@@ -97,7 +97,7 @@ test("materializing a missing device cache fails locally instead of returning it
             },
             revokeObjectUrl: () => undefined,
         }),
-        /no longer available/i,
+        /больше недоступна/i,
     );
     assert.equal(created, false);
 });
@@ -125,7 +125,7 @@ test("materializing a truncated ready device copy fails before creating a playba
             },
             revokeObjectUrl: () => undefined,
         }),
-        /incomplete/i,
+        /неполная/i,
     );
     assert.equal(created, false);
 });
@@ -214,7 +214,10 @@ test("a blocked IndexedDB open closes a late handle and successful handles close
     });
 
     const manager = getBrowserDeviceOfflineManager();
-    await assert.rejects(manager.list("user-1"), /upgrade blocked/);
+    await assert.rejects(
+        manager.list("user-1"),
+        /обновление базы.*заблокировано/i,
+    );
     await Promise.resolve();
     assert.equal(lateCloseCalls, 1);
     assert.deepEqual(await manager.list("user-1"), []);

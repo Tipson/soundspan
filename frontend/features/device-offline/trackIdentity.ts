@@ -29,7 +29,7 @@ export function resolveDeviceOfflineTrackIdentity(
 /** Build the service-worker-owned stable media URL for an opaque cache key. */
 export function buildDeviceOfflineVirtualUrl(key: string): string {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(key)) {
-        throw new Error("Device offline cache key is invalid");
+        throw new Error("Некорректный ключ офлайн-кэша устройства");
     }
     return `/__offline/audio/${key}`;
 }

@@ -33,7 +33,7 @@ export async function deleteDeviceAudioRecordTransaction(
         foregroundLeaseExpiresAt: null,
         errorCode: "device_file_delete_pending",
         errorMessage:
-            "Removing this device file was interrupted. Delete it again to retry.",
+            "Удаление файла с устройства было прервано. Повторите удаление.",
         updatedAt: input.now(),
     };
     if (!(await input.claim(input.expected, deleting))) return false;
@@ -49,7 +49,7 @@ export async function deleteDeviceAudioRecordTransaction(
             ...deleting,
             errorCode: "device_file_delete_failed",
             errorMessage:
-                "Soundspan could not remove this device file. Restore folder access and delete it again.",
+                "Soundspan не удалось удалить файл с устройства. Восстановите доступ к папке и повторите удаление.",
             updatedAt: input.now(),
         };
         await input.publishFailure(deleting, failed).catch(() => false);

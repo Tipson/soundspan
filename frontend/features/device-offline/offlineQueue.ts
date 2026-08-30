@@ -824,7 +824,7 @@ export class DeviceOfflineQueueManager {
                 await this.markQueueFailure(
                     latest,
                     "interrupted",
-                    "Download interrupted; it will continue when this device is online.",
+                    "Загрузка прервана и продолжится, когда устройство подключится к интернету.",
                     authRuntimeLease,
                 );
                 return false;
@@ -843,7 +843,7 @@ export class DeviceOfflineQueueManager {
                     await this.markQueueFailure(
                         latest,
                         "error",
-                        "This track exceeds the automatic-download budget.",
+                        "Этот трек превышает лимит автоматической загрузки.",
                         authRuntimeLease,
                     );
                     return true;
@@ -869,7 +869,9 @@ export class DeviceOfflineQueueManager {
             await this.markQueueFailure(
                 latest,
                 interrupted ? "interrupted" : "error",
-                error instanceof Error ? error.message : "Download failed",
+                error instanceof Error
+                    ? error.message
+                    : "Не удалось скачать трек",
                 authRuntimeLease,
             );
             return !interrupted;
@@ -923,7 +925,7 @@ export class DeviceOfflineQueueManager {
                 }
             }
         }
-        throw new Error("Device download retry loop exhausted");
+        throw new Error("Исчерпаны попытки повторной загрузки на устройство");
     }
 
     private isTransientDownloadFailure(error: unknown): boolean {
@@ -998,7 +1000,7 @@ export class DeviceOfflineQueueManager {
     ): void {
         if (!this.isOwnerAuthCurrent(ownerId, authRuntimeLease)) {
             throw new Error(
-                "Authentication session changed while the device queue was pending",
+                "Сеанс авторизации изменился во время ожидания очереди загрузок",
             );
         }
     }

@@ -61,7 +61,9 @@ export async function createBrowserDeviceOfflinePlaybackSource(
     runtime: DeviceOfflinePlaybackSourceRuntime = defaultPlaybackSourceRuntime(),
 ): Promise<BrowserDeviceOfflinePlaybackSource> {
     if (record.status !== "ready") {
-        throw new Error("This device copy is not ready for playback");
+        throw new Error(
+            "Эта копия на устройстве ещё не готова к воспроизведению",
+        );
     }
     const absoluteVirtualUrl = new URL(
         record.virtualUrl,
@@ -70,13 +72,13 @@ export async function createBrowserDeviceOfflinePlaybackSource(
     const cached = await runtime.match(absoluteVirtualUrl);
     if (!cached) {
         throw new Error(
-            "This device copy is no longer available. Download it again while online.",
+            "Эта копия на устройстве больше недоступна. Подключитесь к интернету и скачайте её снова.",
         );
     }
     const blob = await cached.blob();
     if (blob.size < 1) {
         throw new Error(
-            "This device copy is empty. Download it again while online.",
+            "Эта копия на устройстве пуста. Подключитесь к интернету и скачайте её снова.",
         );
     }
     if (
@@ -85,7 +87,7 @@ export async function createBrowserDeviceOfflinePlaybackSource(
         blob.size !== record.totalBytes
     ) {
         throw new Error(
-            `This device copy is incomplete (${blob.size} of ${record.totalBytes} bytes). Download it again while online.`,
+            `Эта копия на устройстве неполная (${blob.size} из ${record.totalBytes} байт). Подключитесь к интернету и скачайте её снова.`,
         );
     }
     const url = runtime.createObjectUrl(blob);
@@ -165,7 +167,11 @@ function openDatabase(): Promise<IDBDatabase> {
             request.onblocked = () => {
                 if (settled) return;
                 settled = true;
-                reject(new Error("Device download database upgrade blocked"));
+                reject(
+                    new Error(
+                        "Обновление базы загрузок на устройство заблокировано",
+                    ),
+                );
             };
         });
         const retryableAttempt = openAttempt.catch((error: unknown) => {
@@ -492,7 +498,7 @@ function createOpaqueKey(): string {
 
 export function getBrowserDeviceOfflineManager(): DeviceOfflineDownloadManager {
     if (typeof window === "undefined") {
-        throw new Error("Device downloads are available only in the browser");
+        throw new Error("Загрузки на устройство доступны только в браузере");
     }
     if (manager) return manager;
 

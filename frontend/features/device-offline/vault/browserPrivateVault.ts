@@ -55,9 +55,9 @@ const CAPABILITY_FILE = ".soundspan-write-capability";
 
 function privateStorageReason(persistenceGranted: boolean | null): string {
     if (persistenceGranted === false) {
-        return "Offline playback works, but the browser declined durable private storage. Use Save as file in Downloads because browser data may be cleared.";
+        return "Офлайн-воспроизведение работает, но браузер не разрешил постоянное хранение. Сохраните обычный файл из раздела «Загрузки», потому что данные браузера могут быть очищены.";
     }
-    return "Offline playback uses private Soundspan storage. Use Save as file in Downloads to create a normal file outside the browser.";
+    return "Офлайн-воспроизведение использует закрытое хранилище Soundspan. В разделе «Загрузки» выберите «Сохранить как обычный файл», чтобы создать файл вне браузера.";
 }
 
 async function requestPrivatePersistence(
@@ -94,7 +94,7 @@ function wrapFileHandle(
             if (typeof handle.createWritable !== "function") {
                 throw new DeviceAudioVaultError(
                     "unsupported",
-                    "This browser cannot write private device files.",
+                    "Этот браузер не может записывать файлы в закрытое хранилище устройства.",
                     "none",
                 );
             }
@@ -144,7 +144,7 @@ async function requireWritableRoot(
         if (typeof capability.createWritable !== "function") {
             throw new DeviceAudioVaultError(
                 "unsupported",
-                "This browser cannot write private device files.",
+                "Этот браузер не может записывать файлы в закрытое хранилище устройства.",
                 "none",
             );
         }
@@ -159,7 +159,7 @@ async function requireWritableRoot(
         if (error instanceof DeviceAudioVaultError) throw error;
         throw new DeviceAudioVaultError(
             "unsupported",
-            "This browser cannot write private device files.",
+            "Этот браузер не может записывать файлы в закрытое хранилище устройства.",
             "none",
             { cause: error },
         );
@@ -203,7 +203,7 @@ export function createBrowserPrivateDeviceAudioVault(
             return Promise.reject(
                 new DeviceAudioVaultError(
                     "unsupported",
-                    "Private device storage is unavailable.",
+                    "Закрытое хранилище устройства недоступно.",
                     "none",
                 ),
             );
@@ -234,7 +234,7 @@ export function createBrowserPrivateDeviceAudioVault(
         presentation: {
             storageKind: "browser-private",
             mediaRefVersion: "opfs1",
-            readyLabel: "Soundspan on this device",
+            readyLabel: "Soundspan на этом устройстве",
             readyReason: privateStorageReason(null),
         },
     });

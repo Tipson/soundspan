@@ -1,7 +1,7 @@
 {
     "name": "soundspan",
     "short_name": "soundspan",
-    "description": "Listen without limits",
+    "description": "Слушайте без ограничений",
     "start_url": "/",
     "display": "standalone",
     "display_override": ["window-controls-overlay", "standalone"],
@@ -55,20 +55,20 @@
     ],
     "shortcuts": [
         {
-            "name": "Search",
-            "short_name": "Search",
+            "name": "Поиск",
+            "short_name": "Поиск",
             "url": "/search",
             "icons": [{ "src": "assets/icons/icon-96.webp", "sizes": "96x96" }]
         },
         {
-            "name": "Library",
-            "short_name": "Library",
+            "name": "Коллекция",
+            "short_name": "Коллекция",
             "url": "/library",
             "icons": [{ "src": "assets/icons/icon-96.webp", "sizes": "96x96" }]
         },
         {
-            "name": "Downloads",
-            "short_name": "Downloads",
+            "name": "Загрузки",
+            "short_name": "Загрузки",
             "url": "/library?tab=downloads",
             "icons": [{ "src": "assets/icons/icon-96.webp", "sizes": "96x96" }]
         }

@@ -45,7 +45,7 @@ class IndexedDbDeviceAudioDirectoryRegistry implements DeviceAudioDirectoryRegis
             request.onerror = () => reject(request.error);
             request.onblocked = () =>
                 reject(
-                    new Error("Device audio vault database upgrade blocked"),
+                    new Error("Обновление базы хранилища аудио заблокировано"),
                 );
         });
         const retryableAttempt = attempt.catch((error: unknown) => {

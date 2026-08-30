@@ -591,7 +591,7 @@ test("background fetch success stores audio, marks its record ready, and notifie
     assert.deepEqual(harness.clientMessages, [
         { type: "DEVICE_OFFLINE_CHANGED", key, status: "ready" },
     ]);
-    assert.deepEqual(systemUiUpdates, [{ title: "Download saved" }]);
+    assert.deepEqual(systemUiUpdates, [{ title: "Загрузка сохранена" }]);
 });
 
 test("background success measures a body when Content-Length is absent", async () => {
@@ -661,7 +661,7 @@ test("background success never publishes ready when the retained body is shorter
     assert.equal(stored?.status, "interrupted");
     assert.equal(stored?.backgroundFetchId, null);
     assert.equal(stored?.errorCode, "background_failed");
-    assert.match(String(stored?.errorMessage), /length|complete|bytes/i);
+    assert.match(String(stored?.errorMessage), /размер|неполный|байт/i);
     assert.deepEqual(harness.clientMessages, [
         { type: "DEVICE_OFFLINE_CHANGED", key, status: "interrupted" },
     ]);
@@ -801,7 +801,7 @@ test("background fetch success removes its orphan cache entry when the record wa
         undefined,
     );
     assert.deepEqual(harness.clientMessages, []);
-    assert.deepEqual(systemUiUpdates, [{ title: "Download stopped" }]);
+    assert.deepEqual(systemUiUpdates, [{ title: "Загрузка остановлена" }]);
 });
 
 test("a stale background success cannot overwrite a newer attempt or its cache", async () => {
@@ -1074,7 +1074,7 @@ test("install rejects a failed Downloads document without replacing the previous
 
     await assert.rejects(
         harness.dispatch("install"),
-        /Critical offline document failed.*library/i,
+        /важный офлайн-документ.*library/i,
     );
 
     assert.equal(
@@ -1109,7 +1109,7 @@ test("install rejects a failed discovered Next chunk before publishing critical 
 
     await assert.rejects(
         harness.dispatch("install"),
-        /Critical offline asset failed.*downloads\.js/i,
+        /важный офлайн-ресурс.*downloads\.js/i,
     );
 
     assert.equal(

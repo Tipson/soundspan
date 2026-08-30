@@ -16,7 +16,7 @@ export interface PhysicalFileDownloadRuntime {
 
 function browserRuntime(): PhysicalFileDownloadRuntime {
     if (typeof document === "undefined") {
-        throw new Error("Browser file downloads are unavailable");
+        throw new Error("Сохранение файлов через браузер недоступно");
     }
     return {
         createLink: () => document.createElement("a"),

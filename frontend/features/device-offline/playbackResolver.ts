@@ -27,8 +27,8 @@ export function getDeviceOfflinePlaybackErrorMessage(
     hasDeviceCopy: boolean,
 ): string {
     return hasDeviceCopy
-        ? "This downloaded copy could not be opened. Download it again when you are online."
-        : "You are offline and this track is not downloaded to this device.";
+        ? "Не удалось открыть загруженную копию. Загрузите её снова, когда подключитесь к интернету."
+        : "Вы не в сети, и этот трек не загружен на это устройство.";
 }
 
 function releasePreparedSource(key: string): void {
@@ -156,7 +156,7 @@ function immediatePlaybackSource(url: string): DeviceAudioPlayResult {
 
 function playbackAcquisitionAbort(): DOMException {
     return new DOMException(
-        "Playback source acquisition was superseded",
+        "Получение источника воспроизведения было отменено новой операцией",
         "AbortError",
     );
 }

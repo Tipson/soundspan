@@ -720,7 +720,7 @@ test("storage read failures preserve the last successful device snapshot and exp
     });
     assert.match(
         container.textContent ?? "",
-        /^1:1:true:true:.*device storage/i,
+        /^1:1:true:true:.*хранилище устройства/i,
     );
 
     const resumesBeforeRecovery = queueCalls.resumes.length;
@@ -766,7 +766,10 @@ test("an initial records storage failure does not block online audio runtime rea
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    assert.match(container.textContent ?? "", /^true:0:.*device storage/i);
+    assert.match(
+        container.textContent ?? "",
+        /^true:0:.*хранилище устройства/i,
+    );
 
     await React.act(async () => root.unmount());
     container.remove();

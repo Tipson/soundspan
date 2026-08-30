@@ -26,7 +26,7 @@ function opaqueId(): string {
         return runtime.randomUUID();
     }
     if (!runtime?.getRandomValues) {
-        throw new Error("Secure random values are unavailable");
+        throw new Error("Безопасный генератор случайных значений недоступен");
     }
     const bytes = new Uint8Array(24);
     runtime.getRandomValues(bytes);
@@ -38,7 +38,7 @@ function opaqueId(): string {
 async function ownerScope(ownerId: string): Promise<string> {
     const runtime = cryptoRuntime();
     if (!runtime?.subtle) {
-        throw new Error("Web Crypto is unavailable");
+        throw new Error("Web Crypto недоступен");
     }
     const digest = await runtime.subtle.digest(
         "SHA-256",
@@ -58,7 +58,7 @@ export function createBrowserDeviceAudioVaultRuntime(): DeviceAudioVaultRuntime 
         pickDirectory: () => {
             const picker = browserGlobal().showDirectoryPicker;
             if (!picker) {
-                throw new Error("File System Access is unavailable");
+                throw new Error("File System Access недоступен");
             }
             return picker.call(globalThis, {
                 id: "soundspan-device-audio",

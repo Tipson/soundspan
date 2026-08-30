@@ -637,7 +637,7 @@ test("an auth-runtime replacement during persistence setup cannot fetch or retai
     runtimeGeneration = 2;
     releasePersistence();
 
-    await assert.rejects(pending, /authentication session changed/i);
+    await assert.rejects(pending, /сеанс авторизации изменился/i);
     assert.equal(fetches, 0);
     assert.deepEqual(await manager.list("user-a"), []);
 });
@@ -680,7 +680,7 @@ test("a stale owner callback cannot adopt a replacement runtime with the same ow
                 track: TRACK,
                 sourceUrl: "/api/library/tracks/track-1/stream",
             }),
-        /authentication session changed/i,
+        /сеанс авторизации изменился/i,
     );
     assert.equal(fetches, 0);
 
@@ -736,7 +736,7 @@ test("revoking an owner lease aborts an in-flight credentialed fetch and removes
     await fetchStarted;
     authController.abort();
 
-    await assert.rejects(pending, /runtime retired|session changed/i);
+    await assert.rejects(pending, /сеанс авторизации изменился/i);
     assert.deepEqual(await manager.list("user-a"), []);
     assert.equal(deps.audioCache.responses.size, 0);
 });
@@ -892,7 +892,7 @@ test("auth rotation after a file write removes the stale file before rejecting r
     generation = 2;
     audioVault.resumeRetain();
 
-    await assert.rejects(pending, /authentication session changed/i);
+    await assert.rejects(pending, /сеанс авторизации изменился/i);
     assert.equal(audioVault.files.size, 0);
     assert.equal(audioVault.removed.length, 1);
     assert.deepEqual(await manager.list("user-1"), []);
@@ -1302,7 +1302,7 @@ test("foreground download rejects a retained cache body shorter than Content-Len
             quality: "auto",
             sourceUrl: "/api/library/tracks/track-1/stream",
         }),
-        /complete|length|bytes/i,
+        /неполный|размер|байт/i,
     );
 
     const failed = [...deps.metadataStore.records.values()][0];
@@ -1430,7 +1430,7 @@ test("quota preflight fails without leaving partial audio in CacheStorage", asyn
             quality: "auto",
             sourceUrl: "/api/library/tracks/track-1/stream",
         }),
-        /storage/i,
+        /недостаточно места/i,
     );
 
     const failed = [...deps.metadataStore.records.values()][0];
@@ -2318,7 +2318,10 @@ test("reconcile aborts a legacy Background Fetch stuck at zero and exposes a for
     assert.equal(interrupted.status, "interrupted");
     assert.equal(interrupted.backgroundFetchId, null);
     assert.equal(interrupted.errorCode, "background_stalled");
-    assert.match(interrupted.errorMessage ?? "", /retry.*foreground/i);
+    assert.match(
+        interrupted.errorMessage ?? "",
+        /повтор.*загрузка в активном окне/i,
+    );
     assert.deepEqual(aborted, [backgroundFetchId]);
 });
 
@@ -2630,7 +2633,7 @@ test("a deleted background candidate is aborted instead of reported started", as
             quality: "auto",
             sourceUrl: "/api/library/tracks/track-1/stream",
         }),
-        /superseded|deleted/i,
+        /заменена|удалена/i,
     );
 
     assert.equal(foregroundFetches, 0);
@@ -2731,7 +2734,7 @@ test("a delete from another manager wins over a completing foreground transfer",
     assert.equal(await managerB.delete("user-1", active.key), true);
     audioCache.resumePut();
 
-    await assert.rejects(pending, /superseded|deleted/i);
+    await assert.rejects(pending, /заменена|удалена/i);
     assert.equal(metadataStore.records.has(active.key), false);
     assert.equal(audioCache.responses.size, 0);
 });
@@ -2759,7 +2762,7 @@ test("a newer shared-store attempt wins over an older completing manager", async
     await metadataStore.put(newer);
     audioCache.resumePut();
 
-    await assert.rejects(pending, /superseded|deleted/i);
+    await assert.rejects(pending, /заменена|удалена/i);
     assert.deepEqual(metadataStore.records.get(active.key), newer);
     assert.equal(audioCache.responses.size, 0);
 });
@@ -2788,7 +2791,7 @@ test("atomic ready publish cannot overwrite a newer attempt after the final chec
     await metadataStore.put(newer);
     metadataStore.resumeUpdate();
 
-    await assert.rejects(pending, /superseded|deleted/i);
+    await assert.rejects(pending, /заменена|удалена/i);
     assert.deepEqual(metadataStore.records.get(active.key), newer);
     assert.equal(audioCache.responses.size, 0);
 });

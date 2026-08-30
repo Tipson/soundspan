@@ -45,19 +45,24 @@ test("Android uses the verified foreground path even when Background Fetch is ex
         fetch: async () => ({ id: "download-1" }),
     } as unknown as BackgroundFetchRegistrationLike["backgroundFetch"];
 
+    const withBackgroundFetch = resolveDeviceOfflineTransferCapability({
+        userAgent: "Mozilla/5.0 (Linux; Android 15)",
+        backgroundFetch,
+    });
+    const withoutBackgroundFetch = resolveDeviceOfflineTransferCapability({
+        userAgent: "Mozilla/5.0 (Linux; Android 15)",
+        backgroundFetch: undefined,
+    });
+
+    assert.equal(withBackgroundFetch.mode, "foreground");
+    assert.equal(withoutBackgroundFetch.mode, "foreground");
     assert.equal(
-        resolveDeviceOfflineTransferCapability({
-            userAgent: "Mozilla/5.0 (Linux; Android 15)",
-            backgroundFetch,
-        }).mode,
-        "foreground",
+        withBackgroundFetch.explanation,
+        "Не закрывайте Soundspan, пока трек не будет сохранён и проверен на этом Android-устройстве. Прерванную загрузку можно повторить в разделе «Загрузки».",
     );
     assert.equal(
-        resolveDeviceOfflineTransferCapability({
-            userAgent: "Mozilla/5.0 (Linux; Android 15)",
-            backgroundFetch: undefined,
-        }).mode,
-        "foreground",
+        withoutBackgroundFetch.explanation,
+        withBackgroundFetch.explanation,
     );
 });
 
@@ -70,7 +75,23 @@ test("iPhone remains honest foreground even if a partial vendor object is presen
     });
 
     assert.equal(result.mode, "foreground");
-    assert.match(result.explanation, /keep.*open|foreground/i);
+    assert.equal(
+        result.explanation,
+        "Не закрывайте Soundspan до завершения загрузки. На iPhone прерванная загрузка при повторе начнётся заново в активном приложении.",
+    );
+});
+
+test("desktop explains the foreground-only download path in Russian", () => {
+    const result = resolveDeviceOfflineTransferCapability({
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        backgroundFetch: undefined,
+    });
+
+    assert.deepEqual(result, {
+        mode: "foreground",
+        explanation:
+            "Не закрывайте Soundspan до завершения загрузки. Прерванную загрузку можно продолжить в разделе «Загрузки».",
+    });
 });
 
 test("registration discovery is bounded and never waits for serviceWorker.ready", async () => {

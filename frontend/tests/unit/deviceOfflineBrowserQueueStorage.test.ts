@@ -93,7 +93,7 @@ test("browser settings storage rechecks authorization inside the IndexedDB trans
             manager.updateSettings("user-a", {
                 autoDownloadLiked: true,
             }),
-            /authentication session changed/i,
+            /сеанс авторизации изменился/i,
         );
         assert.equal(rotated, true);
         assert.deepEqual(writtenSettings, []);

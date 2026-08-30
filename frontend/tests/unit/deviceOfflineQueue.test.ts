@@ -765,7 +765,7 @@ test("a stale owner callback cannot enqueue work into a replacement same-owner r
 
     await assert.rejects(
         harness.manager.enqueueBatch([request("user-a")]),
-        /authentication session changed/i,
+        /сеанс авторизации изменился/i,
     );
     assert.equal((await harness.manager.list("user-a")).length, 0);
 
@@ -817,7 +817,7 @@ test("a stale cancellation cannot delete a fresh same-owner queue item after aut
     );
     releaseQueueList();
 
-    await assert.rejects(staleCancellation, /authentication session changed/i);
+    await assert.rejects(staleCancellation, /сеанс авторизации изменился/i);
     const freshItems = await harness.manager.list("user-a");
     assert.equal(freshItems.length, 1);
     assert.equal(freshItems[0]?.trackIdentity, "youtube:video-1");
@@ -868,7 +868,7 @@ test("a stale cancellation cannot delete a same-key download after auth rotates 
     };
     releaseDownloadDelete();
 
-    await assert.rejects(staleCancellation, /authentication session changed/i);
+    await assert.rejects(staleCancellation, /сеанс авторизации изменился/i);
     assert.equal(harness.downloads.length, 1);
     assert.equal(harness.downloads[0]?.key, "same-key-copy");
     assert.equal(harness.downloads[0]?.updatedAt, 2);

@@ -18,7 +18,7 @@ export function reconcileDeviceAudioRecord(
             status: "interrupted",
             errorCode: "device_file_missing",
             errorMessage:
-                "This device file is missing. Resume to download it again.",
+                "Файл на устройстве отсутствует. Возобновите загрузку, чтобы скачать его снова.",
             updatedAt: now,
         };
     }

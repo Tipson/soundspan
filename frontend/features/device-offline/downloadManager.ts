@@ -119,7 +119,7 @@ export function interruptExpiredForegroundRecord(
         foregroundLeaseExpiresAt: null,
         errorCode: "interrupted",
         errorMessage:
-            "The download was interrupted. Resume restarts this track transfer.",
+            "Загрузка была прервана. При продолжении загрузка этого трека начнётся заново.",
         updatedAt: now,
     };
 }
@@ -360,7 +360,7 @@ export class DeviceOfflineDownloadManager {
                             () =>
                                 reject(
                                     new Error(
-                                        "Background Fetch enumeration timed out",
+                                        "Истекло время ожидания списка Background Fetch",
                                     ),
                                 ),
                             this.dependencies.backgroundFetchLookupTimeoutMs ??
@@ -428,7 +428,7 @@ export class DeviceOfflineDownloadManager {
                         status: "interrupted",
                         errorCode: "cache_unavailable",
                         errorMessage:
-                            "Browser storage could not be inspected. Retry this device copy.",
+                            "Не удалось проверить хранилище браузера. Повторите загрузку этой копии на устройство.",
                         updatedAt: this.dependencies.now(),
                     };
                 }
@@ -438,7 +438,7 @@ export class DeviceOfflineDownloadManager {
                         status: "interrupted",
                         errorCode: "cache_missing",
                         errorMessage:
-                            "The browser evicted this device copy. Resume to download it again.",
+                            "Браузер удалил эту копию с устройства. Возобновите загрузку, чтобы скачать её снова.",
                         updatedAt: this.dependencies.now(),
                     };
                 } else if (cached) {
@@ -467,7 +467,7 @@ export class DeviceOfflineDownloadManager {
                             status: "interrupted",
                             errorCode: "cache_integrity",
                             errorMessage:
-                                "This device copy is incomplete. Retry to download it again.",
+                                "Эта копия на устройстве неполная. Повторите загрузку.",
                             updatedAt: this.dependencies.now(),
                         };
                         cacheUrlToDelete = absoluteVirtualUrl;
@@ -496,7 +496,7 @@ export class DeviceOfflineDownloadManager {
                     foregroundLeaseExpiresAt: null,
                     errorCode: "background_stalled",
                     errorMessage:
-                        "The browser background transfer stalled. Retry uses a verified foreground download.",
+                        "Фоновая загрузка браузера зависла. При повторе начнётся проверенная загрузка в активном окне.",
                     updatedAt: this.dependencies.now(),
                 };
                 abortBackgroundRegistration = true;
@@ -548,7 +548,7 @@ export class DeviceOfflineDownloadManager {
                     foregroundLeaseExpiresAt: null,
                     errorCode: "interrupted",
                     errorMessage:
-                        "The download was interrupted. Resume restarts this track transfer.",
+                        "Загрузка была прервана. При продолжении загрузка этого трека начнётся заново.",
                     updatedAt: this.dependencies.now(),
                 };
             } else if (
@@ -944,7 +944,7 @@ export class DeviceOfflineDownloadManager {
             if (response.status !== 200) {
                 throw new DeviceOfflineDownloadError(
                     "http",
-                    `Audio download failed with HTTP ${response.status}`,
+                    `Не удалось скачать аудио: HTTP ${response.status}`,
                     response.status,
                 );
             }
@@ -1058,7 +1058,7 @@ export class DeviceOfflineDownloadManager {
 
             if (this.deletedKeys.has(key)) {
                 await this.dependencies.audioCache.delete(absoluteVirtualUrl);
-                throw new DOMException("Download deleted", "AbortError");
+                throw new DOMException("Загрузка удалена", "AbortError");
             }
             const current = await this.dependencies.metadataStore.getByKey(key);
             this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
@@ -1072,7 +1072,7 @@ export class DeviceOfflineDownloadManager {
             if (!cached) {
                 throw new DeviceOfflineDownloadError(
                     "cache",
-                    "The browser did not retain the completed audio response",
+                    "Браузер не сохранил полностью загруженный аудиофайл",
                 );
             }
             const verifiedBytes = await verifyLegacyCachedAudioBytes(

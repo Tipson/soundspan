@@ -22,7 +22,7 @@ const VAULT_DIRECTORY_NAME = "Soundspan";
 const TRACKS_DIRECTORY_NAME = "tracks";
 const MEDIA_REF_VERSION = "fsa1";
 
-const READY_REASON = "Music files are stored in the selected folder.";
+const READY_REASON = "Музыкальные файлы хранятся в выбранной папке.";
 
 interface BrowserDirectoryVaultPresentation {
     storageKind: DeviceAudioStorageKind;
@@ -61,7 +61,7 @@ function readyState(
     return accessState(
         "ready",
         null,
-        presentation.readyLabel || handle.name || "Selected folder",
+        presentation.readyLabel || handle.name || "Выбранная папка",
         presentation.readyReason,
         presentation.storageKind,
     );
@@ -77,16 +77,16 @@ function stateForPermission(
         return accessState(
             "denied",
             "permission_denied",
-            handle.name || "Selected folder",
-            "Soundspan cannot write to the selected folder.",
+            handle.name || "Выбранная папка",
+            "Soundspan не может записывать файлы в выбранную папку.",
             presentation.storageKind,
         );
     }
     return accessState(
         "permission-required",
         "permission_required",
-        handle.name || "Selected folder",
-        "Allow Soundspan to write to the selected folder.",
+        handle.name || "Выбранная папка",
+        "Разрешите Soundspan запись в выбранную папку.",
         presentation.storageKind,
     );
 }
@@ -97,8 +97,8 @@ function setupRequiredState(
     return accessState(
         "setup-required",
         "setup_required",
-        "Choose a music folder",
-        "Choose a folder before downloading files to this device.",
+        "Выберите папку с музыкой",
+        "Перед загрузкой файлов на это устройство выберите папку.",
         presentation.storageKind,
     );
 }
@@ -107,8 +107,8 @@ function unsupportedState(): DeviceAudioAccessState {
     return accessState(
         "unsupported",
         "unsupported",
-        "Device files unavailable",
-        "This browser cannot write to a user-selected directory.",
+        "Файлы на устройстве недоступны",
+        "Этот браузер не может записывать файлы в выбранную пользователем папку.",
         "desktop-directory",
     );
 }
@@ -117,8 +117,8 @@ function ioState(): DeviceAudioAccessState {
     return accessState(
         "error",
         "io",
-        "Device storage unavailable",
-        "Soundspan could not inspect the selected folder.",
+        "Хранилище устройства недоступно",
+        "Soundspan не удалось проверить выбранную папку.",
         "desktop-directory",
     );
 }
@@ -148,7 +148,7 @@ function mapIoError(error: unknown): DeviceAudioVaultError {
     if (isNamedError(error, "AbortError")) {
         return new DeviceAudioVaultError(
             "interrupted",
-            "The device file operation was interrupted.",
+            "Операция с файлом на устройстве была прервана.",
             "retry",
             { cause: error },
         );
@@ -156,7 +156,7 @@ function mapIoError(error: unknown): DeviceAudioVaultError {
     if (isNamedError(error, "QuotaExceededError")) {
         return new DeviceAudioVaultError(
             "storage_full",
-            "There is not enough space for this device file.",
+            "На устройстве недостаточно места для этого файла.",
             "user-action",
             { cause: error },
         );
@@ -167,7 +167,7 @@ function mapIoError(error: unknown): DeviceAudioVaultError {
     ) {
         return new DeviceAudioVaultError(
             "permission_denied",
-            "Soundspan cannot access the selected folder.",
+            "Soundspan не может получить доступ к выбранной папке.",
             "user-action",
             { cause: error },
         );
@@ -176,7 +176,7 @@ function mapIoError(error: unknown): DeviceAudioVaultError {
         "io",
         error instanceof Error
             ? error.message
-            : "The device file operation failed.",
+            : "Не удалось выполнить операцию с файлом на устройстве.",
         "retry",
         { cause: error },
     );
@@ -189,7 +189,7 @@ function assertSessionCurrent(
     if (!runtime.isAuthGenerationCurrent(authGeneration)) {
         throw new DeviceAudioVaultError(
             "auth_changed",
-            "The active account changed during the device file operation.",
+            "Активный аккаунт изменился во время операции с файлом на устройстве.",
             "none",
         );
     }
@@ -233,7 +233,7 @@ function opaqueSuffix(runtime: DeviceAudioVaultRuntime): string {
     if (normalized.length >= 6) return normalized;
     throw new DeviceAudioVaultError(
         "io",
-        "The runtime did not create a valid opaque media identifier.",
+        "Среда выполнения не создала корректный непрозрачный идентификатор медиафайла.",
         "retry",
     );
 }
@@ -243,8 +243,8 @@ function displayName(
     contentType: string | null,
     runtime: DeviceAudioVaultRuntime,
 ): string {
-    const artist = safeSegment(track.artist.name, "Unknown artist");
-    const title = safeSegment(track.title, "Untitled");
+    const artist = safeSegment(track.artist.name, "Неизвестный исполнитель");
+    const title = safeSegment(track.title, "Без названия");
     return `${artist} - ${title} -- ${opaqueSuffix(runtime)}.${extensionFor(contentType)}`;
 }
 
@@ -265,14 +265,14 @@ function parseMediaRef(
     if (parts.length !== 3 || parts[0] !== mediaRefVersion) {
         throw new DeviceAudioVaultError(
             "invalid_ref",
-            "The device file reference is invalid.",
+            "Некорректная ссылка на файл устройства.",
             "none",
         );
     }
     if (parts[1] !== expectedOwnerScope) {
         throw new DeviceAudioVaultError(
             "owner_mismatch",
-            "This device file belongs to another account.",
+            "Этот файл на устройстве принадлежит другому аккаунту.",
             "none",
         );
     }
@@ -282,7 +282,7 @@ function parseMediaRef(
     } catch (error) {
         throw new DeviceAudioVaultError(
             "invalid_ref",
-            "The device file reference is invalid.",
+            "Некорректная ссылка на файл устройства.",
             "none",
             { cause: error },
         );
@@ -297,7 +297,7 @@ function parseMediaRef(
     ) {
         throw new DeviceAudioVaultError(
             "invalid_ref",
-            "The device file reference is invalid.",
+            "Некорректная ссылка на файл устройства.",
             "none",
         );
     }
@@ -337,7 +337,7 @@ function verifyBytes(
     if (file.size < 1) {
         throw new DeviceAudioVaultError(
             "integrity",
-            "The retained device file is empty.",
+            "Сохранённый файл на устройстве пуст.",
             "retry",
         );
     }
@@ -348,7 +348,7 @@ function verifyBytes(
     ) {
         throw new DeviceAudioVaultError(
             "integrity",
-            `The retained device file is incomplete (${file.size} of ${expectedBytes} bytes).`,
+            `Сохранённый файл на устройстве неполный (${file.size} из ${expectedBytes} байт).`,
             "retry",
         );
     }
@@ -390,7 +390,7 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
         let committed = false;
         try {
             if (input.signal?.aborted) {
-                throw new DOMException("Download interrupted", "AbortError");
+                throw new DOMException("Загрузка прервана", "AbortError");
             }
             const fileHandle = await this.tracksDirectory.getFileHandle(name, {
                 create: true,
@@ -401,17 +401,14 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
             while (true) {
                 assertSessionCurrent(this.runtime, this.authGeneration);
                 if (input.signal?.aborted) {
-                    throw new DOMException(
-                        "Download interrupted",
-                        "AbortError",
-                    );
+                    throw new DOMException("Загрузка прервана", "AbortError");
                 }
                 const chunk = await reader.read();
                 if (chunk.done) break;
                 if (!(chunk.value instanceof Uint8Array)) {
                     throw new DeviceAudioVaultError(
                         "io",
-                        "The device file stream returned an invalid chunk.",
+                        "Поток файла на устройстве вернул некорректный фрагмент.",
                         "retry",
                     );
                 }
@@ -420,22 +417,22 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
                 input.onProgress?.(bytes, input.expectedBytes ?? null);
             }
             if (input.signal?.aborted) {
-                throw new DOMException("Download interrupted", "AbortError");
+                throw new DOMException("Загрузка прервана", "AbortError");
             }
             await writer.close();
             writer = null;
             if (input.signal?.aborted) {
-                throw new DOMException("Download interrupted", "AbortError");
+                throw new DOMException("Загрузка прервана", "AbortError");
             }
             assertSessionCurrent(this.runtime, this.authGeneration);
             const file = await fileHandle.getFile();
             if (input.signal?.aborted) {
-                throw new DOMException("Download interrupted", "AbortError");
+                throw new DOMException("Загрузка прервана", "AbortError");
             }
             assertSessionCurrent(this.runtime, this.authGeneration);
             verifyBytes(file, input.expectedBytes);
             if (input.signal?.aborted) {
-                throw new DOMException("Download interrupted", "AbortError");
+                throw new DOMException("Загрузка прервана", "AbortError");
             }
             assertSessionCurrent(this.runtime, this.authGeneration);
             committed = true;
@@ -499,7 +496,7 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
             }
             throw new DeviceAudioVaultError(
                 "not_found",
-                "This device file is no longer available.",
+                "Этот файл на устройстве больше недоступен.",
                 "retry",
             );
         }
@@ -590,7 +587,7 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
                 if (isNamedError(error, "AbortError")) {
                     throw new DeviceAudioVaultError(
                         "user_cancelled",
-                        "No device folder was selected.",
+                        "Папка на устройстве не выбрана.",
                         "user-action",
                         { cause: error },
                     );
@@ -644,7 +641,7 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
         if (!ownerId) {
             throw new DeviceAudioVaultError(
                 "invalid_owner",
-                "A signed-in owner is required for device files.",
+                "Для доступа к файлам на устройстве нужно войти в аккаунт.",
                 "none",
             );
         }
@@ -658,7 +655,7 @@ class BrowserDirectoryDeviceAudioVault implements DeviceAudioVault {
             if (!/^[A-Za-z0-9_-]{8,128}$/.test(scope)) {
                 throw new DeviceAudioVaultError(
                     "io",
-                    "The runtime produced an invalid owner scope.",
+                    "Среда выполнения создала некорректную область владельца.",
                     "retry",
                 );
             }

@@ -225,7 +225,7 @@ export function resolveDeviceOfflineTransferCapability(input: {
         return {
             mode: "background",
             explanation:
-                "Android can continue this download through the browser's Background Fetch UI.",
+                "Android может продолжить эту загрузку через системный интерфейс Background Fetch браузера.",
         };
     }
 
@@ -233,10 +233,10 @@ export function resolveDeviceOfflineTransferCapability(input: {
     return {
         mode: "foreground",
         explanation: isAppleMobile
-            ? "Keep soundspan open until the track finishes. iPhone resumes an interrupted item by restarting that foreground transfer."
+            ? "Не закрывайте Soundspan до завершения загрузки. На iPhone прерванная загрузка при повторе начнётся заново в активном приложении."
             : isAndroid
-              ? "Keep soundspan open until the track is saved and verified on this Android device. Interrupted items can be retried from Downloads."
-              : "Keep soundspan open until the track finishes. Interrupted items can be resumed from the Downloads tab.",
+              ? "Не закрывайте Soundspan, пока трек не будет сохранён и проверен на этом Android-устройстве. Прерванную загрузку можно повторить в разделе «Загрузки»."
+              : "Не закрывайте Soundspan до завершения загрузки. Прерванную загрузку можно продолжить в разделе «Загрузки».",
     };
 }
 
@@ -309,7 +309,7 @@ export async function startBrowserBackgroundFetch(
             id,
             [new Request(sourceUrl, { credentials: "include" })],
             {
-                title: `Download ${record.track.title}`,
+                title: `Загрузка: ${record.track.title}`,
                 ...(record.totalBytes
                     ? { downloadTotal: record.totalBytes }
                     : {}),
@@ -445,7 +445,7 @@ export async function listBrowserBackgroundFetchIds(): Promise<string[]> {
     );
     if (inspection.state === "unavailable") return [];
     if (inspection.state === "unknown") {
-        throw new Error("Service Worker registration status is unknown");
+        throw new Error("Статус регистрации Service Worker неизвестен");
     }
     const getIds = inspection.registration.backgroundFetch?.getIds;
     if (!getIds) return [];
@@ -454,7 +454,7 @@ export async function listBrowserBackgroundFetchIds(): Promise<string[]> {
         BROWSER_BACKGROUND_FETCH_OPERATION_TIMEOUT_MS,
     );
     if (ids.state !== "resolved") {
-        throw new Error("Background Fetch enumeration timed out");
+        throw new Error("Истекло время ожидания списка Background Fetch");
     }
     return ids.value;
 }

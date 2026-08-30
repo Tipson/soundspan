@@ -171,7 +171,7 @@ async function fetchAndCacheImage(request, cacheKey) {
         }
         return response;
     } catch {
-        return new Response("Image unavailable", { status: 503 });
+        return new Response("Изображение недоступно", { status: 503 });
     }
 }
 
@@ -188,7 +188,9 @@ async function fetchNavigationWithTimeout(request) {
     const timeout = new Promise((_, reject) => {
         timeoutHandle = setTimeout(() => {
             controller.abort();
-            reject(new Error("Navigation network request timed out"));
+            reject(
+                new Error("Истекло время ожидания сетевого запроса навигации"),
+            );
         }, NAVIGATION_NETWORK_TIMEOUT_MS);
     });
     try {
@@ -235,7 +237,9 @@ async function serveDeviceAudio(request, url) {
     const cache = await caches.open(DEVICE_AUDIO_CACHE_NAME);
     const cached = await cache.match(url.toString());
     if (!cached) {
-        return new Response("Device audio unavailable", { status: 404 });
+        return new Response("Аудиофайл на устройстве недоступен", {
+            status: 404,
+        });
     }
 
     const rangeHeader = request.headers.get("range");
@@ -278,7 +282,7 @@ async function serveDeviceAudio(request, url) {
 function openDeviceOfflineDatabase() {
     return new Promise((resolve, reject) => {
         if (typeof indexedDB === "undefined") {
-            reject(new Error("IndexedDB is unavailable"));
+            reject(new Error("IndexedDB недоступна"));
             return;
         }
         const request = indexedDB.open(DEVICE_OFFLINE_DATABASE_NAME);
@@ -295,7 +299,7 @@ function openDeviceOfflineDatabase() {
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () =>
-            reject(request.error ?? new Error("Unable to open IndexedDB"));
+            reject(request.error ?? new Error("Не удалось открыть IndexedDB"));
     });
 }
 
@@ -324,12 +328,14 @@ async function mutateDeviceOfflineRecord(key, mutate) {
             transaction.onerror = () =>
                 reject(
                     transaction.error ??
-                        new Error("Unable to update device download"),
+                        new Error("Не удалось обновить загрузку на устройство"),
                 );
             transaction.onabort = () =>
                 reject(
                     transaction.error ??
-                        new Error("Device download update was aborted"),
+                        new Error(
+                            "Обновление загрузки на устройство было отменено",
+                        ),
                 );
         });
     } finally {
@@ -357,12 +363,16 @@ async function getDeviceOfflineRecord(key) {
             transaction.onerror = () =>
                 reject(
                     transaction.error ??
-                        new Error("Unable to read device download"),
+                        new Error(
+                            "Не удалось прочитать загрузку на устройство",
+                        ),
                 );
             transaction.onabort = () =>
                 reject(
                     transaction.error ??
-                        new Error("Device download read was aborted"),
+                        new Error(
+                            "Чтение загрузки на устройство было отменено",
+                        ),
                 );
         });
     } finally {
@@ -445,12 +455,12 @@ async function handleBackgroundFetchSuccess(registration) {
     if (!completionClaimed) return "ignored";
     const records = await registration.matchAll();
     if (records.length !== 1) {
-        throw new Error("Expected one background audio response");
+        throw new Error("Ожидался один ответ фоновой загрузки аудио");
     }
     const response = await records[0].responseReady;
     if (!response || response.status !== 200) {
         throw new Error(
-            `Background audio download failed with HTTP ${response?.status ?? 0}`,
+            `Не удалось скачать аудио в фоне: HTTP ${response?.status ?? 0}`,
         );
     }
 
@@ -470,7 +480,7 @@ async function handleBackgroundFetchSuccess(registration) {
         new Response(response.body, { status: 200, headers }),
     );
     const retained = await cache.match(temporaryUrl);
-    if (!retained) throw new Error("Completed audio was not retained");
+    if (!retained) throw new Error("Загруженный аудиофайл не был сохранён");
 
     const rawContentLength = retained.headers.get("content-length");
     const contentLength =
@@ -483,14 +493,14 @@ async function handleBackgroundFetchSuccess(registration) {
             : null;
     const actualTotalBytes = (await retained.clone().arrayBuffer()).byteLength;
     if (actualTotalBytes < 1) {
-        throw new Error("Completed background audio response is empty");
+        throw new Error("Ответ завершённой фоновой загрузки аудио пуст");
     }
     if (
         declaredTotalBytes !== null &&
         declaredTotalBytes !== actualTotalBytes
     ) {
         throw new Error(
-            `Completed background audio length mismatch (${actualTotalBytes} of ${declaredTotalBytes} bytes)`,
+            `Размер аудио после фоновой загрузки не совпадает (${actualTotalBytes} из ${declaredTotalBytes} байт)`,
         );
     }
     const totalBytes = actualTotalBytes;
@@ -501,11 +511,11 @@ async function handleBackgroundFetchSuccess(registration) {
     }
     await cache.put(virtualUrl, retained.clone());
     const published = await cache.match(virtualUrl);
-    if (!published) throw new Error("Completed audio was not published");
+    if (!published) throw new Error("Загруженный аудиофайл не был опубликован");
     const publishedBytes = (await published.arrayBuffer()).byteLength;
     if (publishedBytes !== totalBytes) {
         throw new Error(
-            `Published background audio length mismatch (${publishedBytes} of ${totalBytes} bytes)`,
+            `Размер опубликованного аудио не совпадает (${publishedBytes} из ${totalBytes} байт)`,
         );
     }
     const updated = await mutateDeviceOfflineRecord(identity.key, (record) =>
@@ -580,7 +590,7 @@ async function handleBackgroundFetchSuccessSafely(registration) {
             "background_failed",
             error instanceof Error
                 ? error.message
-                : "Background download could not be saved",
+                : "Не удалось сохранить фоновую загрузку",
         ).catch(() => undefined);
         return "failed";
     }
@@ -599,7 +609,7 @@ self.addEventListener("install", (event) => {
                     );
                     if (!response.ok) {
                         throw new Error(
-                            `Critical offline document failed with HTTP ${response.status}: ${asset}`,
+                            `Не удалось загрузить важный офлайн-документ: HTTP ${response.status}: ${asset}`,
                         );
                     }
                     const html = await response.clone().text();
@@ -633,7 +643,7 @@ self.addEventListener("install", (event) => {
                     );
                     if (!response.ok) {
                         throw new Error(
-                            `Critical offline asset failed with HTTP ${response.status}: ${url}`,
+                            `Не удалось загрузить важный офлайн-ресурс: HTTP ${response.status}: ${url}`,
                         );
                     }
                     return { url, response };
@@ -715,7 +725,9 @@ self.addEventListener("backgroundfetchsuccess", (event) => {
             );
             await event.updateUI?.({
                 title:
-                    outcome === "saved" ? "Download saved" : "Download stopped",
+                    outcome === "saved"
+                        ? "Загрузка сохранена"
+                        : "Загрузка остановлена",
             });
         })(),
     );
@@ -726,9 +738,9 @@ self.addEventListener("backgroundfetchfail", (event) => {
             await markBackgroundFetchInterrupted(
                 event.registration,
                 "background_failed",
-                "The browser background download failed. Resume to try again.",
+                "Фоновая загрузка браузера завершилась ошибкой. Возобновите её, чтобы повторить попытку.",
             ).catch(() => undefined);
-            await event.updateUI?.({ title: "Download stopped" });
+            await event.updateUI?.({ title: "Загрузка остановлена" });
         })(),
     );
 });
@@ -738,9 +750,9 @@ self.addEventListener("backgroundfetchabort", (event) => {
             await markBackgroundFetchInterrupted(
                 event.registration,
                 "interrupted",
-                "The background download was interrupted. Resume to try again.",
+                "Фоновая загрузка была прервана. Возобновите её, чтобы повторить попытку.",
             ).catch(() => undefined);
-            await event.updateUI?.({ title: "Download stopped" });
+            await event.updateUI?.({ title: "Загрузка остановлена" });
         })(),
     );
 });
@@ -821,7 +833,9 @@ self.addEventListener("fetch", (event) => {
                     );
                     if (root) return root;
                 }
-                return new Response("Offline", { status: 503 });
+                return new Response("Нет подключения к интернету", {
+                    status: 503,
+                });
             }
         })(),
     );

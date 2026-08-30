@@ -148,8 +148,8 @@ export function createBrowserDeviceAudioVault(
                     ? "desktop-directory"
                     : "browser-private",
                 label: directoryRuntime.isSupported()
-                    ? "Selected folder"
-                    : "Soundspan on this device",
+                    ? "Выбранная папка"
+                    : "Soundspan на этом устройстве",
             },
             retain: async (retainInput) => {
                 const selected = await writeVault();

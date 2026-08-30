@@ -83,11 +83,11 @@ afterEach(() => clearDeviceOfflineRuntimeState());
 test("offline playback errors distinguish missing downloads from a damaged local copy", () => {
     assert.match(
         getDeviceOfflinePlaybackErrorMessage(false),
-        /not downloaded to this device/i,
+        /не загружен на это устройство/i,
     );
     assert.match(
         getDeviceOfflinePlaybackErrorMessage(true),
-        /downloaded copy could not be opened/i,
+        /не удалось открыть загруженную копию/i,
     );
 });
 

@@ -39,13 +39,13 @@ export async function verifyLegacyCachedAudioBytes(
     if (actualBytes < 1) {
         throw new DeviceOfflineDownloadError(
             "cache",
-            "The browser retained an empty audio response",
+            "Браузер сохранил пустой аудиофайл",
         );
     }
     if (expectedBytes !== null && actualBytes !== expectedBytes) {
         throw new DeviceOfflineDownloadError(
             "cache",
-            `The retained audio is incomplete (${actualBytes} of ${expectedBytes} bytes)`,
+            `Сохранённый аудиофайл неполный (${actualBytes} из ${expectedBytes} байт)`,
         );
     }
     return actualBytes;
@@ -68,7 +68,7 @@ export async function assertLegacyCacheQuotaAvailable(
     if (Math.max(0, quota - usage) < totalBytes) {
         throw new DeviceOfflineDownloadError(
             "quota",
-            "Not enough device storage for this track",
+            "На устройстве недостаточно места для этого трека",
         );
     }
 }

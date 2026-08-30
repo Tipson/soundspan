@@ -210,8 +210,8 @@ test("inspectAccess reports explicit unsupported and setup-required states witho
         status: "unsupported",
         code: "unsupported",
         storageKind: null,
-        label: "Device files unavailable",
-        reason: "This browser cannot write to a user-selected directory.",
+        label: "Файлы на устройстве недоступны",
+        reason: "Этот браузер не может записывать файлы в выбранную пользователем папку.",
     });
     assert.equal(unsupported.registry.loaded, false);
 
@@ -220,8 +220,8 @@ test("inspectAccess reports explicit unsupported and setup-required states witho
         status: "setup-required",
         code: "setup_required",
         storageKind: "desktop-directory",
-        label: "Choose a music folder",
-        reason: "Choose a folder before downloading files to this device.",
+        label: "Выберите папку с музыкой",
+        reason: "Перед загрузкой файлов на это устройство выберите папку.",
     });
     assert.equal(missing.picked.queryCalls, 0);
 });
@@ -237,7 +237,7 @@ test("inspectAccess never requests permission, while requestAccess reuses a pers
         code: "permission_required",
         storageKind: "desktop-directory",
         label: "Soundspan Music",
-        reason: "Allow Soundspan to write to the selected folder.",
+        reason: "Разрешите Soundspan запись в выбранную папку.",
     });
     assert.equal(persisted.requestCalls, 0);
 
@@ -246,7 +246,7 @@ test("inspectAccess never requests permission, while requestAccess reuses a pers
         code: null,
         storageKind: "desktop-directory",
         label: "Soundspan Music",
-        reason: "Music files are stored in the selected folder.",
+        reason: "Музыкальные файлы хранятся в выбранной папке.",
     });
     assert.equal(persisted.requestCalls, 1);
     assert.equal(registry.saved, null);
@@ -684,8 +684,8 @@ test("browser-private storage retains an owner-scoped file and reopens it after 
         status: "ready",
         code: null,
         storageKind: "browser-private",
-        label: "Soundspan on this device",
-        reason: "Offline playback uses private Soundspan storage. Use Save as file in Downloads to create a normal file outside the browser.",
+        label: "Soundspan на этом устройстве",
+        reason: "Офлайн-воспроизведение использует закрытое хранилище Soundspan. В разделе «Загрузки» выберите «Сохранить как обычный файл», чтобы создать файл вне браузера.",
     });
     assert.equal(persistCalls, 1);
 
@@ -749,8 +749,8 @@ test("browser-private storage reports when durable persistence was declined", as
         status: "ready",
         code: null,
         storageKind: "browser-private",
-        label: "Soundspan on this device",
-        reason: "Offline playback works, but the browser declined durable private storage. Use Save as file in Downloads because browser data may be cleared.",
+        label: "Soundspan на этом устройстве",
+        reason: "Офлайн-воспроизведение работает, но браузер не разрешил постоянное хранение. Сохраните обычный файл из раздела «Загрузки», потому что данные браузера могут быть очищены.",
     });
     const session = await vault.open({
         ownerId: "user-1",
@@ -1032,7 +1032,7 @@ test("an older private file system without writable streams stays explicitly uns
         status: "unsupported",
         code: "unsupported",
         storageKind: null,
-        label: "Device files unavailable",
-        reason: "This browser cannot write to a user-selected directory.",
+        label: "Файлы на устройстве недоступны",
+        reason: "Этот браузер не может записывать файлы в выбранную пользователем папку.",
     });
 });

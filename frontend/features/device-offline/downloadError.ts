@@ -14,14 +14,14 @@ export class DeviceOfflineDownloadError extends Error {
 
 export class StaleDeviceOfflineAttemptError extends Error {
     constructor() {
-        super("Device download was superseded or deleted");
+        super("Загрузка на устройство была заменена или удалена");
         this.name = "StaleDeviceOfflineAttemptError";
     }
 }
 
 export class SupersededDeviceOfflineAuthRuntimeError extends Error {
     constructor() {
-        super("Authentication session changed while the download was pending");
+        super("Сеанс авторизации изменился во время ожидания загрузки");
         this.name = "SupersededDeviceOfflineAuthRuntimeError";
     }
 }
@@ -34,7 +34,7 @@ export function classifyDeviceOfflineFailure(error: unknown): {
     const message =
         error instanceof Error
             ? error.message
-            : String(error ?? "Download failed");
+            : String(error ?? "Не удалось скачать трек");
     if (error instanceof DeviceOfflineDownloadError) {
         return { status: "error", code: error.code, message };
     }

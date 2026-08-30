@@ -68,7 +68,7 @@ export async function retainDeviceAudioFile(
     if (response.status !== 200) {
         throw new DeviceOfflineDownloadError(
             "http",
-            `Audio download failed with HTTP ${response.status}`,
+            `Не удалось скачать аудио: HTTP ${response.status}`,
             response.status,
         );
     }

@@ -101,7 +101,7 @@ function openAutomationDatabase(): Promise<IDBDatabase> {
         request.onblocked = () => {
             if (settled) return;
             settled = true;
-            reject(new Error("Device offline queue database upgrade blocked"));
+            reject(new Error("Обновление базы офлайн-загрузок заблокировано"));
         };
     });
     const retryableAttempt = attempt.catch((error: unknown) => {
@@ -186,7 +186,8 @@ class BrowserDeviceOfflineQueueStore implements DeviceOfflineQueueStore {
         };
         request.onerror = () => transaction.abort();
         await transactionDone(transaction);
-        if (!next) throw new Error("Device offline queue upsert failed");
+        if (!next)
+            throw new Error("Не удалось обновить очередь офлайн-загрузок");
         publishQueueChange();
         return next;
     }
@@ -318,7 +319,7 @@ class BrowserDeviceOfflineQueueStore implements DeviceOfflineQueueStore {
                         leaseExpiresAt: null,
                         updatedAt: now,
                         errorMessage:
-                            "Download was interrupted and is ready to resume.",
+                            "Загрузка была прервана и готова к продолжению.",
                     });
                 }
             }
@@ -437,9 +438,7 @@ export function getBrowserDeviceOfflineQueueManager(
     downloads: DeviceOfflineDownloadManager = getBrowserDeviceOfflineManager(),
 ): DeviceOfflineQueueManager {
     if (typeof window === "undefined") {
-        throw new Error(
-            "Device offline queue is available only in the browser",
-        );
+        throw new Error("Очередь офлайн-загрузок доступна только в браузере");
     }
     if (queueManager) return queueManager;
 

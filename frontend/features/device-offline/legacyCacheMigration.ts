@@ -34,7 +34,7 @@ export async function migrateLegacyDeviceAudioCache(
     let migrated = 0;
     for (const record of candidates) {
         if (input.signal.aborted)
-            throw new DOMException("Migration aborted", "AbortError");
+            throw new DOMException("Перенос загрузки отменён", "AbortError");
         const cacheUrl = new URL(record.virtualUrl, input.origin).toString();
         if (record.mediaRef) {
             if (await input.audioCache.match(cacheUrl)) {

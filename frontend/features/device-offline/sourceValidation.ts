@@ -26,21 +26,21 @@ export function normalizeDeviceAudioSourceUrl(
     if (parsed.origin !== new URL(origin).origin) {
         throw new DeviceOfflineDownloadError(
             "invalid_source",
-            "Device downloads require a same-origin audio URL",
+            "Для загрузки на устройство нужен аудио-URL с того же источника",
         );
     }
     for (const name of parsed.searchParams.keys()) {
         if (SENSITIVE_QUERY_NAMES.has(name.toLowerCase())) {
             throw new DeviceOfflineDownloadError(
                 "invalid_source",
-                "Device download URL contains a credential",
+                "URL загрузки на устройство содержит учётные данные",
             );
         }
     }
     if (!STREAM_SOURCE_PATHS.some((pattern) => pattern.test(parsed.pathname))) {
         throw new DeviceOfflineDownloadError(
             "invalid_source",
-            "Device download URL is not an approved audio route",
+            "URL загрузки на устройство не относится к разрешённому аудиомаршруту",
         );
     }
     return {

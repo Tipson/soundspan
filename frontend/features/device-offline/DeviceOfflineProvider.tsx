@@ -76,13 +76,14 @@ export interface DeviceOfflineStorageState {
 }
 
 const DEVICE_FOLDER_UNSUPPORTED_EXPLANATION =
-    "This browser cannot provide writable device storage. Update the browser, use Chrome or Edge for a normal music folder where supported, or use a native Soundspan build.";
+    "Этот браузер не поддерживает запись в хранилище устройства. Обновите браузер, используйте Chrome или Edge для обычной папки с музыкой там, где это поддерживается, либо нативное приложение Soundspan.";
 
 const INITIAL_DEVICE_OFFLINE_STORAGE: DeviceOfflineStorageState = {
     status: "checking",
     directoryName: null,
     storageKind: null,
-    explanation: "Checking whether this device can store music files…",
+    explanation:
+        "Проверяем, может ли это устройство хранить музыкальные файлы…",
 };
 
 function toDeviceOfflineStorageState(
@@ -136,7 +137,7 @@ function toDeviceOfflineStorageFailure(
             directoryName: null,
             storageKind: null,
             explanation:
-                "No folder was selected. Choose a music folder when you are ready to download.",
+                "Папка не выбрана. Когда будете готовы скачать музыку, выберите папку.",
         };
     }
     if (code === "unsupported") {
@@ -154,7 +155,7 @@ function toDeviceOfflineStorageFailure(
         explanation:
             error instanceof Error && error.message
                 ? error.message
-                : "Soundspan could not open device storage. Choose the folder again and allow file access.",
+                : "Soundspan не удалось открыть хранилище устройства. Выберите папку снова и разрешите доступ к файлам.",
     };
 }
 
@@ -204,7 +205,7 @@ const DeviceOfflineContext = createContext<DeviceOfflineContextValue | null>(
 const EMPTY_DEVICE_OFFLINE_RECORDS: DeviceOfflineDownloadRecord[] = [];
 const EMPTY_DEVICE_OFFLINE_QUEUE: DeviceOfflineQueueItem[] = [];
 const DEVICE_STORAGE_READ_ERROR =
-    "Could not read all device storage. Previously loaded downloads remain visible when available; retry before changing offline settings.";
+    "Не удалось прочитать всё хранилище устройства. Ранее загруженные треки по возможности останутся видны; повторите попытку, прежде чем менять настройки офлайн-доступа.";
 
 export function DeviceOfflineProvider({
     children,
@@ -389,7 +390,7 @@ export function DeviceOfflineProvider({
                         directoryName: null,
                         storageKind: null,
                         explanation:
-                            "Soundspan could not inspect device-folder access. Try choosing the folder again.",
+                            "Soundspan не удалось проверить доступ к папке на устройстве. Попробуйте выбрать папку снова.",
                     });
                 }
             },
@@ -716,7 +717,7 @@ export function DeviceOfflineProvider({
             directoryName: storage.directoryName,
             storageKind: storage.storageKind,
             explanation:
-                "Choose a folder in the device picker and allow Soundspan to write music files there.",
+                "Выберите папку в системном окне и разрешите Soundspan записывать туда музыкальные файлы.",
         });
 
         let accessRequest: Promise<DeviceAudioAccessState>;
@@ -803,7 +804,7 @@ export function DeviceOfflineProvider({
                             quality: "auto",
                             management: "auto-liked" as const,
                             collectionId: "playlist:my-liked",
-                            collectionLabel: "My Liked",
+                            collectionLabel: "Любимые треки",
                         };
                     });
                 await queueManager.syncAutoLiked(ownerId, requests);
@@ -872,7 +873,7 @@ export function DeviceOfflineProvider({
     const download = useCallback(
         async (input: Omit<DeviceOfflineDownloadInput, "ownerId">) => {
             if (!manager || !ownerId)
-                throw new Error("Sign in to download tracks");
+                throw new Error("Войдите в аккаунт, чтобы скачивать треки");
             await requireManualStorage();
             try {
                 return await manager.download({ ...input, ownerId });
@@ -960,10 +961,14 @@ export function DeviceOfflineProvider({
     const preparePlayback = useCallback(
         async (record: DeviceOfflineDownloadRecord) => {
             if (!ownerId || record.ownerId !== ownerId) {
-                throw new Error("This device copy belongs to another account");
+                throw new Error(
+                    "Эта копия на устройстве принадлежит другому аккаунту",
+                );
             }
             if (record.status !== "ready") {
-                throw new Error("This device copy is not ready for playback");
+                throw new Error(
+                    "Эта копия на устройстве ещё не готова к воспроизведению",
+                );
             }
             // Real device files are acquired as a revocable lease by the
             // player orchestrator. Only legacy CacheStorage records need the
@@ -985,7 +990,7 @@ export function DeviceOfflineProvider({
                     )
                 ) {
                     throw new Error(
-                        "The active account changed before playback started",
+                        "Активный аккаунт изменился до начала воспроизведения",
                     );
                 }
             } catch (error) {
@@ -1007,11 +1012,13 @@ export function DeviceOfflineProvider({
                 !ownerAuthRuntimeLease ||
                 record.ownerId !== ownerId
             ) {
-                throw new Error("This device copy belongs to another account");
+                throw new Error(
+                    "Эта копия на устройстве принадлежит другому аккаунту",
+                );
             }
             if (record.status !== "ready" || !record.mediaRef) {
                 throw new Error(
-                    "This device copy is not ready to save as a file",
+                    "Эта копия на устройстве ещё не готова к сохранению в файл",
                 );
             }
             const session = await vault.open({
@@ -1046,7 +1053,7 @@ export function DeviceOfflineProvider({
     const enqueueCollection = useCallback(
         async (input: DeviceOfflineCollectionDownloadInput) => {
             if (!queueManager || !ownerId) {
-                throw new Error("Sign in to download tracks");
+                throw new Error("Войдите в аккаунт, чтобы скачивать треки");
             }
             await requireManualStorage();
             const result = await queueManager.enqueueBatch(
@@ -1091,14 +1098,16 @@ export function DeviceOfflineProvider({
             >,
         ) => {
             if (!queueManager || !ownerId) {
-                throw new Error("Sign in to configure device downloads");
+                throw new Error(
+                    "Войдите в аккаунт, чтобы настроить загрузки на устройство",
+                );
             }
             if (
                 patch.autoDownloadLiked === true &&
                 storage.status !== "ready"
             ) {
                 throw new Error(
-                    "Prepare offline storage before enabling automatic downloads",
+                    "Подготовьте офлайн-хранилище, прежде чем включать автоматические загрузки",
                 );
             }
             const next = await queueManager.updateSettings(ownerId, patch);
