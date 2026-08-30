@@ -902,6 +902,111 @@ test("the browser vault prefers a normal directory and falls back to private sto
     );
 });
 
+test("a browser vault restart routes an existing private ref even when a directory picker becomes available", async () => {
+    const privateRoot = new MemoryDirectoryHandle("OPFS");
+    const firstRuntime = createHarness().runtime;
+    const noPickerRuntime: DeviceAudioVaultRuntime = {
+        ...firstRuntime,
+        isSupported: () => false,
+    };
+    const privateStorage = {
+        getDirectory: async () => privateRoot,
+        persisted: async () => true,
+        persist: async () => true,
+    };
+    const firstVault = createBrowserDeviceAudioVault({
+        directoryRegistry: new MemoryRegistry(),
+        directoryRuntime: noPickerRuntime,
+        privateStorage,
+    });
+    const firstSession = await firstVault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    const receipt = await firstSession.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream([1, 2, 3]),
+        contentType: "audio/mpeg",
+        expectedBytes: 3,
+    });
+    assert.match(receipt.ref, /^opfs1:/);
+
+    const directory = createHarness();
+    const restartedVault = createBrowserDeviceAudioVault({
+        directoryRegistry: directory.registry,
+        directoryRuntime: directory.runtime,
+        privateStorage,
+    });
+    const restartedSession = await restartedVault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    const playback = await restartedSession.access({
+        kind: "play",
+        ref: receipt.ref,
+        expectedBytes: 3,
+    });
+    assert.equal(playback.url, "blob:soundspan/1");
+    playback.release();
+});
+
+test("a browser vault restart routes a retained directory ref when the picker is no longer exposed", async () => {
+    const directory = createHarness();
+    const privateRoot = new MemoryDirectoryHandle("OPFS");
+    const privateStorage = {
+        getDirectory: async () => privateRoot,
+        persisted: async () => true,
+        persist: async () => true,
+    };
+    const firstVault = createBrowserDeviceAudioVault({
+        directoryRegistry: directory.registry,
+        directoryRuntime: directory.runtime,
+        privateStorage,
+    });
+    await firstVault.requestAccess();
+    const firstSession = await firstVault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    const receipt = await firstSession.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream([4, 5, 6]),
+        contentType: "audio/mpeg",
+        expectedBytes: 3,
+    });
+    assert.match(receipt.ref, /^fsa1:/);
+
+    const noPickerRuntime: DeviceAudioVaultRuntime = {
+        ...directory.runtime,
+        isSupported: () => false,
+    };
+    directory.picked.permission = "prompt";
+    directory.picked.requestedPermission = "granted";
+    const restartedVault = createBrowserDeviceAudioVault({
+        directoryRegistry: directory.registry,
+        directoryRuntime: noPickerRuntime,
+        privateStorage,
+    });
+    assert.equal(
+        (await restartedVault.inspectAccess()).status,
+        "permission-required",
+    );
+    assert.equal((await restartedVault.requestAccess()).status, "ready");
+    const restartedSession = await restartedVault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    const playback = await restartedSession.access({
+        kind: "play",
+        ref: receipt.ref,
+        expectedBytes: 3,
+    });
+    assert.equal(playback.url, "blob:soundspan/1");
+    playback.release();
+});
+
 test("an older private file system without writable streams stays explicitly unsupported", async () => {
     const root = {
         kind: "directory" as const,

@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Device collection downloads retry transient network, provider, and device-I/O failures with bounded backoff and continue later tracks after an exhausted or permanent failure. Ready files reopen through their original directory or browser-private adapter after a PWA restart, offline playback never falls through to an unreachable network URL, and interrupted or failed entries expose Retry without appearing playable.
 - Rapid manual track changes invalidate late callbacks from the superseded audio source before they can stop or autoplay the replacement, and replacement-only intent no longer lets queue actions hide a genuine playback failure. Clicking the currently playing queue occurrence now pauses and resumes it without rebuilding the queue, while repeated playlist occurrences remain distinct.
 - An active Vibe mood now travels with the player session, so endless provider continuation keeps the selected context after navigating away from the Vibe page instead of silently reverting to an unfiltered Wave.
 - Public YouTube Music search uses an isolated provider-safe English interface context while retaining the Russian regional catalog and Unicode queries, so `Кино`, `Цой`, `sqwoz bab`, and `Linkin Park` no longer collapse to cached empty results; Home and Explore keep their configured Russian presentation locale.

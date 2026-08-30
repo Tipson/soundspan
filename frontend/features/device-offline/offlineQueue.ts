@@ -9,9 +9,12 @@ import type {
     DeviceOfflineTrack,
 } from "./types";
 import type { AuthRuntimeLease } from "@/lib/auth-runtime-generation";
+import { DeviceOfflineDownloadError } from "./downloadError";
+import { DeviceAudioVaultError } from "./vault";
 
 export const DEVICE_OFFLINE_QUEUE_LEASE_MS = 60_000;
 export const DEVICE_OFFLINE_QUEUE_HEARTBEAT_MS = 20_000;
+export const DEVICE_OFFLINE_QUEUE_RETRY_DELAYS_MS = [500, 1_500] as const;
 export const DEVICE_OFFLINE_AUTO_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 export const DEVICE_OFFLINE_AUTO_LIMIT_OPTIONS = [25, 50, 100, 200] as const;
 
@@ -152,6 +155,7 @@ interface DeviceOfflineQueueDependencies {
         intervalMs: number,
     ) => unknown;
     cancelLeaseHeartbeat?: (handle: unknown) => void;
+    waitBeforeRetry?: (delayMs: number) => Promise<void>;
     getAuthRuntimeLease: () => AuthRuntimeLease;
     isAuthRuntimeCurrent: (generation: number) => boolean;
 }
@@ -794,13 +798,10 @@ export class DeviceOfflineQueueManager {
             if (!this.ownsQueueLease(latestBeforeDownload, claimed)) {
                 return true;
             }
-            const downloaded = await this.dependencies.downloads.download({
-                ownerId: claimed.ownerId,
-                track: claimed.track,
-                quality: claimed.quality,
-                sourceUrl: claimed.sourceUrl,
-                management: claimed.management,
-            });
+            const downloaded = await this.downloadWithRetry(
+                claimed,
+                authRuntimeLease,
+            );
             if (!this.isRuntimeActive(claimed.ownerId, authRuntimeLease)) {
                 return false;
             }
@@ -864,17 +865,7 @@ export class DeviceOfflineQueueManager {
             }
             const latest = await this.dependencies.store.getByKey(claimed.key);
             if (!latest) return true;
-            const records = await this.dependencies.downloads
-                .list(claimed.ownerId)
-                .catch(() => []);
-            const download = records.find(
-                (record) =>
-                    record.trackIdentity === claimed.trackIdentity &&
-                    record.quality === claimed.quality,
-            );
-            const interrupted =
-                !this.dependencies.isOnline() ||
-                download?.status === "interrupted";
+            const interrupted = !this.dependencies.isOnline();
             await this.markQueueFailure(
                 latest,
                 interrupted ? "interrupted" : "error",
@@ -887,6 +878,79 @@ export class DeviceOfflineQueueManager {
                 this.dependencies.cancelLeaseHeartbeat?.(heartbeat);
             }
         }
+    }
+
+    private async downloadWithRetry(
+        claimed: DeviceOfflineQueueItem,
+        authRuntimeLease: AuthRuntimeLease,
+    ): Promise<DeviceOfflineDownloadRecord> {
+        for (
+            let retryIndex = 0;
+            retryIndex <= DEVICE_OFFLINE_QUEUE_RETRY_DELAYS_MS.length;
+            retryIndex += 1
+        ) {
+            try {
+                return await this.dependencies.downloads.download({
+                    ownerId: claimed.ownerId,
+                    track: claimed.track,
+                    quality: claimed.quality,
+                    sourceUrl: claimed.sourceUrl,
+                    management: claimed.management,
+                });
+            } catch (error) {
+                const retryDelay =
+                    DEVICE_OFFLINE_QUEUE_RETRY_DELAYS_MS[retryIndex];
+                if (
+                    retryDelay === undefined ||
+                    !this.isTransientDownloadFailure(error) ||
+                    !this.isRuntimeActive(claimed.ownerId, authRuntimeLease) ||
+                    !this.dependencies.isOnline() ||
+                    this.isTrackCancelled(claimed)
+                ) {
+                    throw error;
+                }
+                const current = await this.dependencies.store.getByKey(
+                    claimed.key,
+                );
+                if (!this.ownsQueueLease(current, claimed)) throw error;
+                await this.waitBeforeRetry(retryDelay);
+                if (
+                    !this.isRuntimeActive(claimed.ownerId, authRuntimeLease) ||
+                    !this.dependencies.isOnline() ||
+                    this.isTrackCancelled(claimed)
+                ) {
+                    throw error;
+                }
+            }
+        }
+        throw new Error("Device download retry loop exhausted");
+    }
+
+    private isTransientDownloadFailure(error: unknown): boolean {
+        if (error instanceof TypeError) return true;
+        if (error instanceof DOMException) {
+            return error.name === "NetworkError";
+        }
+        if (error instanceof DeviceAudioVaultError) {
+            return error.recovery === "retry";
+        }
+        if (!(error instanceof DeviceOfflineDownloadError)) return false;
+        if (error.code === "cache") return true;
+        if (error.code !== "http") return false;
+        const status = error.httpStatus;
+        return (
+            status === 408 ||
+            status === 425 ||
+            status === 429 ||
+            (typeof status === "number" && status >= 500 && status <= 599)
+        );
+    }
+
+    private waitBeforeRetry(delayMs: number): Promise<void> {
+        if (this.dependencies.waitBeforeRetry) {
+            return this.dependencies.waitBeforeRetry(delayMs);
+        }
+        return new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
     private async markQueueFailure(

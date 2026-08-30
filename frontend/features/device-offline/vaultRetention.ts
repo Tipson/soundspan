@@ -69,6 +69,7 @@ export async function retainDeviceAudioFile(
         throw new DeviceOfflineDownloadError(
             "http",
             `Audio download failed with HTTP ${response.status}`,
+            response.status,
         );
     }
 

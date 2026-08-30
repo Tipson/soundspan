@@ -17,6 +17,7 @@ import type {
     DeviceOfflineDownloadRecord,
     DeviceOfflineTrack,
 } from "../../features/device-offline/types";
+import { DeviceOfflineDownloadError } from "../../features/device-offline/downloadError";
 
 const TRACK: DeviceOfflineTrack = {
     id: "yt:video-1",
@@ -233,6 +234,7 @@ function createHarness(options?: {
     promotionGate?: Promise<void>;
     queueListGate?: Promise<void>;
     downloadDeleteGate?: Promise<void>;
+    downloadOutcomes?: Array<Error | "ready">;
     captureHeartbeat?: boolean;
     getAuthRuntimeLease?: () => {
         generation: number;
@@ -248,6 +250,8 @@ function createHarness(options?: {
     let maxActive = 0;
     let online = options?.online ?? true;
     const calls: DeviceOfflineDownloadInput[] = [];
+    const downloadOutcomes = [...(options?.downloadOutcomes ?? [])];
+    const retryDelays: number[] = [];
     const promoted: string[] = [];
     const deleted: string[] = [];
     let heartbeatCallback: (() => void) | null = null;
@@ -304,25 +308,30 @@ function createHarness(options?: {
                 calls.push(input);
                 active += 1;
                 maxActive = Math.max(maxActive, active);
-                await options?.downloadGate;
-                await Promise.resolve();
-                active -= 1;
-                const identity = input.track.youtubeVideoId
-                    ? `youtube:${input.track.youtubeVideoId}`
-                    : `track:${input.track.id}`;
-                const record: DeviceOfflineDownloadRecord = {
-                    ...readyRecord(
-                        input.ownerId,
-                        `download-${calls.length}`,
-                        input.management ?? "manual",
-                        now,
-                    ),
-                    trackIdentity: identity,
-                    track: input.track,
-                    sourceUrl: input.sourceUrl,
-                };
-                downloads.push(record);
-                return record;
+                try {
+                    await options?.downloadGate;
+                    await Promise.resolve();
+                    const outcome = downloadOutcomes.shift();
+                    if (outcome instanceof Error) throw outcome;
+                    const identity = input.track.youtubeVideoId
+                        ? `youtube:${input.track.youtubeVideoId}`
+                        : `track:${input.track.id}`;
+                    const record: DeviceOfflineDownloadRecord = {
+                        ...readyRecord(
+                            input.ownerId,
+                            `download-${calls.length}`,
+                            input.management ?? "manual",
+                            now,
+                        ),
+                        trackIdentity: identity,
+                        track: input.track,
+                        sourceUrl: input.sourceUrl,
+                    };
+                    downloads.push(record);
+                    return record;
+                } finally {
+                    active -= 1;
+                }
             },
             delete: async (ownerId, key, isAuthorized?: () => boolean) => {
                 signalDownloadDeleteStarted();
@@ -375,6 +384,9 @@ function createHarness(options?: {
         cancelLeaseHeartbeat: () => {
             heartbeatCallback = null;
         },
+        waitBeforeRetry: async (delayMs: number) => {
+            retryDelays.push(delayMs);
+        },
         getAuthRuntimeLease:
             options?.getAuthRuntimeLease ??
             (() => ({
@@ -392,6 +404,7 @@ function createHarness(options?: {
         calls,
         deleted,
         promoted,
+        retryDelays,
         maxActive: () => maxActive,
         downloadListStarted,
         autoDeleteStarted,
@@ -452,6 +465,118 @@ test("batch queue deduplicates per owner and track quality and processes seriall
     assert.equal(harness.maxActive(), 1);
     assert.equal((await harness.manager.list("user-1")).length, 0);
     assert.equal((await harness.manager.list("user-2")).length, 1);
+});
+
+test("transient download failures retry with bounded backoff and preserve serial collection order", async () => {
+    const second = {
+        ...TRACK,
+        id: "yt:video-2",
+        youtubeVideoId: "video-2",
+        title: "Two",
+    };
+    const harness = createHarness({
+        downloadOutcomes: [
+            new TypeError("network disconnected"),
+            new DeviceOfflineDownloadError(
+                "http",
+                "Audio download failed with HTTP 503",
+                503,
+            ),
+            "ready",
+            "ready",
+        ],
+    });
+
+    await harness.manager.enqueueBatch([
+        request("user-1"),
+        request("user-1", second),
+    ]);
+    await harness.manager.resume("user-1");
+
+    assert.deepEqual(
+        harness.calls.map((call) => call.track.youtubeVideoId),
+        ["video-1", "video-1", "video-1", "video-2"],
+    );
+    assert.deepEqual(harness.retryDelays, [500, 1_500]);
+    assert.equal((await harness.manager.list("user-1")).length, 0);
+    assert.equal(harness.maxActive(), 1);
+});
+
+test("an exhausted transient failure is isolated and the remaining collection continues", async () => {
+    const second = {
+        ...TRACK,
+        id: "yt:video-2",
+        youtubeVideoId: "video-2",
+        title: "Two",
+    };
+    const harness = createHarness({
+        downloadOutcomes: [
+            new TypeError("network attempt one"),
+            new TypeError("network attempt two"),
+            new TypeError("network attempt three"),
+            "ready",
+        ],
+    });
+
+    await harness.manager.enqueueBatch([
+        request("user-1"),
+        request("user-1", second),
+    ]);
+    await harness.manager.resume("user-1");
+
+    assert.deepEqual(
+        harness.calls.map((call) => call.track.youtubeVideoId),
+        ["video-1", "video-1", "video-1", "video-2"],
+    );
+    assert.deepEqual(harness.retryDelays, [500, 1_500]);
+    const failed = await harness.manager.list("user-1");
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0]?.trackIdentity, "youtube:video-1");
+    assert.equal(failed[0]?.status, "error");
+    assert.match(failed[0]?.errorMessage ?? "", /network attempt three/i);
+    assert.equal(harness.downloads[0]?.trackIdentity, "youtube:video-2");
+});
+
+test("permanent HTTP failures do not auto-retry, while a later manual Retry remains available", async () => {
+    const second = {
+        ...TRACK,
+        id: "yt:video-2",
+        youtubeVideoId: "video-2",
+        title: "Two",
+    };
+    const harness = createHarness({
+        downloadOutcomes: [
+            new DeviceOfflineDownloadError(
+                "http",
+                "Audio download failed with HTTP 404",
+                404,
+            ),
+            "ready",
+            "ready",
+        ],
+    });
+
+    await harness.manager.enqueueBatch([
+        request("user-1"),
+        request("user-1", second),
+    ]);
+    await harness.manager.resume("user-1");
+
+    assert.deepEqual(
+        harness.calls.map((call) => call.track.youtubeVideoId),
+        ["video-1", "video-2"],
+    );
+    assert.deepEqual(harness.retryDelays, []);
+    assert.equal((await harness.manager.list("user-1"))[0]?.status, "error");
+
+    await harness.manager.enqueueBatch([request("user-1")]);
+    await harness.manager.resume("user-1");
+
+    assert.deepEqual(
+        harness.calls.map((call) => call.track.youtubeVideoId),
+        ["video-1", "video-2", "video-1"],
+    );
+    assert.equal((await harness.manager.list("user-1")).length, 0);
 });
 
 test("offline queue remains local and resumes an interrupted lease on the next online run", async () => {

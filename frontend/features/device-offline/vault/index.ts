@@ -42,12 +42,24 @@ import {
 import { createBrowserDeviceAudioVaultRuntime } from "./browserRuntime";
 import { createIndexedDbDeviceAudioDirectoryRegistry } from "./indexedDbDirectoryRegistry";
 import type {
+    DeviceAudioAccessRequest,
+    DeviceAudioAccessResult,
+    DeviceAudioAccessState,
     DeviceAudioDirectoryRegistry,
     DeviceAudioVault,
     DeviceAudioVaultRuntime,
+    DeviceAudioVaultSession,
 } from "./types";
 
 type DeviceAudioVaultFactory = () => DeviceAudioVault;
+
+function hasRetainedDirectory(access: DeviceAudioAccessState): boolean {
+    return (
+        access.status === "ready" ||
+        access.status === "permission-required" ||
+        access.status === "denied"
+    );
+}
 
 export interface BrowserDeviceAudioVaultOptions {
     directoryRegistry?: DeviceAudioDirectoryRegistry;
@@ -61,18 +73,97 @@ export function createBrowserDeviceAudioVault(
 ): DeviceAudioVault {
     const directoryRuntime =
         input.directoryRuntime ?? createBrowserDeviceAudioVaultRuntime();
-    if (directoryRuntime.isSupported()) {
-        return createBrowserDirectoryDeviceAudioVault({
-            registry:
-                input.directoryRegistry ??
-                createIndexedDbDeviceAudioDirectoryRegistry(),
-            runtime: directoryRuntime,
-        });
-    }
-    return createBrowserPrivateDeviceAudioVault({
+    const directoryRegistry =
+        input.directoryRegistry ??
+        createIndexedDbDeviceAudioDirectoryRegistry();
+    const directoryVault = createBrowserDirectoryDeviceAudioVault({
+        registry: directoryRegistry,
+        runtime: directoryRuntime,
+    });
+    const retainedDirectoryVault = directoryRuntime.isSupported()
+        ? directoryVault
+        : createBrowserDirectoryDeviceAudioVault({
+              registry: directoryRegistry,
+              runtime: {
+                  ...directoryRuntime,
+                  // A persisted handle can remain readable in an installed PWA
+                  // even when that window no longer exposes the picker entrypoint.
+                  isSupported: () => true,
+              },
+          });
+    const privateVault = createBrowserPrivateDeviceAudioVault({
         storage: input.privateStorage,
         runtime: directoryRuntime,
     });
+
+    const writeVault = async (): Promise<DeviceAudioVault> => {
+        const directoryAccess = await retainedDirectoryVault.inspectAccess();
+        if (
+            hasRetainedDirectory(directoryAccess) ||
+            directoryRuntime.isSupported()
+        ) {
+            return retainedDirectoryVault;
+        }
+        return privateVault;
+    };
+    const accessVault = (
+        request: DeviceAudioAccessRequest,
+    ): DeviceAudioVault => {
+        const version = String(request.ref).split(":", 1)[0];
+        if (version === "fsa1") return retainedDirectoryVault;
+        if (version === "opfs1") return privateVault;
+        return directoryRuntime.isSupported() ? directoryVault : privateVault;
+    };
+
+    return {
+        inspectAccess: async () => {
+            const directoryAccess =
+                await retainedDirectoryVault.inspectAccess();
+            if (
+                hasRetainedDirectory(directoryAccess) ||
+                directoryRuntime.isSupported()
+            ) {
+                return directoryAccess;
+            }
+            return privateVault.inspectAccess();
+        },
+        requestAccess: async () => {
+            // Preserve the user's transient activation: when a picker exists,
+            // invoke it without first awaiting IndexedDB or OPFS work.
+            if (directoryRuntime.isSupported()) {
+                return directoryVault.requestAccess();
+            }
+            const directoryAccess =
+                await retainedDirectoryVault.inspectAccess();
+            if (hasRetainedDirectory(directoryAccess)) {
+                return retainedDirectoryVault.requestAccess();
+            }
+            return privateVault.requestAccess();
+        },
+        open: async (openInput): Promise<DeviceAudioVaultSession> => ({
+            ownerId: openInput.ownerId,
+            authGeneration: openInput.authGeneration,
+            storage: {
+                kind: directoryRuntime.isSupported()
+                    ? "desktop-directory"
+                    : "browser-private",
+                label: directoryRuntime.isSupported()
+                    ? "Selected folder"
+                    : "Soundspan on this device",
+            },
+            retain: async (retainInput) => {
+                const selected = await writeVault();
+                const session = await selected.open(openInput);
+                return session.retain(retainInput);
+            },
+            access: async <T extends DeviceAudioAccessRequest>(
+                accessInput: T,
+            ): Promise<DeviceAudioAccessResult<T>> => {
+                const session = await accessVault(accessInput).open(openInput);
+                return session.access(accessInput);
+            },
+        }),
+    };
 }
 
 const defaultFactory: DeviceAudioVaultFactory = createBrowserDeviceAudioVault;

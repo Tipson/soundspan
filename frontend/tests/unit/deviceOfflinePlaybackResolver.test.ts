@@ -246,6 +246,51 @@ test("a recoverable vault access failure falls back to the clean network URL", a
     assert.equal(source.url, "/network");
 });
 
+test("an offline cold-start never replaces a ready device file with an unreachable network URL", async (t) => {
+    const previousNavigator = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator",
+    );
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: { onLine: false },
+    });
+    t.after(() => {
+        if (previousNavigator) {
+            Object.defineProperty(globalThis, "navigator", previousNavigator);
+        } else {
+            Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+    const localFailure = new DeviceAudioVaultError(
+        "not_found",
+        "The retained device file could not be opened",
+        "retry",
+    );
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeVault(async () => {
+            throw localFailure;
+        }),
+    );
+    t.after(restore);
+    setDeviceOfflineRuntimeState("user-1", [
+        {
+            ...readyRecord("user-1", "cold-start-key"),
+            mediaRef: "opfs1:owner:cold-start" as DeviceAudioVaultRef,
+        },
+    ]);
+
+    await assert.rejects(
+        acquireDeviceOfflinePlaybackSource(
+            TRACK,
+            "/network-that-cannot-work-offline",
+            new AbortController().signal,
+        ),
+        (error: unknown) => error === localFailure,
+    );
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), true);
+});
+
 test("an aborted managed acquisition releases a late vault URL", async (t) => {
     let resolveAccess!: (value: unknown) => void;
     let releases = 0;

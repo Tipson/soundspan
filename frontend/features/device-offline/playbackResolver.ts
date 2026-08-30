@@ -279,6 +279,12 @@ export async function acquireDeviceOfflinePlaybackSource(
             throw playbackAcquisitionAbort();
         }
         if (error instanceof DeviceAudioVaultError) {
+            if (
+                typeof navigator !== "undefined" &&
+                navigator.onLine === false
+            ) {
+                throw error;
+            }
             return immediatePlaybackSource(networkUrl);
         }
         throw error;

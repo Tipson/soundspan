@@ -344,35 +344,43 @@ export class DeviceOfflineDownloadManager {
     async reconcile(ownerId: string): Promise<DeviceOfflineDownloadRecord[]> {
         const records = await this.list(ownerId);
         let activeBackgroundIds: Set<string> | null = null;
-        try {
-            const backgroundFetchLookup =
-                this.dependencies.listActiveBackgroundFetches();
-            activeBackgroundIds = new Set(
-                await new Promise<string[]>((resolve, reject) => {
-                    const timer = setTimeout(
-                        () =>
-                            reject(
-                                new Error(
-                                    "Background Fetch enumeration timed out",
+        const needsBackgroundEnumeration = records.some(
+            (record) =>
+                record.status === "downloading" &&
+                record.transferMode === "background" &&
+                record.backgroundFetchId !== null,
+        );
+        if (needsBackgroundEnumeration) {
+            try {
+                const backgroundFetchLookup =
+                    this.dependencies.listActiveBackgroundFetches();
+                activeBackgroundIds = new Set(
+                    await new Promise<string[]>((resolve, reject) => {
+                        const timer = setTimeout(
+                            () =>
+                                reject(
+                                    new Error(
+                                        "Background Fetch enumeration timed out",
+                                    ),
                                 ),
-                            ),
-                        this.dependencies.backgroundFetchLookupTimeoutMs ??
-                            DEVICE_OFFLINE_BACKGROUND_LOOKUP_TIMEOUT_MS,
-                    );
-                    void backgroundFetchLookup.then(
-                        (ids) => {
-                            clearTimeout(timer);
-                            resolve(ids);
-                        },
-                        (error: unknown) => {
-                            clearTimeout(timer);
-                            reject(error);
-                        },
-                    );
-                }),
-            );
-        } catch {
-            // Enumeration failure means unknown, not that active transfers ended.
+                            this.dependencies.backgroundFetchLookupTimeoutMs ??
+                                DEVICE_OFFLINE_BACKGROUND_LOOKUP_TIMEOUT_MS,
+                        );
+                        void backgroundFetchLookup.then(
+                            (ids) => {
+                                clearTimeout(timer);
+                                resolve(ids);
+                            },
+                            (error: unknown) => {
+                                clearTimeout(timer);
+                                reject(error);
+                            },
+                        );
+                    }),
+                );
+            } catch {
+                // Enumeration failure means unknown, not that active transfers ended.
+            }
         }
 
         for (const record of records) {
@@ -937,6 +945,7 @@ export class DeviceOfflineDownloadManager {
                 throw new DeviceOfflineDownloadError(
                     "http",
                     `Audio download failed with HTTP ${response.status}`,
+                    response.status,
                 );
             }
 

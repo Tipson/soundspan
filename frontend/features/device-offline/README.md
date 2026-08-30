@@ -8,6 +8,9 @@ the final destination for a new download.
   the File System Access API and writes owner-scoped files below a directory
   chosen by the user. When a browser cannot expose such a directory, it uses
   writable Origin Private File System storage on that browser profile/device.
+  Persisted `fsa1` and `opfs1` references route back to the adapter that wrote
+  them after a PWA restart, even if picker availability changes between app
+  contexts.
   Its public seam (`DeviceAudioVault`) also allows a future Capacitor adapter
   to use Android or iOS app-private files without changing queue, collection,
   or player callers.
@@ -35,7 +38,10 @@ the final destination for a new download.
 - `offlineQueue.ts` and `browserQueueStorage.ts` de-duplicate album, artist,
   playlist, and My Liked work by owner, track identity, and quality. Renewable
   leases ensure one foreground transfer per owner across tabs. Interrupted work
-  resumes only while the app is visible, online, and storage is ready.
+  resumes only while the app is visible, online, and storage is ready. A
+  transient per-track network, provider, or device-I/O failure receives two
+  bounded retries; an exhausted or permanent failure remains retryable in the
+  UI without preventing later collection tracks from completing.
 - Playback opens a short-lived revocable URL from the device file. The player
   owns that lease and releases it on replacement, error, account rotation, or
   unmount, so an offline play does not require the Soundspan server.

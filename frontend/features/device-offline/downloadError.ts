@@ -5,6 +5,7 @@ export class DeviceOfflineDownloadError extends Error {
     constructor(
         readonly code: "http" | "quota" | "cache" | "invalid_source",
         message: string,
+        readonly httpStatus?: number,
     ) {
         super(message);
         this.name = "DeviceOfflineDownloadError";

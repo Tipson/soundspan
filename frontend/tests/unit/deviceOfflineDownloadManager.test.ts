@@ -2244,6 +2244,33 @@ test("a hung background registration enumeration cannot block offline hydration"
     assert.deepEqual(metadataStore.records.get(record.key), record);
 });
 
+test("ready device files hydrate without consulting unrelated Background Fetch registrations", async () => {
+    let backgroundEnumerationCalls = 0;
+    const audioVault = new MemoryDeviceAudioVault();
+    const manager = new DeviceOfflineDownloadManager(
+        createDependencies({
+            audioVault,
+            listActiveBackgroundFetches: async () => {
+                backgroundEnumerationCalls += 1;
+                return [];
+            },
+        }),
+    );
+    const ready = await manager.download({
+        ownerId: "user-1",
+        track: TRACK,
+        sourceUrl: "/api/library/tracks/track-1/stream",
+    });
+    assert.equal(ready.status, "ready");
+    assert.ok(ready.mediaRef);
+
+    const reconciled = await manager.reconcile("user-1");
+
+    assert.equal(backgroundEnumerationCalls, 0);
+    assert.equal(reconciled[0]?.status, "ready");
+    assert.equal(reconciled[0]?.mediaRef, ready.mediaRef);
+});
+
 test("reconcile aborts a legacy Background Fetch stuck at zero and exposes a foreground retry", async () => {
     const metadataStore = new MemoryMetadataStore();
     const currentTime = 1_000_000;

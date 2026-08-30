@@ -885,8 +885,17 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
             ...base,
             key: "retry-key",
             virtualUrl: "/__offline/audio/retry-key",
+            track: { ...track, id: "interrupted", title: "Interrupted song" },
             status: "interrupted",
-            errorMessage: "Interrupted",
+            errorMessage: "The transfer stopped before the file was ready.",
+        },
+        {
+            ...base,
+            key: "failed-key",
+            virtualUrl: "/__offline/audio/failed-key",
+            track: { ...track, id: "failed", title: "Failed song" },
+            status: "error",
+            errorMessage: "The provider rejected this file.",
         },
     ];
     const { DownloadsList } =
@@ -903,9 +912,29 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
     await React.act(async () =>
         (
             view.container.querySelector(
-                'button[aria-label="Retry Alpha"]',
+                'button[aria-label="Retry Interrupted song"]',
             ) as HTMLButtonElement
         ).click(),
+    );
+    assert.equal(
+        view.container.querySelector(
+            'button[aria-label="Play Interrupted song"]',
+        ),
+        null,
+    );
+    assert.equal(
+        view.container.querySelector('button[aria-label="Play Failed song"]'),
+        null,
+    );
+    assert.match(
+        view.container.querySelector('[data-download-status="interrupted"]')
+            ?.textContent ?? "",
+        /interrupted.*retry/i,
+    );
+    assert.match(
+        view.container.querySelector('[data-download-status="error"]')
+            ?.textContent ?? "",
+        /failed.*retry/i,
     );
     const deleteButtons = view.container.querySelectorAll(
         'button[aria-label="Delete device copy of Alpha"]',

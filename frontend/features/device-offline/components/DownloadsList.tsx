@@ -49,7 +49,10 @@ function statusCopy(record: DeviceOfflineDownloadRecord): string {
         }
         return "Downloading — keep Soundspan open";
     }
-    return record.errorMessage ?? "Interrupted — retry restarts this track";
+    if (record.status === "interrupted") {
+        return `Interrupted — ${record.errorMessage ?? "the transfer stopped before the file was ready"} Retry restarts this track.`;
+    }
+    return `Failed — ${record.errorMessage ?? "the device copy could not be saved"} Retry this track.`;
 }
 
 function progressPercent(record: DeviceOfflineDownloadRecord): number | null {
@@ -330,29 +333,47 @@ export function DownloadsList() {
                     return (
                         <div
                             key={record.key}
+                            data-download-status={record.status}
                             className="flex min-h-16 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-3 py-2 last:border-b-0"
                         >
-                            <button
-                                type="button"
-                                disabled={record.status !== "ready"}
-                                onClick={() => {
-                                    void preparePlayback(record)
-                                        .then(() =>
-                                            playNow({
-                                                ...(record.track as Track),
-                                            }),
-                                        )
-                                        .catch(() =>
-                                            toast.error(
-                                                "This device copy is unavailable. Download it again while online.",
-                                            ),
-                                        );
-                                }}
-                                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand text-black transition hover:brightness-110 disabled:bg-white/10 disabled:text-white/30"
-                                aria-label={`Play ${record.track.title}`}
-                            >
-                                <Play className="h-4 w-4 fill-current" />
-                            </button>
+                            {record.status === "ready" ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        void preparePlayback(record)
+                                            .then(() =>
+                                                playNow({
+                                                    ...(record.track as Track),
+                                                }),
+                                            )
+                                            .catch(() =>
+                                                toast.error(
+                                                    "This device copy is unavailable. Download it again while online.",
+                                                ),
+                                            );
+                                    }}
+                                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand text-black transition hover:brightness-110"
+                                    aria-label={`Play ${record.track.title}`}
+                                >
+                                    <Play className="h-4 w-4 fill-current" />
+                                </button>
+                            ) : record.status === "downloading" ? (
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white/30"
+                                    aria-label={`Play ${record.track.title}`}
+                                >
+                                    <Play className="h-4 w-4 fill-current" />
+                                </button>
+                            ) : (
+                                <div
+                                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white/30"
+                                    aria-hidden="true"
+                                >
+                                    <HardDriveDownload className="h-4 w-4" />
+                                </div>
+                            )}
                             <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-semibold text-white">
                                     {record.track.title}
