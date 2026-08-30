@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, type LibraryHealthSummary } from "@/lib/api";
+import { libraryOperationsRu } from "@/lib/i18n/libraryOperationsRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 export interface LibraryInsightsState {
     summary: LibraryHealthSummary | null;
@@ -28,9 +30,14 @@ export function useLibraryInsights(): LibraryInsightsState {
             .then((data) => {
                 if (!cancelled) setSummary(data);
             })
-            .catch(() => {
+            .catch((loadError: unknown) => {
                 if (!cancelled) {
-                    setError("Failed to load library insights");
+                    setError(
+                        userFacingError(
+                            loadError,
+                            libraryOperationsRu.libraryInsights.loadFailed,
+                        ),
+                    );
                 }
             })
             .finally(() => {
@@ -50,8 +57,13 @@ export function useLibraryInsights(): LibraryInsightsState {
                 setSummary(data);
                 setRefreshToken((token) => token + 1);
             })
-            .catch(() => {
-                setError("Failed to refresh library insights");
+            .catch((refreshError: unknown) => {
+                setError(
+                    userFacingError(
+                        refreshError,
+                        libraryOperationsRu.libraryInsights.refreshFailed,
+                    ),
+                );
             })
             .finally(() => {
                 setIsRefreshing(false);

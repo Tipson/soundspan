@@ -26,7 +26,17 @@ import { api } from "@/lib/api";
 import Link from "next/link";
 import Image from "next/image";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { formatRelativeDate } from "@/utils/formatTime";
+import {
+    formatDownloadingReleaseRu,
+    formatDownloadStartedRu,
+    formatReleaseCalendarDateRu,
+    formatReleaseRadarSummaryRu,
+    formatReleaseRequestedRu,
+    formatRelativeReleaseDateRu,
+    formatRequestingReleaseRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 interface ReleaseItem {
     id: number | string;
@@ -75,7 +85,7 @@ export default function ReleasesPage() {
             setData(json);
         } catch (err: unknown) {
             setError(
-                err instanceof Error ? err.message : "Failed to fetch releases",
+                userFacingError(err, libraryOperationsRu.releases.loadFailed),
             );
         } finally {
             setLoading(false);
@@ -91,7 +101,7 @@ export default function ReleasesPage() {
         try {
             setDownloadingId(release.id);
             if (downloadsEnabled) {
-                toast.loading(`Downloading ${release.title}...`, {
+                toast.loading(formatDownloadingReleaseRu(release.title), {
                     id: toastId,
                 });
                 await api.downloadAlbum(
@@ -99,13 +109,15 @@ export default function ReleasesPage() {
                     release.title,
                     release.albumMbid,
                 );
-                toast.success(`Download started for ${release.title}`, {
+                toast.success(formatDownloadStartedRu(release.title), {
                     id: toastId,
                 });
                 await fetchReleases();
                 return;
             }
-            toast.loading(`Requesting ${release.title}...`, { id: toastId });
+            toast.loading(formatRequestingReleaseRu(release.title), {
+                id: toastId,
+            });
             await createRequest.mutateAsync({
                 artistName: release.artistName,
                 albumTitle: release.title,
@@ -114,14 +126,13 @@ export default function ReleasesPage() {
                     ? { artistMbid: release.artistMbid }
                     : {}),
             });
-            toast.success(
-                `Requested ${release.title} — an admin will review it`,
-                { id: toastId },
-            );
+            toast.success(formatReleaseRequestedRu(release.title), {
+                id: toastId,
+            });
         } catch (err) {
             sharedFrontendLogger.error("Release acquisition failed:", err);
             toast.error(
-                err instanceof Error ? err.message : "Something went wrong",
+                userFacingError(err, libraryOperationsRu.releases.actionFailed),
                 { id: toastId },
             );
         } finally {
@@ -141,7 +152,7 @@ export default function ReleasesPage() {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen text-white/60">
                 <Music2 className="w-12 h-12 mb-4 opacity-40" />
-                <p>Failed to load releases</p>
+                <p>{libraryOperationsRu.releases.loadFailed}</p>
                 <p className="text-sm">{error}</p>
             </div>
         );
@@ -158,16 +169,18 @@ export default function ReleasesPage() {
                     <div className="flex items-center gap-3 mb-2">
                         <Calendar className="w-6 h-6 text-amber-400" />
                         <span className="text-amber-400 text-sm font-medium uppercase tracking-wider">
-                            Release Radar
+                            {libraryOperationsRu.releases.title}
                         </span>
                     </div>
                     <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-                        New & Upcoming
+                        {libraryOperationsRu.releases.heading}
                     </h1>
                     <p className="text-white/60 text-sm md:text-base max-w-xl">
-                        {data?.monitoredArtistCount || 0} monitored artists •
-                        {data?.upcoming.length || 0} upcoming •
-                        {data?.recent.length || 0} recent releases
+                        {formatReleaseRadarSummaryRu(
+                            data?.monitoredArtistCount || 0,
+                            data?.upcoming.length || 0,
+                            data?.recent.length || 0,
+                        )}
                     </p>
                 </div>
             </div>
@@ -179,7 +192,7 @@ export default function ReleasesPage() {
                         <div className="flex items-center gap-3 mb-6">
                             <Clock className="w-5 h-5 text-amber-400" />
                             <h2 className="text-xl font-semibold text-white">
-                                Coming Soon
+                                {libraryOperationsRu.releases.comingSoon}
                             </h2>
                             <span className="text-white/40 text-sm">
                                 ({data.upcoming.length})
@@ -191,7 +204,7 @@ export default function ReleasesPage() {
                                 <ReleaseCard
                                     key={`${release.albumMbid}-${release.id}`}
                                     release={release}
-                                    formatDate={formatRelativeDate}
+                                    formatDate={formatRelativeReleaseDateRu}
                                     onAcquire={handleAcquire}
                                     isDownloading={downloadingId === release.id}
                                     mode={
@@ -216,7 +229,7 @@ export default function ReleasesPage() {
                         <div className="flex items-center gap-3 mb-6">
                             <Disc className="w-5 h-5 text-emerald-400" />
                             <h2 className="text-xl font-semibold text-white">
-                                Just Dropped
+                                {libraryOperationsRu.releases.justDropped}
                             </h2>
                             <span className="text-white/40 text-sm">
                                 ({data.recent.length})
@@ -228,7 +241,7 @@ export default function ReleasesPage() {
                                 <ReleaseCard
                                     key={`${release.albumMbid}-${release.id}`}
                                     release={release}
-                                    formatDate={formatRelativeDate}
+                                    formatDate={formatRelativeReleaseDateRu}
                                     onAcquire={handleAcquire}
                                     isDownloading={downloadingId === release.id}
                                     mode={
@@ -252,17 +265,16 @@ export default function ReleasesPage() {
                     <div className="flex flex-col items-center justify-center py-20 text-center">
                         <Calendar className="w-16 h-16 text-white/20 mb-6" />
                         <h3 className="text-xl font-medium text-white mb-2">
-                            No releases found
+                            {libraryOperationsRu.releases.emptyTitle}
                         </h3>
                         <p className="text-white/50 max-w-md mb-6">
-                            Add artists to Lidarr and enable monitoring to see
-                            their upcoming and recent releases here.
+                            {libraryOperationsRu.releases.emptyDescription}
                         </p>
                         <Link
                             href="/settings"
                             className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors"
                         >
-                            Configure Lidarr
+                            {libraryOperationsRu.releases.configureLidarr}
                             <ArrowRight className="w-4 h-4" />
                         </Link>
                     </div>
@@ -323,8 +335,8 @@ function ReleaseCard({
                     {isUpcoming
                         ? formatDate(release.releaseDate)
                         : hasIt
-                          ? "In Library"
-                          : "Available"}
+                          ? libraryOperationsRu.releases.inLibrary
+                          : libraryOperationsRu.releases.available}
                 </div>
 
                 {/* Acquire Overlay: admins download, everyone else requests */}
@@ -334,10 +346,10 @@ function ReleaseCard({
                         disabled={isDownloading || isRequested}
                         title={
                             isRequested
-                                ? "Already requested"
+                                ? libraryOperationsRu.releases.alreadyRequested
                                 : mode === "download"
-                                  ? "Download this release"
-                                  : "Request this release"
+                                  ? libraryOperationsRu.releases.downloadRelease
+                                  : libraryOperationsRu.releases.requestRelease
                         }
                         className={cn(
                             "absolute inset-0 flex items-center justify-center",
@@ -381,14 +393,7 @@ function ReleaseCard({
                 </p>
                 {isUpcoming && (
                     <p className="text-xs text-amber-400/80">
-                        {new Date(release.releaseDate).toLocaleDateString(
-                            "en-US",
-                            {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                            },
-                        )}
+                        {formatReleaseCalendarDateRu(release.releaseDate)}
                     </p>
                 )}
             </div>

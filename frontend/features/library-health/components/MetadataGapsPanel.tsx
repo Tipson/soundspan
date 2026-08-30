@@ -7,14 +7,31 @@ import {
     type LibraryHealthSummary,
 } from "@/lib/api";
 import { gapItemLine } from "../format";
+import {
+    formatMetadataGapsSummaryRu,
+    formatShowingRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
 import { useInsightPanelLoader } from "../hooks/useInsightPanelLoader";
 import { InsightPanel } from "./InsightPanel";
 
 const GAP_TABS: Array<{ kind: LibraryHealthGapKind; label: string }> = [
-    { kind: "missing-art", label: "Cover art" },
-    { kind: "missing-mbid", label: "MusicBrainz IDs" },
-    { kind: "missing-genres", label: "Genres" },
-    { kind: "missing-lyrics", label: "Lyrics" },
+    {
+        kind: "missing-art",
+        label: libraryOperationsRu.libraryInsights.metadata.tabs.art,
+    },
+    {
+        kind: "missing-mbid",
+        label: libraryOperationsRu.libraryInsights.metadata.tabs.mbid,
+    },
+    {
+        kind: "missing-genres",
+        label: libraryOperationsRu.libraryInsights.metadata.tabs.genres,
+    },
+    {
+        kind: "missing-lyrics",
+        label: libraryOperationsRu.libraryInsights.metadata.tabs.lyrics,
+    },
 ];
 
 interface MetadataGapsPanelProps {
@@ -35,7 +52,7 @@ export function MetadataGapsPanel({
     );
     const page = useInsightPanelLoader(
         fetchPage,
-        "Failed to load metadata gaps",
+        libraryOperationsRu.libraryInsights.metadata.loadFailed,
         refreshToken,
     );
 
@@ -47,8 +64,13 @@ export function MetadataGapsPanel({
 
     return (
         <InsightPanel
-            title="Metadata gaps"
-            subtitle={`${gaps.missingArt.albums} albums without art · ${gaps.missingMbid.albums} albums without MBIDs · ${gaps.missingGenres} tracks without genres · ${gaps.missingLyrics} tracks without lyrics`}
+            title={libraryOperationsRu.libraryInsights.metadata.title}
+            subtitle={formatMetadataGapsSummaryRu(
+                gaps.missingArt.albums,
+                gaps.missingMbid.albums,
+                gaps.missingGenres,
+                gaps.missingLyrics,
+            )}
             onFirstExpand={page.onFirstExpand}
             onRetry={page.load}
             isLoading={page.isLoading}
@@ -88,21 +110,24 @@ export function MetadataGapsPanel({
                     })}
                     {page.data.items.length === 0 && (
                         <li className="text-xs text-gray-500">
-                            Nothing is missing in this category.
+                            {libraryOperationsRu.libraryInsights.metadata.empty}
                         </li>
                     )}
                     {page.data.total > page.data.items.length && (
                         <li className="text-xs text-gray-500 pt-1">
-                            Showing {page.data.items.length} of{" "}
-                            {page.data.total}.
+                            {formatShowingRu(
+                                page.data.items.length,
+                                page.data.total,
+                                ["запись", "записи", "записей"],
+                            )}
                         </li>
                     )}
                 </ul>
             ) : null}
             <p className="text-xs text-gray-500 mt-3">
-                Fix these from Cache &amp; Automation: metadata enrichment fills
-                art, MBIDs, and genres, and lyrics are fetched during
-                enrichment. {totalGaps === 0 && "Everything is covered."}
+                {libraryOperationsRu.libraryInsights.metadata.remediation}{" "}
+                {totalGaps === 0 &&
+                    libraryOperationsRu.libraryInsights.metadata.covered}
             </p>
         </InsightPanel>
     );

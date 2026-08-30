@@ -7,13 +7,20 @@ import {
     type LibraryHealthSummary,
 } from "@/lib/api";
 import { formatBytes } from "../format";
+import {
+    formatDuplicatesSummaryRu,
+    formatShowingRu,
+    formatTrackCountRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
 import { useInsightPanelLoader } from "../hooks/useInsightPanelLoader";
 import { InsightPanel } from "./InsightPanel";
 
 const TIER_LABELS: Record<LibraryHealthDuplicateTier, string> = {
-    audioHash: "Exact audio duplicate",
-    recordingMbid: "Same recording",
-    isrc: "Same ISRC",
+    audioHash: libraryOperationsRu.libraryInsights.duplicates.tiers.audioHash,
+    recordingMbid:
+        libraryOperationsRu.libraryInsights.duplicates.tiers.recordingMbid,
+    isrc: libraryOperationsRu.libraryInsights.duplicates.tiers.isrc,
 };
 
 interface DuplicatesPanelProps {
@@ -32,14 +39,19 @@ export function DuplicatesPanel({
     );
     const page = useInsightPanelLoader(
         fetchPage,
-        "Failed to load duplicate clusters",
+        libraryOperationsRu.libraryInsights.duplicates.loadFailed,
         refreshToken,
     );
 
     return (
         <InsightPanel
-            title="Duplicates and versions"
-            subtitle={`${duplicates.clusters} clusters · ${duplicates.byTier.audioHash} exact · ${duplicates.byTier.recordingMbid} same recording · ${duplicates.byTier.isrc} same ISRC`}
+            title={libraryOperationsRu.libraryInsights.duplicates.title}
+            subtitle={formatDuplicatesSummaryRu(
+                duplicates.clusters,
+                duplicates.byTier.audioHash,
+                duplicates.byTier.recordingMbid,
+                duplicates.byTier.isrc,
+            )}
             isTruncated={duplicates.isTruncated}
             onFirstExpand={page.onFirstExpand}
             onRetry={page.load}
@@ -47,8 +59,7 @@ export function DuplicatesPanel({
             error={page.error}
         >
             <p className="text-xs text-gray-500 mb-3">
-                Detection is report-only: nothing is hidden, merged, or deleted.
-                Your files are never touched.
+                {libraryOperationsRu.libraryInsights.duplicates.reportOnly}
             </p>
             {page.data && (
                 <ul className="space-y-3">
@@ -59,7 +70,7 @@ export function DuplicatesPanel({
                         >
                             <div className="text-xs text-gray-400 mb-1">
                                 {TIER_LABELS[cluster.tier]} ·{" "}
-                                {cluster.memberCount} tracks ·{" "}
+                                {formatTrackCountRu(cluster.memberCount)} ·{" "}
                                 {formatBytes(cluster.totalFileSize)}
                             </div>
                             <ul className="space-y-0.5 pl-3 border-l border-white/10">
@@ -84,8 +95,11 @@ export function DuplicatesPanel({
                                 {cluster.memberCount >
                                     cluster.members.length && (
                                     <li className="text-xs text-gray-500">
-                                        Showing {cluster.members.length} of{" "}
-                                        {cluster.memberCount} tracks.
+                                        {formatShowingRu(
+                                            cluster.members.length,
+                                            cluster.memberCount,
+                                            ["трек", "трека", "треков"],
+                                        )}
                                     </li>
                                 )}
                             </ul>
@@ -93,13 +107,19 @@ export function DuplicatesPanel({
                     ))}
                     {page.data.clusters.length === 0 && (
                         <li className="text-xs text-gray-500">
-                            No duplicate clusters found.
+                            {
+                                libraryOperationsRu.libraryInsights.duplicates
+                                    .empty
+                            }
                         </li>
                     )}
                     {page.data.total > page.data.clusters.length && (
                         <li className="text-xs text-gray-500">
-                            Showing {page.data.clusters.length} of{" "}
-                            {page.data.total} clusters.
+                            {formatShowingRu(
+                                page.data.clusters.length,
+                                page.data.total,
+                                ["группа", "группы", "групп"],
+                            )}
                         </li>
                     )}
                 </ul>

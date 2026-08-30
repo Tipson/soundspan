@@ -3,6 +3,11 @@
 import { useCallback, useState } from "react";
 import { api, type LibraryHealthSummary } from "@/lib/api";
 import { enrichmentApi } from "@/lib/enrichmentApi";
+import {
+    formatAnalysisCoverageSummaryRu,
+    formatShowingRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
 import { formatCoveragePercent } from "../format";
 import { useInsightPanelLoader } from "../hooks/useInsightPanelLoader";
 import { InsightPanel } from "./InsightPanel";
@@ -26,7 +31,7 @@ export function AnalysisCoveragePanel({
     );
     const page = useInsightPanelLoader(
         fetchPage,
-        "Failed to load analysis coverage",
+        libraryOperationsRu.libraryInsights.analysis.loadFailed,
         refreshToken,
     );
     const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -45,7 +50,9 @@ export function AnalysisCoveragePanel({
                 }
             })
             .catch(() => {
-                setActionNotice("Action failed — check the server logs.");
+                setActionNotice(
+                    libraryOperationsRu.libraryInsights.analysis.actionFailed,
+                );
             })
             .finally(() => {
                 setIsActing(false);
@@ -59,8 +66,16 @@ export function AnalysisCoveragePanel({
 
     return (
         <InsightPanel
-            title="Analysis coverage"
-            subtitle={`Audio ${formatCoveragePercent(analysisDone, coverage.total)} · Vibe ${formatCoveragePercent(vibeDone, coverage.total)} · Loudness ${formatCoveragePercent(coverage.loudness.measured, loudnessTotal)} · ${coverage.analysisStatus.failed} failed`}
+            title={libraryOperationsRu.libraryInsights.analysis.title}
+            subtitle={formatAnalysisCoverageSummaryRu(
+                formatCoveragePercent(analysisDone, coverage.total),
+                formatCoveragePercent(vibeDone, coverage.total),
+                formatCoveragePercent(
+                    coverage.loudness.measured,
+                    loudnessTotal,
+                ),
+                coverage.analysisStatus.failed,
+            )}
             onFirstExpand={page.onFirstExpand}
             onRetry={page.load}
             isLoading={page.isLoading}
@@ -73,12 +88,13 @@ export function AnalysisCoveragePanel({
                     onClick={() =>
                         runAction(
                             () => api.retryFailedAnalysis(),
-                            "Failed audio analysis re-queued.",
+                            libraryOperationsRu.libraryInsights.analysis
+                                .audioQueued,
                         )
                     }
                     className="px-2 py-1 text-xs rounded-full border border-white/10 text-gray-300 disabled:opacity-50"
                 >
-                    Retry failed audio analysis
+                    {libraryOperationsRu.libraryInsights.analysis.retryAudio}
                 </button>
                 <button
                     type="button"
@@ -86,12 +102,13 @@ export function AnalysisCoveragePanel({
                     onClick={() =>
                         runAction(
                             () => enrichmentApi.retryVibeEmbeddings(),
-                            "Failed vibe embeddings re-queued.",
+                            libraryOperationsRu.libraryInsights.analysis
+                                .vibeQueued,
                         )
                     }
                     className="px-2 py-1 text-xs rounded-full border border-white/10 text-gray-300 disabled:opacity-50"
                 >
-                    Retry failed vibe embeddings
+                    {libraryOperationsRu.libraryInsights.analysis.retryVibe}
                 </button>
             </div>
             {actionNotice && (
@@ -106,23 +123,25 @@ export function AnalysisCoveragePanel({
                                 {" "}
                                 — {track.artistName}
                                 {track.analysisError
-                                    ? ` · ${track.analysisError}`
+                                    ? ` · ${libraryOperationsRu.libraryInsights.analysis.itemError}`
                                     : ""}
                             </span>
                         </li>
                     ))}
                     {page.data.failed.total > page.data.failed.items.length && (
                         <li className="text-xs text-gray-500 pt-1">
-                            Showing {page.data.failed.items.length} of{" "}
-                            {page.data.failed.total} failed tracks.
+                            {formatShowingRu(
+                                page.data.failed.items.length,
+                                page.data.failed.total,
+                                ["трек", "трека", "треков"],
+                            )}
                         </li>
                     )}
                 </ul>
             )}
             {page.data && page.data.failed.items.length === 0 && (
                 <p className="text-xs text-gray-500">
-                    No failed tracks. Pending tracks are processed by the
-                    analysis workers automatically.
+                    {libraryOperationsRu.libraryInsights.analysis.empty}
                 </p>
             )}
         </InsightPanel>

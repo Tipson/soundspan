@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { libraryOperationsRu } from "@/lib/i18n/libraryOperationsRu";
 
 interface InsightPanelProps {
     title: string;
@@ -56,7 +57,7 @@ export function InsightPanel({
                         {subtitle}
                         {isTruncated && (
                             <span className="ml-2 text-amber-400">
-                                (large library: counts are sampled)
+                                {libraryOperationsRu.libraryInsights.truncated}
                             </span>
                         )}
                     </div>
@@ -68,7 +69,7 @@ export function InsightPanel({
                     {isLoading && (
                         <div className="flex items-center gap-2 py-2 text-sm text-gray-300">
                             <Loader2 className="w-4 h-4 animate-spin text-brand" />
-                            Loading…
+                            {libraryOperationsRu.libraryInsights.loading}
                         </div>
                     )}
                     {error && (
@@ -80,7 +81,7 @@ export function InsightPanel({
                                     onClick={onRetry}
                                     className="px-2 py-1 text-xs rounded-full border border-white/10 text-gray-300 hover:text-white"
                                 >
-                                    Retry
+                                    {libraryOperationsRu.libraryInsights.retry}
                                 </button>
                             )}
                         </div>

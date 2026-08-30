@@ -3,6 +3,10 @@
 import { useCallback } from "react";
 import { api, type LibraryHealthSummary } from "@/lib/api";
 import { formatBytes, formatKbps } from "../format";
+import {
+    formatStorageSummaryRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
 import { useInsightPanelLoader } from "../hooks/useInsightPanelLoader";
 import { InsightPanel } from "./InsightPanel";
 
@@ -19,14 +23,18 @@ export function StoragePanel({
     const fetchReport = useCallback(() => api.getLibraryHealthStorage(), []);
     const report = useInsightPanelLoader(
         fetchReport,
-        "Failed to load storage report",
+        libraryOperationsRu.libraryInsights.storage.loadFailed,
         refreshToken,
     );
 
     return (
         <InsightPanel
-            title="Storage"
-            subtitle={`${storage.tracks} tracks · ${formatBytes(storage.totalFileSize)} across ${storage.mimeTypes} formats`}
+            title={libraryOperationsRu.libraryInsights.storage.title}
+            subtitle={formatStorageSummaryRu(
+                storage.tracks,
+                formatBytes(storage.totalFileSize),
+                storage.mimeTypes,
+            )}
             isTruncated={storage.isTruncated}
             onFirstExpand={report.onFirstExpand}
             onRetry={report.load}
@@ -37,7 +45,10 @@ export function StoragePanel({
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                         <h3 className="text-xs font-medium text-gray-400 mb-1">
-                            By format
+                            {
+                                libraryOperationsRu.libraryInsights.storage
+                                    .byFormat
+                            }
                         </h3>
                         <ul className="space-y-1">
                             {report.data.formats.map((format) => (
@@ -46,7 +57,9 @@ export function StoragePanel({
                                     className="text-sm text-gray-300 flex justify-between gap-3"
                                 >
                                     <span className="truncate">
-                                        {format.mime ?? "Unknown format"}
+                                        {format.mime ??
+                                            libraryOperationsRu.libraryInsights
+                                                .storage.unknownFormat}
                                     </span>
                                     <span className="text-gray-500 whitespace-nowrap">
                                         {format.trackCount} ·{" "}
@@ -59,7 +72,10 @@ export function StoragePanel({
                     </div>
                     <div>
                         <h3 className="text-xs font-medium text-gray-400 mb-1">
-                            Largest artists
+                            {
+                                libraryOperationsRu.libraryInsights.storage
+                                    .largestArtists
+                            }
                         </h3>
                         <ul className="space-y-1">
                             {report.data.topArtists.map((artist) => (

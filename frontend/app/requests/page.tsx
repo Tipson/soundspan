@@ -16,9 +16,16 @@ import {
     canReviewRequest,
     filterRequestRows,
     requestStatusBadgeVariant,
-    requestStatusLabel,
     type MusicRequestFilter,
 } from "@/lib/musicRequests";
+import {
+    formatPendingRequestsRu,
+    formatRequestDateRu,
+    libraryOperationsRu,
+    requestFilterLabelRu,
+    requestStatusLabelRu,
+} from "@/lib/i18n/libraryOperationsRu";
+import { userFacingError } from "@/lib/i18n/ru";
 import {
     useCancelMusicRequest,
     useMusicRequestsAdmin,
@@ -40,16 +47,6 @@ function requestAlbumHref(request: MusicRequest): string {
     )}`;
 }
 
-function formatRequestDate(value: string): string {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return "";
-    return parsed.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-}
-
 function RequestFilterPills(props: {
     filter: MusicRequestFilter;
     onChange: (value: MusicRequestFilter) => void;
@@ -57,7 +54,7 @@ function RequestFilterPills(props: {
     return (
         <div
             role="group"
-            aria-label="Request status filter"
+            aria-label={libraryOperationsRu.requests.filterAria}
             className="flex flex-wrap items-center gap-1 rounded-full bg-white/5 p-1"
         >
             {REQUEST_FILTER_OPTIONS.map((option) => (
@@ -71,7 +68,7 @@ function RequestFilterPills(props: {
                             : "text-gray-400 hover:text-white",
                     )}
                 >
-                    {option.label}
+                    {requestFilterLabelRu(option.value)}
                 </button>
             ))}
         </div>
@@ -91,7 +88,7 @@ function ReviewActions(props: {
                 className="flex items-center gap-1.5 rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-black transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 <Check className="h-3.5 w-3.5" />
-                Approve
+                {libraryOperationsRu.requests.approve}
             </button>
             <button
                 onClick={props.onDeny}
@@ -99,7 +96,7 @@ function ReviewActions(props: {
                 className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-all hover:bg-red-500/20 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 <X className="h-3.5 w-3.5" />
-                Decline
+                {libraryOperationsRu.requests.decline}
             </button>
         </div>
     );
@@ -138,17 +135,17 @@ function RequestRow(props: {
                 </p>
                 <p className="truncate text-xs text-gray-400">
                     {props.isAdmin && request.user
-                        ? `Requested by ${request.user.username} · `
+                        ? `${libraryOperationsRu.requests.requestedBy} ${request.user.username} · `
                         : ""}
-                    {formatRequestDate(request.createdAt)}
+                    {formatRequestDateRu(request.createdAt)}
                     {request.note ? ` · “${request.note}”` : ""}
                     {request.status === "denied" && request.deniedReason
-                        ? ` · Declined: ${request.deniedReason}`
+                        ? ` · ${libraryOperationsRu.requests.declinedReason} ${request.deniedReason}`
                         : ""}
                 </p>
             </div>
             <Badge variant={requestStatusBadgeVariant(request.status)}>
-                {requestStatusLabel(request.status)}
+                {requestStatusLabelRu(request.status)}
             </Badge>
             {showReview && (
                 <ReviewActions
@@ -163,7 +160,7 @@ function RequestRow(props: {
                     disabled={props.busy}
                     className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-all hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    Cancel
+                    {libraryOperationsRu.requests.cancel}
                 </button>
             )}
         </li>
@@ -176,17 +173,17 @@ function EmptyState(props: { isAdmin: boolean; filtered: boolean }) {
             <Inbox className="h-8 w-8 text-white/30" />
             <p className="text-sm text-gray-400">
                 {props.filtered
-                    ? "No requests match this filter."
+                    ? libraryOperationsRu.requests.filteredEmpty
                     : props.isAdmin
-                      ? "No requests yet. When users request albums, they show up here for review."
-                      : "You haven't requested anything yet. Find an album that isn't in the library and hit Request."}
+                      ? libraryOperationsRu.requests.adminEmpty
+                      : libraryOperationsRu.requests.userEmpty}
             </p>
             {!props.isAdmin && (
                 <Link
                     href="/library"
                     className="text-sm font-medium text-brand hover:underline"
                 >
-                    Browse the library
+                    {libraryOperationsRu.requests.browseLibrary}
                 </Link>
             )}
         </div>
@@ -213,9 +210,10 @@ function useRequestActions() {
             .then(() => toast.success(messages.success, { id: toastId }))
             .catch((error: unknown) =>
                 toast.error(
-                    error instanceof Error
-                        ? error.message
-                        : "Something went wrong",
+                    userFacingError(
+                        error,
+                        libraryOperationsRu.requests.actionFailed,
+                    ),
                     { id: toastId },
                 ),
             );
@@ -225,18 +223,18 @@ function useRequestActions() {
         busy: review.isPending || cancel.isPending,
         onApprove: (id: string) =>
             act(id, "approve", {
-                loading: "Approving request...",
-                success: "Approved — the download has started",
+                loading: libraryOperationsRu.requests.approveLoading,
+                success: libraryOperationsRu.requests.approveSuccess,
             }),
         onDeny: (id: string) =>
             act(id, "deny", {
-                loading: "Declining request...",
-                success: "Request declined",
+                loading: libraryOperationsRu.requests.declineLoading,
+                success: libraryOperationsRu.requests.declineSuccess,
             }),
         onCancel: (id: string) =>
             act(id, "cancel", {
-                loading: "Cancelling request...",
-                success: "Request cancelled",
+                loading: libraryOperationsRu.requests.cancelLoading,
+                success: libraryOperationsRu.requests.cancelSuccess,
             }),
     };
 }
@@ -295,16 +293,22 @@ export default function RequestsPage() {
     return (
         <div className="min-h-screen px-4 py-6 md:px-8">
             <PageHeader
-                title={isAdmin ? "Requests" : "My Requests"}
+                title={
+                    isAdmin
+                        ? libraryOperationsRu.requests.title
+                        : libraryOperationsRu.requests.myTitle
+                }
                 subtitle={
                     isAdmin
-                        ? "Review album requests from users and approve or decline them."
-                        : "Albums you've asked to add to the library."
+                        ? libraryOperationsRu.requests.adminSubtitle
+                        : libraryOperationsRu.requests.userSubtitle
                 }
                 icon={Inbox}
                 badge={
                     pendingCount > 0 ? (
-                        <Badge variant="warning">{pendingCount} pending</Badge>
+                        <Badge variant="warning">
+                            {formatPendingRequestsRu(pendingCount)}
+                        </Badge>
                     ) : null
                 }
                 actions={
