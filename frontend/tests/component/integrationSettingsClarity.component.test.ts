@@ -115,8 +115,8 @@ test("explains that playback source order is not connection status", async () =>
         }),
     );
 
-    assert.match(html, /priority, not a connection status list/i);
-    assert.match(html, /Unavailable or disabled sources are skipped/);
+    assert.match(html, /Это приоритет, а не список подключений/i);
+    assert.match(html, /недоступные и отключённые источники пропускаются/i);
 });
 
 test("separates active public YouTube Music access from optional account linking", async () => {
@@ -135,12 +135,15 @@ test("separates active public YouTube Music access from optional account linking
 
     assert.match(
         html,
-        /Public search, browse, and streaming can work without linking a Google account/,
+        /Публичный поиск, каталог и воспроизведение работают без привязки Google-аккаунта/,
     );
-    assert.match(html, /Linking is optional and adds personal library access/);
     assert.match(
         html,
-        /Some content or account features may require YouTube Music Premium/,
+        /Привязка необязательна и добавляет доступ к личной медиатеке/,
+    );
+    assert.match(
+        html,
+        /Для части контента и функций может потребоваться YouTube Music Premium/,
     );
     assert.doesNotMatch(
         html,

@@ -15,7 +15,12 @@ import { cn } from "@/utils/cn";
 import Link from "next/link";
 import { useNotifications, type Notification } from "@/hooks/useNotifications";
 import { createFrontendLogger } from "@/lib/logger";
-import { formatRelativeTime } from "@/utils/formatTime";
+import {
+    adminActivityRu,
+    formatActivityRelativeTime,
+    localizeActivityNotification,
+} from "@/lib/i18n/adminActivityRu";
+import { pluralRu } from "@/lib/i18n/ru";
 
 const logger = createFrontendLogger("Activity.NotificationsTab");
 
@@ -126,8 +131,26 @@ export function NotificationsTab({
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-8">
+            <div
+                className="flex items-center justify-center py-8"
+                role="status"
+                aria-label={adminActivityRu.activity.loading}
+            >
                 <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (error && notifications.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+                <AlertCircle className="mb-3 h-8 w-8 text-red-400/60" />
+                <p className="text-sm text-white/60">
+                    {adminActivityRu.activity.notifications.unavailable}
+                </p>
+                <p className="mt-1 text-xs text-white/35">
+                    {adminActivityRu.activity.notifications.unavailableHint}
+                </p>
             </div>
         );
     }
@@ -136,9 +159,11 @@ export function NotificationsTab({
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Bell className="w-8 h-8 text-white/20 mb-3" />
-                <p className="text-sm text-white/40">No notifications</p>
+                <p className="text-sm text-white/40">
+                    {adminActivityRu.activity.notifications.empty}
+                </p>
                 <p className="text-xs text-white/30 mt-1">
-                    You&apos;re all caught up!
+                    {adminActivityRu.activity.notifications.emptyHint}
                 </p>
             </div>
         );
@@ -150,14 +175,18 @@ export function NotificationsTab({
             {notifications.length > 0 && (
                 <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
                     <span className="text-xs text-white/40">
-                        {notifications.length} notification
-                        {notifications.length !== 1 ? "s" : ""}
+                        {notifications.length}{" "}
+                        {pluralRu(notifications.length, [
+                            "уведомление",
+                            "уведомления",
+                            "уведомлений",
+                        ])}
                     </span>
                     <button
                         onClick={handleClearAll}
                         className="text-xs text-white/40 hover:text-white transition-colors"
                     >
-                        Clear all
+                        {adminActivityRu.activity.notifications.clearAll}
                     </button>
                 </div>
             )}
@@ -166,6 +195,8 @@ export function NotificationsTab({
             <div className="flex-1 overflow-y-auto">
                 {notifications.map((notification) => {
                     const link = getLink(notification);
+                    const localized =
+                        localizeActivityNotification(notification);
 
                     return (
                         <div
@@ -189,20 +220,20 @@ export function NotificationsTab({
                                                     : "text-white",
                                             )}
                                         >
-                                            {notification.title}
+                                            {localized.title}
                                         </p>
                                         {!notification.read && (
                                             <span className="w-1.5 h-1.5 rounded-full bg-brand flex-shrink-0" />
                                         )}
                                     </div>
-                                    {notification.message && (
+                                    {localized.message && (
                                         <p className="text-xs text-white/50 mt-0.5 line-clamp-2">
-                                            {notification.message}
+                                            {localized.message}
                                         </p>
                                     )}
                                     <div className="flex items-center gap-2 mt-1.5">
                                         <span className="text-[10px] text-white/30">
-                                            {formatRelativeTime(
+                                            {formatActivityRelativeTime(
                                                 notification.createdAt,
                                             )}
                                         </span>
@@ -211,7 +242,10 @@ export function NotificationsTab({
                                                 href={link}
                                                 className="text-[10px] text-brand hover:underline flex items-center gap-0.5"
                                             >
-                                                View{" "}
+                                                {
+                                                    adminActivityRu.activity
+                                                        .notifications.view
+                                                }{" "}
                                                 <ExternalLink className="w-2.5 h-2.5" />
                                             </Link>
                                         )}
@@ -226,7 +260,14 @@ export function NotificationsTab({
                                                 )
                                             }
                                             className="p-1 hover:bg-white/10 rounded transition-colors"
-                                            title="Mark as read"
+                                            title={
+                                                adminActivityRu.activity
+                                                    .notifications.markRead
+                                            }
+                                            aria-label={
+                                                adminActivityRu.activity
+                                                    .notifications.markRead
+                                            }
                                         >
                                             <Check className="w-3.5 h-3.5 text-white/40 hover:text-white" />
                                         </button>
@@ -236,7 +277,14 @@ export function NotificationsTab({
                                             handleClear(notification.id)
                                         }
                                         className="p-1 hover:bg-white/10 rounded transition-colors"
-                                        title="Dismiss"
+                                        title={
+                                            adminActivityRu.activity
+                                                .notifications.dismiss
+                                        }
+                                        aria-label={
+                                            adminActivityRu.activity
+                                                .notifications.dismiss
+                                        }
                                     >
                                         <Trash2 className="w-3.5 h-3.5 text-white/40 hover:text-red-400" />
                                     </button>

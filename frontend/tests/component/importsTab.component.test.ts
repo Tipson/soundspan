@@ -103,14 +103,14 @@ test("links to a playlist that completed after its job was cancelled and shows t
         });
         await flushAsync();
 
-        assert.match(container.textContent ?? "", /Cancelled/);
+        assert.match(container.textContent ?? "", /Отменено/);
         assert.match(
             container.textContent ?? "",
-            /Cancellation requested after playlist creation completed/,
+            /Запрос на отмену поступил после создания плейлиста/,
         );
         const viewPlaylistButton = [
             ...container.querySelectorAll("button"),
-        ].find((button) => button.textContent?.includes("View Playlist"));
+        ].find((button) => button.textContent?.includes("Открыть плейлист"));
         assert.ok(viewPlaylistButton);
 
         await React.act(async () => {
@@ -137,7 +137,7 @@ test("refreshes an already-open empty tab when an import job is submitted", asyn
             root.render(React.createElement(ImportsTab));
         });
         await flushAsync();
-        assert.match(container.textContent ?? "", /No import jobs yet/);
+        assert.match(container.textContent ?? "", /Импортов пока нет/);
 
         jobsResponse = [
             {
@@ -323,7 +323,7 @@ test("skips an interval tick while the previous poll remains in flight", async (
             ],
         });
         await flushAsync();
-        assert.match(container.textContent ?? "", /Completed/);
+        assert.match(container.textContent ?? "", /Завершено/);
     } finally {
         pendingPoll.resolve({ jobs: [] });
         await React.act(async () => root.unmount());

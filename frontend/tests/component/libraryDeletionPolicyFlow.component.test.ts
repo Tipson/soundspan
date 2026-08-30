@@ -112,7 +112,7 @@ test("an admin can enable a default-off deletion policy and reveal local album d
             root.render(React.createElement(PolicyFlow)),
         );
 
-        assert.match(container.textContent ?? "", /Server Library Safety/);
+        assert.match(container.textContent ?? "", /Защита серверной медиатеки/);
         const policyToggle = container.querySelector<HTMLInputElement>(
             "#library-deletion-enabled",
         );
@@ -120,7 +120,7 @@ test("an admin can enable a default-off deletion policy and reveal local album d
         assert.equal(policyToggle.checked, false);
         assert.equal(
             container.querySelector(
-                '[aria-label="Delete album from server library"]',
+                '[aria-label="Удалить альбом из медиатеки сервера"]',
             ),
             null,
         );
@@ -130,7 +130,7 @@ test("an admin can enable a default-off deletion policy and reveal local album d
         assert.equal(policyToggle.checked, true);
         assert.ok(
             container.querySelector(
-                '[aria-label="Delete album from server library"]',
+                '[aria-label="Удалить альбом из медиатеки сервера"]',
             ),
         );
     } finally {

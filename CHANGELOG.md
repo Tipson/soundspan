@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Cache and enrichment administration now uses complete Russian copy for progress, retries, controls, migration status, storage limits, automation, and actionable errors while preserving provider and analysis technology names.
 - Personalized Quick Picks and Wave radio can use account taste-profile seeds as a moderate positive signal without presenting those seeds as plays or likes, and malformed stored JSON is ignored instead of entering recommendation ranking.
 - Search results and Settings now use the first Soundspan design-system primitives: a quiet artwork-led stage, consistent filter chips, stronger result hierarchy, accessible settings navigation, and shared surface, focus, spacing, and state tokens.
 - Device downloads prefer ordinary files below a user-selected folder on supported desktop and Android Chromium browsers; browsers without a directory picker use owner-scoped writable OPFS storage on that device only, while older browsers without either writable route remain unsupported. Private-storage downloads expose an explicit per-track Save as file action that hands a separate ordinary audio file to the browser/OS without removing the verified offline copy, and a rejected durable-storage request is reported instead of being recorded as granted. IndexedDB keeps only owner-scoped metadata, queue state, and the persisted directory handle, and existing verified CacheStorage copies migrate file-first after storage setup.

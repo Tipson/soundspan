@@ -26,13 +26,34 @@ import {
 import { Bell, Download, FileInput, History, Users, X } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
 
 const TABS: { id: ActivityTab; label: string; icon: React.ElementType }[] = [
-    { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "active", label: "Active", icon: Download },
-    { id: "history", label: "History", icon: History },
-    { id: "imports", label: "Imports", icon: FileInput },
-    { id: "social", label: "Social", icon: Users },
+    {
+        id: "notifications",
+        label: adminActivityRu.activity.tabs.notifications,
+        icon: Bell,
+    },
+    {
+        id: "active",
+        label: adminActivityRu.activity.tabs.active,
+        icon: Download,
+    },
+    {
+        id: "history",
+        label: adminActivityRu.activity.tabs.history,
+        icon: History,
+    },
+    {
+        id: "imports",
+        label: adminActivityRu.activity.tabs.imports,
+        icon: FileInput,
+    },
+    {
+        id: "social",
+        label: adminActivityRu.activity.tabs.social,
+        icon: Users,
+    },
 ];
 interface ActivityPanelProps {
     isOpen: boolean;
@@ -152,7 +173,7 @@ export function ActivityPanel({
                 {/* Backdrop */}
                 <button
                     type="button"
-                    aria-label="Close activity"
+                    aria-label={adminActivityRu.activity.close}
                     className="fixed inset-0 bg-black/60  z-[100]"
                     onClick={onToggle}
                 />
@@ -165,12 +186,13 @@ export function ActivityPanel({
                     {/* Header */}
                     <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
                         <h2 className="text-lg font-semibold text-white">
-                            Activity
+                            {adminActivityRu.activity.title}
                         </h2>
                         <button
                             onClick={onToggle}
                             className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                            title="Close"
+                            title={adminActivityRu.activity.close}
+                            aria-label={adminActivityRu.activity.close}
                         >
                             <X className="w-5 h-5 text-white/60" />
                         </button>
@@ -260,18 +282,18 @@ export function ActivityPanel({
     return (
         <aside
             data-activity-panel-layout="overlay"
-            aria-label="Activity"
+            aria-label={adminActivityRu.activity.aria}
             className="fixed bottom-[calc(6.5rem+var(--safe-area-bottom))] right-3 top-[4.5rem] z-[90] flex w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d0d]/98 shadow-2xl shadow-black/60 backdrop-blur-xl"
         >
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
                 <h2 className="whitespace-nowrap text-base font-semibold text-white">
-                    Activity
+                    {adminActivityRu.activity.title}
                 </h2>
                 <button
                     onClick={onToggle}
                     className="grid min-h-11 min-w-11 place-items-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                    title="Close panel"
-                    aria-label="Close activity"
+                    title={adminActivityRu.activity.close}
+                    aria-label={adminActivityRu.activity.close}
                 >
                     <X className="h-5 w-5" />
                 </button>
@@ -395,7 +417,8 @@ export function ActivityPanelToggle({
                 "relative p-2 rounded-full transition-all",
                 "text-white/60 hover:text-white",
             )}
-            title="Toggle activity panel"
+            title={adminActivityRu.activity.toggle}
+            aria-label={adminActivityRu.activity.toggle}
         >
             <Bell className="w-5 h-5" />
             {hasActivity && (

@@ -6,15 +6,10 @@ import type {
     PeerPresenceUser,
     SocialListeningStatus,
 } from "@/hooks/useSocialPresence";
-
-function formatSnapshotAge(isoDate: string): string {
-    const parsed = Date.parse(isoDate);
-    if (Number.isNaN(parsed)) return "recently";
-    const diffMs = Date.now() - parsed;
-    if (diffMs < 60_000) return "moments ago";
-    if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
-    return `${Math.floor(diffMs / 3_600_000)}h ago`;
-}
+import {
+    adminActivityRu,
+    formatActivityRelativeTime,
+} from "@/lib/i18n/adminActivityRu";
 
 const statusDotClass: Record<SocialListeningStatus, string> = {
     playing: "bg-green-400",
@@ -66,19 +61,24 @@ export function PeerPresenceSection({
     const withUsers = peers.filter((peer) => peer.users.length > 0);
     if (withUsers.length === 0) return null;
     return (
-        <div aria-label="Online users from federated peers">
+        <div aria-label={adminActivityRu.activity.social.peerUsersAria}>
             {withUsers.map((peer) => (
                 <section key={peer.peerId}>
                     <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-white/[0.02]">
                         <span className="flex items-center gap-1.5 text-xs text-white/50">
                             <Network className="w-3.5 h-3.5" />
-                            From {peer.peerName}
+                            {adminActivityRu.activity.social.from}{" "}
+                            {peer.peerName}
                         </span>
                         <span className="text-xs text-white/30">
-                            updated {formatSnapshotAge(peer.fetchedAt)}
+                            {adminActivityRu.activity.social.updated}{" "}
+                            {formatActivityRelativeTime(peer.fetchedAt)}
                         </span>
                     </div>
-                    <div role="list" aria-label={`Users on ${peer.peerName}`}>
+                    <div
+                        role="list"
+                        aria-label={`${adminActivityRu.activity.social.usersOn} ${peer.peerName}`}
+                    >
                         {peer.users.map((user) => (
                             <PeerUserRow
                                 key={`${peer.peerId}:${user.username}`}

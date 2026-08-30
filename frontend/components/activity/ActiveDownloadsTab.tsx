@@ -5,12 +5,19 @@ import { Download, Loader2, Music, Disc, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { createFrontendLogger } from "@/lib/logger";
 import { cn } from "@/utils/cn";
-import { formatRelativeTime } from "@/utils/formatTime";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import {
     useActiveDownloads,
     type DownloadHistoryItem,
 } from "@/hooks/useNotifications";
+import {
+    adminActivityRu,
+    formatActivityRelativeTime,
+    localizeDownloadStatusText,
+    translateDownloadStatus,
+    translateDownloadType,
+} from "@/lib/i18n/adminActivityRu";
+import { pluralRu } from "@/lib/i18n/ru";
 
 const logger = createFrontendLogger("Activity.ActiveDownloadsTab");
 
@@ -86,7 +93,11 @@ export function ActiveDownloadsTab({
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-8">
+            <div
+                className="flex items-center justify-center py-8"
+                role="status"
+                aria-label={adminActivityRu.activity.loading}
+            >
                 <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
             </div>
         );
@@ -96,9 +107,11 @@ export function ActiveDownloadsTab({
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Download className="w-8 h-8 text-white/20 mb-3" />
-                <p className="text-sm text-white/40">No active downloads</p>
+                <p className="text-sm text-white/40">
+                    {adminActivityRu.activity.activeDownloads.empty}
+                </p>
                 <p className="text-xs text-white/30 mt-1">
-                    Downloads will appear here
+                    {adminActivityRu.activity.activeDownloads.emptyHint}
                 </p>
             </div>
         );
@@ -109,19 +122,27 @@ export function ActiveDownloadsTab({
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
                 <span className="text-xs text-white/40">
-                    {downloads.length} downloading
+                    {downloads.length}{" "}
+                    {pluralRu(downloads.length, [
+                        "загрузка",
+                        "загрузки",
+                        "загрузок",
+                    ])}
                 </span>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleCancelAll}
                         className="text-xs text-white/40 hover:text-red-400 transition-colors"
-                        title="Cancel all downloads"
+                        title={
+                            adminActivityRu.activity.activeDownloads
+                                .cancelAllTitle
+                        }
                     >
-                        Cancel all
+                        {adminActivityRu.activity.activeDownloads.cancelAll}
                     </button>
                     <span className="flex items-center gap-1.5 text-xs text-green-400">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                        Active
+                        {adminActivityRu.activity.activeDownloads.active}
                     </span>
                 </div>
             </div>
@@ -154,7 +175,9 @@ export function ActiveDownloadsTab({
                                                 : "text-yellow-400",
                                         )}
                                     >
-                                        {download.status}
+                                        {translateDownloadStatus(
+                                            download.status,
+                                        )}
                                     </span>
                                     {Boolean(download.metadata?.statusText) && (
                                         <>
@@ -179,7 +202,7 @@ export function ActiveDownloadsTab({
                                                             : "text-teal-400",
                                                 )}
                                             >
-                                                {String(
+                                                {localizeDownloadStatusText(
                                                     download.metadata
                                                         ?.statusText,
                                                 )}
@@ -195,18 +218,14 @@ export function ActiveDownloadsTab({
                                         ) : (
                                             <Music className="w-3 h-3" />
                                         )}
-                                        {download.type}
+                                        {translateDownloadType(download.type)}
                                     </span>
                                     <span className="text-xs text-white/30">
                                         •
                                     </span>
                                     <span className="text-xs text-white/30">
-                                        {formatRelativeTime(
+                                        {formatActivityRelativeTime(
                                             download.createdAt,
-                                            {
-                                                justNowLabel: "Just started",
-                                                suffix: "",
-                                            },
                                         )}
                                     </span>
                                 </div>
@@ -215,7 +234,14 @@ export function ActiveDownloadsTab({
                                 onClick={() => handleCancel(download.id)}
                                 disabled={cancelling.has(download.id)}
                                 className="p-1 opacity-0 group-hover:opacity-100 hover:bg-white/10 rounded transition-all shrink-0"
-                                title="Cancel download"
+                                title={
+                                    adminActivityRu.activity.activeDownloads
+                                        .cancel
+                                }
+                                aria-label={
+                                    adminActivityRu.activity.activeDownloads
+                                        .cancel
+                                }
                             >
                                 <X className="w-4 h-4 text-white/40 hover:text-red-400" />
                             </button>

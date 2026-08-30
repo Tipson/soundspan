@@ -11,26 +11,50 @@ import {
     ArrowRight,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+    adminActivityRu,
+    localizeImportJobMessage,
+} from "@/lib/i18n/adminActivityRu";
 
 const STATUS_CONFIG: Record<
     string,
     { icon: React.ElementType; color: string; label: string }
 > = {
-    pending: { icon: Clock, color: "text-gray-400", label: "Pending" },
-    resolving: { icon: Loader2, color: "text-blue-400", label: "Resolving" },
+    pending: {
+        icon: Clock,
+        color: "text-gray-400",
+        label: adminActivityRu.activity.imports.statuses.pending,
+    },
+    resolving: {
+        icon: Loader2,
+        color: "text-blue-400",
+        label: adminActivityRu.activity.imports.statuses.resolving,
+    },
     creating_playlist: {
         icon: Loader2,
         color: "text-blue-400",
-        label: "Creating",
+        label: adminActivityRu.activity.imports.statuses.creating_playlist,
     },
-    cancelling: { icon: Loader2, color: "text-amber-400", label: "Cancelling" },
+    cancelling: {
+        icon: Loader2,
+        color: "text-amber-400",
+        label: adminActivityRu.activity.imports.statuses.cancelling,
+    },
     completed: {
         icon: CheckCircle2,
         color: "text-emerald-400",
-        label: "Completed",
+        label: adminActivityRu.activity.imports.statuses.completed,
     },
-    failed: { icon: XCircle, color: "text-red-400", label: "Failed" },
-    cancelled: { icon: Ban, color: "text-gray-400", label: "Cancelled" },
+    failed: {
+        icon: XCircle,
+        color: "text-red-400",
+        label: adminActivityRu.activity.imports.statuses.failed,
+    },
+    cancelled: {
+        icon: Ban,
+        color: "text-gray-400",
+        label: adminActivityRu.activity.imports.statuses.cancelled,
+    },
 };
 
 function JobStatusBadge({ status }: { status: string }) {
@@ -161,7 +185,11 @@ export function ImportsTab() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center py-12">
+            <div
+                className="flex items-center justify-center py-12"
+                role="status"
+                aria-label={adminActivityRu.activity.loading}
+            >
                 <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
             </div>
         );
@@ -170,9 +198,11 @@ export function ImportsTab() {
     if (jobs.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                <p className="text-gray-400 text-sm">No import jobs yet</p>
+                <p className="text-gray-400 text-sm">
+                    {adminActivityRu.activity.imports.empty}
+                </p>
                 <p className="text-gray-400 text-xs mt-1">
-                    Submit imports from the Import page
+                    {adminActivityRu.activity.imports.emptyHint}
                 </p>
             </div>
         );
@@ -208,9 +238,9 @@ export function ImportsTab() {
                                 </p>
                                 <p className="text-xs text-gray-400 truncate mt-0.5">
                                     {job.sourceType} &middot;{" "}
-                                    {new Date(
-                                        job.createdAt,
-                                    ).toLocaleDateString()}
+                                    {new Date(job.createdAt).toLocaleDateString(
+                                        "ru-RU",
+                                    )}
                                 </p>
                             </div>
                             <JobStatusBadge status={job.status} />
@@ -229,9 +259,12 @@ export function ImportsTab() {
 
                         {job.summary && job.summary.total > 0 && (
                             <p className="text-[11px] text-gray-400 mt-1">
-                                {job.summary.local} local &middot;{" "}
-                                {job.summary.unresolved} unresolved &middot;{" "}
-                                {job.summary.total} total
+                                {job.summary.local}{" "}
+                                {adminActivityRu.activity.imports.local}{" "}
+                                &middot; {job.summary.unresolved}{" "}
+                                {adminActivityRu.activity.imports.unresolved}{" "}
+                                &middot; {job.summary.total}{" "}
+                                {adminActivityRu.activity.imports.total}
                             </p>
                         )}
 
@@ -241,7 +274,7 @@ export function ImportsTab() {
                                     onClick={() => void handleCancel(job.id)}
                                     className="text-xs text-red-400/70 hover:text-red-400 transition-colors"
                                 >
-                                    Cancel
+                                    {adminActivityRu.activity.imports.cancel}
                                 </button>
                             )}
                             {createdPlaylistId && (
@@ -253,13 +286,19 @@ export function ImportsTab() {
                                     }
                                     className="flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
                                 >
-                                    View Playlist
+                                    {
+                                        adminActivityRu.activity.imports
+                                            .viewPlaylist
+                                    }
                                     <ArrowRight className="w-3 h-3" />
                                 </button>
                             )}
                             {job.status === "failed" && job.error && (
                                 <p className="text-xs text-red-400/60 truncate">
-                                    {job.error}
+                                    {localizeImportJobMessage(
+                                        job.error,
+                                        "error",
+                                    )}
                                 </p>
                             )}
                         </div>
@@ -268,7 +307,11 @@ export function ImportsTab() {
                                 role="status"
                                 className="mt-1 text-xs text-amber-300/80"
                             >
-                                Warning: {cancellationWarning}
+                                {adminActivityRu.activity.imports.warning}:{" "}
+                                {localizeImportJobMessage(
+                                    cancellationWarning,
+                                    "warning",
+                                )}
                             </p>
                         )}
                     </div>

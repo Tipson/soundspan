@@ -12,6 +12,7 @@ import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
 import { SettingsLayout } from "@/features/settings/components/ui";
 import { useFeatures } from "@/lib/features-context";
 import { getPersonalStreamingAdminSidebarItems } from "@/features/settings/personalStreamingAdminSections";
+import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
 
 function renderSectionFallback() {
     return (
@@ -145,7 +146,7 @@ export default function AdminPage() {
             const changedSystemServices =
                 (await saveSystemSettings(systemSettings)) || [];
             setIsSaving(false);
-            saveStatus.setSuccess("Saved");
+            saveStatus.setSuccess(adminActivityRu.admin.saved);
             if (changedSystemServices.length > 0) {
                 setShowRestartModal(true);
             }
@@ -154,7 +155,7 @@ export default function AdminPage() {
                 error,
             });
             setIsSaving(false);
-            saveStatus.setError("Failed to save");
+            saveStatus.setError(adminActivityRu.admin.saveFailed);
         }
     }, [systemSettings, saveSystemSettings, saveStatus]);
 
@@ -172,7 +173,11 @@ export default function AdminPage() {
 
     if (authLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-surface">
+            <div
+                className="flex items-center justify-center min-h-screen bg-surface"
+                role="status"
+                aria-label={adminActivityRu.admin.loading}
+            >
                 <GradientSpinner size="md" />
             </div>
         );
@@ -184,7 +189,11 @@ export default function AdminPage() {
 
     if (systemSettingsLoading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-surface">
+            <div
+                className="flex items-center justify-center min-h-screen bg-surface"
+                role="status"
+                aria-label={adminActivityRu.admin.loading}
+            >
                 <GradientSpinner size="md" />
             </div>
         );
@@ -194,14 +203,13 @@ export default function AdminPage() {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-surface gap-4 px-4">
                 <p className="text-red-400 text-sm text-center">
-                    Failed to load settings from the server. Settings cannot be
-                    edited until they are loaded.
+                    {adminActivityRu.admin.loadFailed}
                 </p>
                 <button
                     onClick={() => loadSystemSettings()}
                     className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-full transition-colors"
                 >
-                    Retry
+                    {adminActivityRu.admin.retry}
                 </button>
             </div>
         );
@@ -212,7 +220,7 @@ export default function AdminPage() {
             <SettingsLayout
                 sidebarItems={sidebarItems}
                 isAdmin={true}
-                title="Admin"
+                title={adminActivityRu.admin.title}
             >
                 <PlaybackSourcesSection
                     settings={systemSettings}
@@ -264,7 +272,9 @@ export default function AdminPage() {
                                 hover:scale-[1.02] active:scale-[0.98] transition-transform
                                 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                         >
-                            {isSaving ? "Saving..." : "Save"}
+                            {isSaving
+                                ? adminActivityRu.admin.saving
+                                : adminActivityRu.admin.save}
                         </button>
                         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-surface/90 backdrop-blur-sm px-3 py-0.5 rounded-full">
                             <InlineStatus {...saveStatus.props} />

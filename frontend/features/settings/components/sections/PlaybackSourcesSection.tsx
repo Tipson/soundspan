@@ -2,25 +2,26 @@
 
 import { SettingsSection, SettingsRow, SettingsSelect } from "../ui";
 import { SystemSettings } from "../../types";
+import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
 
 const DEFAULT_ORDER = "library,peers,tidal,ytmusic";
 
 const orderOptions = [
     {
         value: DEFAULT_ORDER,
-        label: "Library → Peers → TIDAL → YT Music (Default)",
+        label: `${adminActivityRu.admin.playbackSources.library} → ${adminActivityRu.admin.playbackSources.peers} → TIDAL → YouTube Music (${adminActivityRu.admin.playbackSources.default})`,
     },
     {
         value: "library,peers,ytmusic,tidal",
-        label: "Library → Peers → YT Music → TIDAL",
+        label: `${adminActivityRu.admin.playbackSources.library} → ${adminActivityRu.admin.playbackSources.peers} → YouTube Music → TIDAL`,
     },
     {
         value: "library,tidal,ytmusic,peers",
-        label: "Library → TIDAL → YT Music → Peers",
+        label: `${adminActivityRu.admin.playbackSources.library} → TIDAL → YouTube Music → ${adminActivityRu.admin.playbackSources.peers}`,
     },
     {
         value: "library,ytmusic,tidal,peers",
-        label: "Library → YT Music → TIDAL → Peers",
+        label: `${adminActivityRu.admin.playbackSources.library} → YouTube Music → TIDAL → ${adminActivityRu.admin.playbackSources.peers}`,
     },
 ];
 
@@ -29,7 +30,10 @@ function resolveOrderOptions(stored: string) {
     if (orderOptions.some((option) => option.value === stored)) {
         return orderOptions;
     }
-    return [...orderOptions, { value: stored, label: "Custom (current)" }];
+    return [
+        ...orderOptions,
+        { value: stored, label: adminActivityRu.admin.playbackSources.custom },
+    ];
 }
 
 interface PlaybackSourcesSectionProps {
@@ -49,12 +53,14 @@ export function PlaybackSourcesSection({
     return (
         <SettingsSection
             id="playback-sources"
-            title="Playback Sources"
-            description="Where tracks play from when more than one source can provide them"
+            title={adminActivityRu.admin.playbackSources.title}
+            description={adminActivityRu.admin.playbackSources.description}
         >
             <SettingsRow
-                label="Source priority"
-                description="Your own library always wins. This is a priority, not a connection status list. Unavailable or disabled sources are skipped; the remaining order decides what is tried next."
+                label={adminActivityRu.admin.playbackSources.priority}
+                description={
+                    adminActivityRu.admin.playbackSources.priorityDescription
+                }
             >
                 <SettingsSelect
                     value={stored}

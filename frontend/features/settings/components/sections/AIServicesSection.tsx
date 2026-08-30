@@ -9,6 +9,7 @@ import {
 import { SystemSettings } from "../../types";
 import { InlineStatus } from "@/components/ui/InlineStatus";
 import { useConnectionTest } from "@/features/settings/hooks/useConnectionTest";
+import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
 
 interface AIServicesSectionProps {
     settings: SystemSettings;
@@ -34,9 +35,9 @@ export function AIServicesSection({
         runTest: runFanartTest,
         reset: resetFanartTest,
     } = useConnectionTest({
-        loadingMessage: "Testing...",
-        successMessage: "Connected",
-        failureMessage: "Failed",
+        loadingMessage: adminActivityRu.admin.common.testing,
+        successMessage: adminActivityRu.admin.common.connected,
+        failureMessage: adminActivityRu.admin.common.failed,
     });
     const {
         status: lastfmTestStatus,
@@ -44,9 +45,9 @@ export function AIServicesSection({
         runTest: runLastfmTest,
         reset: resetLastfmTest,
     } = useConnectionTest({
-        loadingMessage: "Testing...",
-        successMessage: "Connected",
-        failureMessage: "Failed",
+        loadingMessage: adminActivityRu.admin.common.testing,
+        successMessage: adminActivityRu.admin.common.connected,
+        failureMessage: adminActivityRu.admin.common.failed,
     });
 
     const handleFanartTest = () => runFanartTest(() => onTest("fanart"));
@@ -56,13 +57,13 @@ export function AIServicesSection({
     return (
         <SettingsSection
             id="ai-services"
-            title="Artwork Services"
-            description="Enhance your library with high-quality artwork"
+            title={adminActivityRu.admin.artwork.title}
+            description={adminActivityRu.admin.artwork.description}
         >
             {/* Fanart.tv */}
             <SettingsRow
-                label="Enable Fanart.tv"
-                description="Enhanced artist and album artwork"
+                label={adminActivityRu.admin.artwork.enableFanart}
+                description={adminActivityRu.admin.artwork.fanartDescription}
                 htmlFor="fanart-enabled"
             >
                 <SettingsToggle
@@ -74,12 +75,14 @@ export function AIServicesSection({
 
             {settings.fanartEnabled && (
                 <>
-                    <SettingsRow label="API Key">
+                    <SettingsRow label={adminActivityRu.admin.common.apiKey}>
                         <SettingsInput
                             type="password"
                             value={settings.fanartApiKey}
                             onChange={(v) => onUpdate({ fanartApiKey: v })}
-                            placeholder="Enter Fanart.tv API key"
+                            placeholder={
+                                adminActivityRu.admin.artwork.fanartPlaceholder
+                            }
                             className="w-64"
                         />
                     </SettingsRow>
@@ -93,8 +96,9 @@ export function AIServicesSection({
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
                                 {fanartTestStatus === "loading"
-                                    ? "Testing..."
-                                    : "Test Connection"}
+                                    ? adminActivityRu.admin.common.testing
+                                    : adminActivityRu.admin.common
+                                          .testConnection}
                             </button>
                             <InlineStatus
                                 status={fanartTestStatus}
@@ -110,17 +114,18 @@ export function AIServicesSection({
             <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="mb-4">
                     <p className="text-sm text-white/60">
-                        Last.fm is pre-configured with a default key. Add your
-                        own for higher rate limits.
+                        {adminActivityRu.admin.artwork.lastfmHint}
                     </p>
                 </div>
 
-                <SettingsRow label="Last.fm API Key (Optional)">
+                <SettingsRow label={adminActivityRu.admin.artwork.lastfmKey}>
                     <SettingsInput
                         type="password"
                         value={settings.lastfmApiKey || ""}
                         onChange={(v) => onUpdate({ lastfmApiKey: v })}
-                        placeholder="Optional: Your Last.fm API key"
+                        placeholder={
+                            adminActivityRu.admin.artwork.lastfmPlaceholder
+                        }
                         className="w-64"
                     />
                 </SettingsRow>
@@ -135,8 +140,9 @@ export function AIServicesSection({
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
                                 {lastfmTestStatus === "loading"
-                                    ? "Testing..."
-                                    : "Test Connection"}
+                                    ? adminActivityRu.admin.common.testing
+                                    : adminActivityRu.admin.common
+                                          .testConnection}
                             </button>
                             <InlineStatus
                                 status={lastfmTestStatus}

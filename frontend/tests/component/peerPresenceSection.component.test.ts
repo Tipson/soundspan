@@ -48,8 +48,8 @@ test("peer presence renders home-peer badge, freshness, and tracks", async () =>
             ],
         }),
     );
-    assert.match(html, /From Family server/);
-    assert.match(html, /updated 5m ago/);
+    assert.match(html, /Сервер Family server/);
+    assert.match(html, /обновлено 5 мин наза/);
     assert.match(html, /Alice/);
     assert.match(html, /Song — Artist/);
     assert.match(html, /bob/);

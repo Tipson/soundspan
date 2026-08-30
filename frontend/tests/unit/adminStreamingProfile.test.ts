@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getPersonalStreamingAdminSidebarItems } from "../../features/settings/personalStreamingAdminSections";
 
-test("personal streaming admin exposes deletion safety without restoring dormant library tooling", () => {
+test("админка показывает защиту медиатеки без скрытых серверных разделов", () => {
     const sidebarItems = getPersonalStreamingAdminSidebarItems(false);
     const sectionIds = sidebarItems.map((item) => item.id);
 
@@ -16,7 +16,7 @@ test("personal streaming admin exposes deletion safety without restoring dormant
     ]);
     assert.equal(
         sidebarItems.find((item) => item.id === "library-safety")?.label,
-        "Server Library Safety",
+        "Защита серверной медиатеки",
     );
 
     for (const dormantSectionId of [
@@ -30,7 +30,7 @@ test("personal streaming admin exposes deletion safety without restoring dormant
     }
 });
 
-test("personal streaming admin appends federation after the core safety controls", () => {
+test("админка добавляет федерацию после основных защитных настроек", () => {
     const sidebarItems = getPersonalStreamingAdminSidebarItems(true);
 
     assert.equal(sidebarItems.at(-1)?.id, "federation");

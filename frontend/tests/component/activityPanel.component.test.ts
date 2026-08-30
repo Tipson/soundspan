@@ -175,11 +175,11 @@ test("shows all tabs for admin users on desktop", async () => {
         }),
     );
 
-    assert.match(html, />Notifications</);
-    assert.match(html, />Active</);
-    assert.match(html, />History</);
-    assert.match(html, />Imports</);
-    assert.match(html, />Social</);
+    assert.match(html, />Уведомления</);
+    assert.match(html, />Активные</);
+    assert.match(html, />История</);
+    assert.match(html, />Импорт</);
+    assert.match(html, />Сейчас онлайн</);
     assert.match(html, /notifications-tab/);
     assert.equal(
         state.notificationHookOptions.some(
@@ -210,11 +210,11 @@ test("keeps ordinary-user activity focused on notifications and imports", async 
         }),
     );
 
-    assert.match(html, />Notifications</);
-    assert.match(html, />Imports</);
-    assert.doesNotMatch(html, />Social</);
-    assert.doesNotMatch(html, />Active</);
-    assert.doesNotMatch(html, />History</);
+    assert.match(html, />Уведомления</);
+    assert.match(html, />Импорт</);
+    assert.doesNotMatch(html, />Сейчас онлайн</);
+    assert.doesNotMatch(html, />Активные</);
+    assert.doesNotMatch(html, />История</);
     assert.match(html, /notifications-tab/);
 });
 
@@ -239,7 +239,7 @@ test("renders mobile overlay with social content and capped badges", async () =>
         }),
     );
 
-    assert.match(html, /title="Close"/);
+    assert.match(html, /title="Закрыть панель активности"/);
     assert.match(html, /social-tab/);
     assert.match(html, /99\+/);
 });
@@ -324,7 +324,7 @@ test("open desktop activity overlays content instead of shrinking it", async () 
     );
 
     assert.match(html, /data-activity-panel-layout="overlay"/);
-    assert.doesNotMatch(html, /Open activity panel/);
+    assert.doesNotMatch(html, /Открыть панель активности/);
 });
 
 test("activity panel toggle hides on mobile and renders on desktop", async () => {
@@ -338,7 +338,7 @@ test("activity panel toggle hides on mobile and renders on desktop", async () =>
     state.isMobile = false;
     state.unreadCount = 1;
     html = renderToStaticMarkup(React.createElement(ActivityPanelToggle));
-    assert.match(html, /Toggle activity panel/);
+    assert.match(html, /Открыть или закрыть панель активности/);
     assert.match(html, /w-1 h-1 rounded-full/);
 });
 

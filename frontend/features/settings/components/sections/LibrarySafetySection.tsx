@@ -1,5 +1,6 @@
 import { SettingsSection, SettingsRow, SettingsToggle } from "../ui";
 import { SystemSettings } from "../../types";
+import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
 
 interface LibrarySafetySectionProps {
     settings: SystemSettings;
@@ -16,12 +17,14 @@ export function LibrarySafetySection({
     return (
         <SettingsSection
             id="library-safety"
-            title="Server Library Safety"
-            description="Keep permanent server-file deletion locked unless you explicitly need it."
+            title={adminActivityRu.admin.librarySafety.title}
+            description={adminActivityRu.admin.librarySafety.description}
         >
             <SettingsRow
-                label="Allow permanent album deletion"
-                description="Off by default. Enabling this reveals deletion for locally stored albums; the server still validates every request."
+                label={adminActivityRu.admin.librarySafety.allowDeletion}
+                description={
+                    adminActivityRu.admin.librarySafety.allowDeletionDescription
+                }
                 htmlFor="library-deletion-enabled"
             >
                 <SettingsToggle
