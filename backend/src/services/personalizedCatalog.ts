@@ -21,6 +21,22 @@ const log = logger.child("PersonalizedCatalog");
 /** Wave policies exposed by the personalized catalog endpoint. */
 export type PersonalizedWaveMode = "for-you" | "new" | "familiar";
 
+/** Independent mood or listening-context filter applied to a Wave policy. */
+export type PersonalizedWaveMood =
+    | "calm"
+    | "energetic"
+    | "focus"
+    | "workout"
+    | "favorites"
+    | "forgotten";
+
+const SCENARIO_SEARCH_QUERY: Partial<Record<PersonalizedWaveMood, string>> = {
+    calm: "calm relaxing music",
+    energetic: "energetic upbeat music",
+    focus: "focus concentration music",
+    workout: "workout energy music",
+};
+
 /** Final client-observed playback outcomes used as taste signals. */
 export type PersonalizedPlaybackOutcome =
     | "meaningful"
@@ -76,6 +92,11 @@ export interface PersonalizedCatalogDependencies {
         limit: number,
         cursor: number,
     ) => Promise<UnifiedTrackYtMusicRecord[]>;
+    getScenarioCandidates: (
+        userId: string,
+        mood: PersonalizedWaveMood,
+        limit: number,
+    ) => Promise<unknown[]>;
 }
 
 /** Bounded continuation context supplied by one provider-radio session. */
@@ -83,6 +104,7 @@ export interface PersonalizedCatalogOptions {
     cursor?: number;
     excludeVideoIds?: readonly string[];
     mode?: PersonalizedWaveMode;
+    mood?: PersonalizedWaveMood;
 }
 
 /** Playable YouTube response contract shared by all personalized shelves. */
@@ -169,6 +191,37 @@ function safeDuration(value: unknown): number {
 
 function fallbackCover(videoId: string): string {
     return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+}
+
+function normalizeScenarioSearchCandidate(candidate: unknown): unknown {
+    if (
+        typeof candidate !== "object" ||
+        candidate === null ||
+        Array.isArray(candidate)
+    ) {
+        return candidate;
+    }
+    const record = candidate as Record<string, unknown>;
+    const thumbnails = Array.isArray(record.thumbnails)
+        ? record.thumbnails
+        : [];
+    const thumbnailUrl = [...thumbnails]
+        .reverse()
+        .map((thumbnail) =>
+            typeof thumbnail === "object" && thumbnail !== null
+                ? nonBlank((thumbnail as Record<string, unknown>).url)
+                : null,
+        )
+        .find((value): value is string => value !== null);
+
+    return {
+        ...record,
+        duration:
+            typeof record.duration_seconds === "number"
+                ? record.duration_seconds
+                : record.duration,
+        ...(thumbnailUrl ? { thumbnailUrl } : {}),
+    };
 }
 
 function toPersonalizedTrack(candidate: unknown): PersonalizedTrack | null {
@@ -498,12 +551,22 @@ function selectDiverseSeedTracks(
     dislikedVideoIds: Set<string>,
     cursor: number,
     profile: PersonalizedPreferenceProfile,
+    mood?: PersonalizedWaveMood,
 ): PersonalizedTrack[] {
-    const signalSources = [
-        signals.recentPlays,
-        signals.likedTracks,
-        signals.playlistTracks,
-    ];
+    const signalSources =
+        mood === "favorites"
+            ? [signals.likedTracks, signals.playlistTracks, signals.recentPlays]
+            : mood === "forgotten"
+              ? [
+                    signals.playlistTracks,
+                    signals.likedTracks,
+                    signals.recentPlays,
+                ]
+              : [
+                    signals.recentPlays,
+                    signals.likedTracks,
+                    signals.playlistTracks,
+                ];
     const selected: PersonalizedTrack[] = [];
     const exclusions = new Set(dislikedVideoIds);
 
@@ -691,6 +754,17 @@ function validateRequest(
     ) {
         throw new RangeError("Unsupported personalized Wave mode");
     }
+    if (
+        options.mood !== undefined &&
+        options.mood !== "calm" &&
+        options.mood !== "energetic" &&
+        options.mood !== "focus" &&
+        options.mood !== "workout" &&
+        options.mood !== "favorites" &&
+        options.mood !== "forgotten"
+    ) {
+        throw new RangeError("Unsupported personalized Wave mood");
+    }
 }
 
 function normalizeRequestedExclusions(
@@ -781,6 +855,7 @@ export class PersonalizedCatalogService {
             dislikedVideoIds,
             cursor,
             preferenceProfile,
+            options.mood,
         );
         const seedVideoIds = seedTracks.map((track) => track.youtubeVideoId);
 
@@ -801,13 +876,42 @@ export class PersonalizedCatalogService {
                 );
                 return [];
             });
+        const requestedMood = options.mood;
+        const scenarioCandidatesPromise = requestedMood
+            ? Promise.resolve()
+                  .then(() =>
+                      this.dependencies.getScenarioCandidates(
+                          userId,
+                          requestedMood,
+                          radioResultLimit(limit),
+                      ),
+                  )
+                  .then((candidates) =>
+                      Array.isArray(candidates) ? candidates : [],
+                  )
+                  .catch((error: unknown) => {
+                      log.warn(
+                          "Optional Wave mood search is unavailable",
+                          { userId, mood: requestedMood },
+                          error,
+                      );
+                      return [];
+                  })
+            : Promise.resolve([]);
 
         if (seedVideoIds.length === 0) {
-            const listenBrainzCandidates = await listenBrainzCandidatesPromise;
+            const [listenBrainzCandidates, scenarioCandidates] =
+                await Promise.all([
+                    listenBrainzCandidatesPromise,
+                    scenarioCandidatesPromise,
+                ]);
             const externalDislikes =
                 await this.dependencies.loadDislikedEntityIds(
                     userId,
-                    collectCanonicalEntityIds(listenBrainzCandidates),
+                    collectCanonicalEntityIds([
+                        ...scenarioCandidates,
+                        ...listenBrainzCandidates,
+                    ]),
                 );
             const externalExclusions = new Set([
                 ...dislikedVideoIds,
@@ -816,7 +920,7 @@ export class PersonalizedCatalogService {
             ]);
             const discovery = rankDiscoveryTracks(
                 collectDistinctTracks(
-                    listenBrainzCandidates,
+                    [...scenarioCandidates, ...listenBrainzCandidates],
                     externalExclusions,
                     MAX_DISCOVERY_CANDIDATES,
                 ),
@@ -834,45 +938,48 @@ export class PersonalizedCatalogService {
         }
 
         const requestedRadioLimit = radioResultLimit(limit);
-        const [radioResults, listenBrainzCandidates] = await Promise.all([
-            Promise.allSettled(
-                seedVideoIds.map(async (seedVideoId) => {
-                    const queue = await this.dependencies.getRadio(
-                        seedVideoId,
-                        requestedRadioLimit,
-                    );
-                    if (!queue || !Array.isArray(queue.tracks)) {
-                        throw new TypeError(
-                            "Invalid YouTube Music radio response",
+        const [radioResults, listenBrainzCandidates, scenarioCandidates] =
+            await Promise.all([
+                Promise.allSettled(
+                    seedVideoIds.map(async (seedVideoId) => {
+                        const queue = await this.dependencies.getRadio(
+                            seedVideoId,
+                            requestedRadioLimit,
                         );
-                    }
-                    const boundedTracks = queue.tracks.slice(
-                        0,
-                        requestedRadioLimit,
-                    );
-                    const hasPlayableTrack = boundedTracks.some((track) => {
-                        if (
-                            typeof track !== "object" ||
-                            track === null ||
-                            Array.isArray(track)
-                        ) {
-                            return false;
+                        if (!queue || !Array.isArray(queue.tracks)) {
+                            throw new TypeError(
+                                "Invalid YouTube Music radio response",
+                            );
                         }
-                        return (
-                            normalizeVideoId((track as TrackLike).videoId) !==
-                            null
+                        const boundedTracks = queue.tracks.slice(
+                            0,
+                            requestedRadioLimit,
                         );
-                    });
-                    if (!hasPlayableTrack) {
-                        throw new TypeError(
-                            "Empty YouTube Music radio response",
-                        );
-                    }
-                    return boundedTracks;
-                }),
-            ),
-            listenBrainzCandidatesPromise,
-        ]);
+                        const hasPlayableTrack = boundedTracks.some((track) => {
+                            if (
+                                typeof track !== "object" ||
+                                track === null ||
+                                Array.isArray(track)
+                            ) {
+                                return false;
+                            }
+                            return (
+                                normalizeVideoId(
+                                    (track as TrackLike).videoId,
+                                ) !== null
+                            );
+                        });
+                        if (!hasPlayableTrack) {
+                            throw new TypeError(
+                                "Empty YouTube Music radio response",
+                            );
+                        }
+                        return boundedTracks;
+                    }),
+                ),
+                listenBrainzCandidatesPromise,
+                scenarioCandidatesPromise,
+            ]);
         const failedRadioCount = radioResults.filter(
             (result) => result.status === "rejected",
         ).length;
@@ -886,6 +993,7 @@ export class PersonalizedCatalogService {
                 collectCanonicalEntityIds([
                     ...signalCandidates,
                     ...discoveryCandidates,
+                    ...scenarioCandidates,
                     ...listenBrainzCandidates,
                 ]),
             );
@@ -919,12 +1027,19 @@ export class PersonalizedCatalogService {
         ]);
         addTrackIds(discoveryExclusions, finalListenAgain);
         addTrackIds(discoveryExclusions, finalQuickPicks);
-        const providerDiscovery = collectInterleavedDistinctTracks(
-            successfulRadioQueues,
+        const scenarioDiscovery = collectDistinctTracks(
+            scenarioCandidates,
             discoveryExclusions,
             MAX_DISCOVERY_CANDIDATES,
         );
-        const externalExclusions = new Set(discoveryExclusions);
+        const providerExclusions = new Set(discoveryExclusions);
+        addTrackIds(providerExclusions, scenarioDiscovery);
+        const providerDiscovery = collectInterleavedDistinctTracks(
+            successfulRadioQueues,
+            providerExclusions,
+            MAX_DISCOVERY_CANDIDATES - scenarioDiscovery.length,
+        );
+        const externalExclusions = new Set(providerExclusions);
         addTrackIds(externalExclusions, providerDiscovery);
         const externalDiscovery = collectDistinctTracks(
             listenBrainzCandidates,
@@ -932,7 +1047,7 @@ export class PersonalizedCatalogService {
             MAX_DISCOVERY_CANDIDATES - providerDiscovery.length,
         );
         const discovery = rankDiscoveryTracks(
-            [...providerDiscovery, ...externalDiscovery],
+            [...scenarioDiscovery, ...providerDiscovery, ...externalDiscovery],
             preferenceProfile,
             mode,
             limit,
@@ -969,4 +1084,18 @@ export const personalizedCatalogService = new PersonalizedCatalogService({
     // existing ListenBrainz connection continues to receive scrobbles, while
     // Wave remains independent from its experimental recommendation API.
     getListenBrainzCandidates: async () => [],
+    getScenarioCandidates: async (userId, mood, limit) => {
+        const query = SCENARIO_SEARCH_QUERY[mood];
+        if (!query) return [];
+        const result = await ytMusicService.search(
+            userId,
+            query,
+            "songs",
+            limit,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        return Array.isArray(result.results)
+            ? result.results.map(normalizeScenarioSearchCandidate)
+            : [];
+    },
 });

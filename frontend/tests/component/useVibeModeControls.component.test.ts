@@ -161,6 +161,14 @@ function makeAudioState(
     currentIndex = 0,
     vibeMode = false,
     waveMode: "for-you" | "new" | "familiar" = "for-you",
+    waveMood:
+        | "calm"
+        | "energetic"
+        | "focus"
+        | "workout"
+        | "favorites"
+        | "forgotten"
+        | null = null,
 ) {
     const mutations: string[] = [];
     return {
@@ -170,6 +178,7 @@ function makeAudioState(
             queue,
             vibeMode,
             waveMode,
+            waveMood,
             setIsShuffle: () => mutations.push("shuffle"),
             setShuffleIndices: () => mutations.push("shuffle-indices"),
             setVibeMode: () => mutations.push("vibe-mode"),
@@ -181,6 +190,42 @@ function makeAudioState(
         mutations,
     };
 }
+
+test("provider continuation keeps the active Wave mood outside the Vibe route", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const harness = new HookLifecycleHarness();
+    const seed = makeProviderTrack("AAAAAAAAAAA");
+    const audio = makeAudioState(seed, [seed], 0, true, "new", "workout");
+
+    harness.beginRender();
+    activeHarness = harness;
+    const controls = useVibeModeControls({
+        state: audio.state as never,
+        getActiveListenTogetherSession: () => null,
+        showQueueMutationToasts: () => undefined,
+    });
+    harness.commitRender();
+
+    const result = controls.startVibeMode();
+    await Promise.resolve();
+    const requestUrl = new URL(feedRequestPaths[0], "https://soundspan.test");
+    assert.equal(requestUrl.searchParams.get("mode"), "new");
+    assert.equal(requestUrl.searchParams.get("mood"), "workout");
+
+    feedRequests[0].resolve({
+        shelves: {
+            discovery: [makeProviderTrack("BBBBBBBBBBB")],
+            quickPicks: [],
+            listenAgain: [],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+        nextCursor: 1,
+    });
+    assert.deepEqual(await result, { success: true, trackCount: 1 });
+});
 
 test("provider radio advances its cursor and sends the bounded queue exclusions on continuation", async () => {
     const { useVibeModeControls } =

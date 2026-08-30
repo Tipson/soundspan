@@ -30,3 +30,21 @@ test("personalized home request and cache key preserve the ranking mode", () => 
         queryKeys.personalizedHome(24, "familiar"),
     );
 });
+
+test("personalized home request and cache key preserve an independent Wave mood", () => {
+    assert.equal(
+        buildPersonalizedHomeFeedUrl(24, "new", "focus"),
+        "/personalized/home?limit=24&mode=new&mood=focus",
+    );
+    assert.deepEqual(queryKeys.personalizedHome(24, "new", "focus"), [
+        "home",
+        "personalized",
+        24,
+        "new",
+        "focus",
+    ]);
+    assert.notDeepEqual(
+        queryKeys.personalizedHome(24, "new", "focus"),
+        queryKeys.personalizedHome(24, "new", "workout"),
+    );
+});

@@ -303,7 +303,17 @@ export default function SearchPage() {
         ) : null;
 
     return (
-        <div className="min-h-screen px-6 py-6">
+        <div
+            data-search-results-canvas="true"
+            className="relative mx-auto min-h-screen max-w-[1600px] px-4 pb-36 pt-4 sm:px-6 sm:pt-6 lg:px-8"
+        >
+            <div
+                aria-hidden="true"
+                data-search-ambient-clip="true"
+                className="pointer-events-none absolute inset-0 overflow-hidden"
+            >
+                <div className="absolute -right-48 -top-64 h-[38rem] w-[38rem] rounded-full bg-brand/[0.07] blur-3xl" />
+            </div>
             <TVSearchInput initialQuery={query} onSearch={handleTVSearch} />
 
             <SearchFilters
@@ -312,7 +322,7 @@ export default function SearchPage() {
                 hasSearched={hasSearched}
             />
 
-            <div className="space-y-12 pb-24">
+            <div className="relative space-y-10 sm:space-y-12">
                 {hasSearched && aliasInfo ? (
                     <AliasResolutionBanner aliasInfo={aliasInfo} />
                 ) : null}
@@ -380,8 +390,8 @@ export default function SearchPage() {
                         </div>
                         <p className="text-sm text-gray-400">
                             {isSoulseekSearching || isSoulseekPolling
-                                ? `Searching... (${soulseekResults.length} found)`
-                                : "Searching..."}
+                                ? `Searching… (${soulseekResults.length} found)`
+                                : "Searching…"}
                         </p>
                     </div>
                 ) : null}

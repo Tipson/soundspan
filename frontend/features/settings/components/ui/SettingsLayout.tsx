@@ -24,14 +24,74 @@ export function SettingsLayout({
     );
     const mainContentRef = useRef<HTMLDivElement>(null);
 
-    // Handle sidebar click - scroll to section
-    const handleSectionClick = useCallback((id: string) => {
+    const scrollToSection = useCallback((id: string): boolean => {
         const element = document.getElementById(id);
         if (element) {
-            element.scrollIntoView({ behavior: "smooth", block: "start" });
+            const reduceMotion = window.matchMedia?.(
+                "(prefers-reduced-motion: reduce)",
+            ).matches;
+            element.scrollIntoView({
+                behavior: reduceMotion ? "auto" : "smooth",
+                block: "start",
+            });
             setActiveSection(id);
+            return true;
         }
+        return false;
     }, []);
+
+    // Handle sidebar click - scroll to section and keep it deep-linkable.
+    const handleSectionClick = useCallback(
+        (id: string) => {
+            if (!scrollToSection(id)) return;
+
+            const url = new URL(window.location.href);
+            if (url.hash !== `#${id}`) {
+                url.hash = id;
+                window.history.pushState({}, "", url);
+            }
+        },
+        [scrollToSection],
+    );
+
+    useEffect(() => {
+        const visibleSectionIds = new Set(
+            sidebarItems
+                .filter((item) => !item.adminOnly || isAdmin)
+                .map((item) => item.id),
+        );
+        let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+        const restoreSectionFromLocation = () => {
+            const hash = window.location.hash.slice(1);
+            if (!hash) return;
+
+            let id: string;
+            try {
+                id = decodeURIComponent(hash);
+            } catch {
+                return;
+            }
+            if (!visibleSectionIds.has(id)) return;
+
+            if (!scrollToSection(id)) {
+                retryTimer = setTimeout(() => scrollToSection(id), 150);
+            }
+        };
+
+        restoreSectionFromLocation();
+        window.addEventListener("popstate", restoreSectionFromLocation);
+        window.addEventListener("hashchange", restoreSectionFromLocation);
+
+        return () => {
+            if (retryTimer) clearTimeout(retryTimer);
+            window.removeEventListener("popstate", restoreSectionFromLocation);
+            window.removeEventListener(
+                "hashchange",
+                restoreSectionFromLocation,
+            );
+        };
+    }, [sidebarItems, isAdmin, scrollToSection]);
 
     // Track active section based on scroll position
     useEffect(() => {
@@ -113,23 +173,22 @@ export function SettingsLayout({
     }, [sidebarItems, isAdmin]);
 
     return (
-        <div className="min-h-screen bg-surface relative">
-            {/* Subtle grey gradient for systems page feel */}
-            <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                    backgroundImage:
-                        "linear-gradient(to bottom, #1a1a1a 0%, #121212 15%, #0a0a0a 30%)",
-                }}
-            />
+        <div className="settings-page min-h-full">
+            <div className="relative mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10 xl:px-10">
+                <header className="mb-7 max-w-2xl md:mb-10">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-light">
+                        Your soundspan
+                    </p>
+                    <h1 className="text-3xl font-bold tracking-[-0.04em] text-content md:text-4xl">
+                        {title}
+                    </h1>
+                    <p className="mt-3 text-sm leading-6 text-content-secondary md:text-base">
+                        Shape playback, offline music, privacy, and connected
+                        services for this account and device.
+                    </p>
+                </header>
 
-            <div className="relative max-w-5xl mx-auto px-4 md:px-8 py-8">
-                {/* Header */}
-                <h1 className="text-2xl font-bold text-white mb-8">{title}</h1>
-
-                {/* Layout */}
-                <div className="flex gap-12">
-                    {/* Sidebar */}
+                <div className="grid items-start gap-5 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-8">
                     <SettingsSidebar
                         items={sidebarItems}
                         activeSection={activeSection}
@@ -137,10 +196,12 @@ export function SettingsLayout({
                         isAdmin={isAdmin}
                     />
 
-                    {/* Main Content */}
-                    <main ref={mainContentRef} className="flex-1 min-w-0">
+                    <div
+                        ref={mainContentRef}
+                        className="min-w-0 space-y-4 md:space-y-5"
+                    >
                         {children}
-                    </main>
+                    </div>
                 </div>
             </div>
         </div>

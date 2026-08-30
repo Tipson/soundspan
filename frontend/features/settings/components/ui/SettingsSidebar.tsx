@@ -29,20 +29,22 @@ export function SettingsSidebar({
     const adminItems = filteredItems.filter((item) => item.adminOnly);
 
     return (
-        <nav className="w-48 shrink-0 sticky top-8 self-start hidden md:block">
-            <div className="space-y-0.5">
+        <nav
+            className="settings-section-navigation min-w-0 self-start lg:sticky lg:top-6 lg:w-56 lg:shrink-0"
+            aria-label="Settings sections"
+        >
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
                 {regularItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => onSectionClick(item.id)}
-                        className={`
-                            w-full text-left px-3 py-2 rounded-md text-sm transition-colors
-                            ${
-                                activeSection === item.id
-                                    ? "text-white bg-surface-highlight"
-                                    : "text-gray-400 hover:text-white"
-                            }
-                        `}
+                        aria-current={
+                            activeSection === item.id ? "location" : undefined
+                        }
+                        className="settings-navigation-item"
+                        data-state={
+                            activeSection === item.id ? "active" : "inactive"
+                        }
                     >
                         {item.label}
                     </button>
@@ -50,8 +52,8 @@ export function SettingsSidebar({
 
                 {adminItems.length > 0 && (
                     <>
-                        <div className="pt-4 pb-2 px-3">
-                            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                        <div className="hidden px-3 pb-2 pt-5 lg:block">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-content-muted">
                                 Admin
                             </span>
                         </div>
@@ -59,14 +61,17 @@ export function SettingsSidebar({
                             <button
                                 key={item.id}
                                 onClick={() => onSectionClick(item.id)}
-                                className={`
-                                    w-full text-left px-3 py-2 rounded-md text-sm transition-colors
-                                    ${
-                                        activeSection === item.id
-                                            ? "text-white bg-surface-highlight"
-                                            : "text-gray-400 hover:text-white"
-                                    }
-                                `}
+                                aria-current={
+                                    activeSection === item.id
+                                        ? "location"
+                                        : undefined
+                                }
+                                className="settings-navigation-item"
+                                data-state={
+                                    activeSection === item.id
+                                        ? "active"
+                                        : "inactive"
+                                }
                             >
                                 {item.label}
                             </button>

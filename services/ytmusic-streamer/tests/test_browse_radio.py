@@ -424,11 +424,13 @@ def test_public_search_uses_the_leased_retry_runner() -> None:
         *,
         request_timeout_seconds: float,
         retry_timeouts: bool,
+        language: str | None = None,
     ) -> object:
         assert strategy == "native"
         assert "search-native" in operation
         assert request_timeout_seconds == app.SEARCH_PROVIDER_REQUEST_TIMEOUT_SECONDS
         assert retry_timeouts is False
+        assert language == "en"
         assert callable(func)
         return func(public_client)
 

@@ -1,5 +1,6 @@
 import type {
     PersonalizedHomeFeed,
+    PersonalizedHomeMood,
     PersonalizedTrack,
 } from "@/features/home/types";
 import type { Track, WaveMode } from "@/lib/audio-state-context";
@@ -36,6 +37,7 @@ export function buildProviderRadioContinuationPath(
     cursor: number,
     limit: number,
     mode: WaveMode,
+    mood: PersonalizedHomeMood | null = null,
 ): string {
     const excludedVideoIds = Array.from(
         new Set(
@@ -49,6 +51,7 @@ export function buildProviderRadioContinuationPath(
         cursor: String(Math.max(0, Math.floor(cursor))),
         mode,
     });
+    if (mood) params.set("mood", mood);
     if (excludedVideoIds.length > 0) {
         params.set("exclude", excludedVideoIds.join(","));
     }

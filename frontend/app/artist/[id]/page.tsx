@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     useAudioState,
     usePlaybackStatus,
@@ -26,6 +26,7 @@ import { useArtistActions } from "@/features/artist/hooks/useArtistActions";
 import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import { useYtMusicTopTracks } from "@/features/artist/hooks/useYtMusicTopTracks";
 import { useTidalTopTracks } from "@/features/artist/hooks/useTidalTopTracks";
+import { useArtistTracks } from "@/features/artist/hooks/useArtistTracks";
 import type { Track, Album } from "@/features/artist/types";
 
 // Components
@@ -39,6 +40,15 @@ import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
 import { ProviderAlbumsGrid } from "@/features/search/components/ProviderAlbumsGrid";
 import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
 import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
+import {
+    ArtistViewTabs,
+    buildArtistViewHref,
+    resolveArtistView,
+} from "@/features/artist/components/ArtistViewTabs";
+import {
+    filterArtistReleases,
+    mergeArtistTracks,
+} from "@/features/artist/artistView";
 
 function ListSectionSkeleton({
     title,
@@ -84,11 +94,32 @@ function GridSectionSkeleton({
     );
 }
 
+function ArtistViewEmptyState({
+    title,
+    description,
+}: {
+    title: string;
+    description: string;
+}) {
+    return (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-12 text-center">
+            <h2 className="text-xl font-bold text-white">{title}</h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-gray-400">
+                {description}
+            </p>
+        </div>
+    );
+}
+
 /**
  * Renders the ArtistPage component.
  */
 export default function ArtistPage() {
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const activeView = resolveArtistView(searchParams.get("view"));
+    const serializedSearchParams = searchParams.toString();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = usePlaybackStatus();
@@ -111,6 +142,14 @@ export default function ArtistPage() {
         reloadArtist,
     } = useArtistData();
     const isDirectYtMusicArtist = artistProvider === "ytmusic";
+    const libraryArtistTracksEnabled =
+        activeView === "tracks" &&
+        source === "library" &&
+        !isDirectYtMusicArtist;
+    const artistTracksQuery = useArtistTracks(
+        artist?.id,
+        libraryArtistTracksEnabled,
+    );
 
     const artistAlbumRequests = useArtistAlbumRequests(artist?.name || "");
     const albumRequestControls = {
@@ -166,10 +205,34 @@ export default function ArtistPage() {
           !isYtStatusResolved ||
           isTidalMatching ||
           isYtMatching;
+    const popularTracks = enrichedTopTracks || artist?.topTracks || [];
+    const visibleArtistTracks = libraryArtistTracksEnabled
+        ? mergeArtistTracks(popularTracks, artistTracksQuery.tracks)
+        : popularTracks;
+    const isArtistTracksLoading =
+        libraryArtistTracksEnabled &&
+        artistTracksQuery.isLoading &&
+        visibleArtistTracks.length === 0;
 
     // Separate owned and available albums
     const ownedAlbums = albums.filter((a) => a.owned);
     const availableAlbums = albums.filter((a) => !a.owned);
+    const visibleOwnedAlbums = filterArtistReleases(ownedAlbums, activeView);
+    const visibleAvailableAlbums = filterArtistReleases(
+        availableAlbums,
+        activeView,
+    );
+    const visibleProviderAlbums =
+        activeView === "singles" ? [] : providerAlbums;
+    const showTracks = activeView === "overview" || activeView === "tracks";
+    const showReleases =
+        activeView === "overview" ||
+        activeView === "albums" ||
+        activeView === "singles";
+    const hasVisibleReleases =
+        visibleOwnedAlbums.length > 0 ||
+        visibleAvailableAlbums.length > 0 ||
+        visibleProviderAlbums.length > 0;
 
     // Get image URLs for display and color extraction
     const rawImageUrl =
@@ -531,57 +594,117 @@ export default function ArtistPage() {
                 <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,rgba(16,16,16,0.4)_100%)] pointer-events-none" />
 
                 <div className="relative mx-auto w-full max-w-[1800px] space-y-10 px-4 py-7 sm:px-6 lg:px-8">
+                    <ArtistViewTabs
+                        activeView={activeView}
+                        pathname={pathname}
+                        searchParams={serializedSearchParams}
+                    />
+
                     {/* Popular Tracks */}
-                    {artist.topTracks && artist.topTracks.length > 0 ? (
+                    {showTracks && visibleArtistTracks.length > 0 ? (
                         <PopularTracks
-                            tracks={enrichedTopTracks || artist.topTracks}
+                            tracks={visibleArtistTracks}
                             artist={artist}
                             currentTrackId={currentTrack?.id}
                             colors={colors}
                             onPlayTrack={handlePlayTrack}
-                            isProviderMatching={isProviderMatching}
+                            isProviderMatching={
+                                isProviderMatching &&
+                                !libraryArtistTracksEnabled
+                            }
                             popularHref={
-                                isDirectYtMusicArtist
-                                    ? undefined
-                                    : `/artist/${artist.id}/popular`
+                                activeView === "overview"
+                                    ? buildArtistViewHref(
+                                          pathname,
+                                          serializedSearchParams,
+                                          "tracks",
+                                      )
+                                    : undefined
                             }
                             onAddAllToQueue={handleAddAllPopularToQueue}
+                            showAll={activeView === "tracks"}
                         />
-                    ) : (
-                        showProgressivePlaceholders && (
-                            <ListSectionSkeleton title="Popular" />
-                        )
+                    ) : showTracks &&
+                      (showProgressivePlaceholders || isArtistTracksLoading) ? (
+                        <ListSectionSkeleton title="Popular" />
+                    ) : showTracks && activeView === "tracks" ? (
+                        <ArtistViewEmptyState
+                            title="No tracks available"
+                            description="The connected music sources did not return playable tracks for this artist."
+                        />
+                    ) : null}
+
+                    {activeView === "tracks" &&
+                        libraryArtistTracksEnabled &&
+                        artistTracksQuery.hasNextPage && (
+                            <div className="-mt-7 flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        void artistTracksQuery.fetchNextPage()
+                                    }
+                                    disabled={
+                                        artistTracksQuery.isFetchingNextPage
+                                    }
+                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
+                                >
+                                    {artistTracksQuery.isFetchingNextPage
+                                        ? "Loading tracks…"
+                                        : `Load more tracks (${artistTracksQuery.tracks.length} of ${artistTracksQuery.total})`}
+                                </button>
+                            </div>
+                        )}
+
+                    {showReleases &&
+                        (activeView === "albums" || activeView === "singles") &&
+                        !detailsLoading &&
+                        !hasVisibleReleases && (
+                            <ArtistViewEmptyState
+                                title={
+                                    activeView === "singles"
+                                        ? "No singles or EPs available"
+                                        : "No albums available"
+                                }
+                                description="The connected music sources did not classify any releases for this view."
+                            />
+                        )}
+
+                    {activeView === "overview" &&
+                        (artist.bio || artist.summary) && (
+                            <ArtistBio
+                                bio={artist.bio || artist.summary || ""}
+                            />
+                        )}
+
+                    {showReleases && visibleOwnedAlbums.length > 0 && (
+                        <Discography
+                            albums={visibleOwnedAlbums}
+                            colors={colors}
+                            onPlayAlbum={handlePlayAlbum}
+                            sortBy={sortBy}
+                            onSortChange={setSortBy}
+                            title={
+                                activeView === "singles"
+                                    ? "Singles and EPs"
+                                    : "Discography"
+                            }
+                        />
                     )}
 
-                    {/* About follows the music so mobile listeners reach
-                        playable content before long biographies. */}
-                    {(artist.bio || artist.summary) && (
-                        <ArtistBio bio={artist.bio || artist.summary || ""} />
-                    )}
-
-                    {/* Discography (Owned Albums) */}
-                    <Discography
-                        albums={ownedAlbums}
-                        colors={colors}
-                        onPlayAlbum={handlePlayAlbum}
-                        sortBy={sortBy}
-                        onSortChange={setSortBy}
-                    />
-
-                    {providerAlbums.length > 0 && (
+                    {showReleases && visibleProviderAlbums.length > 0 && (
                         <section>
                             <h2 className="mb-4 text-xl font-bold">Albums</h2>
                             <ProviderAlbumsGrid
-                                albums={providerAlbums}
+                                albums={visibleProviderAlbums}
                                 limit={null}
                             />
                         </section>
                     )}
 
                     {/* Available Albums to Download */}
-                    {availableAlbums.length > 0 ? (
+                    {showReleases && visibleAvailableAlbums.length > 0 ? (
                         <AvailableAlbums
-                            albums={availableAlbums}
+                            albums={visibleAvailableAlbums}
                             artistName={artist.name}
                             source={source || "discovery"}
                             colors={colors}
@@ -591,14 +714,13 @@ export default function ArtistPage() {
                             downloadsEnabled={downloadsEnabled}
                             requestControls={albumRequestControls}
                         />
-                    ) : (
-                        showProgressivePlaceholders && (
-                            <GridSectionSkeleton title="Albums Available" />
-                        )
-                    )}
+                    ) : showReleases && showProgressivePlaceholders ? (
+                        <GridSectionSkeleton title="Albums Available" />
+                    ) : null}
 
                     {/* Similar Artists */}
-                    {artist.similarArtists &&
+                    {activeView === "overview" &&
+                    artist.similarArtists &&
                     artist.similarArtists.length > 0 ? (
                         <SimilarArtists
                             similarArtists={artist.similarArtists}
@@ -606,11 +728,10 @@ export default function ArtistPage() {
                                 router.push(`/artist/${artistId}`)
                             }
                         />
-                    ) : (
-                        showProgressivePlaceholders && (
-                            <GridSectionSkeleton title="Fans Also Like" />
-                        )
-                    )}
+                    ) : activeView === "overview" &&
+                      showProgressivePlaceholders ? (
+                        <GridSectionSkeleton title="Fans Also Like" />
+                    ) : null}
                 </div>
             </div>
 

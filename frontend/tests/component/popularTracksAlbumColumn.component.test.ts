@@ -160,6 +160,7 @@ async function renderPopular(
         index: number,
         visibleTracks: Track[],
     ) => void = () => undefined,
+    showAll = false,
 ): Promise<{ container: HTMLElement; unmount: () => void }> {
     const { PopularTracks } =
         await import("../../features/artist/components/PopularTracks");
@@ -176,6 +177,7 @@ async function renderPopular(
                 currentTrackId: undefined,
                 colors: null,
                 onPlayTrack,
+                showAll,
             }),
         );
     });
@@ -294,6 +296,43 @@ test("collapsed popular-track click forwards the exact visible queue snapshot", 
                 "visible-4",
                 "visible-5",
             ],
+        },
+    ]);
+    unmount();
+});
+
+test("tracks view exposes every returned track as the ordered playback context", async () => {
+    const calls: Array<{ trackId: string; visibleIds: string[] }> = [];
+    const tracks = Array.from({ length: 7 }, (_, index) => ({
+        id: `all-${index + 1}`,
+        title: `All ${index + 1}`,
+        duration: 180 + index,
+        artist,
+        album: { id: `album-${index + 1}`, title: "Album" },
+        filePath: `/music/all-${index + 1}.flac`,
+    }));
+    const { container, unmount } = await renderPopular(
+        tracks,
+        (track, _index, visibleTracks) => {
+            calls.push({
+                trackId: track.id,
+                visibleIds: visibleTracks.map((item) => item.id),
+            });
+        },
+        true,
+    );
+
+    const seventhRow = container.querySelector<HTMLElement>(
+        '[data-track-id="all-7"]',
+    );
+    assert.ok(seventhRow, "expected the full returned track list");
+    assert.equal(container.textContent?.includes("See more"), false);
+    await React.act(async () => seventhRow.click());
+
+    assert.deepEqual(calls, [
+        {
+            trackId: "all-7",
+            visibleIds: tracks.map((track) => track.id),
         },
     ]);
     unmount();

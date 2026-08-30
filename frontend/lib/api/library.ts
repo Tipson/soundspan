@@ -94,6 +94,23 @@ export function WithLibrary<TBase extends ApiClientConstructor>(Base: TBase) {
             return this.request<ApiData>(`/library/artists/${id}${suffix}`);
         }
 
+        /** List a deterministic page of visible library tracks for an artist. */
+        async getArtistTracks(
+            id: string,
+            params?: { limit?: number; offset?: number },
+        ) {
+            const query = toSearchParams(params ?? {}).toString();
+            const encodedId = encodeURIComponent(id);
+            return this.request<{
+                tracks: ApiData[];
+                total: number;
+                offset: number;
+                limit: number;
+            }>(
+                `/library/artists/${encodedId}/tracks${query ? `?${query}` : ""}`,
+            );
+        }
+
         async getAlbums(params?: {
             artistId?: string;
             limit?: number;

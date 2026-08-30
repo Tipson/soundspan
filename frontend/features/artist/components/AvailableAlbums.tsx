@@ -7,6 +7,7 @@ import { PlayableCard } from "@/components/ui/PlayableCard";
 import { Disc3 } from "lucide-react";
 import { api } from "@/lib/api";
 import { PeerBadge } from "@/components/ui/PeerBadge";
+import { isSingleOrEpRelease } from "../artistView";
 
 /** Request-flow controls threaded into the album grids for non-admins. */
 export interface AlbumRequestControls {
@@ -250,12 +251,8 @@ export function AvailableAlbums({
     }
 
     // Separate studio albums from EPs/Singles/Demos
-    const studioAlbums = albums.filter(
-        (album) => album.type?.toLowerCase() === "album",
-    );
-    const epsAndSingles = albums.filter(
-        (album) => album.type?.toLowerCase() !== "album",
-    );
+    const studioAlbums = albums.filter((album) => !isSingleOrEpRelease(album));
+    const epsAndSingles = albums.filter(isSingleOrEpRelease);
 
     return (
         <>

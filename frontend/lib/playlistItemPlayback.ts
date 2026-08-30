@@ -78,3 +78,22 @@ export function toAudioTrack(item: PlayablePlaylistItem): AudioTrack {
             : {}),
     };
 }
+
+/**
+ * Builds the ordered playable queue represented by a playlist detail view and
+ * resolves the selected playlist item to its index in that filtered queue.
+ */
+export function selectPlaylistPlaybackQueue(
+    items: readonly PlaylistDetailTrackItem[],
+    selectedItemId: string,
+): { tracks: AudioTrack[]; startIndex: number } {
+    const playableItems = items.filter(isPlayableTrackItem);
+    const startIndex = playableItems.findIndex(
+        (item) => item.id === selectedItemId,
+    );
+    if (startIndex < 0) return { tracks: [], startIndex: -1 };
+    return {
+        tracks: playableItems.map(toAudioTrack),
+        startIndex,
+    };
+}

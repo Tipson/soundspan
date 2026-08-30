@@ -87,6 +87,14 @@ function queueDebugLog(message: string, data?: Record<string, unknown>) {
 
 export type PlayerMode = "full" | "mini" | "overlay";
 export type WaveMode = "for-you" | "new" | "familiar";
+export type WaveMood =
+    | "calm"
+    | "energetic"
+    | "focus"
+    | "workout"
+    | "favorites"
+    | "forgotten"
+    | null;
 
 // Audio features for vibe mode visualization
 export interface AudioFeatures {
@@ -219,6 +227,7 @@ interface AudioStateContextType {
     // Vibe mode state
     vibeMode: boolean;
     waveMode: WaveMode;
+    waveMood: WaveMood;
     vibeSourceFeatures: AudioFeatures | null;
     vibeQueueIds: string[];
 
@@ -243,6 +252,7 @@ interface AudioStateContextType {
     setRepeatOneCount: (count: SetStateAction<number>) => void;
     setVibeMode: (mode: SetStateAction<boolean>) => void;
     setWaveMode: (mode: SetStateAction<WaveMode>) => void;
+    setWaveMood: (mood: SetStateAction<WaveMood>) => void;
     setVibeSourceFeatures: (
         features: SetStateAction<AudioFeatures | null>,
     ) => void;
@@ -348,6 +358,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     // Vibe mode state
     const [vibeMode, setVibeMode] = useState(false);
     const [waveMode, setWaveMode] = useState<WaveMode>("for-you");
+    const [waveMood, setWaveMood] = useState<WaveMood>(null);
     const [vibeSourceFeatures, setVibeSourceFeatures] =
         useState<AudioFeatures | null>(null);
     const [vibeQueueIds, setVibeQueueIds] = useState<string[]>([]);
@@ -1180,6 +1191,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             shuffleIndices,
             vibeMode,
             waveMode,
+            waveMood,
             vibeSourceFeatures,
             vibeQueueIds,
             isHydrated,
@@ -1198,6 +1210,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             setRepeatOneCount,
             setVibeMode,
             setWaveMode,
+            setWaveMood,
             setVibeSourceFeatures,
             setVibeQueueIds,
         }),
@@ -1213,6 +1226,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             shuffleIndices,
             vibeMode,
             waveMode,
+            waveMood,
             vibeSourceFeatures,
             vibeQueueIds,
             isHydrated,

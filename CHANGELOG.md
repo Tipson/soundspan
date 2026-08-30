@@ -8,12 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Vibe tuning now combines an independent Wave direction with an optional listening context (Calm, Energetic, Focus, Workout, Favorites, or Forgotten); the selection is deep-linkable, remains account-personalized, filters dislikes, and follows endless provider continuation without requiring local Audio-DNA files.
+- Artist pages expose URL-addressable Overview, Tracks, Albums, and Singles & EPs views. The Tracks view paginates the full visible library catalog, merges it with provider-popular tracks without duplicates, and starts playback in the displayed order.
 - Tracks and whole playable albums, artist top-track sets, owned playlists, My Liked, and YouTube Music collections can be queued to per-user device storage, managed from Library > Downloads, and played through the PWA while offline with byte-range seeking. Optional per-device liked-song automation starts off, runs serially in the foreground, is bounded to 25–200 newest likes and 2 GiB, and evicts only old automatic copies; manual copies and every other device remain independent.
 - The home API can build per-user Listen Again, Quick Picks, and Discovery shelves directly from remote YouTube Music plays, likes, and playlist items, balancing and rotating radio seeds across those signals while retaining useful shelves when some seeds fail.
 - Playback history can retain a bounded completion, skip, or failure outcome plus its Wave context, allowing recommendation learning to distinguish meaningful listens from early skips without changing legacy clients.
 
 ### Changed
 
+- Search results and Settings now use the first Soundspan design-system primitives: a quiet artwork-led stage, consistent filter chips, stronger result hierarchy, accessible settings navigation, and shared surface, focus, spacing, and state tokens.
 - Device downloads retain audio as ordinary files below a user-selected folder on supported desktop and Android Chromium browsers; IndexedDB keeps only owner-scoped metadata, queue state, and the persisted directory handle. Existing verified CacheStorage copies migrate file-first after folder setup, while unsupported browsers explain that a native mobile build is required instead of reporting browser-private bytes as device files.
 - Library is now a personal, account-scoped music hub for liked songs, user playlists, explicitly saved albums and artists, and downloads on the current device; album and artist pages expose an optimistic Save to Library control without treating one liked track as a saved release or downloading server files.
 - Library, artist, and album surfaces use a mobile-first catalog layout with horizontally discoverable Library sections, full-width wrapping action bars, long-title-safe artwork heroes, track-first artist pages, touch-sized row actions, and bottom clearance for the persistent player.
@@ -31,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An active Vibe mood now travels with the player session, so endless provider continuation keeps the selected context after navigating away from the Vibe page instead of silently reverting to an unfiltered Wave.
+- Public YouTube Music search uses an isolated provider-safe English interface context while retaining the Russian regional catalog and Unicode queries, so `Кино`, `Цой`, `sqwoz bab`, and `Linkin Park` no longer collapse to cached empty results; Home and Explore keep their configured Russian presentation locale.
+- Starting a track from an ordinary playlist now snapshots every playable row in visible order and begins at the selected occurrence instead of replacing the queue with one track; imported provider rows retain their YouTube/TIDAL preference identity and metadata for like/unlike actions.
 - Album Play all, Shuffle, and Add all to queue share the row-level source-availability rule, so metadata-only or preview-only discovery entries are not sent to the player; Library's device-offline total counts only verified ready copies instead of transfers and failures.
 - YouTube Music public browse clients accept an explicit `YTMUSIC_LOCATION`, preventing Home shelves from inheriting an unrelated remote VPS region; Compose, Helm, and the sample environment expose the language/location pair so catalog locale stays independent from each account's private taste profile.
 - Provider tracks that the server confirms unavailable after a 404/451 probe and validated alternate search skip independently instead of tripping the system-outage breaker after three different catalog misses; revisiting the same unavailable queue occurrence still stops recovery, while transport and engine failures retain the bounded consecutive-error guard.

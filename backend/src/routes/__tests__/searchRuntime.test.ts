@@ -636,7 +636,7 @@ describe("search route runtime behavior", () => {
             ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "search:discover:v6:yt1:lf1:all:rh:50",
+            "search:discover:v7:yt1:lf1:all:rh:50",
             900,
             expect.any(String),
         );
@@ -844,7 +844,7 @@ describe("search route runtime behavior", () => {
             ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "search:discover:v6:yt1:lf0:music:linkin park:20",
+            "search:discover:v7:yt1:lf0:music:linkin park:20",
             900,
             expect.any(String),
         );
@@ -1265,7 +1265,7 @@ describe("search route runtime behavior", () => {
         expect(res.statusCode).toBe(200);
         expect(mockYtMusicSearch).not.toHaveBeenCalled();
         expect(mockRedisGet).toHaveBeenCalledWith(
-            "search:discover:v6:yt0:lf0:music:radiohead:5",
+            "search:discover:v7:yt0:lf0:music:radiohead:5",
         );
         expect(res.body.results).toEqual([]);
     });

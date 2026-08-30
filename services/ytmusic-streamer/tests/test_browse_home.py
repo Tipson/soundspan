@@ -415,6 +415,33 @@ class TestBrowseAlbumEndpoint:
 class TestYTMusicLocaleParams:
     """Verify that the configured catalog locale reaches every YTMusic client."""
 
+    def test_public_client_accepts_operation_language_override(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Search can use a provider-safe locale without changing browse locale."""
+        import app
+
+        owned_session = MagicMock()
+        owned_client = MagicMock()
+        monkeypatch.setattr(app, "YTMUSIC_LANGUAGE", "ru")
+
+        with (
+            patch("app._build_ytmusic_requests_session", return_value=owned_session),
+            patch("app.YTMusic", return_value=owned_client) as mock_ytmusic,
+        ):
+            client = app._create_public_ytmusic(
+                "native",
+                5.0,
+                language="en",
+            )
+
+        assert client is owned_client
+        assert mock_ytmusic.call_args.kwargs["language"] == "en"
+        assert mock_ytmusic.call_args.kwargs["location"] == ""
+        app._close_owned_ytmusic_session(client)
+        owned_session.close.assert_called_once_with()
+
     def test_language_passed_to_public_ytmusic(self) -> None:
         """Public (unauthenticated) YTMusic should receive language kwarg."""
         from app import _public_ytmusic_instances

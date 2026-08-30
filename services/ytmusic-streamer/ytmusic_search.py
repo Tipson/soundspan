@@ -44,6 +44,11 @@ SEARCH_ENDPOINT_TIMEOUT_SECONDS = 6.0
 _SEARCH_PROVIDER_DRAIN_SECONDS = 6.0
 _SEARCH_PROVIDER_CAPACITY_DETAIL = "YouTube Music search capacity is temporarily exhausted"
 _SEARCH_PROVIDER_TIMEOUT_DETAIL = "YouTube Music search timed out"
+# Public ytmusicapi search currently returns an empty catalog for some
+# non-English interface locales (including ``ru``), even when the same query
+# and regional catalog return results in English. Search text remains Unicode,
+# so an English provider context still resolves Cyrillic artists and titles.
+_PUBLIC_SEARCH_LANGUAGE = "en"
 _SearchProviderResult = tuple[JsonList, Literal["tv", "native"]]
 _SearchProviderJob = asyncio.Future[_SearchProviderResult]
 
@@ -832,6 +837,7 @@ def _search_once(
                 search_public,
                 request_timeout_seconds=SEARCH_PROVIDER_REQUEST_TIMEOUT_SECONDS,
                 retry_timeouts=False,
+                language=_PUBLIC_SEARCH_LANGUAGE,
             ),
         )
     else:

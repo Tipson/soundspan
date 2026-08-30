@@ -26,6 +26,7 @@ import {
     getUnplayableMessage,
     isLocalPlayableTrackItem,
     isPlayableTrackItem,
+    selectPlaylistPlaybackQueue,
     toAudioTrack,
     TRACK_REMOVED_TOOLTIP,
 } from "@/lib/playlistItemPlayback";
@@ -98,8 +99,7 @@ export default function PlaylistDetailPage() {
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = usePlaybackStatus();
-    const { playTracks, playNow, pause, resume, addTracksToQueue } =
-        useAudioControls();
+    const { playTracks, pause, resume, addTracksToQueue } = useAudioControls();
     const playlistId = params.id as string;
 
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -576,13 +576,13 @@ export default function PlaylistDetailPage() {
         const item = trackItems.find((entry) => entry.id === itemId);
         if (!item) return;
         const fallbackMessage = getUnplayableMessage(item);
-
         if (!isPlayableTrackItem(item)) {
             toast.error(fallbackMessage);
             return;
         }
-
-        playNow(toAudioTrack(item));
+        const selection = selectPlaylistPlaybackQueue(trackItems, itemId);
+        if (selection.startIndex >= 0)
+            playTracks(selection.tracks, selection.startIndex);
     };
 
     const handleStartRadio = async () => {

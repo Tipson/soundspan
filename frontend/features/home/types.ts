@@ -72,6 +72,18 @@ export interface PopularArtist {
     mbid?: string;
 }
 
+/** Direction policy for one account's personalized Wave. */
+export type PersonalizedHomeMode = "for-you" | "new" | "familiar";
+
+/** Mood or listening context applied independently from Wave direction. */
+export type PersonalizedHomeMood =
+    | "calm"
+    | "energetic"
+    | "focus"
+    | "workout"
+    | "favorites"
+    | "forgotten";
+
 /** Provider-neutral track returned by the personalized home feed. */
 export interface PersonalizedTrack {
     id: string;

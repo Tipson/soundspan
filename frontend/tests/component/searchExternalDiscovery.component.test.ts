@@ -11,8 +11,26 @@ mock.module("lucide-react", {
 });
 
 mock.module("next/image", {
-    defaultExport: ({ alt, src }: { alt?: string; src?: string }) =>
-        React.createElement("img", { alt, src }),
+    defaultExport: ({
+        alt,
+        src,
+        loading,
+        fetchPriority,
+        sizes,
+    }: {
+        alt?: string;
+        src?: string;
+        loading?: string;
+        fetchPriority?: string;
+        sizes?: string;
+    }) =>
+        React.createElement("img", {
+            alt,
+            src,
+            loading,
+            fetchPriority,
+            sizes,
+        }),
 });
 
 mock.module("@/lib/api", {
@@ -118,6 +136,24 @@ test("top result prefers an exact external match when asked", async () => {
     assert.match(html, />Drake</);
     assert.match(html, /href="\/artist\/b49b81cc-d5b7-4bdd-aadb-385df8de69a6"/);
     assert.doesNotMatch(html, /Nick Drake/);
+});
+
+test("top result prioritizes its above-the-fold artist artwork at the rendered sizes", async () => {
+    const { TopResult } =
+        await import("../../features/search/components/TopResult");
+    const html = renderToStaticMarkup(
+        React.createElement(TopResult, {
+            discoveryArtist: {
+                type: "music",
+                name: "Massive Attack",
+                image: "https://img/massive-attack.jpg",
+            },
+        } as never),
+    );
+
+    assert.match(html, /loading="eager"/);
+    assert.match(html, /fetchPriority="high"/);
+    assert.match(html, /sizes="\(min-width: 640px\) 112px, 96px"/);
 });
 
 test("YouTube Music-only artists keep their provider channel route identity", async () => {

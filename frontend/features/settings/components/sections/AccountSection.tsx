@@ -186,10 +186,13 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                 <SettingsRow
                     label="Display Name"
                     description="Optional name shown in supported user-facing areas. Max 80 characters."
+                    htmlFor="display-name"
                 >
                     <div className="w-64">
                         <SettingsInput
                             id="display-name"
+                            name="displayName"
+                            autoComplete="name"
                             type="text"
                             value={displayName}
                             onChange={(value) =>
@@ -218,11 +221,14 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                 <SettingsRow
                     label="Email"
                     description="Used for login and account recovery"
+                    htmlFor="email"
                 >
                     <div className="flex items-center gap-3">
                         <div className="w-64">
                             <SettingsInput
                                 id="email"
+                                name="email"
+                                autoComplete="email"
                                 type="email"
                                 value={email}
                                 onChange={setEmail}
@@ -238,7 +244,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                             className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full
                                 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
-                            {savingEmail ? "Saving..." : "Save"}
+                            {savingEmail ? "Saving…" : "Save"}
                         </button>
                         <InlineStatus
                             status={emailStatus}
@@ -273,18 +279,27 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                 {showPasswordForm && (
                     <div className="py-4 space-y-3 border-t border-b border-white/5">
                         <SettingsInput
+                            id="current-password"
+                            name="currentPassword"
+                            autoComplete="current-password"
                             type="password"
                             value={currentPassword}
                             onChange={setCurrentPassword}
                             placeholder="Current password"
                         />
                         <SettingsInput
+                            id="new-password"
+                            name="newPassword"
+                            autoComplete="new-password"
                             type="password"
                             value={newPassword}
                             onChange={setNewPassword}
                             placeholder="New password (min 6 characters)"
                         />
                         <SettingsInput
+                            id="confirm-password"
+                            name="confirmPassword"
+                            autoComplete="new-password"
                             type="password"
                             value={confirmPassword}
                             onChange={setConfirmPassword}
@@ -396,6 +411,9 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                         )}
 
                         <SettingsInput
+                            id="two-factor-token"
+                            name="twoFactorToken"
+                            autoComplete="one-time-code"
                             type="text"
                             value={twoFactorToken}
                             onChange={(v) =>
@@ -440,12 +458,18 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                             Enter your password and current code to disable 2FA.
                         </p>
                         <SettingsInput
+                            id="disable-two-factor-password"
+                            name="disableTwoFactorPassword"
+                            autoComplete="current-password"
                             type="password"
                             value={disablePassword}
                             onChange={setDisablePassword}
                             placeholder="Password"
                         />
                         <SettingsInput
+                            id="disable-two-factor-token"
+                            name="disableTwoFactorToken"
+                            autoComplete="one-time-code"
                             type="text"
                             value={disableToken}
                             onChange={(v) =>

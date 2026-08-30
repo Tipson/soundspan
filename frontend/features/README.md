@@ -38,8 +38,10 @@ directory.
 
 Vibe stays in this recognized location to avoid broad import churn. Extend the
 personal-radio surface in `VibeAvailability.tsx`; its accessible mobile sheet /
-desktop dialog for the supported For you, New to me, and Familiar directions is
-isolated in `WaveDirectionSheet.tsx`. Cover user-visible behavior in
+desktop dialog for the supported For you, New to me, and Familiar directions,
+plus the independent mood or listening-context choice, is isolated in
+`WaveDirectionSheet.tsx`. The selected pair is deep-linked and changes the
+personalized endpoint request. Cover user-visible behavior in
 `frontend/tests/component/vibePage.component.test.ts`.
 
 Home is the single online-first landing page. It composes the personal feed with

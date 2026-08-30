@@ -8,22 +8,70 @@ import {
     RotateCcw,
     SkipForward,
 } from "lucide-react";
-import {
-    type PersonalizedHomeMode,
-    usePersonalizedHomeFeed,
-} from "@/features/home/hooks/usePersonalizedHomeFeed";
-import type { PersonalizedTrack } from "@/features/home/types";
+import { usePersonalizedHomeFeed } from "@/features/home/hooks/usePersonalizedHomeFeed";
+import type {
+    PersonalizedHomeMode,
+    PersonalizedHomeMood,
+    PersonalizedTrack,
+} from "@/features/home/types";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { NowPlayingConnected } from "./NowPlayingConnected";
 import {
     WaveDirectionSheet,
+    WAVE_MOODS,
     WAVE_MODES,
     type WaveFeedMode,
+    type WaveMood,
 } from "./WaveDirectionSheet";
 
 type SupportedPersonalizedMode = Extract<PersonalizedHomeMode, WaveFeedMode>;
+
+const WAVE_MODE_IDS = new Set<WaveFeedMode>(["for-you", "new", "familiar"]);
+const WAVE_MOOD_IDS = new Set<PersonalizedHomeMood>([
+    "calm",
+    "energetic",
+    "focus",
+    "workout",
+    "favorites",
+    "forgotten",
+]);
+
+function readWaveSelection(): {
+    mode: SupportedPersonalizedMode;
+    mood: PersonalizedHomeMood | null;
+} {
+    if (typeof window === "undefined") {
+        return { mode: "for-you", mood: null };
+    }
+    const params = new URLSearchParams(window.location.search);
+    const requestedMode = params.get("mode");
+    const requestedMood = params.get("mood");
+    return {
+        mode:
+            requestedMode && WAVE_MODE_IDS.has(requestedMode as WaveFeedMode)
+                ? (requestedMode as SupportedPersonalizedMode)
+                : "for-you",
+        mood:
+            requestedMood &&
+            WAVE_MOOD_IDS.has(requestedMood as PersonalizedHomeMood)
+                ? (requestedMood as PersonalizedHomeMood)
+                : null,
+    };
+}
+
+function replaceWaveSelection(
+    mode: WaveFeedMode,
+    mood: PersonalizedHomeMood | null,
+): void {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", mode);
+    if (mood) url.searchParams.set("mood", mood);
+    else url.searchParams.delete("mood");
+    window.history.replaceState(window.history.state, "", url);
+}
 
 function uniqueTracks(tracks: readonly PersonalizedTrack[]) {
     const seen = new Set<string>();
@@ -92,9 +140,15 @@ function selectWaveTracks(
 export function VibeProviderFallback() {
     const [activeMode, setActiveMode] =
         useState<SupportedPersonalizedMode>("for-you");
+    const [activeMood, setActiveMood] = useState<PersonalizedHomeMood | null>(
+        null,
+    );
     const [isTuneOpen, setIsTuneOpen] = useState(false);
     const tuneButtonRef = useRef<HTMLButtonElement>(null);
-    const pendingRetuneModeRef = useRef<WaveFeedMode | null>(null);
+    const pendingRetuneRef = useRef<{
+        mode: WaveFeedMode;
+        mood: WaveMood | null;
+    } | null>(null);
     const { advanceQueue, playTracks, setUpcoming } = useAudioControls();
     const {
         currentTrack,
@@ -103,12 +157,28 @@ export function VibeProviderFallback() {
         setVibeQueueIds,
         setVibeSourceFeatures,
         setWaveMode,
+        setWaveMood,
     } = useAudioState();
     const { data, isLoading, isError, refetch } = usePersonalizedHomeFeed(
         12,
         true,
         activeMode,
+        activeMood,
     );
+
+    useEffect(() => {
+        let mounted = true;
+        queueMicrotask(() => {
+            if (!mounted) return;
+            const selection = readWaveSelection();
+            setActiveMode(selection.mode);
+            setActiveMood(selection.mood);
+            setWaveMood(selection.mood);
+        });
+        return () => {
+            mounted = false;
+        };
+    }, [setWaveMood]);
     const tracks = useMemo(
         () => selectWaveTracks(data?.shelves, activeMode),
         [activeMode, data?.shelves],
@@ -116,15 +186,21 @@ export function VibeProviderFallback() {
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
 
     useEffect(() => {
-        const pendingMode = pendingRetuneModeRef.current;
-        if (!pendingMode) return;
+        const pendingRetune = pendingRetuneRef.current;
+        if (!pendingRetune) return;
         if (!vibeMode) {
-            pendingRetuneModeRef.current = null;
+            pendingRetuneRef.current = null;
             return;
         }
-        if (pendingMode !== activeMode || isLoading) return;
+        if (
+            pendingRetune.mode !== activeMode ||
+            pendingRetune.mood !== activeMood ||
+            isLoading
+        ) {
+            return;
+        }
 
-        pendingRetuneModeRef.current = null;
+        pendingRetuneRef.current = null;
         const currentTrackId = currentTrack?.id ?? null;
         const upcoming = currentTrackId
             ? queue.filter((track) => track.id !== currentTrackId)
@@ -141,6 +217,7 @@ export function VibeProviderFallback() {
         );
     }, [
         activeMode,
+        activeMood,
         currentTrack?.id,
         isLoading,
         queue,
@@ -151,6 +228,8 @@ export function VibeProviderFallback() {
     ]);
     const activeModeDefinition =
         WAVE_MODES.find((mode) => mode.id === activeMode) ?? WAVE_MODES[0];
+    const activeMoodDefinition =
+        WAVE_MOODS.find((mood) => mood.id === activeMood) ?? WAVE_MOODS[0];
     const spectralField =
         activeMode === "new"
             ? {
@@ -173,6 +252,7 @@ export function VibeProviderFallback() {
     const startWave = useCallback(() => {
         if (queue.length === 0) return;
         setWaveMode(activeMode);
+        setWaveMood(activeMood);
         playTracks(queue, 0, true);
         setVibeMode(true);
         setVibeSourceFeatures(null);
@@ -185,21 +265,27 @@ export function VibeProviderFallback() {
         setVibeQueueIds,
         setVibeSourceFeatures,
         setWaveMode,
+        setWaveMood,
     ]);
     const closeTune = useCallback(() => {
         setIsTuneOpen(false);
         queueMicrotask(() => tuneButtonRef.current?.focus());
     }, []);
     const applyDirection = useCallback(
-        (mode: WaveFeedMode) => {
-            pendingRetuneModeRef.current =
-                vibeMode && mode !== activeMode ? mode : null;
+        (mode: WaveFeedMode, mood: WaveMood | null) => {
+            pendingRetuneRef.current =
+                vibeMode && (mode !== activeMode || mood !== activeMood)
+                    ? { mode, mood }
+                    : null;
             setActiveMode(mode);
+            setActiveMood(mood);
             setWaveMode(mode);
+            setWaveMood(mood);
+            replaceWaveSelection(mode, mood);
             setIsTuneOpen(false);
             queueMicrotask(() => tuneButtonRef.current?.focus());
         },
-        [activeMode, setWaveMode, vibeMode],
+        [activeMode, activeMood, setWaveMode, setWaveMood, vibeMode],
     );
 
     return (
@@ -327,7 +413,7 @@ export function VibeProviderFallback() {
                                     >
                                         {activeModeDefinition.shortLabel}
                                         <span className="font-semibold text-content-secondary">
-                                            {` · ${activeModeDefinition.label}`}
+                                            {` · ${activeMoodDefinition.label}`}
                                         </span>
                                     </p>
                                 </div>
@@ -347,7 +433,8 @@ export function VibeProviderFallback() {
                                 </button>
                             </div>
                             <p className="mt-3 text-sm leading-6 text-content-secondary">
-                                {activeModeDefinition.subtitle}
+                                {activeModeDefinition.subtitle}{" "}
+                                {activeMoodDefinition.subtitle}
                             </p>
 
                             {!isLoading && tracks.length === 0 && (
@@ -426,6 +513,7 @@ export function VibeProviderFallback() {
             {isTuneOpen && (
                 <WaveDirectionSheet
                     activeMode={activeMode}
+                    activeMood={activeMood}
                     onApply={applyDirection}
                     onClose={closeTune}
                 />

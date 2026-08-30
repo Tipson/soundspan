@@ -1,7 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queryKeys";
-import type { PersonalizedHomeFeed } from "../types";
+import type {
+    PersonalizedHomeFeed,
+    PersonalizedHomeMode,
+    PersonalizedHomeMood,
+} from "../types";
 import {
     PERSONALIZED_HOME_QUERY_RETRY,
     PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
@@ -14,16 +18,16 @@ export {
     PERSONALIZED_HOME_TIMEOUT_RETRY,
 } from "../personalizedHomeRequestPolicy";
 
-export type PersonalizedHomeMode = "for-you" | "new" | "familiar";
-
 export function buildPersonalizedHomeFeedUrl(
     limit: number,
     mode: PersonalizedHomeMode,
+    mood: PersonalizedHomeMood | null = null,
 ): string {
     const params = new URLSearchParams({
         limit: String(limit),
         mode,
     });
+    if (mood) params.set("mood", mood);
     return `/personalized/home?${params.toString()}`;
 }
 
@@ -32,12 +36,13 @@ export function usePersonalizedHomeFeed(
     limit = 12,
     enabled = true,
     mode: PersonalizedHomeMode = "for-you",
+    mood: PersonalizedHomeMood | null = null,
 ) {
     return useQuery({
-        queryKey: queryKeys.personalizedHome(limit, mode),
+        queryKey: queryKeys.personalizedHome(limit, mode, mood),
         queryFn: ({ signal }) =>
             api.request<PersonalizedHomeFeed>(
-                buildPersonalizedHomeFeedUrl(limit, mode),
+                buildPersonalizedHomeFeedUrl(limit, mode, mood),
                 {
                     method: "GET",
                     signal,

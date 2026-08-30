@@ -28,6 +28,16 @@ const personalizedHomeQuerySchema = z
             .optional(),
         exclude: z.string().max(5_280).optional(),
         mode: z.enum(["for-you", "new", "familiar"]).optional(),
+        mood: z
+            .enum([
+                "calm",
+                "energetic",
+                "focus",
+                "workout",
+                "favorites",
+                "forgotten",
+            ])
+            .optional(),
     })
     .strict();
 
@@ -181,6 +191,12 @@ router.use(requireAuthOrToken);
  *           default: for-you
  *         description: Deterministic Wave ranking policy
  *       - in: query
+ *         name: mood
+ *         schema:
+ *           type: string
+ *           enum: [calm, energetic, focus, workout, favorites, forgotten]
+ *         description: Independent mood or listening context applied to the Wave ranking policy
+ *       - in: query
  *         name: cursor
  *         schema:
  *           type: integer
@@ -236,7 +252,8 @@ async function handlePersonalizedHome(req: Request, res: Response) {
     const hasContinuationContext =
         parsedQuery.data.cursor !== undefined ||
         excludeVideoIds.length > 0 ||
-        parsedQuery.data.mode !== undefined;
+        parsedQuery.data.mode !== undefined ||
+        parsedQuery.data.mood !== undefined;
     const feed = hasContinuationContext
         ? await personalizedCatalogService.getHomeFeed(userId, limit, {
               ...(parsedQuery.data.cursor !== undefined
@@ -244,6 +261,7 @@ async function handlePersonalizedHome(req: Request, res: Response) {
                   : {}),
               ...(excludeVideoIds.length > 0 ? { excludeVideoIds } : {}),
               ...(parsedQuery.data.mode ? { mode: parsedQuery.data.mode } : {}),
+              ...(parsedQuery.data.mood ? { mood: parsedQuery.data.mood } : {}),
           })
         : await personalizedCatalogService.getHomeFeed(userId, limit);
     if (feed.degraded) {

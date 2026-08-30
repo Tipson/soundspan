@@ -11,6 +11,16 @@ const state = {
     isPlaying: false,
     playlist: null as Record<string, unknown> | null,
     routerPushPath: null as string | null,
+    preferenceProps: [] as Array<{
+        trackId?: string;
+        mode?: string;
+        metadata?: {
+            title?: string;
+            artist?: string;
+            album?: string;
+            duration?: number;
+        };
+    }>,
 };
 
 const Icon = (props: Record<string, unknown> = {}) =>
@@ -104,12 +114,23 @@ mock.module(
 
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
-        TrackPreferenceButtons: ({ mode }: { mode?: string }) =>
-            React.createElement(
+        TrackPreferenceButtons: (props: {
+            trackId?: string;
+            mode?: string;
+            metadata?: {
+                title?: string;
+                artist?: string;
+                album?: string;
+                duration?: number;
+            };
+        }) => {
+            state.preferenceProps.push(props);
+            return React.createElement(
                 "button",
-                { type: "button", "data-preference-mode": mode },
+                { type: "button", "data-preference-mode": props.mode },
                 "prefs",
-            ),
+            );
+        },
     },
 });
 
@@ -282,6 +303,7 @@ beforeEach(() => {
     state.isPlaying = false;
     state.queuedTrackIds = new Set();
     state.routerPushPath = null;
+    state.preferenceProps = [];
     state.playlist = {
         id: "playlist-1",
         name: "Mixed Playlist",
@@ -557,6 +579,35 @@ test("playlist rows keep the compact like-only preference control", async () => 
     ).length;
     assert.equal(compactPreferenceCount, 3);
     assert.doesNotMatch(html, /data-preference-mode="both"/);
+    assert.deepEqual(
+        state.preferenceProps.map(({ trackId, metadata }) => ({
+            trackId,
+            metadata,
+        })),
+        [
+            { trackId: "track-local-1", metadata: undefined },
+            {
+                trackId: "tidal:991",
+                metadata: {
+                    title: "Tidal Song",
+                    artist: "Tidal Artist",
+                    album: "Tidal Album",
+                    duration: 245,
+                    thumbnailUrl: undefined,
+                },
+            },
+            {
+                trackId: "yt:yt-video-7",
+                metadata: {
+                    title: "YouTube Song",
+                    artist: "YT Artist",
+                    album: "YT Album",
+                    duration: 210,
+                    thumbnailUrl: undefined,
+                },
+            },
+        ],
+    );
 });
 
 test("playlist detail renders provider badges and unplayable fallback messaging", async () => {

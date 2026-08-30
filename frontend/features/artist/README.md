@@ -17,6 +17,7 @@ Start-here guide for `frontend/features/artist`.
 | `components/ArtistActionBar.tsx` | components |
 | `components/ArtistBio.tsx` | components |
 | `components/ArtistHero.tsx` | components |
+| `components/ArtistViewTabs.tsx` | components |
 | `components/AvailableAlbums.tsx` | components |
 | `components/Discography.tsx` | components |
 | `components/index.ts` | components |
@@ -26,11 +27,13 @@ Start-here guide for `frontend/features/artist`.
 | `hooks/useArtistActions.ts` | hooks |
 | `hooks/useArtistAlbumRequests.ts` | hooks |
 | `hooks/useArtistData.ts` | hooks |
+| `hooks/useArtistTracks.ts` | hooks |
 | `hooks/useDownloadActions.ts` | hooks |
 | `hooks/useTidalTopTracks.ts` | hooks |
 | `hooks/useTrackAlbumResolutions.ts` | hooks |
 | `hooks/useYtMusicTopTracks.ts` | hooks |
 | `types.ts` | root |
+| `artistView.ts` | root |
 
 ## Update Rule
 
@@ -46,3 +49,10 @@ popular tracks in the current browser/PWA only.
 The responsive artist page presents playable Popular tracks before the longer
 About biography, keeps the selected visible track list as playback context, and
 uses a stacked artwork hero plus wrapping action bar on narrow screens.
+
+Artist content is addressable through `?view=overview|tracks|albums|singles`.
+The Tracks view exposes every track returned by the artist data source as one
+ordered playback context. Library artists use a bounded paginated track read;
+provider-only artists expose the complete song set returned by that provider's
+artist response. Albums include untyped releases; Singles & EPs only includes
+releases explicitly classified as singles or EPs.

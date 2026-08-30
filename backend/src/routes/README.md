@@ -138,6 +138,7 @@ composed from these order-dependent domain and helper modules:
 | `backend/src/routes/library/albums.ts`                     | Album browse, preference, and deletion routes                 |
 | `backend/src/routes/library/artistCounts.ts`               | Artist-count status and backfill routes                       |
 | `backend/src/routes/library/artistPageMatching.ts`         | Artist-page matching helper; not a router                     |
+| `backend/src/routes/library/artistTracks.ts`               | Paginated full artist-track browse route                      |
 | `backend/src/routes/library/artists.ts`                    | Artist list, detail, and deletion routes                      |
 | `backend/src/routes/library/coverArt.ts`                   | Library cover-art delivery routes                             |
 | `backend/src/routes/library/federationStreamPeer.ts`       | Federated stream-peer resolution helper                       |

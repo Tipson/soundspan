@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { cn } from "@/utils/cn";
+import { FilterChip } from "@/components/ui/FilterChip";
 import type { SearchResultView } from "../types";
 
 interface SearchFiltersProps {
@@ -40,30 +39,23 @@ export function SearchFilters({
     return (
         <nav
             aria-label="Search result type"
-            className="mb-8 overflow-x-auto scrollbar-hide"
+            className="sticky top-0 z-30 -mx-4 mb-8 overflow-x-auto border-b border-white/[0.06] bg-surface/85 px-4 py-3 backdrop-blur-xl scrollbar-hide sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
             data-tv-section="search-filters"
         >
             <div className="flex min-w-max gap-2">
                 {SEARCH_RESULT_VIEWS.map((view, index) => {
                     const isActive = activeView === view.id;
                     return (
-                        <Link
+                        <FilterChip
                             key={view.id}
                             href={searchViewHref(query, view.id)}
-                            aria-current={isActive ? "page" : undefined}
+                            active={isActive}
                             data-tv-card
                             data-tv-card-index={index}
-                            tabIndex={0}
-                            className={cn(
-                                "rounded-full px-4 py-2 text-sm font-bold transition-colors",
-                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
-                                isActive
-                                    ? "bg-brand text-black"
-                                    : "bg-surface-highlight text-white hover:bg-surface-elevated",
-                            )}
+                            className="min-h-10"
                         >
                             {view.label}
-                        </Link>
+                        </FilterChip>
                     );
                 })}
             </div>

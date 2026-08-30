@@ -146,6 +146,8 @@ mock.module("next/navigation", {
             push: () => undefined,
             back: () => undefined,
         }),
+        usePathname: () => "/artist/artist-1",
+        useSearchParams: () => new URLSearchParams(),
     },
 });
 
@@ -391,6 +393,19 @@ mock.module("@/features/artist/hooks/useArtistData", {
             sortBy: artistState.sortBy,
             setSortBy: () => undefined,
             reloadArtist: () => undefined,
+        }),
+    },
+});
+
+mock.module("@/features/artist/hooks/useArtistTracks", {
+    namedExports: {
+        useArtistTracks: () => ({
+            tracks: [],
+            total: 0,
+            isLoading: false,
+            hasNextPage: false,
+            isFetchingNextPage: false,
+            fetchNextPage: async () => undefined,
         }),
     },
 });
@@ -868,7 +883,7 @@ test("artist route renders popular tracks and provider matching metadata", async
     assert.equal(capture.artistPopularTracks?.isProviderMatching, true);
     assert.equal(
         capture.artistPopularTracks?.popularHref,
-        "/artist/artist-1/popular",
+        "/artist/artist-1?view=tracks",
     );
     assert.equal(capture.artistActionBar?.source, "discovery");
 });
@@ -1003,7 +1018,10 @@ test("YouTube Music artist route exposes playable tracks and provider albums", a
             .browseId,
         "MPREb_mezzanine",
     );
-    assert.equal(capture.artistPopularTracks?.popularHref, undefined);
+    assert.equal(
+        capture.artistPopularTracks?.popularHref,
+        "/artist/artist-1?view=tracks",
+    );
     assert.equal(capture.artistActionBar?.downloadsEnabled, false);
 
     (capture.artistActionBar?.onPlayAll as () => void)();

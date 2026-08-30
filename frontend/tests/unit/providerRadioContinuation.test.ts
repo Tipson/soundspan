@@ -86,13 +86,20 @@ test("builds a bounded continuation request with cursor and recent provider excl
         youtubeVideoId: `video-${index}`,
     }));
 
-    const path = buildProviderRadioContinuationPath(queue, 7, 25, "new");
+    const path = buildProviderRadioContinuationPath(
+        queue,
+        7,
+        25,
+        "new",
+        "focus",
+    );
     const url = new URL(path, "https://soundspan.test");
 
     assert.equal(url.pathname, "/personalized/home");
     assert.equal(url.searchParams.get("limit"), "25");
     assert.equal(url.searchParams.get("cursor"), "7");
     assert.equal(url.searchParams.get("mode"), "new");
+    assert.equal(url.searchParams.get("mood"), "focus");
     const excluded = url.searchParams.get("exclude")?.split(",") ?? [];
     assert.equal(excluded.length, 80);
     assert.equal(excluded[0], "video-10");

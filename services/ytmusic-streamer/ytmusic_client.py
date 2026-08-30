@@ -126,12 +126,14 @@ def _apply_tv_client_context(yt: YTMusic) -> None:
 def _create_public_ytmusic(
     strategy: Literal["tv", "native"],
     request_timeout_seconds: float,
+    *,
+    language: str | None = None,
 ) -> YTMusic:
     """Create one public client with an operation-specific transport budget."""
     request_session = _build_ytmusic_requests_session(request_timeout_seconds)
     try:
         yt = YTMusic(
-            language=YTMUSIC_LANGUAGE,
+            language=language or YTMUSIC_LANGUAGE,
             location=YTMUSIC_LOCATION,
             requests_session=request_session,
         )
@@ -322,6 +324,7 @@ def _run_public_ytmusic_with_retry(
     *,
     request_timeout_seconds: float | None = None,
     retry_timeouts: bool = True,
+    language: str | None = None,
 ) -> Any:
     """Run one idempotent public browse call with a fresh-client retry.
 
@@ -336,6 +339,16 @@ def _run_public_ytmusic_with_retry(
 
     def run_once() -> Any:
         nonlocal attempted_client
+        if language is not None:
+            attempted_client = _create_public_ytmusic(
+                strategy,
+                request_timeout_seconds or YTMUSIC_REQUEST_TIMEOUT_SECONDS,
+                language=language,
+            )
+            try:
+                return func(attempted_client)
+            finally:
+                _close_owned_ytmusic_session(attempted_client)
         with _lease_public_ytmusic(strategy, request_timeout_seconds) as yt:
             attempted_client = yt
             return func(yt)
@@ -350,7 +363,7 @@ def _run_public_ytmusic_with_retry(
             operation,
             type(first_error).__name__,
         )
-        if request_timeout_seconds is None and attempted_client is not None:
+        if request_timeout_seconds is None and language is None and attempted_client is not None:
             _invalidate_public_ytmusic(strategy, expected=attempted_client)
         return run_once()
 

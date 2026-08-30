@@ -124,6 +124,25 @@ describe("GET /api/personalized/home", () => {
         },
     );
 
+    it.each([
+        "calm",
+        "energetic",
+        "focus",
+        "workout",
+        "favorites",
+        "forgotten",
+    ])("forwards the supported %s Wave mood independently", async (mood) => {
+        const response = await request(app)
+            .get(`/api/personalized/home?mode=new&mood=${mood}`)
+            .set("x-test-auth", "ok");
+
+        expect(response.status).toBe(200);
+        expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 12, {
+            mode: "new",
+            mood,
+        });
+    });
+
     it("forwards a bounded continuation cursor and canonical provider exclusions", async () => {
         const response = await request(app)
             .get(
@@ -143,6 +162,7 @@ describe("GET /api/personalized/home", () => {
         "cursor=1.5",
         "exclude=bad%20id",
         "mode=random",
+        "mood=random",
         `exclude=${Array.from({ length: 81 }, (_, index) => `id-${index}`).join(
             "%2C",
         )}`,

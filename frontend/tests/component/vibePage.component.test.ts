@@ -4,7 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import React from "react";
 import type { Root } from "react-dom/client";
 
-GlobalRegistrator.register();
+GlobalRegistrator.register({ url: "https://soundspan.test/vibe" });
 (
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -17,6 +17,7 @@ const state = {
     audioAnalysis: true,
     personalizedEnabled: false,
     personalizedMode: "for-you",
+    personalizedMood: null as string | null,
     playedTrackIds: [] as string[],
     playedAsVibeQueue: false,
     vibeModeEnabled: false,
@@ -180,6 +181,9 @@ mock.module("@/lib/audio-state-context", {
             setWaveMode: (mode: string) => {
                 state.waveMode = mode;
             },
+            setWaveMood: (mood: string | null) => {
+                state.personalizedMood = mood;
+            },
             setVibeSourceFeatures: () => undefined,
             setVibeQueueIds: (ids: string[]) => {
                 state.vibeQueueIds = ids;
@@ -239,9 +243,11 @@ mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
             _limit: number,
             enabled: boolean,
             mode: string,
+            mood: string | null,
         ) => {
             state.personalizedEnabled = enabled;
             state.personalizedMode = mode;
+            state.personalizedMood = mood;
             return {
                 data: state.personalizedFeed,
                 isLoading: false,
@@ -287,6 +293,7 @@ beforeEach(() => {
     state.audioAnalysis = true;
     state.personalizedEnabled = false;
     state.personalizedMode = "for-you";
+    state.personalizedMood = null;
     state.playedTrackIds = [];
     state.playedAsVibeQueue = false;
     state.vibeModeEnabled = false;
@@ -299,6 +306,7 @@ beforeEach(() => {
     state.currentTrack = null;
     state.personalizedFeed = createPersonalizedFeed();
     window.localStorage.clear();
+    window.history.replaceState({}, "", "https://soundspan.test/vibe");
 });
 
 interface MountedPage {
@@ -447,11 +455,19 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
 
     const newToMe = findButtonByLabel(dialog, "New to me");
     const familiar = findButtonByLabel(dialog, "Familiar");
-    const directionOptions = dialog.querySelectorAll('[role="radio"]');
+    const directionOptions = dialog.querySelectorAll(
+        '[role="radiogroup"][aria-label="My Wave direction"] [role="radio"]',
+    );
 
     assert.ok(newToMe);
     assert.ok(familiar);
     assert.equal(directionOptions.length, 3);
+    assert.equal(
+        dialog.querySelectorAll(
+            '[role="radiogroup"][aria-label="My Wave mood"] [role="radio"]',
+        ).length,
+        7,
+    );
     assert.match(
         dialog.textContent ?? "",
         /how close the next picks stay to your listening history/i,
@@ -500,6 +516,49 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
     assert.equal(state.vibeModeEnabled, true);
     assert.equal(state.waveMode, "familiar");
     assert.deepEqual(state.vibeQueueIds, ["yt:familiar-1"]);
+
+    await unmountPage(mounted);
+});
+
+test("Tune My Wave applies mood independently and keeps both choices in the deep link", async () => {
+    window.history.replaceState(
+        {},
+        "",
+        "https://soundspan.test/vibe?mode=familiar&mood=calm",
+    );
+    const mounted = await mountPage();
+
+    assert.equal(state.personalizedMode, "familiar");
+    assert.equal(state.personalizedMood, "calm");
+
+    const tune = findButton(mounted.container, "Tune");
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    const energetic = findButtonByLabel(dialog, "Energetic");
+    const newToMe = findButtonByLabel(dialog, "New to me");
+    assert.ok(energetic);
+    assert.ok(newToMe);
+
+    await React.act(async () => {
+        energetic.click();
+        newToMe.click();
+    });
+    assert.equal(state.personalizedMode, "familiar");
+    assert.equal(state.personalizedMood, "calm");
+
+    const apply = findButton(dialog, "Use New to me");
+    assert.ok(apply);
+    await React.act(async () => apply.click());
+
+    assert.equal(state.personalizedMode, "new");
+    assert.equal(state.personalizedMood, "energetic");
+    const url = new URL(window.location.href);
+    assert.equal(url.searchParams.get("mode"), "new");
+    assert.equal(url.searchParams.get("mood"), "energetic");
 
     await unmountPage(mounted);
 });

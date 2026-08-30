@@ -326,6 +326,13 @@ test("All renders an explicit five-track continuation and one six-album shelf", 
     const SearchPage = (await import("../../app/search/page")).default;
     const html = renderToStaticMarkup(React.createElement(SearchPage));
 
+    const canvasClass = html.match(
+        /<div[^>]*data-search-results-canvas="true"[^>]*class="([^"]+)"/,
+    )?.[1];
+    assert.ok(canvasClass);
+    assert.doesNotMatch(canvasClass, /(?:^|\s)overflow-hidden(?:\s|$)/);
+    assert.match(html, /data-search-ambient-clip="true"/);
+
     assert.match(html, />Tracks<\/h2>/);
     assert.match(
         html,

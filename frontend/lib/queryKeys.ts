@@ -14,6 +14,7 @@ export const queryKeys = {
     artist: (id: string) => ["artist", id] as const,
     artistDetails: (id: string, source?: "library" | "discovery" | null) =>
         ["artist", "details", id, source || "unknown"] as const,
+    artistTracks: (id: string) => ["artist", "tracks", id] as const,
     artistLibrary: (id: string) => ["artist", "library", id] as const,
     artistDiscovery: (id: string) => ["artist", "discovery", id] as const,
     ytMusicArtist: (channelId: string) =>
@@ -110,7 +111,18 @@ export const queryKeys = {
     personalizedHome: (
         limit: number,
         mode: "for-you" | "new" | "familiar" = "for-you",
-    ) => ["home", "personalized", limit, mode] as const,
+        mood:
+            | "calm"
+            | "energetic"
+            | "focus"
+            | "workout"
+            | "favorites"
+            | "forgotten"
+            | null = null,
+    ) =>
+        mood
+            ? (["home", "personalized", limit, mode, mood] as const)
+            : (["home", "personalized", limit, mode] as const),
 
     // Browse (YT Music) — used by Explore page
     browseHomeShelves: () => ["browse", "ytmusic", "home"] as const,

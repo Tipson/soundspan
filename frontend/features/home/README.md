@@ -67,6 +67,10 @@ Start-here guide for `frontend/features/home`.
   only relabeling the same browser-side list. Vibe deliberately keeps the
   player, direction controls, and feedback in one focused radio surface instead
   of repeating Home's horizontally scrolling preview shelves.
+- Vibe treats direction and listening context as separate controls. Calm,
+  Energetic, Focus, Workout, Favorites, and Forgotten are sent as an independent
+  server-ranking input and remain in the `/vibe` deep link for later provider
+  continuation requests; no local Audio-DNA catalog is required.
 - When that queue reaches its final item with repeat disabled, the player asks
   the personalized home feed for unseen continuation tracks, sends a bounded
   tail of the existing queue as exclusions, and rotates across later play,

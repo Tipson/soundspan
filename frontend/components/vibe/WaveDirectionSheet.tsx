@@ -8,9 +8,11 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { AudioWaveform, Check, X } from "lucide-react";
+import type { PersonalizedHomeMood } from "@/features/home/types";
 
 /** Provider-backed ranking directions currently supported by My Wave. */
 export type WaveFeedMode = "for-you" | "new" | "familiar";
+export type WaveMood = PersonalizedHomeMood;
 
 /** User-facing metadata for one supported My Wave direction. */
 export interface WaveModeDefinition {
@@ -45,9 +47,53 @@ export const WAVE_MODES: readonly WaveModeDefinition[] = [
     },
 ];
 
+/** User-facing listening contexts applied independently from Wave direction. */
+export const WAVE_MOODS: readonly {
+    id: WaveMood | null;
+    label: string;
+    subtitle: string;
+}[] = [
+    {
+        id: null,
+        label: "Any mood",
+        subtitle: "Let My Wave choose the moment.",
+    },
+    {
+        id: "calm",
+        label: "Calm",
+        subtitle: "Gentler, lower-intensity picks.",
+    },
+    {
+        id: "energetic",
+        label: "Energetic",
+        subtitle: "More motion and brighter momentum.",
+    },
+    {
+        id: "focus",
+        label: "Focus",
+        subtitle: "Music that stays out of the way.",
+    },
+    {
+        id: "workout",
+        label: "Workout",
+        subtitle: "A steady push for training or running.",
+    },
+    {
+        id: "favorites",
+        label: "Favorites",
+        subtitle: "Lead with tracks and artists you love.",
+    },
+    {
+        id: "forgotten",
+        label: "Forgotten",
+        subtitle: "Bring older favorites back into rotation.",
+    },
+];
+
 interface WaveDirectionSheetProps {
     activeMode: WaveFeedMode;
-    onApply: (mode: WaveFeedMode) => void;
+    activeMood: WaveMood | null;
+    onApply: (mode: WaveFeedMode, mood: WaveMood | null) => void;
     onClose: () => void;
 }
 
@@ -78,10 +124,12 @@ function nextRadioIndex(
 /** Accessible mobile sheet / desktop dialog for choosing a supported Wave direction. */
 export function WaveDirectionSheet({
     activeMode,
+    activeMood,
     onApply,
     onClose,
 }: WaveDirectionSheetProps) {
     const [draftMode, setDraftMode] = useState(activeMode);
+    const [draftMood, setDraftMood] = useState<WaveMood | null>(activeMood);
     const dialogRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -124,6 +172,10 @@ export function WaveDirectionSheet({
         () => WAVE_MODES.find((mode) => mode.id === draftMode) ?? WAVE_MODES[0],
         [draftMode],
     );
+    const selectedMoodDefinition = useMemo(
+        () => WAVE_MOODS.find((mood) => mood.id === draftMood) ?? WAVE_MOODS[0],
+        [draftMood],
+    );
     const handleRadioKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
         const currentIndex = WAVE_MODES.findIndex(
             (mode) => mode.id === draftMode,
@@ -142,6 +194,25 @@ export function WaveDirectionSheet({
             'button[role="radio"]',
         );
         options[nextIndex]?.focus();
+    };
+    const handleMoodRadioKeyDown = (
+        event: ReactKeyboardEvent<HTMLDivElement>,
+    ) => {
+        const currentIndex = WAVE_MOODS.findIndex(
+            (mood) => mood.id === draftMood,
+        );
+        const nextIndex = nextRadioIndex(
+            event.key,
+            Math.max(currentIndex, 0),
+            WAVE_MOODS.length,
+        );
+        if (nextIndex === null) return;
+
+        event.preventDefault();
+        setDraftMood(WAVE_MOODS[nextIndex].id);
+        event.currentTarget
+            .querySelectorAll<HTMLButtonElement>('button[role="radio"]')
+            [nextIndex]?.focus();
     };
 
     return (
@@ -191,6 +262,9 @@ export function WaveDirectionSheet({
                     </button>
                 </div>
 
+                <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
+                    Direction
+                </p>
                 <div
                     role="radiogroup"
                     aria-label="My Wave direction"
@@ -250,10 +324,78 @@ export function WaveDirectionSheet({
                     })}
                 </div>
 
+                <div className="mt-7 border-t border-white/8 pt-6">
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
+                            Mood or moment
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-content-secondary">
+                            This changes what My Wave searches and ranks; it
+                            does not replace the direction above.
+                        </p>
+                    </div>
+                    <div
+                        role="radiogroup"
+                        aria-label="My Wave mood"
+                        tabIndex={-1}
+                        onKeyDown={handleMoodRadioKeyDown}
+                        className="mt-4 grid gap-2 sm:grid-cols-2"
+                    >
+                        {WAVE_MOODS.map((mood) => {
+                            const selected = mood.id === draftMood;
+                            return (
+                                <button
+                                    key={mood.id ?? "any"}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selected}
+                                    aria-label={mood.label}
+                                    tabIndex={selected ? 0 : -1}
+                                    onClick={() => setDraftMood(mood.id)}
+                                    className={`group flex min-h-[4.75rem] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                                        selected
+                                            ? "border-brand/50 bg-brand/12"
+                                            : "border-white/8 bg-black/20 hover:border-white/15 hover:bg-white/[0.055]"
+                                    }`}
+                                >
+                                    <span
+                                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
+                                            selected
+                                                ? "bg-brand text-black"
+                                                : "bg-white/[0.06] text-content-secondary"
+                                        }`}
+                                    >
+                                        {selected ? (
+                                            <Check
+                                                className="h-4 w-4"
+                                                aria-hidden="true"
+                                            />
+                                        ) : (
+                                            <AudioWaveform
+                                                className="h-4 w-4"
+                                                aria-hidden="true"
+                                            />
+                                        )}
+                                    </span>
+                                    <span className="min-w-0">
+                                        <span className="block text-sm font-bold text-content">
+                                            {mood.label}
+                                        </span>
+                                        <span className="mt-0.5 block text-xs leading-5 text-content-muted">
+                                            {mood.subtitle}
+                                        </span>
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
                 <div className="mt-6 grid gap-4 border-t border-white/8 pt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                     <p className="text-sm text-content-secondary">
-                        Selected: {selectedDefinition.shortLabel}. You can tune
-                        again at any time.
+                        Selected: {selectedDefinition.shortLabel} ·{" "}
+                        {selectedMoodDefinition.label}. You can tune again at
+                        any time.
                     </p>
                     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <button
@@ -265,7 +407,7 @@ export function WaveDirectionSheet({
                         </button>
                         <button
                             type="button"
-                            onClick={() => onApply(draftMode)}
+                            onClick={() => onApply(draftMode, draftMood)}
                             className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
                         >
                             Use {selectedDefinition.label}

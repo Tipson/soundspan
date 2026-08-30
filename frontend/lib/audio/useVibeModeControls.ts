@@ -121,6 +121,7 @@ export function useVibeModeControls({
                                 cursor,
                                 25,
                                 state.waveMode,
+                                state.vibeMode ? state.waveMood : null,
                             ),
                             {
                                 timeoutMs: PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
@@ -317,6 +318,7 @@ export function useVibeModeControls({
         requestGenerationRef.current++;
         providerRadioCursorRef.current = 0;
         state.setVibeMode(false);
+        state.setWaveMood(null);
         state.setVibeSourceFeatures(null);
         state.setVibeQueueIds([]);
     }, [state]);

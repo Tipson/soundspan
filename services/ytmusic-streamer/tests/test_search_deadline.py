@@ -85,6 +85,47 @@ def test_public_search_fallback_does_not_pin_shared_identity(
         app._ytmusic_auto_tv_fallback_users.discard("__public__")
 
 
+def test_public_search_uses_provider_safe_english_locale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Public search must not inherit a locale that yields an empty catalog."""
+    import app
+
+    observed_languages: list[str | None] = []
+
+    def run_public(
+        strategy: str,
+        operation: str,
+        func: Any,
+        *,
+        request_timeout_seconds: float,
+        retry_timeouts: bool,
+        language: str | None = None,
+    ) -> list[dict[str, str]]:
+        assert strategy == "native"
+        assert "search-native" in operation
+        assert request_timeout_seconds == app.SEARCH_PROVIDER_REQUEST_TIMEOUT_SECONDS
+        assert retry_timeouts is False
+        assert callable(func)
+        observed_languages.append(language)
+        return [{"videoId": "dQw4w9WgXcQ"}]
+
+    app._search_cache.clear()
+    monkeypatch.setattr(app, "_run_public_ytmusic_with_retry", run_public)
+
+    results = app._search_once(
+        "__public__",
+        "Кино",
+        "songs",
+        20,
+        "native",
+        use_unauth_client=True,
+    )
+
+    assert results == [{"videoId": "dQw4w9WgXcQ"}]
+    assert observed_languages == ["en"]
+
+
 def test_authenticated_issue_813_fallback_remains_pinned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -152,10 +193,12 @@ async def test_provider_timeout_returns_504_without_tv_fallback(
         *,
         request_timeout_seconds: float,
         retry_timeouts: bool,
+        language: str | None = None,
     ) -> Any:
         attempted_strategies.append(strategy)
         assert request_timeout_seconds == app.SEARCH_PROVIDER_REQUEST_TIMEOUT_SECONDS
         assert retry_timeouts is False
+        assert language == "en"
         raise requests.Timeout("provider stalled")
 
     app._search_cache.clear()

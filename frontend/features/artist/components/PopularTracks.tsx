@@ -29,6 +29,7 @@ interface PopularTracksProps {
     isProviderMatching?: boolean;
     popularHref?: string;
     onAddAllToQueue?: (visibleTracks: Track[]) => void;
+    showAll?: boolean;
 }
 
 function toRowItem(track: Track): TrackRowItem {
@@ -58,12 +59,16 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
     isProviderMatching = false,
     popularHref,
     onAddAllToQueue,
+    showAll = false,
 }) => {
     const [expanded, setExpanded] = useState(false);
     const canExpand = tracks.length > POPULAR_COLLAPSED_COUNT;
     const visibleTracks = useMemo(
-        () => (expanded ? tracks : tracks.slice(0, POPULAR_COLLAPSED_COUNT)),
-        [tracks, expanded],
+        () =>
+            showAll || expanded
+                ? tracks
+                : tracks.slice(0, POPULAR_COLLAPSED_COUNT),
+        [tracks, expanded, showAll],
     );
     const albumResolutions = useTrackAlbumResolutions(
         visibleTracks,
@@ -271,7 +276,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                 preferenceMode="both"
                 tvSection="tracks"
             />
-            {canExpand && (
+            {canExpand && !showAll && (
                 <button
                     onClick={() => setExpanded((prev) => !prev)}
                     className="mt-2 flex min-h-11 items-center gap-1 rounded-full px-2 text-sm font-semibold text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"

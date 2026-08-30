@@ -98,13 +98,16 @@ function createService(
         Partial<
             Pick<
                 PersonalizedCatalogDependencies,
-                "loadDislikedEntityIds" | "getListenBrainzCandidates"
+                | "loadDislikedEntityIds"
+                | "getListenBrainzCandidates"
+                | "getScenarioCandidates"
             >
         >,
 ): PersonalizedCatalogService {
     return new PersonalizedCatalogService({
         loadDislikedEntityIds: async () => [],
         getListenBrainzCandidates: async () => [],
+        getScenarioCandidates: async () => [],
         ...dependencies,
     });
 }
@@ -806,6 +809,73 @@ describe("PersonalizedCatalogService", () => {
         expect(forYou.shelves.discovery[0].id).toBe("yt:familiar");
         expect(fresh.shelves.discovery[0].id).toBe("yt:unseen");
         expect(familiar.shelves.discovery[0].id).toBe("yt:familiar");
+    });
+
+    it("blends a mood-specific provider search with the independent direction ranking", async () => {
+        const affinityTrack = storedTrack("affinity-seed", {
+            artist: "Affinity Artist",
+        });
+        const loadSignals = jest.fn(async () => ({
+            ...emptySignals(),
+            likedTracks: [affinityTrack],
+        }));
+        const getRadio = jest.fn(async (seedVideoId: string) => ({
+            playlistId: null,
+            seedVideoId,
+            tracks: [
+                radioTrack("familiar", { artist: "Affinity Artist" }),
+                radioTrack("unseen", { artist: "Unseen Artist" }),
+            ],
+        }));
+        const getScenarioCandidates = jest.fn(async () => [
+            radioTrack("focus-affinity", { artist: "Affinity Artist" }),
+            radioTrack("focus-unseen", { artist: "Unseen Focus Artist" }),
+        ]);
+        const service = createService({
+            loadSignals,
+            getRadio,
+            getScenarioCandidates,
+        });
+
+        const result = await service.getHomeFeed("user-1", 12, {
+            mode: "new",
+            mood: "focus",
+        });
+
+        expect(getScenarioCandidates).toHaveBeenCalledWith(
+            "user-1",
+            "focus",
+            36,
+        );
+        expect(result.shelves.discovery[0].id).toBe("yt:focus-unseen");
+        expect(result.shelves.discovery.map((track) => track.id)).toContain(
+            "yt:focus-affinity",
+        );
+    });
+
+    it("uses different personal seed priorities for Favorites and Forgotten", async () => {
+        const loadSignals = jest.fn(async () => ({
+            ...emptySignals(),
+            recentPlays: [storedTrack("recent")],
+            likedTracks: [storedTrack("liked")],
+            playlistTracks: [storedTrack("playlist")],
+        }));
+        const getRadio = jest.fn(async (seedVideoId: string) => ({
+            playlistId: null,
+            seedVideoId,
+            tracks: [radioTrack(`${seedVideoId}-candidate`)],
+        }));
+        const service = createService({ loadSignals, getRadio });
+
+        const favorites = await service.getHomeFeed("user-1", 12, {
+            mood: "favorites",
+        });
+        const forgotten = await service.getHomeFeed("user-1", 12, {
+            mood: "forgotten",
+        });
+
+        expect(favorites.shelves.discovery[0].id).toBe("yt:liked-candidate");
+        expect(forgotten.shelves.discovery[0].id).toBe("yt:playlist-candidate");
     });
 
     it("does not treat an artist known only from an explicit skip as familiar", async () => {

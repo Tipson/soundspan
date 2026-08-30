@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { createFrontendLogger } from "@/lib/logger";
 import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
@@ -70,7 +69,6 @@ const logger = createFrontendLogger("Settings.Page");
  */
 export default function SettingsPage() {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
-    useSearchParams();
     const [isSaving, setIsSaving] = useState(false);
     const saveStatus = useInlineStatus();
 
@@ -82,24 +80,6 @@ export default function SettingsPage() {
         saveSettings: saveUserSettings,
         loadSettings: reloadUserSettings,
     } = useSettingsData();
-
-    // Handle initial hash for section scrolling
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            const hash = window.location.hash.substring(1);
-            if (hash) {
-                setTimeout(() => {
-                    const element = document.getElementById(hash);
-                    if (element) {
-                        element.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start",
-                        });
-                    }
-                }, 100);
-            }
-        }
-    }, []);
 
     const handleSaveAll = useCallback(async () => {
         setIsSaving(true);
@@ -186,22 +166,18 @@ export default function SettingsPage() {
             {/* API Keys */}
             <APIKeysSection />
 
-            {/* Save Button - Fixed at bottom */}
-            <div className="sticky bottom-0 pt-8 pb-8">
-                <div className="relative">
+            <div className="sticky bottom-3 z-20 pt-4 md:bottom-4 md:pt-6">
+                <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.1] bg-surface-overlay/90 p-2.5 shadow-2xl shadow-black/30 backdrop-blur-xl md:justify-end">
+                    <div className="min-w-0 flex-1 px-2 md:flex-none">
+                        <InlineStatus {...saveStatus.props} />
+                    </div>
                     <button
                         onClick={handleSaveAll}
                         disabled={isSaving}
-                        className="w-full bg-white text-black font-semibold py-3 px-4 rounded-full
-                            hover:scale-[1.02] active:scale-[0.98] transition-transform
-                            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        className="min-h-11 flex-shrink-0 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-brand/15 transition hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand"
                     >
-                        {isSaving ? "Saving..." : "Save"}
+                        {isSaving ? "Saving…" : "Save changes"}
                     </button>
-                    {/* Status appears below button, absolutely positioned */}
-                    <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-surface/90 backdrop-blur-sm px-3 py-0.5 rounded-full">
-                        <InlineStatus {...saveStatus.props} />
-                    </div>
                 </div>
             </div>
         </SettingsLayout>

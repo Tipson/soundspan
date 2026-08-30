@@ -5,7 +5,7 @@ import { isLibraryMediaPath } from "../../middleware/libraryRateLimitPaths";
 const METADATA_TEST_MAX = 2;
 const COVER_TEST_MAX = 1;
 const STREAMING_TEST_MAX = 2;
-const EXPECTED_LIBRARY_ROUTE_COUNT = 43;
+const EXPECTED_LIBRARY_ROUTE_COUNT = 44;
 const MAX_STATUS_REQUESTS = 3;
 const mockMiddlewareTrace = new Map<string, string[]>();
 
@@ -148,6 +148,7 @@ import router from "../library";
 import * as albums from "../library/albums";
 import * as artistCounts from "../library/artistCounts";
 import * as artists from "../library/artists";
+import * as artistTracks from "../library/artistTracks";
 import * as coverArt from "../library/coverArt";
 import * as imageBackfill from "../library/imageBackfill";
 import * as maintenance from "../library/maintenance";
@@ -236,6 +237,7 @@ const getTerminalHandlerNames = (): string[] =>
 const handlerModules = [
     maintenance,
     artists,
+    artistTracks,
     artistCounts,
     imageBackfill,
     metadataBackfill,
