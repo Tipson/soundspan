@@ -45,13 +45,13 @@ export function UniversalPlayer() {
                             <motion.div
                                 key="overlay-player"
                                 data-player-transition="overlay"
-                                initial={{ opacity: 0, y: 18, scale: 0.995 }}
+                                initial={{ opacity: 0, y: 14, scale: 0.995 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 52, scale: 0.992 }}
                                 transition={{
                                     type: "spring",
                                     bounce: 0,
-                                    duration: 0.36,
+                                    duration: 0.32,
                                 }}
                             >
                                 <OverlayPlayer />
@@ -61,13 +61,13 @@ export function UniversalPlayer() {
                             <motion.div
                                 key="mini-player"
                                 data-player-transition="mini"
-                                initial={{ opacity: 0, y: 20 }}
+                                initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 20 }}
+                                exit={{ opacity: 0, y: 12 }}
                                 transition={{
                                     type: "spring",
                                     bounce: 0,
-                                    duration: 0.32,
+                                    duration: 0.28,
                                 }}
                             >
                                 <MiniPlayer />

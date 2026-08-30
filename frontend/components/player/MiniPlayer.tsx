@@ -7,24 +7,20 @@ import {
 } from "@/lib/audio-context";
 import { usePlaybackProgress } from "@/lib/audio-playback-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
-import { useStreamBitrate } from "@/hooks/useStreamBitrate";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { motion } from "framer-motion";
 import {
     Play,
     Pause,
-    SkipForward,
     Music as MusicIcon,
     Loader2,
     RefreshCw,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { clampTime } from "@/utils/formatTime";
-import { SyncBadge } from "@/components/player/SyncBadge";
 import { CurrentTrackPreferenceButtons } from "@/components/player/CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
-import { PlaybackQualityBadgeWithStats } from "@/components/player/PlaybackQualityBadgeWithStats";
 
 /**
  * Renders the MiniPlayer component.
@@ -41,13 +37,12 @@ export function MiniPlayer() {
     } = usePlaybackStatus();
     // The mini player renders the progress bar: legitimate clock consumer.
     const { currentTime } = usePlaybackProgress();
-    const { pause, resume, next, setPlayerMode } = useAudioControls();
+    const { pause, resume, setPlayerMode } = useAudioControls();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
 
     const { title, subtitle, coverUrl, hasMedia } = useMediaInfo(100);
-    const { qualityBadge } = useStreamBitrate();
     const currentMediaId =
         currentTrack?.id ||
         currentAudiobook?.id ||
@@ -89,7 +84,10 @@ export function MiniPlayer() {
             data-mobile-player="dock"
             className="mobile-player-dock pointer-events-none fixed z-50"
         >
-            <div className="mobile-player-surface pointer-events-auto overflow-hidden rounded-2xl">
+            <div
+                className="mobile-player-surface pointer-events-auto overflow-hidden rounded-[14px]"
+                data-player-layout="identity-like-play"
+            >
                 <div className="relative h-[2px] w-full bg-white/[0.08]">
                     <div
                         className="shell-signal-progress h-full transition-[width] duration-150"
@@ -98,7 +96,7 @@ export function MiniPlayer() {
                 </div>
 
                 <div
-                    className="flex min-h-[70px] items-center gap-2 px-3 py-2"
+                    className="flex min-h-[64px] items-center gap-2 px-3 py-2"
                     style={{
                         paddingLeft: "calc(0.75rem + var(--safe-area-left))",
                         paddingRight: "calc(0.75rem + var(--safe-area-right))",
@@ -154,22 +152,9 @@ export function MiniPlayer() {
                                 <p className="truncate text-[13px] font-semibold text-white min-[360px]:text-sm">
                                     {title}
                                 </p>
-                                <div className="mt-0.5 flex items-center gap-1.5">
-                                    <p className="truncate text-xs text-gray-300/80">
-                                        {subtitle}
-                                    </p>
-                                    {qualityBadge ? (
-                                        <span className="hidden min-[400px]:inline-flex">
-                                            <PlaybackQualityBadgeWithStats
-                                                badge={qualityBadge}
-                                                size="mini"
-                                            />
-                                        </span>
-                                    ) : null}
-                                    <span className="hidden min-[400px]:inline-flex">
-                                        <SyncBadge compact />
-                                    </span>
-                                </div>
+                                <p className="mt-0.5 truncate text-xs text-content-muted">
+                                    {subtitle}
+                                </p>
                             </>
                         )}
                     </div>
@@ -184,7 +169,7 @@ export function MiniPlayer() {
                         >
                             <CurrentTrackPreferenceButtons
                                 trackId={currentTrack.id}
-                                mode="both"
+                                mode="up-only"
                                 buttonSizeClassName="h-11 w-11"
                                 iconSizeClassName="h-4 w-4"
                                 metadata={buildPreferenceMetadata(currentTrack)}
@@ -193,7 +178,7 @@ export function MiniPlayer() {
                     )}
 
                     <div
-                        className="flex flex-shrink-0 items-center gap-1"
+                        className="flex flex-shrink-0 items-center"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                         role="group"
@@ -248,14 +233,6 @@ export function MiniPlayer() {
                             ) : (
                                 <Play className="ml-0.5 h-5 w-5" />
                             )}
-                        </button>
-                        <button
-                            onClick={() => next()}
-                            className="hidden h-11 w-11 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white min-[380px]:flex"
-                            aria-label="Next track"
-                            title="Next track"
-                        >
-                            <SkipForward className="h-4 w-4" />
                         </button>
                     </div>
                 </div>

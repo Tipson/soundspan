@@ -6,12 +6,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 /**
  * Component tests for MiniPlayer enhancements.
  *
- * Phase 4: Add Next Track button and thumbs-up to the MiniPlayer.
- *
  * Tests verify:
- * - MiniPlayer renders a "Next track" button alongside play/pause
- * - MiniPlayer renders TrackPreferenceButtons (thumbs-up) for tracks
- * - MiniPlayer does NOT render Next/thumbs when no media is playing
+ * - MiniPlayer keeps only one preference and play/pause in compact chrome
+ * - MiniPlayer does not expose stream diagnostics in the listening surface
+ * - MiniPlayer does not render when no media is playing
  */
 
 // Shared mutable state
@@ -259,21 +257,16 @@ beforeEach(() => {
     state.qualityBadge = null;
 });
 
-test("MiniPlayer renders Next Track button", async () => {
+test("MiniPlayer keeps a compact 64px identity, like and play surface", async () => {
     const { MiniPlayer } = await import("../../components/player/MiniPlayer");
 
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
 
-    // Should have a "Next track" button
-    assert.match(html, /Next track/, "Should have Next track button");
-    const nextButton = html.match(
-        /<button[^>]*aria-label="Next track"[^>]*>/,
-    )?.[0];
-    assert.ok(nextButton);
-    assert.match(nextButton, /h-11 w-11/);
+    assert.doesNotMatch(html, /aria-label="Next track"/);
     const playButton = html.match(/<button[^>]*aria-label="Pause"[^>]*>/)?.[0];
     assert.ok(playButton);
     assert.match(playButton, /h-11 w-11/);
+    assert.match(html, /min-h-\[64px\]/);
     assert.match(
         html,
         /padding-left:calc\(0\.75rem \+ var\(--safe-area-left\)\)/,
@@ -284,11 +277,9 @@ test("MiniPlayer renders Next Track button", async () => {
     );
     assert.match(html, /data-mobile-player="dock"/);
     assert.match(html, /hidden flex-shrink-0 items-center min-\[360px\]:flex/);
-    assert.match(nextButton, /class="[^"]*\bhidden\b/);
-    assert.match(nextButton, /min-\[380px\]:flex/);
 });
 
-test("MiniPlayer renders like and dislike preferences for tracks", async () => {
+test("MiniPlayer exposes only the like preference in compact chrome", async () => {
     const { MiniPlayer } = await import("../../components/player/MiniPlayer");
 
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
@@ -300,7 +291,7 @@ test("MiniPlayer renders like and dislike preferences for tracks", async () => {
         "Should render TrackPreferenceButtons",
     );
     assert.match(html, /data-track-id="t1"/, "Should pass correct track ID");
-    assert.match(html, /data-mode="both"/, "Should expose both preferences");
+    assert.match(html, /data-mode="up-only"/, "Should expose one preference");
 });
 
 test("MiniPlayer does not render Next/thumbs when no media playing", async () => {
@@ -343,21 +334,12 @@ test("MiniPlayer does not render thumbs for audiobook playback", async () => {
     );
 });
 
-test("MiniPlayer renders playback quality badge label with shared badge component", async () => {
+test("MiniPlayer keeps playback quality diagnostics out of the compact surface", async () => {
     state.qualityBadge = { variant: "tidal", label: "FLAC · 24/96kHz" };
 
     const { MiniPlayer } = await import("../../components/player/MiniPlayer");
 
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
 
-    assert.match(
-        html,
-        /FLAC · 24\/96kHz/,
-        "Should render shared quality badge label text",
-    );
-    assert.match(
-        html,
-        /bg-\[#00BFFF\]\/20 text-\[#00BFFF\]/,
-        "Should apply tidal badge style classes",
-    );
+    assert.doesNotMatch(html, /FLAC · 24\/96kHz/);
 });

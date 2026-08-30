@@ -27,11 +27,9 @@ import {
     Repeat,
     Repeat1,
     Loader2,
-    AudioWaveform,
     RefreshCw,
-    Radio,
 } from "lucide-react";
-import { useMemo, useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/utils/cn";
 import { formatTime, clampTime } from "@/utils/formatTime";
 import { SeekSlider } from "./SeekSlider";
@@ -40,11 +38,6 @@ import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaybackQualityBadgeWithStats } from "./PlaybackQualityBadgeWithStats";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
-import { useFeatures } from "@/lib/features-context";
-import { api } from "@/lib/api";
-import { toast } from "sonner";
-import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { APP_VERSION } from "@/lib/version";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 
 /**
@@ -60,10 +53,7 @@ export function FullPlayer() {
         playbackType,
         isShuffle,
         repeatMode,
-        vibeMode,
-        vibeSourceFeatures,
         queue,
-        currentIndex,
     } = useAudioState();
     const { volume, isMuted, playerMode } = useAudioVolumeMode();
 
@@ -91,55 +81,11 @@ export function FullPlayer() {
         toggleMute,
         toggleShuffle,
         toggleRepeat,
-        startVibeMode,
-        stopVibeMode,
-        setUpcoming,
         skipForward,
         skipBackward,
     } = useAudioControls();
     const preferenceTrackId =
         playbackType === "track" ? currentTrack?.id : undefined;
-
-    // Get current track's audio features for vibe comparison
-    const currentQueueItem = queue[currentIndex];
-    const currentTrackFeatures =
-        currentQueueItem && currentQueueItem.itemType !== "episode"
-            ? currentQueueItem.audioFeatures || null
-            : null;
-
-    // Calculate vibe match score (simplified version - compares key audio features)
-    const vibeMatchScore = useMemo(() => {
-        if (!vibeMode || !vibeSourceFeatures || !currentTrackFeatures)
-            return null;
-
-        // Compare key features: energy, valence, danceability, arousal
-        const features = [
-            "energy",
-            "valence",
-            "danceability",
-            "arousal",
-        ] as const;
-        const scores: number[] = [];
-
-        for (const key of features) {
-            const sourceVal =
-                vibeSourceFeatures[key as keyof typeof vibeSourceFeatures];
-            const currentVal =
-                currentTrackFeatures[key as keyof typeof currentTrackFeatures];
-
-            if (
-                typeof sourceVal === "number" &&
-                typeof currentVal === "number"
-            ) {
-                const diff = Math.abs(sourceVal - currentVal);
-                scores.push(1 - diff);
-            }
-        }
-
-        if (scores.length === 0) return null;
-        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-        return Math.round(avgScore * 100);
-    }, [vibeMode, vibeSourceFeatures, currentTrackFeatures]);
 
     const duration = (() => {
         // Prefer canonical durations for long-form media to avoid stale/misreported playbackDuration.
@@ -213,70 +159,6 @@ export function FullPlayer() {
         playbackType === "podcast" || playbackType === "audiobook";
     const { qualityBadge } = useStreamBitrate();
 
-    const {
-        vibeEmbeddings,
-        showVersion,
-        loading: featuresLoading,
-    } = useFeatures();
-    const [isVibeLoading, setIsVibeLoading] = useState(false);
-    const [isRadioLoading, setIsRadioLoading] = useState(false);
-
-    const handleVibeToggle = async () => {
-        if (!currentTrack?.id) return;
-        if (vibeMode) {
-            stopVibeMode();
-            toast.success("Vibe mode off");
-            return;
-        }
-        setIsVibeLoading(true);
-        try {
-            const result = await startVibeMode();
-            if (result.success && result.trackCount > 0) {
-                toast.success("Vibe mode on", {
-                    description: `${result.trackCount} similar tracks queued`,
-                    icon: (
-                        <AudioWaveform className="w-4 h-4 text-brand-hover" />
-                    ),
-                });
-            } else {
-                toast.error("Couldn't find matching tracks");
-            }
-        } catch (error) {
-            sharedFrontendLogger.error("Failed to start vibe match:", error);
-            toast.error("Failed to match vibe");
-        } finally {
-            setIsVibeLoading(false);
-        }
-    };
-
-    const handleStartRadio = async () => {
-        if (!currentTrack?.artist?.id) return;
-        setIsRadioLoading(true);
-        try {
-            const response = await api.getRadioTracks(
-                "artist",
-                currentTrack.artist.id,
-            );
-            if (response.tracks && response.tracks.length > 0) {
-                const filtered = response.tracks.filter(
-                    (t: { id: string }) => t.id !== currentTrack.id,
-                );
-                setUpcoming(filtered);
-                toast.success(
-                    `Playing ${currentTrack.artist.name} Radio (${filtered.length} tracks)`,
-                );
-            } else {
-                toast.error(
-                    "Not enough similar music in your library for artist radio",
-                );
-            }
-        } catch {
-            toast.error("Failed to start artist radio");
-        } finally {
-            setIsRadioLoading(false);
-        }
-    };
-
     // Determine if seeking is allowed
     const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newVolume = parseInt(e.target.value) / 100;
@@ -341,15 +223,24 @@ export function FullPlayer() {
             document.removeEventListener("mousedown", handleClickOutside);
     }, [showVolumePopup]);
 
+    const playerDiagnostics = qualityBadge ? (
+        <div
+            className="mt-1 flex items-center justify-between gap-3 border-t border-white/10 px-2 py-2"
+            data-player-diagnostics="overflow"
+        >
+            <span className="text-[11px] font-medium text-content-muted">
+                Stream
+            </span>
+            <PlaybackQualityBadgeWithStats badge={qualityBadge} size="mini" />
+        </div>
+    ) : null;
+
     return (
         <div
             className="desktop-player-dock relative flex-shrink-0"
             data-player-surface="desktop"
         >
-            <div className="desktop-player-surface relative h-24">
-                {/* Desktop-wide progress tracker — z above overlay (z-[9999]) so handle isn't covered.
-                    pb-5 creates a generous invisible hit zone below the 4px track so the seekbar
-                    is easy to grab; the hit zone also blocks handleBarClick from toggling overlay. */}
+            <div className="desktop-player-surface relative h-20">
                 <div
                     className="absolute inset-x-0 top-0 z-[10000]"
                     data-seek-zone
@@ -365,95 +256,95 @@ export function FullPlayer() {
                         variant="default"
                         alwaysShowHandle
                         handleClassName="w-2.5 h-2.5 shadow-xl shadow-black/50"
-                        className="h-1 rounded-none"
-                        hitZoneClassName="pb-5"
+                        className="h-[2px] rounded-none"
+                        hitZoneClassName="pb-4"
                     />
                 </div>
-                {/* Subtle top glow */}
-                <div className="absolute top-1 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
                 <div
                     className={cn(
-                        "desktop-player-layout grid h-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-5 pt-1",
+                        "desktop-player-layout grid h-full grid-cols-[minmax(220px,1fr)_auto_minmax(220px,1fr)] items-center gap-4 px-4 pt-0.5",
                         hasMedia && "cursor-pointer",
                     )}
+                    data-player-layout="identity-transport-actions"
                     onClick={handleBarClick}
                 >
-                    {/* Artwork & Info — left-aligned, expands rightward */}
-                    <div className="flex items-center gap-3 min-w-0 mr-4">
+                    <div
+                        className="flex min-w-0 items-center gap-3"
+                        data-player-region="identity"
+                    >
                         {mediaLink ? (
                             <Link
                                 href={mediaLink}
                                 prefetch={false}
-                                className="relative w-14 h-14 flex-shrink-0 group"
+                                className="group relative h-12 w-12 flex-shrink-0"
                             >
-                                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                <div className="relative w-full h-full bg-gradient-to-br from-[#2a2a2a] to-surface-hover rounded-lg overflow-hidden shadow-lg flex items-center justify-center">
+                                <div className="absolute inset-0 rounded-[10px] bg-white/15 opacity-0 blur-md transition-opacity duration-200 group-hover:opacity-100" />
+                                <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[10px] bg-surface-hover shadow-lg ring-1 ring-white/10">
                                     {coverUrl ? (
                                         <CachedImage
                                             key={coverUrl}
                                             src={coverUrl}
                                             alt={title}
                                             fill
-                                            sizes="56px"
+                                            sizes="48px"
                                             className="object-cover"
                                             priority
                                             unoptimized
                                         />
                                     ) : (
-                                        <MusicIcon className="w-6 h-6 text-gray-400" />
+                                        <MusicIcon className="h-5 w-5 text-content-muted" />
                                     )}
                                 </div>
                             </Link>
                         ) : (
-                            <div className="relative w-14 h-14 flex-shrink-0">
-                                <div className="relative w-full h-full bg-gradient-to-br from-[#2a2a2a] to-surface-hover rounded-lg overflow-hidden shadow-lg flex items-center justify-center">
-                                    <MusicIcon className="w-6 h-6 text-gray-400" />
+                            <div className="relative h-12 w-12 flex-shrink-0">
+                                <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[10px] bg-surface-hover shadow-lg ring-1 ring-white/10">
+                                    <MusicIcon className="h-5 w-5 text-content-muted" />
                                 </div>
                             </div>
                         )}
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                             {mediaLink ? (
                                 <Link
                                     href={mediaLink}
                                     prefetch={false}
                                     className="block min-w-0 hover:underline"
                                 >
-                                    <h4 className="text-white font-semibold truncate text-sm">
+                                    <h4 className="truncate text-sm font-semibold leading-5 text-white">
                                         {title}
                                     </h4>
                                 </Link>
                             ) : (
-                                <h4 className="text-white font-semibold truncate text-sm">
+                                <h4 className="truncate text-sm font-semibold leading-5 text-white">
                                     {title}
                                 </h4>
                             )}
-                            {artistLink ? (
-                                <Link
-                                    href={artistLink}
-                                    prefetch={false}
-                                    className="block min-w-0 hover:underline"
-                                >
-                                    <p className="text-xs text-gray-400 truncate">
+                            <div className="flex min-w-0 items-center gap-2">
+                                {artistLink ? (
+                                    <Link
+                                        href={artistLink}
+                                        prefetch={false}
+                                        className="min-w-0 hover:underline"
+                                    >
+                                        <p className="truncate text-xs leading-4 text-content-muted">
+                                            {subtitle}
+                                        </p>
+                                    </Link>
+                                ) : mediaLink ? (
+                                    <Link
+                                        href={mediaLink}
+                                        prefetch={false}
+                                        className="min-w-0 hover:underline"
+                                    >
+                                        <p className="truncate text-xs leading-4 text-content-muted">
+                                            {subtitle}
+                                        </p>
+                                    </Link>
+                                ) : (
+                                    <p className="truncate text-xs leading-4 text-content-muted">
                                         {subtitle}
                                     </p>
-                                </Link>
-                            ) : mediaLink ? (
-                                <Link
-                                    href={mediaLink}
-                                    prefetch={false}
-                                    className="block min-w-0 hover:underline"
-                                >
-                                    <p className="text-xs text-gray-400 truncate">
-                                        {subtitle}
-                                    </p>
-                                </Link>
-                            ) : (
-                                <p className="text-xs text-gray-400 truncate">
-                                    {subtitle}
-                                </p>
-                            )}
-                            {/* Status badges */}
-                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                )}
                                 {currentTrack?.source === "federated" &&
                                     currentTrack.peer && (
                                         <PeerBadge
@@ -461,38 +352,21 @@ export function FullPlayer() {
                                             online={currentTrack.peer.online}
                                         />
                                     )}
-                                {/* Vibe match score when in vibe mode */}
-                                {vibeMode && vibeMatchScore !== null && (
-                                    <span
-                                        className={cn(
-                                            "inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                            vibeMatchScore >= 80
-                                                ? "bg-green-500/20 text-green-400"
-                                                : vibeMatchScore >= 60
-                                                  ? "bg-brand/20 text-brand"
-                                                  : "bg-orange-500/20 text-orange-400",
-                                        )}
-                                    >
-                                        <AudioWaveform className="w-2.5 h-2.5" />
-                                        {vibeMatchScore}% match
-                                    </span>
-                                )}
-                                {/* Listen Together sync indicator */}
-                                <SyncBadge />
+                                <SyncBadge compact />
                             </div>
                         </div>
                     </div>
 
-                    {/* Controls — truly centered column */}
-                    <div className="flex items-center justify-center gap-4">
-                        {/* Buttons */}
+                    <div
+                        className="flex items-center justify-center"
+                        data-player-region="transport"
+                    >
                         <div
-                            className="player-transport flex items-center gap-5"
+                            className="player-transport flex items-center gap-2 xl:gap-3"
                             role="group"
                             aria-label="Playback controls"
                             data-player-control-group="primary"
                         >
-                            {/* Shuffle */}
                             {!isLongForm && (
                                 <button
                                     onClick={toggleShuffle}
@@ -513,9 +387,6 @@ export function FullPlayer() {
                                 </button>
                             )}
 
-                            {/* Skip back 15s — a seek, so gated on canSeek like the seek slider
-                                (false while an uncached podcast episode is still caching);
-                                independent of queue length */}
                             {isLongForm && (
                                 <button
                                     onClick={() => skipBackward(15)}
@@ -594,9 +465,6 @@ export function FullPlayer() {
                                 <SkipForward className="w-6 h-6" />
                             </button>
 
-                            {/* Skip forward 15s — a seek, so gated on canSeek like the seek slider
-                                (false while an uncached podcast episode is still caching);
-                                independent of queue length */}
                             {isLongForm && (
                                 <button
                                     onClick={() => skipForward(15)}
@@ -609,7 +477,6 @@ export function FullPlayer() {
                                 </button>
                             )}
 
-                            {/* Repeat */}
                             {!isLongForm && (
                                 <button
                                     onClick={toggleRepeat}
@@ -648,26 +515,17 @@ export function FullPlayer() {
                         </div>
                     </div>
 
-                    {/* Right Controls — right-aligned */}
                     <div
-                        className="player-utilities ml-4 flex items-center justify-end gap-3"
+                        className="player-utilities flex min-w-0 items-center justify-end gap-1"
+                        data-player-region="actions"
                         data-player-control-group="utilities"
                     >
-                        {/* Quality badge — centered in space between controls and time */}
-                        <div className="hidden flex-1 justify-center 2xl:flex">
-                            {qualityBadge && (
-                                <PlaybackQualityBadgeWithStats
-                                    badge={qualityBadge}
-                                    size="full"
-                                />
-                            )}
-                        </div>
-
-                        {/* Timer */}
                         <span
                             className={cn(
-                                "hidden whitespace-nowrap text-xs font-medium tabular-nums xl:block",
-                                hasMedia ? "text-gray-300" : "text-gray-400",
+                                "mr-2 hidden whitespace-nowrap text-[11px] font-medium tabular-nums 2xl:block",
+                                hasMedia
+                                    ? "text-content-secondary"
+                                    : "text-content-muted",
                             )}
                         >
                             {formatTime(displayTime)}
@@ -675,72 +533,29 @@ export function FullPlayer() {
                             {formatTime(duration)}
                         </span>
 
-                        {/* Icon group: radio, vibe, heart, 3-dot, volume, chevron — equally spaced, vertically centered */}
-                        <div className="flex items-center gap-2.5">
-                            {/* Radio */}
-                            {currentTrack?.artist?.id &&
-                                playbackType === "track" && (
-                                    <button
-                                        onClick={handleStartRadio}
-                                        disabled={isRadioLoading}
-                                        className="player-control rare-player-control text-content-muted hover:text-white"
-                                        title="Start artist radio"
-                                        aria-label="Start Radio"
-                                    >
-                                        {isRadioLoading ? (
-                                            <Loader2 className="w-[18px] h-[18px] animate-spin" />
-                                        ) : (
-                                            <Radio className="w-[18px] h-[18px]" />
-                                        )}
-                                    </button>
-                                )}
-
-                            {/* Vibe */}
-                            {!featuresLoading && vibeEmbeddings && (
-                                <button
-                                    onClick={handleVibeToggle}
-                                    disabled={isVibeLoading}
-                                    className={cn(
-                                        "player-control rare-player-control",
-                                        vibeMode
-                                            ? "text-brand-hover hover:text-brand-hover"
-                                            : "text-gray-400 hover:text-white",
+                        <div className="flex items-center gap-1">
+                            {currentTrack && playbackType === "track" ? (
+                                <CurrentTrackPreferenceButtons
+                                    trackId={preferenceTrackId}
+                                    mode="both"
+                                    buttonSizeClassName="h-10 w-10"
+                                    iconSizeClassName="h-[18px] w-[18px]"
+                                    metadata={buildPreferenceMetadata(
+                                        currentTrack,
                                     )}
-                                    title={
-                                        vibeMode
-                                            ? "Turn off vibe mode"
-                                            : "Match this vibe"
-                                    }
-                                    aria-label="Match Vibe"
-                                >
-                                    {isVibeLoading ? (
-                                        <Loader2 className="w-[18px] h-[18px] animate-spin" />
-                                    ) : (
-                                        <AudioWaveform className="w-[18px] h-[18px]" />
-                                    )}
-                                </button>
-                            )}
+                                />
+                            ) : null}
 
-                            {/* Track preferences */}
-                            <CurrentTrackPreferenceButtons
-                                trackId={preferenceTrackId}
-                                mode="both"
-                                buttonSizeClassName="h-11 w-11"
-                                iconSizeClassName="h-[18px] w-[18px]"
-                                metadata={buildPreferenceMetadata(currentTrack)}
-                            />
-
-                            {/* 3-dot context menu for current track */}
                             {currentTrack && playbackType === "track" && (
                                 <TrackOverflowMenu
                                     track={currentTrack}
                                     showPlayNext={false}
-                                    triggerClassName="!opacity-100 text-gray-400 hover:text-white"
+                                    triggerClassName="!flex !h-10 !w-10 !items-center !justify-center !p-0 !opacity-100 text-content-muted hover:text-white"
                                     menuClassName="bottom-full top-auto mb-1 mt-0 z-[10001]"
+                                    extraItemsAfter={playerDiagnostics}
                                 />
                             )}
 
-                            {/* Volume icon + vertical popup */}
                             <div
                                 ref={volumePopupRef}
                                 className="relative z-[10000] flex items-center justify-center"
@@ -749,7 +564,7 @@ export function FullPlayer() {
                             >
                                 <button
                                     onClick={toggleMute}
-                                    className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110"
+                                    className="player-control text-content-muted hover:text-white"
                                     aria-label={
                                         volume === 0 ? "Unmute" : "Mute"
                                     }
@@ -761,7 +576,6 @@ export function FullPlayer() {
                                     )}
                                 </button>
 
-                                {/* Vertical volume slider popup */}
                                 <div
                                     className={cn(
                                         "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-1.5 py-3 bg-surface-hover border border-white/10 rounded-lg shadow-xl transition-all duration-200 overflow-hidden",
@@ -807,10 +621,10 @@ export function FullPlayer() {
                                     }
                                 }}
                                 className={cn(
-                                    "flex items-center justify-center w-8 h-8 transition-all duration-200",
+                                    "player-control",
                                     hasMedia
-                                        ? "text-gray-400 hover:text-white hover:scale-110"
-                                        : "text-gray-400 cursor-not-allowed",
+                                        ? "text-content-muted hover:text-white"
+                                        : "cursor-not-allowed text-content-disabled",
                                 )}
                                 disabled={!hasMedia}
                                 aria-label={
@@ -833,12 +647,6 @@ export function FullPlayer() {
                         </div>
                     </div>
                 </div>
-                {/* Version badge — absolutely positioned bottom-right, doesn't affect layout */}
-                {showVersion && (
-                    <span className="absolute bottom-1 right-2 text-[9px] text-white/20 pointer-events-none select-none">
-                        {APP_VERSION}
-                    </span>
-                )}
             </div>
         </div>
     );

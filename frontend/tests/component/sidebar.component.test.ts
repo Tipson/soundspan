@@ -215,6 +215,12 @@ test("desktop sidebar exposes a restrained shell landmark", async () => {
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
     assert.match(html, /data-shell-sidebar="desktop"/);
+    const sidebar = html.match(
+        /<aside[^>]*data-shell-sidebar="desktop"[^>]*>/,
+    )?.[0];
+    assert.ok(sidebar);
+    assert.match(sidebar, /w-\[224px\]/);
+    assert.doesNotMatch(sidebar, /rounded-/);
     assert.match(html, /aria-label="Create playlist"/);
     assert.doesNotMatch(html, /Sync Library/);
 });

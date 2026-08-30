@@ -99,7 +99,7 @@ beforeEach(() => {
     state.isTablet = false;
 });
 
-test("desktop shell gives content a single quiet stage", async () => {
+test("desktop shell exposes one open canvas instead of a framed content card", async () => {
     const { AuthenticatedLayout } =
         await import("../../components/layout/AuthenticatedLayout");
     const html = renderToStaticMarkup(
@@ -107,13 +107,17 @@ test("desktop shell gives content a single quiet stage", async () => {
     );
 
     assert.match(html, /data-shell-frame="desktop"/);
+    assert.match(html, /data-shell-workspace="desktop"/);
     assert.match(html, /data-shell-surface="content"/);
+    assert.match(html, /data-shell-canvas="open"/);
+    assert.match(html, /desktop-shell-workspace[^\"]*gap-0/);
+    assert.doesNotMatch(html, /desktop-content-stage[^\"]*rounded-/);
     assert.match(html, /data-marker="sidebar"/);
     assert.match(html, /data-marker="player"/);
     assert.doesNotMatch(html, /galaxy-background/);
 });
 
-test("mobile shell reserves independent topbar, player and navigation zones", async () => {
+test("mobile shell keeps safe chrome around an unframed content canvas", async () => {
     state.isMobile = true;
 
     const { AuthenticatedLayout } =
@@ -124,8 +128,10 @@ test("mobile shell reserves independent topbar, player and navigation zones", as
 
     assert.match(html, /data-shell-frame="mobile"/);
     assert.match(html, /data-shell-surface="content"/);
+    assert.match(html, /data-shell-canvas="open"/);
     assert.match(html, /data-marker="topbar"/);
     assert.match(html, /data-marker="player"/);
     assert.match(html, /data-marker="bottom-navigation"/);
     assert.match(html, /mobile-app-stage/);
+    assert.doesNotMatch(html, /mobile-app-stage[^\"]*rounded-/);
 });

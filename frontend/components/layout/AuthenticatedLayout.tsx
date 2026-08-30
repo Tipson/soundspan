@@ -140,7 +140,8 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                                 tabIndex={-1}
                                 data-app-scroll-container
                                 data-shell-surface="content"
-                                className="mobile-app-stage relative overflow-y-auto rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
+                                data-shell-canvas="open"
+                                className="mobile-app-stage relative overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
                             >
                                 <div className="mobile-stage-content">
                                     {children}
@@ -176,7 +177,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     <TopBar isActivityPanelOpen={activityPanel.isOpen} />
                     <div
                         data-shell-workspace="desktop"
-                        className="desktop-shell-workspace flex min-h-0 flex-1 gap-2 overflow-hidden px-2 pb-2"
+                        className="desktop-shell-workspace flex min-h-0 flex-1 gap-0 overflow-hidden"
                     >
                         <Sidebar />
                         <main
@@ -184,7 +185,8 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                             tabIndex={-1}
                             data-app-scroll-container
                             data-shell-surface="content"
-                            className="desktop-content-stage relative min-w-0 flex-1 overflow-y-auto rounded-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
+                            data-shell-canvas="open"
+                            className="desktop-content-stage relative min-w-0 flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
                         >
                             {children}
                         </main>

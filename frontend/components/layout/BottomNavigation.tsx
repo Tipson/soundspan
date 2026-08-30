@@ -44,7 +44,7 @@ export function BottomNavigation() {
     return (
         <nav
             data-shell-bottom-navigation="true"
-            className="mobile-bottom-navigation fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08]"
+            className="mobile-bottom-navigation fixed inset-x-0 bottom-0 z-40"
             role="navigation"
             aria-label="Main navigation"
             style={{

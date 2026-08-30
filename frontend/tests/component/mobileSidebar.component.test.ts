@@ -52,6 +52,7 @@ mock.module("lucide-react", {
         X: Icon,
         Inbox: Icon,
         Shield: Icon,
+        Bell: Icon,
     },
 });
 
@@ -117,7 +118,7 @@ test("returns null when closed", async () => {
     assert.equal(html, "");
 });
 
-test("renders the focused music quick links and omits secondary routes", async () => {
+test("keeps search in the top bar and moves notifications into the account drawer", async () => {
     const { MobileSidebar } =
         await import("../../components/layout/MobileSidebar");
 
@@ -131,12 +132,18 @@ test("renders the focused music quick links and omits secondary routes", async (
 
     assert.match(html, />Listen</);
     assert.match(html, />Home</);
-    assert.match(html, />Search</);
+    assert.doesNotMatch(html, />Search</);
+    assert.doesNotMatch(html, /href="\/search"/);
     assert.match(html, />Library</);
     assert.match(html, />Vibe</);
     assert.match(html, />Liked songs</);
     assert.match(html, />Downloads</);
     assert.match(html, />Import playlist</);
+    const notifications = html.match(
+        /<button[^>]*aria-label="Open notifications"[^>]*>/,
+    )?.[0];
+    assert.ok(notifications);
+    assert.match(notifications, /min-h-11/);
     assert.doesNotMatch(html, />Explore</);
     assert.doesNotMatch(html, />Listen Together</);
     assert.doesNotMatch(html, /My History/);

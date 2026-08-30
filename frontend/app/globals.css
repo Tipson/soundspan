@@ -14,13 +14,13 @@
 
     /* Surfaces */
     --color-surface: #07080b;
-    --color-surface-active: #202532;
-    --color-surface-elevated: #181c25;
-    --color-surface-highlight: #242a38;
-    --color-surface-hover: #1d222d;
-    --color-surface-overlay: #12151c;
-    --color-surface-raised: #0c0e13;
-    --color-surface-sunken: #10131a;
+    --color-surface-active: #18202c;
+    --color-surface-elevated: #10151e;
+    --color-surface-highlight: #18202c;
+    --color-surface-hover: #18202c;
+    --color-surface-overlay: #10151e;
+    --color-surface-raised: #0b0e14;
+    --color-surface-sunken: #0b0e14;
 
     /* Lines */
     --color-line: #252a36;
@@ -45,10 +45,10 @@
 
     /* Soundspan music foundation */
     --music-canvas: #07080b;
-    --music-stage: #0c0e13;
-    --music-surface: #12151c;
-    --music-raised: #181c25;
-    --music-soft: #202532;
+    --music-stage: #0b0e14;
+    --music-surface: #10151e;
+    --music-raised: #18202c;
+    --music-soft: var(--music-raised);
     --music-ink: #f7f7fa;
     --music-ink-body: #d8dae2;
     --music-ink-muted: #a2a6b3;
@@ -60,9 +60,9 @@
     --music-warning: #f4c76e;
     --music-line: rgb(255 255 255 / 0.08);
     --music-line-strong: rgb(255 255 255 / 0.14);
-    --music-radius-control: 12px;
-    --music-radius-card: 18px;
-    --music-radius-editorial: 28px;
+    --music-radius-control: 10px;
+    --music-radius-card: 14px;
+    --music-radius-editorial: 20px;
     --music-ease: cubic-bezier(0.16, 1, 0.3, 1);
     --font-interface:
         "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont,
@@ -75,7 +75,7 @@
     --bg-primary: var(--music-canvas); /* Primary canvas */
     --bg-secondary: var(--music-stage); /* Cards, panels */
     --bg-tertiary: var(--music-surface); /* Nested content, wells */
-    --bg-hover: #1d222d; /* Modals, dropdowns, hover */
+    --bg-hover: var(--music-raised); /* Modals, dropdowns, hover */
     --bg-active: var(--music-soft); /* Active/selected states */
 
     /* Borders */
@@ -102,10 +102,11 @@
     --color-info: var(--music-action);
 
     /* Authenticated music shell geometry */
-    --app-topbar-height: 64px;
-    --app-topbar-height-desktop: 72px;
-    --app-bottom-nav-height: 64px;
-    --app-mini-player-height: 72px;
+    --app-topbar-height: 60px;
+    --app-topbar-height-desktop: 64px;
+    --app-bottom-nav-height: 60px;
+    --app-mini-player-height: 68px;
+    --app-player-height-desktop: 80px;
 }
 
 * {
@@ -130,7 +131,21 @@ h2,
 h3 {
     font-family: var(--font-display);
     font-optical-sizing: auto;
+}
+
+h1 {
+    line-height: 1.04;
+    letter-spacing: -0.035em;
+}
+
+h2 {
+    line-height: 1.1;
     letter-spacing: -0.025em;
+}
+
+h3 {
+    line-height: 1.2;
+    letter-spacing: -0.015em;
 }
 
 button,
@@ -164,9 +179,13 @@ select {
    ===================================================== */
 
 .shell-topbar {
-    background: color-mix(in srgb, var(--music-canvas) 82%, transparent);
-    box-shadow: 0 14px 40px color-mix(in srgb, black 20%, transparent);
-    backdrop-filter: blur(24px) saturate(145%);
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--music-canvas) 94%, transparent),
+        color-mix(in srgb, var(--music-canvas) 78%, transparent)
+    );
+    box-shadow: 0 14px 34px color-mix(in srgb, black 16%, transparent);
+    backdrop-filter: blur(18px) saturate(130%);
 }
 
 .desktop-shell-frame,
@@ -181,8 +200,8 @@ select {
     background:
         radial-gradient(
             ellipse at 45% -10%,
-            color-mix(in srgb, var(--music-action) 9%, transparent),
-            transparent 42rem
+            color-mix(in srgb, var(--music-action) 7%, transparent),
+            transparent 48rem
         ),
         var(--music-canvas);
 }
@@ -192,32 +211,34 @@ select {
     background:
         radial-gradient(
             ellipse at 18% -8%,
-            color-mix(in srgb, var(--music-action) 10%, transparent),
-            transparent 38rem
+            color-mix(in srgb, var(--music-action) 7%, transparent),
+            transparent 44rem
         ),
-        linear-gradient(180deg, var(--music-stage), var(--music-canvas) 28rem);
-    border: 1px solid color-mix(in srgb, white 7%, transparent);
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 3%, transparent),
-        0 24px 64px color-mix(in srgb, black 18%, transparent);
+        linear-gradient(180deg, var(--music-stage), var(--music-canvas) 32rem);
+    border: 0;
+    box-shadow: none;
+    overscroll-behavior: contain;
 }
 
-.shell-sidebar,
-.mobile-sidebar-sheet {
-    border: 1px solid color-mix(in srgb, white 7%, transparent);
-    background: color-mix(in srgb, var(--music-stage) 88%, transparent);
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
-        0 24px 64px color-mix(in srgb, black 28%, transparent);
-    backdrop-filter: blur(24px) saturate(135%);
+.shell-sidebar {
+    border: 0;
+    border-right: 1px solid color-mix(in srgb, white 6%, transparent);
+    background: color-mix(in srgb, var(--music-canvas) 74%, transparent);
+    box-shadow: none;
+    backdrop-filter: blur(18px) saturate(120%);
 }
 
 .mobile-sidebar-sheet {
-    border-width: 0 1px 0 0;
+    border: 0;
+    border-right: 1px solid color-mix(in srgb, white 10%, transparent);
+    background: color-mix(in srgb, var(--music-stage) 96%, transparent);
+    box-shadow: 20px 0 60px color-mix(in srgb, black 48%, transparent);
+    backdrop-filter: blur(24px) saturate(130%);
 }
 
 .shell-control,
 .shell-nav-item {
+    border-radius: var(--music-radius-control);
     transition:
         color 160ms var(--music-ease),
         background-color 160ms var(--music-ease),
@@ -240,6 +261,7 @@ select {
 }
 
 .shell-search-field {
+    border-radius: var(--music-radius-control);
     border: 1px solid color-mix(in srgb, white 9%, transparent);
     background: color-mix(in srgb, var(--music-surface) 78%, transparent);
     box-shadow:
@@ -415,20 +437,18 @@ select {
 .mobile-app-stage {
     min-height: 0;
     flex: 1 1 auto;
-    margin-left: calc(8px + var(--safe-area-left));
-    margin-right: calc(8px + var(--safe-area-right));
-    margin-bottom: 8px;
+    margin: 0;
 }
 
 .mobile-stage-content {
     min-height: 100%;
-    padding-bottom: calc(var(--app-mini-player-height) + 16px);
+    padding-bottom: calc(var(--app-mini-player-height) + 12px);
 }
 
 .mobile-player-dock {
-    bottom: calc(var(--app-bottom-nav-height) + var(--safe-area-bottom) + 6px);
-    left: 8px;
-    right: 8px;
+    bottom: calc(var(--app-bottom-nav-height) + var(--safe-area-bottom) + 4px);
+    left: calc(8px + var(--safe-area-left));
+    right: calc(8px + var(--safe-area-right));
     min-height: var(--app-mini-player-height);
 }
 
@@ -437,13 +457,13 @@ select {
     background:
         linear-gradient(
             110deg,
-            color-mix(in srgb, var(--music-action) 7%, transparent),
-            transparent 42%
+            color-mix(in srgb, var(--music-action) 6%, transparent),
+            transparent 48%
         ),
-        color-mix(in srgb, var(--bg-tertiary) 88%, transparent);
-    border: 1px solid color-mix(in srgb, white 10%, transparent);
-    box-shadow: 0 16px 48px color-mix(in srgb, black 55%, transparent);
-    backdrop-filter: blur(20px) saturate(140%);
+        color-mix(in srgb, var(--music-surface) 92%, transparent);
+    border: 1px solid color-mix(in srgb, white 9%, transparent);
+    box-shadow: 0 14px 38px color-mix(in srgb, black 52%, transparent);
+    backdrop-filter: blur(18px) saturate(132%);
 }
 
 .shell-signal-progress {
@@ -458,31 +478,32 @@ select {
 
 .mobile-bottom-navigation {
     min-height: calc(var(--app-bottom-nav-height) + var(--safe-area-bottom));
-    background: color-mix(in srgb, var(--bg-primary) 94%, transparent);
+    background: color-mix(in srgb, var(--music-canvas) 91%, transparent);
+    box-shadow: 0 -12px 30px color-mix(in srgb, black 32%, transparent);
     backdrop-filter: blur(18px) saturate(125%);
 }
 
 .desktop-player-dock {
     z-index: 45;
-    padding: 0 8px 8px;
+    min-height: var(--app-player-height-desktop);
+    padding: 0;
     background: transparent;
 }
 
 .desktop-player-surface {
     overflow: visible;
-    border: 1px solid color-mix(in srgb, white 9%, transparent);
-    border-radius: 18px;
+    border: 0;
+    border-top: 1px solid color-mix(in srgb, white 8%, transparent);
+    border-radius: 0;
     background:
         linear-gradient(
             110deg,
-            color-mix(in srgb, var(--music-action) 6%, transparent),
-            transparent 36%
+            color-mix(in srgb, var(--music-action) 5%, transparent),
+            transparent 42%
         ),
-        color-mix(in srgb, var(--music-stage) 91%, transparent);
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
-        0 18px 48px color-mix(in srgb, black 34%, transparent);
-    backdrop-filter: blur(24px) saturate(145%);
+        color-mix(in srgb, var(--music-stage) 94%, transparent);
+    box-shadow: 0 -14px 34px color-mix(in srgb, black 28%, transparent);
+    backdrop-filter: blur(20px) saturate(132%);
 }
 
 .player-control {
@@ -610,16 +631,17 @@ select {
 
 @media (max-width: 1180px) {
     .desktop-player-layout {
-        grid-template-columns: minmax(0, 0.85fr) auto minmax(0, 0.85fr);
-        padding-inline: 14px;
+        grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+        gap: 8px;
+        padding-inline: 12px;
     }
 
     .player-transport {
-        gap: 10px;
+        gap: 4px;
     }
 
     .player-utilities {
-        gap: 4px;
+        gap: 0;
     }
 }
 

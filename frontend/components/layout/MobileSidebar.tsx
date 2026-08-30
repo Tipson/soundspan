@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
     AudioWaveform,
+    Bell,
     Download,
     Heart,
     Home,
@@ -13,7 +14,6 @@ import {
     Library,
     ListMusic,
     LogOut,
-    Search,
     Settings,
     Shield,
     Upload,
@@ -34,7 +34,6 @@ interface MobileSidebarProps {
 
 const quickLinkIcons = {
     "/": Home,
-    "/search": Search,
     "/vibe": AudioWaveform,
     "/library": Library,
 } as const;
@@ -75,6 +74,11 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
         }
     };
 
+    const handleOpenNotifications = () => {
+        onClose();
+        window.dispatchEvent(new CustomEvent("open-activity-panel"));
+    };
+
     if (!isOpen) return null;
 
     const linkClassName = (active: boolean) =>
@@ -95,7 +99,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             />
 
             <aside
-                className="mobile-sidebar-sheet fixed inset-y-0 left-0 z-[60] flex w-[min(88vw,320px)] flex-col overflow-hidden"
+                className="mobile-sidebar-sheet fixed inset-y-0 left-0 z-[60] flex w-[min(86vw,304px)] flex-col overflow-hidden"
                 style={{
                     paddingTop: "var(--safe-area-top)",
                     paddingBottom: "var(--safe-area-bottom)",
@@ -187,6 +191,15 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     </div>
 
                     <div className="my-4 border-t border-white/[0.07]" />
+                    <button
+                        type="button"
+                        onClick={handleOpenNotifications}
+                        className={linkClassName(false)}
+                        aria-label="Open notifications"
+                    >
+                        <Bell className="h-5 w-5" />
+                        <span>Notifications</span>
+                    </button>
                     <Link
                         href="/settings"
                         aria-current={

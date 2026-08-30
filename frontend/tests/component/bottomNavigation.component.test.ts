@@ -66,6 +66,11 @@ test("mobile navigation leaves search to the persistent top bar", async () => {
     assert.match(html, /padding-left:var\(--safe-area-left\)/);
     assert.match(html, /padding-right:var\(--safe-area-right\)/);
     assert.match(html, /data-shell-bottom-navigation="true"/);
+    const navigation = html.match(
+        /<nav[^>]*data-shell-bottom-navigation="true"[^>]*>/,
+    )?.[0];
+    assert.ok(navigation);
+    assert.doesNotMatch(navigation, /border-t/);
     for (const label of ["Home", "Vibe", "Library"]) {
         const link = html.match(
             new RegExp(`<a[^>]*aria-label="${label}"[^>]*>`),

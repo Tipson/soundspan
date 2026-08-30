@@ -59,7 +59,7 @@ mock.module("@/utils/cn", {
     },
 });
 
-test("mobile top bar stays compact at 320px while keeping 44px controls", async () => {
+test("mobile top bar keeps only menu and persistent search at 320px", async () => {
     const { TopBar } = await import("../../components/layout/TopBar");
     const html = renderToStaticMarkup(React.createElement(TopBar));
 
@@ -72,7 +72,7 @@ test("mobile top bar stays compact at 320px while keeping 44px controls", async 
         html,
         /padding-right:calc\(0\.75rem \+ var\(--safe-area-right\)\)/,
     );
-    for (const label of ["Open menu", "Notifications"]) {
+    for (const label of ["Open menu"]) {
         const control = html.match(
             new RegExp(`<(?:button|a)[^>]*aria-label="${label}"[^>]*>`),
         )?.[0];
@@ -81,9 +81,11 @@ test("mobile top bar stays compact at 320px while keeping 44px controls", async 
     }
     assert.doesNotMatch(html, /aria-label="Go back"/);
     assert.doesNotMatch(html, /aria-label="Home"/);
+    assert.doesNotMatch(html, /aria-label="Notifications"/);
     assert.match(html, /aria-label="Search"[^>]*class="[^"]*h-11/);
     assert.match(html, /placeholder="Search music"/);
     assert.match(html, /data-shell-topbar="mobile"/);
+    assert.match(html, /data-shell-search="persistent"/);
 });
 
 test("desktop top bar keeps global search centered in the music shell", async () => {
@@ -94,7 +96,9 @@ test("desktop top bar keeps global search centered in the music shell", async ()
 
     assert.match(html, /data-shell-topbar="desktop"/);
     assert.match(html, /placeholder="What do you want to play\?"/);
-    assert.match(html, /max-w-\[620px\]/);
+    assert.match(html, /max-w-\[720px\]/);
+    assert.match(html, /w-\[224px\]/);
     assert.match(html, /aria-label="Go back"/);
     assert.match(html, />\/<\/kbd>/);
+    assert.match(html, /data-shell-search="persistent"/);
 });

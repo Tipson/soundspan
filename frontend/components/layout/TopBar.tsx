@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Search, Menu, Bell, ChevronLeft } from "lucide-react";
+import { Search, Menu, ChevronLeft } from "lucide-react";
 import { ActivityPanelToggle } from "./ActivityPanel";
 import { UserAvatarMenu } from "./UserAvatarMenu";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
@@ -140,6 +140,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                         <div
                             className="group relative"
                             data-tv-section="search-input"
+                            data-shell-search="persistent"
                         >
                             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
                             <input
@@ -157,23 +158,10 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                             />
                         </div>
                     </form>
-
-                    <button
-                        onClick={() => {
-                            window.dispatchEvent(
-                                new CustomEvent("toggle-activity-panel"),
-                            );
-                        }}
-                        className="shell-control relative ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-content-secondary hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                        aria-label="Notifications"
-                        title="Notifications"
-                    >
-                        <Bell className="w-5 h-5" />
-                    </button>
                 </>
             ) : (
                 <>
-                    <div className="flex w-[236px] flex-shrink-0 items-center px-3">
+                    <div className="flex w-[224px] flex-shrink-0 items-center px-4">
                         <Link
                             href="/"
                             className="group flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
@@ -193,7 +181,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                     </div>
 
                     <div className="flex min-w-0 flex-1 items-center justify-center px-4">
-                        <div className="flex w-full max-w-[620px] items-center gap-2">
+                        <div className="flex w-full max-w-[720px] items-center gap-2">
                             <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center">
                                 {pathname !== "/" ? (
                                     <button
@@ -219,6 +207,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 <div
                                     className="group relative"
                                     data-tv-section="search-input"
+                                    data-shell-search="persistent"
                                 >
                                     <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
                                     <input
@@ -243,7 +232,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                         </div>
                     </div>
 
-                    <div className="flex w-[236px] flex-shrink-0 items-center justify-end gap-2 px-3">
+                    <div className="flex w-[224px] flex-shrink-0 items-center justify-end gap-2 px-4">
                         <ActivityPanelToggle
                             pollingEnabled={!isActivityPanelOpen}
                         />

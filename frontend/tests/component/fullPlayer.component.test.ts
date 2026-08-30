@@ -45,6 +45,10 @@ const state = {
     canSeek: true,
     downloadProgress: null as number | null,
     audioError: null as string | null,
+    qualityBadge: null as null | {
+        variant: "tidal" | "youtube" | "local";
+        label: string;
+    },
 };
 
 mock.module("@/lib/audio-volume-mode-context", {
@@ -209,8 +213,33 @@ mock.module("@/hooks/useMediaInfo", {
 mock.module("@/hooks/useStreamBitrate", {
     namedExports: {
         useStreamBitrate: () => ({
-            qualityBadge: null,
+            qualityBadge: state.qualityBadge,
         }),
+    },
+});
+
+mock.module("@/components/player/PlaybackQualityBadgeWithStats", {
+    namedExports: {
+        PlaybackQualityBadgeWithStats: ({
+            badge,
+        }: {
+            badge: { label: string };
+        }) => React.createElement("span", null, badge.label),
+    },
+});
+
+mock.module("@/components/ui/TrackOverflowMenu", {
+    namedExports: {
+        TrackOverflowMenu: ({
+            extraItemsAfter,
+        }: {
+            extraItemsAfter?: React.ReactNode;
+        }) =>
+            React.createElement(
+                "div",
+                { "data-testid": "track-overflow" },
+                extraItemsAfter,
+            ),
     },
 });
 
@@ -268,6 +297,31 @@ beforeEach(() => {
     state.canSeek = true;
     state.downloadProgress = null;
     state.audioError = null;
+    state.qualityBadge = null;
+});
+
+test("FullPlayer presents an 80px identity, transport and actions dock", async () => {
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /data-player-surface="desktop"/);
+    assert.match(html, /data-player-layout="identity-transport-actions"/);
+    assert.match(html, /desktop-player-surface relative h-20/);
+    assert.match(html, /data-player-region="identity"/);
+    assert.match(html, /data-player-region="transport"/);
+    assert.match(html, /data-player-region="actions"/);
+});
+
+test("FullPlayer keeps stream diagnostics inside track overflow", async () => {
+    state.qualityBadge = { variant: "youtube", label: "OPUS · 150 kbps" };
+
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /data-player-diagnostics="overflow"/);
+    assert.match(html, /data-testid="track-overflow"/);
+    assert.match(html, /OPUS · 150 kbps/);
+    assert.doesNotMatch(html, /data-player-diagnostics="surface"/);
 });
 
 test("FullPlayer shows retry affordance when audioError is present", async () => {
