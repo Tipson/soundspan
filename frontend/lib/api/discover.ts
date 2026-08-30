@@ -191,6 +191,10 @@ export function WithDiscover<TBase extends ApiClientConstructor>(Base: TBase) {
                     canonical: string;
                     mbid?: string;
                 } | null;
+                pageInfo?: {
+                    requestedLimit: number;
+                    canRequestMoreTracks: boolean;
+                };
             }>(
                 `/search/discover?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}`,
                 {

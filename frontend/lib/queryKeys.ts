@@ -19,6 +19,7 @@ export const queryKeys = {
     artistDiscovery: (id: string) => ["artist", "discovery", id] as const,
     ytMusicArtist: (channelId: string) =>
         ["artist", "ytmusic", channelId] as const,
+    ytMusicAlbum: (browseId: string) => ["album", "ytmusic", browseId] as const,
 
     // Album queries
     album: (id: string) => ["album", id] as const,
@@ -74,6 +75,8 @@ export const queryKeys = {
     // Search
     search: (query: string, type?: string, limit?: number, source?: string) =>
         ["search", query, type, limit, source] as const,
+    searchTracks: (query: string, source?: string) =>
+        ["search", "tracks", query, source] as const,
     discoverSearch: (query: string, type?: string, limit?: number) =>
         ["search", "discover", query, type, limit] as const,
     discoverSimilar: (artist: string, mbid: string, limit: number) =>

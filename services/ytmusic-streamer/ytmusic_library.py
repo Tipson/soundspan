@@ -434,6 +434,55 @@ async def get_public_album_metadata(browse_id: str) -> JsonObject:
     return _format_album_response(resolved_browse_id, album)
 
 
+def _get_artist_with_complete_releases(yt: YTMusic, channel_id: str) -> JsonObject:
+    """Expand every provider album and single continuation for one artist."""
+    artist = cast(JsonObject, yt.get_artist(channel_id))
+    for group_name in ("albums", "singles"):
+        raw_group = artist.get(group_name)
+        if not isinstance(raw_group, dict):
+            continue
+        group = cast(JsonObject, raw_group)
+        preview = [
+            cast(JsonObject, release)
+            for release in group.get("results", [])
+            if isinstance(release, dict)
+        ]
+        browse_id = group.get("browseId")
+        params = group.get("params")
+        expanded = preview
+        if isinstance(browse_id, str) and isinstance(params, str) and params:
+            try:
+                provider_releases = yt.get_artist_albums(browse_id, params, limit=None)
+                expanded = [
+                    cast(JsonObject, release)
+                    for release in provider_releases
+                    if isinstance(release, dict)
+                ]
+            except Exception as error:
+                # The preview still provides useful releases when a provider
+                # continuation expires or one category becomes unavailable.
+                log.warning(
+                    "Artist %s %s continuation failed; retaining preview: %s",
+                    channel_id,
+                    group_name,
+                    type(error).__name__,
+                )
+
+        seen: set[str] = set()
+        merged: list[JsonObject] = []
+        for release in [*preview, *expanded]:
+            identity = str(
+                release.get("browseId")
+                or f"{release.get('title', '')}\0{release.get('year', '')}"
+            )
+            if not identity or identity in seen:
+                continue
+            seen.add(identity)
+            merged.append(release)
+        group["results"] = merged
+    return artist
+
+
 @app.get("/album/{browse_id}")
 async def get_album(browse_id: str, user_id: str = Query(...)) -> JsonObject:
     """Get album details and track listing from YouTube Music.
@@ -467,14 +516,14 @@ async def get_artist(channel_id: str, user_id: str = Query(...)) -> JsonObject:
             artist = await _browse_public_bounded(
                 _run_public_ytmusic,
                 "native",
-                lambda yt: yt.get_artist(channel_id),
+                lambda yt: _get_artist_with_complete_releases(yt, channel_id),
             )
         else:
             artist = await asyncio.to_thread(
                 _run_ytmusic_with_auth_retry,
                 user_id,
                 operation=f"get_artist({channel_id})",
-                func=lambda yt: yt.get_artist(channel_id),
+                func=lambda yt: _get_artist_with_complete_releases(yt, channel_id),
             )
 
         songs = []
@@ -491,16 +540,17 @@ async def get_artist(channel_id: str, user_id: str = Query(...)) -> JsonObject:
             )
 
         albums = []
-        for a in (artist.get("albums", {}).get("results", []))[:20]:
-            albums.append(
-                {
-                    "browseId": a.get("browseId"),
-                    "title": a.get("title"),
-                    "year": a.get("year"),
-                    "type": a.get("type", "Album"),
-                    "thumbnails": a.get("thumbnails", []),
-                }
-            )
+        for release_group, fallback_type in (("albums", "Album"), ("singles", "Single")):
+            for a in artist.get(release_group, {}).get("results", []):
+                albums.append(
+                    {
+                        "browseId": a.get("browseId"),
+                        "title": a.get("title"),
+                        "year": a.get("year"),
+                        "type": a.get("type") or fallback_type,
+                        "thumbnails": a.get("thumbnails", []),
+                    }
+                )
 
         thumbnails = artist.get("thumbnails", [])
         return {

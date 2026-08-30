@@ -11,6 +11,8 @@ const state = {
     libraryArtists: [] as unknown[],
     discoverResults: [] as unknown[],
     isDiscoverSearching: false,
+    canRequestMoreDiscoverTracks: false,
+    hasNextLibraryTracks: false,
 };
 
 const calls = {
@@ -108,6 +110,11 @@ mock.module("@/features/search/hooks/useSearchData", {
                 isLibrarySearching: false,
                 isDiscoverSearching: state.isDiscoverSearching,
                 hasSearched: true,
+                canRequestMoreDiscoverTracks:
+                    state.canRequestMoreDiscoverTracks,
+                hasNextLibraryTracks: state.hasNextLibraryTracks,
+                isFetchingNextLibraryTracks: false,
+                fetchNextLibraryTracks: async () => undefined,
             };
         },
     },
@@ -265,6 +272,8 @@ beforeEach(() => {
         ...Array.from({ length: 4 }, (_, index) => providerAlbum(index)),
     ];
     state.isDiscoverSearching = false;
+    state.canRequestMoreDiscoverTracks = false;
+    state.hasNextLibraryTracks = false;
     calls.searchData.length = 0;
     calls.topResult.length = 0;
     calls.libraryTrackLimits.length = 0;
@@ -348,7 +357,7 @@ test("All keeps the canonical artist and five popular tracks visible without a S
     assert.equal(calls.searchData[0]?.libraryLimit, 20);
 });
 
-test("Tracks requests and renders at most fifty tracks without artist hero", async () => {
+test("Tracks renders the complete loaded prefix and offers honest continuation", async () => {
     state.view = "tracks";
     state.libraryTracks = Array.from({ length: 40 }, (_, index) =>
         localTrack(index),
@@ -356,6 +365,8 @@ test("Tracks requests and renders at most fifty tracks without artist hero", asy
     state.discoverResults = Array.from({ length: 30 }, (_, index) =>
         discoverTrack(index),
     );
+    state.canRequestMoreDiscoverTracks = true;
+    state.hasNextLibraryTracks = true;
     const SearchPage = (await import("../../app/search/page")).default;
     const html = renderToStaticMarkup(React.createElement(SearchPage));
 
@@ -363,7 +374,9 @@ test("Tracks requests and renders at most fifty tracks without artist hero", asy
     assert.equal(calls.searchData[0]?.libraryLimit, 50);
     assert.equal(calls.searchData[0]?.discoverLimit, 50);
     assert.deepEqual(calls.libraryTrackLimits, [40]);
-    assert.deepEqual(calls.discoverTrackLimits, [10]);
+    assert.deepEqual(calls.discoverTrackLimits, [30]);
+    assert.match(html, /Load more tracks \(70 loaded\)/);
+    assert.doesNotMatch(html, /Up to 50 playable matches/);
     assert.doesNotMatch(
         html,
         /top-result|Show all|library-albums|search-artists/,

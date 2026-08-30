@@ -66,6 +66,9 @@ const artistState = {
     ] as Array<Record<string, unknown>>,
     providerAlbums: [] as Array<Record<string, unknown>>,
     artistProvider: null as "ytmusic" | null,
+    providerCatalogTracks: [] as Array<Record<string, unknown>>,
+    providerCatalogLoading: false,
+    providerCatalogHasNextPage: false,
     tidalTopTracks: {
         enrichedTopTracks: null as unknown[] | null,
         isMatching: false,
@@ -76,6 +79,10 @@ const artistState = {
         isMatching: false,
         isStatusResolved: true,
     },
+};
+
+const navigationState = {
+    artistView: null as string | null,
 };
 
 const discoverState = {
@@ -147,7 +154,12 @@ mock.module("next/navigation", {
             back: () => undefined,
         }),
         usePathname: () => "/artist/artist-1",
-        useSearchParams: () => new URLSearchParams(),
+        useSearchParams: () =>
+            new URLSearchParams(
+                navigationState.artistView
+                    ? `view=${navigationState.artistView}`
+                    : "",
+            ),
     },
 });
 
@@ -410,6 +422,21 @@ mock.module("@/features/artist/hooks/useArtistTracks", {
     },
 });
 
+mock.module("@/features/artist/hooks/useProviderArtistTracks", {
+    namedExports: {
+        useProviderArtistTracks: () => ({
+            tracks: artistState.providerCatalogTracks,
+            isLoading: artistState.providerCatalogLoading,
+            failedReleaseCount: 0,
+            loadedReleaseCount: artistState.providerAlbums.length,
+            totalReleaseCount: artistState.providerAlbums.length,
+            hasNextPage: artistState.providerCatalogHasNextPage,
+            isFetchingNextPage: false,
+            fetchNextPage: () => undefined,
+        }),
+    },
+});
+
 mock.module("@/features/artist/hooks/useArtistActions", {
     namedExports: {
         useArtistActions: () => ({
@@ -649,6 +676,10 @@ beforeEach(() => {
     ];
     artistState.providerAlbums = [];
     artistState.artistProvider = null;
+    artistState.providerCatalogTracks = [];
+    artistState.providerCatalogLoading = false;
+    artistState.providerCatalogHasNextPage = false;
+    navigationState.artistView = null;
     artistState.tidalTopTracks = {
         enrichedTopTracks: null,
         isMatching: false,
@@ -1027,6 +1058,55 @@ test("YouTube Music artist route exposes playable tracks and provider albums", a
     (capture.artistActionBar?.onPlayAll as () => void)();
     assert.equal(capture.playedTracks?.[0]?.youtubeVideoId, "teardrop");
     assert.equal(capture.playedTracks?.[0]?.streamSource, "youtube");
+});
+
+test("YouTube Music Tracks view waits for release aggregation instead of showing a false empty state", async () => {
+    navigationState.artistView = "tracks";
+    artistState.source = "discovery";
+    artistState.artistProvider = "ytmusic";
+    artistState.artist = {
+        id: "ytartist:UClinkinpark",
+        name: "Linkin Park",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.providerAlbums = Array.from({ length: 16 }, (_, index) => ({
+        type: "album",
+        id: `MPREb_${index}`,
+        browseId: `MPREb_${index}`,
+        name: `Release ${index}`,
+        artist: "Linkin Park",
+        provider: "ytmusic",
+    }));
+    artistState.providerCatalogLoading = true;
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const loadingHtml = renderToStaticMarkup(React.createElement(ArtistPage));
+    assert.match(loadingHtml, /Popular/);
+    assert.doesNotMatch(loadingHtml, /No tracks available/);
+
+    artistState.providerCatalogLoading = false;
+    artistState.providerCatalogHasNextPage = true;
+    const partialHtml = renderToStaticMarkup(React.createElement(ArtistPage));
+    assert.match(partialHtml, /Load more tracks/);
+    assert.doesNotMatch(partialHtml, /No tracks available/);
+
+    artistState.providerCatalogHasNextPage = false;
+    artistState.providerCatalogLoading = false;
+    artistState.providerCatalogTracks = [
+        {
+            id: "yt:from-zero",
+            title: "From Zero",
+            duration: 200,
+            streamSource: "youtube",
+            youtubeVideoId: "from-zero",
+            artist: { name: "Linkin Park" },
+            album: { title: "From Zero" },
+        },
+    ];
+    const loadedHtml = renderToStaticMarkup(React.createElement(ArtistPage));
+    assert.match(loadedHtml, /popular-tracks/);
+    assert.doesNotMatch(loadedHtml, /No tracks available/);
 });
 
 test("discover route shows spinner while loading", async () => {

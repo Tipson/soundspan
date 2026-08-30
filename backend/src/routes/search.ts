@@ -872,8 +872,8 @@ router.get("/genres", async (req, res) => {
  *         schema:
  *           type: integer
  *           default: 20
- *           maximum: 50
- *         description: Maximum number of results
+ *           maximum: 500
+ *         description: Maximum requested provider prefix; filtered YouTube Music search follows upstream continuations up to this bound
  *     responses:
  *       200:
  *         description: Discovery search results with optional alias info
@@ -907,7 +907,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         const parsedLimit = parseInt(limit as string, 10);
         const searchLimit = Number.isNaN(parsedLimit)
             ? 20
-            : Math.min(Math.max(parsedLimit, 1), 50);
+            : Math.min(Math.max(parsedLimit, 1), 500);
 
         if (!query) {
             return res.json({ results: [], aliasInfo: null });
@@ -936,7 +936,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         }
 
         // Cache TTL: 15 min (900s) -- external API data rarely changes
-        const cacheKey = `search:discover:v7:yt${ytMusicEnabled ? "1" : "0"}:lf${lastFmEnabled ? "1" : "0"}:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
+        const cacheKey = `search:discover:v8:yt${ytMusicEnabled ? "1" : "0"}:lf${lastFmEnabled ? "1" : "0"}:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
@@ -991,7 +991,10 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         if (type === "music" || type === "all") {
             if (lastFmEnabled) {
                 promiseMap.artists = withDiscoveryDeadline(
-                    lastFmService.searchArtists(searchQuery, searchLimit),
+                    lastFmService.searchArtists(
+                        searchQuery,
+                        Math.min(searchLimit, 50),
+                    ),
                     DISCOVERY_SOURCE_DEADLINE_MS,
                     "Last.fm artist search",
                 );
@@ -1105,7 +1108,28 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
             results.push(...resolved.podcasts);
         }
 
-        const payload = { results, aliasInfo };
+        // ytmusicapi's filtered search follows provider continuations until
+        // the requested limit. A full prefix is the only honest signal that a
+        // larger prefix may exist; a short prefix means the provider exhausted
+        // what it can expose. Omit pagination metadata when there is no next
+        // request so older cached payloads remain compatible.
+        const canRequestMoreTracks =
+            (type === "music" || type === "all") &&
+            searchLimit < 500 &&
+            (ytMusicTracks.length >= searchLimit ||
+                (resolved.tracks?.length ?? 0) >= searchLimit);
+        const payload = {
+            results,
+            aliasInfo,
+            ...(canRequestMoreTracks
+                ? {
+                      pageInfo: {
+                          requestedLimit: searchLimit,
+                          canRequestMoreTracks: true,
+                      },
+                  }
+                : {}),
+        };
 
         // A partial response is useful for this request, but caching it would
         // hide the missing catalog source for the full 15-minute TTL.

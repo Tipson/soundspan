@@ -597,12 +597,12 @@ describe("search route runtime behavior", () => {
         await discoverHandler(req, res);
 
         expect(mockSearchArtists).toHaveBeenCalledWith("Radiohead", 50);
-        expect(mockSearchTracks).toHaveBeenCalledWith("Radiohead", 50);
+        expect(mockSearchTracks).toHaveBeenCalledWith("Radiohead", 60);
         expect(mockYtMusicSearch).toHaveBeenCalledWith(
             "__public__",
             "Radiohead",
             "songs",
-            50,
+            60,
             { timeoutMs: 8_000, maxRetries: 0 },
         );
         expect(mockAxiosGet).toHaveBeenCalledWith(
@@ -612,7 +612,7 @@ describe("search route runtime behavior", () => {
                     term: "rh",
                     media: "podcast",
                     entity: "podcast",
-                    limit: 50,
+                    limit: 60,
                 },
                 timeout: 5000,
             }),
@@ -636,7 +636,7 @@ describe("search route runtime behavior", () => {
             ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "search:discover:v7:yt1:lf1:all:rh:50",
+            "search:discover:v8:yt1:lf1:all:rh:60",
             900,
             expect.any(String),
         );
@@ -844,7 +844,7 @@ describe("search route runtime behavior", () => {
             ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "search:discover:v7:yt1:lf0:music:linkin park:20",
+            "search:discover:v8:yt1:lf0:music:linkin park:20",
             900,
             expect.any(String),
         );
@@ -1233,6 +1233,50 @@ describe("search route runtime behavior", () => {
         ).toEqual(["Numb", "LINKIN PARK: Full Album"]);
     });
 
+    it("requests a provider continuation prefix beyond fifty and advertises only a proven next step", async () => {
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "linkin park",
+            filter: "songs",
+            total: 100,
+            results: Array.from({ length: 100 }, (_, index) => ({
+                source: "youtube",
+                provider: "ytmusic",
+                providerTrackId: `video-${index}`,
+                title: `Track ${index}`,
+                artistName: "Linkin Park",
+                albumTitle: null,
+                durationSec: 180,
+                thumbnailUrl: null,
+                raw: {},
+            })),
+        });
+
+        const res = createRes();
+        await discoverHandler(
+            {
+                query: { q: "linkin park", type: "music", limit: "100" },
+            } as any,
+            res,
+        );
+
+        expect(mockYtMusicSearch).toHaveBeenCalledWith(
+            "__public__",
+            "linkin park",
+            "songs",
+            100,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(
+            res.body.results.filter(
+                (result: { type: string }) => result.type === "track",
+            ),
+        ).toHaveLength(100);
+        expect(res.body.pageInfo).toEqual({
+            requestedLimit: 100,
+            canRequestMoreTracks: true,
+        });
+    });
+
     it("does not query YouTube Music when the integration is disabled", async () => {
         mockGetSystemSettings.mockResolvedValueOnce({
             ytMusicEnabled: false,
@@ -1265,7 +1309,7 @@ describe("search route runtime behavior", () => {
         expect(res.statusCode).toBe(200);
         expect(mockYtMusicSearch).not.toHaveBeenCalled();
         expect(mockRedisGet).toHaveBeenCalledWith(
-            "search:discover:v7:yt0:lf0:music:radiohead:5",
+            "search:discover:v8:yt0:lf0:music:radiohead:5",
         );
         expect(res.body.results).toEqual([]);
     });

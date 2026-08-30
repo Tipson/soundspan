@@ -6,6 +6,7 @@ import {
 import type { SearchResult, DiscoverResult, AliasInfo } from "../types";
 import { deriveDiscoverySelection } from "../discoverySelection";
 import { useMemo } from "react";
+import { useLibraryTrackSearch } from "./useLibraryTrackSearch";
 
 interface UseSearchDataProps {
     query: string;
@@ -31,6 +32,10 @@ interface UseSearchDataReturn {
     isLibrarySearching: boolean;
     isDiscoverSearching: boolean;
     hasSearched: boolean;
+    canRequestMoreDiscoverTracks: boolean;
+    hasNextLibraryTracks: boolean;
+    isFetchingNextLibraryTracks: boolean;
+    fetchNextLibraryTracks: () => Promise<unknown>;
 }
 
 /**
@@ -49,7 +54,18 @@ export function useSearchData({
         data: libraryResults,
         isLoading: isLibrarySearching,
         isFetching: isLibraryFetching,
-    } = useSearchQuery(query, libraryType, libraryLimit, source);
+    } = useSearchQuery(
+        query,
+        libraryType,
+        libraryLimit,
+        source,
+        libraryType !== "tracks",
+    );
+    const libraryTrackSearch = useLibraryTrackSearch(
+        query,
+        source,
+        libraryType === "tracks",
+    );
 
     const {
         data: discoverData,
@@ -64,6 +80,12 @@ export function useSearchData({
     const aliasInfo = useMemo(() => {
         return discoverData?.aliasInfo || null;
     }, [discoverData]);
+    const effectiveLibraryResults = useMemo<SearchResult | undefined>(() => {
+        if (libraryType !== "tracks") {
+            return libraryResults as SearchResult | undefined;
+        }
+        return { tracks: libraryTrackSearch.tracks };
+    }, [libraryResults, libraryTrackSearch.tracks, libraryType]);
 
     // Derive top artist for the similar artists query, using the same
     // exact-match-aware selection the search page shows as the top result.
@@ -93,12 +115,21 @@ export function useSearchData({
     const hasSearched = query.trim().length >= 2;
 
     return {
-        libraryResults: libraryResults || null,
+        libraryResults: effectiveLibraryResults || null,
         discoverResults,
         similarArtists,
         aliasInfo,
-        isLibrarySearching: isLibrarySearching || isLibraryFetching,
+        isLibrarySearching:
+            libraryType === "tracks"
+                ? libraryTrackSearch.isLoading
+                : isLibrarySearching || isLibraryFetching,
         isDiscoverSearching: isDiscoverSearching || isDiscoverFetching,
         hasSearched,
+        canRequestMoreDiscoverTracks: Boolean(
+            discoverData?.pageInfo?.canRequestMoreTracks,
+        ),
+        hasNextLibraryTracks: Boolean(libraryTrackSearch.hasNextPage),
+        isFetchingNextLibraryTracks: libraryTrackSearch.isFetchingNextPage,
+        fetchNextLibraryTracks: libraryTrackSearch.fetchNextPage,
     };
 }

@@ -58,7 +58,13 @@ export async function searchYtMusicDiscoveryCatalog(
     ];
     const batchResult = await transport.searchBatch(
         userId,
-        filters.map((filter) => ({ query, filter, limit })),
+        filters.map((filter) => ({
+            query,
+            filter,
+            // Progressive search is a track concern. Do not turn a request
+            // for the next songs prefix into hundreds of album/artist rows.
+            limit: filter === "songs" ? limit : Math.min(limit, 50),
+        })),
         options,
     );
     const rows = Array.isArray(batchResult) ? batchResult : [];

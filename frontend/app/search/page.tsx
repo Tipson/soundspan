@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SearchIcon } from "lucide-react";
 import { useSearchData } from "@/features/search/hooks/useSearchData";
@@ -59,6 +60,12 @@ export default function SearchPage() {
     const isTracksView = sectionView === "tracks";
     const isAlbumsView = sectionView === "albums";
     const isArtistsView = sectionView === "artists";
+    const [trackPagination, setTrackPagination] = useState({
+        query,
+        limit: 50,
+    });
+    const discoverTrackLimit =
+        trackPagination.query === query ? trackPagination.limit : 50;
     const showTracksView = sectionView === null || isTracksView;
     const searchCatalogPolicy = resolveSearchCatalogPolicy({
         isTracksView,
@@ -74,12 +81,18 @@ export default function SearchPage() {
         isLibrarySearching,
         isDiscoverSearching,
         hasSearched,
+        canRequestMoreDiscoverTracks,
+        hasNextLibraryTracks,
+        isFetchingNextLibraryTracks,
+        fetchNextLibraryTracks,
     } = useSearchData({
         query,
         libraryType: searchCatalogPolicy.libraryType,
         discoverType: searchCatalogPolicy.discoverType,
         libraryLimit: searchCatalogPolicy.libraryLimit,
-        discoverLimit: searchCatalogPolicy.discoverLimit,
+        discoverLimit: isTracksView
+            ? discoverTrackLimit
+            : searchCatalogPolicy.discoverLimit,
         similarArtistsLimit: isArtistsView ? 50 : 6,
         source: "all",
     });
@@ -157,10 +170,15 @@ export default function SearchPage() {
         libraryTracks,
     );
     const mergedAlbums = mergeSearchAlbums(discoverAlbums, libraryAlbums);
-    const trackLimits = allocateSearchResultLimits({
-        primaryCount: libraryTracks.length,
-        totalLimit: searchCatalogPolicy.trackDisplayLimit,
-    });
+    const trackLimits = isTracksView
+        ? {
+              primaryLimit: libraryTracks.length,
+              secondaryLimit: unownedDiscoverTracks.length,
+          }
+        : allocateSearchResultLimits({
+              primaryCount: libraryTracks.length,
+              totalLimit: searchCatalogPolicy.trackDisplayLimit,
+          });
     const albumLimits = allocateSearchResultLimits({
         primaryCount: mergedAlbums.libraryAlbums.length,
         totalLimit: searchCatalogPolicy.albumDisplayLimit,
@@ -244,7 +262,7 @@ export default function SearchPage() {
                         description={
                             sectionView === null
                                 ? "Popular playable matches from every source"
-                                : "Up to 50 playable matches, ranked for this search"
+                                : "Playable matches loaded progressively from your library and the online catalog"
                         }
                         status={trackStatus}
                     />
@@ -263,6 +281,39 @@ export default function SearchPage() {
                                 tracks={unownedDiscoverTracks}
                                 limit={trackLimits.secondaryLimit}
                             />
+                        ) : null}
+                        {isTracksView &&
+                        (hasNextLibraryTracks ||
+                            canRequestMoreDiscoverTracks) ? (
+                            <div className="mt-4 flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (hasNextLibraryTracks) {
+                                            void fetchNextLibraryTracks();
+                                        }
+                                        if (canRequestMoreDiscoverTracks) {
+                                            setTrackPagination((current) => ({
+                                                query,
+                                                limit:
+                                                    current.query === query
+                                                        ? current.limit + 50
+                                                        : 100,
+                                            }));
+                                        }
+                                    }}
+                                    disabled={
+                                        isFetchingNextLibraryTracks ||
+                                        isDiscoverSearching
+                                    }
+                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
+                                >
+                                    {isFetchingNextLibraryTracks ||
+                                    isDiscoverSearching
+                                        ? "Loading more tracks…"
+                                        : `Load more tracks (${libraryTracks.length + unownedDiscoverTracks.length} loaded)`}
+                                </button>
+                            </div>
                         ) : null}
                     </>
                 ) : primarySongsSurface === "soulseek" ? (

@@ -115,6 +115,7 @@ export interface DiscoverResult {
     browseId?: string;
     year?: string | null;
     provider?: "ytmusic";
+    releaseType?: string | null;
     /** YouTube Music artist route identity; accepted by discovery fallback. */
     youtubeChannelId?: string;
 }
@@ -128,6 +129,10 @@ export interface AliasInfo {
 export interface DiscoverResponse {
     results: DiscoverResult[];
     aliasInfo: AliasInfo | null;
+    pageInfo?: {
+        requestedLimit: number;
+        canRequestMoreTracks: boolean;
+    };
 }
 
 export interface SimilarArtistsResponse {

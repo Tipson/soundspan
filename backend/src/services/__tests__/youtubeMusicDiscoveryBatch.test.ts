@@ -194,6 +194,32 @@ describe("YouTube Music discovery batch", () => {
         );
     });
 
+    it("expands only the songs prefix when loading more track results", async () => {
+        mockClient.post.mockResolvedValueOnce({
+            data: { results: emptyBatchRows() },
+        });
+
+        await searchYtMusicDiscoveryCatalog(
+            ytMusicService,
+            "__public__",
+            "linkin park",
+            100,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+
+        expect(mockClient.post).toHaveBeenCalledWith(
+            "/search/batch",
+            {
+                queries: [
+                    { query: "linkin park", filter: "songs", limit: 100 },
+                    { query: "linkin park", filter: "albums", limit: 50 },
+                    { query: "linkin park", filter: "artists", limit: 50 },
+                ],
+            },
+            expect.any(Object),
+        );
+    });
+
     it("keeps two concurrent discovery calls to two batch requests instead of six singles", async () => {
         const releases: Array<() => void> = [];
         mockClient.post.mockImplementation(

@@ -27,6 +27,7 @@ import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import { useYtMusicTopTracks } from "@/features/artist/hooks/useYtMusicTopTracks";
 import { useTidalTopTracks } from "@/features/artist/hooks/useTidalTopTracks";
 import { useArtistTracks } from "@/features/artist/hooks/useArtistTracks";
+import { useProviderArtistTracks } from "@/features/artist/hooks/useProviderArtistTracks";
 import type { Track, Album } from "@/features/artist/types";
 
 // Components
@@ -150,6 +151,10 @@ export default function ArtistPage() {
         artist?.id,
         libraryArtistTracksEnabled,
     );
+    const providerArtistTracksQuery = useProviderArtistTracks(
+        providerAlbums,
+        activeView === "tracks" && isDirectYtMusicArtist,
+    );
 
     const artistAlbumRequests = useArtistAlbumRequests(artist?.name || "");
     const albumRequestControls = {
@@ -206,13 +211,19 @@ export default function ArtistPage() {
           isTidalMatching ||
           isYtMatching;
     const popularTracks = enrichedTopTracks || artist?.topTracks || [];
-    const visibleArtistTracks = libraryArtistTracksEnabled
-        ? mergeArtistTracks(popularTracks, artistTracksQuery.tracks)
-        : popularTracks;
+    const visibleArtistTracks =
+        isDirectYtMusicArtist && activeView === "tracks"
+            ? mergeArtistTracks(popularTracks, providerArtistTracksQuery.tracks)
+            : libraryArtistTracksEnabled
+              ? mergeArtistTracks(popularTracks, artistTracksQuery.tracks)
+              : popularTracks;
     const isArtistTracksLoading =
-        libraryArtistTracksEnabled &&
-        artistTracksQuery.isLoading &&
-        visibleArtistTracks.length === 0;
+        visibleArtistTracks.length === 0 &&
+        ((libraryArtistTracksEnabled && artistTracksQuery.isLoading) ||
+            (isDirectYtMusicArtist &&
+                activeView === "tracks" &&
+                (providerArtistTracksQuery.isLoading ||
+                    providerArtistTracksQuery.hasNextPage)));
 
     // Separate owned and available albums
     const ownedAlbums = albums.filter((a) => a.owned);
@@ -222,8 +233,12 @@ export default function ArtistPage() {
         availableAlbums,
         activeView,
     );
-    const visibleProviderAlbums =
-        activeView === "singles" ? [] : providerAlbums;
+    const visibleProviderAlbums = providerAlbums.filter((release) => {
+        const isSingle = /(?:single|ep)/i.test(release.releaseType ?? "");
+        if (activeView === "singles") return isSingle;
+        if (activeView === "albums") return !isSingle;
+        return true;
+    });
     const showTracks = activeView === "overview" || activeView === "tracks";
     const showReleases =
         activeView === "overview" ||
@@ -330,7 +345,7 @@ export default function ArtistPage() {
             streamSource: "peer" as const,
         }),
     });
-    const deviceDownloadTracks = (enrichedTopTracks || artist?.topTracks || [])
+    const deviceDownloadTracks = visibleArtistTracks
         .filter(
             (track: Track) =>
                 Boolean(track.filePath) ||
@@ -343,11 +358,7 @@ export default function ArtistPage() {
 
     function handlePlayProviderArtist(shuffle: boolean) {
         if (!artist) return;
-        const playableTracks = (
-            enrichedTopTracks ||
-            artist.topTracks ||
-            []
-        ).filter(
+        const playableTracks = visibleArtistTracks.filter(
             (track: Track) =>
                 track.streamSource === "youtube" && !!track.youtubeVideoId,
         );
@@ -535,9 +546,7 @@ export default function ArtistPage() {
                     }
                     onAddAllToQueue={() =>
                         isDirectYtMusicArtist
-                            ? handleAddAllPopularToQueue(
-                                  enrichedTopTracks || artist.topTracks || [],
-                              )
+                            ? handleAddAllPopularToQueue(visibleArtistTracks)
                             : addAllToQueue(artist, albums)
                     }
                     onShuffle={() =>
@@ -654,6 +663,27 @@ export default function ArtistPage() {
                             </div>
                         )}
 
+                    {activeView === "tracks" &&
+                        isDirectYtMusicArtist &&
+                        providerArtistTracksQuery.hasNextPage && (
+                            <div className="-mt-7 flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        providerArtistTracksQuery.fetchNextPage()
+                                    }
+                                    disabled={
+                                        providerArtistTracksQuery.isFetchingNextPage
+                                    }
+                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
+                                >
+                                    {providerArtistTracksQuery.isFetchingNextPage
+                                        ? "Loading tracks…"
+                                        : `Load more tracks (${providerArtistTracksQuery.loadedReleaseCount} of ${providerArtistTracksQuery.totalReleaseCount} releases scanned)`}
+                                </button>
+                            </div>
+                        )}
+
                     {showReleases &&
                         (activeView === "albums" || activeView === "singles") &&
                         !detailsLoading &&
@@ -692,7 +722,11 @@ export default function ArtistPage() {
 
                     {showReleases && visibleProviderAlbums.length > 0 && (
                         <section>
-                            <h2 className="mb-4 text-xl font-bold">Albums</h2>
+                            <h2 className="mb-4 text-xl font-bold">
+                                {activeView === "singles"
+                                    ? "Singles and EPs"
+                                    : "Albums"}
+                            </h2>
                             <ProviderAlbumsGrid
                                 albums={visibleProviderAlbums}
                                 limit={null}

@@ -137,6 +137,7 @@ export const normalizeYtMusicArtist = (
                     image: bestThumbnailUrl(album.thumbnails) ?? undefined,
                     year,
                     provider: "ytmusic" as const,
+                    releaseType: nonEmptyString(album.type),
                 },
             ];
         },
