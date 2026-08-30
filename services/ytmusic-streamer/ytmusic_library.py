@@ -436,7 +436,7 @@ async def get_public_album_metadata(browse_id: str) -> JsonObject:
 
 def _get_artist_with_complete_releases(yt: YTMusic, channel_id: str) -> JsonObject:
     """Expand every provider album and single continuation for one artist."""
-    artist = cast(JsonObject, yt.get_artist(channel_id))
+    artist = yt.get_artist(channel_id)
     for group_name in ("albums", "singles"):
         raw_group = artist.get(group_name)
         if not isinstance(raw_group, dict):
@@ -453,11 +453,7 @@ def _get_artist_with_complete_releases(yt: YTMusic, channel_id: str) -> JsonObje
         if isinstance(browse_id, str) and isinstance(params, str) and params:
             try:
                 provider_releases = yt.get_artist_albums(browse_id, params, limit=None)
-                expanded = [
-                    cast(JsonObject, release)
-                    for release in provider_releases
-                    if isinstance(release, dict)
-                ]
+                expanded = [release for release in provider_releases if isinstance(release, dict)]
             except Exception as error:
                 # The preview still provides useful releases when a provider
                 # continuation expires or one category becomes unavailable.
@@ -472,8 +468,7 @@ def _get_artist_with_complete_releases(yt: YTMusic, channel_id: str) -> JsonObje
         merged: list[JsonObject] = []
         for release in [*preview, *expanded]:
             identity = str(
-                release.get("browseId")
-                or f"{release.get('title', '')}\0{release.get('year', '')}"
+                release.get("browseId") or f"{release.get('title', '')}\0{release.get('year', '')}"
             )
             if not identity or identity in seen:
                 continue

@@ -23,9 +23,7 @@ async def test_artist_merges_all_album_and_single_release_pages(
                 "albums": {
                     "browseId": channel_id,
                     "params": "album-params",
-                    "results": [
-                        {"browseId": "album-preview", "title": "Album preview"}
-                    ],
+                    "results": [{"browseId": "album-preview", "title": "Album preview"}],
                 },
                 "singles": {
                     "browseId": channel_id,
