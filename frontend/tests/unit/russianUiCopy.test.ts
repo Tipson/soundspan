@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { pluralRu, ru } from "../../lib/i18n/ru";
+import { pluralRu, ru, userFacingError } from "../../lib/i18n/ru";
 
 test("основная навигация и ключевые музыкальные поверхности используют русскую микрокопию", () => {
     assert.deepEqual(
@@ -21,4 +21,22 @@ test("pluralRu выбирает русскую форму числительно
     assert.equal(pluralRu(5, forms), "треков");
     assert.equal(pluralRu(21, forms), "трек");
     assert.equal(pluralRu(11, forms), "треков");
+});
+
+test("userFacingError не показывает английские серверные ошибки", () => {
+    assert.equal(
+        userFacingError(
+            new Error("Interactive session authentication required"),
+            "Не удалось выполнить действие",
+        ),
+        ru.errors.interactiveSessionRequired,
+    );
+    assert.equal(
+        userFacingError(new Error("Unknown backend failure"), "Сбой операции"),
+        "Сбой операции",
+    );
+    assert.equal(
+        userFacingError(new Error("Ошибка уже переведена"), "Сбой операции"),
+        "Ошибка уже переведена",
+    );
 });

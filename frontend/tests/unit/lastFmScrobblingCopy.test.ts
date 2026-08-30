@@ -40,7 +40,7 @@ test("names only the API key when the shared secret is present", () => {
 test("names both values when neither is present", () => {
     assert.equal(
         missingLastFmValues(status({})),
-        "LASTFM_API_KEY and LASTFM_SHARED_SECRET",
+        "LASTFM_API_KEY и LASTFM_SHARED_SECRET",
     );
 });
 
@@ -49,21 +49,21 @@ test("falls back to naming both values when flags claim configured but serverCon
         missingLastFmValues(
             status({ apiKeyConfigured: true, sharedSecretConfigured: true }),
         ),
-        "LASTFM_API_KEY and LASTFM_SHARED_SECRET",
+        "LASTFM_API_KEY и LASTFM_SHARED_SECRET",
     );
 });
 
 test("unconfigured and disconnected asks the admin for the missing value", () => {
     assert.equal(
         lastFmDescription(status({ apiKeyConfigured: true })),
-        "Last.fm scrobbling is unavailable: this server is missing LASTFM_SHARED_SECRET. Ask your server admin to set it.",
+        "Скробблинг Last.fm недоступен: на сервере не заданы LASTFM_SHARED_SECRET. Обратитесь к администратору сервера.",
     );
 });
 
 test("unconfigured but connected warns that scrobbling may fail", () => {
     assert.equal(
         lastFmDescription(status({ connected: true, apiKeyConfigured: true })),
-        "This server is missing LASTFM_SHARED_SECRET; existing scrobbling may fail. You can still disconnect.",
+        "На сервере не заданы LASTFM_SHARED_SECRET; скробблинг может не работать. Сервис всё ещё можно отключить.",
     );
 });
 
@@ -76,6 +76,6 @@ test("configured invites the user to sign in", () => {
                 sharedSecretConfigured: true,
             }),
         ),
-        "Sign in with your Last.fm account to scrobble plays",
+        "Войдите в Last.fm, чтобы сохранять историю прослушиваний",
     );
 });

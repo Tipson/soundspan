@@ -676,8 +676,31 @@ export const ru = {
         critical: "Произошла критическая ошибка",
         reload: "Перезагрузить приложение",
         unexpected: "Произошла непредвиденная ошибка",
+        interactiveSessionRequired:
+            "Для этого действия снова войдите в аккаунт в текущей сессии.",
+        lastSignInMethod: "Нельзя отвязать последний доступный способ входа.",
     },
 } as const;
+
+const KNOWN_USER_ERROR_COPY: Readonly<Record<string, string>> = {
+    "Interactive session authentication required":
+        ru.errors.interactiveSessionRequired,
+    "Cannot unlink the last sign-in method": ru.errors.lastSignInMethod,
+};
+
+/** Keeps known server errors useful without leaking untranslated copy into UI. */
+export function userFacingError(error: unknown, fallback: string): string {
+    const message =
+        typeof error === "string"
+            ? error
+            : error instanceof Error
+              ? error.message
+              : "";
+    if (!message) return fallback;
+    const known = KNOWN_USER_ERROR_COPY[message];
+    if (known) return known;
+    return /[А-Яа-яЁё]/.test(message) ? message : fallback;
+}
 
 /** Returns the correct Russian noun form for an integer count. */
 export function pluralRu(

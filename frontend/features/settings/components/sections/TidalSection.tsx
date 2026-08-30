@@ -32,12 +32,12 @@ interface TidalCardProps {
 }
 
 const QUALITY_OPTIONS = [
-    { value: "LOW", label: "Low (AAC 96 kbps)" },
-    { value: "HIGH", label: "High (AAC 320 kbps)" },
-    { value: "LOSSLESS", label: "Lossless (FLAC 16-bit / 44.1 kHz)" },
+    { value: "LOW", label: "Низкое (AAC 96 кбит/с)" },
+    { value: "HIGH", label: "Высокое (AAC 320 кбит/с)" },
+    { value: "LOSSLESS", label: "Без потерь (FLAC 16 бит / 44,1 кГц)" },
     {
         value: "HI_RES_LOSSLESS",
-        label: "Max / Hi-Res (FLAC up to 24-bit / 192 kHz)",
+        label: "Максимальное / Hi-Res (FLAC до 24 бит / 192 кГц)",
     },
 ];
 
@@ -56,8 +56,8 @@ export function TidalCard({
         runTest,
         reset,
     } = useConnectionTest({
-        loadingMessage: "Checking TIDAL...",
-        successMessage: "Connected to TIDAL",
+        loadingMessage: "Проверяем TIDAL…",
+        successMessage: "TIDAL подключён",
     });
 
     const [authMessage, setAuthMessage] = useState("");
@@ -91,7 +91,7 @@ export function TidalCard({
     const handleAuthSuccess = useCallback(() => {
         const result = authResultRef.current;
         if (!result) return;
-        setAuthMessage(`Authenticated as ${result.username || result.user_id}`);
+        setAuthMessage(`Выполнен вход: ${result.username || result.user_id}`);
         onUpdate({
             tidalEnabled: true,
             tidalConnected: true,
@@ -109,7 +109,7 @@ export function TidalCard({
         initiate: initiateAuth,
         poll: pollAuth,
         onSessionStarted: (session) => {
-            setAuthMessage("Waiting for you to approve...");
+            setAuthMessage("Ожидаем подтверждения…");
             window.open(
                 session.verificationUri,
                 "_blank",
@@ -117,12 +117,12 @@ export function TidalCard({
             );
         },
         onSuccess: handleAuthSuccess,
-        expiredMessage: "Device code expired. Please try again.",
-        startErrorMessage: "Failed to start device auth",
+        expiredMessage: "Код устройства истёк. Попробуйте ещё раз.",
+        startErrorMessage: "Не удалось начать вход с устройства",
     });
     const authUrl = authSession?.verificationUri || "";
     const handleAuthenticate = useCallback(async () => {
-        setAuthMessage("Requesting device code...");
+        setAuthMessage("Получаем код устройства…");
         await startAuthentication();
     }, [startAuthentication]);
 
@@ -132,9 +132,9 @@ export function TidalCard({
 
     const statusText = settings.tidalEnabled
         ? isAuthenticated
-            ? `Enabled (User: ${settings.tidalUserId})`
-            : "Enabled — not authenticated"
-        : "Disabled";
+            ? `Включено (пользователь: ${settings.tidalUserId})`
+            : "Включено — вход не выполнен"
+        : "Выключено";
 
     const statusColor: "green" | "gray" =
         settings.tidalEnabled && isAuthenticated ? "green" : "gray";
@@ -143,10 +143,10 @@ export function TidalCard({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200/80">
-                Not affiliated with or endorsed by TIDAL. Intended for personal
-                use with your own subscription. You are responsible for
-                complying with TIDAL&apos;s Terms of Service and applicable
-                copyright laws.
+                Интеграция не связана с TIDAL и не одобрена им. Она
+                предназначена для личного использования с вашей подпиской. Вы
+                отвечаете за соблюдение условий TIDAL и применимых законов об
+                авторском праве.
             </p>
         </div>
     );
@@ -171,17 +171,18 @@ export function TidalCard({
             <div className="space-y-1">
                 {/* Authentication */}
                 <SettingsRow
-                    label="TIDAL Account"
+                    label="Аккаунт TIDAL"
                     description={
                         isAuthenticated ? (
                             <span className="flex items-center gap-1.5 text-green-400">
                                 <CheckCircle className="w-3 h-3" />
-                                Logged in (User: {settings.tidalUserId})
+                                Выполнен вход (пользователь:{" "}
+                                {settings.tidalUserId})
                             </span>
                         ) : (
                             <span className="flex items-center gap-1.5">
-                                Authenticate with your TIDAL account via device
-                                code
+                                Войдите в аккаунт TIDAL с помощью кода
+                                устройства
                                 <a
                                     href="https://tidal.com"
                                     target="_blank"
@@ -208,25 +209,25 @@ export function TidalCard({
                             {authState === "loading" && (
                                 <span className="inline-flex items-center gap-2">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    Starting...
+                                    Запуск…
                                 </span>
                             )}
                             {authState === "polling" && (
                                 <span className="inline-flex items-center gap-2">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    Waiting for approval...
+                                    Ожидание подтверждения…
                                 </span>
                             )}
                             {authState !== "loading" &&
                                 authState !== "polling" &&
                                 (isAuthenticated
-                                    ? "Re-authenticate"
-                                    : "Authenticate with TIDAL")}
+                                    ? "Войти заново"
+                                    : "Войти через TIDAL")}
                         </button>
 
                         {authState === "polling" && authUrl && (
                             <p className="text-xs text-white/60">
-                                If the browser didn&apos;t open, visit:{" "}
+                                Если страница не открылась, перейдите по ссылке:{" "}
                                 <a
                                     href={authUrl}
                                     target="_blank"
@@ -255,8 +256,8 @@ export function TidalCard({
 
                 {/* Quality */}
                 <SettingsRow
-                    label="Download Quality"
-                    description="Audio quality for TIDAL downloads (requires matching TIDAL subscription)"
+                    label="Качество скачивания"
+                    description="Качество звука при скачивании из TIDAL (нужен соответствующий тариф)"
                 >
                     <SettingsSelect
                         value={settings.tidalQuality || "HIGH"}
@@ -272,8 +273,8 @@ export function TidalCard({
 
                 {/* Country code */}
                 <SettingsRow
-                    label="Country Code"
-                    description="Your TIDAL account region (auto-detected on login)"
+                    label="Код страны"
+                    description="Регион аккаунта TIDAL (определяется автоматически при входе)"
                 >
                     <SettingsInput
                         value={settings.tidalCountryCode || "US"}
@@ -285,93 +286,101 @@ export function TidalCard({
 
                 {/* File template */}
                 <SettingsRow
-                    label="File Naming Template"
+                    label="Шаблон имён файлов"
                     description={
                         <div className="space-y-2">
                             <span>
-                                How downloaded files are organized. Use{" "}
+                                Как будут организованы скачанные файлы.
+                                Используйте{" "}
                                 <code className="text-xs text-white/60">/</code>{" "}
-                                to create folders.
+                                для создания папок.
                             </span>
                             <details className="text-xs">
                                 <summary className="cursor-pointer text-brand hover:underline select-none">
-                                    Show available variables
+                                    Показать доступные переменные
                                 </summary>
                                 <div className="mt-2 space-y-2 text-white/60">
                                     <div>
                                         <p className="text-white/80 font-medium mb-1">
-                                            Track / Item
+                                            Трек / элемент
                                         </p>
                                         <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
                                             <code>{"{item.number}"}</code>
                                             <span>
-                                                Track number (use{" "}
-                                                <code>{":02d"}</code> for
-                                                zero-padded)
+                                                Номер трека (используйте{" "}
+                                                <code>{":02d"}</code> для
+                                                дополнения нулём)
                                             </span>
                                             <code>{"{item.volume}"}</code>
-                                            <span>Disc / volume number</span>
+                                            <span>Номер диска / тома</span>
                                             <code>{"{item.title}"}</code>
-                                            <span>Track title</span>
+                                            <span>Название трека</span>
                                             <code>
                                                 {"{item.title_version}"}
                                             </code>
                                             <span>
-                                                Title + version, e.g. &quot;One
-                                                More Time (Radio Edit)&quot;
+                                                Название и версия, например
+                                                &quot;One More Time (Radio
+                                                Edit)&quot;
                                             </span>
                                             <code>{"{item.artist}"}</code>
-                                            <span>Primary artist</span>
+                                            <span>Основной исполнитель</span>
                                             <code>{"{item.artists}"}</code>
-                                            <span>All main artists</span>
+                                            <span>
+                                                Все основные исполнители
+                                            </span>
                                             <code>{"{item.features}"}</code>
-                                            <span>Featured artists</span>
+                                            <span>
+                                                Приглашённые исполнители
+                                            </span>
                                             <code>{"{item.version}"}</code>
                                             <span>
-                                                Version string (e.g.
+                                                Версия записи (например,
                                                 &quot;Remastered&quot;)
                                             </span>
                                             <code>{"{item.quality}"}</code>
-                                            <span>Audio quality</span>
+                                            <span>Качество звука</span>
                                             <code>{"{item.isrc}"}</code>
-                                            <span>ISRC code</span>
+                                            <span>Код ISRC</span>
                                             <code>{"{item.bpm}"}</code>
-                                            <span>BPM (if available)</span>
+                                            <span>BPM (если доступно)</span>
                                             <code>{"{item.explicit}"}</code>
                                             <span>
-                                                &quot;E&quot; if explicit
+                                                &quot;E&quot; для треков с
+                                                ненормативной лексикой
                                             </span>
                                         </div>
                                     </div>
                                     <div>
                                         <p className="text-white/80 font-medium mb-1">
-                                            Album
+                                            Альбом
                                         </p>
                                         <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
                                             <code>{"{album.artist}"}</code>
-                                            <span>Album artist</span>
+                                            <span>Исполнитель альбома</span>
                                             <code>{"{album.artists}"}</code>
-                                            <span>All album artists</span>
+                                            <span>Все исполнители альбома</span>
                                             <code>{"{album.title}"}</code>
-                                            <span>Album title</span>
+                                            <span>Название альбома</span>
                                             <code>{"{album.date:%Y}"}</code>
                                             <span>
-                                                Release year (date is
-                                                formattable)
+                                                Год выпуска (формат даты можно
+                                                менять)
                                             </span>
                                             <code>{"{album.release}"}</code>
                                             <span>
-                                                Type: ALBUM, EP, or SINGLE
+                                                Тип: ALBUM, EP или SINGLE
                                             </span>
                                             <code>{"{album.explicit}"}</code>
                                             <span>
-                                                &quot;E&quot; if explicit
+                                                &quot;E&quot; для релизов с
+                                                ненормативной лексикой
                                             </span>
                                         </div>
                                     </div>
                                     <div>
                                         <p className="text-white/80 font-medium mb-1">
-                                            Examples
+                                            Примеры
                                         </p>
                                         <div className="space-y-1">
                                             <div>
@@ -404,8 +413,8 @@ export function TidalCard({
                                                 </code>
                                             </div>
                                             <div className="pl-3 text-white/40">
-                                                → Pink Floyd - Time (flat, no
-                                                folders)
+                                                → Pink Floyd - Time (без
+                                                вложенных папок)
                                             </div>
                                         </div>
                                     </div>
@@ -435,8 +444,8 @@ export function TidalCard({
                                 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
                             {testStatus === "loading"
-                                ? "Testing..."
-                                : "Test Connection"}
+                                ? "Проверка…"
+                                : "Проверить подключение"}
                         </button>
                         <InlineStatus
                             status={testStatus}
@@ -445,7 +454,7 @@ export function TidalCard({
                         />
                     </div>
                     <p className="text-xs text-white/40">
-                        Downloads will be saved using your file naming template
+                        Скачанные файлы будут сохранены по выбранному шаблону
                     </p>
                 </div>
             </div>

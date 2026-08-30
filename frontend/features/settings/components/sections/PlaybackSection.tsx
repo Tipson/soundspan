@@ -16,17 +16,17 @@ interface PlaybackSectionProps {
 }
 
 const qualityOptions = [
-    { value: "original", label: "Original (Lossless)" },
-    { value: "high", label: "High (320 kbps)" },
-    { value: "medium", label: "Medium (192 kbps)" },
-    { value: "low", label: "Low (128 kbps)" },
+    { value: "original", label: "Оригинал (без потерь)" },
+    { value: "high", label: "Высокое (320 кбит/с)" },
+    { value: "medium", label: "Среднее (192 кбит/с)" },
+    { value: "low", label: "Низкое (128 кбит/с)" },
 ];
 
 const loudnessOptions = [
-    { value: "auto", label: "Automatic (recommended)" },
-    { value: "track", label: "By track" },
-    { value: "album", label: "By album" },
-    { value: "off", label: "Off" },
+    { value: "auto", label: "Автоматически (рекомендуется)" },
+    { value: "track", label: "По трекам" },
+    { value: "album", label: "По альбомам" },
+    { value: "off", label: "Выключено" },
 ];
 
 /**
@@ -41,14 +41,14 @@ export function PlaybackSection({
     return (
         <SettingsSection
             id="playback"
-            title="Playback"
+            title="Воспроизведение"
             titleExtra={
-                <InfoTooltip text="Controls quality for local files streamed from your library. Integration streaming quality (YouTube Music, TIDAL) is configured per-service in the Integrations section." />
+                <InfoTooltip text="Здесь настраивается качество локальных файлов из коллекции. Качество YouTube Music и TIDAL задаётся отдельно в разделе интеграций." />
             }
         >
             <SettingsRow
-                label="Streaming quality"
-                description="Higher quality uses more bandwidth"
+                label="Качество потока"
+                description="Чем выше качество, тем больше трафика используется"
             >
                 <SettingsSelect
                     value={value}
@@ -59,8 +59,8 @@ export function PlaybackSection({
                 />
             </SettingsRow>
             <SettingsRow
-                label="Volume leveling"
-                description="Evens out volume differences between songs. Automatic keeps albums sounding the way they were mastered and levels everything else per song."
+                label="Выравнивание громкости"
+                description="Сглаживает разницу в громкости. Автоматический режим сохраняет исходную динамику альбомов и выравнивает остальные треки."
             >
                 <SettingsSelect
                     value={loudnessMode}

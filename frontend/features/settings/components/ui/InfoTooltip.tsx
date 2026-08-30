@@ -21,8 +21,8 @@ export function InfoTooltip({ text }: InfoTooltipProps) {
                 onMouseLeave={() => setShowTooltip(false)}
                 onClick={() => setShowTooltip((current) => !current)}
                 className="inline-flex items-center rounded p-0.5 text-gray-400 hover:text-white transition-colors"
-                aria-label="More info"
-                title="More info"
+                aria-label="Подробнее"
+                title="Подробнее"
             >
                 <Info className="h-3.5 w-3.5" />
             </button>

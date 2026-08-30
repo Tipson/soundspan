@@ -9,8 +9,8 @@ export function missingLastFmValues(
         !status.sharedSecretConfigured && "LASTFM_SHARED_SECRET",
     ].filter(Boolean);
     return missing.length > 0
-        ? missing.join(" and ")
-        : "LASTFM_API_KEY and LASTFM_SHARED_SECRET";
+        ? missing.join(" и ")
+        : "LASTFM_API_KEY и LASTFM_SHARED_SECRET";
 }
 
 /** Row description for the Last.fm scrobbling settings entry. */
@@ -18,8 +18,8 @@ export function lastFmDescription(status: ScrobblingStatus["lastfm"]): string {
     if (!status.serverConfigured) {
         const missing = missingLastFmValues(status);
         return status.connected
-            ? `This server is missing ${missing}; existing scrobbling may fail. You can still disconnect.`
-            : `Last.fm scrobbling is unavailable: this server is missing ${missing}. Ask your server admin to set it.`;
+            ? `На сервере не заданы ${missing}; скробблинг может не работать. Сервис всё ещё можно отключить.`
+            : `Скробблинг Last.fm недоступен: на сервере не заданы ${missing}. Обратитесь к администратору сервера.`;
     }
-    return "Sign in with your Last.fm account to scrobble plays";
+    return "Войдите в Last.fm, чтобы сохранять историю прослушиваний";
 }

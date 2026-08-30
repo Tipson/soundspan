@@ -22,11 +22,11 @@ function errorMessage(error: unknown, fallback: string): string {
 function ConnectionPill({ connected }: { connected: boolean }) {
     return connected ? (
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">
-            Connected
+            Подключено
         </span>
     ) : (
         <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] text-gray-400">
-            Not connected
+            Не подключено
         </span>
     );
 }
@@ -52,11 +52,11 @@ function useServiceMutations(
                 ? api.disconnectLastFm()
                 : api.disconnectListenBrainz(),
         onSuccess: () => {
-            toast.success(`${service} disconnected`);
+            toast.success(`${service} отключён`);
             onChanged();
         },
         onError: (error) =>
-            toast.error(errorMessage(error, "Failed to disconnect")),
+            toast.error(errorMessage(error, "Не удалось отключить сервис")),
     });
     const setEnabled = useMutation({
         mutationFn: (enabled: boolean) =>
@@ -65,7 +65,7 @@ function useServiceMutations(
                 : api.setListenBrainzScrobblingEnabled(enabled),
         onSuccess: onChanged,
         onError: (error) =>
-            toast.error(errorMessage(error, "Failed to update setting")),
+            toast.error(errorMessage(error, "Не удалось обновить настройку")),
     });
     return {
         disconnect: () => disconnect.mutate(),
@@ -96,7 +96,7 @@ function ConnectedControls({
                 disabled={mutations.disconnectPending}
                 className={SUBTLE_BUTTON_CLASS}
             >
-                Disconnect
+                Отключить
             </button>
         </div>
     );
@@ -108,14 +108,14 @@ function ListenBrainzConnectForm({ onChanged }: { onChanged: () => void }) {
         mutationFn: () => api.connectListenBrainz(token.trim()),
         onSuccess: () => {
             setToken("");
-            toast.success("ListenBrainz connected");
+            toast.success("ListenBrainz подключён");
             onChanged();
         },
         onError: (error) =>
             toast.error(
                 errorMessage(
                     error,
-                    "ListenBrainz rejected the token. Copy it again from listenbrainz.org/settings.",
+                    "ListenBrainz отклонил токен. Скопируйте его заново на listenbrainz.org/settings.",
                 ),
             ),
     });
@@ -125,7 +125,7 @@ function ListenBrainzConnectForm({ onChanged }: { onChanged: () => void }) {
                 type="password"
                 value={token}
                 onChange={setToken}
-                placeholder="User token"
+                placeholder="Токен пользователя"
                 className="w-56"
             />
             <button
@@ -134,7 +134,7 @@ function ListenBrainzConnectForm({ onChanged }: { onChanged: () => void }) {
                 disabled={connect.isPending || token.trim() === ""}
                 className={BUTTON_CLASS}
             >
-                {connect.isPending ? "Validating..." : "Connect"}
+                {connect.isPending ? "Проверяем…" : "Подключить"}
             </button>
         </div>
     );
@@ -155,7 +155,7 @@ function ListenBrainzRow({
                     ListenBrainz <ConnectionPill connected={status.connected} />
                 </span>
             }
-            description="Paste your user token from listenbrainz.org/settings"
+            description="Вставьте токен пользователя со страницы listenbrainz.org/settings"
         >
             {status.connected ? (
                 <ConnectedControls
@@ -179,20 +179,22 @@ function LastFmConnectFlow({ onChanged }: { onChanged: () => void }) {
             setAwaitingApproval(true);
         },
         onError: (error) =>
-            toast.error(errorMessage(error, "Could not start Last.fm sign-in")),
+            toast.error(
+                errorMessage(error, "Не удалось начать вход в Last.fm"),
+            ),
     });
     const completeAuth = useMutation({
         mutationFn: () => api.completeLastFmAuth(),
         onSuccess: () => {
             setAwaitingApproval(false);
-            toast.success("Last.fm connected");
+            toast.success("Last.fm подключён");
             onChanged();
         },
         onError: (error) =>
             toast.error(
                 errorMessage(
                     error,
-                    "Last.fm has not confirmed the approval yet. Approve access in the Last.fm tab, then try again.",
+                    "Last.fm ещё не подтвердил доступ. Разрешите доступ во вкладке Last.fm и повторите попытку.",
                 ),
             ),
     });
@@ -205,7 +207,7 @@ function LastFmConnectFlow({ onChanged }: { onChanged: () => void }) {
                 disabled={startAuth.isPending}
                 className={BUTTON_CLASS}
             >
-                {startAuth.isPending ? "Starting..." : "Connect Last.fm"}
+                {startAuth.isPending ? "Запускаем…" : "Подключить Last.fm"}
             </button>
         );
     }
@@ -218,15 +220,15 @@ function LastFmConnectFlow({ onChanged }: { onChanged: () => void }) {
                 className={BUTTON_CLASS}
             >
                 {completeAuth.isPending
-                    ? "Finishing..."
-                    : "I've approved — finish connecting"}
+                    ? "Завершаем…"
+                    : "Доступ подтверждён — завершить"}
             </button>
             <button
                 type="button"
                 onClick={() => setAwaitingApproval(false)}
                 className={SUBTLE_BUTTON_CLASS}
             >
-                Cancel
+                Отмена
             </button>
         </div>
     );
@@ -247,7 +249,7 @@ function LastFmRow({
                     Last.fm <ConnectionPill connected={status.connected} />
                     {status.username && (
                         <span className="text-xs text-gray-400">
-                            as {status.username}
+                            как {status.username}
                         </span>
                     )}
                 </span>
@@ -263,7 +265,7 @@ function LastFmRow({
             ) : status.serverConfigured ? (
                 <LastFmConnectFlow onChanged={onChanged} />
             ) : (
-                <span className="text-sm text-gray-500">Unavailable</span>
+                <span className="text-sm text-gray-500">Недоступно</span>
             )}
         </SettingsRow>
     );
@@ -289,8 +291,8 @@ export function ScrobblingSection() {
     return (
         <SettingsSection
             id="scrobbling"
-            title="Scrobbling"
-            description="Send the music you play here to your listening-history services"
+            title="Скробблинг"
+            description="Отправляйте прослушивания в сервисы музыкальной истории"
         >
             {isLoading || !status ? (
                 <div className="flex items-center justify-center py-6">

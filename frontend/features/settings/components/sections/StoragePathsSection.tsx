@@ -22,12 +22,12 @@ export function StoragePathsSection({
     return (
         <SettingsSection
             id="storage"
-            title="Storage"
-            description="Configure storage paths for your music library"
+            title="Хранилище"
+            description="Пути к музыкальной коллекции на сервере"
         >
             <SettingsRow
-                label="Music library path"
-                description="Path to your music library"
+                label="Папка музыкальной коллекции"
+                description="Путь к музыке на сервере"
             >
                 <SettingsInput
                     value={settings.musicPath}
@@ -38,8 +38,8 @@ export function StoragePathsSection({
             </SettingsRow>
 
             <SettingsRow
-                label="Download path"
-                description="Path for new downloads"
+                label="Папка загрузок"
+                description="Путь для новых загрузок"
             >
                 <SettingsInput
                     value={settings.downloadPath}

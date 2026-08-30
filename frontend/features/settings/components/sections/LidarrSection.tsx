@@ -39,10 +39,10 @@ export function LidarrCard({
         error?: string;
         version?: string;
     }>({
-        loadingMessage: "Testing...",
+        loadingMessage: "Проверяем…",
         successMessage: (result) =>
-            result.version ? `v${result.version}` : "Connected",
-        failureMessage: "Failed",
+            result.version ? `v${result.version}` : "Подключено",
+        failureMessage: "Не удалось подключиться",
     });
 
     const handleTest = () => runTest(() => onTest("lidarr"));
@@ -52,9 +52,9 @@ export function LidarrCard({
 
     const statusText = settings.lidarrEnabled
         ? isConfigured
-            ? "Enabled"
-            : "Enabled — needs configuration"
-        : "Disabled";
+            ? "Включено"
+            : "Включено — требуется настройка"
+        : "Выключено";
 
     const statusColor: "green" | "gray" = isConfigured ? "green" : "gray";
 
@@ -75,7 +75,7 @@ export function LidarrCard({
             }
         >
             <div className="space-y-1">
-                <SettingsRow label="Lidarr URL">
+                <SettingsRow label="Адрес Lidarr">
                     <SettingsInput
                         value={settings.lidarrUrl}
                         onChange={(v) => onUpdate({ lidarrUrl: v })}
@@ -84,12 +84,12 @@ export function LidarrCard({
                     />
                 </SettingsRow>
 
-                <SettingsRow label="API Key">
+                <SettingsRow label="Ключ API">
                     <SettingsInput
                         type="password"
                         value={settings.lidarrApiKey}
                         onChange={(v) => onUpdate({ lidarrApiKey: v })}
-                        placeholder="Enter API key"
+                        placeholder="Введите ключ API"
                         className="w-64"
                     />
                 </SettingsRow>
@@ -107,8 +107,8 @@ export function LidarrCard({
                                 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
                             {testStatus === "loading"
-                                ? "Testing..."
-                                : "Test Connection"}
+                                ? "Проверяем…"
+                                : "Проверить подключение"}
                         </button>
                         <InlineStatus
                             status={testStatus}

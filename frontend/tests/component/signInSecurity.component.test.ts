@@ -191,13 +191,13 @@ test("renders, links, and unlinks OIDC identities", async (t) => {
     assert.match(harness.container.textContent ?? "", /alice@example\.com/);
     assert.match(harness.container.textContent ?? "", /subject-…/);
 
-    await click(findButton("Link Company SSO account"));
+    await click(findButton("Подключить аккаунт Company SSO"));
     assert.equal(startOidcLink.mock.callCount(), 1);
     assert.equal(window.location.hash, "#oidc-provider");
 
-    await click(findButton("Unlink"));
+    await click(findButton("Отвязать"));
     assert.ok(document.querySelector('[role="dialog"]'));
-    await click(findLastButton("Unlink"));
+    await click(findLastButton("Отвязать"));
 
     assert.deepEqual(unlinkExternalIdentity.mock.calls[0]?.arguments, [
         "identity-1",
@@ -220,12 +220,12 @@ test("surfaces the strand guard when the last sign-in method cannot be unlinked"
     const harness = await mountSecuritySection();
     t.after(harness.unmount);
 
-    await click(findButton("Unlink"));
-    await click(findLastButton("Unlink"));
+    await click(findButton("Отвязать"));
+    await click(findLastButton("Отвязать"));
 
     assert.match(
         document.body.textContent ?? "",
-        /Cannot unlink the last sign-in method/,
+        /Нельзя отвязать последний доступный способ входа/,
     );
     assert.match(harness.container.textContent ?? "", /Alice Example/);
 });
@@ -241,7 +241,7 @@ test("shows the link result once and removes OIDC status parameters", async (t) 
 
     assert.match(
         harness.container.textContent ?? "",
-        /This SSO identity is already linked to another account/,
+        /Эта учётная запись SSO уже связана с другим аккаунтом/,
     );
     assert.equal(window.location.search, "?keep=1");
     assert.equal(window.location.hash, "#sign-in-security");
@@ -252,7 +252,10 @@ test("shows a successful link result and strips it from the URL", async (t) => {
     const harness = await mountSecuritySection();
     t.after(harness.unmount);
 
-    assert.match(harness.container.textContent ?? "", /SSO account linked\./);
+    assert.match(
+        harness.container.textContent ?? "",
+        /Аккаунт SSO подключён\./,
+    );
     assert.equal(window.location.search, "");
 });
 
@@ -280,44 +283,44 @@ test("creates, reveals once, copies, and revokes app passwords", async (t) => {
 
     assert.match(
         harness.container.textContent ?? "",
-        /Use app passwords in OpenSubsonic apps instead of your account password\./,
+        /Используйте отдельные пароли в приложениях OpenSubsonic/,
     );
     assert.doesNotMatch(
         harness.container.textContent ?? "",
-        /Link Company SSO account/,
+        /Подключить аккаунт Company SSO/,
     );
 
     const nameInput = document.querySelector("#app-password-display-name");
     assert.ok(nameInput instanceof HTMLInputElement);
     await typeInto(nameInput, "Bedroom speaker");
-    await click(findButton("Create app password"));
+    await click(findButton("Создать пароль приложения"));
 
     assert.deepEqual(createAppPassword.mock.calls[0]?.arguments, [
         "Bedroom speaker",
     ]);
     const secretInput = document.querySelector(
-        'input[aria-label="New app password"]',
+        'input[aria-label="Новый пароль приложения"]',
     );
     assert.ok(secretInput instanceof HTMLInputElement);
     assert.equal(secretInput.value, "ssap_once-only-secret");
     assert.match(
         harness.container.textContent ?? "",
-        /you won.t see this again/i,
+        /повторно он не отображается/i,
     );
-    await click(findButton("Copy"));
+    await click(findButton("Копировать"));
     assert.deepEqual(clipboardWrites, ["ssap_once-only-secret"]);
-    await click(findButton("Dismiss"));
+    await click(findButton("Скрыть"));
     assert.equal(
-        document.querySelector('input[aria-label="New app password"]'),
+        document.querySelector('input[aria-label="Новый пароль приложения"]'),
         null,
     );
 
     const revokeButtons = Array.from(
         document.querySelectorAll("button"),
-    ).filter((button) => button.textContent?.trim() === "Revoke");
+    ).filter((button) => button.textContent?.trim() === "Отозвать");
     assert.ok(revokeButtons[0] instanceof HTMLButtonElement);
     await click(revokeButtons[0]);
-    await click(findLastButton("Revoke"));
+    await click(findLastButton("Отозвать"));
 
     assert.deepEqual(revokeAppPassword.mock.calls[0]?.arguments, ["app-new"]);
     assert.doesNotMatch(harness.container.textContent ?? "", /Bedroom speaker/);

@@ -66,7 +66,7 @@ function CodeStep({
                 <p className="text-sm text-gray-300">
                     {pasteInstruction}
                     <span className="text-gray-400 text-xs ml-1">
-                        (it&apos;s already on your clipboard)
+                        (код уже скопирован)
                     </span>
                 </p>
                 <div className="flex items-center gap-3">
@@ -76,7 +76,7 @@ function CodeStep({
                     <button
                         onClick={onCopyCode}
                         className="p-2 text-gray-400 hover:text-white transition-colors"
-                        title="Copy code"
+                        title="Скопировать код"
                     >
                         {copied ? (
                             <PanelIcon
@@ -100,7 +100,7 @@ function WaitingRow({
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-gray-400">
                 <PanelIcon icon={Loader2} className="w-3 h-3 animate-spin" />
-                <span>Waiting for you to complete sign-in...</span>
+                <span>Ожидаем завершения входа…</span>
             </div>
             {timeLeftSeconds !== null && (
                 <span
@@ -110,7 +110,7 @@ function WaitingRow({
                             : "text-gray-400"
                     }`}
                 >
-                    Expires in {formatTime(timeLeftSeconds)}
+                    Истекает через {formatTime(timeLeftSeconds)}
                 </span>
             )}
         </div>
@@ -131,7 +131,7 @@ export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
                 </NumberedStep>
                 <NumberedStep number={3}>
                     <p className="text-sm text-gray-300">
-                        Return here — this page will update automatically
+                        Вернитесь сюда — страница обновится автоматически
                     </p>
                 </NumberedStep>
             </div>
@@ -152,7 +152,7 @@ export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
                 onClick={props.onCancel}
                 className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
             >
-                Cancel
+                Отмена
             </button>
         </div>
     );

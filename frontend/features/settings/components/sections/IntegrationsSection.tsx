@@ -20,8 +20,8 @@ export function IntegrationsSection({
     return (
         <SettingsSection
             id="integrations"
-            title="Integrations"
-            description="Connect external music services to stream tracks not in your library"
+            title="Интеграции"
+            description="Подключите внешние музыкальные сервисы для онлайн-воспроизведения"
         >
             <div className="space-y-3">
                 <YouTubeMusicCard settings={settings} onUpdate={onUpdate} />

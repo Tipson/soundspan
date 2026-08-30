@@ -12,6 +12,7 @@ import { UserSettings } from "../../types";
 import { CheckCircle, XCircle, AlertTriangle, Music2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useDeviceAuthPolling } from "@/hooks/useDeviceAuthPolling";
+import { userFacingError } from "@/lib/i18n/ru";
 
 interface TidalStreamingCardProps {
     settings: UserSettings;
@@ -19,12 +20,12 @@ interface TidalStreamingCardProps {
 }
 
 const QUALITY_OPTIONS = [
-    { value: "LOW", label: "Low (AAC 96 kbps)" },
-    { value: "HIGH", label: "High (AAC 320 kbps)" },
-    { value: "LOSSLESS", label: "Lossless (FLAC 16-bit / 44.1 kHz)" },
+    { value: "LOW", label: "Низкое (AAC 96 кбит/с)" },
+    { value: "HIGH", label: "Высокое (AAC 320 кбит/с)" },
+    { value: "LOSSLESS", label: "Без потерь (FLAC 16 бит / 44,1 кГц)" },
     {
         value: "HI_RES_LOSSLESS",
-        label: "Max / Hi-Res (FLAC up to 24-bit / 192 kHz)",
+        label: "Максимальное / Hi-Res (FLAC до 24 бит / 192 кГц)",
     },
 ];
 
@@ -87,7 +88,10 @@ export function TidalStreamingCard({
         if (result.status === "error") {
             return {
                 status: "error",
-                message: result.error || "Authentication failed",
+                message: userFacingError(
+                    result.error,
+                    "Не удалось войти в аккаунт",
+                ),
             } as const;
         }
         authResultRef.current = result;
@@ -115,7 +119,7 @@ export function TidalStreamingCard({
     const handleAuthSuccess = useCallback(() => {
         const result = authResultRef.current;
         if (!result) return;
-        setSuccess(`Connected as ${result.username || "TIDAL user"}`);
+        setSuccess(`Подключён аккаунт ${result.username || "TIDAL"}`);
         setError(null);
         setIsAuthenticated(true);
     }, []);
@@ -132,8 +136,8 @@ export function TidalStreamingCard({
         poll: pollAuth,
         onSessionStarted: handleSessionStarted,
         onSuccess: handleAuthSuccess,
-        expiredMessage: "The sign-in code has expired. Please try again.",
-        startErrorMessage: "Failed to start TIDAL auth",
+        expiredMessage: "Код входа истёк. Попробуйте ещё раз.",
+        startErrorMessage: "Не удалось начать вход в TIDAL",
     });
     const authUrl = authSession?.verificationUri || "";
     const userCode = authSession?.userCode || "";
@@ -157,9 +161,7 @@ export function TidalStreamingCard({
             setSuccess(null);
             setError(null);
         } catch (err: unknown) {
-            setError(
-                err instanceof Error ? err.message : "Failed to disconnect",
-            );
+            setError(userFacingError(err, "Не удалось отключиться"));
         }
     }, [cancelAuthentication]);
 
@@ -184,18 +186,18 @@ export function TidalStreamingCard({
     // Derived card state
     const isDisabled = !statusLoading && (!tidalEnabled || !tidalAvailable);
     const disabledReason = !tidalEnabled
-        ? "Not enabled. Ask your administrator to enable it."
+        ? "Интеграция не включена. Обратитесь к администратору."
         : !tidalAvailable
-          ? "TIDAL service is not running"
+          ? "Сервис TIDAL не запущен"
           : undefined;
     const isExpanded =
         isAuthenticated || authState === "polling" || authState === "loading";
 
     const statusText = statusLoading
-        ? "Checking..."
+        ? "Проверка…"
         : isAuthenticated
-          ? "Connected"
-          : "Not connected";
+          ? "Подключено"
+          : "Не подключено";
 
     const statusColor: "green" | "red" | "gray" = statusLoading
         ? "gray"
@@ -207,9 +209,9 @@ export function TidalStreamingCard({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200/80">
-                Not affiliated with or endorsed by TIDAL. Requires an active
-                TIDAL subscription. You are responsible for complying with
-                TIDAL&apos;s Terms of Service.
+                Интеграция не связана с TIDAL и не одобрена им. Требуется
+                активная подписка TIDAL. Вы отвечаете за соблюдение условий
+                использования TIDAL.
             </p>
         </div>
     );
@@ -241,17 +243,17 @@ export function TidalStreamingCard({
                             copied={copied}
                             onCopyCode={handleCopyCode}
                             onCancel={handleCancelLink}
-                            introText="A TIDAL authorization page should have opened. If it didn't, click the link below."
-                            pasteInstruction="Enter this code on the TIDAL page"
+                            introText="Страница авторизации TIDAL должна была открыться. Если этого не произошло, нажмите ссылку ниже."
+                            pasteInstruction="Введите этот код на странице TIDAL"
                             signInInstruction={
                                 <>
-                                    Sign in with your TIDAL account and click{" "}
+                                    Войдите в аккаунт TIDAL и нажмите{" "}
                                     <strong className="text-white">
-                                        Allow
+                                        «Разрешить»
                                     </strong>
                                 </>
                             }
-                            openLinkLabel="Open TIDAL Authorization Page"
+                            openLinkLabel="Открыть страницу авторизации TIDAL"
                         />
                     )}
 
@@ -282,8 +284,8 @@ export function TidalStreamingCard({
             {/* Explore Page Toggle — only when connected (TIDAL requires auth) */}
             {isAuthenticated && (
                 <SettingsRow
-                    label="Show on Explore Page"
-                    description="Display TIDAL mixes, moods, and shelves on the Explore page"
+                    label="Показывать на главной"
+                    description="Показывать миксы, настроения и подборки TIDAL на главной странице"
                 >
                     <SettingsToggle
                         checked={settings.showTidalExplore}
@@ -295,8 +297,8 @@ export function TidalStreamingCard({
             {/* Streaming Quality */}
             {isAuthenticated && (
                 <SettingsRow
-                    label="Streaming Quality"
-                    description="Audio quality for TIDAL streaming (requires matching subscription)"
+                    label="Качество воспроизведения"
+                    description="Качество звука при воспроизведении из TIDAL (нужен соответствующий тариф)"
                 >
                     <SettingsSelect
                         value={settings.tidalStreamingQuality || "HIGH"}

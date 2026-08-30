@@ -17,9 +17,9 @@ interface LinkNotice {
 
 function getLinkErrorMessage(code: string): string {
     if (code === "identity_already_linked") {
-        return "This SSO identity is already linked to another account.";
+        return "Эта учётная запись SSO уже связана с другим аккаунтом.";
     }
-    return "SSO account linking failed. Please try again.";
+    return "Не удалось связать аккаунт SSO. Попробуйте ещё раз.";
 }
 
 function consumeLinkNotice(): LinkNotice | null {
@@ -33,7 +33,7 @@ function consumeLinkNotice(): LinkNotice | null {
     const cleanedUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
     window.history.replaceState(window.history.state, "", cleanedUrl);
     if (linked === "1") {
-        return { kind: "success", message: "SSO account linked." };
+        return { kind: "success", message: "Аккаунт SSO подключён." };
     }
     return { kind: "error", message: getLinkErrorMessage(error ?? "") };
 }
@@ -80,8 +80,8 @@ export function SignInSecuritySection() {
     return (
         <SettingsSection
             id="sign-in-security"
-            title="Sign-in & Security"
-            description="Manage sign-in methods and app-specific credentials"
+            title="Вход и безопасность"
+            description="Способы входа и отдельные пароли для приложений"
         >
             {notice && <LinkNoticeBanner notice={notice} />}
             {authConfig?.oidcEnabled && (

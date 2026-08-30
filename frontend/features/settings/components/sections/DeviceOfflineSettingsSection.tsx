@@ -51,9 +51,7 @@ export function DeviceOfflineSettingsSection() {
         try {
             await setupStorage();
         } catch {
-            setError(
-                ru.downloads.folderError,
-            );
+            setError(ru.downloads.folderError);
         } finally {
             setIsSaving(false);
         }
@@ -69,7 +67,9 @@ export function DeviceOfflineSettingsSection() {
         try {
             await updateAutomationSettings(patch);
         } catch {
-            setError("Не удалось обновить офлайн-настройки на этом устройстве.");
+            setError(
+                "Не удалось обновить офлайн-настройки на этом устройстве.",
+            );
         } finally {
             setIsSaving(false);
         }
@@ -99,7 +99,7 @@ export function DeviceOfflineSettingsSection() {
                         }}
                         className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
                     >
-                        Retry
+                        Повторить
                     </button>
                 </div>
             )}
@@ -108,7 +108,7 @@ export function DeviceOfflineSettingsSection() {
                     className="mb-4 text-sm text-content-muted"
                     aria-live="polite"
                 >
-                    Loading offline settings on this device…
+                    Загружаем офлайн-настройки этого устройства…
                 </p>
             )}
             <div
@@ -127,10 +127,10 @@ export function DeviceOfflineSettingsSection() {
                                 storage.explanation
                             ) : (
                                 <>
-                                    New downloads will use{" "}
+                                    Новые загрузки будут сохраняться в{" "}
                                     <span className="font-medium text-content-body">
                                         {storage.directoryName ??
-                                            "the selected Soundspan folder"}
+                                            "выбранную папку Soundspan"}
                                     </span>
                                     .
                                 </>

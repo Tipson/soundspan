@@ -55,10 +55,10 @@ test("renders history settings row with my-history route", async () => {
         React.createElement(PlaybackHistorySection),
     );
 
-    assert.match(html, /History &amp; Personalization/);
-    assert.match(html, /Open My History/);
+    assert.match(html, /История и персонализация/);
+    assert.match(html, /Открыть мою историю/);
     assert.match(html, /href="\/my-history"/);
-    assert.match(html, /Clear History/);
+    assert.match(html, /Очистить историю/);
 });
 
 test("renders configured history range options", async () => {
@@ -69,9 +69,9 @@ test("renders configured history range options", async () => {
         React.createElement(PlaybackHistorySection),
     );
 
-    assert.match(html, />Past week</);
-    assert.match(html, />Past month</);
-    assert.match(html, />Past year</);
-    assert.match(html, />All time</);
-    assert.match(html, /Loading history totals/);
+    assert.match(html, />За неделю</);
+    assert.match(html, />За месяц</);
+    assert.match(html, />За год</);
+    assert.match(html, />За всё время</);
+    assert.match(html, /Считаем события/);
 });

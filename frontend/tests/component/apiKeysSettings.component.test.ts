@@ -161,9 +161,9 @@ test("lists API-key expiry dates with expired and expiring-soon states", async (
     t.after(harness.unmount);
     const text = harness.container.textContent ?? "";
 
-    assert.match(text, /Expires/);
-    assert.match(text, /Expired/);
-    assert.match(text, /Expires soon/);
+    assert.match(text, /Истекает/);
+    assert.match(text, /Истёк/);
+    assert.match(text, /Скоро истечёт/);
     assert.match(text, new RegExp(formatDate(expiringSoon)));
 });
 
@@ -172,18 +172,18 @@ test("shows the interactive-session message when API-key creation is forbidden",
     const harness = await mountApiKeysSection();
     t.after(harness.unmount);
 
-    await click(findButton("Generate New API Key"));
+    await click(findButton("Создать ключ API"));
     const input = document.querySelector(
-        'input[placeholder^="e.g., My Laptop"]',
+        'input[placeholder^="Например, ноутбук"]',
     );
     assert.ok(input instanceof HTMLInputElement);
     await React.act(async () => typeInto(input, "Automation"));
-    await click(findButton("Create"));
+    await click(findButton("Создать"));
 
     assert.equal(createApiKey.mock.callCount(), 1);
     assert.match(
         document.body.textContent ?? "",
-        /Interactive session authentication required/,
+        /Для этого действия снова войдите в аккаунт в текущей сессии/,
     );
 });
 
@@ -201,12 +201,12 @@ test("shows the interactive-session message when API-key revocation is forbidden
     const harness = await mountApiKeysSection();
     t.after(harness.unmount);
 
-    await click(findButton("Revoke"));
-    await click(findLastButton("Revoke"));
+    await click(findButton("Отозвать"));
+    await click(findLastButton("Отозвать"));
 
     assert.equal(revokeApiKey.mock.callCount(), 1);
     assert.match(
         document.body.textContent ?? "",
-        /Interactive session authentication required/,
+        /Для этого действия снова войдите в аккаунт в текущей сессии/,
     );
 });

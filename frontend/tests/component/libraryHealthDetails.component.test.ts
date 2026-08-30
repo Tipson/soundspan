@@ -79,7 +79,7 @@ test("library health shows live purge progress while a sweep runs", async () => 
             },
         }),
     );
-    assert.match(html, /Purging — 1786 tracks remaining/);
+    assert.match(html, /Очистка… Осталось треков: 1786/);
 });
 
 test("library health surfaces a stopped purge with its failure reason", async () => {
@@ -96,8 +96,8 @@ test("library health surfaces a stopped purge with its failure reason", async ()
             },
         }),
     );
-    assert.match(html, /Purge stopped: Database error\. Code: 23514\./);
-    assert.match(html, /press Delete all now to retry/);
+    assert.match(html, /Очистка остановлена: Database error\. Code: 23514\./);
+    assert.match(html, /Нажмите «Удалить всё сейчас», чтобы повторить/);
 });
 
 test("library health summarizes removed tracks and collapses the record list by default", async () => {
@@ -108,18 +108,18 @@ test("library health summarizes removed tracks and collapses the record list by 
         React.createElement(LibraryHealthDetails, DETAILS_PROPS),
     );
 
-    assert.match(html, /2 issues detected/);
-    assert.match(html, /1 removed, pending purge/);
+    assert.match(html, /Обнаружено проблем: 2/);
+    assert.match(html, /Удалено, ожидают очистки: 1/);
     assert.match(
         html,
-        /A rescan restores these tracks if their files return\./,
+        /Повторное сканирование восстановит записи, если файлы появятся снова\./,
     );
     assert.match(html, /TRACK_REMOVAL_RETENTION_DAYS/);
-    assert.match(html, /90 days/);
+    assert.match(html, /90 дн\./);
 
     // Collapsed by default: the toggle advertises the hidden rows and no
     // per-record content is mounted.
-    assert.match(html, /Show 2 records/);
+    assert.match(html, /Показать записи \(2\)/);
     assert.match(html, /aria-expanded="false"/);
     assert.doesNotMatch(html, /\/music\/removed\.flac/);
     assert.doesNotMatch(html, /Removed Track/);
@@ -132,7 +132,7 @@ test("library health offers a purge-all button only when removed tracks are pend
     const withRemoved = renderToStaticMarkup(
         React.createElement(LibraryHealthDetails, DETAILS_PROPS),
     );
-    assert.match(withRemoved, /Delete all now/);
+    assert.match(withRemoved, /Удалить всё сейчас/);
 
     const withoutRemoved = renderToStaticMarkup(
         React.createElement(LibraryHealthDetails, {
@@ -140,7 +140,7 @@ test("library health offers a purge-all button only when removed tracks are pend
             removedPendingPurgeCount: 0,
         }),
     );
-    assert.doesNotMatch(withoutRemoved, /Delete all now/);
+    assert.doesNotMatch(withoutRemoved, /Удалить всё сейчас/);
 });
 
 test("library health surfaces purge notices", async () => {
@@ -168,9 +168,9 @@ test("library health expanded list distinguishes removed tracks pending purge", 
     );
 
     assert.match(html, /aria-expanded="true"/);
-    assert.match(html, /Hide records/);
-    assert.match(html, /Removed, pending purge/);
-    assert.match(html, />Missing</);
+    assert.match(html, /Скрыть записи/);
+    assert.match(html, /Удалён, ожидает очистки/);
+    assert.match(html, />Файл не найден</);
     assert.match(html, /\/music\/removed\.flac/);
     assert.match(html, /Transiently Missing Track/);
 });

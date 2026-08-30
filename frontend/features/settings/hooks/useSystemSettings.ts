@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth-context";
 import { createFrontendLogger } from "@/lib/logger";
 import { SystemSettings } from "../types";
 import { shouldRetryFailedSettingsLoad } from "./settingsHydration";
+import { userFacingError } from "@/lib/i18n/ru";
 
 const logger = createFrontendLogger("Settings.useSystemSettings");
 
@@ -173,7 +174,7 @@ export function useSystemSettings() {
         // This prevents frontend defaults from overwriting real values.
         if (!originalSettings) {
             throw new Error(
-                "Cannot save — settings have not been loaded from the server yet.",
+                "Не удалось сохранить: настройки ещё не загружены с сервера.",
             );
         }
 
@@ -247,7 +248,7 @@ export function useSystemSettings() {
         if (!systemSettings) {
             return {
                 success: false,
-                error: "Settings have not been loaded yet.",
+                error: "Настройки ещё не загружены.",
             };
         }
         try {
@@ -295,10 +296,7 @@ export function useSystemSettings() {
             logger.error("Failed to test service", { service, error });
             return {
                 success: false,
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : `Failed to connect`,
+                error: userFacingError(error, "Не удалось подключиться"),
             };
         }
     };

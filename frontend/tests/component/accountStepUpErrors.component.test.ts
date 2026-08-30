@@ -139,12 +139,12 @@ async function click(button: HTMLButtonElement): Promise<void> {
 test("shows the interactive-session message when 2FA setup is forbidden", async (t) => {
     const harness = await mountAccountSection();
     t.after(harness.unmount);
-    await click(findButton("Enable"));
+    await click(findButton("Включить"));
 
     assert.equal(setup2FA.mock.callCount(), 1);
     assert.match(
         document.body.textContent ?? "",
-        /Interactive session authentication required/,
+        /Для этого действия снова войдите в аккаунт в текущей сессии/,
     );
 });
 
@@ -154,14 +154,14 @@ test("shows the interactive-session message when 2FA enablement is forbidden", a
     t.after(harness.unmount);
 
     await React.act(async () =>
-        typeInto(findInput("Enter 6-digit code"), "123456"),
+        typeInto(findInput("Введите 6-значный код"), "123456"),
     );
-    await click(findButton("Verify"));
+    await click(findButton("Проверить"));
 
     assert.equal(enable2FA.mock.callCount(), 1);
     assert.match(
         document.body.textContent ?? "",
-        /Interactive session authentication required/,
+        /Для этого действия снова войдите в аккаунт в текущей сессии/,
     );
 });
 
@@ -170,16 +170,16 @@ test("shows the interactive-session message when 2FA disablement is forbidden", 
     const harness = await mountAccountSection();
     t.after(harness.unmount);
 
-    await click(findButton("Disable"));
+    await click(findButton("Выключить"));
     await React.act(async () => {
-        typeInto(findInput("Password"), "password");
-        typeInto(findInput("6-digit code"), "123456");
+        typeInto(findInput("Пароль"), "password");
+        typeInto(findInput("6-значный код"), "123456");
     });
-    await click(findButton("Disable 2FA"));
+    await click(findButton("Выключить 2FA"));
 
     assert.equal(disable2FA.mock.callCount(), 1);
     assert.match(
         document.body.textContent ?? "",
-        /Interactive session authentication required/,
+        /Для этого действия снова войдите в аккаунт в текущей сессии/,
     );
 });

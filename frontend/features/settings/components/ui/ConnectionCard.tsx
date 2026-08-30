@@ -76,7 +76,7 @@ export function ConnectionCard({
                     }
                 `}
             >
-                {isLoading ? "..." : connected ? "Disconnect" : "Connect"}
+                {isLoading ? "…" : connected ? "Отключить" : "Подключить"}
             </button>
         </div>
     );

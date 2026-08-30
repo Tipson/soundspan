@@ -90,7 +90,7 @@ export function SettingsInput({
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={
-                        showPassword ? "Hide password" : "Show password"
+                        showPassword ? "Скрыть пароль" : "Показать пароль"
                     }
                     className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover"
                 >

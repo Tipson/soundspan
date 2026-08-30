@@ -64,7 +64,7 @@ test("password settings expose their visibility control", async () => {
         }),
     );
 
-    assert.match(html, /aria-label="Show password"/);
+    assert.match(html, /aria-label="Показать пароль"/);
     assert.match(html, /type="password"/);
     assert.match(html, /name="provider-password"/);
     assert.match(html, /autocomplete="off"/i);

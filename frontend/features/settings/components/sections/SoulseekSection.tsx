@@ -30,8 +30,8 @@ export function SoulseekCard({
         runTest,
         reset,
     } = useConnectionTest({
-        loadingMessage: "Connecting...",
-        successMessage: "Connected to Soulseek",
+        loadingMessage: "Подключаемся…",
+        successMessage: "Soulseek подключён",
     });
 
     const handleTest = () => runTest(() => onTest("soulseek"));
@@ -43,10 +43,9 @@ export function SoulseekCard({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200/80">
-                Soulseek is a peer-to-peer network. You are responsible for
-                ensuring your use complies with applicable copyright laws. Do
-                not use this feature to download or distribute copyrighted
-                material without authorization.
+                Soulseek — одноранговая сеть. Вы сами отвечаете за соблюдение
+                авторских прав. Не загружайте и не распространяйте защищённые
+                материалы без разрешения правообладателя.
             </p>
         </div>
     );
@@ -55,7 +54,7 @@ export function SoulseekCard({
         <IntegrationCard
             icon={<Share2 className="w-5 h-5 text-green-400" />}
             title="Soulseek"
-            statusText={hasCredentials ? "Configured" : "Not configured"}
+            statusText={hasCredentials ? "Настроено" : "Не настроено"}
             statusColor={hasCredentials ? "green" : "gray"}
             connected={false}
             expanded={true}
@@ -63,10 +62,10 @@ export function SoulseekCard({
         >
             <div className="space-y-1">
                 <SettingsRow
-                    label="Soulseek Username"
+                    label="Имя пользователя Soulseek"
                     description={
                         <span className="flex items-center gap-1.5">
-                            Your Soulseek account username
+                            Имя пользователя вашего аккаунта Soulseek
                             <a
                                 href="https://www.slsknet.org/news/node/1"
                                 target="_blank"
@@ -74,7 +73,7 @@ export function SoulseekCard({
                                 className="inline-flex items-center gap-1 text-brand hover:underline"
                             >
                                 <ExternalLink className="w-3 h-3" />
-                                Create Account
+                                Создать аккаунт
                             </a>
                         </span>
                     }
@@ -88,8 +87,8 @@ export function SoulseekCard({
                 </SettingsRow>
 
                 <SettingsRow
-                    label="Soulseek Password"
-                    description="Your Soulseek account password"
+                    label="Пароль Soulseek"
+                    description="Пароль вашего аккаунта Soulseek"
                 >
                     <SettingsInput
                         type="password"
@@ -109,8 +108,8 @@ export function SoulseekCard({
                                 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
                             {testStatus === "loading"
-                                ? "Connecting..."
-                                : "Test Connection"}
+                                ? "Подключаемся…"
+                                : "Проверить подключение"}
                         </button>
                         <InlineStatus
                             status={testStatus}
@@ -119,8 +118,8 @@ export function SoulseekCard({
                         />
                     </div>
                     <p className="text-xs text-white/40">
-                        Downloads will be saved to your Singles folder
-                        automatically
+                        Загруженные треки автоматически сохраняются в папке
+                        Singles
                     </p>
                 </div>
             </div>

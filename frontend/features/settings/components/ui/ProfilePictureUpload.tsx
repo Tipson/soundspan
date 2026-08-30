@@ -42,12 +42,14 @@ export function ProfilePictureUpload({
         e.target.value = "";
 
         if (!ACCEPTED_TYPES.includes(file.type)) {
-            toast.error("Invalid file type. Use JPEG, PNG, WebP, or GIF.");
+            toast.error("Нужен файл JPEG, PNG, WebP или GIF.");
             return;
         }
 
         if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-            toast.error(`File too large. Maximum ${MAX_FILE_SIZE_MB}MB.`);
+            toast.error(
+                `Файл слишком большой. Максимум ${MAX_FILE_SIZE_MB} МБ.`,
+            );
             return;
         }
 
@@ -56,12 +58,14 @@ export function ProfilePictureUpload({
             await api.uploadProfilePicture(file);
             setHasPicture(true);
             setPreviewKey((k) => k + 1);
-            toast.success("Profile picture updated");
+            toast.success("Фото профиля обновлено");
             window.dispatchEvent(new Event("profile-picture-changed"));
             onChanged?.();
         } catch (err) {
             toast.error(
-                err instanceof Error ? err.message : "Failed to upload",
+                err instanceof Error
+                    ? err.message
+                    : "Не удалось загрузить фото",
             );
         } finally {
             setIsUploading(false);
@@ -73,11 +77,11 @@ export function ProfilePictureUpload({
             setIsRemoving(true);
             await api.deleteProfilePicture();
             setHasPicture(false);
-            toast.success("Profile picture removed");
+            toast.success("Фото профиля удалено");
             window.dispatchEvent(new Event("profile-picture-changed"));
             onChanged?.();
         } catch {
-            toast.error("Failed to remove profile picture");
+            toast.error("Не удалось удалить фото профиля");
         } finally {
             setIsRemoving(false);
         }
@@ -95,7 +99,7 @@ export function ProfilePictureUpload({
                     <img
                         key={previewKey}
                         src={`${api.getProfilePictureUrl(user.id)}&_k=${previewKey}`}
-                        alt="Profile"
+                        alt="Фото профиля"
                         className="w-full h-full object-cover"
                     />
                 ) : (
@@ -123,7 +127,7 @@ export function ProfilePictureUpload({
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-white/10 hover:bg-white/15 text-white transition-colors disabled:opacity-50"
             >
                 <Upload className="w-3.5 h-3.5" />
-                Upload
+                Загрузить
             </button>
             {hasPicture && (
                 <button
@@ -133,7 +137,7 @@ export function ProfilePictureUpload({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-white/10 hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-colors disabled:opacity-50"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
-                    Remove
+                    Удалить
                 </button>
             )}
         </div>

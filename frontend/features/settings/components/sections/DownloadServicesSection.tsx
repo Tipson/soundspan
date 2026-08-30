@@ -27,16 +27,15 @@ export function DownloadServicesSection({
     return (
         <SettingsSection
             id="download-services"
-            title="Additional Server Download Services"
-            description="Optional extra sources for permanent server copies"
+            title="Дополнительные сервисы загрузок"
+            description="Необязательные источники постоянных копий на сервере"
         >
             <div className="space-y-3">
                 <div className="mx-4 rounded-lg border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-xs text-blue-100/80">
-                    YouTube Music already provides worldwide search and
-                    streaming and can also save full albums when you explicitly
-                    request a permanent server copy. The services below are
-                    optional and are not required for playlist import or offline
-                    downloads on your phone.
+                    YouTube Music уже обеспечивает поиск и потоковое
+                    воспроизведение по всему миру, а по запросу может сохранять
+                    альбомы на сервере. Сервисы ниже необязательны и не нужны
+                    для импорта плейлистов или офлайн-загрузок на телефон.
                 </div>
                 <LidarrCard
                     settings={settings}
