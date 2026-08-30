@@ -101,7 +101,9 @@ export default function PeerPlaylistDetailPage() {
         try {
             await action();
         } catch {
-            toast.error("The peer could not be reached. Try again later.");
+            toast.error(
+                "Не удалось подключиться к удалённому серверу. Попробуйте позже.",
+            );
         } finally {
             setBusy(false);
         }
@@ -120,11 +122,11 @@ export default function PeerPlaylistDetailPage() {
             <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Network className="mb-3 h-8 w-8 text-white/20" />
                 <p className="text-sm text-white/50">
-                    This peer playlist is unavailable right now.
+                    Этот плейлист сейчас недоступен.
                 </p>
                 <p className="mt-1 text-xs text-white/30">
-                    The peer may be offline, or the playlist is no longer
-                    shared.
+                    Возможно, удалённый сервер не в сети или доступ к плейлисту
+                    закрыт.
                 </p>
             </div>
         );
@@ -135,7 +137,7 @@ export default function PeerPlaylistDetailPage() {
             <PageHeader
                 icon={ListMusic}
                 title={detail.playlist.name}
-                subtitle={`By ${detail.playlist.owner.displayName} · From ${detail.peer.name} · ${playable.length} of ${rows.length} tracks playable`}
+                subtitle={`${detail.playlist.owner.displayName} · Сервер ${detail.peer.name} · Доступно ${playable.length} из ${rows.length}`}
             />
             <div className="flex flex-wrap gap-2">
                 <button
@@ -143,11 +145,11 @@ export default function PeerPlaylistDetailPage() {
                     disabled={busy || playable.length === 0}
                     onClick={() => {
                         playTracks(playable, 0);
-                        toast.success("Playing peer playlist");
+                        toast.success("Воспроизводится удалённый плейлист");
                     }}
                     className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black disabled:opacity-50"
                 >
-                    <Play className="h-3.5 w-3.5" /> Play
+                    <Play className="h-3.5 w-3.5" /> Слушать
                 </button>
                 <button
                     type="button"
@@ -163,11 +165,13 @@ export default function PeerPlaylistDetailPage() {
                                     peerId,
                                     remoteId,
                                 );
-                                toast.success("Unfollowed");
+                                toast.success(
+                                    "Плейлист больше не отслеживается",
+                                );
                             } else {
                                 await api.followPeerPlaylist(peerId, remoteId);
                                 toast.success(
-                                    "Following — it stays in sync with the peer",
+                                    "Плейлист отслеживается и будет синхронизироваться",
                                 );
                             }
                             await invalidate();
@@ -176,7 +180,7 @@ export default function PeerPlaylistDetailPage() {
                     className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-medium text-white hover:border-white/40 disabled:opacity-50"
                 >
                     <Heart className="h-3.5 w-3.5" />
-                    {isFollowed ? "Unfollow" : "Follow"}
+                    {isFollowed ? "Не отслеживать" : "Отслеживать"}
                 </button>
                 <button
                     type="button"
@@ -188,17 +192,17 @@ export default function PeerPlaylistDetailPage() {
                                 remoteId,
                             );
                             toast.success(
-                                `Saved a copy: ${result.copied} tracks${result.skipped ? `, ${result.skipped} skipped` : ""}`,
+                                `Копия сохранена: ${result.copied} треков${result.skipped ? `, пропущено ${result.skipped}` : ""}`,
                             );
                             await invalidate();
                         })
                     }
                     className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-medium text-white hover:border-white/40 disabled:opacity-50"
                 >
-                    <Copy className="h-3.5 w-3.5" /> Save a copy
+                    <Copy className="h-3.5 w-3.5" /> Сохранить копию
                 </button>
             </div>
-            <div role="list" aria-label="Peer playlist tracks">
+            <div role="list" aria-label="Треки удалённого плейлиста">
                 {rows.map((row, index) => {
                     const audioTrack = peerRowToAudioTrack(row);
                     return (
@@ -224,7 +228,7 @@ export default function PeerPlaylistDetailPage() {
                                 <p className="truncate text-xs text-white/40">
                                     {row.artist}
                                     {!audioTrack &&
-                                        " · Not available from this peer"}
+                                        " · Недоступно на этом сервере"}
                                 </p>
                             </div>
                             <span className="shrink-0 text-xs text-white/30">

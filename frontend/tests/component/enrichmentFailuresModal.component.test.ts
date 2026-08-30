@@ -142,15 +142,15 @@ test("retries every audio failure instead of only the visible page", async (t) =
     const harness = await mountModal();
     t.after(harness.unmount);
     assert.equal(reconcileFailures.mock.callCount(), 1);
-    await click(buttonWithText("Audio Analysis (7226)"));
-    await click(buttonWithText("Retry all 7226"));
-    assert.match(document.body.textContent ?? "", /bounded background queue/i);
-    await click(buttonWithText("Retry all"));
+    await click(buttonWithText("Анализ аудио (7226)"));
+    await click(buttonWithText("Повторить все (7226)"));
+    assert.match(document.body.textContent ?? "", /Фоновая очередь/);
+    await click(buttonWithText("Повторить всё"));
     assert.equal(retryFailedAudioAnalysis.mock.callCount(), 1);
 
-    await click(buttonWithText("Vibe Embeddings (1204)"));
-    await click(buttonWithText("Retry all 1204"));
-    await click(buttonWithText("Retry all"));
+    await click(buttonWithText("Векторы Vibe (1204)"));
+    await click(buttonWithText("Повторить все (1204)"));
+    await click(buttonWithText("Повторить всё"));
     assert.equal(retryVibeEmbeddings.mock.callCount(), 1);
     assert.equal(reconcileFailures.mock.callCount(), 3);
 });
@@ -200,6 +200,9 @@ test("renders sanitized summaries and accurate missing-detail fallbacks", async 
         /Decoder rejected the stream/,
     );
     assert.match(document.body.textContent ?? "", /VIBE_EMBEDDING_FAILED/);
-    assert.match(document.body.textContent ?? "", /No error details recorded/);
+    assert.match(
+        document.body.textContent ?? "",
+        /Подробности ошибки не сохранены/,
+    );
     assert.doesNotMatch(document.body.textContent ?? "", /Unknown error/);
 });

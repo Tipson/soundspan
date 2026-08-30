@@ -184,7 +184,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                         role="group"
-                        aria-label={`Actions for ${track.displayTitle ?? track.title}`}
+                        aria-label={`Действия с треком «${track.displayTitle ?? track.title}»`}
                     >
                         {track.duration > 0 && (
                             <span className="hidden w-10 text-right text-xs tabular-nums text-gray-400 sm:inline">
@@ -251,24 +251,24 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                             href={popularHref}
                             className="inline-flex items-center hover:text-brand transition-colors"
                         >
-                            Popular
+                            Популярное
                         </Link>
                     ) : (
-                        "Popular"
+                        "Популярное"
                     )}
                 </h2>
                 {onAddAllToQueue && (
                     <button
                         onClick={() => onAddAllToQueue(visibleTracks)}
                         className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                        title="Add visible popular tracks to queue"
-                        aria-label="Add visible popular tracks to queue"
+                        title="Добавить показанные популярные треки в очередь"
+                        aria-label="Добавить показанные популярные треки в очередь"
                     >
                         <Plus className="w-4 h-4" />
                     </button>
                 )}
             </div>
-            <MusicDetailTrackSurface label={`${artist.name} tracks`}>
+            <MusicDetailTrackSurface label={`Треки исполнителя ${artist.name}`}>
                 <TrackList
                     items={visibleTracks}
                     toRowItem={toRowItem}
@@ -288,12 +288,12 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                     {expanded ? (
                         <>
                             <ChevronUp className="w-4 h-4" />
-                            Show less
+                            Свернуть
                         </>
                     ) : (
                         <>
                             <ChevronDown className="w-4 h-4" />
-                            See more
+                            Показать ещё
                         </>
                     )}
                 </button>

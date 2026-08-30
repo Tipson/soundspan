@@ -3,7 +3,7 @@ export default function Loading() {
     return (
         <div
             role="status"
-            aria-label="Loading search results"
+            aria-label="Загрузка результатов поиска"
             className="mx-auto min-h-full max-w-[1520px] px-3 pb-40 pt-5 sm:px-6 sm:pb-32 lg:px-8"
         >
             <div className="mb-6 space-y-3" aria-hidden="true">
@@ -42,7 +42,7 @@ export default function Loading() {
                     </div>
                 </div>
             </div>
-            <span className="sr-only">Loading search results…</span>
+            <span className="sr-only">Загрузка результатов поиска…</span>
         </div>
     );
 }

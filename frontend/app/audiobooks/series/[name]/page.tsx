@@ -74,7 +74,7 @@ export default function SeriesDetailPage() {
                 setBooks(Array.isArray(data) ? data : []);
             } catch (error: unknown) {
                 sharedFrontendLogger.error("Failed to load series:", error);
-                toast.error("Failed to load series");
+                toast.error("Не удалось загрузить цикл книг");
             } finally {
                 setIsLoading(false);
             }
@@ -99,7 +99,7 @@ export default function SeriesDetailPage() {
     if (books.length === 0) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">No books found in this series</p>
+                <p className="text-gray-400">В этом цикле нет книг</p>
             </div>
         );
     }
@@ -137,7 +137,7 @@ export default function SeriesDetailPage() {
                         {/* Series Info */}
                         <div className="flex-1">
                             <div className="text-sm font-bold text-white/90 mb-2">
-                                SERIES
+                                ЦИКЛ
                             </div>
                             <h1 className="text-5xl md:text-7xl font-bold text-white mb-6">
                                 {seriesName}
@@ -148,7 +148,11 @@ export default function SeriesDetailPage() {
                                 <span>•</span>
                                 <span>
                                     {books.length}{" "}
-                                    {books.length === 1 ? "book" : "books"}
+                                    {books.length === 1
+                                        ? "книга"
+                                        : books.length >= 2 && books.length <= 4
+                                          ? "книги"
+                                          : "книг"}
                                 </span>
                                 <span>•</span>
                                 <span>{formatDuration(totalDuration)}</span>
@@ -170,7 +174,7 @@ export default function SeriesDetailPage() {
                                 className="mb-6"
                             >
                                 <ArrowLeft className="w-4 h-4 mr-2" />
-                                Back
+                                Назад
                             </Button>
                         </div>
                     </div>
@@ -180,7 +184,7 @@ export default function SeriesDetailPage() {
             {/* Books List */}
             <div className="max-w-7xl mx-auto px-8 pb-24">
                 <h2 className="text-2xl font-bold text-white mb-6">
-                    Books in Series
+                    Книги цикла
                 </h2>
 
                 <div className="space-y-2">

@@ -312,9 +312,9 @@ test("artist PopularTracks limits visible items and renders provider states", as
 
     // Plus button (add to queue) renders as icon-only
     assert.doesNotMatch(html, /Add All to Queue/);
-    assert.match(html, /Add visible popular tracks to queue/);
+    assert.match(html, /Добавить показанные популярные треки в очередь/);
     // "See more" toggle visible since there are 6 tracks (> 5 collapsed)
-    assert.match(html, /See more/);
+    assert.match(html, /Показать ещё/);
     assert.match(html, /href=\"\/artist\/artist-1\/popular\"/);
     assert.match(html, /LOADING/);
     assert.match(html, /YT/);
@@ -426,11 +426,10 @@ test("discover TrackList renders source badges, tier aliases, queue badges, and 
 
     assert.match(html, /TIDAL/);
     assert.match(html, /YT</);
-    assert.match(html, /LOADING/);
-    assert.match(html, /Local/);
+    assert.match(html, /Ищем/);
+    assert.match(html, /Локально/);
     assert.match(html, /IN QUEUE/);
-    assert.match(html, /Explore/);
-    assert.match(html, /Wild/);
+    assert.match(html, /Сюрприз/);
     assert.match(html, /href=\"\/artist\/A%20Tidal\"/);
     assert.equal(
         state.overflowTracks.some(

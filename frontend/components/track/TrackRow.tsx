@@ -54,7 +54,7 @@ export function TrackRow({
             onClick={onPlay}
             role="button"
             aria-disabled={item.isPlayable === false ? true : undefined}
-            aria-label={`Play ${item.displayTitle ?? item.title} by ${item.artistName}`}
+            aria-label={`Воспроизвести «${item.displayTitle ?? item.title}», исполнитель ${item.artistName}`}
             tabIndex={0}
             onKeyDown={(e) => {
                 if ((e.key === "Enter" || e.key === " ") && onPlay) {
@@ -127,8 +127,8 @@ export function TrackRow({
                         {titleBadges}
                         {item.unplayableReason === "peer_offline" && (
                             <UnplayableBadge
-                                label="OFFLINE"
-                                title="This federation peer is offline"
+                                label="НЕ В СЕТИ"
+                                title="Удалённый сервер сейчас не в сети"
                                 variant="muted"
                             />
                         )}
