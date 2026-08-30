@@ -126,6 +126,8 @@ export const queryKeys = {
         mood
             ? (["home", "personalized", limit, mode, mood] as const)
             : (["home", "personalized", limit, mode] as const),
+    tasteProfile: (accountId: string) =>
+        ["taste-profile", accountId.trim()] as const,
 
     // Browse (YT Music) — used by Explore page
     browseHomeShelves: () => ["browse", "ytmusic", "home"] as const,
