@@ -44,7 +44,21 @@ import {
     promoteReadyDeviceOfflineRecord,
     reuseReadyDeviceOfflineRecord,
 } from "./downloadRecordManagement";
-export const DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS = 30_000;
+import {
+    clampForegroundLeaseClockSkew,
+    DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS,
+    DEVICE_OFFLINE_LEASE_MAX_FUTURE_MS,
+    foregroundLeaseDisposition,
+    interruptExpiredForegroundRecord,
+    type ForegroundLeaseDisposition,
+} from "./foregroundLease";
+export {
+    clampForegroundLeaseClockSkew,
+    DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS,
+    foregroundLeaseDisposition,
+    interruptExpiredForegroundRecord,
+    type ForegroundLeaseDisposition,
+};
 export const DEVICE_OFFLINE_FOREGROUND_HEARTBEAT_MS = 10_000;
 export const DEVICE_OFFLINE_PROGRESS_UPDATE_INTERVAL_MS = 500;
 export const DEVICE_OFFLINE_PROGRESS_UPDATE_MIN_BYTES = 256 * 1024;
@@ -52,77 +66,10 @@ export const DEVICE_OFFLINE_BACKGROUND_MISSING_GRACE_MS = 10_000;
 export const DEVICE_OFFLINE_BACKGROUND_LOOKUP_TIMEOUT_MS = 1_500;
 export const DEVICE_OFFLINE_BACKGROUND_UNKNOWN_RETRY_LIMIT = 3;
 export const DEVICE_OFFLINE_BACKGROUND_STALL_MS = 5 * 60_000;
-const DEVICE_OFFLINE_LEASE_MAX_FUTURE_MS = 5 * 60_000;
-const DEVICE_OFFLINE_LEGACY_FOREGROUND_GRACE_MS = 30_000;
 const DEVICE_OFFLINE_BACKGROUND_UNKNOWN_LEASE_PREFIX = "background-unknown:";
 const DEVICE_OFFLINE_BACKGROUND_STALL_LEASE_PREFIX = "background-stall:";
 const DEVICE_OFFLINE_BACKGROUND_COMPLETION_LEASE_PREFIX =
     "background-completing:";
-
-export type ForegroundLeaseDisposition = "live" | "clamp" | "expired";
-
-export function foregroundLeaseDisposition(
-    record: DeviceOfflineDownloadRecord,
-    now: number,
-): ForegroundLeaseDisposition {
-    const leaseId = record.foregroundLeaseId;
-    const expiresAt =
-        typeof record.foregroundLeaseExpiresAt === "number"
-            ? record.foregroundLeaseExpiresAt
-            : Number.NaN;
-    if (
-        typeof leaseId === "string" &&
-        leaseId.length > 0 &&
-        Number.isFinite(expiresAt)
-    ) {
-        const remaining = expiresAt - now;
-        if (remaining > DEVICE_OFFLINE_LEASE_MAX_FUTURE_MS) return "clamp";
-        return remaining > 0 ? "live" : "expired";
-    }
-
-    const age = now - Number(record.updatedAt);
-    if (!Number.isFinite(age)) return "expired";
-    if (age < -DEVICE_OFFLINE_LEASE_MAX_FUTURE_MS) return "clamp";
-    return age <= DEVICE_OFFLINE_LEGACY_FOREGROUND_GRACE_MS
-        ? "live"
-        : "expired";
-}
-
-export function clampForegroundLeaseClockSkew(
-    record: DeviceOfflineDownloadRecord,
-    now: number,
-): DeviceOfflineDownloadRecord {
-    return {
-        ...record,
-        ...(record.foregroundLeaseId
-            ? {
-                  foregroundLeaseExpiresAt:
-                      now + DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS,
-              }
-            : {}),
-        updatedAt: now,
-    };
-}
-
-export function interruptExpiredForegroundRecord(
-    record: DeviceOfflineDownloadRecord,
-    now: number,
-): DeviceOfflineDownloadRecord {
-    return {
-        ...record,
-        status: "interrupted",
-        backgroundFetchId:
-            record.transferMode === "background"
-                ? null
-                : record.backgroundFetchId,
-        foregroundLeaseId: null,
-        foregroundLeaseExpiresAt: null,
-        errorCode: "interrupted",
-        errorMessage:
-            "Загрузка была прервана. При продолжении загрузка этого трека начнётся заново.",
-        updatedAt: now,
-    };
-}
 
 export interface DeviceOfflineMetadataStore {
     listByOwner(ownerId: string): Promise<DeviceOfflineDownloadRecord[]>;

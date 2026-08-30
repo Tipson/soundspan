@@ -4,10 +4,6 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
-    createMosaicCandidates,
-    selectMosaicCovers,
-} from "@/utils/mosaicCoverSelection";
-import {
     api,
     type PlaylistDetailTrackItem,
     type PlaylistPendingTrackItem,
@@ -76,7 +72,6 @@ import {
 } from "lucide-react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { useCollectionLikeAll } from "@/hooks/useCollectionLikeAll";
-import type { LikeableTrack } from "@/hooks/useCollectionLikeAll";
 import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
 import { ShareLinkModal } from "@/components/ui/ShareLinkModal";
 import { RadioPlaylistActions } from "./RadioPlaylistActions";
@@ -88,6 +83,10 @@ import {
 } from "@/components/music-detail";
 import { PlaylistDetailHero } from "@/features/playlist/components/PlaylistDetailHero";
 import { pluralRu, ru } from "@/lib/i18n/ru";
+import {
+    buildPlaylistCoverUrls,
+    buildPlaylistLikeableTracks,
+} from "./playlistViewModel";
 
 type PlaylistItem = PlaylistDetailTrackItem;
 type PendingTrack = PlaylistPendingTrackItem;
@@ -395,15 +394,8 @@ export default function PlaylistDetailPage() {
         [playableTrackItems],
     );
 
-    const likeableTracks: LikeableTrack[] = useMemo(
-        () =>
-            playableTrackItems.map((item) => ({
-                id: item.track.id,
-                title: item.track.title,
-                artist: item.track.album.artist.name,
-                album: item.track.album.title,
-                duration: item.track.duration,
-            })),
+    const likeableTracks = useMemo(
+        () => buildPlaylistLikeableTracks(playableTrackItems),
         [playableTrackItems],
     );
     const {
@@ -420,20 +412,10 @@ export default function PlaylistDetailPage() {
         );
     };
 
-    // Calculate cover arts from playlist tracks for mosaic (memoized, artist+album diversity)
-    const coverUrls = useMemo(() => {
-        if (trackItems.length === 0) return [];
-        const candidates = createMosaicCandidates(trackItems, {
-            getId: (item) => item.id,
-            getCoverUrl: (item) => item.track?.album?.coverArt,
-            getArtistKey: (item) =>
-                item.track?.album?.artist?.name?.toLowerCase(),
-            getAlbumKey: (item) => item.track?.album?.title?.toLowerCase(),
-        });
-        return selectMosaicCovers(candidates, { count: 4 }).map((r) =>
-            api.getCoverArtUrl(r.coverUrl, 200),
-        );
-    }, [trackItems]);
+    const coverUrls = useMemo(
+        () => buildPlaylistCoverUrls(trackItems),
+        [trackItems],
+    );
 
     const handleRemoveTrack = async (itemIdOrTrackId: string) => {
         try {

@@ -106,70 +106,13 @@ import {
     resumeGroupForRole,
     resumeListenTogetherPlayback,
 } from "@/lib/audio-engine/listenTogetherPlaybackResume";
+import type {
+    CreateGroupOptions,
+    ListenTogetherContextType,
+    SocketRouteStatus,
+} from "@/lib/listenTogetherContextTypes";
 const playbackEngine = createRuntimeAudioEngine();
 const log = sharedFrontendLogger.child("ListenTogetherContext");
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface CreateGroupOptions {
-    name?: string;
-    visibility?: "public" | "private";
-    useCurrentQueue?: boolean;
-}
-
-type SocketRouteStatus = "checking" | "ok" | "failed";
-
-interface ListenTogetherContextType {
-    /** Current group state (null when not in a group). */
-    activeGroup: GroupSnapshot | null;
-    /** Is the user currently in a group? */
-    isInGroup: boolean;
-    /** Is the user the host? */
-    isHost: boolean;
-    /** Can the current user control playback? (host only) */
-    canControl: boolean;
-    /** Can the current user edit the Listen Together queue? */
-    canEditQueue: boolean;
-    /** Is the initial group fetch still loading? */
-    isLoading: boolean;
-    /** Is Socket.IO connected? */
-    isConnected: boolean;
-    /** Has the socket connected at least once? (Used to avoid premature "Reconnecting" flash.) */
-    hasConnectedOnce: boolean;
-    /** Current reconnect attempt count while disconnected (0 when connected). */
-    reconnectAttempt: number;
-    /** Last error message. */
-    error: string | null;
-    /** Socket route preflight status for Listen Together websocket path. */
-    socketRouteStatus: SocketRouteStatus;
-    /** Human-readable route validation failure message (if any). */
-    socketRouteError: string | null;
-    /** True when socket route preflight has passed. */
-    canUseListenTogether: boolean;
-
-    // Actions (cold path — REST)
-    createGroup: (
-        options?: CreateGroupOptions,
-    ) => Promise<GroupSnapshot | null>;
-    joinGroup: (joinCode: string) => Promise<GroupSnapshot | null>;
-    leaveGroup: () => Promise<void>;
-    clearError: () => void;
-    recheckSocketRoute: () => Promise<boolean>;
-
-    // Actions (hot path — Socket.IO, forwarded through context for convenience)
-    syncPlay: () => void;
-    syncPause: () => void;
-    syncSeek: (positionMs: number) => void;
-    syncNext: () => void;
-    syncPrevious: () => void;
-    syncSetTrack: (index: number) => void;
-    syncAddToQueue: (tracks: QueueTrackInput[]) => void;
-    syncRemoveFromQueue: (index: number) => void;
-    syncClearQueue: () => void;
-    trackAvailability: Map<number, AvailabilityItem>;
-}
 
 const ListenTogetherContext = createContext<
     ListenTogetherContextType | undefined
