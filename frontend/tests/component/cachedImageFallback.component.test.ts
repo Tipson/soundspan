@@ -62,7 +62,7 @@ test("CachedImage replaces a failed thumbnail and retries when src changes", asy
     assert.equal(container.querySelector('[data-testid="next-image"]'), null);
     assert.equal(
         container.querySelector('[role="img"]')?.getAttribute("aria-label"),
-        "Artwork unavailable for Broken cover",
+        "Обложка для «Broken cover» недоступна",
     );
 
     await React.act(async () => {

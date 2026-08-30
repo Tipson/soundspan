@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Music } from "lucide-react";
 import { DiscoverResult } from "../types";
 import { api } from "@/lib/api";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 interface DiscoverPodcastsGridProps {
     podcasts: DiscoverResult[];
@@ -63,7 +64,8 @@ export function DiscoverPodcastsGrid({
                                 {podcast.name}
                             </h3>
                             <p className="text-sm text-[#b3b3b3] line-clamp-1">
-                                {podcast.artist || "Podcast"}
+                                {podcast.artist ||
+                                    searchExtrasRu.podcastFallback}
                             </p>
                             {typeof podcast.trackCount === "number" &&
                                 podcast.trackCount > 0 && (

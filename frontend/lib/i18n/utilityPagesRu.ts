@@ -141,4 +141,41 @@ export const radioRu = {
     aboutTitle: "О радиостанциях",
     aboutDescription:
         "Станции создаются из вашей музыкальной коллекции. При открытии формируется плейлист, который можно воспроизвести снова, обновить или дополнить треками. «Перемешать всё» сразу запускает всю коллекцию. По мере добавления музыки здесь автоматически появляются новые станции по жанрам и десятилетиям.",
+    openFailed: "Не удалось открыть радиостанцию",
 } as const satisfies Record<string, string>;
+
+export function formatRadioTrackCount(count: number): string {
+    return `${count} ${pluralRu(count, ["трек", "трека", "треков"])}`;
+}
+
+export function formatRadioStationStarted(
+    name: string,
+    trackCount: number,
+): { title: string; description: string } {
+    return {
+        title: `Радио «${name}»`,
+        description: `Перемешиваем ${formatRadioTrackCount(trackCount)}`,
+    };
+}
+
+export function formatRadioNoTracks(name: string): string {
+    return `Для радиостанции «${name}» треки не найдены`;
+}
+
+export function formatRadioNotEnoughTracks(name: string): string {
+    return `Недостаточно треков для радиостанции «${name}»`;
+}
+
+export function formatRadioMinimumDescription(
+    found: number,
+    minimum: number,
+): string {
+    return `Найдено ${found}, требуется не менее ${minimum}`;
+}
+
+export function formatRadioDecadeDescription(
+    decade: number,
+    count: number,
+): string {
+    return `${decade}–${decade + 9} • ${formatRadioTrackCount(count)}`;
+}

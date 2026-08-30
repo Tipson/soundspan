@@ -101,12 +101,12 @@ export function useSleepTimer(
 /** Common sleep timer preset durations in minutes. */
 export const SLEEP_TIMER_PRESETS = [15, 30, 45, 60, 90, 120] as const;
 
-/** Format remaining seconds as "Xh Ym Zs" or "Ym Zs". */
+/** Format remaining seconds as "X ч Y мин" or "Y мин Z с". */
 export function formatSleepTimerRemaining(seconds: number): string {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
+    if (h > 0) return `${h} ч ${m} мин`;
+    if (m > 0) return `${m} мин ${s} с`;
+    return `${s} с`;
 }

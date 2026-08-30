@@ -16,8 +16,8 @@ function DefaultArtworkFallback({
     height,
 }: Pick<CachedImageProps, "alt" | "fill" | "width" | "height">) {
     const label = alt?.trim()
-        ? `Artwork unavailable for ${alt}`
-        : "Artwork unavailable";
+        ? `Обложка для «${alt}» недоступна`
+        : "Обложка недоступна";
     return (
         <span
             role="img"

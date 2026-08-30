@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 import { TwoFactorInput } from "./TwoFactorInput";
 
 /** Props for the OIDC existing-account confirmation form. */
@@ -34,11 +35,7 @@ function useOidcLinkForm({ linkToken, onAuthenticated }: OidcLinkFormProps) {
             }
             onAuthenticated();
         } catch (caught) {
-            setError(
-                caught instanceof Error
-                    ? caught.message
-                    : "Unable to link the SSO account",
-            );
+            setError(userFacingError(caught, ru.auth.linkSsoFailed));
             setTwoFactorToken("");
         } finally {
             setIsLoading(false);
@@ -66,8 +63,7 @@ export function OidcLinkForm(props: OidcLinkFormProps) {
     return (
         <form onSubmit={form.handleSubmit} className="space-y-4">
             <p className="text-sm text-white/70">
-                An account with this email already exists — sign in with your
-                soundspan password to link it.
+                {ru.auth.oidcLinkDescription}
             </p>
             <LinkError message={form.error} />
             <OidcLinkCredentials form={form} />
@@ -106,7 +102,7 @@ function OidcLinkCredentials({ form }: { form: OidcLinkFormState }) {
                 htmlFor="oidcLinkPassword"
                 className="block text-sm font-medium text-white/90 mb-1.5"
             >
-                Password
+                {ru.auth.password}
             </label>
             <input
                 id="oidcLinkPassword"
@@ -134,8 +130,8 @@ function OidcLinkSubmitButton({ form }: { form: OidcLinkFormState }) {
                 <Loader2 className="inline w-5 h-5 mr-2 animate-spin" />
             )}
             {form.requires2FA
-                ? "Verify and sign in"
-                : "Link account and sign in"}
+                ? ru.auth.verifyAndSignIn
+                : ru.auth.linkAccountAndSignIn}
         </button>
     );
 }

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { ListenTogetherSocket } from "../../lib/listen-together-socket";
+import {
+    formatListenTogetherSocketRouteError,
+    ListenTogetherSocket,
+} from "../../lib/listen-together-socket";
 
 type AckResponse = {
     ok?: boolean;
@@ -481,8 +484,23 @@ test("createAckError uses default message when server omits error text", () => {
         retryable: false,
     });
 
-    assert.equal(err.message, "Listen Together request failed");
+    assert.equal(err.message, "Запрос совместного прослушивания не выполнен");
     assert.equal(err.code, "NOT_ALLOWED");
+});
+
+test("socket route diagnostics are shown in Russian", () => {
+    assert.equal(
+        formatListenTogetherSocketRouteError({ ok: false, reason: "timeout" }),
+        "Проверка подключения для совместного прослушивания заняла слишком много времени. Проверьте маршрутизацию /socket.io/listen-together через прокси или туннель.",
+    );
+    assert.equal(
+        formatListenTogetherSocketRouteError({
+            ok: false,
+            reason: "http-error",
+            status: 502,
+        }),
+        "Сервис совместного прослушивания ответил с ошибкой HTTP 502. Проверьте маршрутизацию /socket.io/listen-together и поддержку WebSocket.",
+    );
 });
 
 test("reportReady exhausts retry budget and fails deterministically", async () => {

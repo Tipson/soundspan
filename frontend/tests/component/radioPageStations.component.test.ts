@@ -39,8 +39,18 @@ test("genre stations skip sparse genres and carry playlist filters", async () =>
     ]);
 
     assert.deepEqual(
-        stations.map((s) => ({ id: s.id, filter: s.filter })),
-        [{ id: "genre-Rock", filter: { type: "genre", value: "Rock" } }],
+        stations.map((s) => ({
+            id: s.id,
+            filter: s.filter,
+            description: s.description,
+        })),
+        [
+            {
+                id: "genre-Rock",
+                filter: { type: "genre", value: "Rock" },
+                description: "30 треков",
+            },
+        ],
     );
 });
 
@@ -54,7 +64,17 @@ test("decade stations drop values the generated-playlist API rejects", async () 
     ]);
 
     assert.deepEqual(
-        stations.map((s) => ({ id: s.id, filter: s.filter })),
-        [{ id: "decade-1990", filter: { type: "decade", value: "1990" } }],
+        stations.map((s) => ({
+            id: s.id,
+            filter: s.filter,
+            description: s.description,
+        })),
+        [
+            {
+                id: "decade-1990",
+                filter: { type: "decade", value: "1990" },
+                description: "1990–1999 • 40 треков",
+            },
+        ],
     );
 });

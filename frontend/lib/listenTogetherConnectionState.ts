@@ -5,6 +5,8 @@
  * React, sockets, and timers so the connection rules are unit-testable.
  */
 
+import { listenTogetherFeedbackRu } from "@/lib/i18n/listenDeviceRu";
+
 /** Brief reconnects should not flash the UI grey. */
 export const LT_DISCONNECT_GRACE_MS = 2000;
 
@@ -39,8 +41,7 @@ export interface ListenTogetherConnectionDirective {
     validateRoute?: true;
 }
 
-const RECONNECT_FAILED_ERROR =
-    "Listen Together reconnect failed. Check route/proxy health and try rejoining.";
+const RECONNECT_FAILED_ERROR = listenTogetherFeedbackRu.reconnectFailed;
 
 /** The provider-visible consequences of one socket lifecycle event. */
 export function resolveConnectionEvent(

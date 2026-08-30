@@ -146,6 +146,21 @@ export function formatQueueSaved(count: number, name: string): string {
     return `${count} ${pluralRu(count, ["трек", "трека", "треков"])} сохранено в плейлист «${name}»`;
 }
 
+/** Success after one track or episode is appended to the local queue. */
+export function formatQueueTrackAdded(title: string): string {
+    return `«${title}» добавлен в очередь`;
+}
+
+/** Count-aware success after several tracks are appended to the local queue. */
+export function formatQueueTracksAdded(count: number): string {
+    return `Добавлено в очередь: ${count} ${pluralRu(count, ["трек", "трека", "треков"])}`;
+}
+
+/** Success after scheduling one track or episode immediately after current. */
+export function formatQueueTrackNext(title: string): string {
+    return `Следующий трек: «${title}»`;
+}
+
 /** Russian copy for artist details and artist-wide actions. */
 export const artistRu = {
     fallbackName: "Исполнитель",

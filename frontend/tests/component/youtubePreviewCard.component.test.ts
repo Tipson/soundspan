@@ -50,18 +50,18 @@ async function render(props: Record<string, unknown>) {
     );
 }
 
-test("renders Play and Download for admins", async () => {
+test("renders Russian playback and download actions for admins", async () => {
     const html = await render({});
     assert.match(html, /Test Video/);
-    assert.match(html, />Play</);
-    assert.match(html, /Download/);
+    assert.match(html, />Воспроизвести</);
+    assert.match(html, /Скачать/);
 });
 
 test("hides the Download affordance for non-admin users but keeps Play", async () => {
     const html = await render({ canDownload: false });
     assert.match(html, /Test Video/);
-    assert.match(html, />Play</);
-    assert.doesNotMatch(html, /Download/);
+    assert.match(html, />Воспроизвести</);
+    assert.doesNotMatch(html, /Скачать/);
 });
 
 test("hides the download progress bar for non-admin users", async () => {
@@ -70,5 +70,5 @@ test("hides the download progress bar for non-admin users", async () => {
         isDownloading: true,
         downloadProgress: 42,
     });
-    assert.doesNotMatch(html, /Downloading/);
+    assert.doesNotMatch(html, /Загружаем/);
 });

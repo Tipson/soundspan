@@ -61,7 +61,7 @@ export default async function RootLayout({
     await connection();
 
     return (
-        <html lang="en">
+        <html lang="ru">
             <body
                 className={`${polea.variable} antialiased`}
                 style={{ fontFamily: "var(--font-interface)" }}

@@ -346,9 +346,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 workers: newWorkers,
                 cpuCores: workersConfig?.cpuCores || 4,
                 recommended: workersConfig?.recommended || 2,
-                description: `Using ${newWorkers} of ${
+                description: `Используется ${newWorkers} из ${
                     workersConfig?.cpuCores || 4
-                } available CPU cores`,
+                } доступных ядер процессора`,
             });
 
             return { previousWorkers };

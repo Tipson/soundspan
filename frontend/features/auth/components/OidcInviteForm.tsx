@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 
 /** Props for the OIDC invite-code provisioning form. */
 export interface OidcInviteFormProps {
@@ -25,11 +26,7 @@ function useOidcInviteForm({
             await api.redeemOidcInvite({ inviteToken, inviteCode });
             onAuthenticated();
         } catch (caught) {
-            setError(
-                caught instanceof Error
-                    ? caught.message
-                    : "Unable to redeem the invite code",
-            );
+            setError(userFacingError(caught, ru.auth.redeemInviteFailed));
         } finally {
             setIsLoading(false);
         }
@@ -45,8 +42,7 @@ export function OidcInviteForm(props: OidcInviteFormProps) {
     return (
         <form onSubmit={form.handleSubmit} className="space-y-4">
             <p className="text-sm text-white/70">
-                No soundspan account is linked to this identity — enter an
-                invite code to create one.
+                {ru.auth.oidcInviteDescription}
             </p>
             <InviteError message={form.error} />
             <InviteCodeField form={form} />
@@ -58,7 +54,7 @@ export function OidcInviteForm(props: OidcInviteFormProps) {
                 {form.isLoading && (
                     <Loader2 className="inline w-5 h-5 mr-2 animate-spin" />
                 )}
-                Create account and sign in
+                {ru.auth.createAccountAndSignIn}
             </button>
         </form>
     );
@@ -83,7 +79,7 @@ function InviteCodeField({ form }: { form: OidcInviteFormState }) {
                 htmlFor="oidcInviteCode"
                 className="block text-sm font-medium text-white/90 mb-1.5"
             >
-                Invite Code
+                {ru.auth.inviteCode}
             </label>
             <input
                 id="oidcInviteCode"

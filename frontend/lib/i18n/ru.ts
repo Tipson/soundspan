@@ -589,6 +589,24 @@ export const ru = {
         featuredArtist: "Сейчас в коллекции",
         inYourLibrary: "в вашей коллекции",
         completeSsoError: "Не удалось завершить вход через SSO",
+        signInWith: "Войти через",
+        ssoSessionInvalid:
+            "Сессия входа через SSO истекла или недействительна. Попробуйте ещё раз.",
+        ssoAccountAlreadyLinked:
+            "Этот аккаунт Soundspan уже связан с другой учётной записью SSO.",
+        ssoSignInFailed: "Не удалось войти через SSO. Попробуйте ещё раз.",
+        ssoCodeInvalid:
+            "Код входа через SSO недействителен или истёк. Попробуйте ещё раз.",
+        oidcInviteDescription:
+            "С этой учётной записью не связан аккаунт Soundspan. Введите код приглашения, чтобы создать его.",
+        createAccountAndSignIn: "Создать аккаунт и войти",
+        redeemInviteFailed: "Не удалось применить код приглашения",
+        invalidInviteCode: "Неверный код приглашения",
+        oidcLinkDescription:
+            "Аккаунт с этой электронной почтой уже существует. Войдите с паролем Soundspan, чтобы связать его с SSO.",
+        linkAccountAndSignIn: "Связать аккаунт и войти",
+        verifyAndSignIn: "Подтвердить и войти",
+        linkSsoFailed: "Не удалось связать аккаунт с SSO",
         loginFailed: "Не удалось войти",
         backToLogin: "Назад ко входу",
         twoFactorRequired: "Нужна двухфакторная аутентификация",
@@ -692,6 +710,8 @@ const KNOWN_USER_ERROR_COPY: Readonly<Record<string, string>> = {
     "Interactive session authentication required":
         ru.errors.interactiveSessionRequired,
     "Cannot unlink the last sign-in method": ru.errors.lastSignInMethod,
+    "Invalid or expired OIDC code": ru.auth.ssoCodeInvalid,
+    "Invalid invite code": ru.auth.invalidInviteCode,
 };
 
 /** Keeps known server errors useful without leaking untranslated copy into UI. */

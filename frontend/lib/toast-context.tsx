@@ -11,6 +11,7 @@ import {
 } from "react";
 import { CheckCircle2, XCircle, AlertCircle, Info, X } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { ru } from "@/lib/i18n/ru";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
@@ -156,7 +157,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
             <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-white transition-colors"
-                aria-label="Close"
+                aria-label={ru.common.close}
             >
                 <X className="w-4 h-4" />
             </button>

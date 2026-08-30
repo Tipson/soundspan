@@ -286,9 +286,9 @@ export default function MyLikedPlaylistPage() {
         const hours = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
         if (hours > 0) {
-            return `${hours} hr ${mins} min`;
+            return `${hours} ч ${mins} мин`;
         }
-        return `${mins} min`;
+        return `${mins} мин`;
     };
 
     const handleAddAllToQueue = () => {

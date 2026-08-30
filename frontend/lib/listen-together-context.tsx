@@ -31,6 +31,12 @@ import {
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import {
+    formatListenTogetherMemberJoined,
+    formatListenTogetherMemberLeft,
+    listenTogetherFeedbackRu,
+} from "@/lib/i18n/listenDeviceRu";
+import { userFacingError } from "@/lib/i18n/ru";
 import { useAudioState } from "@/lib/audio-state-context";
 import { isEpisodeQueueItem } from "@/lib/queue-item";
 import { useAudioControls } from "@/lib/audio-controls-context";
@@ -369,7 +375,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
         (revokedGroupId: string) => {
             if (activeGroupRef.current?.id !== revokedGroupId) return;
             clearActiveMembership();
-            toast.info("You left the Listen Together group");
+            toast.info(listenTogetherFeedbackRu.leftGroup);
         },
         [clearActiveMembership],
     );
@@ -1203,7 +1209,9 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                     if (!shouldApplyMembershipEvent(data.membershipVersion))
                         return;
                     if (data.userId !== user?.id)
-                        toast.info(`${data.username} joined`);
+                        toast.info(
+                            formatListenTogetherMemberJoined(data.username),
+                        );
                     setActiveGroup((prev) => {
                         if (!prev) return prev;
                         const exists = prev.members.some(
@@ -1255,7 +1263,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                         handleMembershipRevoked(data.groupId ?? groupId);
                         return;
                     }
-                    toast.info(`${data.username} left`);
+                    toast.info(formatListenTogetherMemberLeft(data.username));
                     setActiveGroup((prev) => {
                         if (!prev) return prev;
                         const updated = {
@@ -1274,7 +1282,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                                 isHost: m.userId === data.newHostUserId,
                             }));
                             if (data.newHostUserId === user?.id) {
-                                toast.success("You are now the host!");
+                                toast.success(listenTogetherFeedbackRu.nowHost);
                             }
                         }
                         activeGroupRef.current = updated;
@@ -1289,7 +1297,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 },
                 onGroupEnded: (_data) => {
                     clearActiveMembership();
-                    toast.info("Listen Together session ended");
+                    toast.info(listenTogetherFeedbackRu.sessionEnded);
                 },
                 onConnect: () => {
                     applyConnectionDirective(
@@ -1598,12 +1606,8 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 setError(null);
                 const routeOk = await validateSocketRoute();
                 if (!routeOk) {
-                    setError(
-                        "Listen Together needs socket route forwarding. See docs/REVERSE_PROXY_AND_TUNNELS.md.",
-                    );
-                    toast.error(
-                        "Listen Together socket route is not configured",
-                    );
+                    setError(listenTogetherFeedbackRu.routeRequired);
+                    toast.error(listenTogetherFeedbackRu.routeNotConfigured);
                     return null;
                 }
                 const shouldUseCurrentQueue =
@@ -1655,9 +1659,7 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 });
 
                 if (requestedQueueTrackCount > 500) {
-                    toast.info(
-                        "Listen Together kept the first 500 tracks from the current queue",
-                    );
+                    toast.info(listenTogetherFeedbackRu.queueFirst500);
                 }
 
                 adoptActiveMembership(group);
@@ -1665,13 +1667,13 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 // The creator has no server position to adopt.
                 connectSocket(group.id, { adoptGroupPosition: false });
 
-                toast.success("Group created!");
+                toast.success(listenTogetherFeedbackRu.groupCreated);
                 return group;
             } catch (err) {
-                const message =
-                    err instanceof Error
-                        ? err.message
-                        : "Failed to create group";
+                const message = userFacingError(
+                    err,
+                    listenTogetherFeedbackRu.createFailed,
+                );
                 setError(message);
                 toast.error(message);
                 return null;
@@ -1700,12 +1702,8 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 setError(null);
                 const routeOk = await validateSocketRoute();
                 if (!routeOk) {
-                    setError(
-                        "Listen Together needs socket route forwarding. See docs/REVERSE_PROXY_AND_TUNNELS.md.",
-                    );
-                    toast.error(
-                        "Listen Together socket route is not configured",
-                    );
+                    setError(listenTogetherFeedbackRu.routeRequired);
+                    toast.error(listenTogetherFeedbackRu.routeNotConfigured);
                     return null;
                 }
                 const group = await api.joinListenGroup(joinCode);
@@ -1715,11 +1713,13 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
                 // Connect socket — applyGroupState will run on first group:state event
                 connectSocket(group.id);
 
-                toast.success("Joined group!");
+                toast.success(listenTogetherFeedbackRu.groupJoined);
                 return group;
             } catch (err) {
-                const message =
-                    err instanceof Error ? err.message : "Failed to join group";
+                const message = userFacingError(
+                    err,
+                    listenTogetherFeedbackRu.joinFailed,
+                );
                 setError(message);
                 toast.error(message);
                 return null;
@@ -1742,12 +1742,14 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
 
         try {
             await api.leaveListenGroup(group.id);
-            toast.success("Left Listen Together group");
+            toast.success(listenTogetherFeedbackRu.groupLeft);
         } catch (err) {
-            const message =
-                err instanceof Error ? err.message : "Failed to leave group";
+            const message = userFacingError(
+                err,
+                listenTogetherFeedbackRu.leaveFailed,
+            );
             setError(message);
-            toast.error(`Leave request failed in background: ${message}`);
+            toast.error(listenTogetherFeedbackRu.leaveFailedBackground);
         }
     }, [clearActiveMembership]);
 
@@ -1848,17 +1850,26 @@ export function ListenTogetherProvider({ children }: { children: ReactNode }) {
     );
     const syncAddToQueue = useCallback((tracks: QueueTrackInput[]) => {
         listenTogetherSocket.addToQueue(tracks).catch((err) => {
-            toast.error(err?.message || "Failed to add to queue");
+            toast.error(
+                userFacingError(err, listenTogetherFeedbackRu.addTracksFailed),
+            );
         });
     }, []);
     const syncRemoveFromQueue = useCallback((index: number) => {
         listenTogetherSocket.removeFromQueue(index).catch((err) => {
-            toast.error(err?.message || "Failed to remove from queue");
+            toast.error(
+                userFacingError(
+                    err,
+                    listenTogetherFeedbackRu.removeFromQueueFailed,
+                ),
+            );
         });
     }, []);
     const syncClearQueue = useCallback(() => {
         listenTogetherSocket.clearQueue().catch((err) => {
-            toast.error(err?.message || "Failed to clear queue");
+            toast.error(
+                userFacingError(err, listenTogetherFeedbackRu.clearQueueFailed),
+            );
         });
     }, []);
 

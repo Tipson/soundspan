@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/HorizontalCarousel";
 import { memo, useCallback } from "react";
 import type { PlaylistPreview } from "@/hooks/useQueries";
+import { pluralRu } from "@/lib/i18n/ru";
 
 export type { PlaylistPreview };
 
@@ -57,7 +58,7 @@ const PlaylistCard = memo(function PlaylistCard({
                 </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
                     {playlist.trackCount != null
-                        ? `${playlist.trackCount} songs`
+                        ? `${playlist.trackCount} ${pluralRu(playlist.trackCount, ["трек", "трека", "треков"])}`
                         : (playlist.description ?? "")}
                 </p>
             </div>

@@ -22,9 +22,9 @@ test("toMusicRequestStatus narrows known statuses and rejects unknowns", () => {
 });
 
 test("requestStatusLabel maps the vocabulary and passes unknowns through", () => {
-    assert.equal(requestStatusLabel("pending"), "Pending");
-    assert.equal(requestStatusLabel("denied"), "Declined");
-    assert.equal(requestStatusLabel("fulfilled"), "In library");
+    assert.equal(requestStatusLabel("pending"), "Ожидает");
+    assert.equal(requestStatusLabel("denied"), "Отклонён");
+    assert.equal(requestStatusLabel("fulfilled"), "В коллекции");
     assert.equal(requestStatusLabel("mystery"), "mystery");
 });
 
@@ -92,6 +92,12 @@ test("isRequestableMbid accepts real MBIDs and rejects synthetic ids", () => {
 
 test("filter options start with all and cover the reviewable states", () => {
     assert.equal(REQUEST_FILTER_OPTIONS[0]?.value, "all");
+    assert.equal(REQUEST_FILTER_OPTIONS[0]?.label, "Все");
+    assert.equal(
+        REQUEST_FILTER_OPTIONS.find((option) => option.value === "fulfilled")
+            ?.label,
+        "В коллекции",
+    );
     const values = REQUEST_FILTER_OPTIONS.map((option) => option.value);
     for (const status of ["pending", "approved", "denied", "fulfilled"]) {
         assert.ok(values.includes(status as (typeof values)[number]));

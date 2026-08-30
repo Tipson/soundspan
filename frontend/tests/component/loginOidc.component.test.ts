@@ -239,7 +239,7 @@ test("shows the configured SSO button and local login form", async (t) => {
         () => document.body.textContent?.includes("Acme ID") === true,
     );
 
-    assert.equal(findButton("Sign in with Acme ID").disabled, false);
+    assert.equal(findButton("Войти через Acme ID").disabled, false);
     assert.ok(findInput("Имя пользователя или почта"));
 });
 
@@ -249,10 +249,7 @@ test("hides the SSO button when OIDC is disabled", async (t) => {
     t.after(harness.unmount);
     await waitFor(() => document.querySelector("#username") !== null);
 
-    assert.doesNotMatch(
-        document.body.textContent ?? "",
-        /Sign in with Acme ID/,
-    );
+    assert.doesNotMatch(document.body.textContent ?? "", /Войти через Acme ID/);
 });
 
 test("hides local credentials when local login is disabled", async (t) => {
@@ -262,11 +259,13 @@ test("hides local credentials when local login is disabled", async (t) => {
     t.after(harness.unmount);
     await waitFor(
         () =>
-            document.body.textContent?.includes("SSO sign-in failed") === true,
+            document.body.textContent?.includes(
+                "Не удалось войти через SSO",
+            ) === true,
     );
 
     assert.equal(document.querySelector("#username"), null);
-    assert.ok(findButton("Sign in with Acme ID"));
+    assert.ok(findButton("Войти через Acme ID"));
 });
 
 test("auto-redirects to SSO only when no callback parameter is present", async (t) => {
@@ -289,9 +288,12 @@ test("every callback parameter gates the automatic SSO redirect", async () => {
     exchangeBehavior = "pending";
     const cases = [
         ["ssoCode=pending-code", "Завершаем вход через SSO"],
-        ["ssoLink=link-token", "account with this email already exists"],
-        ["ssoInvite=invite-token", "enter an invite code to create one"],
-        ["ssoError=oidc_failed", "SSO sign-in failed"],
+        [
+            "ssoLink=link-token",
+            "Аккаунт с этой электронной почтой уже существует",
+        ],
+        ["ssoInvite=invite-token", "Введите код приглашения"],
+        ["ssoError=oidc_failed", "Не удалось войти через SSO"],
     ] as const;
 
     for (const [query, visibleText] of cases) {
@@ -326,7 +328,7 @@ test("shows a readable error and local form when SSO code exchange fails", async
     await waitFor(
         () =>
             document.body.textContent?.includes(
-                "Invalid or expired OIDC code",
+                "Код входа через SSO недействителен или истёк",
             ) === true,
     );
     assert.ok(findInput("Имя пользователя или почта"));
@@ -345,9 +347,9 @@ test("confirms an existing-account link through the 2FA branch", async (t) => {
     await waitFor(() => document.querySelector("#oidcLinkPassword") !== null);
 
     await React.act(async () => {
-        typeInto(findInput("Password"), "local-password");
+        typeInto(findInput("Пароль"), "local-password");
     });
-    await click(findButton("Link account and sign in"));
+    await click(findButton("Связать аккаунт и войти"));
     await waitFor(
         () => document.querySelector("#oidcLinkTwoFactorToken") !== null,
     );
@@ -355,7 +357,7 @@ test("confirms an existing-account link through the 2FA branch", async (t) => {
     await React.act(async () => {
         typeInto(findInput("Код из приложения"), "123456");
     });
-    await click(findButton("Verify and sign in"));
+    await click(findButton("Подтвердить и войти"));
     await waitFor(() => window.location.pathname === "/settings");
 
     assert.equal(confirmOidcLink.mock.callCount(), 2);
@@ -375,29 +377,27 @@ test("keeps the invite form retryable after an invalid code", async (t) => {
     await waitFor(() => document.querySelector("#oidcInviteCode") !== null);
 
     await React.act(async () => {
-        typeInto(findInput("Invite Code"), "BAD-CODE");
+        typeInto(findInput("Код приглашения"), "BAD-CODE");
     });
-    await click(findButton("Create account and sign in"));
+    await click(findButton("Создать аккаунт и войти"));
     await waitFor(
         () =>
-            document.body.textContent?.includes("Invalid invite code") === true,
+            document.body.textContent?.includes("Неверный код приглашения") ===
+            true,
     );
 
-    assert.equal(findInput("Invite Code").value, "BAD-CODE");
-    await click(findButton("Create account and sign in"));
+    assert.equal(findInput("Код приглашения").value, "BAD-CODE");
+    await click(findButton("Создать аккаунт и войти"));
     await waitFor(() => window.location.pathname === "/library");
     assert.equal(redeemOidcInvite.mock.callCount(), 2);
 });
 
 test("maps and strips SSO callback errors", async (t) => {
     const cases = [
-        ["invalid_state", "SSO sign-in session expired or was invalid"],
-        [
-            "account_already_linked",
-            "already linked to a different SSO identity",
-        ],
-        ["oidc_failed", "SSO sign-in failed"],
-        ["unexpected_code", "SSO sign-in failed"],
+        ["invalid_state", "Сессия входа через SSO истекла"],
+        ["account_already_linked", "уже связан с другой учётной записью SSO"],
+        ["oidc_failed", "Не удалось войти через SSO"],
+        ["unexpected_code", "Не удалось войти через SSO"],
     ] as const;
 
     for (const [code, message] of cases) {

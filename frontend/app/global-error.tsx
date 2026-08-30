@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { ru } from "@/lib/i18n/ru";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 
 /**
  * Renders the GlobalError component.
@@ -19,7 +19,7 @@ export default function GlobalError({
     }, [error]);
 
     return (
-        <html>
+        <html lang="ru">
             <body>
                 <div className="flex h-screen items-center justify-center bg-black">
                     <div className="text-center">
@@ -27,7 +27,7 @@ export default function GlobalError({
                             {ru.errors.applicationTitle}
                         </h2>
                         <p className="text-gray-400 mb-6">
-                            {error.message || ru.errors.critical}
+                            {userFacingError(error, ru.errors.critical)}
                         </p>
                         <button
                             onClick={reset}

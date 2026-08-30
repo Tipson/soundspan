@@ -50,6 +50,84 @@ export const listenTogetherRu = {
     loading: "Загружаем сеанс…",
 } as const satisfies Record<string, string>;
 
+/** Russian feedback and failure copy emitted by shared-listening controls. */
+export const listenTogetherFeedbackRu = {
+    leftGroup: "Вы покинули группу совместного прослушивания",
+    nowHost: "Теперь вы ведущий!",
+    groupCreated: "Группа создана!",
+    groupJoined: "Вы присоединились к группе!",
+    groupLeft: "Вы покинули группу",
+    sessionEnded: "Сеанс совместного прослушивания завершён",
+    createFailed: "Не удалось создать группу",
+    joinFailed: "Не удалось присоединиться к группе",
+    leaveFailed: "Не удалось покинуть группу",
+    leaveFailedBackground: "Не удалось завершить выход из группы в фоне",
+    queueFirst500: "В общей очереди сохранены первые 500 треков",
+    queueFull: "Общая очередь уже содержит 500 треков",
+    queueLimit: "В общей очереди можно сохранить не более 500 треков.",
+    prepareTrackFailed:
+        "Не удалось подготовить трек для совместного прослушивания",
+    noValidTracks: "Нет доступных треков для добавления в общую очередь",
+    someTracksSkipped:
+        "Некоторые треки не удалось подготовить для общей очереди",
+    addTrackFailed: "Не удалось добавить трек в общую очередь",
+    addTracksFailed: "Не удалось добавить треки в общую очередь",
+    removeFromQueueFailed: "Не удалось удалить трек из общей очереди",
+    clearQueueFailed: "Не удалось очистить общую очередь",
+    audiobookUnsupported:
+        "Аудиокниги не поддерживаются в совместном прослушивании",
+    podcastUnsupported: "Подкасты не поддерживаются в совместном прослушивании",
+    matchVibeCancelled: "Подбор похожей музыки отменён",
+    matchVibeFailed: "Не удалось подобрать похожую музыку",
+    reconnectFailed:
+        "Не удалось переподключиться к совместному прослушиванию. Проверьте подключение и войдите в группу снова.",
+    routeRequired:
+        "Для совместного прослушивания требуется маршрутизация Socket.IO. Проверьте настройки прокси или туннеля.",
+    routeNotConfigured: "Маршрут для совместного прослушивания не настроен",
+    requestFailed: "Запрос совместного прослушивания не выполнен",
+} as const satisfies Record<string, string>;
+
+/** Toast shown when another listener joins the group. */
+export function formatListenTogetherMemberJoined(username: string): string {
+    return `К группе присоединился ${username}`;
+}
+
+/** Toast shown when another listener leaves the group. */
+export function formatListenTogetherMemberLeft(username: string): string {
+    return `${username} покинул группу`;
+}
+
+/** Success feedback after tracks enter the shared queue. */
+export function formatListenTogetherQueueAccepted(count: number): string {
+    const verb =
+        count % 10 === 1 && count % 100 !== 11 ? "Добавлен" : "Добавлено";
+    return `${verb} ${count} ${pluralRu(count, ["трек", "трека", "треков"])} в общую очередь`;
+}
+
+/** Warning feedback after queue entries are rejected or truncated. */
+export function formatListenTogetherQueueSkipped(count: number): string {
+    return `Пропущено ${count} ${pluralRu(count, ["трек", "трека", "треков"])} при обновлении общей очереди`;
+}
+
+/** Success after one named track enters the shared queue. */
+export function formatListenTogetherTrackAccepted(title: string): string {
+    return `«${title}» добавлен в общую очередь`;
+}
+
+/** Success after one named track is inserted after the current shared item. */
+export function formatListenTogetherTrackNext(title: string): string {
+    return `Следующий в общей очереди: «${title}»`;
+}
+
+/** Confirmation before Match Vibe mutates a shared queue. */
+export function formatMatchVibeConfirmation(count: number): string {
+    const verb =
+        count % 10 === 1 && count % 100 !== 11
+            ? "будет добавлен"
+            : "будет добавлено";
+    return `Вы слушаете вместе. В общую очередь ${verb} ${count} ${pluralRu(count, ["похожий трек", "похожих трека", "похожих треков"])}. Продолжить?`;
+}
+
 /** Russian listener count with the correct noun form. */
 export function formatListenerCount(count: number): string {
     return `${count} ${pluralRu(count, ["слушатель", "слушателя", "слушателей"])}`;

@@ -121,7 +121,7 @@ export function MusicDetailHero({
                     <div
                         className="mt-6 sm:mt-7"
                         role="group"
-                        aria-label={`${eyebrow} actions`}
+                        aria-label={`${eyebrow}: действия`}
                     >
                         {actions}
                     </div>

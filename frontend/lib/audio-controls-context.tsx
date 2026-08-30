@@ -75,6 +75,19 @@ import {
 } from "@/lib/playback-state-cadence";
 import { useVibeModeControls } from "@/lib/audio/useVibeModeControls";
 import { applyTrackClick } from "@/lib/audio-engine/playbackOccurrence";
+import { userFacingError } from "@/lib/i18n/ru";
+import {
+    formatListenTogetherQueueAccepted,
+    formatListenTogetherQueueSkipped,
+    formatListenTogetherTrackAccepted,
+    formatListenTogetherTrackNext,
+    listenTogetherFeedbackRu,
+} from "@/lib/i18n/listenDeviceRu";
+import {
+    formatQueueTrackAdded,
+    formatQueueTracksAdded,
+    formatQueueTrackNext,
+} from "@/lib/i18n/musicPagesRu";
 
 const LAST_PLAYBACK_STATE_SAVE_AT_KEY = createMigratingStorageKey(
     LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX,
@@ -132,25 +145,20 @@ function showListenTogetherQueueMutationToasts(
                 : messages.multiAccepted(result.acceptedCount),
         );
     } else {
-        toast.info(
-            messages.noneAccepted ??
-                "Group queue is already at the 500-track cap",
-        );
+        toast.info(messages.noneAccepted ?? listenTogetherFeedbackRu.queueFull);
     }
 
     if (result.truncated && result.skippedCount > 0) {
         toast.info(
             result.acceptedCount > 0
-                ? `${result.skippedCount} track${result.skippedCount === 1 ? " was" : "s were"} skipped because Listen Together queues keep only the first 500 tracks`
-                : "Listen Together queues keep only the first 500 tracks. The group queue is already full.",
+                ? `${formatListenTogetherQueueSkipped(result.skippedCount)}. ${listenTogetherFeedbackRu.queueLimit}`
+                : `${listenTogetherFeedbackRu.queueLimit} ${listenTogetherFeedbackRu.queueFull}.`,
         );
         return;
     }
 
     if (result.skippedCount > 0) {
-        toast.info(
-            `Skipped ${result.skippedCount} track${result.skippedCount === 1 ? "" : "s"} while updating the group queue`,
-        );
+        toast.info(formatListenTogetherQueueSkipped(result.skippedCount));
     }
 }
 
@@ -478,7 +486,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 );
                 const queueTrack = toListenTogetherQueueTrack(track);
                 if (!queueTrack) {
-                    toast.error("Failed to prepare track for Listen Together");
+                    toast.error(listenTogetherFeedbackRu.prepareTrackFailed);
                     return;
                 }
 
@@ -486,17 +494,25 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                     .addToQueue([queueTrack])
                     .then((result) => {
                         showListenTogetherQueueMutationToasts(result, {
-                            singleAccepted: `Added "${track.title}" to group queue`,
+                            singleAccepted: formatListenTogetherTrackAccepted(
+                                track.title,
+                            ),
                             multiAccepted: (acceptedCount) =>
                                 acceptedCount === 1
-                                    ? `Added "${track.title}" to group queue`
-                                    : `Added ${acceptedCount} tracks to group queue`,
+                                    ? formatListenTogetherTrackAccepted(
+                                          track.title,
+                                      )
+                                    : formatListenTogetherQueueAccepted(
+                                          acceptedCount,
+                                      ),
                         });
                     })
                     .catch((err) => {
                         toast.error(
-                            err?.message ||
-                                "Failed to add track to Listen Together queue",
+                            userFacingError(
+                                err,
+                                listenTogetherFeedbackRu.addTrackFailed,
+                            ),
                         );
                     });
                 return;
@@ -558,16 +574,12 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 const rejectedCount = selectedSlice.length - queueTracks.length;
 
                 if (queueTracks.length === 0) {
-                    toast.error(
-                        "No valid tracks to add to Listen Together queue",
-                    );
+                    toast.error(listenTogetherFeedbackRu.noValidTracks);
                     return;
                 }
 
                 if (rejectedCount > 0) {
-                    toast.error(
-                        "Some tracks were skipped while preparing group queue items",
-                    );
+                    toast.error(listenTogetherFeedbackRu.someTracksSkipped);
                 }
 
                 const trackPayloads = queueTracks.map(
@@ -577,15 +589,21 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                     .addToQueue(trackPayloads)
                     .then((result) => {
                         showListenTogetherQueueMutationToasts(result, {
-                            singleAccepted: `Added "${queueTracks[0].track.title}" to group queue`,
+                            singleAccepted: formatListenTogetherTrackAccepted(
+                                queueTracks[0].track.title,
+                            ),
                             multiAccepted: (acceptedCount) =>
-                                `Added ${acceptedCount} tracks to group queue`,
+                                formatListenTogetherQueueAccepted(
+                                    acceptedCount,
+                                ),
                         });
                     })
                     .catch((err) => {
                         toast.error(
-                            err?.message ||
-                                "Failed to add tracks to Listen Together queue",
+                            userFacingError(
+                                err,
+                                listenTogetherFeedbackRu.addTracksFailed,
+                            ),
                         );
                     });
                 return;
@@ -644,7 +662,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
-                toast.error("Audiobooks are not supported in Listen Together");
+                toast.error(listenTogetherFeedbackRu.audiobookUnsupported);
                 return;
             }
 
@@ -713,7 +731,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
-                toast.error("Podcasts are not supported in Listen Together");
+                toast.error(listenTogetherFeedbackRu.podcastUnsupported);
                 return;
             }
 
@@ -1151,13 +1169,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 const rejectedCount = validTracks.length - queueTracks.length;
 
                 if (queueTracks.length === 0) {
-                    toast.error("Failed to prepare tracks for Listen Together");
+                    toast.error(listenTogetherFeedbackRu.prepareTrackFailed);
                     return;
                 }
                 if (rejectedCount > 0) {
-                    toast.error(
-                        "Some tracks were skipped while preparing group queue items",
-                    );
+                    toast.error(listenTogetherFeedbackRu.someTracksSkipped);
                 }
 
                 const trackPayloads = queueTracks.map(
@@ -1168,15 +1184,21 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                     .then((result) => {
                         if (!shouldToastSuccess) return;
                         showListenTogetherQueueMutationToasts(result, {
-                            singleAccepted: `Added "${queueTracks[0].track.title}" to group queue`,
+                            singleAccepted: formatListenTogetherTrackAccepted(
+                                queueTracks[0].track.title,
+                            ),
                             multiAccepted: (acceptedCount) =>
-                                `Added ${acceptedCount} tracks to group queue`,
+                                formatListenTogetherQueueAccepted(
+                                    acceptedCount,
+                                ),
                         });
                     })
                     .catch((err) => {
                         toast.error(
-                            err?.message ||
-                                "Failed to add track to Listen Together queue",
+                            userFacingError(
+                                err,
+                                listenTogetherFeedbackRu.addTrackFailed,
+                            ),
                         );
                     });
                 return;
@@ -1218,11 +1240,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 if (shouldToastSuccess) {
                     if (validTracks.length === 1) {
                         toast.success(
-                            `Added "${validTracks[0].title}" to queue`,
+                            formatQueueTrackAdded(validTracks[0].title),
                         );
                     } else {
                         toast.success(
-                            `Added ${validTracks.length} tracks to queue`,
+                            formatQueueTracksAdded(validTracks.length),
                         );
                     }
                 }
@@ -1249,11 +1271,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 if (shouldToastSuccess) {
                     if (validTracks.length === 1) {
                         toast.success(
-                            `Added "${validTracks[0].title}" to queue`,
+                            formatQueueTrackAdded(validTracks[0].title),
                         );
                     } else {
                         toast.success(
-                            `Added ${validTracks.length} tracks to queue`,
+                            formatQueueTracksAdded(validTracks.length),
                         );
                     }
                 }
@@ -1310,11 +1332,9 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
             if (shouldToastSuccess) {
                 if (validTracks.length === 1) {
-                    toast.success(`Added "${validTracks[0].title}" to queue`);
+                    toast.success(formatQueueTrackAdded(validTracks[0].title));
                 } else {
-                    toast.success(
-                        `Added ${validTracks.length} tracks to queue`,
-                    );
+                    toast.success(formatQueueTracksAdded(validTracks.length));
                 }
             }
         },
@@ -1346,24 +1366,30 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             if (ltSession) {
                 const queueTrack = toListenTogetherQueueTrack(track);
                 if (!queueTrack) {
-                    toast.error("Failed to prepare track for Listen Together");
+                    toast.error(listenTogetherFeedbackRu.prepareTrackFailed);
                     return;
                 }
                 void listenTogetherSocket
                     .insertNext([queueTrack])
                     .then((result) => {
                         showListenTogetherQueueMutationToasts(result, {
-                            singleAccepted: `Playing "${track.title}" next in group queue`,
+                            singleAccepted: formatListenTogetherTrackNext(
+                                track.title,
+                            ),
                             multiAccepted: (acceptedCount) =>
                                 acceptedCount === 1
-                                    ? `Playing "${track.title}" next in group queue`
-                                    : `Added ${acceptedCount} tracks to group queue`,
+                                    ? formatListenTogetherTrackNext(track.title)
+                                    : formatListenTogetherQueueAccepted(
+                                          acceptedCount,
+                                      ),
                         });
                     })
                     .catch((err) => {
                         toast.error(
-                            err?.message ||
-                                "Failed to add track to Listen Together queue",
+                            userFacingError(
+                                err,
+                                listenTogetherFeedbackRu.addTrackFailed,
+                            ),
                         );
                     });
                 return;
@@ -1382,7 +1408,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 playbackState.setCurrentTime(0);
                 state.setRepeatOneCount(0);
                 state.setShuffleIndices(generateShuffleIndices(1, 0));
-                toast.success(`Playing "${track.title}" next`);
+                toast.success(formatQueueTrackNext(track.title));
                 return;
             }
 
@@ -1397,7 +1423,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 if (state.isShuffle) {
                     state.setShuffleIndices([0, 1]);
                 }
-                toast.success(`Playing "${track.title}" next`);
+                toast.success(formatQueueTrackNext(track.title));
                 return;
             }
 
@@ -1434,7 +1460,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 });
             }
 
-            toast.success(`Playing "${track.title}" next`);
+            toast.success(formatQueueTrackNext(track.title));
             queueDebugLog("playNext()", {
                 trackId: track.id,
                 insertAt,
@@ -1464,24 +1490,32 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             if (ltSession) {
                 const queueTrack = toListenTogetherQueueTrack(track);
                 if (!queueTrack) {
-                    toast.error("Failed to prepare track for Listen Together");
+                    toast.error(listenTogetherFeedbackRu.prepareTrackFailed);
                     return;
                 }
                 void listenTogetherSocket
                     .addToQueue([queueTrack])
                     .then((result) => {
                         showListenTogetherQueueMutationToasts(result, {
-                            singleAccepted: `Added "${track.title}" to group queue`,
+                            singleAccepted: formatListenTogetherTrackAccepted(
+                                track.title,
+                            ),
                             multiAccepted: (acceptedCount) =>
                                 acceptedCount === 1
-                                    ? `Added "${track.title}" to group queue`
-                                    : `Added ${acceptedCount} tracks to group queue`,
+                                    ? formatListenTogetherTrackAccepted(
+                                          track.title,
+                                      )
+                                    : formatListenTogetherQueueAccepted(
+                                          acceptedCount,
+                                      ),
                         });
                     })
                     .catch((err) => {
                         toast.error(
-                            err?.message ||
-                                "Failed to add track to Listen Together queue",
+                            userFacingError(
+                                err,
+                                listenTogetherFeedbackRu.addTrackFailed,
+                            ),
                         );
                     });
                 return;
@@ -1589,7 +1623,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
-                toast.error("Podcasts are not supported in Listen Together");
+                toast.error(listenTogetherFeedbackRu.podcastUnsupported);
                 return;
             }
 
@@ -1621,7 +1655,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 );
                 state.setQueue([currentItem, item]);
                 state.setCurrentIndex(0);
-                toast.success(`Added "${episode.title}" to queue`);
+                toast.success(formatQueueTrackAdded(episode.title));
                 return;
             }
 
@@ -1639,7 +1673,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         : [...prevIndices, prevIndices.length],
                 );
             }
-            toast.success(`Added "${episode.title}" to queue`);
+            toast.success(formatQueueTrackAdded(episode.title));
         },
         [
             state,
@@ -1660,7 +1694,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
-                toast.error("Podcasts are not supported in Listen Together");
+                toast.error(listenTogetherFeedbackRu.podcastUnsupported);
                 return;
             }
 
@@ -1690,7 +1724,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 );
                 state.setQueue([currentItem, item]);
                 state.setCurrentIndex(0);
-                toast.success(`Playing "${episode.title}" next`);
+                toast.success(formatQueueTrackNext(episode.title));
                 return;
             }
 
@@ -1722,7 +1756,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                     return newIndices;
                 });
             }
-            toast.success(`Playing "${episode.title}" next`);
+            toast.success(formatQueueTrackNext(episode.title));
         },
         [
             state,

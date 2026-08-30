@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { SoulseekResult } from "../types";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 interface UseSoulseekSearchProps {
     query: string;
@@ -190,11 +192,9 @@ export function useSoulseekSearch({
             }, 5000);
         } catch (error) {
             sharedFrontendLogger.error("Download error:", error);
-            const message =
-                error instanceof Error
-                    ? error.message
-                    : "Failed to start download";
-            toast.error(message);
+            toast.error(
+                userFacingError(error, searchExtrasRu.soulseek.startFailed),
+            );
             setDownloadingFiles((prev) => {
                 const newSet = new Set(prev);
                 newSet.delete(result.filename);

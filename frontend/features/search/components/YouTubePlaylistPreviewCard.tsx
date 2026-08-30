@@ -6,6 +6,12 @@ import type {
     BulkDownloadProgress,
     YouTubePlaylistInfo,
 } from "@/lib/youtube-bulk-download";
+import {
+    formatYouTubeBulkUnfinished,
+    formatYouTubePlaylistPreviewCount,
+    formatYouTubePlaylistRemaining,
+    searchExtrasRu,
+} from "@/lib/i18n/searchExtrasRu";
 
 interface YouTubePlaylistPreviewCardProps {
     playlistInfo: YouTubePlaylistInfo | null;
@@ -75,14 +81,13 @@ export function YouTubePlaylistPreviewCard({
 
     const heading =
         playlistInfo.kind === "channel"
-            ? "YouTube Channel"
-            : "YouTube Playlist";
-    const trackWord = playlistInfo.count === 1 ? "track" : "tracks";
-    const countLabel = playlistInfo.truncated
-        ? `Showing first ${playlistInfo.count}${
-              playlistInfo.totalCount ? ` of ${playlistInfo.totalCount}` : ""
-          } ${trackWord}`
-        : `${playlistInfo.count} ${trackWord}`;
+            ? searchExtrasRu.youtubeDownload.channel
+            : searchExtrasRu.youtubeDownload.playlist;
+    const countLabel = formatYouTubePlaylistPreviewCount(
+        playlistInfo.count,
+        playlistInfo.totalCount,
+        playlistInfo.truncated,
+    );
 
     const previewEntries = playlistInfo.entries.slice(0, PREVIEW_ROWS);
     const remaining = playlistInfo.count - previewEntries.length;
@@ -113,7 +118,11 @@ export function YouTubePlaylistPreviewCard({
                             {playlistInfo.truncated && (
                                 <span className="text-gray-400">
                                     {" "}
-                                    — paste with a smaller list to get them all
+                                    —{" "}
+                                    {
+                                        searchExtrasRu.youtubeDownload
+                                            .truncationHint
+                                    }
                                 </span>
                             )}
                         </p>
@@ -137,7 +146,9 @@ export function YouTubePlaylistPreviewCard({
                         {remaining > 0 && (
                             <li className="flex gap-3 text-gray-400">
                                 <span className="w-5 shrink-0" />
-                                <span>+{remaining} more</span>
+                                <span>
+                                    {formatYouTubePlaylistRemaining(remaining)}
+                                </span>
                             </li>
                         )}
                     </ol>
@@ -158,13 +169,18 @@ export function YouTubePlaylistPreviewCard({
                                     <>
                                         <Loader2 className="w-4 h-4 animate-spin" />
                                         {progress
-                                            ? `Downloading… ${progress.completed}/${progress.total}`
-                                            : "Downloading…"}
+                                            ? `${searchExtrasRu.youtubeDownload.downloading} ${progress.completed}/${progress.total}`
+                                            : searchExtrasRu.youtubeDownload
+                                                  .downloading}
                                     </>
                                 ) : (
                                     <>
                                         <Download className="w-4 h-4" />
-                                        Download all ({playlistInfo.count})
+                                        {
+                                            searchExtrasRu.youtubeDownload
+                                                .downloadAll
+                                        }{" "}
+                                        ({playlistInfo.count})
                                         <ChevronDown className="w-3 h-3" />
                                     </>
                                 )}
@@ -196,7 +212,7 @@ export function YouTubePlaylistPreviewCard({
                                 className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
                             >
                                 <X className="w-4 h-4" />
-                                Cancel
+                                {searchExtrasRu.youtubeDownload.cancel}
                             </button>
                         )}
                     </div>
@@ -213,8 +229,16 @@ export function YouTubePlaylistPreviewCard({
                         </div>
                         {progress.failed > 0 && (
                             <p className="text-xs text-gray-400 mt-1.5">
-                                {progress.failed} unfinished (continuing in the
-                                background)
+                                {formatYouTubeBulkUnfinished(
+                                    progress.completed,
+                                    progress.total,
+                                    progress.failed,
+                                )}{" "}
+                                —{" "}
+                                {
+                                    searchExtrasRu.youtubeDownload
+                                        .unfinishedBackground
+                                }
                             </p>
                         )}
                     </div>

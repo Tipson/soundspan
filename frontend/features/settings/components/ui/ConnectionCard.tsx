@@ -51,7 +51,7 @@ export function ConnectionCard({
                     </div>
                     {connected && connectedAs ? (
                         <div className="text-xs text-gray-400">
-                            Connected as{" "}
+                            Подключено как{" "}
                             <span className="text-white">{connectedAs}</span>
                         </div>
                     ) : description ? (

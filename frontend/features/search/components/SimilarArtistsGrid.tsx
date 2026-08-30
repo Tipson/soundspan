@@ -5,6 +5,7 @@ import { DiscoverResult } from "../types";
 import { api } from "@/lib/api";
 import { formatListeners } from "@/lib/format";
 import { getDiscoveryArtistHref } from "@/utils/artistRoute";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 interface SimilarArtistsGridProps {
     similarArtists: DiscoverResult[];
@@ -22,7 +23,7 @@ const getProxiedImageUrl = (imageUrl: string | undefined): string | null => {
  */
 export function SimilarArtistsGrid({
     similarArtists,
-    title = "Related Artists",
+    title = searchExtrasRu.artist.related,
     titleHref,
 }: SimilarArtistsGridProps) {
     if (similarArtists.length === 0) {

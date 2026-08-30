@@ -2,5 +2,5 @@
 export function formatPlaylistDuration(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    return hours > 0 ? `about ${hours} hr ${minutes} min` : `${minutes} min`;
+    return hours > 0 ? `около ${hours} ч ${minutes} мин` : `${minutes} мин`;
 }

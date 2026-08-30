@@ -281,7 +281,7 @@ export const TrackList = memo(function TrackList({
     );
 
     return (
-        <MusicDetailTrackSurface label={`${album.title} tracks`}>
+        <MusicDetailTrackSurface label={`${album.title}: треки`}>
             <SharedTrackList<Track>
                 items={tracks}
                 toRowItem={toRowItem}

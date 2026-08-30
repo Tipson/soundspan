@@ -12,6 +12,9 @@ import {
     formatMixTrackCount,
     formatOnboardingConnectionSuccess,
     formatQueueCount,
+    formatQueueTrackAdded,
+    formatQueueTracksAdded,
+    formatQueueTrackNext,
     formatQueueSaveDescription,
     formatQueueSaved,
     mixRu,
@@ -30,6 +33,12 @@ test("динамическая микрокопия основных музык�
         formatQueueSaved(3, "В дорогу"),
         "3 трека сохранено в плейлист «В дорогу»",
     );
+    assert.equal(
+        formatQueueTrackAdded("Солнце"),
+        "«Солнце» добавлен в очередь",
+    );
+    assert.equal(formatQueueTracksAdded(24), "Добавлено в очередь: 24 трека");
+    assert.equal(formatQueueTrackNext("Солнце"), "Следующий трек: «Солнце»");
     assert.equal(
         formatArtistLoadMoreTracks(50, 123),
         "Показать ещё треки (50 из 123)",

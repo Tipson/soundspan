@@ -12,6 +12,10 @@ import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import {
+    formatGoToSearchArtistAria,
+    formatPlaySearchTrackAria,
+} from "@/lib/i18n/searchExtrasRu";
+import {
     useSearchTrackMatches,
     type SearchMatchTarget,
     type SearchProviderMatch,
@@ -203,8 +207,11 @@ export function DiscoverTracksList({
                         className="group flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-transparent px-2.5 py-2 transition-colors hover:border-white/[0.06] hover:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:gap-4 sm:px-3"
                         aria-label={
                             isPlayable
-                                ? `Play ${track.name} by ${track.artist ?? ""}`
-                                : `Go to ${track.artist ?? "artist"}`
+                                ? formatPlaySearchTrackAria(
+                                      track.name,
+                                      track.artist,
+                                  )
+                                : formatGoToSearchArtistAria(track.artist)
                         }
                     >
                         <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-elevated">

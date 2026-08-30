@@ -93,7 +93,7 @@ export function YouTubeMusicAdminSection({
                     {oauthExpanded && (
                         <>
                             <SettingsRow
-                                label="Client ID"
+                                label="Идентификатор клиента"
                                 description={
                                     <>
                                         {
@@ -130,7 +130,7 @@ export function YouTubeMusicAdminSection({
                             </SettingsRow>
 
                             <SettingsRow
-                                label="Client Secret"
+                                label="Секрет клиента"
                                 description={
                                     adminActivityRu.admin.youtubeMusic
                                         .clientSecretDescription

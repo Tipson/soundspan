@@ -31,7 +31,7 @@ import {
     BRAND_NAME_TRADEMARK,
 } from "@/lib/brand";
 import { frontendLogger } from "@/lib/logger";
-import { pluralRu, ru } from "@/lib/i18n/ru";
+import { pluralRu, ru, userFacingError } from "@/lib/i18n/ru";
 
 interface Artist {
     id: string;
@@ -189,11 +189,7 @@ function useOidcCodeExchange(
                 loginLogger.error("OIDC code exchange failed", {
                     error: caught,
                 });
-                setError(
-                    caught instanceof Error
-                        ? caught.message
-                        : ru.auth.completeSsoError,
-                );
+                setError(userFacingError(caught, ru.auth.completeSsoError));
                 stripQueryParameter("ssoCode");
                 setState({ failed: true, pending: false });
             });
@@ -508,7 +504,11 @@ function ArtistInfo({ artist }: { artist: Artist }) {
             {artist.albumCount !== undefined && (
                 <p className="text-white/70 text-sm">
                     {artist.albumCount}{" "}
-                    {pluralRu(artist.albumCount, ["альбом", "альбома", "альбомов"])}{" "}
+                    {pluralRu(artist.albumCount, [
+                        "альбом",
+                        "альбома",
+                        "альбомов",
+                    ])}{" "}
                     {ru.auth.inYourLibrary}
                 </p>
             )}

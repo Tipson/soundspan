@@ -6,6 +6,8 @@ import {
     formatDuplicatesSummaryRu,
     formatMetadataGapsSummaryRu,
     formatPendingRequestsRu,
+    formatCollectionLikedRu,
+    formatCollectionPreferencesClearedRu,
     formatQualitySummaryRu,
     formatReleaseCalendarDateRu,
     formatReleaseRadarSummaryRu,
@@ -80,6 +82,19 @@ test("request filters, statuses and dates never expose raw English fallbacks", (
         /20 авг\. 2026 г\./,
     );
     assert.equal(formatRequestDateRu("not-a-date"), "");
+});
+
+test("collection preference feedback uses Russian count forms", () => {
+    assert.equal(formatCollectionLikedRu(1), "Понравился 1 трек");
+    assert.equal(formatCollectionLikedRu(24), "Понравились 24 трека");
+    assert.equal(
+        formatCollectionPreferencesClearedRu(1),
+        "Отметка очищена у 1 трека",
+    );
+    assert.equal(
+        formatCollectionPreferencesClearedRu(12),
+        "Отметки очищены у 12 треков",
+    );
 });
 
 test("target pages do not retain direct English UI literals", () => {

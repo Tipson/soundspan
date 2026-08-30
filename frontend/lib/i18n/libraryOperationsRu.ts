@@ -172,6 +172,20 @@ export function formatTrackCountRu(count: number): string {
     return countRu(count, ["трек", "трека", "треков"]);
 }
 
+export function formatCollectionLikedRu(count: number): string {
+    const verb =
+        count % 10 === 1 && count % 100 !== 11 ? "Понравился" : "Понравились";
+    return `${verb} ${countRu(count, ["трек", "трека", "треков"])}`;
+}
+
+export function formatCollectionPreferencesClearedRu(count: number): string {
+    const verb =
+        count % 10 === 1 && count % 100 !== 11
+            ? "Отметка очищена"
+            : "Отметки очищены";
+    return `${verb} у ${countRu(count, ["трека", "треков", "треков"])}`;
+}
+
 export function formatShowingRu(
     visible: number,
     total: number,

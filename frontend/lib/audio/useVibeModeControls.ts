@@ -5,6 +5,12 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Track, useAudioState } from "@/lib/audio-state-context";
 import { isEpisodeQueueItem } from "@/lib/queue-item";
+import {
+    formatListenTogetherQueueAccepted,
+    formatMatchVibeConfirmation,
+    listenTogetherFeedbackRu,
+} from "@/lib/i18n/listenDeviceRu";
+import { userFacingError } from "@/lib/i18n/ru";
 import { listenTogetherSocket } from "@/lib/listen-together-socket";
 import type { ListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
 import { frontendLogger } from "@/lib/logger";
@@ -152,10 +158,14 @@ export function useVibeModeControls({
                     if (listenTogetherSession) {
                         if (typeof window !== "undefined") {
                             const confirmed = window.confirm(
-                                `You're in a Listen Together group. Match Vibe will add ${continuation.length} similar track${continuation.length === 1 ? "" : "s"} to the shared queue. Continue?`,
+                                formatMatchVibeConfirmation(
+                                    continuation.length,
+                                ),
                             );
                             if (!confirmed) {
-                                toast.info("Match Vibe cancelled");
+                                toast.info(
+                                    listenTogetherFeedbackRu.matchVibeCancelled,
+                                );
                                 return { success: false, trackCount: 0 };
                             }
                         }
@@ -164,9 +174,12 @@ export function useVibeModeControls({
                                 continuation.map(toAddToPlaylistRef),
                             );
                         showQueueMutationToasts(queueResult, {
-                            singleAccepted: "Added 1 track to group queue",
+                            singleAccepted:
+                                formatListenTogetherQueueAccepted(1),
                             multiAccepted: (acceptedCount) =>
-                                `Added ${acceptedCount} tracks to group queue`,
+                                formatListenTogetherQueueAccepted(
+                                    acceptedCount,
+                                ),
                         });
                         return {
                             success: queueResult.acceptedCount > 0,
@@ -227,15 +240,13 @@ export function useVibeModeControls({
                     }
 
                     if (typeof window !== "undefined") {
-                        const trackLabel =
-                            uniqueQueueIds.length === 1
-                                ? "1 song"
-                                : `${uniqueQueueIds.length} songs`;
                         const confirmed = window.confirm(
-                            `You're in a Listen Together group. Match Vibe will add ${trackLabel} to the shared queue. Continue?`,
+                            formatMatchVibeConfirmation(uniqueQueueIds.length),
                         );
                         if (!confirmed) {
-                            toast.info("Match Vibe cancelled");
+                            toast.info(
+                                listenTogetherFeedbackRu.matchVibeCancelled,
+                            );
                             return { success: false, trackCount: 0 };
                         }
                     }
@@ -243,9 +254,9 @@ export function useVibeModeControls({
                     const queueResult =
                         await listenTogetherSocket.addToQueue(uniqueQueueIds);
                     showQueueMutationToasts(queueResult, {
-                        singleAccepted: "Added 1 track to group queue",
+                        singleAccepted: formatListenTogetherQueueAccepted(1),
                         multiAccepted: (acceptedCount) =>
-                            `Added ${acceptedCount} tracks to group queue`,
+                            formatListenTogetherQueueAccepted(acceptedCount),
                     });
                     return {
                         success: queueResult.acceptedCount > 0,
@@ -305,9 +316,12 @@ export function useVibeModeControls({
                     "[Vibe] Failed to get similar tracks:",
                     error,
                 );
-                if (error instanceof Error) {
-                    toast.error(error.message);
-                }
+                toast.error(
+                    userFacingError(
+                        error,
+                        listenTogetherFeedbackRu.matchVibeFailed,
+                    ),
+                );
                 return { success: false, trackCount: 0 };
             }
         },

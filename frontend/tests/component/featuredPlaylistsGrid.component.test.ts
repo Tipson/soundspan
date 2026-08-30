@@ -82,7 +82,7 @@ test("renders playlist cards with artwork only — no overlaid controls", async 
     const card = container.querySelector("[data-tv-card]");
     assert.ok(card, "expected a playlist card to render");
     assert.match(card.textContent ?? "", /Community Favorites/);
-    assert.match(card.textContent ?? "", /12 songs/);
+    assert.match(card.textContent ?? "", /12 треков/);
     assert.equal(card.getAttribute("tabindex"), "0");
 
     // Behavioral invariant: nothing interactive or decorative sits on top

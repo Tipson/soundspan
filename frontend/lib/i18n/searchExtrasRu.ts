@@ -2,6 +2,10 @@ import { pluralRu } from "./ru";
 
 /** Russian copy for secondary search and YouTube Music discovery surfaces. */
 export const searchExtrasRu = {
+    alias: {
+        showing: "Показаны результаты для",
+        query: "по запросу",
+    },
     youtubePlaylist: {
         unknownArtist: "Неизвестный исполнитель",
         single: "Сингл",
@@ -29,6 +33,19 @@ export const searchExtrasRu = {
         addingTracks: "Добавляем треки…",
     },
     youtubeDownload: {
+        play: "Воспроизвести",
+        download: "Скачать",
+        downloadAll: "Скачать всё",
+        downloading: "Загружаем…",
+        cancel: "Отменить",
+        channel: "Канал YouTube",
+        playlist: "Плейлист YouTube",
+        truncationHint:
+            "вставьте ссылку на список меньшего размера, чтобы получить все треки",
+        unfinishedBackground: "Незавершённые файлы могут загрузиться в фоне.",
+        playlistLoadFailed: "Не удалось загрузить плейлист или канал",
+        noPreview: "Предпрослушивание YouTube недоступно",
+        previewFailed: "Не удалось воспроизвести фрагмент",
         alreadyDownloaded: "Уже загружено — сканируем медиатеку",
         addedToLibrary: "Добавлено в медиатеку — сканируем",
         failed: "Не удалось загрузить",
@@ -41,6 +58,7 @@ export const searchExtrasRu = {
         description: "Мгновенный поток не найден, но эти файлы можно сохранить",
         downloading: "Загружаем",
         download: "Скачать",
+        startFailed: "Не удалось начать загрузку",
     },
     tvSearch: {
         label: "Поиск музыки",
@@ -49,8 +67,85 @@ export const searchExtrasRu = {
     },
     artist: {
         type: "Исполнитель",
+        fallback: "исполнитель",
+        related: "Похожие исполнители",
     },
+    podcastFallback: "Подкаст",
+    unknownAuthor: "Неизвестный автор",
 } as const;
+
+/** Search alias explanation kept as one accessible status sentence. */
+export function formatAliasResolution(
+    canonical: string,
+    original: string,
+): string {
+    return `Показаны результаты для ${canonical} (по запросу «${original}»)`;
+}
+
+/** Accessible action for a playable provider-search row. */
+export function formatPlaySearchTrackAria(
+    title: string,
+    artist: string | null | undefined,
+): string {
+    return artist
+        ? `Воспроизвести «${title}» — ${artist}`
+        : `Воспроизвести «${title}»`;
+}
+
+/** Accessible action for an unplayable row that opens its artist. */
+export function formatGoToSearchArtistAria(
+    artist: string | null | undefined,
+): string {
+    return `Открыть исполнителя ${artist ?? searchExtrasRu.artist.fallback}`;
+}
+
+/** Playlist/channel count, including provider truncation metadata. */
+export function formatYouTubePlaylistPreviewCount(
+    count: number,
+    totalCount: number | null | undefined,
+    truncated: boolean,
+): string {
+    if (truncated) {
+        const total = totalCount ? ` из ${totalCount}` : "";
+        const nounCount = totalCount || count;
+        return `Показаны первые ${count}${total} ${pluralRu(nounCount, ["трек", "трека", "треков"])}`;
+    }
+    return formatYouTubePlaylistTrackCount(count);
+}
+
+/** Collapsed remainder beneath a short playlist preview. */
+export function formatYouTubePlaylistRemaining(count: number): string {
+    return `+${count} ${pluralRu(count, ["трек", "трека", "треков"])}`;
+}
+
+/** Aggregate bulk-download cancellation result. */
+export function formatYouTubeBulkStopped(
+    completed: number,
+    total: number,
+): string {
+    return `Остановлено — загружено ${completed} из ${total}`;
+}
+
+/** Aggregate bulk-download success result. */
+export function formatYouTubeBulkSuccess(
+    completed: number,
+    total: number,
+): string {
+    return `Загружено ${completed} из ${total} — сканируем медиатеку`;
+}
+
+/** Aggregate bulk-download partial-success result. */
+export function formatYouTubeBulkUnfinished(
+    completed: number,
+    total: number,
+    failed: number,
+): string {
+    const adjective =
+        failed % 10 === 1 && failed % 100 !== 11
+            ? "не завершён"
+            : "не завершено";
+    return `Загружено ${completed} из ${total}, ${adjective} ${failed} ${pluralRu(failed, ["файл", "файла", "файлов"])}`;
+}
 
 /** Description for a chart item while preserving artist metadata. */
 export function formatYouTubeChartTrackDescription(artist: string): string {
