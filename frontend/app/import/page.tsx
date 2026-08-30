@@ -12,7 +12,13 @@ import {
     type PlaylistImportResolvedTrack,
 } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
-import { ru } from "@/lib/i18n/ru";
+import { ru, userFacingError } from "@/lib/i18n/ru";
+import {
+    formatImportResolutionSubtitle,
+    formatImportSkipped,
+    formatImportSongsFound,
+    importPageRu,
+} from "@/lib/i18n/utilityPagesRu";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { formatTime } from "@/utils/formatTime";
@@ -39,18 +45,8 @@ function tryParsePlaylistUrl(rawInput: string): URL | null {
     }
 }
 
-function getErrorMessage(error: unknown, fallback: string): string {
-    return error instanceof Error ? error.message : fallback;
-}
-
 function getResolutionSubtitle(track: PlaylistImportResolvedTrack): string {
-    if (track.source === "unresolved") {
-        return "No provider match";
-    }
-    if (track.confidence > 0) {
-        return `${track.confidence}% confidence`;
-    }
-    return "Resolved";
+    return formatImportResolutionSubtitle(track);
 }
 
 /**
@@ -117,9 +113,9 @@ export function ImportResolutionBadge({
         return (
             <span
                 className="shrink-0 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded"
-                title="LOCAL"
+                title={importPageRu.localBadge}
             >
-                LOCAL
+                {importPageRu.localBadge}
             </span>
         );
     }
@@ -135,9 +131,9 @@ export function ImportResolutionBadge({
     return (
         <span
             className="shrink-0 text-[10px] font-bold bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded"
-            title="UNRESOLVED"
+            title={importPageRu.unresolvedBadge}
         >
-            UNRESOLVED
+            {importPageRu.unresolvedBadge}
         </span>
     );
 }
@@ -153,7 +149,7 @@ export function PreviewTrackResolutionList({
     if (tracks.length === 0) {
         return (
             <div className="p-4 text-sm text-gray-400">
-                No tracks found in this playlist.
+                {importPageRu.noTracks}
             </div>
         );
     }
@@ -238,7 +234,7 @@ function ImportPageContent() {
                 setM3uPlaylistName(defaultName);
             };
             reader.onerror = () => {
-                toast.error("Failed to read file");
+                toast.error(importPageRu.fileReadFailed);
             };
             reader.readAsText(file);
         },
@@ -247,7 +243,7 @@ function ImportPageContent() {
 
     const fetchM3uPreview = useCallback(async () => {
         if (!m3uContent) {
-            toast.error("Please select an M3U file");
+            toast.error(importPageRu.selectM3uFirst);
             return;
         }
 
@@ -261,7 +257,7 @@ function ImportPageContent() {
             setPlaylistName(response.playlistName);
             setStep("preview");
         } catch (error) {
-            toast.error(getErrorMessage(error, "Failed to preview M3U file"));
+            toast.error(userFacingError(error, importPageRu.previewM3uFailed));
         } finally {
             setIsPreviewLoading(false);
         }
@@ -286,7 +282,7 @@ function ImportPageContent() {
             window.dispatchEvent(new CustomEvent("playlist-created"));
         } catch (error) {
             setStep("preview");
-            toast.error(getErrorMessage(error, "Failed to import playlist"));
+            toast.error(userFacingError(error, importPageRu.importFailed));
         } finally {
             setIsExecuting(false);
         }
@@ -299,9 +295,7 @@ function ImportPageContent() {
             }
             const parsedUrl = tryParsePlaylistUrl(nextUrl);
             if (!parsedUrl || !isSupportedPlaylistUrl(parsedUrl.href)) {
-                toast.error(
-                    "Supported URLs: Spotify, Deezer, YouTube Music, and TIDAL playlists",
-                );
+                toast.error(importPageRu.supportedUrls);
                 return;
             }
             const nextCanonicalUrl = parsedUrl.href;
@@ -312,13 +306,9 @@ function ImportPageContent() {
             try {
                 const result = await api.submitImportJob(nextCanonicalUrl);
                 if (result.deduped) {
-                    toast.info(
-                        "An import for this playlist is already in progress",
-                    );
+                    toast.info(importPageRu.alreadyInProgress);
                 } else {
-                    toast.success(
-                        "Import job submitted — check the Imports tab in Activity",
-                    );
+                    toast.success(importPageRu.jobSubmitted);
                 }
                 window.dispatchEvent(
                     new CustomEvent("import-jobs-changed", {
@@ -327,9 +317,7 @@ function ImportPageContent() {
                 );
                 setUrlInput("");
             } catch (error) {
-                toast.error(
-                    getErrorMessage(error, "Failed to submit import job"),
-                );
+                toast.error(userFacingError(error, importPageRu.submitFailed));
             } finally {
                 jobSubmissionInFlightRef.current = false;
                 setIsJobSubmitting(false);
@@ -396,7 +384,7 @@ function ImportPageContent() {
             <div className="relative max-w-3xl mx-auto px-6 py-6">
                 <div className="flex items-center gap-4 mb-6">
                     <button
-                        aria-label="Back"
+                        aria-label={importPageRu.back}
                         onClick={() => router.back()}
                         className="p-2 hover:bg-white/5 rounded-full transition-colors"
                     >
@@ -451,7 +439,9 @@ function ImportPageContent() {
                                         onChange={(event) =>
                                             setUrlInput(event.target.value)
                                         }
-                                        placeholder="Paste a Spotify, Deezer, YouTube Music, or TIDAL playlist URL"
+                                        placeholder={
+                                            importPageRu.urlPlaceholder
+                                        }
                                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-colors"
                                         onKeyDown={(event) =>
                                             event.key === "Enter" &&
@@ -461,31 +451,10 @@ function ImportPageContent() {
                                         }
                                     />
                                     <p className="text-xs text-gray-400 mt-2">
-                                        Paste a{" "}
-                                        <span className="text-[#1DB954]">
-                                            Spotify
-                                        </span>
-                                        ,{" "}
-                                        <span className="text-[#AD47FF]">
-                                            Deezer
-                                        </span>
-                                        ,{" "}
-                                        <span className="text-red-400">
-                                            YouTube Music
-                                        </span>
-                                        , or{" "}
-                                        <span className="text-[#00BFFF]">
-                                            TIDAL
-                                        </span>{" "}
-                                        playlist URL
+                                        {importPageRu.urlHint}
                                     </p>
                                     <p className="mt-2 text-xs leading-5 text-gray-400">
-                                        Spotify is used only to read the public
-                                        playlist track list. Soundspan does not
-                                        play audio from Spotify, change the
-                                        source playlist, or save audio files to
-                                        the server. Private playlists are not
-                                        supported yet.
+                                        {importPageRu.spotifyBoundary}
                                     </p>
                                 </div>
                                 <div className="space-y-2">
@@ -547,8 +516,7 @@ function ImportPageContent() {
                                         onChange={handleM3uFileSelect}
                                     />
                                     <p className="text-xs text-gray-400 mt-2">
-                                        Tracks are matched against your local
-                                        library using file paths and metadata
+                                        {importPageRu.m3uMatchHint}
                                     </p>
                                 </div>
                                 {m3uContent && (
@@ -564,7 +532,10 @@ function ImportPageContent() {
                                                     event.target.value,
                                                 )
                                             }
-                                            placeholder={ru.import.playlistNamePlaceholder}
+                                            placeholder={
+                                                ru.import
+                                                    .playlistNamePlaceholder
+                                            }
                                             className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-colors"
                                         />
                                     </div>
@@ -599,7 +570,9 @@ function ImportPageContent() {
                                     {preview.playlistName}
                                 </h2>
                                 <p className="text-sm text-gray-400">
-                                    {preview.summary.total} songs found
+                                    {formatImportSongsFound(
+                                        preview.summary.total,
+                                    )}
                                 </p>
                             </div>
                         </div>
@@ -618,7 +591,7 @@ function ImportPageContent() {
                                     {preview.summary.local}
                                 </div>
                                 <div className="text-xs text-gray-400">
-                                    Local
+                                    {importPageRu.localSummary}
                                 </div>
                             </div>
                             <div className="text-center py-3 bg-red-500/10 rounded-lg">
@@ -721,12 +694,12 @@ function ImportPageContent() {
                             {ru.import.complete}
                         </h2>
                         <p className="text-sm text-gray-400">
-                            {ru.import.added} {completedImportableCount} {ru.import.toNewPlaylist}
+                            {ru.import.added} {completedImportableCount}{" "}
+                            {ru.import.toNewPlaylist}
                         </p>
                         {result.summary.unresolved > 0 && (
                             <p className="text-sm text-amber-400 mt-2">
-                                Skipped {result.summary.unresolved} unresolved
-                                tracks
+                                {formatImportSkipped(result.summary.unresolved)}
                             </p>
                         )}
 

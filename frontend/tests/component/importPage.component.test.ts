@@ -206,18 +206,18 @@ function findButton(container: HTMLElement, text: string): HTMLButtonElement {
 test("explains Spotify import boundaries and names the back button", async () => {
     const { container, unmount } = await mountImportPage();
 
-    assert.ok(container.querySelector('button[aria-label="Back"]'));
+    assert.ok(container.querySelector('button[aria-label="Назад"]'));
     assert.match(
         container.textContent || "",
-        /Spotify is used only to read the public playlist track list/i,
+        /Spotify используется только для чтения списка треков из публичного плейлиста/i,
     );
     assert.match(
         container.textContent || "",
-        /does not play audio from Spotify, change the source playlist, or save audio files to the server/i,
+        /не воспроизводит музыку из Spotify, не изменяет исходный плейлист и не сохраняет аудиофайлы на сервере/i,
     );
     assert.match(
         container.textContent || "",
-        /Private playlists are not supported yet/i,
+        /Приватные плейлисты пока не поддерживаются/i,
     );
 
     await unmount();
@@ -231,7 +231,7 @@ test("imports a public Spotify playlist link without an OAuth connection", async
             /Connect Spotify|Spotify playlist access/i,
         );
         const input = harness.container.querySelector(
-            'input[placeholder^="Paste a Spotify"]',
+            'input[placeholder^="Вставьте ссылку"]',
         );
         assert.ok(input instanceof HTMLInputElement, "playlist input missing");
         await React.act(async () => {
@@ -241,7 +241,7 @@ test("imports a public Spotify playlist link without an OAuth connection", async
             );
         });
 
-        await click(findButton(harness.container, "Start Import"));
+        await click(findButton(harness.container, "Начать импорт"));
         assert.deepEqual(backgroundJobCalls, [
             {
                 url: "https://open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45",
@@ -292,11 +292,11 @@ test("preview list renders provider resolution badges per track", async () => {
         }),
     );
 
-    assert.match(html, /LOCAL/);
+    assert.match(html, /ЛОКАЛЬНО/);
     assert.match(html, /YOUTUBE/);
     assert.match(html, /TIDAL/);
-    assert.match(html, /UNRESOLVED/);
-    assert.match(html, /No provider match/);
+    assert.match(html, /НЕ НАЙДЕНО/);
+    assert.match(html, /Совпадение у провайдеров не найдено/);
 });
 
 test("execute import action sends previewData instead of URL", async () => {
@@ -347,7 +347,7 @@ test("keeps M3U preview and invalidates personalized home after import", async (
             value: ImmediateFileReader,
         });
 
-        await click(findButton(harness.container, "M3U File"));
+        await click(findButton(harness.container, "Файл M3U"));
         const input = harness.container.querySelector('input[type="file"]');
         assert.ok(input instanceof HTMLInputElement, "M3U input missing");
         const file = new File(
@@ -362,8 +362,8 @@ test("keeps M3U preview and invalidates personalized home after import", async (
         await React.act(async () => {
             input.dispatchEvent(new Event("change", { bubbles: true }));
         });
-        await click(findButton(harness.container, "Preview Import"));
-        await click(findButton(harness.container, "Create Playlist"));
+        await click(findButton(harness.container, "Предпросмотр импорта"));
+        await click(findButton(harness.container, "Создать плейлист"));
 
         assert.equal(m3uPreviewCalls.length, 1);
         assert.deepEqual(invalidatedQueries, [
@@ -411,7 +411,7 @@ test("starts a durable background import without waiting for playlist preview", 
     const harness = await mountImportPage();
     try {
         const input = harness.container.querySelector(
-            'input[placeholder^="Paste a Spotify"]',
+            'input[placeholder^="Вставьте ссылку"]',
         );
         assert.ok(input instanceof HTMLInputElement, "playlist input missing");
 
@@ -421,7 +421,7 @@ test("starts a durable background import without waiting for playlist preview", 
                 " open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45 ",
             );
         });
-        await click(findButton(harness.container, "Start Import"));
+        await click(findButton(harness.container, "Начать импорт"));
 
         assert.deepEqual(backgroundJobCalls, [
             {
@@ -434,7 +434,10 @@ test("starts a durable background import without waiting for playlist preview", 
             harness.container.textContent ?? "",
             /Preview Tracks First/i,
         );
-        assert.match(toastSuccesses[0] ?? "", /Imports tab in Activity/);
+        assert.match(
+            toastSuccesses[0] ?? "",
+            /вкладке импорта в панели активности/,
+        );
     } finally {
         await harness.unmount();
     }
@@ -444,7 +447,7 @@ test("rapid import clicks submit only one background job", async () => {
     const harness = await mountImportPage();
     try {
         const input = harness.container.querySelector(
-            'input[placeholder^="Paste a Spotify"]',
+            'input[placeholder^="Вставьте ссылку"]',
         );
         assert.ok(input instanceof HTMLInputElement, "playlist input missing");
         await React.act(async () => {
@@ -454,7 +457,7 @@ test("rapid import clicks submit only one background job", async () => {
             );
         });
         holdBackgroundJobSubmission = true;
-        const button = findButton(harness.container, "Start Import");
+        const button = findButton(harness.container, "Начать импорт");
 
         await React.act(async () => {
             button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -511,7 +514,7 @@ test("successful background submission notifies an open Imports activity tab", a
     window.addEventListener("import-jobs-changed", handleChanged);
     try {
         const input = harness.container.querySelector(
-            'input[placeholder^="Paste a Spotify"]',
+            'input[placeholder^="Вставьте ссылку"]',
         );
         assert.ok(input instanceof HTMLInputElement, "playlist input missing");
         await React.act(async () => {
@@ -520,7 +523,7 @@ test("successful background submission notifies an open Imports activity tab", a
                 "https://open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45",
             );
         });
-        await click(findButton(harness.container, "Start Import"));
+        await click(findButton(harness.container, "Начать импорт"));
 
         assert.equal(eventCount, 1);
         assert.equal(submittedJobId, "job-123");
@@ -546,7 +549,7 @@ test("background import submits only the canonical HTTP(S) URL", async () => {
         const harness = await mountImportPage();
         try {
             const input = harness.container.querySelector(
-                'input[placeholder^="Paste a Spotify"]',
+                'input[placeholder^="Вставьте ссылку"]',
             );
             assert.ok(
                 input instanceof HTMLInputElement,
@@ -556,7 +559,7 @@ test("background import submits only the canonical HTTP(S) URL", async () => {
             await React.act(async () => {
                 typeInto(input, testCase.input);
             });
-            await click(findButton(harness.container, "Start Import"));
+            await click(findButton(harness.container, "Начать импорт"));
 
             assert.equal(backgroundJobCalls.at(-1)?.url, testCase.canonical);
             assert.equal(previewCalls.length, 0);

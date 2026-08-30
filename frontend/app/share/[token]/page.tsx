@@ -21,6 +21,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { api } from "@/lib/api";
+import {
+    formatShareCount,
+    formatShareOwner,
+    shareRu,
+} from "@/lib/i18n/utilityPagesRu";
 
 interface AlbumTrackResource {
     id: string;
@@ -468,7 +473,7 @@ export default function SharePage() {
             <main className="flex min-h-screen items-center justify-center bg-surface px-4 text-white">
                 <div className="flex items-center gap-3 text-gray-300">
                     <Loader2 className="h-5 w-5 animate-spin text-brand" />
-                    <span>Loading shared link...</span>
+                    <span>{shareRu.loading}</span>
                 </div>
             </main>
         );
@@ -482,11 +487,10 @@ export default function SharePage() {
                         <AlertCircle className="h-7 w-7 text-red-400" />
                     </div>
                     <h1 className="text-2xl font-semibold">
-                        Link not found or expired
+                        {shareRu.unavailableTitle}
                     </h1>
                     <p className="mt-2 text-sm text-gray-400">
-                        This share link is invalid, expired, or no longer
-                        available.
+                        {shareRu.unavailableDescription}
                     </p>
                     <p className="mt-8 text-xs text-gray-400">soundspan™</p>
                 </div>
@@ -527,7 +531,9 @@ export default function SharePage() {
             ? (data.resource as AlbumResource).artist.name
             : data.resourceType === "track"
               ? (data.resource as TrackResource).album.artist.name
-              : `by ${(data.resource as PlaylistResource).user?.username ?? "Unknown user"}`);
+              : formatShareOwner(
+                    (data.resource as PlaylistResource).user?.username,
+                ));
 
     const progressPercent =
         duration > 0 ? Math.min(100, (progress / duration) * 100) : 0;
@@ -540,17 +546,17 @@ export default function SharePage() {
                         {data.resourceType === "track" ? (
                             <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-brand-hover/30 bg-brand-hover/10 px-2.5 py-1 text-xs uppercase tracking-widest text-brand-hover">
                                 <Disc3 className="h-3 w-3" />
-                                Shared Track
+                                {shareRu.sharedTrack}
                             </span>
                         ) : data.resourceType === "album" ? (
                             <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-brand-hover/30 bg-brand-hover/10 px-2.5 py-1 text-xs uppercase tracking-widest text-brand-hover">
                                 <Disc3 className="h-3 w-3" />
-                                Shared Album
+                                {shareRu.sharedAlbum}
                             </span>
                         ) : (
                             <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-brand-hover/30 bg-brand-hover/10 px-2.5 py-1 text-xs uppercase tracking-widest text-brand-hover">
                                 <ListMusic className="h-3 w-3" />
-                                Shared Playlist
+                                {shareRu.sharedPlaylist}
                             </span>
                         )}
 
@@ -560,7 +566,7 @@ export default function SharePage() {
                                 {leftPanelCoverUrl ? (
                                     <img
                                         src={leftPanelCoverUrl}
-                                        alt="Cover art"
+                                        alt={shareRu.coverAlt}
                                         className="h-full w-full object-cover"
                                     />
                                 ) : (
@@ -579,18 +585,22 @@ export default function SharePage() {
                         </p>
                         {!currentTrack && data.resourceType === "album" && (
                             <p className="mt-1 text-sm text-gray-400 text-center">
-                                {trackQueue.length} tracks
+                                {formatShareCount(trackQueue.length, "tracks")}
                             </p>
                         )}
                         {!currentTrack && data.resourceType === "playlist" && (
                             <>
                                 <p className="mt-1 text-sm text-gray-400 text-center">
-                                    {trackQueue.length} items
+                                    {formatShareCount(
+                                        trackQueue.length,
+                                        "playlist",
+                                    )}
                                 </p>
                                 <p className="mt-0.5 text-sm text-gray-400 text-center">
-                                    by{" "}
-                                    {(data.resource as PlaylistResource).user
-                                        ?.username ?? "Unknown user"}
+                                    {formatShareOwner(
+                                        (data.resource as PlaylistResource).user
+                                            ?.username,
+                                    )}
                                 </p>
                             </>
                         )}
@@ -607,13 +617,15 @@ export default function SharePage() {
                                 <div className="flex items-center gap-2">
                                     <ListMusic className="h-4 w-4 text-brand-hover" />
                                     <h2 className="text-sm font-semibold text-white">
-                                        Up Next
+                                        {shareRu.upNext}
                                     </h2>
                                     <span className="text-xs text-gray-400">
-                                        {trackQueue.length}{" "}
-                                        {data.resourceType === "playlist"
-                                            ? "items"
-                                            : "tracks"}
+                                        {formatShareCount(
+                                            trackQueue.length,
+                                            data.resourceType === "playlist"
+                                                ? "playlist"
+                                                : "tracks",
+                                        )}
                                     </span>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
@@ -625,7 +637,7 @@ export default function SharePage() {
                                             className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
                                         >
                                             <Download className="h-3.5 w-3.5" />
-                                            Download All
+                                            {shareRu.downloadAll}
                                         </a>
                                     )}
                                     {data.resourceType === "track" && (
@@ -638,7 +650,7 @@ export default function SharePage() {
                                             className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
                                         >
                                             <Download className="h-3.5 w-3.5" />
-                                            Download
+                                            {shareRu.download}
                                         </a>
                                     )}
                                     {data.resourceType === "playlist" && (
@@ -752,7 +764,9 @@ export default function SharePage() {
                                                                     <span className="h-2.5 w-0.5 animate-bounce rounded-full bg-brand-hover" />
                                                                     <span className="h-1.5 w-0.5 animate-bounce rounded-full bg-brand-hover [animation-delay:-0.35s]" />
                                                                 </span>
-                                                                Playing
+                                                                {
+                                                                    shareRu.playing
+                                                                }
                                                             </span>
                                                         )}
                                                     </div>
@@ -777,7 +791,10 @@ export default function SharePage() {
                                                 onClick={(e) =>
                                                     e.stopPropagation()
                                                 }
-                                                title="Download track"
+                                                title={shareRu.downloadTrack}
+                                                aria-label={
+                                                    shareRu.downloadTrack
+                                                }
                                             >
                                                 <Download className="h-3.5 w-3.5" />
                                             </a>
@@ -815,7 +832,7 @@ export default function SharePage() {
                                 audio.currentTime = seekTime;
                                 setProgress(seekTime);
                             }}
-                            aria-label="Playback progress"
+                            aria-label={shareRu.playbackProgress}
                             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                         />
                     </div>
@@ -853,7 +870,8 @@ export default function SharePage() {
                                 onClick={handlePrev}
                                 disabled={!hasPrev && progress <= 3}
                                 className="text-gray-400 transition-all duration-200 hover:scale-110 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
-                                title="Previous"
+                                title={shareRu.previous}
+                                aria-label={shareRu.previous}
                             >
                                 <SkipBack className="h-6 w-6" />
                             </button>
@@ -861,7 +879,10 @@ export default function SharePage() {
                                 type="button"
                                 onClick={handlePlayPause}
                                 className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-lg shadow-white/20 transition-all duration-200 hover:scale-110 hover:shadow-white/30"
-                                title={isPlaying ? "Pause" : "Play"}
+                                title={isPlaying ? shareRu.pause : shareRu.play}
+                                aria-label={
+                                    isPlaying ? shareRu.pause : shareRu.play
+                                }
                             >
                                 {isPlaying ? (
                                     <Pause className="h-6 w-6" />
@@ -874,7 +895,8 @@ export default function SharePage() {
                                 onClick={handleNext}
                                 disabled={!hasNext}
                                 className="text-gray-400 transition-all duration-200 hover:scale-110 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
-                                title="Next"
+                                title={shareRu.next}
+                                aria-label={shareRu.next}
                             >
                                 <SkipForward className="h-6 w-6" />
                             </button>
@@ -898,13 +920,13 @@ export default function SharePage() {
                                     className="flex h-8 w-8 items-center justify-center text-gray-400 transition-all duration-200 hover:scale-110 hover:text-white"
                                     aria-label={
                                         isMuted || volume === 0
-                                            ? "Unmute"
-                                            : "Mute"
+                                            ? shareRu.unmute
+                                            : shareRu.mute
                                     }
                                     title={
                                         isMuted || volume === 0
-                                            ? "Unmute"
-                                            : "Mute"
+                                            ? shareRu.unmute
+                                            : shareRu.mute
                                     }
                                 >
                                     {isMuted || volume === 0 ? (
@@ -937,7 +959,7 @@ export default function SharePage() {
                                                           )
                                                 }
                                                 onChange={handleVolumeChange}
-                                                aria-label="Volume"
+                                                aria-label={shareRu.volume}
                                                 aria-valuemin={0}
                                                 aria-valuemax={100}
                                                 aria-valuenow={Math.round(
@@ -975,7 +997,7 @@ export default function SharePage() {
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
             >
-                <track kind="captions" srcLang="en" label="Music" />
+                <track kind="captions" srcLang="en" label="Музыка" />
             </audio>
         </>
     );

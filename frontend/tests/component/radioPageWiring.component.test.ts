@@ -140,6 +140,11 @@ async function clickStation(container: Element, stationId: string) {
 test("static and dynamic cards route through the shared open helper", async (t) => {
     const container = await renderRadioPage(t);
 
+    assert.match(container.textContent ?? "", /Радиостанции/);
+    assert.match(container.textContent ?? "", /Быстрый старт/);
+    assert.match(container.textContent ?? "", /Тренировка/);
+    assert.doesNotMatch(container.textContent ?? "", /Radio Stations/);
+
     await clickStation(container, "workout");
     await clickStation(container, "genre-Rock");
     await clickStation(container, "decade-1990");

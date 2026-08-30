@@ -7,6 +7,7 @@ import Image from "next/image";
 import { dispatchQueryEvent } from "@/lib/query-events";
 import { BRAND_NAME } from "@/lib/brand";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { syncRu } from "@/lib/i18n/utilityPagesRu";
 
 /**
  * Renders the SyncPage component.
@@ -15,7 +16,7 @@ export default function SyncPage() {
     useRouter();
     const [syncing, setSyncing] = useState(true);
     const [progress, setProgress] = useState(0);
-    const [message, setMessage] = useState("Scanning your music library...");
+    const [message, setMessage] = useState<string>(syncRu.scanningLibrary);
     const [error, setError] = useState("");
     const [completedSteps, setCompletedSteps] = useState<string[]>([]);
 
@@ -31,7 +32,7 @@ export default function SyncPage() {
                 const jobId = scanResult.jobId;
 
                 if (!mounted) return;
-                setMessage("Scanning your music library...");
+                setMessage(syncRu.scanningLibrary);
 
                 // Poll for actual scan progress
                 pollInterval = setInterval(async () => {
@@ -56,7 +57,7 @@ export default function SyncPage() {
                             // Trigger post-scan operations
                             try {
                                 // 1. Audiobook sync
-                                setMessage("Syncing audiobooks...");
+                                setMessage(syncRu.syncingAudiobooks);
                                 await api.post("/audiobooks/sync");
                             } catch (audiobookError) {
                                 sharedFrontendLogger.error(
@@ -76,16 +77,14 @@ export default function SyncPage() {
                             dispatchQueryEvent("library-updated");
 
                             setProgress(100);
-                            setMessage("All set! Redirecting...");
+                            setMessage(syncRu.redirecting);
                             redirectTimeout = setTimeout(() => {
                                 // Use window.location for full page reload to ensure fresh data
                                 window.location.href = "/";
                             }, 1500);
                         } else if (status.status === "failed") {
                             if (pollInterval) clearInterval(pollInterval);
-                            setError(
-                                "Scan failed. You can skip and try again later.",
-                            );
+                            setError(syncRu.scanFailed);
                             setSyncing(false);
                         } else {
                             // Update progress based on actual scan progress
@@ -100,19 +99,19 @@ export default function SyncPage() {
                             setCompletedSteps(steps);
 
                             if (status.progress > 0 && status.progress < 30) {
-                                setMessage("Discovering tracks...");
+                                setMessage(syncRu.discoveringTracks);
                             } else if (
                                 status.progress >= 30 &&
                                 status.progress < 60
                             ) {
-                                setMessage("Indexing albums...");
+                                setMessage(syncRu.indexingAlbums);
                             } else if (
                                 status.progress >= 60 &&
                                 status.progress < 90
                             ) {
-                                setMessage("Organizing artists...");
+                                setMessage(syncRu.organizingArtists);
                             } else if (status.progress >= 90) {
-                                setMessage("Almost done...");
+                                setMessage(syncRu.almostDone);
                             }
                         }
                     } catch (pollError) {
@@ -125,9 +124,7 @@ export default function SyncPage() {
             } catch (err: unknown) {
                 sharedFrontendLogger.error("Sync error:", err);
                 if (!mounted) return;
-                setError(
-                    "Failed to start sync. You can skip and start manually later.",
-                );
+                setError(syncRu.startFailed);
                 setSyncing(false);
             }
         };
@@ -151,10 +148,10 @@ export default function SyncPage() {
     };
 
     const steps = [
-        { id: "tracks", label: "Scanning tracks" },
-        { id: "library", label: "Building library" },
-        { id: "albums", label: "Organizing albums" },
-        { id: "indexes", label: "Creating indexes" },
+        { id: "tracks", label: syncRu.stepTracks },
+        { id: "library", label: syncRu.stepLibrary },
+        { id: "albums", label: syncRu.stepAlbums },
+        { id: "indexes", label: syncRu.stepIndexes },
     ];
 
     return (
@@ -189,8 +186,8 @@ export default function SyncPage() {
                                 <div>
                                     <h2 className="text-xl font-semibold text-white">
                                         {syncing
-                                            ? "Setting Things Up"
-                                            : "Ready to Go!"}
+                                            ? syncRu.settingUp
+                                            : syncRu.ready}
                                     </h2>
                                     <p className="text-white/50 text-sm mt-1">
                                         {error || message}
@@ -208,7 +205,7 @@ export default function SyncPage() {
                                         />
                                     </div>
                                     <p className="text-xs text-white/40 text-center">
-                                        {progress}% complete
+                                        {progress}% {syncRu.complete}
                                     </p>
                                 </div>
                             )}
@@ -278,13 +275,13 @@ export default function SyncPage() {
                             onClick={handleSkip}
                             className="px-4 py-2 text-sm text-white/50 hover:text-white/70 transition-colors"
                         >
-                            Skip for Now →
+                            {syncRu.skip}
                         </button>
                     </div>
 
                     {/* Footer note */}
                     <p className="text-center text-white/30 text-xs mt-6">
-                        This may take a few minutes for large libraries
+                        {syncRu.largeLibraryHint}
                     </p>
                 </div>
             </div>

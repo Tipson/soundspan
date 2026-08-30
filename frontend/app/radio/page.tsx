@@ -11,37 +11,38 @@ import {
 } from "@/lib/radio/radioPageStations";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RadioStationCard } from "@/components/ui/RadioStationCard";
+import { radioRu } from "@/lib/i18n/utilityPagesRu";
 
 // Static radio stations
 const STATIC_STATIONS: RadioPageStation[] = [
     {
         id: "all",
-        name: "Shuffle All",
-        description: "Your entire library",
+        name: radioRu.allName,
+        description: radioRu.allDescription,
         color: "from-brand/40 to-sky-400/30",
         filter: { type: "all" },
         minTracks: 10,
     },
     {
         id: "workout",
-        name: "Workout",
-        description: "High energy tracks",
+        name: radioRu.workoutName,
+        description: radioRu.workoutDescription,
         color: "from-red-500/30 to-orange-600/30",
         filter: { type: "workout" },
         minTracks: 15,
     },
     {
         id: "discovery",
-        name: "Discovery",
-        description: "Lesser-played gems",
+        name: radioRu.discoveryName,
+        description: radioRu.discoveryDescription,
         color: "from-emerald-500/30 to-teal-600/30",
         filter: { type: "discovery" },
         minTracks: 20,
     },
     {
         id: "favorites",
-        name: "Favorites",
-        description: "Most played",
+        name: radioRu.favoritesName,
+        description: radioRu.favoritesDescription,
         color: "from-rose-500/30 to-pink-600/30",
         filter: { type: "favorites" },
         minTracks: 10,
@@ -147,8 +148,8 @@ export default function RadioPage() {
             <div className="relative px-4 md:px-8 py-6">
                 {/* Header */}
                 <PageHeader
-                    title="Radio Stations"
-                    subtitle="Generated stations from your library"
+                    title={radioRu.title}
+                    subtitle={radioRu.subtitle}
                     icon={AudioLines}
                     className="mb-8"
                 />
@@ -156,8 +157,8 @@ export default function RadioPage() {
                 {/* Quick Start Section */}
                 <section className="mb-10">
                     <SectionHeader
-                        title="Quick Start"
-                        description="Open a ready-made station from your library"
+                        title={radioRu.quickStart}
+                        description={radioRu.quickStartDescription}
                     />
                     <StationGrid
                         stations={STATIC_STATIONS}
@@ -170,8 +171,8 @@ export default function RadioPage() {
                 {(isLoading || genreStations.length > 0) && (
                     <section className="mb-10">
                         <SectionHeader
-                            title="By Genre"
-                            description="Shuffle tracks from specific genres"
+                            title={radioRu.byGenre}
+                            description={radioRu.byGenreDescription}
                         />
                         {isLoading ? (
                             <StationGridSkeleton />
@@ -189,8 +190,8 @@ export default function RadioPage() {
                 {(isLoading || decadeStations.length > 0) && (
                     <section className="mb-10">
                         <SectionHeader
-                            title="By Decade"
-                            description="Travel through time with your music"
+                            title={radioRu.byDecade}
+                            description={radioRu.byDecadeDescription}
                         />
                         {isLoading ? (
                             <StationGridSkeleton />
@@ -207,15 +208,10 @@ export default function RadioPage() {
                 {/* Info */}
                 <div className="mt-12 p-4 rounded-lg bg-white/5 border border-white/10">
                     <h3 className="text-sm font-semibold text-white mb-2">
-                        About Radio Stations
+                        {radioRu.aboutTitle}
                     </h3>
                     <p className="text-sm text-white/60">
-                        Radio stations are generated from your personal music
-                        library. Opening a station builds a playlist you can
-                        replay, regenerate, or extend with more tracks — Shuffle
-                        All starts playing your whole library right away. As you
-                        add more music, new genre and decade stations will
-                        automatically appear.
+                        {radioRu.aboutDescription}
                     </p>
                 </div>
             </div>
