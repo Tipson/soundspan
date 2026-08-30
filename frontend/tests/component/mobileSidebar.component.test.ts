@@ -130,7 +130,7 @@ test("keeps search in the top bar and moves notifications into the account drawe
         }),
     );
 
-    assert.match(html, />Listen</);
+    assert.match(html, />Слушать</);
     assert.match(html, />Главная</);
     assert.doesNotMatch(html, />Поиск</);
     assert.doesNotMatch(html, /href="\/search"/);
@@ -139,6 +139,8 @@ test("keeps search in the top bar and moves notifications into the account drawe
     assert.match(html, />Любимые треки</);
     assert.match(html, />Загрузки</);
     assert.match(html, />Импорт плейлиста</);
+    assert.match(html, />Ваша музыка</);
+    assert.doesNotMatch(html, />Listen|Your music</);
     const notifications = html.match(
         /<button[^>]*aria-label="Открыть уведомления"[^>]*>/,
     )?.[0];

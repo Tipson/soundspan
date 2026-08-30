@@ -343,3 +343,14 @@ test("MiniPlayer keeps playback quality diagnostics out of the compact surface",
 
     assert.doesNotMatch(html, /FLAC · 24\/96kHz/);
 });
+
+test("MiniPlayer renders recoverable playback errors in Russian", async () => {
+    state.audioError = "network disconnected";
+
+    const { MiniPlayer } = await import("../../components/player/MiniPlayer");
+    const html = renderToStaticMarkup(React.createElement(MiniPlayer));
+
+    assert.match(html, /Ошибка воспроизведения/);
+    assert.match(html, /Нажмите «Повторить», чтобы переподключиться/);
+    assert.doesNotMatch(html, /Playback Error|Tap retry to reconnect/);
+});

@@ -384,7 +384,14 @@ export function OverlayPlayer() {
 
             if (result.success && result.trackCount > 0) {
                 toast.success(ru.player.vibeOn, {
-                    description: `${result.trackCount} similar tracks queued`,
+                    description: `${result.trackCount} ${pluralRu(
+                        result.trackCount,
+                        [
+                            "похожий трек добавлен в очередь",
+                            "похожих трека добавлены в очередь",
+                            "похожих треков добавлено в очередь",
+                        ],
+                    )}`,
                     icon: (
                         <AudioWaveform className="w-4 h-4 text-brand-hover" />
                     ),

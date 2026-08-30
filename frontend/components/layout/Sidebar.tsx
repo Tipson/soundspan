@@ -29,7 +29,7 @@ import {
 } from "@/lib/unifiedPlaylists";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
-import { ru } from "@/lib/i18n/ru";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface Playlist {
     id: string;
@@ -436,7 +436,7 @@ export function Sidebar() {
                                                     : "",
                                             )}
                                         >
-                                            My Liked
+                                            {ru.library.likedSongs}
                                         </div>
                                     </div>
                                     <div
@@ -447,8 +447,12 @@ export function Sidebar() {
                                                 : "text-gray-400 group-hover:text-gray-400",
                                         )}
                                     >
-                                        Playlist &bull; {likedTotal} track
-                                        {likedTotal !== 1 ? "s" : ""}
+                                        Плейлист &bull; {likedTotal}{" "}
+                                        {pluralRu(likedTotal, [
+                                            "трек",
+                                            "трека",
+                                            "треков",
+                                        ])}
                                     </div>
                                 </Link>
                             );
@@ -502,9 +506,9 @@ export function Sidebar() {
                                         {isShared && (
                                             <span
                                                 className="shrink-0 w-1.5 h-1.5 rounded-full bg-ai"
-                                                title={`Shared by ${
+                                                title={`Поделился: ${
                                                     playlist.ownerName ||
-                                                    "someone"
+                                                    "неизвестный пользователь"
                                                 }`}
                                             />
                                         )}
@@ -518,12 +522,17 @@ export function Sidebar() {
                                         )}
                                     >
                                         {playlist.kind === "peer" || isShared
-                                            ? `by ${
-                                                  playlist.ownerName || "Shared"
+                                            ? `Автор: ${
+                                                  playlist.ownerName ||
+                                                  "неизвестный пользователь"
                                               }`
-                                            : "Playlist"}{" "}
-                                        • {playlist.trackCount} track
-                                        {playlist.trackCount !== 1 ? "s" : ""}
+                                            : "Плейлист"}{" "}
+                                        • {playlist.trackCount}{" "}
+                                        {pluralRu(playlist.trackCount, [
+                                            "трек",
+                                            "трека",
+                                            "треков",
+                                        ])}
                                     </div>
                                 </Link>
                             );
@@ -532,13 +541,13 @@ export function Sidebar() {
                         <div className="px-4 py-8 text-center">
                             <div className="text-sm text-gray-400 mb-2">
                                 {isFiltered
-                                    ? "No matching playlists"
-                                    : "No playlists yet"}
+                                    ? "Нет подходящих плейлистов"
+                                    : "Плейлистов пока нет"}
                             </div>
                             <div className="text-xs text-gray-400">
                                 {isFiltered
-                                    ? "Try changing your filter"
-                                    : "Create your first playlist to get started"}
+                                    ? "Попробуйте изменить фильтр"
+                                    : "Создайте первый плейлист"}
                             </div>
                         </div>
                     )}

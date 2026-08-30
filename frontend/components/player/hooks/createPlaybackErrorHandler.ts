@@ -222,7 +222,7 @@ export function createPlaybackErrorHandler({
                     ? "YouTube"
                     : "YouTube Music";
             toast.error(
-                `Couldn't stream "${currentTrack.title}" from ${source}. ${queueLength > 1 ? "Trying the next track." : "Try again or choose another version."}`,
+                `Не удалось воспроизвести «${currentTrack.title}» через ${source}. ${queueLength > 1 ? "Пробуем следующий трек." : "Повторите попытку или выберите другую версию."}`,
                 { duration: 5000 },
             );
         }

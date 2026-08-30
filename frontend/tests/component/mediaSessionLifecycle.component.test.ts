@@ -13,7 +13,15 @@ const playback = {
     currentTime: 0,
 };
 
-const track = {
+interface TrackFixture {
+    id: string;
+    title: string;
+    duration: number;
+    artist?: { name: string };
+    album?: { title: string; coverArt: null };
+}
+
+const track: TrackFixture = {
     id: "track-1",
     title: "Offline song",
     duration: 180,
@@ -177,6 +185,43 @@ test("media controls attach on the first local play and stay stable across progr
         registrationCounts.get("play"),
         1,
         "position updates must not tear down and reinstall OS media handlers",
+    );
+});
+
+test("lock-screen metadata localizes missing track identity", async (t) => {
+    const { useMediaSession } = await import("../../hooks/useMediaSession");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+
+    function Probe() {
+        useMediaSession();
+        return null;
+    }
+
+    media.currentTrack = {
+        ...track,
+        artist: undefined,
+        album: undefined,
+    };
+    playback.isPlaying = true;
+    await React.act(async () => {
+        root.render(React.createElement(Probe));
+    });
+
+    assert.ok(mediaSession.metadata instanceof FakeMediaMetadata);
+    assert.equal(
+        (mediaSession.metadata as FakeMediaMetadata).init.artist,
+        "Неизвестный исполнитель",
+    );
+    assert.equal(
+        (mediaSession.metadata as FakeMediaMetadata).init.album,
+        "Неизвестный альбом",
     );
 });
 

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useAudioState } from "@/lib/audio-context";
 import { api } from "@/lib/api";
 import { getArtistHref } from "@/utils/artistRoute";
+import { ru } from "@/lib/i18n/ru";
 
 export interface MediaInfo {
     title: string;
@@ -36,7 +37,7 @@ export function useMediaInfo(coverSize: number = 100): MediaInfo {
                 : null;
             return {
                 title: currentTrack.title,
-                subtitle: currentTrack.artist?.name || "Unknown Artist",
+                subtitle: currentTrack.artist?.name || ru.common.unknownArtist,
                 coverUrl: currentTrack.album?.coverArt
                     ? api.getCoverArtUrl(currentTrack.album.coverArt, coverSize)
                     : null,
@@ -77,8 +78,8 @@ export function useMediaInfo(coverSize: number = 100): MediaInfo {
         }
 
         return {
-            title: "Not Playing",
-            subtitle: "Select something to play",
+            title: "Ничего не воспроизводится",
+            subtitle: "Выберите, что послушать",
             coverUrl: null,
             albumLink: null,
             artistLink: null,

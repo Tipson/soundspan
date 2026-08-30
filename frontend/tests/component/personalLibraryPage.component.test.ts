@@ -155,6 +155,7 @@ test("Library overview is a personal collection hub without server catalog contr
     assert.match(html, /Плейлисты/);
     assert.match(html, /Сохранённые альбомы/);
     assert.match(html, /Сохранённые исполнители/);
+    assert.match(html, /Показать все/);
     assert.match(html, /Загрузки на этом устройстве/);
     assert.match(html, /Сохранено в аккаунте/);
     assert.match(html, /Только на этом устройстве/);

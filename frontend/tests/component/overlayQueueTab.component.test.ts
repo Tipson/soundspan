@@ -133,8 +133,10 @@ async function unmount(mounted: Awaited<ReturnType<typeof mountQueueTab>>) {
 test("an empty queue shows the empty state and no clear button", async () => {
     const mounted = await mountQueueTab({ queue: [] });
 
-    assert.ok(mounted.container.textContent?.includes("В очереди пока нет треков."));
-    assert.ok(mounted.container.textContent?.includes("0 items"));
+    assert.ok(
+        mounted.container.textContent?.includes("В очереди пока нет треков."),
+    );
+    assert.ok(mounted.container.textContent?.includes("0 элементов"));
     assert.equal(
         mounted.container.querySelector('button[title="Очистить очередь"]'),
         null,
@@ -151,7 +153,7 @@ test("long queues window their rows instead of mounting every row", async () => 
         rows.length <= 40,
         `expected a windowed subset of 300 rows, got ${rows.length}`,
     );
-    assert.ok(mounted.container.textContent?.includes("300 items"));
+    assert.ok(mounted.container.textContent?.includes("300 элементов"));
     await unmount(mounted);
 });
 
@@ -171,8 +173,36 @@ test("the playing row pins Сейчас играет and hides its remove contro
         null,
         "the playing row must not offer removal",
     );
-    assert.ok(currentRow.textContent?.includes("Playing"));
+    assert.ok(currentRow.textContent?.includes("Играет"));
     await unmount(mounted);
+});
+
+test("played rows use a Russian status label", async () => {
+    const { createRoot } = await import("react-dom/client");
+    const { OverlayQueueTrackRow } =
+        await import("../../components/player/overlay-tabs/OverlayQueueRows");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(OverlayQueueTrackRow, {
+                track: makeQueue(
+                    1,
+                )[0] as unknown as import("@/lib/queue-item").TrackQueueItem,
+                queueIndex: 0,
+                isCurrentTrack: false,
+                isPlayedTrack: true,
+                onPlayFromQueue: () => undefined,
+                onRemoveFromQueue: () => undefined,
+            }),
+        );
+    });
+
+    assert.ok(container.textContent?.includes("Прослушано"));
+    await React.act(async () => root.unmount());
+    container.remove();
 });
 
 test("row actions dispatch play, remove, and clear callbacks", async () => {
@@ -203,7 +233,9 @@ test("row actions dispatch play, remove, and clear callbacks", async () => {
             )
             ?.click();
         mounted.container
-            .querySelector<HTMLButtonElement>('button[title="Очистить очередь"]')
+            .querySelector<HTMLButtonElement>(
+                'button[title="Очистить очередь"]',
+            )
             ?.click();
     });
 
@@ -251,7 +283,9 @@ test("episode rows render podcast identity instead of track identity", async () 
     assert.ok(episodeRow.textContent?.includes("Episode One"));
     assert.ok(episodeRow.textContent?.includes("My Podcast"));
     assert.ok(
-        episodeRow.querySelector('button[title="Воспроизвести этот выпуск сейчас"]'),
+        episodeRow.querySelector(
+            'button[title="Воспроизвести этот выпуск сейчас"]',
+        ),
     );
     await unmount(mounted);
 });

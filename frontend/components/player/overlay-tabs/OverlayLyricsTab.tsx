@@ -65,7 +65,7 @@ export const OverlayLyricsTab = memo(function OverlayLyricsTab({
             ) : isLyricsError ? (
                 <div className="flex h-full items-center justify-center px-4">
                     <p className="text-center text-sm text-gray-400">
-                        Failed to load lyrics
+                        Не удалось загрузить текст песни
                     </p>
                 </div>
             ) : (

@@ -1393,7 +1393,7 @@ export const AudioPlaybackOrchestrator = memo(
                             audioEngine.stop();
                             playbackSourceLeaseController.release();
                             playbackStateMachine.forceTransition("ERROR", {
-                                error: "Audio stream timed out while loading",
+                                error: "Не удалось дождаться загрузки аудиопотока",
                                 errorCode: 408,
                             });
                             setIsPlaying(false);

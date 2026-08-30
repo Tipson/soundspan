@@ -198,7 +198,7 @@ const SyncBadge = memo(function SyncBadge({ compact = false }: SyncBadgeProps) {
                     prefetch={false}
                     className="block mt-3 pt-2 border-t border-white/10 text-[11px] text-gray-400 hover:text-ai-hover transition-colors text-center"
                 >
-                    Go to Listen Together
+                    Открыть совместное прослушивание
                 </Link>
             </div>
         </div>

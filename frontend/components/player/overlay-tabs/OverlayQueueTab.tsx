@@ -14,7 +14,7 @@ import {
     OverlayQueueEpisodeRow,
     OverlayQueueTrackRow,
 } from "./OverlayQueueRows";
-import { ru } from "@/lib/i18n/ru";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 /**
  * Rows rendered on the first pass before react-virtuoso measures the
@@ -80,9 +80,7 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
             <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-2">
                 <div className="flex items-center gap-2">
                     <ListMusic className="h-4 w-4 text-brand-hover" />
-                    <h2 className="text-sm font-semibold text-white">
-                        Up Next
-                    </h2>
+                    <h2 className="text-sm font-semibold text-white">Далее</h2>
                 </div>
                 <div className="flex items-center gap-3">
                     {queueTracks.length > 0 && (
@@ -94,11 +92,16 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
                             aria-label={ru.player.clearQueue}
                         >
                             <Trash2 className="h-3 w-3" />
-                            Clear Queue
+                            Очистить очередь
                         </button>
                     )}
                     <span className="text-xs text-gray-400">
-                        {queueTracks.length} items
+                        {queueTracks.length}{" "}
+                        {pluralRu(queueTracks.length, [
+                            "элемент",
+                            "элемента",
+                            "элементов",
+                        ])}
                     </span>
                 </div>
             </div>

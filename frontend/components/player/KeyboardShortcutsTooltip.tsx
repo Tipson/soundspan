@@ -41,7 +41,7 @@ export function KeyboardShortcutsTooltip() {
 
                     <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
                         <Info className="w-4 h-4" />
-                        Keyboard Shortcuts
+                        Сочетания клавиш
                     </h3>
 
                     <div className="space-y-2">
@@ -62,8 +62,7 @@ export function KeyboardShortcutsTooltip() {
 
                     <div className="mt-3 pt-3 border-t border-white/10">
                         <p className="text-[10px] text-gray-400 leading-relaxed">
-                            Shortcuts work anywhere except when typing in text
-                            fields.
+                            Сочетания работают везде, кроме полей ввода текста.
                         </p>
                     </div>
                 </div>

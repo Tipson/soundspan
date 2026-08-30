@@ -105,7 +105,7 @@ function QueueRemoveButton({
 function PlayedPill() {
     return (
         <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-400">
-            Played
+            Прослушано
         </span>
     );
 }
@@ -168,11 +168,11 @@ export const OverlayQueueEpisodeRow = memo(function OverlayQueueEpisodeRow({
                     </p>
                     <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
                         <p className="min-w-0 truncate text-xs text-gray-400">
-                            {item.podcastTitle || "Podcast"}
+                            {item.podcastTitle || "Подкаст"}
                         </p>
                         {isCurrentTrack && (
                             <span className="inline-flex shrink-0 items-center rounded-full border border-brand-hover/40 bg-brand-hover/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-hover">
-                                Playing
+                                Играет
                             </span>
                         )}
                         {isPlayedTrack && !isCurrentTrack && <PlayedPill />}
@@ -272,7 +272,7 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
                                     <span className="h-2.5 w-0.5 animate-bounce rounded-full bg-brand-hover" />
                                     <span className="h-1.5 w-0.5 animate-bounce rounded-full bg-brand-hover [animation-delay:-0.35s]" />
                                 </span>
-                                Playing
+                                Играет
                             </span>
                         )}
                         {isPlayedTrack && !isCurrentTrack && <PlayedPill />}

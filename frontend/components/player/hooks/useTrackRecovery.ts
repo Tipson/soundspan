@@ -345,8 +345,8 @@ export function useTrackRecovery({
                     );
                     toast.error(
                         disposition.kind === "confirmed_provider_unavailable"
-                            ? "Playback stopped — the remaining provider tracks are unavailable. Choose another track or try again later."
-                            : "Playback stopped — multiple tracks failed in a row. Check your connection or try again.",
+                            ? "Воспроизведение остановлено: оставшиеся треки провайдера недоступны. Выберите другой трек или повторите попытку позже."
+                            : "Воспроизведение остановлено: несколько треков подряд не удалось загрузить. Проверьте подключение и повторите попытку.",
                         { duration: 6000 },
                     );
                 }

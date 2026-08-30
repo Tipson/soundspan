@@ -7,6 +7,7 @@ import { usePlaybackProgress } from "@/lib/audio-playback-context";
 import { useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Media Session API integration for OS-level media controls
@@ -89,8 +90,8 @@ export function useMediaSession() {
 
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: currentTrack.title,
-                artist: currentTrack.artist?.name || "Unknown Artist",
-                album: currentTrack.album?.title || "Unknown Album",
+                artist: currentTrack.artist?.name || ru.common.unknownArtist,
+                album: currentTrack.album?.title || ru.common.unknownAlbum,
                 artwork: coverUrl
                     ? [
                           { src: coverUrl, sizes: "96x96", type: "image/jpeg" },
@@ -133,8 +134,8 @@ export function useMediaSession() {
                 title: currentAudiobook.title,
                 artist: currentAudiobook.author,
                 album: currentAudiobook.narrator
-                    ? `Narrated by ${currentAudiobook.narrator}`
-                    : "Audiobook",
+                    ? `Читает: ${currentAudiobook.narrator}`
+                    : "Аудиокнига",
                 artwork: coverUrl
                     ? [
                           { src: coverUrl, sizes: "96x96", type: "image/jpeg" },
@@ -176,7 +177,7 @@ export function useMediaSession() {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: currentPodcast.title,
                 artist: currentPodcast.podcastTitle,
-                album: "Podcast",
+                album: "Подкаст",
                 artwork: coverUrl
                     ? [
                           { src: coverUrl, sizes: "96x96", type: "image/jpeg" },

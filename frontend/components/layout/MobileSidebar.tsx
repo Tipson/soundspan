@@ -142,7 +142,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     aria-label={ru.nav.mobileMenu}
                 >
                     <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
-                        Listen
+                        {ru.nav.listen}
                     </p>
                     <div className="space-y-1">
                         {MOBILE_QUICK_LINKS.map((link) => {
@@ -171,7 +171,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
                     <div className="my-4 border-t border-white/[0.07]" />
                     <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
-                        Your music
+                        Ваша музыка
                     </p>
                     <div className="space-y-1">
                         {personalLinks.map((link) => {

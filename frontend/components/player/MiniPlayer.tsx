@@ -142,10 +142,10 @@ export function MiniPlayer() {
                         {audioError ? (
                             <>
                                 <p className="truncate text-sm font-semibold text-red-300">
-                                    Playback Error
+                                    Ошибка воспроизведения
                                 </p>
                                 <p className="truncate text-xs text-red-200/70">
-                                    Tap retry to reconnect
+                                    Нажмите «Повторить», чтобы переподключиться
                                 </p>
                             </>
                         ) : (

@@ -10,6 +10,7 @@ const state = {
     isMobile: false,
     isTablet: false,
     federation: false,
+    likedTotal: 0,
     peerPlaylists: [] as Array<{
         remoteId: string;
         name: string;
@@ -95,7 +96,7 @@ mock.module("@/hooks/useActiveListenSessions", {
 mock.module("@/hooks/useQueries", {
     namedExports: {
         useLikedPlaylistQuery: () => ({
-            data: null,
+            data: { total: state.likedTotal, tracks: [] },
             isLoading: false,
             isError: false,
         }),
@@ -162,6 +163,7 @@ beforeEach(() => {
     state.isMobile = false;
     state.isTablet = false;
     state.federation = false;
+    state.likedTotal = 0;
     state.peerPlaylists = [];
 });
 
@@ -253,7 +255,21 @@ test("renders badged peer playlists in the unified list when federated", async (
     assert.match(html, /Peer Jams/);
     assert.match(html, /peer-badge:Family server/);
     assert.match(html, /href="\/peer-playlists\/peer-a\/remote-1"/);
-    assert.match(html, /by Sam/);
+    assert.match(html, /Автор: Sam/);
+    assert.match(html, /4 трека/);
+});
+
+test("renders the pinned liked playlist and empty state in Russian", async () => {
+    state.likedTotal = 21;
+
+    const { Sidebar } = await import("../../components/layout/Sidebar");
+    const html = renderToStaticMarkup(React.createElement(Sidebar));
+
+    assert.match(html, /Любимые треки/);
+    assert.match(html, /Плейлист.*21 трек/);
+    assert.match(html, /Плейлистов пока нет/);
+    assert.match(html, /Создайте первый плейлист/);
+    assert.doesNotMatch(html, /My Liked|No playlists yet/);
 });
 
 test("hides peer playlists without federation", async () => {

@@ -61,7 +61,7 @@ export function RelatedSectionShell({
                         className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition-colors"
                     >
                         <RefreshCw className="h-3 w-3" />
-                        Retry
+                        Повторить
                     </button>
                 </div>
             ) : isEmpty ? (
@@ -85,7 +85,7 @@ function SimilarSongBadge({
     if (track.inLibrary) {
         return (
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
-                In Library
+                В коллекции
             </span>
         );
     }
@@ -93,7 +93,7 @@ function SimilarSongBadge({
         return (
             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-300">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Matching
+                Подбираем
             </span>
         );
     }
@@ -102,13 +102,13 @@ function SimilarSongBadge({
     if (track.lastFmUrl) {
         return (
             <span className="rounded-full border border-white/20 bg-white/[0.04] px-2 py-0.5 text-[10px] text-gray-300">
-                Info
+                Информация
             </span>
         );
     }
     return (
         <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-400">
-            Search
+            Найти
         </span>
     );
 }

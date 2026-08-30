@@ -31,7 +31,7 @@ const SectionHeader = memo(function SectionHeader({
                     href={showAllHref}
                     className="group inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2 text-sm font-semibold text-content-muted transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                 >
-                    Show all
+                    Показать все
                     <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
                 </Link>
             ) : null}

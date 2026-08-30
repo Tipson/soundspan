@@ -97,7 +97,7 @@ function SectionHeading({
                     href={href}
                     className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-brand-light transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                 >
-                    Show all
+                    Показать все
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
             )}
