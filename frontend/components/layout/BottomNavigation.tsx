@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AudioWaveform, Home, Search, Library } from "lucide-react";
+import { AudioWaveform, Home, Library } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
@@ -14,12 +14,6 @@ const navigationItems = [
         icon: Home,
         matchPattern: "/",
         exact: true,
-    },
-    {
-        name: "Search",
-        href: "/search",
-        icon: Search,
-        matchPattern: "/search",
     },
     {
         name: "Vibe",

@@ -55,6 +55,17 @@ test("navigation folds Explore into Home instead of duplicating it", () => {
     );
 });
 
+test("navigation leaves search to the persistent top bar", () => {
+    assert.equal(
+        SIDEBAR_NAVIGATION.some((link) => link.href === "/search"),
+        false,
+    );
+    assert.equal(
+        MOBILE_QUICK_LINKS.some((link) => link.href === "/search"),
+        false,
+    );
+});
+
 test("SIDEBAR_NAVIGATION does not include /import", () => {
     const importItem = SIDEBAR_NAVIGATION.find(
         (item) => item.href === "/import",

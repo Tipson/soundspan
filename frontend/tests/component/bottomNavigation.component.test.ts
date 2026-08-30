@@ -46,13 +46,14 @@ mock.module("@/hooks/useMediaQuery", {
     },
 });
 
-test("mobile navigation prioritizes the four music discovery destinations", async () => {
+test("mobile navigation leaves search to the persistent top bar", async () => {
     const { BottomNavigation } =
         await import("../../components/layout/BottomNavigation");
     const html = renderToStaticMarkup(React.createElement(BottomNavigation));
 
     assert.match(html, /aria-label="Home"/);
-    assert.match(html, /href="\/search"/);
+    assert.doesNotMatch(html, /aria-label="Search"/);
+    assert.doesNotMatch(html, /href="\/search"/);
     assert.match(html, /aria-label="Vibe"/);
     assert.match(html, /href="\/vibe"/);
     assert.match(html, /aria-label="Library"/);
@@ -65,7 +66,7 @@ test("mobile navigation prioritizes the four music discovery destinations", asyn
     assert.match(html, /padding-left:var\(--safe-area-left\)/);
     assert.match(html, /padding-right:var\(--safe-area-right\)/);
     assert.match(html, /data-shell-bottom-navigation="true"/);
-    for (const label of ["Home", "Search", "Vibe", "Library"]) {
+    for (const label of ["Home", "Vibe", "Library"]) {
         const link = html.match(
             new RegExp(`<a[^>]*aria-label="${label}"[^>]*>`),
         )?.[0];

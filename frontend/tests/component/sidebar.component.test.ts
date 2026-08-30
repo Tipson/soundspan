@@ -174,12 +174,13 @@ test("returns null for auth routes", async () => {
     assert.equal(html, "");
 });
 
-test("renders focused music navigation without duplicated or social entries", async () => {
+test("keeps global search in the top bar instead of duplicating it in navigation", async () => {
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
     assert.match(html, />Home</);
-    assert.match(html, />Search</);
+    assert.doesNotMatch(html, />Search</);
+    assert.doesNotMatch(html, /href="\/search"/);
     assert.match(html, />Library</);
     assert.match(html, />Vibe</);
     assert.doesNotMatch(html, />Explore</);
@@ -193,7 +194,7 @@ test("keeps prefetch enabled for primary sidebar navigation links", async () => 
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
-    const navHrefs = ["/", "/search", "/vibe", "/library"];
+    const navHrefs = ["/", "/vibe", "/library"];
 
     for (const href of navHrefs) {
         const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

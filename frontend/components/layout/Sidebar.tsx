@@ -10,7 +10,6 @@ import {
     Home,
     Library,
     Plus,
-    Search,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { api } from "@/lib/api";
@@ -44,7 +43,6 @@ interface Playlist {
 
 const sidebarNavigationIcons = {
     "/": Home,
-    "/search": Search,
     "/vibe": AudioWaveform,
     "/library": Library,
 } as const;
