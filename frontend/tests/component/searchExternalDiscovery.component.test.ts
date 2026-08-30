@@ -265,7 +265,7 @@ test("discover tracks render artist links and album context", async () => {
     // rows expose the artist destination through their accessible label.
     assert.match(html, /Headlines/);
     assert.match(html, /Drake — Take Care/);
-    assert.match(html, /aria-label="Go to Drake"/);
+    assert.match(html, /aria-label="Открыть исполнителя Drake"/);
     assert.match(html, /Orphan Song/);
     assert.doesNotMatch(html, /href="\/artist\//);
 });

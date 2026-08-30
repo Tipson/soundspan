@@ -39,7 +39,7 @@ test("MusicDetailHero keeps artwork, identity, metadata, and actions in one land
     assert.match(html, /<h1[^>]*>From Zero<\/h1>/);
     assert.match(html, /From Zero cover/);
     assert.match(html, /Linkin Park · 2024/);
-    assert.match(html, /aria-label="Album actions"/);
+    assert.match(html, /aria-label="Album: действия"/);
     assert.match(html, /Play All/);
 });
 
