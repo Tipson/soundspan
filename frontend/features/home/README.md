@@ -20,7 +20,7 @@ Start-here guide for `frontend/features/home`.
 | `components/ContinueListening.tsx` | components |
 | `components/FeaturedPlaylistsGrid.tsx` | components |
 | `components/HomeHero.tsx` | components |
-| `components/HomeQuickActions.tsx` | direct links to liked tracks, history, import, and search |
+| `components/HomeQuickActions.tsx` | legacy utility links; intentionally not rendered on Home |
 | `components/HomeWaveHero.tsx` | personalized My Wave launch surface |
 | `components/HomeMadeForYou.tsx` | bounded set of distinct account-backed and generated mixes |
 | `components/LibraryRadioStations.tsx` | components |
@@ -53,13 +53,11 @@ Start-here guide for `frontend/features/home`.
   remaining slots with non-empty Discover Weekly and generated mixes.
 - Home folds online discovery into at most one station row and one discovery
   row, deduplicates items across both, filters regional spillover, and hides
-  either row when it has nothing navigable. A single context grid links Calm,
-  Energy, Focus, Workout, Favorites, and Forgotten directly into Vibe.
+  either row when it has nothing navigable. Direction and mood are configured
+  only inside Vibe so Home does not duplicate the same control as a link shelf.
 - The primary mobile navigation links directly to Vibe so the endless personal
   radio stays one tap away; podcasts and audiobooks are not promoted on Home or
   in the primary music navigation.
-- Quick access links keep liked tracks, listening history, playlist import, and
-  global music search reachable without passing through the local library.
 - Personalized provider shelves use remote YouTube Music plays, remote likes,
   dislikes, completed listens, early skips, repeats, and playlist items that
   have a YouTube Music match. The online-first feed does not require local

@@ -90,7 +90,7 @@ const props = {
     ],
 };
 
-test("Home discovery becomes one station row, one discovery row, and one context row", async () => {
+test("Home discovery keeps provider rows without duplicating Vibe mood controls", async () => {
     const { HomeOnlineDiscovery } =
         await import("../../features/home/components/HomeOnlineDiscovery");
     const html = renderToStaticMarkup(
@@ -104,9 +104,8 @@ test("Home discovery becomes one station row, one discovery row, and one context
     assert.match(html, /Fresh album/);
     assert.match(html, /Chart track/);
     assert.match(html, /href="\/explore\/yt-playlist\/chart"/);
-    assert.match(html, /Pick a moment/);
-    assert.match(html, /href="\/vibe\?mood=calm"/);
-    assert.match(html, /href="\/vibe\?mood=workout"/);
+    assert.doesNotMatch(html, /Pick a moment/);
+    assert.doesNotMatch(html, /href="\/vibe\?mood=/);
     assert.doesNotMatch(html, /Schlager|Wrong region/);
     assert.equal((html.match(/Personal station/g) ?? []).length, 1);
 });
@@ -246,13 +245,15 @@ test("Home discovery deduplicates chart playlists against provider shelves by pl
     );
 });
 
-test("Home keeps mood shortcuts when provider browsing is off", async () => {
+test("Home does not render a duplicate Vibe control when provider browsing is off", async () => {
     const { HomeOnlineDiscovery } =
         await import("../../features/home/components/HomeOnlineDiscovery");
     const html = renderToStaticMarkup(
         React.createElement(HomeOnlineDiscovery, { ...props, enabled: false }),
     );
 
-    assert.match(html, /Pick a moment/);
-    assert.doesNotMatch(html, /Stations for you|New &amp; noteworthy/);
+    assert.doesNotMatch(
+        html,
+        /Pick a moment|href="\/vibe\?mood=|Stations for you|New &amp; noteworthy/,
+    );
 });

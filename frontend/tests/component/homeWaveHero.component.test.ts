@@ -134,7 +134,7 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
         'button[aria-label="Play My Wave"]',
     );
     assert.ok(playButton);
-    assert.ok(container.querySelector('[data-home-wave-layout="compact"]'));
+    assert.ok(container.querySelector('[data-home-wave-layout="launch"]'));
     assert.equal(container.querySelectorAll("[data-wave-cover]").length, 3);
 
     await act(async () => {
@@ -155,7 +155,13 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.deepEqual(calls.vibeQueueIds, [["quick", "fresh", "again"]]);
     assert.deepEqual(calls.waveMode, ["for-you"]);
     assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
-    assert.match(container.textContent ?? "", /keeps going/i);
+    assert.match(container.textContent ?? "", /My Wave/i);
+    assert.match(container.textContent ?? "", /Tune/i);
+    assert.doesNotMatch(container.textContent ?? "", /Press play/i);
+    assert.doesNotMatch(
+        container.textContent ?? "",
+        /Familiar favorites and new discoveries/i,
+    );
 
     await act(async () => root.unmount());
 });

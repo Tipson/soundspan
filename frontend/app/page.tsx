@@ -3,7 +3,6 @@
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { HomeMadeForYou } from "@/features/home/components/HomeMadeForYou";
 import { HomeOnlineDiscovery } from "@/features/home/components/HomeOnlineDiscovery";
-import { HomeQuickActions } from "@/features/home/components/HomeQuickActions";
 import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
 import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
@@ -46,21 +45,19 @@ export default function HomePage() {
 
     return (
         <div
-            data-home-layout="editorial"
-            className="relative min-h-screen overflow-x-clip bg-transparent pb-40 pt-3 sm:pb-32 sm:pt-5"
+            data-home-layout="music-canvas"
+            className="relative min-h-screen overflow-x-clip bg-transparent pb-40 pt-4 sm:pb-32 sm:pt-6"
         >
-            <div
-                aria-hidden="true"
-                className="pointer-events-none absolute left-1/2 top-0 h-[34rem] w-[72rem] max-w-[120vw] -translate-x-1/2 rounded-full bg-brand/[0.055] blur-3xl"
-            />
-            <div className="relative mx-auto max-w-[1520px] px-3 sm:px-6 lg:px-8">
-                <div className="space-y-7 sm:space-y-9">
-                    <HomeWaveHero
-                        personalizedFeed={personalizedFeed}
-                        isLoading={isPersonalizedLoading}
-                    />
-
-                    <HomeQuickActions />
+            <div className="relative mx-auto w-full max-w-[1720px] px-4 sm:px-7 lg:px-10 2xl:px-12">
+                <div className="space-y-8 sm:space-y-10">
+                    <header className="max-w-3xl pt-1 sm:pt-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-content-muted">
+                            Home
+                        </p>
+                        <h1 className="mt-1 text-[clamp(2rem,4vw,3.5rem)] font-black leading-[0.98] tracking-[-0.045em] text-content">
+                            Your music, right now
+                        </h1>
+                    </header>
 
                     {isPersonalizedLoading && !personalizedFeed && (
                         <section
@@ -91,6 +88,11 @@ export default function HomePage() {
                             tracks={personalizedFeed.shelves.listenAgain}
                         />
                     )}
+
+                    <HomeWaveHero
+                        personalizedFeed={personalizedFeed}
+                        isLoading={isPersonalizedLoading}
+                    />
 
                     <HomeMadeForYou
                         discoverWeekly={discoverWeekly}

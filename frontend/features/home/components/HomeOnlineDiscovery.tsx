@@ -1,14 +1,5 @@
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
-import {
-    Dumbbell,
-    Flame,
-    Heart,
-    History,
-    Leaf,
-    Music2,
-    Sparkles,
-} from "lucide-react";
+import { Music2 } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { api } from "@/lib/api";
 import type {
@@ -40,58 +31,6 @@ interface HomeOnlineDiscoveryProps {
     homeShelves: YtMusicHomeShelf[];
     chartPlaylists: PlaylistPreview[];
 }
-
-interface ContextOption {
-    label: string;
-    description: string;
-    mood:
-        | "calm"
-        | "energetic"
-        | "focus"
-        | "workout"
-        | "favorites"
-        | "forgotten";
-    icon: LucideIcon;
-}
-
-const CONTEXT_OPTIONS: readonly ContextOption[] = [
-    {
-        label: "Calm",
-        description: "A softer flow",
-        mood: "calm",
-        icon: Leaf,
-    },
-    {
-        label: "Energy",
-        description: "Turn it up",
-        mood: "energetic",
-        icon: Flame,
-    },
-    {
-        label: "Focus",
-        description: "Keep momentum",
-        mood: "focus",
-        icon: Sparkles,
-    },
-    {
-        label: "Workout",
-        description: "Move with it",
-        mood: "workout",
-        icon: Dumbbell,
-    },
-    {
-        label: "Favorites",
-        description: "Only proven picks",
-        mood: "favorites",
-        icon: Heart,
-    },
-    {
-        label: "Forgotten",
-        description: "Bring it back",
-        mood: "forgotten",
-        icon: History,
-    },
-];
 
 function shelfScore(shelf: YtMusicHomeShelf): number {
     const title = shelf.title ?? "";
@@ -314,51 +253,6 @@ function HomeMediaRow({
     );
 }
 
-function HomeContextRow() {
-    return (
-        <section aria-labelledby="home-context-title">
-            <div className="mb-4 max-w-2xl">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
-                    Change the energy
-                </p>
-                <h2
-                    id="home-context-title"
-                    className="mt-1 text-xl font-black tracking-[-0.025em] text-content sm:text-2xl"
-                >
-                    Pick a moment
-                </h2>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-                {CONTEXT_OPTIONS.map((option) => {
-                    const ContextIcon = option.icon;
-                    return (
-                        <Link
-                            key={option.mood}
-                            href={`/vibe?mood=${option.mood}`}
-                            className="group flex min-h-[4.5rem] items-center gap-3 rounded-2xl bg-white/[0.04] px-3 py-3 transition duration-200 hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                        >
-                            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand-light transition duration-200 group-hover:bg-brand/20 group-hover:text-content motion-reduce:transition-none">
-                                <ContextIcon
-                                    className="h-5 w-5"
-                                    aria-hidden="true"
-                                />
-                            </span>
-                            <span className="min-w-0">
-                                <span className="block text-sm font-bold text-content">
-                                    {option.label}
-                                </span>
-                                <span className="mt-0.5 block truncate text-xs text-content-muted">
-                                    {option.description}
-                                </span>
-                            </span>
-                        </Link>
-                    );
-                })}
-            </div>
-        </section>
-    );
-}
-
 /** A compact merged Explore surface with no duplicate provider shelves. */
 export function HomeOnlineDiscovery({
     enabled,
@@ -378,7 +272,6 @@ export function HomeOnlineDiscovery({
         <div className="space-y-8 sm:space-y-10">
             <HomeMediaRow title="Stations for you" items={stations} />
             <HomeMediaRow title="New & noteworthy" items={discoveries} />
-            <HomeContextRow />
         </div>
     );
 }

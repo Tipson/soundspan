@@ -95,10 +95,10 @@ test("personal Home mixes are distinct, playable, and bounded", async () => {
 
     const mixes = buildHomePersonalMixes(feed);
 
-    assert.equal(mixes.length, 4);
+    assert.equal(mixes.length, 3);
     assert.deepEqual(
         mixes.map((mix) => mix.title),
-        ["Daily blend", "Fresh finds", "Back in rotation", "Quick picks"],
+        ["Daily blend", "Fresh finds", "Back in rotation"],
     );
     assert.ok(mixes.every((mix) => mix.tracks.length > 0));
     assert.ok(mixes.every((mix) => mix.tracks.length <= 12));
@@ -116,6 +116,10 @@ test("personal Home mixes are distinct, playable, and bounded", async () => {
             .join("|"),
     );
     assert.equal(new Set(identities).size, identities.length);
+    const visibleTrackIds = mixes.flatMap((mix) =>
+        mix.tracks.map((item) => item.youtubeVideoId),
+    );
+    assert.equal(new Set(visibleTrackIds).size, visibleTrackIds.length);
 });
 
 test("Home Made For You renders at most six real collections", async () => {
@@ -147,10 +151,10 @@ test("Home Made For You renders at most six real collections", async () => {
     assert.match(html, /Daily blend/);
     assert.match(html, /Fresh finds/);
     assert.match(html, /Back in rotation/);
-    assert.match(html, /Quick picks/);
     assert.match(html, /Discover Weekly/);
     assert.match(html, /Mix 0/);
-    assert.doesNotMatch(html, /Mix 1/);
+    assert.match(html, /Mix 1/);
+    assert.doesNotMatch(html, /Mix 2/);
 });
 
 test("Home Made For You hides the whole shelf when nothing is playable", async () => {

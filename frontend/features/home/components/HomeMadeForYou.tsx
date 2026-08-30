@@ -81,14 +81,18 @@ export function buildHomePersonalMixes(
     const quickPicks = uniqueTracks(feed.shelves.quickPicks);
     const discovery = uniqueTracks(feed.shelves.discovery);
     const listenAgain = uniqueTracks(feed.shelves.listenAgain);
-    const recipes: HomePersonalMix[] = [
+    const recipes: Array<
+        Omit<HomePersonalMix, "tracks"> & {
+            candidates: PersonalizedTrack[];
+        }
+    > = [
         {
             key: "daily-blend",
             title: "Daily blend",
             description: "A balanced mix for right now",
-            tracks: roundRobinTracks(
+            candidates: roundRobinTracks(
                 [quickPicks, discovery, listenAgain],
-                MAX_PERSONAL_MIX_TRACKS,
+                quickPicks.length + discovery.length + listenAgain.length,
             ),
             tone: "violet",
         },
@@ -96,36 +100,71 @@ export function buildHomePersonalMixes(
             key: "fresh-finds",
             title: "Fresh finds",
             description: "New music around what you already enjoy",
-            tracks: discovery.slice(0, MAX_PERSONAL_MIX_TRACKS),
+            candidates: discovery,
             tone: "blue",
         },
         {
             key: "back-in-rotation",
             title: "Back in rotation",
             description: "Recent favorites worth another play",
-            tracks: listenAgain.slice(0, MAX_PERSONAL_MIX_TRACKS),
+            candidates: listenAgain,
             tone: "amber",
         },
         {
             key: "quick-picks",
             title: "Quick picks",
             description: "An immediate route into your taste",
-            tracks: quickPicks.slice(0, MAX_PERSONAL_MIX_TRACKS),
+            candidates: quickPicks,
             tone: "violet",
         },
     ];
 
-    const seenIdentities = new Set<string>();
-    return recipes.filter((recipe) => {
-        if (recipe.tracks.length === 0) return false;
-        const identity = recipe.tracks
-            .map((track) => track.youtubeVideoId || track.id)
-            .sort()
-            .join("|");
-        if (!identity || seenIdentities.has(identity)) return false;
-        seenIdentities.add(identity);
-        return true;
-    });
+    const uniqueAvailableTracks = uniqueTracks([
+        ...quickPicks,
+        ...discovery,
+        ...listenAgain,
+    ]);
+    if (uniqueAvailableTracks.length === 0) return [];
+
+    // Every visible collection must earn its place with at least roughly two
+    // unique tracks. When the account has fewer signals, showing fewer useful
+    // cards is more honest than repeating the same artwork and songs.
+    const visibleRecipeCount = Math.max(
+        1,
+        Math.min(recipes.length, Math.floor(uniqueAvailableTracks.length / 2)),
+    );
+    const visibleRecipes = recipes.slice(0, visibleRecipeCount);
+    const positions = visibleRecipes.map(() => 0);
+    const assigned = new Set<string>();
+    const allocated: HomePersonalMix[] = visibleRecipes.map((recipe) => ({
+        key: recipe.key,
+        title: recipe.title,
+        description: recipe.description,
+        tone: recipe.tone,
+        tracks: [],
+    }));
+
+    let assignedInRound = true;
+    while (assignedInRound) {
+        assignedInRound = false;
+        visibleRecipes.forEach((recipe, recipeIndex) => {
+            const target = allocated[recipeIndex];
+            if (target.tracks.length >= MAX_PERSONAL_MIX_TRACKS) return;
+
+            while (positions[recipeIndex] < recipe.candidates.length) {
+                const candidate = recipe.candidates[positions[recipeIndex]];
+                positions[recipeIndex] += 1;
+                const identity = candidate.youtubeVideoId || candidate.id;
+                if (assigned.has(identity)) continue;
+                assigned.add(identity);
+                target.tracks.push(candidate);
+                assignedInRound = true;
+                break;
+            }
+        });
+    }
+
+    return allocated.filter((recipe) => recipe.tracks.length > 0);
 }
 
 function GeneratedMixCard({ mix }: { mix: Mix }) {

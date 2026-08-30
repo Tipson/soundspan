@@ -173,21 +173,18 @@ test("Home unifies personal playback and real online discovery", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
+    assert.match(html, /Your music, right now/);
     assert.match(html, /compact-wave-hero/);
     assert.match(html, /Continue listening:Again One/);
     assert.doesNotMatch(html, /Picked for right now:Quick One/);
     assert.match(html, /made-for-you:weekly:1:1/);
     assert.match(html, /online-discovery:true:1/);
     assert.ok(
-        html.indexOf("compact-wave-hero") < html.indexOf("home-quick-actions"),
+        html.indexOf("Continue listening") < html.indexOf("compact-wave-hero"),
     );
-    assert.ok(
-        html.indexOf("home-quick-actions") < html.indexOf("Continue listening"),
-    );
-    assert.ok(
-        html.indexOf("Continue listening") < html.indexOf("made-for-you"),
-    );
+    assert.ok(html.indexOf("compact-wave-hero") < html.indexOf("made-for-you"));
     assert.ok(html.indexOf("made-for-you") < html.indexOf("online-discovery"));
+    assert.doesNotMatch(html, /home-quick-actions/);
 });
 
 test("Home omits legacy local-library Explore surfaces", async () => {
