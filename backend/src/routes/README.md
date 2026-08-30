@@ -118,6 +118,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/system.ts`             | `/api/system`                                                                                         |
 | `backend/src/routes/systemSettings.ts`     | `/api/system-settings`                                                                                |
 | `backend/src/routes/systemSettingsFederationSchema.ts` | Federation settings schema helper; not a router                                        |
+| `backend/src/routes/tasteProfile.ts`       | `/api/taste-profile` (account-scoped taste onboarding and later profile editing)                         |
 | `backend/src/routes/tidalStreaming.ts`     | `/api/tidal-streaming`                                                                                |
 | `backend/src/routes/trackMappings.ts`      | `/api/track-mappings`                                                                                 |
 | `backend/src/routes/vibe.ts`               | `/api/vibe`                                                                                           |

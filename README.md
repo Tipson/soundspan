@@ -56,6 +56,11 @@ docker run -d \
 
 Open `http://localhost:3030` and create your account.
 
+Authenticated clients can read, complete, replace, or skip the current
+account's initial recommendation profile through `GET`, `POST`, and `PUT`
+`/api/taste-profile`. The endpoint stores bounded provider metadata only; it
+does not download audio or turn the selected seeds into synthetic likes.
+
 The AIO image includes the MusicCNN analyzer and a CPU-first DCLAP ONNX
 provider. The backend sends text and audio vibe embedding work to the provider
 over container loopback. Its vendored artifacts total a few hundred MB.

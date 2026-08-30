@@ -7,6 +7,7 @@ import {
 } from "./youtubeMusic";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
+import { parseStoredTasteProfile } from "./tasteProfile";
 
 const SIGNAL_READ_LIMIT = 100;
 const MAX_RADIO_SEEDS = 3;
@@ -62,6 +63,7 @@ export interface PersonalizedCatalogSignals {
     recentPlays: UnifiedTrackYtMusicRecord[];
     likedTracks: UnifiedTrackYtMusicRecord[];
     playlistTracks: UnifiedTrackYtMusicRecord[];
+    tasteSeedTracks?: UnifiedTrackYtMusicRecord[];
     dislikedEntityIds: string[];
     playbackSignals?: PersonalizedPlaybackSignal[];
 }
@@ -413,6 +415,7 @@ function buildPreferenceProfile(
         register(track, 0.25);
     }
     for (const track of signals.playlistTracks) register(track, 2);
+    for (const track of signals.tasteSeedTracks ?? []) register(track, 4);
     for (const track of signals.likedTracks) register(track, 12);
     for (const signal of playbackSignals) {
         const score = playbackSignalScore(signal);
@@ -555,17 +558,24 @@ function selectDiverseSeedTracks(
 ): PersonalizedTrack[] {
     const signalSources =
         mood === "favorites"
-            ? [signals.likedTracks, signals.playlistTracks, signals.recentPlays]
+            ? [
+                  signals.likedTracks,
+                  signals.playlistTracks,
+                  signals.recentPlays,
+                  signals.tasteSeedTracks ?? [],
+              ]
             : mood === "forgotten"
               ? [
                     signals.playlistTracks,
                     signals.likedTracks,
                     signals.recentPlays,
+                    signals.tasteSeedTracks ?? [],
                 ]
               : [
                     signals.recentPlays,
                     signals.likedTracks,
                     signals.playlistTracks,
+                    signals.tasteSeedTracks ?? [],
                 ];
     const selected: PersonalizedTrack[] = [];
     const exclusions = new Set(dislikedVideoIds);
@@ -643,7 +653,7 @@ async function loadDislikedEntityIdsFromPrisma(
 async function loadSignalsFromPrisma(
     userId: string,
 ): Promise<PersonalizedCatalogSignals> {
-    const [recentRows, likedRows, playlistRows] = await Promise.all([
+    const [recentRows, likedRows, playlistRows, settings] = await Promise.all([
         prisma.play.findMany({
             where: { userId, trackYtMusicId: { not: null } },
             orderBy: { playedAt: "desc" },
@@ -676,11 +686,17 @@ async function loadSignalsFromPrisma(
                 trackYtMusic: { select: YOUTUBE_TRACK_SELECT },
             },
         }),
+        prisma.userSettings.findUnique({
+            where: { userId },
+            select: { tasteProfile: true },
+        }),
     ]);
 
     const recentPlays = recentRows.flatMap((row) =>
         row.trackYtMusic ? [row.trackYtMusic] : [],
     );
+    const tasteSeedTracks =
+        parseStoredTasteProfile(settings?.tasteProfile)?.seedTracks ?? [];
     return {
         recentPlays,
         likedTracks: likedRows.flatMap((row) =>
@@ -689,6 +705,7 @@ async function loadSignalsFromPrisma(
         playlistTracks: playlistRows.flatMap((row) =>
             row.trackYtMusic ? [row.trackYtMusic] : [],
         ),
+        tasteSeedTracks,
         dislikedEntityIds: [],
         playbackSignals: recentRows.flatMap((row) => {
             if (!row.trackYtMusic) return [];
@@ -810,6 +827,7 @@ export class PersonalizedCatalogService {
             ...signals.recentPlays,
             ...signals.likedTracks,
             ...signals.playlistTracks,
+            ...(signals.tasteSeedTracks ?? []),
         ];
         const exactSignalDislikes =
             await this.dependencies.loadDislikedEntityIds(
@@ -844,7 +862,11 @@ export class PersonalizedCatalogService {
             ...recentVideoIds,
         ]);
         const quickPicks = rankSignalTracks(
-            [...signals.likedTracks, ...signals.playlistTracks],
+            [
+                ...signals.likedTracks,
+                ...signals.playlistTracks,
+                ...(signals.tasteSeedTracks ?? []),
+            ],
             quickPickExclusions,
             preferenceProfile,
             limit,
@@ -1010,7 +1032,11 @@ export class PersonalizedCatalogService {
             limit,
         );
         const finalQuickPicks = rankSignalTracks(
-            [...signals.likedTracks, ...signals.playlistTracks],
+            [
+                ...signals.likedTracks,
+                ...signals.playlistTracks,
+                ...(signals.tasteSeedTracks ?? []),
+            ],
             new Set([
                 ...dislikedVideoIds,
                 ...requestedExclusions,

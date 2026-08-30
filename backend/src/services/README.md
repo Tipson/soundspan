@@ -170,6 +170,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/playlistMutationLock.ts` | Shared Playlist-first lock and ordinary item-mutation transactions |
 | `backend/src/services/playlistTrackResolution.ts` | Core |
 | `backend/src/services/personalizedCatalog.ts` | Account-scoped online Wave signals, direction policies, and independent mood/context ranking |
+| `backend/src/services/tasteProfile.ts` | Account-scoped taste onboarding, bounded playable YouTube seed resolution, and onboarding eligibility |
 | `backend/src/services/playbackTrace.ts` | Playback telemetry |
 | `backend/src/services/podcastCache.ts` | Core |
 | `backend/src/services/podcastDownload.ts` | Core |

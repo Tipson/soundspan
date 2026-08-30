@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Authenticated accounts can save, replace, or skip a bounded taste profile through `/api/taste-profile`; genres and artists resolve to provider metadata-only YouTube seeds, while existing meaningful plays, remote likes, or playlist signals suppress first-run onboarding without reusing the server-setup flag.
 - Vibe tuning now combines an independent Wave direction with an optional listening context (Calm, Energetic, Focus, Workout, Favorites, or Forgotten); the selection is deep-linkable, remains account-personalized, filters dislikes, and follows endless provider continuation without requiring local Audio-DNA files.
 - Artist pages expose URL-addressable Overview, Tracks, Albums, and Singles & EPs views. The Tracks view paginates the full visible library catalog, merges it with provider-popular tracks without duplicates, and starts playback in the displayed order.
 - Tracks and whole playable albums, artist top-track sets, owned playlists, My Liked, and YouTube Music collections can be queued to per-user device storage, managed from Library > Downloads, and played through the PWA while offline with byte-range seeking. Optional per-device liked-song automation starts off, runs serially in the foreground, is bounded to 25–200 newest likes and 2 GiB, and evicts only old automatic copies; manual copies and every other device remain independent.
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Personalized Quick Picks and Wave radio can use account taste-profile seeds as a moderate positive signal without presenting those seeds as plays or likes, and malformed stored JSON is ignored instead of entering recommendation ranking.
 - Search results and Settings now use the first Soundspan design-system primitives: a quiet artwork-led stage, consistent filter chips, stronger result hierarchy, accessible settings navigation, and shared surface, focus, spacing, and state tokens.
 - Device downloads prefer ordinary files below a user-selected folder on supported desktop and Android Chromium browsers; browsers without a directory picker use owner-scoped writable OPFS storage on that device only, while older browsers without either writable route remain unsupported. Private-storage downloads expose an explicit per-track Save as file action that hands a separate ordinary audio file to the browser/OS without removing the verified offline copy, and a rejected durable-storage request is reported instead of being recorded as granted. IndexedDB keeps only owner-scoped metadata, queue state, and the persisted directory handle, and existing verified CacheStorage copies migrate file-first after storage setup.
 - Library is now a personal, account-scoped music hub for liked songs, user playlists, explicitly saved albums and artists, and downloads on the current device; album and artist pages expose an optimistic Save to Library control without treating one liked track as a saved release or downloading server files.

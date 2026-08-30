@@ -72,23 +72,28 @@ model User {
 }
 
 model UserSettings {
-  userId                String  @id
-  playbackQuality       String  @default("original")
-  loudnessMode          String  @default("auto")
-  shareOnlinePresence   Boolean @default(false)
-  shareListeningStatus  Boolean @default(false)
-  wifiOnly              Boolean @default(false)
-  offlineEnabled        Boolean @default(false)
-  maxCacheSizeMb        Int     @default(10240)
-  showYtMusicExplore    Boolean @default(true)
-  showTidalExplore      Boolean @default(true)
+  userId                  String    @id
+  playbackQuality         String    @default("original")
+  loudnessMode            String    @default("auto")
+  shareOnlinePresence     Boolean   @default(false)
+  shareListeningStatus    Boolean   @default(false)
+  wifiOnly                Boolean   @default(false)
+  offlineEnabled          Boolean   @default(false)
+  maxCacheSizeMb          Int       @default(10240)
+  showYtMusicExplore      Boolean   @default(true)
+  showTidalExplore        Boolean   @default(true)
   // YouTube Music — per-user OAuth credentials and quality preference
-  ytMusicOAuthJson      String? // Encrypted OAuth token JSON from ytmusicapi
-  ytMusicQuality        String  @default("HIGH")
+  ytMusicOAuthJson        String? // Encrypted OAuth token JSON from ytmusicapi
+  ytMusicQuality          String    @default("HIGH")
   // Per-user TIDAL streaming
-  tidalOAuthJson        String? // Encrypted JSON with access_token, refresh_token, user_id, country_code
-  tidalStreamingQuality String  @default("HIGH")
-  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tidalOAuthJson          String? // Encrypted JSON with access_token, refresh_token, user_id, country_code
+  tidalStreamingQuality   String    @default("HIGH")
+  // Account-scoped taste onboarding. Seed tracks are provider identities and
+  // metadata only; no audio bytes are persisted here.
+  tasteProfile            Json?
+  tasteProfileCompletedAt DateTime?
+  tasteProfileSkippedAt   DateTime?
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ScrobbleConnection {

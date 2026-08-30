@@ -4,6 +4,7 @@ const mockPrisma = {
     likedRemoteTrack: { findMany: jest.fn() },
     playlistItem: { findMany: jest.fn() },
     dislikedEntity: { findMany: jest.fn() },
+    userSettings: { findUnique: jest.fn() },
 };
 
 jest.mock("../youtubeMusic", () => ({
@@ -409,6 +410,13 @@ describe("PersonalizedCatalogService", () => {
             { trackYtMusic: storedTrack("isolated-signal") },
         ]);
         mockPrisma.playlistItem.findMany.mockResolvedValueOnce([]);
+        mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
+            tasteProfile: {
+                genres: ["Rock"],
+                artists: ["Signal Artist", "Other Artist"],
+                seedTracks: [storedTrack("profile-seed")],
+            },
+        });
         mockPrisma.dislikedEntity.findMany.mockResolvedValue([]);
         mockDefaultGetRadio.mockResolvedValue({
             playlistId: null,
@@ -435,12 +443,21 @@ describe("PersonalizedCatalogService", () => {
                 }),
             }),
         );
+        expect(mockPrisma.userSettings.findUnique).toHaveBeenCalledWith({
+            where: { userId: "isolated-user" },
+            select: { tasteProfile: true },
+        });
         expect(mockPrisma.dislikedEntity.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({
                     userId: "isolated-user",
                     entityType: "track",
-                    entityId: { in: ["yt:isolated-signal"] },
+                    entityId: {
+                        in: expect.arrayContaining([
+                            "yt:isolated-signal",
+                            "yt:profile-seed",
+                        ]),
+                    },
                 }),
             }),
         );
@@ -1002,5 +1019,32 @@ describe("PersonalizedCatalogService", () => {
             ]),
         );
         expect(getListenBrainzCandidates).toHaveBeenCalledWith("user-1", 12, 0);
+    });
+
+    it("uses taste seeds as moderate Quick Pick and radio signals without pretending they were played or liked", async () => {
+        const tasteSeed = storedTrack("taste-seed", {
+            artist: "Chosen Artist",
+        });
+        const loadSignals = jest.fn(async () => ({
+            ...emptySignals(),
+            tasteSeedTracks: [tasteSeed],
+        }));
+        const getRadio = jest.fn(async (seedVideoId: string) => ({
+            playlistId: null,
+            seedVideoId,
+            tracks: [radioTrack("taste-discovery")],
+        }));
+        const service = createService({ loadSignals, getRadio });
+
+        const result = await service.getHomeFeed("new-account", 12);
+
+        expect(result.shelves.listenAgain).toEqual([]);
+        expect(result.shelves.quickPicks.map((track) => track.id)).toEqual([
+            "yt:taste-seed",
+        ]);
+        expect(result.shelves.discovery.map((track) => track.id)).toEqual([
+            "yt:taste-discovery",
+        ]);
+        expect(getRadio).toHaveBeenCalledWith("taste-seed", 36);
     });
 });
