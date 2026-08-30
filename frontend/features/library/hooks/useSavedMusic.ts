@@ -125,11 +125,11 @@ export function useSavedMusicEntity(entity: SavedMusicEntityInput | null) {
         },
         onError: (_error, _nextSaved, context) => {
             queryClient.setQueryData(statusKey, context?.previous);
-            toast.error("Could not update your Library");
+            toast.error("Не удалось обновить коллекцию");
         },
         onSuccess: (_response, nextSaved) => {
             toast.success(
-                nextSaved ? "Saved to your Library" : "Removed from Library",
+                nextSaved ? "Сохранено в коллекции" : "Удалено из коллекции",
             );
         },
         onSettled: async () => {

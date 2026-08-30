@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { getArtistHref } from "@/utils/artistRoute";
 import { PeerBadge } from "@/components/ui/PeerBadge";
+import { pluralRu } from "@/lib/i18n/ru";
 
 interface ArtistsGridProps {
     artists: Artist[];
@@ -124,7 +125,7 @@ const ArtistCardItem = memo(
                             <button
                                 onClick={handleDelete}
                                 className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/60 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-opacity"
-                                title="Delete artist"
+                                title="Удалить исполнителя"
                             >
                                 <Trash2 className="w-3.5 h-3.5 text-white" />
                             </button>
@@ -135,7 +136,12 @@ const ArtistCardItem = memo(
                     </h3>
                     <div className="mt-0.5 flex items-center gap-2">
                         <p className="min-w-0 flex-1 truncate text-xs text-gray-400">
-                            {artist.albumCount || 0} albums
+                            {artist.albumCount || 0}{" "}
+                            {pluralRu(artist.albumCount || 0, [
+                                "альбом",
+                                "альбома",
+                                "альбомов",
+                            ])}
                         </p>
                         {artist.source === "federated" && artist.peer && (
                             <PeerBadge
@@ -173,8 +179,8 @@ const ArtistsGrid = memo(function ArtistsGrid({
         return (
             <EmptyState
                 icon={<Music className="w-12 h-12" />}
-                title="No artists yet"
-                description="Your library is empty. Sync your music to get started."
+                title="Исполнителей пока нет"
+                description="В коллекции пока нет исполнителей. Добавьте или сохраните музыку, чтобы начать."
             />
         );
     }

@@ -20,6 +20,7 @@ import type {
     TrackRowSlots,
     OverflowConfig,
 } from "@/components/track";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface PlayHistoryTrack {
     id: string;
@@ -80,12 +81,12 @@ function toAudioTrack(track: PlayHistoryTrack) {
             track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
         artist: {
             id: artist?.id ?? undefined,
-            name: artist?.name || "Unknown Artist",
+            name: artist?.name || ru.common.unknownArtist,
             mbid: artist?.mbid,
         },
         album: {
             id: track.album?.id ?? undefined,
-            title: track.album?.title || "Unknown Album",
+            title: track.album?.title || ru.common.unknownAlbum,
             coverArt:
                 track.album?.coverArt || track.album?.coverUrl || undefined,
         },
@@ -97,10 +98,11 @@ function formatPlayedAt(isoDate: string): string {
     if (Number.isNaN(parsed)) return "";
 
     const diffMs = Date.now() - parsed;
-    if (diffMs < 60_000) return "Just now";
-    if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
-    if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
-    return new Date(parsed).toLocaleDateString();
+    if (diffMs < 60_000) return "только что";
+    if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)} мин. назад`;
+    if (diffMs < 86_400_000)
+        return `${Math.floor(diffMs / 3_600_000)} ч. назад`;
+    return new Date(parsed).toLocaleDateString("ru-RU");
 }
 
 function historyToRowItem(entry: PlayHistoryEntry): TrackRowItem {
@@ -117,7 +119,9 @@ function historyToRowItem(entry: PlayHistoryEntry): TrackRowItem {
         title: track.title,
         displayTitle: track.displayTitle,
         artistName:
-            track.artist?.name || track.album?.artist?.name || "Unknown Artist",
+            track.artist?.name ||
+            track.album?.artist?.name ||
+            ru.common.unknownArtist,
         duration: track.duration,
         coverArtUrl: coverArt
             ? isRemote
@@ -157,7 +161,7 @@ export default function MyHistoryPage() {
                 );
             } catch (err) {
                 sharedFrontendLogger.error("Failed to load play history:", err);
-                setError("Failed to load your listening history");
+                setError("Не удалось загрузить историю прослушиваний");
             } finally {
                 setLoading(false);
             }
@@ -175,7 +179,7 @@ export default function MyHistoryPage() {
         (_entry: PlayHistoryEntry, index: number) => {
             if (audioTracks.length === 0) return;
             playTracks(audioTracks, index);
-            toast.success("Playing from history");
+            toast.success("Воспроизводим из истории");
         },
         [audioTracks, playTracks, toast],
     );
@@ -204,10 +208,10 @@ export default function MyHistoryPage() {
                             </div>
                         )}
                         <p className="text-[11px] text-gray-400 truncate">
-                            {track.album?.title || "Unknown Album"}
+                            {track.album?.title || ru.common.unknownAlbum}
                         </p>
                         <p className="text-[11px] text-gray-400 mt-1">
-                            Played {formatPlayedAt(entry.playedAt)}
+                            Слушали {formatPlayedAt(entry.playedAt)}
                         </p>
                     </>
                 ),
@@ -231,10 +235,12 @@ export default function MyHistoryPage() {
         <div className="min-h-screen bg-surface">
             <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6">
                 <PageHeader
-                    title="My History"
-                    subtitle={`${history.length} played track${
-                        history.length !== 1 ? "s" : ""
-                    }`}
+                    title="История прослушиваний"
+                    subtitle={`${history.length} ${pluralRu(history.length, [
+                        "прослушанный трек",
+                        "прослушанных трека",
+                        "прослушанных треков",
+                    ])}`}
                     icon={History}
                     className="mb-8"
                     actions={
@@ -242,7 +248,7 @@ export default function MyHistoryPage() {
                             variant="secondary"
                             onClick={() => router.push("/queue")}
                         >
-                            Queue
+                            Очередь
                         </Button>
                     }
                 />
@@ -260,7 +266,7 @@ export default function MyHistoryPage() {
                             onClick={() => window.location.reload()}
                             className="mt-3 text-xs text-white/60 hover:text-white"
                         >
-                            Retry
+                            Повторить
                         </button>
                     </div>
                 )}
@@ -268,10 +274,10 @@ export default function MyHistoryPage() {
                 {!loading && !error && history.length === 0 && (
                     <EmptyState
                         icon={<History />}
-                        title="No listening history yet"
-                        description="Play something and your recent listening will appear here."
+                        title="История пока пуста"
+                        description="Начните слушать музыку — недавние треки появятся здесь."
                         action={{
-                            label: "Browse Library",
+                            label: "Открыть коллекцию",
                             onClick: () => router.push("/library"),
                         }}
                     />
@@ -280,7 +286,7 @@ export default function MyHistoryPage() {
                 {!loading && !error && history.length > 0 && (
                     <section className="bg-[#111] rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">
-                            Recently Played ({history.length})
+                            Недавно слушали ({history.length})
                         </h2>
 
                         <Card>

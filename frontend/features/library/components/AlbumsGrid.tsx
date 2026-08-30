@@ -113,7 +113,7 @@ const AlbumCardItem = memo(
                             <button
                                 onClick={handleDelete}
                                 className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-opacity"
-                                title="Delete album"
+                                title="Удалить альбом"
                             >
                                 <Trash2 className="w-3.5 h-3.5 text-white" />
                             </button>
@@ -162,8 +162,8 @@ const AlbumsGrid = memo(function AlbumsGrid({
         return (
             <EmptyState
                 icon={<Disc3 className="w-12 h-12" />}
-                title="No albums yet"
-                description="Your library is empty. Sync your music to get started."
+                title="Альбомов пока нет"
+                description="В коллекции пока нет альбомов. Добавьте или сохраните музыку, чтобы начать."
             />
         );
     }

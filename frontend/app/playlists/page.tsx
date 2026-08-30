@@ -35,6 +35,7 @@ import {
 } from "@/utils/mosaicCoverSelection";
 import { useLikedPlaylistQuery } from "@/hooks/useQueries";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 // soundspan brand blue for play buttons
 const BRAND_PLAY = "#60a5fa";
@@ -165,8 +166,8 @@ function PlaylistCard({
                             )}
                             title={
                                 playlist.isHidden
-                                    ? "Show playlist"
-                                    : "Hide playlist"
+                                    ? "Показывать плейлист"
+                                    : "Скрыть плейлист"
                             }
                         >
                             {playlist.isHidden ? (
@@ -192,7 +193,7 @@ function PlaylistCard({
                             "hover:scale-105 hover:brightness-110",
                             "opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0",
                         )}
-                        title="Play playlist"
+                        title="Воспроизвести плейлист"
                     >
                         {showPlaySpinner ? (
                             <Loader2 className="w-4 h-4 animate-spin text-black" />
@@ -214,11 +215,15 @@ function PlaylistCard({
                 <p className="text-xs text-gray-400 mt-0.5 truncate">
                     {isShared && playlist.user?.username ? (
                         <span className="text-gray-400">
-                            By {playlist.user.username} ·{" "}
+                            Автор: {playlist.user.username} ·{" "}
                         </span>
                     ) : null}
                     {playlist.trackCount || 0}{" "}
-                    {playlist.trackCount === 1 ? "song" : "songs"}
+                    {pluralRu(playlist.trackCount || 0, [
+                        "трек",
+                        "трека",
+                        "треков",
+                    ])}
                 </p>
             </div>
         </Link>
@@ -257,8 +262,8 @@ function PeerPlaylistCard({
                     {playlist.name}
                 </h3>
                 <p className="text-xs text-gray-400 mt-0.5 truncate">
-                    By {playlist.owner.displayName} · {playlist.trackCount}{" "}
-                    {playlist.trackCount === 1 ? "song" : "songs"}
+                    Автор: {playlist.owner.displayName} · {playlist.trackCount}{" "}
+                    {pluralRu(playlist.trackCount, ["трек", "трека", "треков"])}
                 </p>
             </div>
         </Link>
@@ -327,11 +332,14 @@ export default function PlaylistsPage() {
                             title: item.track.title,
                             artist: {
                                 name:
-                                    item.track.album?.artist?.name || "Unknown",
+                                    item.track.album?.artist?.name ||
+                                    ru.common.unknownArtist,
                                 id: item.track.album?.artist?.id,
                             },
                             album: {
-                                title: item.track.album?.title || "Unknown",
+                                title:
+                                    item.track.album?.title ||
+                                    ru.common.unknownAlbum,
                                 coverArt: item.track.album?.coverArt,
                                 id: item.track.album?.id,
                             },
@@ -410,10 +418,12 @@ export default function PlaylistsPage() {
             {/* Header */}
             <div className="relative px-4 md:px-8 py-6">
                 <PageHeader
-                    title="Playlists"
-                    subtitle={`${subtitleCount} ${
-                        subtitleCount === 1 ? "playlist" : "playlists"
-                    }`}
+                    title="Плейлисты"
+                    subtitle={`${subtitleCount} ${pluralRu(subtitleCount, [
+                        "плейлист",
+                        "плейлиста",
+                        "плейлистов",
+                    ])}`}
                     icon={Music}
                     className="mb-4"
                     actions={
@@ -421,14 +431,14 @@ export default function PlaylistsPage() {
                             {federation && !showHiddenTab && (
                                 <div
                                     role="group"
-                                    aria-label="Playlist source"
+                                    aria-label="Источник плейлистов"
                                     className="flex items-center gap-1 rounded-full bg-white/5 p-1"
                                 >
                                     {(
                                         [
-                                            ["all", "All"],
-                                            ["local", "Local"],
-                                            ["peers", "Peers"],
+                                            ["all", "Все"],
+                                            ["local", "Мои"],
+                                            ["peers", "Друзья"],
                                         ] as const
                                     ).map(([value, label]) => (
                                         <button
@@ -451,13 +461,13 @@ export default function PlaylistsPage() {
                                 className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all"
                             >
                                 <Download className="w-3.5 h-3.5" />
-                                Import
+                                Импортировать
                             </Link>
                             <Link
                                 href="/explore"
                                 className="px-4 py-2 rounded-full text-sm font-medium bg-brand text-black hover:brightness-110 transition-all"
                             >
-                                Explore Playlists
+                                Найти плейлисты
                             </Link>
 
                             {hiddenPlaylists.length > 0 && (
@@ -473,8 +483,8 @@ export default function PlaylistsPage() {
                                     )}
                                 >
                                     {showHiddenTab
-                                        ? "Show All"
-                                        : `Hidden (${hiddenPlaylists.length})`}
+                                        ? "Показать все"
+                                        : `Скрытые (${hiddenPlaylists.length})`}
                                 </button>
                             )}
                         </>
@@ -488,8 +498,8 @@ export default function PlaylistsPage() {
                 {showHiddenTab && (
                     <div className="mx-2 mb-4 px-4 py-3 bg-white/5 rounded-lg">
                         <p className="text-sm text-gray-400">
-                            Hidden playlists won&apos;t appear in your library.
-                            Hover and click the eye icon to restore.
+                            Скрытые плейлисты не отображаются в коллекции.
+                            Нажмите значок глаза, чтобы вернуть плейлист.
                         </p>
                     </div>
                 )}
@@ -512,11 +522,15 @@ export default function PlaylistsPage() {
                                         <Heart className="w-12 h-12 text-white fill-white/80" />
                                     </div>
                                     <h3 className="text-sm font-semibold truncate text-white">
-                                        My Liked
+                                        Любимые треки
                                     </h3>
                                     <p className="text-xs text-gray-400 mt-0.5 truncate">
                                         {likedTotal}{" "}
-                                        {likedTotal === 1 ? "song" : "songs"}
+                                        {pluralRu(likedTotal, [
+                                            "трек",
+                                            "трека",
+                                            "треков",
+                                        ])}
                                     </p>
                                 </div>
                             </Link>
@@ -552,24 +566,24 @@ export default function PlaylistsPage() {
                         </div>
                         <h2 className="text-lg font-semibold text-white mb-1">
                             {showHiddenTab
-                                ? "No hidden playlists"
+                                ? "Скрытых плейлистов нет"
                                 : effectiveOrigin === "peers"
-                                  ? "No peer playlists"
-                                  : "No playlists yet"}
+                                  ? "У друзей нет доступных плейлистов"
+                                  : "Плейлистов пока нет"}
                         </h2>
                         <p className="text-sm text-gray-400 max-w-sm">
                             {showHiddenTab
-                                ? "You haven't hidden any playlists"
+                                ? "Вы ещё не скрывали плейлисты"
                                 : effectiveOrigin === "peers"
-                                  ? "Your peers haven't shared any public playlists, or they're unreachable right now"
-                                  : "Create your first playlist by adding songs from albums or artists"}
+                                  ? "Друзья ещё не поделились плейлистами или сейчас недоступны"
+                                  : "Создайте первый плейлист, добавив треки из альбома или со страницы исполнителя"}
                         </p>
                         {!showHiddenTab && effectiveOrigin !== "peers" && (
                             <Link
                                 href="/explore"
                                 className="mt-6 px-5 py-2.5 rounded-full text-sm font-medium bg-brand text-black hover:brightness-110 transition-all"
                             >
-                                Explore Playlists
+                                Найти плейлисты
                             </Link>
                         )}
                     </div>
