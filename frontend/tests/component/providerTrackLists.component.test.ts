@@ -168,9 +168,9 @@ test("album TrackList renders disc separators and provider loading badges for un
         }),
     );
 
-    assert.match(html, /Disc 1/);
-    assert.match(html, /Disc 2/);
-    assert.match(html, /LOADING/);
+    assert.match(html, /Диск 1/);
+    assert.match(html, /Диск 2/);
+    assert.match(html, /ИЩЕМ/);
     assert.match(
         html,
         /aria-disabled="true"/,
@@ -234,9 +234,9 @@ test("album TrackList shows preview controls, queue badges, and provider badges"
         }),
     );
 
-    assert.match(html, /PREVIEW/);
-    assert.match(html, /Pause preview/);
-    assert.match(html, /IN QUEUE/);
+    assert.match(html, /ФРАГМЕНТ/);
+    assert.match(html, /Поставить фрагмент на паузу/);
+    assert.match(html, /В ОЧЕРЕДИ/);
     assert.match(html, /TIDAL/);
     assert.match(html, /YT/);
     assert.match(html, /#7/);
@@ -316,9 +316,9 @@ test("artist PopularTracks limits visible items and renders provider states", as
     // "See more" toggle visible since there are 6 tracks (> 5 collapsed)
     assert.match(html, /Показать ещё/);
     assert.match(html, /href=\"\/artist\/artist-1\/popular\"/);
-    assert.match(html, /LOADING/);
+    assert.match(html, /ИЩЕМ/);
     assert.match(html, /YT/);
-    assert.match(html, /IN QUEUE/);
+    assert.match(html, /В ОЧЕРЕДИ/);
     assert.match(html, /#12/);
 
     // Remote provider tracks must use canonical IDs for preference actions.
@@ -428,7 +428,7 @@ test("discover TrackList renders source badges, tier aliases, queue badges, and 
     assert.match(html, /YT</);
     assert.match(html, /Ищем/);
     assert.match(html, /Локально/);
-    assert.match(html, /IN QUEUE/);
+    assert.match(html, /В ОЧЕРЕДИ/);
     assert.match(html, /Сюрприз/);
     assert.match(html, /href=\"\/artist\/A%20Tidal\"/);
     assert.equal(

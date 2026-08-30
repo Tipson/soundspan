@@ -627,8 +627,8 @@ test("playlist detail renders provider badges and unplayable fallback messaging"
     assert.match(html, /Local Song/);
     assert.match(html, /TIDAL/);
     assert.match(html, /YOUTUBE/);
-    assert.match(html, /UNPLAYABLE/);
-    assert.match(html, /Track mapping missing for this import\./);
+    assert.match(html, /НЕДОСТУПНО/);
+    assert.match(html, /Сейчас этот трек недоступен для воспроизведения\./);
     assert.match(html, /Сейчас недоступно/);
     assert.match(html, /Недоступно для воспроизведения/);
     assert.match(html, /title="Удалить из плейлиста"/);
@@ -688,9 +688,9 @@ test("playlist detail distinguishes removed tracks without changing missing-prov
     assert.match(html, /УДАЛЁН/);
     assert.match(
         html,
-        /title="File removed from library — restore the file to bring it back"/,
+        /title="Файл удалён из медиатеки — восстановите его, чтобы вернуть трек"/,
     );
     assert.match(html, /opacity-60/);
-    assert.match(html, /UNPLAYABLE/);
-    assert.match(html, /Track mapping missing for this import\./);
+    assert.match(html, /НЕДОСТУПНО/);
+    assert.match(html, /Сейчас этот трек недоступен для воспроизведения\./);
 });

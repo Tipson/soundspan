@@ -9,7 +9,7 @@
 export function InQueueBadge() {
     return (
         <span className="shrink-0 text-[10px] bg-brand/15 text-brand-light px-1.5 py-0.5 rounded border border-brand/30 font-medium">
-            IN QUEUE
+            В ОЧЕРЕДИ
         </span>
     );
 }
@@ -20,7 +20,7 @@ export function InQueueBadge() {
 export function PreviewBadge() {
     return (
         <span className="shrink-0 text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-medium">
-            PREVIEW
+            ФРАГМЕНТ
         </span>
     );
 }
@@ -31,7 +31,7 @@ export function PreviewBadge() {
 export function LoadingBadge() {
     return (
         <span className="shrink-0 text-[10px] bg-gray-500/20 text-gray-300 px-1.5 py-0.5 rounded font-medium animate-pulse">
-            LOADING
+            ИЩЕМ
         </span>
     );
 }
@@ -46,7 +46,7 @@ interface UnplayableBadgeProps {
  * Renders the UnplayableBadge component with optional reason-specific text.
  */
 export function UnplayableBadge({
-    label = "UNPLAYABLE",
+    label = "НЕДОСТУПНО",
     title,
     variant = "warning",
 }: UnplayableBadgeProps = {}) {

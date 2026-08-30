@@ -5,13 +5,18 @@ import test from "node:test";
 const surfaceFiles = [
     "app/audiobooks/series/[name]/page.tsx",
     "app/peer-playlists/[peerId]/[remoteId]/page.tsx",
+    "app/podcasts/genre/[genreId]/page.tsx",
     "app/search/loading.tsx",
+    "app/setup/page.tsx",
     "components/EnrichmentFailuresModal.tsx",
     "components/track/TrackList.tsx",
     "components/track/TrackRow.tsx",
+    "components/track/badges.tsx",
     "components/ui/LibraryBadge.tsx",
     "features/artist/components/PopularTracks.tsx",
     "features/audiobook/components/AudiobookActionBar.tsx",
+    "features/audiobook/components/AboutSection.tsx",
+    "features/audiobook/components/PlayControls.tsx",
 ].map((path) => readFileSync(path, "utf8"));
 
 test("общие музыкальные экраны не возвращают английские UI-команды", () => {
@@ -29,6 +34,17 @@ test("общие музыкальные экраны не возвращают �
         'title="Delete failure record"',
         'toast.error("Failed to load series")',
         'toast.success("Playing peer playlist")',
+        ">Redirecting to login...<",
+        ">Genre not found<",
+        ">Back to Podcasts<",
+        ">No more podcasts to load<",
+        ">No podcasts found<",
+        ">Pause<",
+        ">Finished<",
+        ">About<",
+        ">IN QUEUE<",
+        ">PREVIEW<",
+        ">LOADING<",
         ">Save a copy<",
         ">See more<",
     ];

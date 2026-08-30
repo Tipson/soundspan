@@ -36,7 +36,7 @@ export default function SetupPage() {
             {/* Loading */}
             <div className="flex items-center gap-3 text-white/60">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Redirecting to login...</span>
+                <span>Переходим к входу…</span>
             </div>
         </div>
     );

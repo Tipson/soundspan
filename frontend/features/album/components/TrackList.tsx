@@ -167,7 +167,7 @@ export const TrackList = memo(function TrackList({
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                         role="group"
-                        aria-label={`Actions for ${track.displayTitle ?? track.title}`}
+                        aria-label={`Действия с треком «${track.displayTitle ?? track.title}»`}
                     >
                         {isPlayable &&
                             track.playCount !== undefined &&
@@ -186,8 +186,8 @@ export const TrackList = memo(function TrackList({
                                 className="p-2 rounded-full bg-surface-hover hover:bg-[#2a2a2a] transition-colors text-white"
                                 aria-label={
                                     isPreviewPlaying
-                                        ? "Pause preview"
-                                        : "Play preview"
+                                        ? "Поставить фрагмент на паузу"
+                                        : "Воспроизвести фрагмент"
                                 }
                             >
                                 {isPreviewPlaying ? (
@@ -270,7 +270,7 @@ export const TrackList = memo(function TrackList({
                     <div className="flex items-center gap-2 px-3 md:px-4 py-2.5 bg-[#0d0d0d] border-b border-surface-active">
                         <Disc className="w-3.5 h-3.5 text-gray-400" />
                         <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                            Disc {currentDisc}
+                            Диск {currentDisc}
                         </span>
                     </div>
                 );

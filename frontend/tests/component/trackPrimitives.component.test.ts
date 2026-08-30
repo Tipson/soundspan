@@ -254,7 +254,7 @@ test("TrackRow renders queue badge, duration, preferences, and overflow actions"
         }),
     );
 
-    assert.match(html, /IN QUEUE/);
+    assert.match(html, /В ОЧЕРЕДИ/);
     assert.match(html, /t:181/);
     assert.match(html, /prefs:track-1/);
     assert.match(html, /overflow-menu/);
@@ -359,8 +359,8 @@ test("track badges render all expected labels", async () => {
         ),
     );
 
-    assert.match(html, /IN QUEUE/);
-    assert.match(html, /PREVIEW/);
-    assert.match(html, /LOADING/);
-    assert.match(html, /UNPLAYABLE/);
+    assert.match(html, /В ОЧЕРЕДИ/);
+    assert.match(html, /ФРАГМЕНТ/);
+    assert.match(html, /ИЩЕМ/);
+    assert.match(html, /НЕДОСТУПНО/);
 });

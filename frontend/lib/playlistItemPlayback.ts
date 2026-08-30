@@ -2,7 +2,7 @@ import type { PlaylistDetailTrackItem } from "@/lib/api";
 import type { Track as AudioTrack } from "@/lib/audio-context";
 
 export const TRACK_REMOVED_TOOLTIP =
-    "File removed from library — restore the file to bring it back";
+    "Файл удалён из медиатеки — восстановите его, чтобы вернуть трек";
 
 /** Playlist row whose track is present and currently playable. */
 export interface PlayablePlaylistItem extends PlaylistDetailTrackItem {
@@ -33,12 +33,13 @@ export function getUnplayableMessage(item: PlaylistDetailTrackItem): string {
         return TRACK_REMOVED_TOOLTIP;
     }
     if (item.playback?.reason === "peer_offline") {
-        return "This peer is offline.";
+        return "Удалённый сервер сейчас не в сети.";
     }
-    return (
-        item.playback?.message ||
-        "Playback is unavailable for this track right now."
-    );
+    const backendMessage = item.playback?.message?.trim();
+    if (backendMessage && /[А-Яа-яЁё]/.test(backendMessage)) {
+        return backendMessage;
+    }
+    return "Сейчас этот трек недоступен для воспроизведения.";
 }
 
 /** Maps a playable playlist row onto the audio-context track shape. */

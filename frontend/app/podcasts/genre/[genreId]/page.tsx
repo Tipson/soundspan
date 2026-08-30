@@ -18,16 +18,16 @@ interface Podcast {
 }
 
 const GENRE_MAP: { [key: string]: { name: string; searchTerm: string } } = {
-    "1303": { name: "Comedy", searchTerm: "comedy podcast" },
+    "1303": { name: "Комедия", searchTerm: "comedy podcast" },
     "1324": {
-        name: "Society & Culture",
+        name: "Общество и культура",
         searchTerm: "society culture podcast",
     },
-    "1489": { name: "News", searchTerm: "news podcast" },
-    "1488": { name: "True Crime", searchTerm: "true crime podcast" },
-    "1321": { name: "Business", searchTerm: "business podcast" },
-    "1545": { name: "Sports", searchTerm: "sports podcast" },
-    "1502": { name: "Leisure", searchTerm: "gaming hobbies podcast" },
+    "1489": { name: "Новости", searchTerm: "news podcast" },
+    "1488": { name: "Криминальные истории", searchTerm: "true crime podcast" },
+    "1321": { name: "Бизнес", searchTerm: "business podcast" },
+    "1545": { name: "Спорт", searchTerm: "sports podcast" },
+    "1502": { name: "Досуг", searchTerm: "gaming hobbies podcast" },
 };
 
 /**
@@ -112,7 +112,7 @@ export default function GenrePage() {
     if (!genre) {
         return (
             <div className="flex items-center justify-center h-screen">
-                <p className="text-white">Genre not found</p>
+                <p className="text-white">Жанр не найден</p>
             </div>
         );
     }
@@ -126,21 +126,30 @@ export default function GenrePage() {
                     className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-4"
                 >
                     <ArrowLeft className="w-5 h-5" />
-                    Back to Podcasts
+                    Назад к подкастам
                 </button>
                 <h1 className="text-4xl md:text-5xl font-bold">{genre.name}</h1>
                 <p className="text-gray-400 mt-2">
-                    {podcasts.length} podcast{podcasts.length !== 1 ? "s" : ""}
+                    {podcasts.length}{" "}
+                    {podcasts.length % 10 === 1 && podcasts.length % 100 !== 11
+                        ? "подкаст"
+                        : podcasts.length % 10 >= 2 &&
+                            podcasts.length % 10 <= 4 &&
+                            (podcasts.length % 100 < 10 ||
+                                podcasts.length % 100 >= 20)
+                          ? "подкаста"
+                          : "подкастов"}
                 </p>
             </div>
 
             {/* Podcast Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                 {podcasts.map((podcast) => (
-                    <div
+                    <button
+                        type="button"
                         key={podcast.id}
                         onClick={() => handlePodcastClick(podcast)}
-                        className="bg-gradient-to-br from-surface-sunken to-surface-sunken hover:from-surface-elevated hover:to-surface-hover transition-all p-4 rounded-lg cursor-pointer group border border-surface-active"
+                        className="group rounded-lg border border-surface-active bg-gradient-to-br from-surface-sunken to-surface-sunken p-4 text-left transition-all hover:from-surface-elevated hover:to-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                     >
                         <div className="relative w-full aspect-square bg-surface-elevated rounded-full mb-3 overflow-hidden">
                             {podcast.coverUrl ? (
@@ -164,7 +173,7 @@ export default function GenrePage() {
                         <p className="text-xs text-gray-400 truncate">
                             {podcast.author}
                         </p>
-                    </div>
+                    </button>
                 ))}
             </div>
 
@@ -181,7 +190,7 @@ export default function GenrePage() {
             {/* End of results */}
             {!hasMore && podcasts.length > 0 && (
                 <div className="text-center py-8 text-gray-400">
-                    No more podcasts to load
+                    Вы посмотрели все подкасты
                 </div>
             )}
 
@@ -189,7 +198,7 @@ export default function GenrePage() {
             {!loading && podcasts.length === 0 && (
                 <div className="text-center py-20">
                     <Mic2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-400">No podcasts found</p>
+                    <p className="text-gray-400">Подкасты не найдены</p>
                 </div>
             )}
         </div>

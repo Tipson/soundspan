@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PlaylistDetailTrackItem } from "../../lib/api";
-import { selectPlaylistPlaybackQueue } from "../../lib/playlistItemPlayback";
+import {
+    getUnplayableMessage,
+    selectPlaylistPlaybackQueue,
+    TRACK_REMOVED_TOOLTIP,
+} from "../../lib/playlistItemPlayback";
 
 function playableItem(
     id: string,
@@ -74,5 +78,39 @@ test("playlist row playback returns no selection for an unavailable row", () => 
     assert.deepEqual(
         selectPlaylistPlaybackQueue([playable, unavailable], unavailable.id),
         { tracks: [], startIndex: -1 },
+    );
+});
+
+test("unplayable playlist rows expose safe Russian explanations", () => {
+    const item: PlaylistDetailTrackItem = {
+        id: "item-unavailable",
+        type: "track",
+        sort: 1,
+        playback: {
+            isPlayable: false,
+            reason: "missing_provider_track",
+            message: "Track mapping missing for this import.",
+        },
+        track: null,
+    };
+
+    assert.equal(
+        getUnplayableMessage(item),
+        "Сейчас этот трек недоступен для воспроизведения.",
+    );
+    item.playback = {
+        isPlayable: false,
+        reason: "track_removed",
+        message: "Playback is unavailable because this track was removed.",
+    };
+    assert.equal(getUnplayableMessage(item), TRACK_REMOVED_TOOLTIP);
+    item.playback = {
+        isPlayable: false,
+        reason: "peer_offline",
+        message: null,
+    };
+    assert.equal(
+        getUnplayableMessage(item),
+        "Удалённый сервер сейчас не в сети.",
     );
 });

@@ -39,13 +39,15 @@ export function PlayControls({
                     {isThisBookPlaying && isPlaying ? (
                         <>
                             <Pause className="w-6 h-6 mr-2" />
-                            <span className="font-semibold">Pause</span>
+                            <span className="font-semibold">Пауза</span>
                         </>
                     ) : (
                         <>
                             <Play className="w-6 h-6 mr-2 fill-current" />
                             <span className="font-semibold">
-                                {hasProgress && !isFinished ? "Resume" : "Play"}
+                                {hasProgress && !isFinished
+                                    ? "Продолжить"
+                                    : "Слушать"}
                             </span>
                         </>
                     )}
@@ -54,7 +56,7 @@ export function PlayControls({
                 {hasProgress && !isFinished && (
                     <div className="text-center sm:text-left">
                         <div className="text-sm text-gray-400">
-                            Continue listening
+                            Продолжить прослушивание
                         </div>
                         <div className="text-white font-medium">
                             {formatTime(
@@ -84,14 +86,14 @@ export function PlayControls({
                 {isFinished && (
                     <div className="flex items-center gap-2 text-green-500">
                         <Book className="w-5 h-5" />
-                        <span className="font-medium">Finished</span>
+                        <span className="font-medium">Прослушано</span>
                     </div>
                 )}
             </div>
 
             <p className="text-center text-sm text-gray-400 mt-4">
-                Use the player controls in the sidebar or bottom bar for
-                playback speed, seeking, and volume.
+                Скорость, позицию и громкость можно изменить в боковом или
+                нижнем плеере.
             </p>
         </section>
     );
