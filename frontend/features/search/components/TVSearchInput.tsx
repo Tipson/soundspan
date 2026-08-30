@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Search as SearchIcon } from "lucide-react";
 import { useIsTV } from "@/lib/tv-utils";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 interface TVSearchInputProps {
     initialQuery?: string;
@@ -51,7 +52,7 @@ export function TVSearchInput({
             <form onSubmit={handleSubmit}>
                 <div className="relative max-w-2xl">
                     <label htmlFor="tv-search-input" className="sr-only">
-                        Search music
+                        {searchExtrasRu.tvSearch.label}
                     </label>
                     <SearchIcon
                         aria-hidden="true"
@@ -66,7 +67,7 @@ export function TVSearchInput({
                         onKeyDown={handleKeyDown}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
-                        placeholder="Press Enter to search..."
+                        placeholder={searchExtrasRu.tvSearch.placeholder}
                         autoCapitalize="none"
                         autoCorrect="off"
                         autoComplete="off"
@@ -81,7 +82,7 @@ export function TVSearchInput({
                     />
                     {query && (
                         <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-sm text-content-secondary">
-                            Press Enter to search
+                            {searchExtrasRu.tvSearch.hint}
                         </div>
                     )}
                 </div>

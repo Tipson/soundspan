@@ -33,6 +33,15 @@ import { TrackList, TrackListHeader } from "@/components/track";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
 import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
+import {
+    formatYouTubeChartTrackDescription,
+    formatYouTubePlaylistDuration,
+    formatYouTubePlaylistTrackCount,
+    formatYouTubeTracksAdded,
+    formatYouTubeTracksAddedToPlaylist,
+    searchExtrasRu,
+} from "@/lib/i18n/searchExtrasRu";
+import { userFacingError } from "@/lib/i18n/ru";
 import type {
     TrackRowItem,
     TrackRowSlots,
@@ -118,7 +127,7 @@ function resolveSongArtist(song: YtMusicSongResponse): string {
         }
     }
 
-    return "Unknown Artist";
+    return searchExtrasRu.youtubePlaylist.unknownArtist;
 }
 
 function resolveSongAlbum(song: YtMusicSongResponse): string {
@@ -141,7 +150,7 @@ function resolveSongAlbum(song: YtMusicSongResponse): string {
     ) {
         return song.album.name.trim();
     }
-    return "Single";
+    return searchExtrasRu.youtubePlaylist.single;
 }
 
 function resolveSongDuration(song: YtMusicSongResponse): number {
@@ -184,7 +193,7 @@ function buildSingleTrackPlaylist(
     const title =
         typeof song.title === "string" && song.title.trim()
             ? song.title.trim()
-            : "YouTube Music Track";
+            : searchExtrasRu.youtubePlaylist.fallbackTrackTitle;
     const artist = resolveSongArtist(song);
     const album = resolveSongAlbum(song);
     const duration = resolveSongDuration(song);
@@ -193,7 +202,7 @@ function buildSingleTrackPlaylist(
     return {
         id: videoId,
         title,
-        description: `Chart track by ${artist}`,
+        description: formatYouTubeChartTrackDescription(artist),
         trackCount: 1,
         thumbnailUrl,
         tracks: [
@@ -284,8 +293,14 @@ function BrowseTrackList({
                         className="grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto] gap-4 mb-2"
                         columns={[
                             { label: "#", className: "text-center" },
-                            { label: "Title" },
-                            { label: "Album" },
+                            {
+                                label: searchExtrasRu.youtubePlaylist
+                                    .tableTitle,
+                            },
+                            {
+                                label: searchExtrasRu.youtubePlaylist
+                                    .tableAlbum,
+                            },
                             { label: "" },
                         ]}
                     />
@@ -373,10 +388,10 @@ function YtMusicPlaylistDetailPageContent() {
                     }
                 }
 
-                const message =
-                    playlistError instanceof Error
-                        ? playlistError.message
-                        : "Failed to load playlist";
+                const message = userFacingError(
+                    playlistError,
+                    searchExtrasRu.youtubePlaylist.loadFailed,
+                );
                 if (isActive) {
                     setError(message);
                 }
@@ -406,7 +421,7 @@ function YtMusicPlaylistDetailPageContent() {
             .filter((t) => t.videoId)
             .map(browseTrackToQueueTrack);
         if (tracks.length === 0) {
-            toast.error("No playable tracks in this playlist");
+            toast.error(searchExtrasRu.youtubePlaylist.noPlayableTracks);
             return;
         }
         playTracks(tracks, startIndex);
@@ -460,7 +475,7 @@ function YtMusicPlaylistDetailPageContent() {
             .map(browseTrackToQueueTrack);
         if (tracks.length === 0) return;
         addTracksToQueue(tracks);
-        toast.success(`Added ${tracks.length} tracks to queue`);
+        toast.success(formatYouTubeTracksAdded(tracks.length));
     };
 
     // Shuffle play
@@ -494,14 +509,16 @@ function YtMusicPlaylistDetailPageContent() {
                     }),
                 );
             }
-            toast.success(`Added ${playlist.tracks.length} tracks to playlist`);
+            toast.success(
+                formatYouTubeTracksAddedToPlaylist(playlist.tracks.length),
+            );
             setShowPlaylistSelector(false);
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
                 error,
             );
-            toast.error("Failed to add some tracks to playlist");
+            toast.error(searchExtrasRu.youtubePlaylist.addSomeToPlaylistFailed);
         } finally {
             setIsAddingToPlaylist(false);
         }
@@ -542,15 +559,6 @@ function YtMusicPlaylistDetailPageContent() {
               }
             : null;
 
-    const formatTotalDuration = (seconds: number) => {
-        const hours = Math.floor(seconds / 3600);
-        const mins = Math.floor((seconds % 3600) / 60);
-        if (hours > 0) {
-            return `about ${hours} hr ${mins} min`;
-        }
-        return `${mins} min`;
-    };
-
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -574,24 +582,24 @@ function YtMusicPlaylistDetailPageContent() {
                         className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
                     >
                         <ArrowLeft className="w-5 h-5" />
-                        Back
+                        {searchExtrasRu.youtubePlaylist.back}
                     </button>
                     <div className="flex flex-col items-center justify-center py-20 text-center">
                         <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
                             <Music2 className="w-8 h-8 text-gray-400" />
                         </div>
                         <h3 className="text-lg font-medium text-white mb-2">
-                            Playlist not found
+                            {searchExtrasRu.youtubePlaylist.notFound}
                         </h3>
                         <p className="text-sm text-gray-400 mb-6 max-w-sm">
                             {error ||
-                                "This playlist may be private or no longer available."}
+                                searchExtrasRu.youtubePlaylist.unavailable}
                         </p>
                         <button
                             onClick={() => router.push("/explore")}
                             className="px-6 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:scale-105 transition-transform"
                         >
-                            Explore playlists
+                            {searchExtrasRu.youtubePlaylist.explore}
                         </button>
                     </div>
                 </div>
@@ -636,8 +644,9 @@ function YtMusicPlaylistDetailPageContent() {
                             </svg>
                             <p className="text-xs font-medium text-white/90">
                                 {isAlbumType
-                                    ? "YouTube Music Album"
-                                    : "YouTube Music Playlist"}
+                                    ? searchExtrasRu.youtubePlaylist.albumType
+                                    : searchExtrasRu.youtubePlaylist
+                                          .playlistType}
                             </p>
                         </div>
                         <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
@@ -649,10 +658,17 @@ function YtMusicPlaylistDetailPageContent() {
                             </p>
                         )}
                         <div className="flex items-center gap-1 text-sm text-white/70">
-                            <span>{playlist.trackCount} songs</span>
+                            <span>
+                                {formatYouTubePlaylistTrackCount(
+                                    playlist.trackCount,
+                                )}
+                            </span>
                             {totalDuration > 0 && (
                                 <span>
-                                    , {formatTotalDuration(totalDuration)}
+                                    ,{" "}
+                                    {formatYouTubePlaylistDuration(
+                                        totalDuration,
+                                    )}
                                 </span>
                             )}
                         </div>
@@ -677,8 +693,8 @@ function YtMusicPlaylistDetailPageContent() {
                         )}
                         <span>
                             {isThisPlaylistPlaying && isPlaying
-                                ? "Pause"
-                                : "Play All"}
+                                ? searchExtrasRu.youtubePlaylist.pause
+                                : searchExtrasRu.youtubePlaylist.playAll}
                         </span>
                     </button>
 
@@ -687,7 +703,8 @@ function YtMusicPlaylistDetailPageContent() {
                         <button
                             onClick={handleShuffle}
                             className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-all hover:bg-white/10 hover:text-white"
-                            title="Shuffle play"
+                            title={searchExtrasRu.youtubePlaylist.shuffle}
+                            aria-label={searchExtrasRu.youtubePlaylist.shuffle}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -697,7 +714,10 @@ function YtMusicPlaylistDetailPageContent() {
                     <button
                         onClick={handleAddToQueue}
                         className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-all hover:bg-white/10 hover:text-white"
-                        title="Add all to queue"
+                        title={searchExtrasRu.youtubePlaylist.addAllToQueue}
+                        aria-label={
+                            searchExtrasRu.youtubePlaylist.addAllToQueue
+                        }
                     >
                         <ListMusic className="w-5 h-5" />
                     </button>
@@ -706,7 +726,10 @@ function YtMusicPlaylistDetailPageContent() {
                     <button
                         onClick={() => setShowPlaylistSelector(true)}
                         className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-all hover:bg-white/10 hover:text-white"
-                        title="Add all to playlist"
+                        title={searchExtrasRu.youtubePlaylist.addAllToPlaylist}
+                        aria-label={
+                            searchExtrasRu.youtubePlaylist.addAllToPlaylist
+                        }
                     >
                         <Plus className="w-5 h-5" />
                     </button>
@@ -726,8 +749,13 @@ function YtMusicPlaylistDetailPageContent() {
                             )}
                             title={
                                 isAllLiked
-                                    ? "Unlike all tracks"
-                                    : "Like all tracks"
+                                    ? searchExtrasRu.youtubePlaylist.unlikeAll
+                                    : searchExtrasRu.youtubePlaylist.likeAll
+                            }
+                            aria-label={
+                                isAllLiked
+                                    ? searchExtrasRu.youtubePlaylist.unlikeAll
+                                    : searchExtrasRu.youtubePlaylist.likeAll
                             }
                         >
                             {isApplyingLikeAll ? (
@@ -761,7 +789,9 @@ function YtMusicPlaylistDetailPageContent() {
                         className="flex min-h-11 items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
                     >
                         <ArrowLeft className="w-4 h-4" />
-                        <span className="hidden sm:inline">Back</span>
+                        <span className="hidden sm:inline">
+                            {searchExtrasRu.youtubePlaylist.back}
+                        </span>
                     </button>
                 </div>
             </div>
@@ -779,10 +809,10 @@ function YtMusicPlaylistDetailPageContent() {
                             <Music2 className="w-10 h-10 text-gray-400" />
                         </div>
                         <h3 className="text-lg font-medium text-white mb-1">
-                            No tracks found
+                            {searchExtrasRu.youtubePlaylist.noTracks}
                         </h3>
                         <p className="text-sm text-gray-400">
-                            This playlist appears to be empty
+                            {searchExtrasRu.youtubePlaylist.empty}
                         </p>
                     </div>
                 )}
@@ -793,7 +823,7 @@ function YtMusicPlaylistDetailPageContent() {
                 onClose={() => setShowPlaylistSelector(false)}
                 onSelectPlaylist={handlePlaylistSelected}
                 isLoading={isAddingToPlaylist}
-                loadingMessage="Adding tracks..."
+                loadingMessage={searchExtrasRu.youtubePlaylist.addingTracks}
             />
         </div>
     );

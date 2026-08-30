@@ -2,6 +2,7 @@ import { Music, Download, CheckCircle } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { SoulseekResult } from "../types";
 import { SearchSectionHeader } from "./SearchSectionHeader";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 interface SoulseekSongsListProps {
     soulseekResults: SoulseekResult[];
@@ -56,9 +57,12 @@ export const parseFilename = (
                 title: parts.slice(1).join(" - ").trim(),
             };
         }
-        return { artist: "Unknown", title: nameWithoutExt };
+        return {
+            artist: searchExtrasRu.soulseek.unknownArtist,
+            title: nameWithoutExt,
+        };
     }
-    return { artist: "Unknown", title: filename };
+    return { artist: searchExtrasRu.soulseek.unknownArtist, title: filename };
 };
 
 /**
@@ -76,8 +80,8 @@ export function SoulseekSongsList({
     return (
         <div>
             <SearchSectionHeader
-                title="Downloadable matches"
-                description="No instant stream matched, so these files are available to save"
+                title={searchExtrasRu.soulseek.title}
+                description={searchExtrasRu.soulseek.description}
             />
             <div className="space-y-1.5" data-tv-section="search-results-songs">
                 {soulseekResults.slice(0, 5).map((result, index) => {
@@ -130,12 +134,15 @@ export function SoulseekSongsList({
                                     {isDownloading ? (
                                         <>
                                             <CheckCircle className="w-4 h-4" />
-                                            Downloading
+                                            {
+                                                searchExtrasRu.soulseek
+                                                    .downloading
+                                            }
                                         </>
                                     ) : (
                                         <>
                                             <Download className="w-4 h-4" />
-                                            Download
+                                            {searchExtrasRu.soulseek.download}
                                         </>
                                     )}
                                 </button>

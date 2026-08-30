@@ -9,6 +9,8 @@ import {
 import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Track } from "@/lib/audio-state-context";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 interface UseYouTubeUrlProps {
     query: string;
@@ -170,9 +172,10 @@ export function useYouTubeUrl({
                     // the backend has queued a library scan to make sure it
                     // is imported.
                     setIsDownloading(false);
-                    toast.info("Already downloaded — scanning library", {
-                        description: title,
-                    });
+                    toast.info(
+                        searchExtrasRu.youtubeDownload.alreadyDownloaded,
+                        { description: title },
+                    );
                     return;
                 }
 
@@ -200,13 +203,18 @@ export function useYouTubeUrl({
                         setDownloadProgress(null);
 
                         if (poll.toast === "success") {
-                            toast.success("Added to library — scanning", {
-                                description: title,
-                            });
+                            toast.success(
+                                searchExtrasRu.youtubeDownload.addedToLibrary,
+                                { description: title },
+                            );
                         } else {
-                            toast.error(status.error || "Download failed", {
-                                description: title,
-                            });
+                            toast.error(
+                                userFacingError(
+                                    status.error,
+                                    searchExtrasRu.youtubeDownload.failed,
+                                ),
+                                { description: title },
+                            );
                         }
                     } catch (pollError) {
                         if (pollSettledRef.current) return;
@@ -230,7 +238,7 @@ export function useYouTubeUrl({
                         setIsDownloading(false);
                         setDownloadProgress(null);
                         toast.info(
-                            "Lost download progress — the download continues in the background",
+                            searchExtrasRu.youtubeDownload.progressLost,
                             { description: title },
                         );
                     }
@@ -238,9 +246,10 @@ export function useYouTubeUrl({
             } catch (error) {
                 sharedFrontendLogger.error("YouTube download error:", error);
                 finishWithError(
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to download",
+                    userFacingError(
+                        error,
+                        searchExtrasRu.youtubeDownload.failed,
+                    ),
                 );
             }
         },

@@ -3,7 +3,10 @@ import Link from "next/link";
 import { Music } from "lucide-react";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import { api } from "@/lib/api";
-import { formatListeners } from "@/lib/format";
+import {
+    formatSearchArtistListeners,
+    searchExtrasRu,
+} from "@/lib/i18n/searchExtrasRu";
 import { getArtistHref, getDiscoveryArtistHref } from "@/utils/artistRoute";
 import {
     hasCanonicalProviderArtistIdentity,
@@ -94,7 +97,7 @@ export function SearchArtistsGrid({
                         name: artist.name,
                     });
                     image = artist.heroUrl;
-                    subtitle = "Artist";
+                    subtitle = searchExtrasRu.artist.type;
                     peer =
                         artist.source === "federated" ? artist.peer : undefined;
                 } else {
@@ -106,7 +109,7 @@ export function SearchArtistsGrid({
                         youtubeChannelId: artist.youtubeChannelId,
                     });
                     image = artist.image;
-                    subtitle = formatListeners(artist.listeners);
+                    subtitle = formatSearchArtistListeners(artist.listeners);
                     peer = undefined;
                 }
                 const imageUrl = image ? api.getCoverArtUrl(image, 200) : null;
