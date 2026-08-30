@@ -118,7 +118,7 @@ async function openResetConfirmation(): Promise<void> {
     const closedButtons = document.querySelectorAll("button");
     assert.equal(closedButtons.length, 1);
     await click(closedButtons[0]);
-    await click(findButton("Reset to Original"));
+    await click(findButton("Вернуть исходные"));
 }
 
 test("confirms before resetting artist metadata", async (t) => {
@@ -130,11 +130,11 @@ test("confirms before resetting artist metadata", async (t) => {
     assert.equal(resetArtistMetadata.mock.callCount(), 0);
     assert.match(
         document.body.textContent ?? "",
-        /Reset .*metadata|cannot be undone/i,
+        /Восстановить метаданные|нельзя отменить/i,
     );
 
     const confirmButton = Array.from(document.querySelectorAll("button")).find(
-        (button) => button.textContent === "Reset",
+        (button) => button.textContent === "Восстановить",
     );
     assert.ok(confirmButton instanceof HTMLButtonElement);
     await click(confirmButton);
@@ -151,7 +151,7 @@ test("cancelling reset confirmation does not reset artist metadata", async (t) =
     t.after(harness.unmount);
 
     await openResetConfirmation();
-    await click(findLastExactButton("Cancel"));
+    await click(findLastExactButton("Отмена"));
 
     assert.equal(resetArtistMetadata.mock.callCount(), 0);
 });
