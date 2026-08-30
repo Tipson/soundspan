@@ -28,6 +28,10 @@ import {
     federationErrorMessage,
     buildLinkPeerInput,
 } from "./federationPairing";
+import {
+    adminManagementRu,
+    federationStatusLabel,
+} from "@/lib/i18n/adminManagementRu";
 
 const inputClassName =
     "w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-white/30 focus:outline-none";
@@ -35,11 +39,11 @@ const secondaryButtonClassName =
     "inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-50";
 
 function formatLastSeen(value: string | null): string {
-    if (!value) return "Never seen";
+    if (!value) return adminManagementRu.federation.neverSeen;
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime())
-        ? "Last seen unknown"
-        : `Last seen ${parsed.toLocaleString()}`;
+        ? adminManagementRu.federation.lastSeenUnknown
+        : `${adminManagementRu.federation.lastSeen}: ${parsed.toLocaleString("ru-RU")}`;
 }
 
 function hasInbound(peer: FederationPeer): boolean {
@@ -78,7 +82,9 @@ function StatusChip({
         <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}
         >
-            {label ? `${label} ${shown}` : shown}
+            {label
+                ? `${label} ${federationStatusLabel(shown)}`
+                : federationStatusLabel(shown)}
         </span>
     );
 }
@@ -106,7 +112,7 @@ export function FederationPeersList({
     if (peers.length === 0) {
         return (
             <div className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-sm text-gray-400">
-                No federation peers linked.
+                {adminManagementRu.federation.empty}
             </div>
         );
     }
@@ -165,21 +171,25 @@ function PeerCard({
                             {hasInbound(peer) && (
                                 <div className="flex items-center gap-2 text-xs text-gray-300">
                                     <ArrowUpFromLine className="h-3.5 w-3.5 text-gray-500" />
-                                    <span>Sharing to them</span>
+                                    <span>
+                                        {adminManagementRu.federation.sharing}
+                                    </span>
                                     <StatusChip status={peer.inboundStatus} />
                                 </div>
                             )}
                             {hasOutbound(peer) && (
                                 <div className="flex items-center gap-2 text-xs text-gray-300">
                                     <ArrowDownToLine className="h-3.5 w-3.5 text-gray-500" />
-                                    <span>Consuming from them</span>
+                                    <span>
+                                        {adminManagementRu.federation.consuming}
+                                    </span>
                                     <StatusChip status={peer.outboundStatus} />
                                 </div>
                             )}
                         </div>
                         <p className="mt-1 truncate text-xs text-gray-400">
                             {peer.baseUrl ??
-                                "No remote URL — they connect to this server"}
+                                adminManagementRu.federation.noRemoteUrl}
                         </p>
                         <p className="mt-1 text-xs text-gray-500">
                             {formatLastSeen(peer.lastSeenAt)}
@@ -211,7 +221,9 @@ function PeerCard({
                     onClick={() => togglePanel("settings")}
                     className="underline-offset-2 hover:underline"
                 >
-                    {panel === "settings" ? "Hide settings" : "Settings"}
+                    {panel === "settings"
+                        ? adminManagementRu.federation.hideSettings
+                        : adminManagementRu.federation.settings}
                 </button>
                 {hasOutbound(peer) && (
                     <button
@@ -220,8 +232,8 @@ function PeerCard({
                         className="underline-offset-2 hover:underline"
                     >
                         {panel === "dedup"
-                            ? "Hide dedup matches"
-                            : "Dedup matches"}
+                            ? adminManagementRu.federation.hideDedupMatches
+                            : adminManagementRu.federation.dedupMatches}
                     </button>
                 )}
             </div>
@@ -259,7 +271,7 @@ function PeerActions(props: {
             {busy && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
             {hasOutbound(peer) && peer.outboundStatus !== "REVOKED" && (
                 <ActionButton
-                    label="Sync now"
+                    label={adminManagementRu.federation.syncNow}
                     onClick={() => onSync(peer)}
                     disabled={busy}
                     icon={<RefreshCw className="h-3.5 w-3.5" />}
@@ -267,7 +279,7 @@ function PeerActions(props: {
             )}
             {hasInbound(peer) && peer.inboundStatus !== "REVOKED" && (
                 <ActionButton
-                    label="Rotate"
+                    label={adminManagementRu.federation.rotate}
                     onClick={() => onRotate(peer)}
                     disabled={busy}
                     icon={<RotateCw className="h-3.5 w-3.5" />}
@@ -275,14 +287,14 @@ function PeerActions(props: {
             )}
             {!isFullyRevoked(peer) && (
                 <ActionButton
-                    label="Revoke"
+                    label={adminManagementRu.federation.revoke}
                     onClick={() => onRevoke(peer)}
                     disabled={busy}
                     icon={<Unlink className="h-3.5 w-3.5" />}
                 />
             )}
             <ActionButton
-                label="Delete"
+                label={adminManagementRu.federation.delete}
                 onClick={() => onDelete(peer)}
                 disabled={busy}
                 icon={<Trash2 className="h-3.5 w-3.5" />}
@@ -341,11 +353,11 @@ export function OneTimeCredentialDialog({
                         id="federation-token-title"
                         className="text-lg font-semibold text-white"
                     >
-                        Credential for {peerName}
+                        {adminManagementRu.federation.credentialFor} {peerName}
                     </h2>
                 </div>
                 <p className="mt-3 text-sm text-amber-200">
-                    Copy this token now. You won&apos;t see this again.
+                    {adminManagementRu.federation.copyTokenWarning}
                 </p>
                 <code className="mt-4 block break-all rounded-lg bg-black/30 p-3 text-xs text-white">
                     {token}
@@ -357,14 +369,16 @@ export function OneTimeCredentialDialog({
                         className={secondaryButtonClassName}
                     >
                         <Clipboard className="h-3.5 w-3.5" />
-                        {copied ? "Copied" : "Copy token"}
+                        {copied
+                            ? adminManagementRu.federation.copied
+                            : adminManagementRu.federation.copyToken}
                     </button>
                     <button
                         type="button"
                         onClick={onClose}
                         className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-black"
                     >
-                        Done
+                        {adminManagementRu.federation.done}
                     </button>
                 </div>
             </div>
@@ -488,9 +502,9 @@ function FederationDialogs(props: {
                             api.deleteFederationPeer(peer.id),
                         );
                 }}
-                title="Delete federation peer?"
-                message={`Delete ${props.deletePeer?.name ?? "this peer"} and all synced federation data?`}
-                confirmText="Delete"
+                title={adminManagementRu.federation.deleteTitle}
+                message={`${adminManagementRu.federation.delete} ${props.deletePeer?.name ?? adminManagementRu.federation.thisPeer} ${adminManagementRu.federation.deleteMessage}`}
+                confirmText={adminManagementRu.federation.delete}
                 variant="danger"
             />
         </>
@@ -562,8 +576,8 @@ function FederationInstanceNameRow(props: {
 }) {
     return (
         <SettingsRow
-            label="Instance display name"
-            description="How this instance introduces itself to peers. Leave empty to use the server's hostname."
+            label={adminManagementRu.federation.instanceName}
+            description={adminManagementRu.federation.instanceNameDescription}
         >
             <input
                 maxLength={100}
@@ -577,7 +591,9 @@ function FederationInstanceNameRow(props: {
                     })
                 }
                 className={inputClassName}
-                placeholder="My music server"
+                placeholder={
+                    adminManagementRu.federation.instanceNamePlaceholder
+                }
             />
         </SettingsRow>
     );
@@ -641,8 +657,8 @@ export function FederationSection(props: {
     return (
         <SettingsSection
             id="federation"
-            title="Federation"
-            description="Link trusted soundspan instances for read-only library browsing and streaming."
+            title={adminManagementRu.federation.title}
+            description={adminManagementRu.federation.description}
         >
             <FederationSettingsContent
                 error={error}

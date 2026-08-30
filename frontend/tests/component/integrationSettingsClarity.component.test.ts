@@ -91,15 +91,15 @@ test("separates optional server downloads from the active streaming stack", asyn
         }),
     );
 
-    assert.match(html, /Additional Server Download Services/);
+    assert.match(html, /Дополнительные сервисы загрузок/);
     assert.match(
         html,
-        /YouTube Music already provides worldwide search and streaming/,
+        /YouTube Music уже обеспечивает поиск и потоковое воспроизведение/,
     );
-    assert.match(html, /explicitly request a permanent server copy/);
+    assert.match(html, /по запросу может сохранять альбомы на сервере/);
     assert.match(
         html,
-        /not required for playlist import or offline downloads on your phone/i,
+        /не нужны для импорта плейлистов или офлайн-загрузок на телефон/i,
     );
 });
 

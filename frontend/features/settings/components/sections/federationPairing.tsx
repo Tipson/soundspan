@@ -6,6 +6,10 @@ import type {
     FederationScope,
     LinkFederationPeerInput,
 } from "@/lib/api/federation";
+import {
+    adminManagementRu,
+    federationRequestError,
+} from "@/lib/i18n/adminManagementRu";
 
 export const DEFAULT_SCOPES: FederationScope[] = [
     "library:read",
@@ -16,30 +20,9 @@ export const DEFAULT_SCOPES: FederationScope[] = [
 const inputClassName =
     "w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-white/30 focus:outline-none";
 
-const FEDERATION_ERROR_MESSAGES: Record<string, string> = {
-    FEDERATION_PEER_UNREACHABLE:
-        "Could not reach the peer. Check the URL and that the instance is online.",
-    FEDERATION_PEER_TLS:
-        "The peer's TLS certificate failed validation. Federation requires a valid HTTPS certificate.",
-    FEDERATION_PEER_UNAUTHORIZED:
-        "The peer rejected the credential. The token may have been revoked or rotated.",
-    FEDERATION_PEER_INVALID:
-        "The peer responded, but not like a compatible soundspan instance. Check the URL points at the backend.",
-    FEDERATION_PEER_CONFLICT:
-        "A peer link to that URL already exists. Revoke or delete it first.",
-};
-
 /** Maps a federation API failure onto an admin-actionable message. */
 export function federationErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        const data = (error as Error & { data?: Record<string, unknown> }).data;
-        const code = typeof data?.code === "string" ? data.code : null;
-        if (code && FEDERATION_ERROR_MESSAGES[code]) {
-            return FEDERATION_ERROR_MESSAGES[code];
-        }
-        return error.message;
-    }
-    return "Federation request failed";
+    return federationRequestError(error);
 }
 
 /** Maps the host form's share options onto the credential's scope grant. */
@@ -100,14 +83,14 @@ export function HostCredentialForm({
     return (
         <form onSubmit={(event) => void submit(event)} className="space-y-3">
             <label className="block text-xs text-gray-300">
-                Name for the instance you are sharing with
+                {adminManagementRu.federation.shareWithName}
                 <input
                     required
                     maxLength={120}
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     className={`${inputClassName} mt-1`}
-                    placeholder="Family server"
+                    placeholder={adminManagementRu.federation.familyServer}
                 />
             </label>
             <label className="flex items-center gap-2 text-xs text-gray-300">
@@ -116,15 +99,15 @@ export function HostCredentialForm({
                     checked={embeddings}
                     onChange={(event) => setEmbeddings(event.target.checked)}
                 />
-                Also share embeddings (used for vibe features)
+                {adminManagementRu.federation.shareEmbeddings}
             </label>
             <p className="text-xs text-gray-500">
-                Online-status sharing is built in: users who turn on “Share
-                online presence” in their Social settings appear in the other
-                server’s Social tab. Nothing is shared for users who haven’t
-                opted in.
+                {adminManagementRu.federation.presenceExplanation}
             </p>
-            <SubmitButton busy={busy} label="Issue credential" />
+            <SubmitButton
+                busy={busy}
+                label={adminManagementRu.federation.issueCredential}
+            />
         </form>
     );
 }
@@ -148,17 +131,17 @@ export function ConsumerConnectForm({
     return (
         <form onSubmit={(event) => void submit(event)} className="space-y-3">
             <label className="block text-xs text-gray-300">
-                Peer name
+                {adminManagementRu.federation.peerName}
                 <input
                     maxLength={120}
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     className={`${inputClassName} mt-1`}
-                    placeholder="Friend's server"
+                    placeholder={adminManagementRu.federation.friendServer}
                 />
             </label>
             <label className="block text-xs text-gray-300">
-                Peer URL
+                {adminManagementRu.federation.peerUrl}
                 <input
                     required
                     type="url"
@@ -169,7 +152,7 @@ export function ConsumerConnectForm({
                 />
             </label>
             <label className="block text-xs text-gray-300">
-                Token
+                {adminManagementRu.federation.token}
                 <input
                     required
                     value={token}
@@ -178,7 +161,10 @@ export function ConsumerConnectForm({
                     autoComplete="off"
                 />
             </label>
-            <SubmitButton busy={busy} label="Connect with token" />
+            <SubmitButton
+                busy={busy}
+                label={adminManagementRu.federation.connectToken}
+            />
         </form>
     );
 }
@@ -196,12 +182,10 @@ export function FederationAddPanel(props: FederationAddPanelProps) {
             <div className="rounded-lg border border-white/[0.06] bg-surface-hover p-4">
                 <h4 className="flex items-center gap-2 text-sm font-medium text-white">
                     <KeyRound className="h-4 w-4" />
-                    Share my library
+                    {adminManagementRu.federation.shareLibrary}
                 </h4>
                 <p className="mt-1 text-xs text-gray-400">
-                    Give another soundspan instance read access to this library.
-                    Issue a credential and send it to the other admin — it is
-                    shown once.
+                    {adminManagementRu.federation.shareLibraryDescription}
                 </p>
                 <div className="mt-3">
                     <HostCredentialForm
@@ -213,11 +197,10 @@ export function FederationAddPanel(props: FederationAddPanelProps) {
             <div className="rounded-lg border border-white/[0.06] bg-surface-hover p-4">
                 <h4 className="flex items-center gap-2 text-sm font-medium text-white">
                     <LinkIcon className="h-4 w-4" />
-                    Connect to a library
+                    {adminManagementRu.federation.connectLibrary}
                 </h4>
                 <p className="mt-1 text-xs text-gray-400">
-                    Use the token another admin issued for you to read their
-                    library.
+                    {adminManagementRu.federation.connectLibraryDescription}
                 </p>
                 <div className="mt-3">
                     <ConsumerConnectForm
@@ -227,10 +210,7 @@ export function FederationAddPanel(props: FederationAddPanelProps) {
                 </div>
             </div>
             <p className="text-xs text-gray-500">
-                Two-way sharing is two deliberate steps: you connect to them
-                with a token they issued, and they connect to you with a
-                credential you issue above. Each direction succeeds or fails on
-                its own — nothing is set up silently.
+                {adminManagementRu.federation.twoWayExplanation}
             </p>
         </div>
     );
