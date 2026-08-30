@@ -20,6 +20,7 @@ import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useIsTV } from "@/lib/tv-utils";
 import { useActivityPanel } from "@/hooks/useActivityPanel";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
+import { TasteProfileOnboardingGate } from "@/features/taste-profile";
 
 const publicPaths = ["/login", "/register", "/onboarding", "/sync"];
 const publicPrefixes = ["/share/"];
@@ -28,7 +29,7 @@ const publicPrefixes = ["/share/"];
  * Renders the AuthenticatedLayout component.
  */
 export function AuthenticatedLayout({ children }: { children: ReactNode }) {
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, user } = useAuth();
     const pathname = usePathname();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
@@ -91,6 +92,10 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
 
     // On protected pages, show appropriate layout based on device
     if (isAuthenticated) {
+        const tasteProfileGate = user?.id ? (
+            <TasteProfileOnboardingGate key={user.id} accountId={user.id} />
+        ) : null;
+
         // Android TV Layout - Optimized for 10-foot UI
         if (isTV) {
             return (
@@ -99,8 +104,9 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         href="#main-content"
                         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                        Skip to main content
+                        {ru.nav.skipToMainContent}
                     </a>
+                    {tasteProfileGate}
                     <MediaControlsHandler />
                     <TVLayout>{children}</TVLayout>
                 </PlayerModeWrapper>
@@ -115,8 +121,9 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         href="#main-content"
                         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                        Skip to main content
+                        {ru.nav.skipToMainContent}
                     </a>
+                    {tasteProfileGate}
                     <div
                         data-shell-frame="mobile"
                         className="mobile-shell-frame h-dvh overflow-hidden"
@@ -168,8 +175,9 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     href="#main-content"
                     className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                    Skip to main content
+                    {ru.nav.skipToMainContent}
                 </a>
+                {tasteProfileGate}
                 <div
                     data-shell-frame="desktop"
                     className="desktop-shell-frame h-dvh overflow-hidden"

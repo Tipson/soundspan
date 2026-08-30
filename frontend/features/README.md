@@ -27,6 +27,7 @@ Start-here index for domain modules under `frontend/features`.
 | `search`    | `frontend/features/search/README.md`    | `frontend/app/playlists/page.tsx`<br>`frontend/app/search/page.tsx`                                                            |
 | `social`    | `frontend/features/social/README.md`    | `frontend/app/page.tsx`<br>`frontend/app/peer-playlists/[peerId]/[remoteId]/page.tsx`                                          |
 | `settings`  | `frontend/features/settings/README.md`  | `frontend/app/device/page.tsx`<br>`frontend/app/settings/page.tsx`                                                             |
+| `taste-profile` | `frontend/features/taste-profile/README.md` | Authenticated application shell; later account-settings editor                                                        |
 
 ## Recognized Exception: Vibe
 

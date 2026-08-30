@@ -16,7 +16,20 @@ mock.module("next/navigation", {
 });
 mock.module("@/lib/auth-context", {
     namedExports: {
-        useAuth: () => ({ isAuthenticated: true, isLoading: false }),
+        useAuth: () => ({
+            isAuthenticated: true,
+            isLoading: false,
+            user: { id: "listener-1" },
+        }),
+    },
+});
+mock.module("@/features/taste-profile", {
+    namedExports: {
+        TasteProfileOnboardingGate: ({ accountId }: { accountId: string }) =>
+            React.createElement("div", {
+                "data-marker": "taste-profile-gate",
+                "data-account-id": accountId,
+            }),
     },
 });
 mock.module("@/hooks/useMediaQuery", {
@@ -114,6 +127,9 @@ test("desktop shell exposes one open canvas instead of a framed content card", a
     assert.doesNotMatch(html, /desktop-content-stage[^\"]*rounded-/);
     assert.match(html, /data-marker="sidebar"/);
     assert.match(html, /data-marker="player"/);
+    assert.match(html, /data-marker="taste-profile-gate"/);
+    assert.match(html, /data-account-id="listener-1"/);
+    assert.match(html, /Перейти к основному содержимому/);
     assert.doesNotMatch(html, /galaxy-background/);
 });
 
@@ -132,6 +148,10 @@ test("mobile shell keeps safe chrome around an unframed content canvas", async (
     assert.match(html, /data-marker="topbar"/);
     assert.match(html, /data-marker="player"/);
     assert.match(html, /data-marker="bottom-navigation"/);
+    assert.equal(
+        (html.match(/data-marker="taste-profile-gate"/g) ?? []).length,
+        1,
+    );
     assert.match(html, /mobile-app-stage/);
     assert.doesNotMatch(html, /mobile-app-stage[^\"]*rounded-/);
 });
