@@ -19,6 +19,7 @@ export { SUGGESTED_ARTISTS, SUGGESTED_GENRES } from "./suggestions";
 export { TasteProfileDialog } from "./components/TasteProfileDialog";
 export { TasteProfileEditor } from "./components/TasteProfileEditor";
 export { TasteProfileOnboardingGate } from "./components/TasteProfileOnboardingGate";
+export { TasteProfileSettingsSection } from "./components/TasteProfileSettingsSection";
 export { useTasteProfile } from "./hooks/useTasteProfile";
 export type {
     TasteProfile,

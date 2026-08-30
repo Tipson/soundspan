@@ -17,10 +17,12 @@ import { SocialSection } from "@/features/settings/components/sections/SocialSec
 import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
 import { DeviceOfflineSettingsSection } from "@/features/settings/components/sections/DeviceOfflineSettingsSection";
 import { IntegrationsSection } from "@/features/settings/components/sections/IntegrationsSection";
+import { TasteProfileSettingsSection } from "@/features/taste-profile";
 
 // Define sidebar items
 const sidebarItems: SidebarItem[] = [
     { id: "account", label: ru.settings.account },
+    { id: "taste-profile", label: "Музыкальные вкусы" },
     { id: "sign-in-security", label: ru.settings.security },
     { id: "social", label: ru.settings.social },
     { id: "history", label: ru.settings.history },
@@ -69,7 +71,7 @@ const logger = createFrontendLogger("Settings.Page");
  * Renders the SettingsPage component.
  */
 export default function SettingsPage() {
-    const { isAuthenticated, isLoading: authLoading } = useAuth();
+    const { user, isAuthenticated, isLoading: authLoading } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
     const saveStatus = useInlineStatus();
 
@@ -127,6 +129,8 @@ export default function SettingsPage() {
                 onUpdate={updateUserSettings}
             />
 
+            {user?.id && <TasteProfileSettingsSection accountId={user.id} />}
+
             <SignInSecuritySection />
 
             {/* Social */}
@@ -177,7 +181,9 @@ export default function SettingsPage() {
                         disabled={isSaving}
                         className="min-h-11 flex-shrink-0 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-brand/15 transition hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand"
                     >
-                        {isSaving ? ru.settings.saving : ru.settings.saveChanges}
+                        {isSaving
+                            ? ru.settings.saving
+                            : ru.settings.saveChanges}
                     </button>
                 </div>
             </div>
