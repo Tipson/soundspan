@@ -66,7 +66,7 @@ test("save control is explicit, pressed-aware, touch-sized, and actionable", asy
     assert.ok(button);
     assert.equal(button.getAttribute("aria-pressed"), "false");
     assert.match(button.className, /min-h-11/);
-    assert.match(button.textContent ?? "", /Save to Library/);
+    assert.match(button.textContent ?? "", /Сохранить в коллекцию/);
 
     await act(async () => {
         button.click();
@@ -81,7 +81,7 @@ test("save control is explicit, pressed-aware, touch-sized, and actionable", asy
         container.querySelector("button")?.getAttribute("aria-pressed"),
         "true",
     );
-    assert.match(container.textContent ?? "", /Remove from Library/);
+    assert.match(container.textContent ?? "", /Удалить из коллекции/);
 
     await act(async () => root.unmount());
 });

@@ -240,7 +240,7 @@ test("shows the configured SSO button and local login form", async (t) => {
     );
 
     assert.equal(findButton("Sign in with Acme ID").disabled, false);
-    assert.ok(findInput("Username or Email"));
+    assert.ok(findInput("Имя пользователя или почта"));
 });
 
 test("hides the SSO button when OIDC is disabled", async (t) => {
@@ -281,14 +281,14 @@ test("auto-redirects to SSO only when no callback parameter is present", async (
         new URLSearchParams(window.location.search).get("returnTo"),
         "/library?tab=albums",
     );
-    assert.match(document.body.textContent ?? "", /Redirecting to SSO/);
+    assert.match(document.body.textContent ?? "", /Переходим к SSO/);
 });
 
 test("every callback parameter gates the automatic SSO redirect", async () => {
     authConfig.localLoginEnabled = false;
     exchangeBehavior = "pending";
     const cases = [
-        ["ssoCode=pending-code", "Completing SSO sign-in"],
+        ["ssoCode=pending-code", "Завершаем вход через SSO"],
         ["ssoLink=link-token", "account with this email already exists"],
         ["ssoInvite=invite-token", "enter an invite code to create one"],
         ["ssoError=oidc_failed", "SSO sign-in failed"],
@@ -329,7 +329,7 @@ test("shows a readable error and local form when SSO code exchange fails", async
                 "Invalid or expired OIDC code",
             ) === true,
     );
-    assert.ok(findInput("Username or Email"));
+    assert.ok(findInput("Имя пользователя или почта"));
     assert.equal(
         new URLSearchParams(window.location.search).has("ssoCode"),
         false,
@@ -353,7 +353,7 @@ test("confirms an existing-account link through the 2FA branch", async (t) => {
     );
 
     await React.act(async () => {
-        typeInto(findInput("Authentication Code"), "123456");
+        typeInto(findInput("Код из приложения"), "123456");
     });
     await click(findButton("Verify and sign in"));
     await waitFor(() => window.location.pathname === "/settings");

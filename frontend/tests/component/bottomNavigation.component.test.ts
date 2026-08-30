@@ -51,18 +51,18 @@ test("mobile navigation leaves search to the persistent top bar", async () => {
         await import("../../components/layout/BottomNavigation");
     const html = renderToStaticMarkup(React.createElement(BottomNavigation));
 
-    assert.match(html, /aria-label="Home"/);
-    assert.doesNotMatch(html, /aria-label="Search"/);
+    assert.match(html, /aria-label="Главная"/);
+    assert.doesNotMatch(html, /aria-label="Поиск"/);
     assert.doesNotMatch(html, /href="\/search"/);
-    assert.match(html, /aria-label="Vibe"/);
+    assert.match(html, /aria-label="Моя волна"/);
     assert.match(html, /href="\/vibe"/);
-    assert.match(html, /aria-label="Library"/);
+    assert.match(html, /aria-label="Коллекция"/);
     assert.match(html, /href="\/library"/);
-    assert.match(html, /aria-label="Vibe" aria-current="page"/);
-    assert.doesNotMatch(html, /aria-label="Explore"/);
-    assert.doesNotMatch(html, /Audiobooks/);
-    assert.doesNotMatch(html, /Podcasts/);
-    assert.doesNotMatch(html, /Playlists/);
+    assert.match(html, /aria-label="Моя волна" aria-current="page"/);
+    assert.doesNotMatch(html, /aria-label="Обзор"/);
+    assert.doesNotMatch(html, /Аудиокниги/);
+    assert.doesNotMatch(html, /Подкасты/);
+    assert.doesNotMatch(html, /Плейлисты/);
     assert.match(html, /padding-left:var\(--safe-area-left\)/);
     assert.match(html, /padding-right:var\(--safe-area-right\)/);
     assert.match(html, /data-shell-bottom-navigation="true"/);
@@ -71,7 +71,7 @@ test("mobile navigation leaves search to the persistent top bar", async () => {
     )?.[0];
     assert.ok(navigation);
     assert.doesNotMatch(navigation, /border-t/);
-    for (const label of ["Home", "Vibe", "Library"]) {
+    for (const label of ["Главная", "Моя волна", "Коллекция"]) {
         const link = html.match(
             new RegExp(`<a[^>]*aria-label="${label}"[^>]*>`),
         )?.[0];

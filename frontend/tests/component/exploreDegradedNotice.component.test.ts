@@ -62,17 +62,17 @@ test("offers retry and can be dismissed", async (testContext) => {
 
     assert.match(
         harness.container.textContent ?? "",
-        /Some sections failed to load — Retry/,
+        /Некоторые разделы не загрузились — повторить/,
     );
     const retry = Array.from(harness.container.querySelectorAll("button")).find(
-        (button) => button.textContent === "Retry",
+        (button) => button.textContent === "повторить",
     );
     assert.ok(retry);
     await React.act(async () => retry.click());
     assert.equal(onRetry.mock.callCount(), 1);
 
     const dismiss = harness.container.querySelector(
-        'button[aria-label="Dismiss degraded results notice"]',
+        'button[aria-label="Скрыть предупреждение о неполной загрузке"]',
     );
     assert.ok(dismiss instanceof HTMLButtonElement);
     await React.act(async () => dismiss.click());
@@ -84,7 +84,7 @@ test("keeps a refetched failure dismissed and reappears when another query fails
     testContext.after(harness.unmount);
 
     const dismiss = harness.container.querySelector(
-        'button[aria-label="Dismiss degraded results notice"]',
+        'button[aria-label="Скрыть предупреждение о неполной загрузке"]',
     );
     assert.ok(dismiss instanceof HTMLButtonElement);
     await React.act(async () => dismiss.click());
@@ -97,6 +97,6 @@ test("keeps a refetched failure dismissed and reappears when another query fails
     await harness.rerender("liked|ytCharts");
     assert.match(
         harness.container.textContent ?? "",
-        /Some sections failed to load — Retry/,
+        /Некоторые разделы не загрузились — повторить/,
     );
 });

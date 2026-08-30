@@ -14,23 +14,23 @@ test("SearchFilters renders the supported result views as query-preserving links
         }),
     );
 
-    assert.match(html, /aria-label="Search result type"/);
-    assert.match(html, /href="\/search\?q=massive%20attack">All<\/a>/);
+    assert.match(html, /aria-label="Тип результатов поиска"/);
+    assert.match(html, /href="\/search\?q=massive%20attack">Всё<\/a>/);
     assert.match(
         html,
-        /aria-current="page"[^>]*href="\/search\?q=massive%20attack&amp;view=tracks"[^>]*>Tracks<\/a>/,
+        /aria-current="page"[^>]*href="\/search\?q=massive%20attack&amp;view=tracks"[^>]*>Треки<\/a>/,
     );
     assert.match(
         html,
-        /href="\/search\?q=massive%20attack&amp;view=artists"[^>]*>Artists<\/a>/,
+        /href="\/search\?q=massive%20attack&amp;view=artists"[^>]*>Исполнители<\/a>/,
     );
     assert.match(
         html,
-        /href="\/search\?q=massive%20attack&amp;view=albums"[^>]*>Albums<\/a>/,
+        /href="\/search\?q=massive%20attack&amp;view=albums"[^>]*>Альбомы<\/a>/,
     );
     assert.doesNotMatch(
         html,
-        />My Library<|>Discover<|>Peers<|>Soulseek<|>Playlists<|>Genres</,
+        />Моя коллекция<|>Открытия<|>Узлы<|>Soulseek<|>Плейлисты<|>Жанры</,
     );
 });
 

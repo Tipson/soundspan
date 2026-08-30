@@ -38,8 +38,8 @@ test("DeviceAuthLinkPanel renders device-code instructions and expiry", async ()
     );
     assert.match(html, /Open the authorization page\./);
     assert.match(html, /Paste this code on the page/);
-    assert.match(html, /Return here — this page will update automatically/);
-    assert.match(html, /Expires in 4:30/);
+    assert.match(html, /Вернитесь сюда — страница обновится автоматически/);
+    assert.match(html, /Истекает через 4:30/);
 });
 
 test("DeviceAuthLinkPanel omits expiry when no countdown is available", async () => {
@@ -52,5 +52,5 @@ test("DeviceAuthLinkPanel omits expiry when no countdown is available", async ()
         }),
     );
 
-    assert.doesNotMatch(html, /Expires in/);
+    assert.doesNotMatch(html, /Истекает через/);
 });

@@ -131,22 +131,22 @@ test("keeps search in the top bar and moves notifications into the account drawe
     );
 
     assert.match(html, />Listen</);
-    assert.match(html, />Home</);
-    assert.doesNotMatch(html, />Search</);
+    assert.match(html, />Главная</);
+    assert.doesNotMatch(html, />Поиск</);
     assert.doesNotMatch(html, /href="\/search"/);
-    assert.match(html, />Library</);
-    assert.match(html, />Vibe</);
-    assert.match(html, />Liked songs</);
-    assert.match(html, />Downloads</);
-    assert.match(html, />Import playlist</);
+    assert.match(html, />Коллекция</);
+    assert.match(html, />Моя волна</);
+    assert.match(html, />Любимые треки</);
+    assert.match(html, />Загрузки</);
+    assert.match(html, />Импорт плейлиста</);
     const notifications = html.match(
-        /<button[^>]*aria-label="Open notifications"[^>]*>/,
+        /<button[^>]*aria-label="Открыть уведомления"[^>]*>/,
     )?.[0];
     assert.ok(notifications);
     assert.match(notifications, /min-h-11/);
-    assert.doesNotMatch(html, />Explore</);
-    assert.doesNotMatch(html, />Listen Together</);
-    assert.doesNotMatch(html, /My History/);
+    assert.doesNotMatch(html, />Обзор</);
+    assert.doesNotMatch(html, />Совместное прослушивание</);
+    assert.doesNotMatch(html, /Моя история/);
 });
 
 test("marks Vibe as current without exposing a social quick link", async () => {
@@ -165,7 +165,7 @@ test("marks Vibe as current without exposing a social quick link", async () => {
 
     assert.match(html, /href="\/vibe"/);
     assert.match(html, /aria-current="page"/);
-    assert.doesNotMatch(html, /eq-bars|Listen Together/);
+    assert.doesNotMatch(html, /eq-bars|Совместное прослушивание/);
 });
 
 test("admins see Requests and Admin links; users see neither", async () => {
@@ -192,7 +192,7 @@ test("admins see Requests and Admin links; users see neither", async () => {
         }),
     );
     assert.match(adminHtml, /href="\/requests"/);
-    assert.match(adminHtml, />Requests</);
+    assert.match(adminHtml, />Запросы</);
     assert.match(adminHtml, /href="\/admin"/);
 });
 

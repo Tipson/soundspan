@@ -338,8 +338,8 @@ test("FullPlayer exposes both like and dislike controls for music", async () => 
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const html = renderToStaticMarkup(React.createElement(FullPlayer));
 
-    assert.match(html, /aria-label="Like"/);
-    assert.match(html, /aria-label="Dislike"/);
+    assert.match(html, /aria-label="Нравится"/);
+    assert.match(html, /aria-label="Не нравится"/);
 });
 
 test("FullPlayer uses podcast saved progress when live currentTime is zero", async () => {

@@ -109,8 +109,8 @@ test("admins keep the download badge even when request controls exist", async ()
             requestControls: requestControls(),
         }),
     );
-    assert.match(html, />Download</);
-    assert.doesNotMatch(html, />Request</);
+    assert.match(html, />Загрузить</);
+    assert.doesNotMatch(html, />Запросить</);
 });
 
 test("non-admins with the gate open see the Request badge", async () => {
@@ -124,8 +124,8 @@ test("non-admins with the gate open see the Request badge", async () => {
             requestControls: requestControls(),
         }),
     );
-    assert.match(html, />Request</);
-    assert.doesNotMatch(html, />Download</);
+    assert.match(html, />Запросить</);
+    assert.doesNotMatch(html, />Загрузить</);
 });
 
 test("albums with an open request render the Requested state", async () => {
@@ -139,8 +139,8 @@ test("albums with an open request render the Requested state", async () => {
             requestControls: requestControls({ isRequested: () => true }),
         }),
     );
-    assert.match(html, />Requested</);
-    assert.doesNotMatch(html, />Request</);
+    assert.match(html, />Запрошен</);
+    assert.doesNotMatch(html, />Запросить</);
 });
 
 test("synthetic release-group ids never show a request affordance", async () => {
@@ -154,8 +154,8 @@ test("synthetic release-group ids never show a request affordance", async () => 
             requestControls: requestControls(),
         }),
     );
-    assert.doesNotMatch(html, />Request</);
-    assert.doesNotMatch(html, />Requested</);
+    assert.doesNotMatch(html, />Запросить</);
+    assert.doesNotMatch(html, />Запрошен</);
 });
 
 test("closed gate renders no acquisition badge at all", async () => {
@@ -169,6 +169,6 @@ test("closed gate renders no acquisition badge at all", async () => {
             requestControls: requestControls({ enabled: false }),
         }),
     );
-    assert.doesNotMatch(html, />Request</);
-    assert.doesNotMatch(html, />Download</);
+    assert.doesNotMatch(html, />Запросить</);
+    assert.doesNotMatch(html, />Загрузить</);
 });

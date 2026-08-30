@@ -374,7 +374,7 @@ test("Library TracksList renders TrackOverflowMenu trigger on each row", async (
     // Should have "Track actions" aria-label
     assert.match(
         html,
-        /Track actions/,
+        /Действия с треком/,
         "Should use TrackOverflowMenu component",
     );
 });
@@ -455,7 +455,11 @@ test("Discover TrackList renders TrackOverflowMenu trigger on each row", async (
     );
 
     // Should have a "Track actions" trigger from TrackOverflowMenu
-    assert.match(html, /Track actions/, "Should render overflow menu trigger");
+    assert.match(
+        html,
+        /Действия с треком/,
+        "Should render overflow menu trigger",
+    );
     assert.match(
         html,
         /aria-haspopup="menu"/,
@@ -503,7 +507,11 @@ test("Album TrackList renders TrackOverflowMenu trigger instead of inline menu",
     );
 
     // Should have "Track actions" from TrackOverflowMenu component
-    assert.match(html, /Track actions/, "Should render overflow menu trigger");
+    assert.match(
+        html,
+        /Действия с треком/,
+        "Should render overflow menu trigger",
+    );
     assert.match(
         html,
         /aria-haspopup="menu"/,

@@ -110,7 +110,7 @@ async function unmount(mounted: Awaited<ReturnType<typeof mountTrackList>>) {
 test("each reorder grip is a labelled button", async () => {
     const mounted = await mountTrackList([], []);
     const grips = mounted.container.querySelectorAll(
-        'button[aria-label*="Reorder"]',
+        'button[aria-label*="Изменить позицию"]',
     );
 
     assert.equal(grips.length, 3);
@@ -121,7 +121,7 @@ test("reorder grip supports ArrowDown and ignores ArrowUp at the first boundary"
     const reorderCalls: Array<[number, number]> = [];
     const mounted = await mountTrackList(reorderCalls, []);
     const grip = mounted.container.querySelector(
-        'button[aria-label*="Reorder"]',
+        'button[aria-label*="Изменить позицию"]',
     ) as HTMLButtonElement | null;
     assert.ok(grip);
 
@@ -145,7 +145,7 @@ test("track row exposes button semantics and plays on Space", async () => {
     const playCalls: string[] = [];
     const mounted = await mountTrackList([], playCalls);
     const row = mounted.container.querySelector(
-        '[data-tv-card][role="button"][aria-label^="Play"]',
+        '[data-tv-card][role="button"][aria-label^="Воспроизвести"]',
     ) as HTMLElement | null;
     assert.ok(row);
 

@@ -72,18 +72,18 @@ test("mobile top bar keeps only menu and persistent search at 320px", async () =
         html,
         /padding-right:calc\(0\.75rem \+ var\(--safe-area-right\)\)/,
     );
-    for (const label of ["Open menu"]) {
+    for (const label of ["Открыть меню"]) {
         const control = html.match(
             new RegExp(`<(?:button|a)[^>]*aria-label="${label}"[^>]*>`),
         )?.[0];
         assert.ok(control, `missing ${label}`);
         assert.match(control, /h-11 w-11/);
     }
-    assert.doesNotMatch(html, /aria-label="Go back"/);
-    assert.doesNotMatch(html, /aria-label="Home"/);
-    assert.doesNotMatch(html, /aria-label="Notifications"/);
-    assert.match(html, /aria-label="Search"[^>]*class="[^"]*h-11/);
-    assert.match(html, /placeholder="Search music"/);
+    assert.doesNotMatch(html, /aria-label="Назад"/);
+    assert.doesNotMatch(html, /aria-label="Главная"/);
+    assert.doesNotMatch(html, /aria-label="Уведомления"/);
+    assert.match(html, /aria-label="Поиск"[^>]*class="[^"]*h-11/);
+    assert.match(html, /placeholder="Поиск музыки"/);
     assert.match(html, /data-shell-topbar="mobile"/);
     assert.match(html, /data-shell-search="persistent"/);
 });
@@ -95,10 +95,10 @@ test("desktop top bar keeps global search centered in the music shell", async ()
     const html = renderToStaticMarkup(React.createElement(TopBar));
 
     assert.match(html, /data-shell-topbar="desktop"/);
-    assert.match(html, /placeholder="What do you want to play\?"/);
+    assert.match(html, /placeholder="Что хотите послушать\?"/);
     assert.match(html, /max-w-\[720px\]/);
     assert.match(html, /w-\[224px\]/);
-    assert.match(html, /aria-label="Go back"/);
+    assert.match(html, /aria-label="Назад"/);
     assert.match(html, />\/<\/kbd>/);
     assert.match(html, /data-shell-search="persistent"/);
 });

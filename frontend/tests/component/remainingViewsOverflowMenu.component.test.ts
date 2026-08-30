@@ -230,7 +230,7 @@ test("PopularTracks overflow menu renders for playable track", async () => {
     );
 
     // Should render the overflow menu (presence check)
-    assert.match(html, /Track actions/, "Should render overflow menu");
+    assert.match(html, /Действия с треком/, "Should render overflow menu");
 });
 
 test("PopularTracks keeps a navigation-only overflow menu for unplayable tracks", async () => {
@@ -262,7 +262,7 @@ test("PopularTracks keeps a navigation-only overflow menu for unplayable tracks"
     // reachable; playback-dependent entries are gated off inside the menu.
     assert.match(
         html,
-        /Track actions/,
+        /Действия с треком/,
         "Should render overflow menu for unplayable track",
     );
     // Should be dimmed

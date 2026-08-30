@@ -99,9 +99,9 @@ test("AlbumActionBar renders share button near other album actions", async () =>
         React.createElement(AlbumActionBar, baseProps),
     );
 
-    assert.match(html, /title="Share album"/);
-    assert.match(html, /title="Shuffle play"/);
-    assert.match(html, /title="Add all to queue"/);
+    assert.match(html, /title="Поделиться альбомом"/);
+    assert.match(html, /title="Перемешать"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
 });
 
 test("AlbumActionBar renders the explicit personal-library control", async () => {
@@ -157,7 +157,7 @@ test("AlbumActionBar still renders share button for non-library albums", async (
         }),
     );
 
-    assert.match(html, /title="Share album"/);
+    assert.match(html, /title="Поделиться альбомом"/);
 });
 
 test("AlbumActionBar keeps remote albums playable without server acquisition controls", async () => {
@@ -181,13 +181,13 @@ test("AlbumActionBar keeps remote albums playable without server acquisition con
         }),
     );
 
-    assert.match(html, />Play All</);
+    assert.match(html, />Воспроизвести всё</);
     assert.match(html, /Download to this device/);
     assert.doesNotMatch(html, />Download</);
     assert.doesNotMatch(html, />Search</);
-    assert.match(html, /title="Add to playlist"/);
-    assert.doesNotMatch(html, /Like every track on this album/);
-    assert.doesNotMatch(html, /Remove like from all tracks/);
+    assert.match(html, /title="Добавить в плейлист"/);
+    assert.doesNotMatch(html, /Поставить лайк всем трекам альбома/);
+    assert.doesNotMatch(html, /Убрать лайк со всех треков/);
 });
 
 test("AlbumActionBar hides server requests in the online-first action bar", async () => {
@@ -274,11 +274,11 @@ test("AlbumActionBar icon controls are touch-sized and have accessible names", a
     );
 
     for (const label of [
-        "Shuffle play",
-        "Share album",
-        "Add all to queue",
-        "Add to playlist",
-        "Like every track on this album",
+        "Перемешать",
+        "Поделиться альбомом",
+        "Добавить всё в очередь",
+        "Добавить в плейлист",
+        "Поставить лайк всем трекам альбома",
     ]) {
         const button = html.match(
             new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`),
@@ -306,7 +306,7 @@ test("AlbumActionBar hides acquisition controls for a synthetic remote release g
         }),
     );
 
-    assert.match(html, />Play All</);
+    assert.match(html, />Воспроизвести всё</);
     assert.doesNotMatch(html, />Download</);
     assert.doesNotMatch(html, />Search</);
 });
@@ -322,7 +322,7 @@ test("AlbumActionBar exposes a touch-sized delete action only for deletable loca
             onDeleteAlbum: noop,
         }),
     );
-    assert.match(localHtml, /title="Delete album from server library"/);
+    assert.match(localHtml, /title="Удалить альбом из медиатеки сервера"/);
     assert.match(localHtml, /h-11 w-11/);
 
     const remoteHtml = renderToStaticMarkup(
@@ -333,5 +333,5 @@ test("AlbumActionBar exposes a touch-sized delete action only for deletable loca
             onDeleteAlbum: noop,
         }),
     );
-    assert.doesNotMatch(remoteHtml, /Delete album from server library/);
+    assert.doesNotMatch(remoteHtml, /Удалить альбом из медиатеки сервера/);
 });

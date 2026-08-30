@@ -19,10 +19,10 @@ test("home quick actions expose the four everyday music routes", async () => {
         await import("../../features/home/components/HomeQuickActions");
     const html = renderToStaticMarkup(React.createElement(HomeQuickActions));
 
-    assert.match(html, /Your shortcuts/);
-    assert.match(html, /aria-label="Your shortcuts"/);
-    assert.match(html, /href="\/playlist\/my-liked"[^>]*>[\s\S]*Liked songs/);
-    assert.match(html, /href="\/my-history"[^>]*>[\s\S]*Listening history/);
-    assert.match(html, /href="\/import"[^>]*>[\s\S]*Import playlists/);
-    assert.match(html, /href="\/search"[^>]*>[\s\S]*Search music/);
+    assert.match(html, /Быстрые действия/);
+    assert.match(html, /aria-label="Быстрые действия"/);
+    assert.match(html, /href="\/playlist\/my-liked"[^>]*>[\s\S]*Любимые треки/);
+    assert.match(html, /href="\/my-history"[^>]*>[\s\S]*История прослушиваний/);
+    assert.match(html, /href="\/import"[^>]*>[\s\S]*Импорт плейлистов/);
+    assert.match(html, /href="\/search"[^>]*>[\s\S]*Поиск музыки/);
 });

@@ -316,7 +316,7 @@ test("storage failures stay visible in Downloads and ordinary Settings with retr
         settings.container.textContent ?? "",
         /Could not read device storage/i,
     );
-    assert.match(settings.container.textContent ?? "", /Retry/i);
+    assert.match(settings.container.textContent ?? "", /Повторить/i);
     assert.equal(
         (
             settings.container.querySelector(
@@ -353,13 +353,18 @@ test("Downloads UI exposes queued device-local work without marking it playable"
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
 
-    assert.match(view.container.textContent ?? "", /В очереди на этом устройстве/i);
+    assert.match(
+        view.container.textContent ?? "",
+        /В очереди на этом устройстве/i,
+    );
     assert.doesNotMatch(
         view.container.textContent ?? "",
         /No device downloads/i,
     );
     assert.equal(
-        view.container.querySelector('button[aria-label="Воспроизвести: Alpha"]'),
+        view.container.querySelector(
+            'button[aria-label="Воспроизвести: Alpha"]',
+        ),
         null,
     );
     const remove = view.container.querySelector(
@@ -409,7 +414,10 @@ test("Downloads reconnects a remembered folder without offering a destructive fo
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
 
-    assert.match(view.container.textContent ?? "", /Подключить папку с музыкой заново/i);
+    assert.match(
+        view.container.textContent ?? "",
+        /Подключить папку с музыкой заново/i,
+    );
     assert.equal(
         view.container.querySelector(
             'button[aria-label="Выбрать папку с музыкой"]',
@@ -523,7 +531,10 @@ test("ordinary settings expose an opt-in auto-liked policy for this device only"
     const view = await render(
         React.createElement(DeviceOfflineSettingsSection),
     );
-    assert.match(view.container.textContent ?? "", /Офлайн на этом устройстве/i);
+    assert.match(
+        view.container.textContent ?? "",
+        /Офлайн на этом устройстве/i,
+    );
     assert.match(
         view.container.textContent ?? "",
         /Автоматически скачивать любимые треки на это устройство/i,
@@ -685,13 +696,13 @@ test("personalized discovery exposes a real clean device-download action", async
         }),
     );
     const button = view.container.querySelector(
-        'button[aria-label="Download Alpha to this device"]',
+        'button[aria-label="Скачать «Alpha» на это устройство"]',
     ) as HTMLButtonElement | null;
     assert.ok(button);
     assert.match(button.className, /min-h-11/);
     assert.match(button.className, /min-w-11/);
     const playAll = view.container.querySelector(
-        'button[aria-label="Play all Quick picks"]',
+        'button[aria-label="Воспроизвести весь раздел «Quick picks»"]',
     ) as HTMLButtonElement;
     assert.match(playAll.className, /min-h-11/);
     await React.act(async () => button.click());
@@ -713,15 +724,15 @@ test("single-track actions explain unavailable storage without blocking folder s
     for (const unavailable of [
         {
             status: "unsupported" as const,
-            label: "Device downloads are unavailable in this browser",
+            label: "Скачивание на устройство недоступно в этом браузере",
         },
         {
             status: "checking" as const,
-            label: "Checking device storage for Alpha",
+            label: "Проверяем хранилище перед скачиванием «Alpha»",
         },
         {
             status: "requesting" as const,
-            label: "Waiting for folder access for Alpha",
+            label: "Ожидаем доступ к папке для скачивания «Alpha»",
         },
     ]) {
         storage = {
@@ -754,14 +765,14 @@ test("single-track actions explain unavailable storage without blocking folder s
     await React.act(async () =>
         (
             menu.container.querySelector(
-                'button[aria-label="Track actions"]',
+                'button[aria-label="Действия с треком"]',
             ) as HTMLButtonElement
         ).click(),
     );
     const unsupportedMenuAction = [
         ...menu.container.querySelectorAll("button"),
     ].find((button) =>
-        button.textContent?.includes("Downloads unavailable in this browser"),
+        button.textContent?.includes("Загрузки недоступны в этом браузере"),
     );
     assert.ok(unsupportedMenuAction);
     assert.equal((unsupportedMenuAction as HTMLButtonElement).disabled, true);
@@ -781,8 +792,8 @@ test("single-track actions explain unavailable storage without blocking folder s
         );
         const action = shelf.container.querySelector(
             actionable === "error"
-                ? 'button[aria-label="Reconnect folder to download Alpha"]'
-                : 'button[aria-label="Choose a folder to download Alpha"]',
+                ? 'button[aria-label="Переподключите папку для скачивания «Alpha»"]'
+                : 'button[aria-label="Выберите папку для скачивания «Alpha»"]',
         ) as HTMLButtonElement;
         assert.ok(action);
         assert.equal(action.disabled, false);
@@ -810,7 +821,7 @@ test("single-track actions can protect an automatic ready copy", async () => {
         }),
     );
     const shelfAction = shelf.container.querySelector(
-        'button[aria-label="Keep Alpha offline on this device"]',
+        'button[aria-label="Оставить «Alpha» офлайн на этом устройстве"]',
     ) as HTMLButtonElement;
     assert.ok(shelfAction);
     assert.equal(shelfAction.disabled, false);
@@ -823,12 +834,12 @@ test("single-track actions can protect an automatic ready copy", async () => {
     await React.act(async () =>
         (
             menu.container.querySelector(
-                'button[aria-label="Track actions"]',
+                'button[aria-label="Действия с треком"]',
             ) as HTMLButtonElement
         ).click(),
     );
     const keep = [...menu.container.querySelectorAll("button")].find((button) =>
-        button.textContent?.includes("Keep offline on this device"),
+        button.textContent?.includes("Сохранить на этом устройстве"),
     ) as HTMLButtonElement;
     assert.ok(keep);
     assert.equal(keep.disabled, false);
@@ -848,7 +859,7 @@ test("single-track actions can protect an automatic ready copy", async () => {
         }),
     );
     const checkingAction = checking.container.querySelector(
-        'button[aria-label="Checking device storage for Alpha"]',
+        'button[aria-label="Проверяем хранилище перед скачиванием «Alpha»"]',
     ) as HTMLButtonElement;
     assert.ok(checkingAction);
     assert.equal(checkingAction.disabled, true);
@@ -923,7 +934,9 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
         null,
     );
     assert.equal(
-        view.container.querySelector('button[aria-label="Воспроизвести: Failed song"]'),
+        view.container.querySelector(
+            'button[aria-label="Воспроизвести: Failed song"]',
+        ),
         null,
     );
     assert.match(
@@ -1010,7 +1023,11 @@ test("browser-private Downloads offers an explicit normal-file export without re
         await Promise.resolve();
     });
     assert.deepEqual(calls.exports, ["private-ready-key"]);
-    assert.ok(view.container.querySelector('button[aria-label="Воспроизвести: Alpha"]'));
+    assert.ok(
+        view.container.querySelector(
+            'button[aria-label="Воспроизвести: Alpha"]',
+        ),
+    );
     view.unmount();
 });
 
@@ -1286,12 +1303,12 @@ test("the shared playable-track menu exposes device download for search rows", a
     await React.act(async () =>
         (
             view.container.querySelector(
-                'button[aria-label="Track actions"]',
+                'button[aria-label="Действия с треком"]',
             ) as HTMLButtonElement
         ).click(),
     );
     const downloadButton = [...view.container.querySelectorAll("button")].find(
-        (button) => button.textContent?.includes("Download to device"),
+        (button) => button.textContent?.includes("Загрузить на устройство"),
     );
     assert.ok(downloadButton);
     await React.act(async () => downloadButton.click());

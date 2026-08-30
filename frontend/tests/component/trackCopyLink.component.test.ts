@@ -127,8 +127,8 @@ function findMenuItem(
 test("copies an /album?track= link for a local track", async () => {
     const { container, unmount } = await renderMenu(localTrack);
 
-    const item = findMenuItem(container, "Copy link to song");
-    assert.ok(item, "Copy link to song item not found");
+    const item = findMenuItem(container, "Скопировать ссылку на трек");
+    assert.ok(item, "Элемент копирования ссылки на трек не найден");
     await React.act(async () => {
         item!.click();
     });
@@ -143,7 +143,7 @@ test("hides the copy item for remote provider tracks", async () => {
         streamSource: "youtube",
     });
 
-    assert.equal(findMenuItem(container, "Copy link to song"), null);
+    assert.equal(findMenuItem(container, "Скопировать ссылку на трек"), null);
     unmount();
 });
 
@@ -153,6 +153,6 @@ test("hides the copy item when the track has no album id", async () => {
         album: { title: "Test Album" },
     });
 
-    assert.equal(findMenuItem(container, "Copy link to song"), null);
+    assert.equal(findMenuItem(container, "Скопировать ссылку на трек"), null);
     unmount();
 });

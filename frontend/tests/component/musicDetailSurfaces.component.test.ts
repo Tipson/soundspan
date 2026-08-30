@@ -89,7 +89,7 @@ test("PlaylistDetailHero uses the shared detail identity without provider jargon
 
     assert.match(html, /data-music-detail="hero"/);
     assert.match(html, /Late-night drive/);
-    assert.match(html, /18 songs/);
+    assert.match(html, /18 треков/);
     assert.match(html, /Oleg/);
     assert.match(html, /Play All/);
     assert.doesNotMatch(html, /TIDAL|YouTube|local \/ /);

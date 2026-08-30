@@ -96,7 +96,10 @@ test("Library tabs announce horizontal overflow and retain touch-sized targets",
     );
 
     assert.match(html, /data-overflow-cue="horizontal"/);
-    assert.match(html, /Scroll horizontally for more Library sections/);
+    assert.match(
+        html,
+        /Прокрутите по горизонтали, чтобы увидеть остальные разделы коллекции/,
+    );
     assert.match(html, /min-h-11/);
     assert.match(html, /snap-x/);
 });
@@ -114,8 +117,8 @@ test("Library overview makes account and device ownership explicit", async () =>
         }),
     );
 
-    assert.match(html, /Saved to your account/);
-    assert.match(html, /Available on every signed-in device/);
-    assert.match(html, /Only on this device/);
-    assert.match(html, /2 offline tracks/);
+    assert.match(html, /Сохранено в аккаунте/);
+    assert.match(html, /Доступно на всех устройствах, где вы вошли в аккаунт/);
+    assert.match(html, /Только на этом устройстве/);
+    assert.match(html, /2 офлайн-трека/);
 });

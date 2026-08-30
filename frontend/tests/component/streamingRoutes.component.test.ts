@@ -1128,9 +1128,9 @@ test("discover route renders source mix and track list when playlist has tracks"
     const DiscoverPage = (await import("../../app/discover/page")).default;
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
-    assert.match(html, /Source mix: 1 local/);
-    assert.match(html, /2 TIDAL gap-fill/);
-    assert.match(html, /3 YouTube Music gap-fill/);
+    assert.match(html, /Источники: 1 на устройстве/);
+    assert.match(html, /2 TIDAL — дополнение/);
+    assert.match(html, /3 YouTube Music — дополнение/);
     assert.match(html, /discover-track-list/);
     assert.match(html, /how-it-works/);
 });
@@ -1149,7 +1149,7 @@ test("discover route keeps unavailable albums visible while tracks are still res
     const DiscoverPage = (await import("../../app/discover/page")).default;
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
-    assert.match(html, /still finishing this week&#x27;s track list/);
+    assert.match(html, /Завершаем список треков на эту неделю/);
     assert.match(html, /unavailable-albums/);
 });
 
@@ -1168,7 +1168,7 @@ test("discover route shows resolving state when generation is recent but playlis
     const DiscoverPage = (await import("../../app/discover/page")).default;
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
-    assert.match(html, /Loading your latest Discover Weekly/);
+    assert.match(html, /Загружаем свежие «Открытия недели»/);
 });
 
 test("discover route shows empty-call-to-action when no playlist exists yet", async () => {
@@ -1186,7 +1186,7 @@ test("discover route shows empty-call-to-action when no playlist exists yet", as
     const DiscoverPage = (await import("../../app/discover/page")).default;
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
-    assert.match(html, /No Discover Weekly Yet/);
-    assert.match(html, /Generate Now/);
+    assert.match(html, /«Открытий недели» пока нет/);
+    assert.match(html, /Собрать сейчас/);
     assert.equal(capture.discoverActionBar?.isGenerating, false);
 });

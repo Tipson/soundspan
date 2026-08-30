@@ -615,7 +615,9 @@ test("FullPlayer keeps the music transport focused on shuffle, previous, next, a
     const previous = mounted.container.querySelector(
         '[aria-label="Предыдущий трек"]',
     );
-    const next = mounted.container.querySelector('[aria-label="Следующий трек"]');
+    const next = mounted.container.querySelector(
+        '[aria-label="Следующий трек"]',
+    );
 
     assert.equal(skipBack, null);
     assert.equal(skipForward, null);
@@ -629,7 +631,7 @@ test("FullPlayer dislike control uses the track-preference mutation", async () =
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const mounted = await mount(React.createElement(FullPlayer));
     const dislike = mounted.container.querySelector(
-        '[aria-label="Dislike"]',
+        '[aria-label="Не нравится"]',
     ) as HTMLButtonElement | null;
     assert.ok(dislike);
 
@@ -876,12 +878,12 @@ test("OverlayPlayer keeps the long-form transport narrow enough for a phone", as
     assert.ok(
         mounted.container.querySelector('[aria-label="Назад на 15 секунд"]'),
     );
-    assert.ok(mounted.container.querySelector('[aria-label="Предыдущий трек"]'));
+    assert.ok(
+        mounted.container.querySelector('[aria-label="Предыдущий трек"]'),
+    );
     assert.ok(mounted.container.querySelector('[aria-label="Следующий трек"]'));
     assert.ok(
-        mounted.container.querySelector(
-            '[aria-label="Вперёд на 15 секунд"]',
-        ),
+        mounted.container.querySelector('[aria-label="Вперёд на 15 секунд"]'),
     );
 
     await unmount(mounted);
@@ -910,12 +912,12 @@ test("OverlayPlayer keeps the music transport focused on shuffle, previous, next
         null,
     );
     assert.equal(
-        mounted.container.querySelector(
-            '[aria-label="Вперёд на 15 секунд"]',
-        ),
+        mounted.container.querySelector('[aria-label="Вперёд на 15 секунд"]'),
         null,
     );
-    assert.ok(mounted.container.querySelector('[aria-label="Предыдущий трек"]'));
+    assert.ok(
+        mounted.container.querySelector('[aria-label="Предыдущий трек"]'),
+    );
     assert.ok(mounted.container.querySelector('[aria-label="Следующий трек"]'));
 
     await unmount(mounted);
@@ -939,8 +941,8 @@ test("OverlayPlayer exposes both like and dislike controls for music", async () 
         withQueryClient(React.createElement(OverlayPlayer)),
     );
 
-    assert.ok(mounted.container.querySelector('[aria-label="Like"]'));
-    assert.ok(mounted.container.querySelector('[aria-label="Dislike"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Нравится"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Не нравится"]'));
 
     await unmount(mounted);
 });
