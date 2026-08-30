@@ -8,6 +8,7 @@ import {
     UserRound,
     type LucideIcon,
 } from "lucide-react";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface LibraryOverviewProps {
     likedTotal: number;
@@ -68,27 +69,27 @@ export function LibraryOverview({
     const accountCards: CollectionCard[] = [
         {
             href: "/playlist/my-liked",
-            label: "Liked songs",
-            detail: `${likedTotal} ${likedTotal === 1 ? "track" : "tracks"}`,
+            label: ru.library.likedSongs,
+            detail: `${likedTotal} ${pluralRu(likedTotal, ["трек", "трека", "треков"])}`,
             icon: Heart,
             featured: true,
         },
         {
             href: "/library?tab=playlists",
-            label: "Playlists",
-            detail: `${playlistTotal} ${playlistTotal === 1 ? "playlist" : "playlists"}`,
+            label: ru.library.playlists,
+            detail: `${playlistTotal} ${pluralRu(playlistTotal, ["плейлист", "плейлиста", "плейлистов"])}`,
             icon: ListMusic,
         },
         {
             href: "/library?tab=albums",
-            label: "Saved albums",
-            detail: `${albumTotal} ${albumTotal === 1 ? "album" : "albums"}`,
+            label: ru.library.savedAlbums,
+            detail: `${albumTotal} ${pluralRu(albumTotal, ["альбом", "альбома", "альбомов"])}`,
             icon: Album,
         },
         {
             href: "/library?tab=artists",
-            label: "Saved artists",
-            detail: `${artistTotal} ${artistTotal === 1 ? "artist" : "artists"}`,
+            label: ru.library.savedArtists,
+            detail: `${artistTotal} ${pluralRu(artistTotal, ["исполнитель", "исполнителя", "исполнителей"])}`,
             icon: UserRound,
         },
     ];
@@ -103,10 +104,10 @@ export function LibraryOverview({
                     id="account-collection-title"
                     className="text-sm font-bold uppercase tracking-[0.16em] text-content-secondary"
                 >
-                    Saved to your account
+                    {ru.library.savedAccount}
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-content-muted">
-                    Available on every signed-in device.
+                    {ru.library.signedInDevices}
                 </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -119,13 +120,10 @@ export function LibraryOverview({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h3 className="text-sm font-bold text-content">
-                            Only on this device
+                            {ru.library.deviceOnly}
                         </h3>
                         <p className="mt-1 max-w-2xl text-xs leading-5 text-content-muted sm:text-sm">
-                            Offline music is saved as ordinary files in your
-                            selected device folder. Their status and folder
-                            permission belong to this browser profile; clearing
-                            site data does not delete the files.
+                            {ru.library.deviceDescription}
                         </p>
                     </div>
                     <Link
@@ -137,11 +135,15 @@ export function LibraryOverview({
                         </span>
                         <span>
                             <span className="block text-sm font-bold">
-                                Downloads on this device
+                                {ru.library.deviceDownloads}
                             </span>
                             <span className="mt-0.5 block text-xs text-content-muted">
-                                {downloadTotal} offline{" "}
-                                {downloadTotal === 1 ? "track" : "tracks"}
+                                {downloadTotal}{" "}
+                                {pluralRu(downloadTotal, [
+                                    "офлайн-трек",
+                                    "офлайн-трека",
+                                    "офлайн-треков",
+                                ])}
                             </span>
                         </span>
                         <ArrowRight

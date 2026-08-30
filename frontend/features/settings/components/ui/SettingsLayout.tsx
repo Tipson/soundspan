@@ -2,6 +2,7 @@
 
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { SettingsSidebar, SidebarItem } from "./SettingsSidebar";
+import { ru } from "@/lib/i18n/ru";
 
 interface SettingsLayoutProps {
     children: ReactNode;
@@ -17,7 +18,7 @@ export function SettingsLayout({
     children,
     sidebarItems,
     isAdmin,
-    title = "Settings",
+    title = ru.settings.title,
 }: SettingsLayoutProps) {
     const [activeSection, setActiveSection] = useState(
         sidebarItems[0]?.id || "",
@@ -177,14 +178,13 @@ export function SettingsLayout({
             <div className="relative mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10 xl:px-10">
                 <header className="mb-7 max-w-2xl md:mb-10">
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-light">
-                        Your soundspan
+                        {ru.settings.eyebrow}
                     </p>
                     <h1 className="text-3xl font-bold tracking-[-0.04em] text-content md:text-4xl">
                         {title}
                     </h1>
                     <p className="mt-3 text-sm leading-6 text-content-secondary md:text-base">
-                        Shape playback, offline music, privacy, and connected
-                        services for this account and device.
+                        {ru.settings.description}
                     </p>
                 </header>
 

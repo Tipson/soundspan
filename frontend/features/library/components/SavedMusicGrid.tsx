@@ -3,6 +3,7 @@ import { Album, Loader2, RotateCcw, Search, UserRound } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { api, type SavedMusicEntity } from "@/lib/api";
 import { getSavedMusicEntityHref } from "../savedMusicEntity";
+import { ru } from "@/lib/i18n/ru";
 
 interface SavedMusicGridProps {
     type: "album" | "artist";
@@ -59,8 +60,8 @@ export function SavedMusicGrid({
                 className="flex flex-col items-center rounded-2xl border border-warning/20 bg-warning/10 px-5 py-8 text-center text-sm text-content-body"
             >
                 <p>
-                    Could not load your saved{" "}
-                    {type === "album" ? "albums" : "artists"}.
+                    Не удалось загрузить сохранённые{" "}
+                    {type === "album" ? "альбомы" : "исполнителей"}.
                 </p>
                 {onRetry && (
                     <button
@@ -69,7 +70,7 @@ export function SavedMusicGrid({
                         className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
                     >
                         <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                        Retry
+                        {ru.common.retry}
                     </button>
                 )}
             </div>
@@ -85,19 +86,20 @@ export function SavedMusicGrid({
                     <UserRound className="mb-4 h-10 w-10 text-content-muted" />
                 )}
                 <h2 className="text-lg font-semibold text-content">
-                    No saved {type === "album" ? "albums" : "artists"} yet
+                    Пока нет сохранённых{" "}
+                    {type === "album" ? "альбомов" : "исполнителей"}
                 </h2>
                 <p className="mt-2 max-w-md text-sm text-content-muted">
-                    Use Save to Library on any {type} page. It follows your
-                    account; offline downloads are a separate choice on each
-                    device.
+                    Сохраните {type === "album" ? "альбом" : "исполнителя"} в
+                    коллекцию на его странице. Коллекция доступна в аккаунте,
+                    а офлайн-загрузки выбираются отдельно на каждом устройстве.
                 </p>
                 <Link
                     href="/search"
                     className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                 >
                     <Search className="h-4 w-4" aria-hidden="true" />
-                    Search music
+                    Найти музыку
                 </Link>
             </div>
         );
@@ -138,7 +140,9 @@ export function SavedMusicGrid({
                         </h3>
                         <p className="mt-1 truncate text-xs text-content-muted">
                             {entity.subtitle ||
-                                (type === "album" ? "Album" : "Artist")}
+                                (type === "album"
+                                    ? ru.catalog.album
+                                    : ru.catalog.artist)}
                         </p>
                     </Link>
                 );
@@ -157,7 +161,8 @@ export function SavedMusicGrid({
                                 aria-hidden="true"
                             />
                         )}
-                        Load more {type === "album" ? "albums" : "artists"}
+                        Показать ещё{" "}
+                        {type === "album" ? "альбомы" : "исполнителей"}
                     </button>
                 </div>
             )}

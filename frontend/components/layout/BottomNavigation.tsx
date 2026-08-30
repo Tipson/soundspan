@@ -6,23 +6,24 @@ import { AudioWaveform, Home, Library } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
+import { ru } from "@/lib/i18n/ru";
 
 const navigationItems = [
     {
-        name: "Home",
+        name: ru.nav.home,
         href: "/",
         icon: Home,
         matchPattern: "/",
         exact: true,
     },
     {
-        name: "Vibe",
+        name: ru.nav.vibe,
         href: "/vibe",
         icon: AudioWaveform,
         matchPattern: "/vibe",
     },
     {
-        name: "Library",
+        name: ru.nav.library,
         href: "/library",
         icon: Library,
         matchPattern: "/library",
@@ -46,7 +47,7 @@ export function BottomNavigation() {
             data-shell-bottom-navigation="true"
             className="mobile-bottom-navigation fixed inset-x-0 bottom-0 z-40"
             role="navigation"
-            aria-label="Main navigation"
+            aria-label={ru.nav.mainAria}
             style={{
                 paddingBottom: "var(--safe-area-bottom)",
             }}
@@ -69,7 +70,7 @@ export function BottomNavigation() {
                             key={item.name}
                             href={item.href}
                             onClick={
-                                item.name === "Library"
+                                item.href === "/library"
                                     ? (event) => {
                                           handleOfflineLibraryNavigation({
                                               isOnline: navigator.onLine,

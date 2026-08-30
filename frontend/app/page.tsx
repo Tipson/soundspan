@@ -6,6 +6,7 @@ import { HomeOnlineDiscovery } from "@/features/home/components/HomeOnlineDiscov
 import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
 import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
+import { ru } from "@/lib/i18n/ru";
 
 function PlaylistSkeleton() {
     return (
@@ -51,16 +52,16 @@ export default function HomePage() {
                 <div className="space-y-8 sm:space-y-10">
                     <header className="max-w-3xl pt-1 sm:pt-2">
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-content-muted">
-                            Home
+                            {ru.nav.home}
                         </p>
                         <h1 className="mt-1 text-[clamp(2rem,4vw,3.5rem)] font-black leading-[0.98] tracking-[-0.045em] text-content">
-                            Your music, right now
+                            {ru.home.greeting}
                         </h1>
                     </header>
 
                     {isPersonalizedLoading && !personalizedFeed && (
                         <section
-                            aria-label="Loading personal recommendations"
+                            aria-label={ru.home.loadingRecommendations}
                             className="rounded-2xl border border-white/8 bg-white/[0.035] p-5"
                         >
                             <div className="mb-4 h-7 w-40 animate-pulse rounded bg-white/10" />
@@ -75,15 +76,14 @@ export default function HomePage() {
                             role="status"
                             className="rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning"
                         >
-                            Personal radio is temporarily unavailable. Search,
-                            playlists, and the online catalog still work.
+                            {ru.home.unavailable}
                         </p>
                     )}
 
                     {personalizedFeed && (
                         <PersonalizedTrackShelf
-                            title="Continue listening"
-                            subtitle="Resume the music still in your rotation"
+                            title={ru.home.continueListening}
+                            subtitle={ru.home.continueSubtitle}
                             tracks={personalizedFeed.shelves.listenAgain}
                         />
                     )}

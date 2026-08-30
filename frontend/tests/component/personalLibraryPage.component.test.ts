@@ -116,9 +116,9 @@ test("personal Library failures provide touch-sized retry actions", async () => 
         }),
     );
 
-    assert.match(playlists, />Retry</);
+    assert.match(playlists, />Повторить</);
     assert.match(playlists, /min-h-11/);
-    assert.match(albums, />Retry</);
+    assert.match(albums, />Повторить</);
     assert.match(albums, /min-h-11/);
 });
 
@@ -141,7 +141,7 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
 
 mock.module("@/features/device-offline/components/DownloadsList", {
     namedExports: {
-        DownloadsList: () => React.createElement("div", null, "DEVICE COPIES"),
+        DownloadsList: () => React.createElement("div", null, "ЗАГРУЗКИ НА УСТРОЙСТВЕ"),
     },
 });
 
@@ -150,19 +150,19 @@ test("Library overview is a personal collection hub without server catalog contr
     tab = null;
     const html = renderToStaticMarkup(React.createElement(LibraryPage));
 
-    assert.match(html, /Your Library/);
-    assert.match(html, /Liked songs/);
-    assert.match(html, /Playlists/);
-    assert.match(html, /Saved albums/);
-    assert.match(html, /Saved artists/);
-    assert.match(html, /Downloads on this device/);
-    assert.match(html, /Saved to your account/);
-    assert.match(html, /Only on this device/);
-    assert.match(html, /ordinary files/i);
-    assert.match(html, /browser profile/i);
-    assert.match(html, /clearing site data does not delete/i);
-    assert.match(html, /1 offline track/);
-    assert.doesNotMatch(html, /4 offline tracks/);
+    assert.match(html, /Моя коллекция/);
+    assert.match(html, /Любимые треки/);
+    assert.match(html, /Плейлисты/);
+    assert.match(html, /Сохранённые альбомы/);
+    assert.match(html, /Сохранённые исполнители/);
+    assert.match(html, /Загрузки на этом устройстве/);
+    assert.match(html, /Сохранено в аккаунте/);
+    assert.match(html, /Только на этом устройстве/);
+    assert.match(html, /обычными файлами/i);
+    assert.match(html, /профилю браузера/i);
+    assert.match(html, /очистка данных сайта не удаляет/i);
+    assert.match(html, /1 офлайн-трек/);
+    assert.doesNotMatch(html, /4 офлайн-трека/);
     assert.doesNotMatch(html, /copies stay in this browser/i);
     assert.match(html, /Meteora/);
     assert.match(html, /Linkin Park/);
@@ -177,17 +177,17 @@ test("Library tabs expose account-saved entities and existing device downloads",
     tab = "albums";
     const albumsHtml = renderToStaticMarkup(React.createElement(LibraryPage));
     assert.match(albumsHtml, /Meteora/);
-    assert.match(albumsHtml, /Albums you kept for later/);
-    assert.match(albumsHtml, /downloads separately on each device/);
-    assert.match(albumsHtml, /Load more albums/);
+    assert.match(albumsHtml, /Сохранённые альбомы/);
+    assert.match(albumsHtml, /Загрузки выбираются отдельно на каждом устройстве/);
+    assert.match(albumsHtml, /Показать ещё альбомы/);
 
     tab = "downloads";
     const downloadsHtml = renderToStaticMarkup(
         React.createElement(LibraryPage),
     );
-    assert.match(downloadsHtml, /DEVICE COPIES/);
-    assert.match(downloadsHtml, /ordinary files/i);
-    assert.match(downloadsHtml, /browser profile/i);
+    assert.match(downloadsHtml, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
+    assert.match(downloadsHtml, /обычными файлами/i);
+    assert.match(downloadsHtml, /профилю браузера/i);
     assert.doesNotMatch(downloadsHtml, /stored only in this browser/i);
-    assert.match(downloadsHtml, /clearing site data does not delete/i);
+    assert.match(downloadsHtml, /очистка данных сайта не удаляет/i);
 });

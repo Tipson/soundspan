@@ -1,5 +1,6 @@
 import { FilterChip } from "@/components/ui/FilterChip";
 import type { SearchResultView } from "../types";
+import { ru } from "@/lib/i18n/ru";
 
 interface SearchFiltersProps {
     activeView: SearchResultView;
@@ -11,10 +12,10 @@ const SEARCH_RESULT_VIEWS: ReadonlyArray<{
     id: SearchResultView;
     label: string;
 }> = [
-    { id: "all", label: "All" },
-    { id: "tracks", label: "Tracks" },
-    { id: "artists", label: "Artists" },
-    { id: "albums", label: "Albums" },
+    { id: "all", label: ru.search.all },
+    { id: "tracks", label: ru.search.tracks },
+    { id: "artists", label: ru.search.artists },
+    { id: "albums", label: ru.search.albums },
 ];
 
 function searchViewHref(query: string, view: SearchResultView): string {
@@ -38,7 +39,7 @@ export function SearchFilters({
 
     return (
         <nav
-            aria-label="Search result type"
+            aria-label={ru.search.resultTypeAria}
             className="sticky top-2 z-30 mb-7 overflow-x-auto rounded-2xl border border-white/[0.08] bg-black/60 p-2 shadow-[0_18px_48px_rgb(0_0_0/0.2)] backdrop-blur-xl scrollbar-hide sm:mb-9"
             data-tv-section="search-filters"
         >

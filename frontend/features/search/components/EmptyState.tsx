@@ -1,4 +1,5 @@
 import { Search as SearchIcon } from "lucide-react";
+import { ru } from "@/lib/i18n/ru";
 
 interface EmptyStateProps {
     hasSearched: boolean;
@@ -28,17 +29,16 @@ export function EmptyState({ hasSearched, isLoading }: EmptyStateProps) {
                     <SearchIcon className="h-6 w-6" aria-hidden="true" />
                 </span>
                 <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-content-muted">
-                    One search, every source
+                    {ru.search.sourceEyebrow}
                 </p>
                 <h1
                     id="search-welcome-title"
                     className="text-balance text-3xl font-black tracking-[-0.045em] text-content sm:text-5xl"
                 >
-                    Find anything you want to hear
+                    {ru.search.welcomeTitle}
                 </h1>
                 <p className="mx-auto mt-4 max-w-md text-pretty text-sm leading-6 text-content-secondary sm:text-base">
-                    Search tracks, artists, and albums across your saved music
-                    and the online catalog.
+                    {ru.search.welcomeDescription}
                 </p>
             </div>
         </section>

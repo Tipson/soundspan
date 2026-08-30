@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { Tab } from "../types";
 import { cn } from "@/utils/cn";
+import { ru } from "@/lib/i18n/ru";
 
 interface LibraryTabsProps {
     activeTab: Tab;
@@ -14,12 +15,12 @@ const TABS: ReadonlyArray<{
     label: string;
     href: string;
 }> = [
-    { id: "overview", label: "Overview", href: "/library" },
-    { id: "liked", label: "Liked songs", href: "/playlist/my-liked" },
-    { id: "playlists", label: "Playlists", href: "/library?tab=playlists" },
-    { id: "albums", label: "Albums", href: "/library?tab=albums" },
-    { id: "artists", label: "Artists", href: "/library?tab=artists" },
-    { id: "downloads", label: "Downloads", href: "/library?tab=downloads" },
+    { id: "overview", label: ru.library.overview, href: "/library" },
+    { id: "liked", label: ru.library.likedSongs, href: "/playlist/my-liked" },
+    { id: "playlists", label: ru.library.playlists, href: "/library?tab=playlists" },
+    { id: "albums", label: ru.library.albums, href: "/library?tab=albums" },
+    { id: "artists", label: ru.library.artists, href: "/library?tab=artists" },
+    { id: "downloads", label: ru.library.downloads, href: "/library?tab=downloads" },
 ];
 
 /** Personal Library navigation; Liked songs keeps its dedicated playable page. */
@@ -35,13 +36,13 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
 
     return (
         <nav
-            aria-label="Library sections"
+            aria-label={ru.library.sectionsAria}
             data-tv-section="library-tabs"
             data-overflow-cue="horizontal"
             className="relative rounded-[20px] border border-white/[0.08] bg-black/30 p-2 shadow-[0_18px_48px_rgb(0_0_0/0.2)] backdrop-blur-xl"
         >
             <span className="sr-only">
-                Scroll horizontally for more Library sections
+                {ru.library.sectionsHint}
             </span>
             <div
                 aria-hidden="true"

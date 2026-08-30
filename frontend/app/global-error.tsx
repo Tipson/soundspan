@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Renders the GlobalError component.
@@ -23,16 +24,16 @@ export default function GlobalError({
                 <div className="flex h-screen items-center justify-center bg-black">
                     <div className="text-center">
                         <h2 className="text-2xl font-bold text-white mb-4">
-                            Application Error
+                            {ru.errors.applicationTitle}
                         </h2>
                         <p className="text-gray-400 mb-6">
-                            {error.message || "A critical error occurred"}
+                            {error.message || ru.errors.critical}
                         </p>
                         <button
                             onClick={reset}
                             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                         >
-                            Reload Application
+                            {ru.errors.reload}
                         </button>
                     </div>
                 </div>

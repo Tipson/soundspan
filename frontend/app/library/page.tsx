@@ -18,6 +18,7 @@ import type {
     PersonalPlaylistItem,
     Tab,
 } from "@/features/library/types";
+import { ru } from "@/lib/i18n/ru";
 
 const LIBRARY_TABS = new Set<Tab>([
     "overview",
@@ -152,8 +153,8 @@ export default function LibraryPage() {
                         playlists.length > 0 ? (
                             <section>
                                 <SectionHeading
-                                    title="Your playlists"
-                                    description="Collections you created or imported"
+                                    title="Ваши плейлисты"
+                                    description="Созданные и импортированные подборки"
                                     href="/library?tab=playlists"
                                 />
                                 <PersonalPlaylistGrid
@@ -172,8 +173,8 @@ export default function LibraryPage() {
                         albumCollection.items.length > 0 ? (
                             <section>
                                 <SectionHeading
-                                    title="Saved albums"
-                                    description="Albums you explicitly kept"
+                                    title={ru.library.savedAlbums}
+                                    description="Альбомы, которые вы сохранили"
                                     href="/library?tab=albums"
                                 />
                                 <SavedMusicGrid
@@ -193,8 +194,8 @@ export default function LibraryPage() {
                         artistCollection.items.length > 0 ? (
                             <section>
                                 <SectionHeading
-                                    title="Saved artists"
-                                    description="Artists you want close at hand"
+                                    title={ru.library.savedArtists}
+                                    description="Исполнители, к которым хочется возвращаться"
                                     href="/library?tab=artists"
                                 />
                                 <SavedMusicGrid
@@ -226,13 +227,13 @@ export default function LibraryPage() {
                                         />
                                     </span>
                                     <h2 className="mt-5 text-xl font-black text-content sm:text-2xl">
-                                        Build a Library around your taste
+                                        Соберите коллекцию на свой вкус
                                     </h2>
                                     <p className="mt-2 max-w-xl text-sm leading-6 text-content-muted">
-                                        Like tracks, save complete albums and
-                                        artists, or import playlists. Saved
-                                        music follows your account; downloads
-                                        are optional and stay on each device.
+                                        Ставьте лайки, сохраняйте альбомы и
+                                        исполнителей или импортируйте плейлисты.
+                                        Коллекция доступна в аккаунте, а
+                                        загрузки остаются на каждом устройстве.
                                     </p>
                                     <Link
                                         href="/search"
@@ -242,7 +243,7 @@ export default function LibraryPage() {
                                             className="h-4 w-4"
                                             aria-hidden="true"
                                         />
-                                        Find music
+                                        Найти музыку
                                     </Link>
                                 </section>
                             )}
@@ -252,8 +253,8 @@ export default function LibraryPage() {
                 {activeTab === "playlists" && (
                     <section>
                         <SectionHeading
-                            title="Playlists"
-                            description="Your own mixes and imported playlists"
+                            title={ru.library.playlists}
+                            description="Ваши миксы и импортированные плейлисты"
                         />
                         <PersonalPlaylistGrid
                             playlists={playlists}
@@ -267,8 +268,8 @@ export default function LibraryPage() {
                 {activeTab === "albums" && (
                     <section>
                         <SectionHeading
-                            title="Saved albums"
-                            description="Albums you kept for later. Choose downloads separately on each device."
+                            title={ru.library.savedAlbums}
+                            description="Сохранённые альбомы. Загрузки выбираются отдельно на каждом устройстве."
                         />
                         <SavedMusicGrid
                             type="album"
@@ -288,8 +289,8 @@ export default function LibraryPage() {
                 {activeTab === "artists" && (
                     <section>
                         <SectionHeading
-                            title="Saved artists"
-                            description="Artists you follow across the music catalog"
+                            title={ru.library.savedArtists}
+                            description="Сохранённые исполнители из музыкального каталога"
                         />
                         <SavedMusicGrid
                             type="artist"
@@ -309,8 +310,8 @@ export default function LibraryPage() {
                 {activeTab === "downloads" && (
                     <section>
                         <SectionHeading
-                            title="Downloads on this device"
-                            description="Offline music is stored as ordinary files on this phone or computer. Folder access belongs to this browser profile; clearing site data does not delete the files or affect other devices."
+                            title={ru.library.deviceDownloads}
+                            description="Офлайн-музыка хранится обычными файлами на телефоне или компьютере. Доступ к папке относится к этому профилю браузера; очистка данных сайта не удаляет файлы и не затрагивает другие устройства."
                         />
                         <DownloadsList />
                     </section>

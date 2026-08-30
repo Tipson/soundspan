@@ -112,11 +112,11 @@ export function playlistFilterOptions(
     federation: boolean,
 ): ReadonlyArray<readonly [UnifiedPlaylistFilter, string]> {
     return [
-        ["all", "All playlists"],
-        ["mine", "Your playlists"],
-        ["others", "Shared playlists"],
+        ["all", ru.nav.allPlaylists],
+        ["mine", ru.nav.yourPlaylists],
+        ["others", ru.nav.sharedPlaylists],
         ...(federation
-            ? ([["peers", "Peer playlists"]] as const)
+            ? ([["peers", ru.nav.peerPlaylists]] as const)
             : ([] as const)),
     ];
 }
@@ -138,3 +138,4 @@ export function buildUnifiedPlaylistRows(
         .filter((row) => matchesFilter(row, options.filter))
         .sort((a, b) => compareRows(a, b, options.sort));
 }
+import { ru } from "./i18n/ru";

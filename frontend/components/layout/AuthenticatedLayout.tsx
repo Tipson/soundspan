@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
+import { ru } from "@/lib/i18n/ru";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Sidebar } from "./Sidebar";
@@ -77,7 +78,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
             <div className="min-h-dvh flex items-center justify-center bg-black">
                 <div className="flex flex-col items-center gap-4">
                     <GradientSpinner size="lg" />
-                    <p className="text-white/60 text-sm">Loading...</p>
+                    <p className="text-white/60 text-sm">{ru.common.loading}</p>
                 </div>
             </div>
         );
@@ -209,7 +210,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
         <div className="min-h-dvh flex items-center justify-center bg-black">
             <div className="flex flex-col items-center gap-4">
                 <GradientSpinner size="lg" />
-                <p className="text-white/60 text-sm">Redirecting...</p>
+                <p className="text-white/60 text-sm">{ru.nav.redirecting}</p>
             </div>
         </div>
     );

@@ -172,7 +172,7 @@ test("Vibe recommendation failure exposes a touch-sized retry action", async () 
         root.render(React.createElement(VibeProviderFallback));
     });
     const retry = container.querySelector(
-        'button[aria-label="Retry My Wave recommendations"]',
+        'button[aria-label="Повторить загрузку рекомендаций моей волны"]',
     ) as HTMLButtonElement | null;
     assert.ok(retry);
     assert.match(retry.className, /min-h-11/);
@@ -210,7 +210,7 @@ test("Vibe starts its ranked queue with shuffle explicitly disabled", async () =
         await Promise.resolve();
     });
     const playButton = container.querySelector(
-        'button[aria-label="Play My Wave"]',
+        'button[aria-label="Включить мою волну"]',
     ) as HTMLButtonElement | null;
     assert.ok(playButton);
 

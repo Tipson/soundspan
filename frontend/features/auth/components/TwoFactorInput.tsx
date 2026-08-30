@@ -1,5 +1,7 @@
 "use client";
 
+import { ru } from "@/lib/i18n/ru";
+
 /** Props for the shared local-authentication second-factor control. */
 export interface TwoFactorInputProps {
     id: string;
@@ -26,7 +28,9 @@ function SecondFactorField({
     useRecoveryCode,
     onValueChange,
 }: SecondFactorFieldProps) {
-    const label = useRecoveryCode ? "Recovery Code" : "Authentication Code";
+    const label = useRecoveryCode
+        ? ru.auth.recoveryCode
+        : ru.auth.authenticationCode;
     return (
         <div>
             <label
@@ -58,8 +62,8 @@ function SecondFactorField({
             />
             <p className="text-xs text-white/50 mt-2">
                 {useRecoveryCode
-                    ? "Enter your 8-character recovery code"
-                    : "Enter the 6-digit code from your authenticator app"}
+                    ? ru.auth.recoveryHint
+                    : ru.auth.authenticationHint}
             </p>
         </div>
     );
@@ -91,8 +95,8 @@ export function TwoFactorInput({
                     className="text-xs text-brand hover:text-brand-light transition-colors underline"
                 >
                     {useRecoveryCode
-                        ? "Use authenticator app instead"
-                        : "Use recovery code instead"}
+                        ? ru.auth.useAuthenticator
+                        : ru.auth.useRecovery}
                 </button>
             </div>
         </div>

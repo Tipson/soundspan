@@ -9,6 +9,7 @@ import {
 } from "react";
 import { AudioWaveform, Check, X } from "lucide-react";
 import type { PersonalizedHomeMood } from "@/features/home/types";
+import { ru } from "@/lib/i18n/ru";
 
 /** Provider-backed ranking directions currently supported by My Wave. */
 export type WaveFeedMode = "for-you" | "new" | "familiar";
@@ -26,24 +27,15 @@ export interface WaveModeDefinition {
 export const WAVE_MODES: readonly WaveModeDefinition[] = [
     {
         id: "for-you",
-        label: "For you",
-        shortLabel: "Your mix",
-        subtitle:
-            "Favorites, recent listens, and new finds in one balanced flow.",
+        ...ru.vibe.modes.forYou,
     },
     {
         id: "new",
-        label: "New to me",
-        shortLabel: "Open up",
-        subtitle:
-            "Lean further into artists and tracks outside your usual rotation.",
+        ...ru.vibe.modes.new,
     },
     {
         id: "familiar",
-        label: "Familiar",
-        shortLabel: "Stay close",
-        subtitle:
-            "Stay near music you return to and quick picks you already know.",
+        ...ru.vibe.modes.familiar,
     },
 ];
 
@@ -55,38 +47,38 @@ export const WAVE_MOODS: readonly {
 }[] = [
     {
         id: null,
-        label: "Any mood",
-        subtitle: "Let My Wave choose the moment.",
+        label: ru.vibe.moods.any[0],
+        subtitle: ru.vibe.moods.any[1],
     },
     {
         id: "calm",
-        label: "Calm",
-        subtitle: "Gentler, lower-intensity picks.",
+        label: ru.vibe.moods.calm[0],
+        subtitle: ru.vibe.moods.calm[1],
     },
     {
         id: "energetic",
-        label: "Energetic",
-        subtitle: "More motion and brighter momentum.",
+        label: ru.vibe.moods.energetic[0],
+        subtitle: ru.vibe.moods.energetic[1],
     },
     {
         id: "focus",
-        label: "Focus",
-        subtitle: "Music that stays out of the way.",
+        label: ru.vibe.moods.focus[0],
+        subtitle: ru.vibe.moods.focus[1],
     },
     {
         id: "workout",
-        label: "Workout",
-        subtitle: "A steady push for training or running.",
+        label: ru.vibe.moods.workout[0],
+        subtitle: ru.vibe.moods.workout[1],
     },
     {
         id: "favorites",
-        label: "Favorites",
-        subtitle: "Lead with tracks and artists you love.",
+        label: ru.vibe.moods.favorites[0],
+        subtitle: ru.vibe.moods.favorites[1],
     },
     {
         id: "forgotten",
-        label: "Forgotten",
-        subtitle: "Bring older favorites back into rotation.",
+        label: ru.vibe.moods.forgotten[0],
+        subtitle: ru.vibe.moods.forgotten[1],
     },
 ];
 
@@ -235,28 +227,26 @@ export function WaveDirectionSheet({
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-light">
-                            Change the feel
+                            {ru.vibe.tuneEyebrow}
                         </p>
                         <h2
                             id="wave-direction-title"
                             className="mt-2 text-2xl font-black tracking-[-0.035em] text-content sm:text-3xl"
                         >
-                            Tune My Wave
+                            {ru.vibe.tuneTitle}
                         </h2>
                         <p
                             id="wave-direction-description"
                             className="mt-2 max-w-md text-sm leading-6 text-content-secondary"
                         >
-                            Choose how close the next picks stay to your
-                            listening history, then add a mood. Your current
-                            song keeps playing while the Wave changes course.
+                            {ru.vibe.tuneDescription}
                         </p>
                     </div>
                     <button
                         ref={closeButtonRef}
                         type="button"
                         onClick={onClose}
-                        aria-label="Close Tune My Wave"
+                        aria-label={ru.vibe.closeTune}
                         className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-black/25 text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     >
                         <X className="h-5 w-5" aria-hidden="true" />
@@ -264,11 +254,11 @@ export function WaveDirectionSheet({
                 </div>
 
                 <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
-                    Direction
+                    {ru.vibe.direction}
                 </p>
                 <div
                     role="radiogroup"
-                    aria-label="My Wave direction"
+                    aria-label={ru.vibe.directionAria}
                     tabIndex={-1}
                     onKeyDown={handleRadioKeyDown}
                     className="mt-3 grid gap-2 sm:grid-cols-3"
@@ -328,15 +318,15 @@ export function WaveDirectionSheet({
                 <div className="mt-6 border-t border-white/8 pt-5">
                     <div>
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
-                            Mood or moment
+                            {ru.vibe.mood}
                         </p>
                         <p className="mt-1 text-sm leading-6 text-content-secondary">
-                            Add a moment without changing the direction above.
+                            {ru.vibe.moodDescription}
                         </p>
                     </div>
                     <div
                         role="radiogroup"
-                        aria-label="My Wave mood"
+                        aria-label={ru.vibe.moodAria}
                         tabIndex={-1}
                         onKeyDown={handleMoodRadioKeyDown}
                         className="mt-3 flex flex-wrap gap-2"
@@ -393,9 +383,8 @@ export function WaveDirectionSheet({
 
                 <div className="mt-6 grid gap-4 border-t border-white/8 pt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                     <p className="text-sm text-content-secondary">
-                        Selected: {selectedDefinition.shortLabel} ·{" "}
-                        {selectedMoodDefinition.label}. You can tune again at
-                        any time.
+                        {ru.vibe.selected}: {selectedDefinition.shortLabel} ·{" "}
+                        {selectedMoodDefinition.label}. {ru.vibe.tuneAnytime}
                     </p>
                     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <button
@@ -403,14 +392,14 @@ export function WaveDirectionSheet({
                             onClick={onClose}
                             className="inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
-                            Cancel
+                            {ru.common.cancel}
                         </button>
                         <button
                             type="button"
                             onClick={() => onApply(draftMode, draftMood)}
                             className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
                         >
-                            Use {selectedDefinition.label}
+                            {ru.vibe.use}: {selectedDefinition.label}
                         </button>
                     </div>
                 </div>

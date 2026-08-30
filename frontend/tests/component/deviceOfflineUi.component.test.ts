@@ -304,7 +304,7 @@ test("storage failures stay visible in Downloads and ordinary Settings with retr
         /No device downloads/i,
     );
     const downloadsRetry = downloads.container.querySelector(
-        'button[aria-label="Retry reading downloads on this device"]',
+        'button[aria-label="Повторить чтение загрузок на этом устройстве"]',
     ) as HTMLButtonElement;
     assert.match(downloadsRetry.className, /min-h-11/);
     await React.act(async () => downloadsRetry.click());
@@ -353,22 +353,22 @@ test("Downloads UI exposes queued device-local work without marking it playable"
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
 
-    assert.match(view.container.textContent ?? "", /Queued on this device/i);
+    assert.match(view.container.textContent ?? "", /В очереди на этом устройстве/i);
     assert.doesNotMatch(
         view.container.textContent ?? "",
         /No device downloads/i,
     );
     assert.equal(
-        view.container.querySelector('button[aria-label="Play Alpha"]'),
+        view.container.querySelector('button[aria-label="Воспроизвести: Alpha"]'),
         null,
     );
     const remove = view.container.querySelector(
-        'button[aria-label="Remove queued device download of Alpha"]',
+        'button[aria-label="Удалить с этого устройства: Alpha"]',
     ) as HTMLButtonElement;
     assert.match(remove.className, /h-11 w-11/);
     await React.act(async () => remove.click());
     assert.deepEqual(calls.queueCancels, ["queued-key"]);
-    assert.match(calls.confirmations[0], /only from this device/i);
+    assert.match(calls.confirmations[0], /только с этого устройства/i);
     view.unmount();
 });
 
@@ -383,13 +383,13 @@ test("empty Downloads asks for a real device folder instead of presenting browse
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
 
-    assert.match(view.container.textContent ?? "", /Choose a music folder/i);
+    assert.match(view.container.textContent ?? "", /Выбрать папку с музыкой/i);
     assert.doesNotMatch(
         view.container.textContent ?? "",
         /No device downloads|browser storage/i,
     );
     const setup = view.container.querySelector(
-        'button[aria-label="Choose music folder on this device"]',
+        'button[aria-label="Выбрать папку с музыкой"]',
     ) as HTMLButtonElement;
     await React.act(async () => {
         setup.click();
@@ -409,15 +409,15 @@ test("Downloads reconnects a remembered folder without offering a destructive fo
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
 
-    assert.match(view.container.textContent ?? "", /Reconnect music folder/i);
+    assert.match(view.container.textContent ?? "", /Подключить папку с музыкой заново/i);
     assert.equal(
         view.container.querySelector(
-            'button[aria-label="Choose music folder on this device"]',
+            'button[aria-label="Выбрать папку с музыкой"]',
         ),
         null,
     );
     const reconnect = view.container.querySelector(
-        'button[aria-label="Reconnect music folder on this device"]',
+        'button[aria-label="Подключить папку с музыкой заново"]',
     ) as HTMLButtonElement;
     assert.ok(reconnect);
     await React.act(async () => {
@@ -461,7 +461,7 @@ test("album device action batches playable tracks and exposes truthful collectio
     const button = view.container.querySelector("button") as HTMLButtonElement;
     assert.equal(
         button.getAttribute("aria-label"),
-        "Download Album One to this device",
+        "Скачать Album One на это устройство",
     );
     assert.match(button.className, /min-h-11/);
     await React.act(async () => {
@@ -486,7 +486,7 @@ test("album device action batches playable tracks and exposes truthful collectio
             collectionLabel: "Album One",
         }),
     );
-    assert.match(failed.container.textContent ?? "", /Retry 1 failed/i);
+    assert.match(failed.container.textContent ?? "", /Повторить: 1 ошибка/i);
     collectionStatus = {
         total: 2,
         ready: 2,
@@ -505,7 +505,7 @@ test("album device action batches playable tracks and exposes truthful collectio
     const protectButton = protect.container.querySelector(
         "button",
     ) as HTMLButtonElement;
-    assert.match(protectButton.textContent ?? "", /Keep offline/i);
+    assert.match(protectButton.textContent ?? "", /Хранить офлайн/i);
     assert.equal(protectButton.disabled, false);
     await React.act(async () => {
         protectButton.click();
@@ -523,12 +523,12 @@ test("ordinary settings expose an opt-in auto-liked policy for this device only"
     const view = await render(
         React.createElement(DeviceOfflineSettingsSection),
     );
-    assert.match(view.container.textContent ?? "", /Offline on this device/i);
+    assert.match(view.container.textContent ?? "", /Офлайн на этом устройстве/i);
     assert.match(
         view.container.textContent ?? "",
-        /Automatically download liked songs on this device/i,
+        /Автоматически скачивать любимые треки на это устройство/i,
     );
-    assert.match(view.container.textContent ?? "", /2 GB/i);
+    assert.match(view.container.textContent ?? "", /2 ГБ/i);
     assert.match(view.container.textContent ?? "", /Soundspan Music/i);
     assert.doesNotMatch(view.container.textContent ?? "", /browser storage/i);
     const toggle = view.container.querySelector(
@@ -558,13 +558,13 @@ test("offline settings require an explicit device folder before enabling automat
         React.createElement(DeviceOfflineSettingsSection),
     );
 
-    assert.match(view.container.textContent ?? "", /Choose a music folder/i);
+    assert.match(view.container.textContent ?? "", /Выбрать папку с музыкой/i);
     const toggle = view.container.querySelector(
         "#device-auto-download-liked",
     ) as HTMLInputElement;
     assert.equal(toggle.disabled, true);
     const setup = view.container.querySelector(
-        'button[aria-label="Choose music folder on this device"]',
+        'button[aria-label="Выбрать папку с музыкой"]',
     ) as HTMLButtonElement;
     await React.act(async () => {
         setup.click();
@@ -587,15 +587,15 @@ test("offline settings reconnect a remembered folder instead of claiming to choo
         React.createElement(DeviceOfflineSettingsSection),
     );
 
-    assert.match(view.container.textContent ?? "", /Reconnect folder/i);
+    assert.match(view.container.textContent ?? "", /Подключить папку заново/i);
     assert.equal(
         view.container.querySelector(
-            'button[aria-label="Choose music folder on this device"]',
+            'button[aria-label="Выбрать папку с музыкой"]',
         ),
         null,
     );
     const reconnect = view.container.querySelector(
-        'button[aria-label="Reconnect music folder on this device"]',
+        'button[aria-label="Подключить папку с музыкой заново"]',
     ) as HTMLButtonElement;
     assert.ok(reconnect);
     await React.act(async () => {
@@ -623,7 +623,7 @@ test("unsupported browsers explain that a plain PWA cannot save managed files ou
     assert.match(view.container.textContent ?? "", /normal device folder/i);
     assert.equal(
         view.container.querySelector(
-            'button[aria-label="Choose music folder on this device"]',
+            'button[aria-label="Выбрать папку с музыкой"]',
         ),
         null,
     );
@@ -905,39 +905,39 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
     await React.act(async () =>
         (
             view.container.querySelector(
-                'button[aria-label="Play Alpha"]',
+                'button[aria-label="Воспроизвести: Alpha"]',
             ) as HTMLButtonElement
         ).click(),
     );
     await React.act(async () =>
         (
             view.container.querySelector(
-                'button[aria-label="Retry Interrupted song"]',
+                'button[aria-label="Повторить загрузку: Interrupted song"]',
             ) as HTMLButtonElement
         ).click(),
     );
     assert.equal(
         view.container.querySelector(
-            'button[aria-label="Play Interrupted song"]',
+            'button[aria-label="Воспроизвести: Interrupted song"]',
         ),
         null,
     );
     assert.equal(
-        view.container.querySelector('button[aria-label="Play Failed song"]'),
+        view.container.querySelector('button[aria-label="Воспроизвести: Failed song"]'),
         null,
     );
     assert.match(
         view.container.querySelector('[data-download-status="interrupted"]')
             ?.textContent ?? "",
-        /interrupted.*retry/i,
+        /Загрузка прервана.*Повтор/i,
     );
     assert.match(
         view.container.querySelector('[data-download-status="error"]')
             ?.textContent ?? "",
-        /failed.*retry/i,
+        /Не удалось сохранить.*Повторить/i,
     );
     const deleteButtons = view.container.querySelectorAll(
-        'button[aria-label="Delete device copy of Alpha"]',
+        'button[aria-label="Удалить копию с устройства: Alpha"]',
     );
     confirmDelete = false;
     await React.act(async () =>
@@ -948,7 +948,7 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
     await React.act(async () =>
         (deleteButtons[0] as HTMLButtonElement).click(),
     );
-    assert.match(calls.confirmations[0], /only from this device/i);
+    assert.match(calls.confirmations[0], /только с этого устройства/i);
 
     assert.deepEqual(calls.prepares, ["ready-key"]);
     assert.deepEqual(calls.plays, ["yt:video-a"]);
@@ -995,14 +995,14 @@ test("browser-private Downloads offers an explicit normal-file export without re
 
     assert.match(
         view.container.textContent ?? "",
-        /private Soundspan storage/i,
+        /Личное хранилище Soundspan/i,
     );
     assert.match(
         view.container.textContent ?? "",
         /browser data may be cleared/i,
     );
     const save = view.container.querySelector(
-        'button[aria-label="Save Alpha as a normal file on this device"]',
+        'button[aria-label="Сохранить как обычный файл: Alpha"]',
     ) as HTMLButtonElement;
     assert.ok(save);
     await React.act(async () => {
@@ -1010,7 +1010,7 @@ test("browser-private Downloads offers an explicit normal-file export without re
         await Promise.resolve();
     });
     assert.deepEqual(calls.exports, ["private-ready-key"]);
-    assert.ok(view.container.querySelector('button[aria-label="Play Alpha"]'));
+    assert.ok(view.container.querySelector('button[aria-label="Воспроизвести: Alpha"]'));
     view.unmount();
 });
 
@@ -1054,19 +1054,19 @@ test("Downloads distinguishes manual and automatic copies and warns before autom
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
 
-    assert.match(view.container.textContent ?? "", /Kept offline manually/i);
+    assert.match(view.container.textContent ?? "", /Сохранено офлайн вручную/i);
     assert.match(
         view.container.textContent ?? "",
-        /Automatic from Liked songs/i,
+        /Автоматически из любимых треков/i,
     );
     await React.act(async () =>
         (
             view.container.querySelector(
-                'button[aria-label="Delete device copy of Automatic copy"]',
+                'button[aria-label="Удалить копию с устройства: Automatic copy"]',
             ) as HTMLButtonElement
         ).click(),
     );
-    assert.match(calls.confirmations.at(-1) ?? "", /may download again/i);
+    assert.match(calls.confirmations.at(-1) ?? "", /может загрузиться снова/i);
     assert.deepEqual(calls.deletes, ["automatic-key"]);
     view.unmount();
 });
@@ -1103,7 +1103,7 @@ test("Downloads UI does not fall through to a network play when the local cache 
     await React.act(async () => {
         (
             view.container.querySelector(
-                'button[aria-label="Play Alpha"]',
+                'button[aria-label="Воспроизвести: Alpha"]',
             ) as HTMLButtonElement
         ).click();
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1144,11 +1144,11 @@ test("Downloads UI keeps a zero-byte legacy background transfer pending and unpl
 
     assert.match(
         view.container.textContent ?? "",
-        /Preparing audio.*progress starts when it is ready/i,
+        /Подготавливаем аудио.*прогресс появится, когда файл будет готов/i,
     );
     assert.doesNotMatch(view.container.textContent ?? "", /0%/);
     const playButton = view.container.querySelector(
-        'button[aria-label="Play Alpha"]',
+        'button[aria-label="Воспроизвести: Alpha"]',
     ) as HTMLButtonElement;
     assert.equal(playButton.disabled, true);
     await React.act(async () => playButton.click());
@@ -1187,17 +1187,17 @@ test("Downloads UI reports foreground bytes and percentage without claiming read
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
 
-    assert.match(view.container.textContent ?? "", /Downloading 50%/i);
-    assert.match(view.container.textContent ?? "", /3 B of 6 B/i);
+    assert.match(view.container.textContent ?? "", /Загрузка: 50%/i);
+    assert.match(view.container.textContent ?? "", /3 B из 6 B/i);
     const play = view.container.querySelector(
-        'button[aria-label="Play Alpha"]',
+        'button[aria-label="Воспроизвести: Alpha"]',
     ) as HTMLButtonElement;
     assert.equal(play.disabled, true);
 
     records = [{ ...records[0], totalBytes: null, bytesReceived: 4 }];
     view.unmount();
     const unknown = await render(React.createElement(DownloadsList));
-    assert.match(unknown.container.textContent ?? "", /4 B received/i);
+    assert.match(unknown.container.textContent ?? "", /получено 4 B/i);
     assert.doesNotMatch(unknown.container.textContent ?? "", /%/);
     unknown.unmount();
 });
@@ -1235,7 +1235,7 @@ test("Downloads UI handles retry and delete failures without unhandled promises"
     await React.act(async () => {
         (
             view.container.querySelector(
-                'button[aria-label="Retry Alpha"]',
+                'button[aria-label="Повторить загрузку: Alpha"]',
             ) as HTMLButtonElement
         ).click();
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1243,7 +1243,7 @@ test("Downloads UI handles retry and delete failures without unhandled promises"
     await React.act(async () => {
         (
             view.container.querySelector(
-                'button[aria-label="Delete device copy of Alpha"]',
+                'button[aria-label="Удалить копию с устройства: Alpha"]',
             ) as HTMLButtonElement
         ).click();
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1263,7 +1263,7 @@ test("Library exposes Downloads as a directly selectable personal-collection tab
         }),
     );
     const downloadsLink = [...view.container.querySelectorAll("a")].find(
-        (candidate) => candidate.textContent === "Downloads",
+        (candidate) => candidate.textContent === "Загрузки",
     );
     assert.ok(downloadsLink);
     assert.equal(downloadsLink.getAttribute("href"), "/library?tab=downloads");

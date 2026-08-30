@@ -342,11 +342,11 @@ test("All keeps the canonical artist and five popular tracks visible without a S
     assert.doesNotMatch(canvasClass, /(?:^|\s)overflow-hidden(?:\s|$)/);
     assert.match(html, /data-search-ambient-clip="true"/);
     assert.match(html, /data-search-query-heading="true"/);
-    assert.match(html, /Results for/);
+    assert.match(html, /Результаты для/);
     assert.match(html, /massive attack/);
     assert.match(html, /data-search-primary-grid="true"/);
 
-    assert.match(html, />Tracks<\/h2>/);
+    assert.match(html, />Треки<\/h2>/);
     assert.doesNotMatch(html, /Show all/);
     assert.deepEqual(calls.libraryTrackLimits, [3]);
     assert.deepEqual(calls.discoverTrackLimits, [2]);
@@ -375,7 +375,7 @@ test("Tracks renders the complete loaded prefix and offers honest continuation",
     assert.equal(calls.searchData[0]?.discoverLimit, 50);
     assert.deepEqual(calls.libraryTrackLimits, [40]);
     assert.deepEqual(calls.discoverTrackLimits, [30]);
-    assert.match(html, /Load more tracks \(70 loaded\)/);
+    assert.match(html, /Показать ещё \(70 загружено\)/);
     assert.doesNotMatch(html, /Up to 50 playable matches/);
     assert.doesNotMatch(
         html,
@@ -390,5 +390,5 @@ test("partial local results disclose that the online catalog is still loading", 
     const SearchPage = (await import("../../app/search/page")).default;
     const html = renderToStaticMarkup(React.createElement(SearchPage));
 
-    assert.match(html, /Searching online catalog/);
+    assert.match(html, /Ищем в онлайн-каталоге/);
 });

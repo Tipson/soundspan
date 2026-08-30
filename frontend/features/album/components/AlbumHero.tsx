@@ -10,6 +10,7 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { getArtistHref } from "@/utils/artistRoute";
 import { formatDuration } from "@/utils/formatTime";
 import { MusicDetailHero } from "@/components/music-detail";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 // Lazy load MetadataEditor - modal component opened on user action
 const MetadataEditor = lazy(() =>
@@ -51,7 +52,7 @@ export function AlbumHero({
         <>
             {displayData.hasUserOverrides && (
                 <span className="mt-1 shrink-0 rounded-full border border-amber-500/30 bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">
-                    Edited
+                    {ru.catalog.edited}
                 </span>
             )}
             {source === "library" && (
@@ -100,7 +101,7 @@ export function AlbumHero({
             {album.trackCount && album.trackCount > 0 && (
                 <>
                     <span aria-hidden="true">•</span>
-                    <span>{album.trackCount} songs</span>
+                    <span>{album.trackCount} {pluralRu(album.trackCount, ["трек", "трека", "треков"])}</span>
                 </>
             )}
             {totalDuration && (
@@ -119,7 +120,7 @@ export function AlbumHero({
 
     return (
         <MusicDetailHero
-            eyebrow="Album"
+            eyebrow={ru.catalog.album}
             title={displayData.title}
             artworkShape="square"
             backgroundImage={coverUrl}

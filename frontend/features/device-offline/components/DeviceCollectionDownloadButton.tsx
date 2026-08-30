@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { Track } from "@/lib/audio-state-context";
 import { cn } from "@/utils/cn";
 import { useDeviceOffline } from "../DeviceOfflineProvider";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface DeviceCollectionDownloadButtonProps {
     tracks: Track[];
@@ -33,27 +34,27 @@ export function DeviceCollectionDownloadButton({
         storage.status === "checking" || storage.status === "requesting";
 
     const label = useMemo(() => {
-        if (needsManualProtection) return "Keep offline on this device";
-        if (isProtected) return "Available offline";
+        if (needsManualProtection) return ru.downloads.keepOffline;
+        if (isProtected) return ru.downloads.availableOffline;
         if (status.errors > 0 && !isActive) {
-            return `Retry ${status.errors} failed`;
+            return `Повторить: ${status.errors} ${pluralRu(status.errors, ["ошибка", "ошибки", "ошибок"])}`;
         }
         if (status.processing > 0 || isSubmitting) {
-            return `Saving ${status.ready}/${status.total}`;
+            return `Сохраняем ${status.ready}/${status.total}`;
         }
         if (status.queued > 0) {
-            return `Queued ${status.ready}/${status.total}`;
+            return `В очереди ${status.ready}/${status.total}`;
         }
         if (storage.status === "needs-setup") {
-            return "Choose folder & download";
+            return ru.downloads.chooseAndDownload;
         }
         if (storage.status === "error") {
-            return "Retry folder & download";
+            return ru.downloads.retryFolderAndDownload;
         }
         if (storage.status === "unsupported") {
-            return "Device downloads unavailable";
+            return ru.downloads.unavailable;
         }
-        return "Download to this device";
+        return ru.downloads.downloadDevice;
     }, [
         isActive,
         isProtected,
@@ -84,16 +85,16 @@ export function DeviceCollectionDownloadButton({
             });
             toast.success(
                 result.queued > 0
-                    ? `${result.queued} tracks queued on this device. Keep Soundspan open while they download.`
+                    ? `${result.queued} ${pluralRu(result.queued, ["трек добавлен", "трека добавлено", "треков добавлено"])} в очередь на этом устройстве. Не закрывайте Soundspan до завершения загрузки.`
                     : needsManualProtection
-                      ? "This collection is protected from automatic cleanup on this device."
-                      : "This collection is already available offline on this device.",
+                      ? ru.downloads.protected
+                      : ru.downloads.alreadyAvailable,
             );
         } catch {
             toast.error(
                 storage.status === "needs-setup"
-                    ? "Choose a device folder and allow file access to start the download."
-                    : "Could not queue this collection. Reconnect and try again.",
+                    ? ru.downloads.chooseFolderHint
+                    : ru.downloads.queueFailed,
             );
         } finally {
             setIsSubmitting(false);
@@ -107,7 +108,7 @@ export function DeviceCollectionDownloadButton({
           : isActive || isSubmitting
             ? Loader2
             : Download;
-    const details = `${status.ready} ready (${status.autoReady} automatic), ${status.queued} queued, ${status.processing} downloading, ${status.errors} failed on this device`;
+    const details = `${status.ready} готово (${status.autoReady} автоматически), ${status.queued} в очереди, ${status.processing} загружается, ${status.errors} с ошибкой на этом устройстве`;
 
     return (
         <div className="flex min-w-0 flex-col gap-1">
@@ -123,16 +124,16 @@ export function DeviceCollectionDownloadButton({
                 }
                 aria-label={
                     isProtected
-                        ? `${collectionLabel} is available offline on this device`
+                        ? `${collectionLabel} доступна офлайн на этом устройстве`
                         : needsManualProtection
-                          ? `Keep ${collectionLabel} offline on this device`
+                          ? `Хранить ${collectionLabel} офлайн на этом устройстве`
                           : storage.status === "needs-setup"
-                            ? `Choose a folder and download ${collectionLabel} to this device`
+                            ? `Выбрать папку и скачать ${collectionLabel} на это устройство`
                             : storage.status === "error"
-                              ? `Retry folder access and download ${collectionLabel} to this device`
+                              ? `Подключить папку заново и скачать ${collectionLabel} на это устройство`
                               : storage.status === "unsupported"
-                                ? `${collectionLabel} cannot be downloaded in this browser`
-                                : `Download ${collectionLabel} to this device`
+                                ? `${collectionLabel} нельзя скачать в этом браузере`
+                                : `Скачать ${collectionLabel} на это устройство`
                 }
                 aria-describedby={`device-download-status-${collectionId}`}
                 className={cn(

@@ -8,6 +8,7 @@ import { Disc3 } from "lucide-react";
 import { api } from "@/lib/api";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import { isSingleOrEpRelease } from "../artistView";
+import { ru } from "@/lib/i18n/ru";
 
 /** Request-flow controls threaded into the album grids for non-admins. */
 export interface AlbumRequestControls {
@@ -259,7 +260,9 @@ export function AvailableAlbums({
             {/* Studio Albums Section */}
             {studioAlbums.length > 0 && (
                 <section>
-                    <h2 className="text-xl font-bold mb-4">Albums Available</h2>
+                    <h2 className="text-xl font-bold mb-4">
+                        {ru.catalog.availableAlbums}
+                    </h2>
                     <div data-tv-section="available-albums">
                         <AlbumGrid
                             albums={studioAlbums}
@@ -278,7 +281,9 @@ export function AvailableAlbums({
             {/* EPs, Singles & Demos Section */}
             {epsAndSingles.length > 0 && (
                 <section>
-                    <h2 className="text-xl font-bold mb-4">Singles and EPs</h2>
+                    <h2 className="text-xl font-bold mb-4">
+                        {ru.catalog.singles}
+                    </h2>
                     <div data-tv-section="available-eps-singles">
                         <AlbumGrid
                             albums={epsAndSingles}

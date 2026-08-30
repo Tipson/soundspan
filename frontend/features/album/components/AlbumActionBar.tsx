@@ -21,10 +21,10 @@ import {
     type AlbumActionVisibility,
 } from "../albumActionVisibility";
 import { MusicDetailActionDock } from "@/components/music-detail";
+import { ru } from "@/lib/i18n/ru";
 
 const BRAND_PLAY = "var(--color-brand-hover)";
-const LOCK_MESSAGE =
-    "Listen Together is active — use Add to Queue to add tracks to the shared session.";
+const LOCK_MESSAGE = ru.catalog.listenTogetherLock;
 
 interface AlbumActionBarProps {
     album: Album;
@@ -79,14 +79,14 @@ function PlaybackControls(props: PlaybackControlsProps) {
                 ) : (
                     <Play className="w-5 h-5 fill-current text-black ml-0.5" />
                 )}
-                <span>{props.showPause ? "Pause" : "Play All"}</span>
+                <span>{props.showPause ? ru.common.pause : ru.common.playAll}</span>
             </button>
             <button
                 type="button"
                 onClick={props.onShuffle}
                 className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                title="Shuffle play"
-                aria-label="Shuffle play"
+                title={ru.common.shuffle}
+                aria-label={ru.common.shuffle}
             >
                 <Shuffle className="w-5 h-5" />
             </button>
@@ -95,8 +95,8 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     type="button"
                     onClick={props.onShare}
                     className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                    title="Share album"
-                    aria-label="Share album"
+                    title={ru.catalog.shareAlbum}
+                    aria-label={ru.catalog.shareAlbum}
                 >
                     <Share2 className="w-5 h-5" />
                 </button>
@@ -119,14 +119,14 @@ function LockedPlaybackControls({ showPause }: { showPause: boolean }) {
                 ) : (
                     <Play className="w-5 h-5 fill-current ml-0.5" />
                 )}
-                <span>{showPause ? "Pause" : "Play All"}</span>
+                <span>{showPause ? ru.common.pause : ru.common.playAll}</span>
             </button>
             <button
                 type="button"
                 onClick={() => toast.error(LOCK_MESSAGE)}
                 className="h-11 w-11 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-content-muted"
                 title={LOCK_MESSAGE}
-                aria-label="Shuffle play unavailable during Listen Together"
+                aria-label={ru.catalog.shuffleUnavailable}
             >
                 <Shuffle className="w-5 h-5" />
             </button>
@@ -167,13 +167,13 @@ function AlbumPreferenceButton(props: {
             )}
             title={
                 props.liked
-                    ? "Remove like from all tracks"
-                    : "Like every track on this album"
+                    ? ru.catalog.unlikeAlbum
+                    : ru.catalog.likeAlbum
             }
             aria-label={
                 props.liked
-                    ? "Remove like from all tracks"
-                    : "Like every track on this album"
+                    ? ru.catalog.unlikeAlbum
+                    : ru.catalog.likeAlbum
             }
         >
             {props.applying ? (
@@ -210,8 +210,8 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     type="button"
                     onClick={props.onAddAllToQueue}
                     className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                    title="Add all to queue"
-                    aria-label="Add all to queue"
+                    title={ru.common.addQueue}
+                    aria-label={ru.common.addQueue}
                 >
                     <ListMusic className="w-5 h-5" />
                 </button>
@@ -222,8 +222,8 @@ function SecondaryControls(props: SecondaryControlsProps) {
                         type="button"
                         onClick={props.onShare}
                         className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                        title="Share album"
-                        aria-label="Share album"
+                        title={ru.catalog.shareAlbum}
+                        aria-label={ru.catalog.shareAlbum}
                     >
                         <Share2 className="w-5 h-5" />
                     </button>
@@ -233,8 +233,8 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     type="button"
                     onClick={props.onAddToPlaylist}
                     className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                    title="Add to playlist"
-                    aria-label="Add to playlist"
+                    title={ru.common.addPlaylist}
+                    aria-label={ru.common.addPlaylist}
                 >
                     <Plus className="w-5 h-5" />
                 </button>
@@ -252,8 +252,8 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     type="button"
                     onClick={props.onDeleteAlbum}
                     className="flex h-11 w-11 items-center justify-center rounded-full text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-                    title="Delete album from server library"
-                    aria-label="Delete album from server library"
+                    title={ru.catalog.deleteAlbum}
+                    aria-label={ru.catalog.deleteAlbum}
                 >
                     <Trash2 className="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -297,7 +297,7 @@ function ActionControlRow(props: {
         return null;
     }
     return (
-        <MusicDetailActionDock label="Album controls">
+        <MusicDetailActionDock label={ru.catalog.albumControls}>
             {actions.isInListenTogetherGroup && visibility.hasLockedControls ? (
                 <LockedControls
                     visibility={visibility}

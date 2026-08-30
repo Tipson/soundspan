@@ -88,10 +88,10 @@ test("Home discovery keeps provider rows without duplicating Vibe mood controls"
         React.createElement(HomeOnlineDiscovery, props),
     );
 
-    assert.match(html, /Stations for you/);
+    assert.match(html, /Станции для вас/);
     assert.doesNotMatch(html, /Your provider mix/);
     assert.match(html, /Personal station/);
-    assert.match(html, /New &amp; noteworthy/);
+    assert.match(html, /Новое и заметное/);
     assert.match(html, /Fresh album/);
     assert.match(html, /Chart track/);
     assert.match(html, /href="\/explore\/yt-playlist\/chart"/);

@@ -11,6 +11,7 @@ import type { Mix, PersonalizedHomeFeed, PersonalizedTrack } from "../types";
 import { PersonalizedMixCard } from "./PersonalizedMixCard";
 import { SectionHeader } from "./SectionHeader";
 import { StaticPlaylistCard } from "./StaticPlaylistCard";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 const MAX_PERSONAL_MIX_TRACKS = 12;
 const MAX_HOME_MADE_CARDS = 6;
@@ -88,8 +89,8 @@ export function buildHomePersonalMixes(
     > = [
         {
             key: "daily-blend",
-            title: "Daily blend",
-            description: "A balanced mix for right now",
+            title: ru.home.dailyBlend,
+            description: ru.home.dailyBlendDescription,
             candidates: roundRobinTracks(
                 [quickPicks, discovery, listenAgain],
                 quickPicks.length + discovery.length + listenAgain.length,
@@ -98,22 +99,22 @@ export function buildHomePersonalMixes(
         },
         {
             key: "fresh-finds",
-            title: "Fresh finds",
-            description: "New music around what you already enjoy",
+            title: ru.home.freshFinds,
+            description: ru.home.freshFindsDescription,
             candidates: discovery,
             tone: "blue",
         },
         {
             key: "back-in-rotation",
-            title: "Back in rotation",
-            description: "Recent favorites worth another play",
+            title: ru.home.backInRotation,
+            description: ru.home.backInRotationDescription,
             candidates: listenAgain,
             tone: "amber",
         },
         {
             key: "quick-picks",
-            title: "Quick picks",
-            description: "An immediate route into your taste",
+            title: ru.home.quickPicks,
+            description: ru.home.quickPicksDescription,
             candidates: quickPicks,
             tone: "violet",
         },
@@ -232,9 +233,9 @@ export function HomeMadeForYou({
     );
 
     return (
-        <section aria-label="Made for you">
+        <section aria-label={ru.home.madeForYou}>
             <SectionHeader
-                title="Made for you"
+                title={ru.home.madeForYou}
                 rightAction={
                     autoPlaylists ? (
                         <button
@@ -243,8 +244,8 @@ export function HomeMadeForYou({
                             disabled={isRefreshingMixes}
                             aria-label={
                                 isRefreshingMixes
-                                    ? "Refreshing personal mixes"
-                                    : "Refresh personal mixes"
+                                    ? ru.home.refreshing
+                                    : ru.home.refresh
                             }
                             className="grid min-h-11 min-w-11 place-items-center rounded-full text-content-muted transition duration-200 hover:bg-white/[0.07] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-45 motion-reduce:transition-none"
                         >
@@ -257,8 +258,7 @@ export function HomeMadeForYou({
                 }
             />
             <p className="-mt-2 mb-4 max-w-2xl text-sm leading-6 text-content-muted">
-                Different mixes from your listening, not copies of the same
-                shelf.
+                {ru.home.madeForYouSubtitle}
             </p>
             <div className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[72vw] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[11rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-4 lg:overflow-visible xl:grid-cols-6">
                 {visiblePersonalMixes.map((mix, index) => (
@@ -285,8 +285,8 @@ export function HomeMadeForYou({
                         <StaticPlaylistCard
                             href="/discover"
                             coverUrl={playableDiscoverWeekly.coverUrl}
-                            title="Discover Weekly"
-                            subtitle={`${playableDiscoverWeekly.totalCount} tracks · refreshed for you`}
+                            title={ru.home.discoverWeekly}
+                            subtitle={`${playableDiscoverWeekly.totalCount} ${pluralRu(playableDiscoverWeekly.totalCount, ["трек", "трека", "треков"])} · ${ru.home.refreshedForYou}`}
                             placeholderIcon={
                                 <Zap
                                     className="h-11 w-11 text-brand-light"

@@ -12,6 +12,7 @@ import {
     type PlaylistImportResolvedTrack,
 } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
+import { ru } from "@/lib/i18n/ru";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { formatTime } from "@/utils/formatTime";
@@ -403,11 +404,10 @@ function ImportPageContent() {
                     </button>
                     <div>
                         <h1 className="text-2xl font-bold text-white">
-                            Import Playlist
+                            {ru.import.playlistTitle}
                         </h1>
                         <p className="text-sm text-gray-400">
-                            Import playlists from streaming services or local
-                            M3U files
+                            {ru.import.servicesOrFile}
                         </p>
                     </div>
                 </div>
@@ -424,7 +424,7 @@ function ImportPageContent() {
                                 }`}
                             >
                                 <Link className="w-4 h-4" />
-                                URL Import
+                                {ru.import.urlMode}
                             </button>
                             <button
                                 onClick={() => setImportMode("file")}
@@ -435,7 +435,7 @@ function ImportPageContent() {
                                 }`}
                             >
                                 <FileUp className="w-4 h-4" />
-                                M3U File
+                                {ru.import.fileMode}
                             </button>
                         </div>
 
@@ -443,7 +443,7 @@ function ImportPageContent() {
                             <>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        Playlist URL
+                                        {ru.import.urlLabel}
                                     </label>
                                     <input
                                         type="text"
@@ -503,16 +503,14 @@ function ImportPageContent() {
                                         {isJobSubmitting ? (
                                             <>
                                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                                Starting Import...
+                                                {ru.import.starting}
                                             </>
                                         ) : (
-                                            "Start Import"
+                                            <>{ru.import.start}</>
                                         )}
                                     </button>
                                     <p className="text-center text-xs text-gray-400">
-                                        Large playlists continue in the
-                                        background. Progress appears in the
-                                        Imports tab in Activity.
+                                        {ru.import.backgroundHint}
                                     </p>
                                 </div>
                             </>
@@ -522,7 +520,7 @@ function ImportPageContent() {
                             <>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                                        M3U / M3U8 Playlist File
+                                        {ru.import.m3uLabel}
                                     </label>
                                     <div
                                         onClick={() =>
@@ -537,8 +535,7 @@ function ImportPageContent() {
                                             </p>
                                         ) : (
                                             <p className="text-sm text-gray-400">
-                                                Click to select an M3U or M3U8
-                                                file
+                                                {ru.import.selectM3u}
                                             </p>
                                         )}
                                     </div>
@@ -557,7 +554,7 @@ function ImportPageContent() {
                                 {m3uContent && (
                                     <div>
                                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                                            Playlist Name
+                                            {ru.import.playlistName}
                                         </label>
                                         <input
                                             type="text"
@@ -567,7 +564,7 @@ function ImportPageContent() {
                                                     event.target.value,
                                                 )
                                             }
-                                            placeholder="Enter playlist name"
+                                            placeholder={ru.import.playlistNamePlaceholder}
                                             className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-colors"
                                         />
                                     </div>
@@ -580,10 +577,10 @@ function ImportPageContent() {
                                     {isPreviewLoading ? (
                                         <>
                                             <Loader2 className="w-4 h-4 animate-spin" />
-                                            Matching Tracks...
+                                            {ru.import.matching}
                                         </>
                                     ) : (
-                                        "Preview Import"
+                                        <>{ru.import.previewImport}</>
                                     )}
                                 </button>
                             </>
@@ -613,7 +610,7 @@ function ImportPageContent() {
                                     {preview.summary.total}
                                 </div>
                                 <div className="text-xs text-gray-400">
-                                    Total
+                                    {ru.import.total}
                                 </div>
                             </div>
                             <div className="text-center py-3 bg-emerald-500/10 rounded-lg">
@@ -645,7 +642,7 @@ function ImportPageContent() {
                                     {preview.summary.unresolved}
                                 </div>
                                 <div className="text-xs text-gray-400">
-                                    Unresolved
+                                    {ru.import.unresolved}
                                 </div>
                             </div>
                         </div>
@@ -653,7 +650,7 @@ function ImportPageContent() {
                         <div className="bg-white/5 rounded-lg overflow-hidden">
                             <div className="px-4 py-3 border-b border-white/5">
                                 <h3 className="text-sm font-medium text-white">
-                                    Track Resolution Preview
+                                    {ru.import.resolutionPreview}
                                 </h3>
                             </div>
                             <PreviewTrackResolutionList
@@ -663,7 +660,7 @@ function ImportPageContent() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Playlist Name
+                                {ru.import.playlistName}
                             </label>
                             <input
                                 type="text"
@@ -671,7 +668,7 @@ function ImportPageContent() {
                                 onChange={(event) =>
                                     setPlaylistName(event.target.value)
                                 }
-                                placeholder="Enter playlist name"
+                                placeholder={ru.import.playlistNamePlaceholder}
                                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1DB954]/50 focus:border-[#1DB954] transition-colors"
                             />
                         </div>
@@ -681,7 +678,7 @@ function ImportPageContent() {
                                 onClick={returnToInput}
                                 className="px-6 py-3 rounded-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
                             >
-                                Back
+                                {ru.import.back}
                             </button>
                             <button
                                 onClick={() => void handleExecute()}
@@ -691,12 +688,12 @@ function ImportPageContent() {
                                 {isExecuting ? (
                                     <>
                                         <Loader2 className="w-4 h-4 animate-spin" />
-                                        Importing...
+                                        {ru.import.importing}
                                     </>
                                 ) : importableCount > 0 ? (
-                                    `Create Playlist (${importableCount} tracks)`
+                                    `${ru.import.createPlaylist} (${importableCount})`
                                 ) : (
-                                    "No importable tracks"
+                                    <>{ru.import.noImportable}</>
                                 )}
                             </button>
                         </div>
@@ -707,11 +704,10 @@ function ImportPageContent() {
                     <div className="text-center py-12">
                         <Loader2 className="w-10 h-10 text-[#1DB954] animate-spin mx-auto mb-4" />
                         <h2 className="text-lg font-bold text-white mb-1">
-                            Creating Playlist
+                            {ru.import.creatingPlaylist}
                         </h2>
                         <p className="text-sm text-gray-400">
-                            Building your playlist from resolved provider
-                            matches
+                            {ru.import.buildingPlaylist}
                         </p>
                     </div>
                 )}
@@ -722,11 +718,10 @@ function ImportPageContent() {
                             <Check className="w-7 h-7 text-black" />
                         </div>
                         <h2 className="text-lg font-bold text-white mb-1">
-                            Import Complete
+                            {ru.import.complete}
                         </h2>
                         <p className="text-sm text-gray-400">
-                            Added {completedImportableCount} tracks to your new
-                            playlist
+                            {ru.import.added} {completedImportableCount} {ru.import.toNewPlaylist}
                         </p>
                         {result.summary.unresolved > 0 && (
                             <p className="text-sm text-amber-400 mt-2">
@@ -740,7 +735,7 @@ function ImportPageContent() {
                                 onClick={resetFlow}
                                 className="px-5 py-2.5 rounded-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
                             >
-                                Import Another
+                                {ru.import.importAnother}
                             </button>
                             <button
                                 onClick={() =>
@@ -750,7 +745,7 @@ function ImportPageContent() {
                                 }
                                 className="px-5 py-2.5 rounded-full text-sm font-medium bg-[#1DB954] text-black hover:brightness-110 transition-all"
                             >
-                                View Playlist
+                                {ru.import.viewPlaylist}
                             </button>
                         </div>
                     </div>

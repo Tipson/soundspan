@@ -3,6 +3,7 @@ import { ListMusic, RotateCcw, Upload } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { api } from "@/lib/api";
 import type { PersonalPlaylist } from "../types";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface PersonalPlaylistGridProps {
     playlists: PersonalPlaylist[];
@@ -82,7 +83,7 @@ export function PersonalPlaylistGrid({
                 role="alert"
                 className="flex flex-col items-center rounded-2xl border border-warning/20 bg-warning/10 px-5 py-8 text-center text-sm text-content-body"
             >
-                <p>Could not load your playlists.</p>
+                <p>{ru.library.loadPlaylistsFailed}</p>
                 {onRetry && (
                     <button
                         type="button"
@@ -90,7 +91,7 @@ export function PersonalPlaylistGrid({
                         className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
                     >
                         <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                        Retry
+                        {ru.common.retry}
                     </button>
                 )}
             </div>
@@ -102,17 +103,17 @@ export function PersonalPlaylistGrid({
             <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-6 text-center">
                 <ListMusic className="mb-4 h-10 w-10 text-content-muted" />
                 <h2 className="text-lg font-semibold text-content">
-                    No playlists yet
+                    {ru.library.emptyPlaylists}
                 </h2>
                 <p className="mt-2 max-w-md text-sm text-content-muted">
-                    Import a playlist or create one while organizing tracks.
+                    {ru.library.emptyPlaylistsHint}
                 </p>
                 <Link
                     href="/import"
                     className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                 >
                     <Upload className="h-4 w-4" aria-hidden="true" />
-                    Import playlist
+                    {ru.nav.importPlaylist}
                 </Link>
             </div>
         );
@@ -134,7 +135,11 @@ export function PersonalPlaylistGrid({
                     </h3>
                     <p className="mt-1 truncate text-xs text-content-muted">
                         {playlist.trackCount ?? 0}{" "}
-                        {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
+                        {pluralRu(playlist.trackCount ?? 0, [
+                            "трек",
+                            "трека",
+                            "треков",
+                        ])}
                     </p>
                 </Link>
             ))}

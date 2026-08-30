@@ -607,20 +607,20 @@ test("FullPlayer keeps the music transport focused on shuffle, previous, next, a
     const mounted = await mount(React.createElement(FullPlayer));
 
     const skipBack = mounted.container.querySelector(
-        '[aria-label="Skip back 15 seconds"]',
+        '[aria-label="Назад на 15 секунд"]',
     );
     const skipForward = mounted.container.querySelector(
-        '[aria-label="Skip forward 15 seconds"]',
+        '[aria-label="Вперёд на 15 секунд"]',
     );
     const previous = mounted.container.querySelector(
-        '[aria-label="Previous track"]',
+        '[aria-label="Предыдущий трек"]',
     );
-    const next = mounted.container.querySelector('[aria-label="Next track"]');
+    const next = mounted.container.querySelector('[aria-label="Следующий трек"]');
 
     assert.equal(skipBack, null);
     assert.equal(skipForward, null);
-    assert.ok(previous, "Previous track button must still be present");
-    assert.ok(next, "Next track button must still be present");
+    assert.ok(previous, "Предыдущий трек button must still be present");
+    assert.ok(next, "Следующий трек button must still be present");
 
     await unmount(mounted);
 });
@@ -640,7 +640,7 @@ test("FullPlayer dislike control uses the track-preference mutation", async () =
     await unmount(mounted);
 });
 
-test("FullPlayer: clicking 'Skip back 15 seconds' calls skipBackward(15)", async () => {
+test("FullPlayer: clicking 'Назад на 15 секунд' calls skipBackward(15)", async () => {
     fullPlayerState.currentTrack =
         null as unknown as typeof fullPlayerState.currentTrack;
     fullPlayerState.currentPodcast = {
@@ -652,9 +652,9 @@ test("FullPlayer: clicking 'Skip back 15 seconds' calls skipBackward(15)", async
     const mounted = await mount(React.createElement(FullPlayer));
 
     const button = mounted.container.querySelector(
-        '[aria-label="Skip back 15 seconds"]',
+        '[aria-label="Назад на 15 секунд"]',
     ) as HTMLButtonElement | null;
-    assert.ok(button, "expected a 'Skip back 15 seconds' button");
+    assert.ok(button, "expected a 'Назад на 15 секунд' button");
 
     await React.act(async () => {
         button!.click();
@@ -666,7 +666,7 @@ test("FullPlayer: clicking 'Skip back 15 seconds' calls skipBackward(15)", async
     await unmount(mounted);
 });
 
-test("FullPlayer: clicking 'Skip forward 15 seconds' calls skipForward(15)", async () => {
+test("FullPlayer: clicking 'Вперёд на 15 секунд' calls skipForward(15)", async () => {
     fullPlayerState.currentTrack =
         null as unknown as typeof fullPlayerState.currentTrack;
     fullPlayerState.currentPodcast = {
@@ -678,9 +678,9 @@ test("FullPlayer: clicking 'Skip forward 15 seconds' calls skipForward(15)", asy
     const mounted = await mount(React.createElement(FullPlayer));
 
     const button = mounted.container.querySelector(
-        '[aria-label="Skip forward 15 seconds"]',
+        '[aria-label="Вперёд на 15 секунд"]',
     ) as HTMLButtonElement | null;
-    assert.ok(button, "expected a 'Skip forward 15 seconds' button");
+    assert.ok(button, "expected a 'Вперёд на 15 секунд' button");
 
     await React.act(async () => {
         button!.click();
@@ -697,10 +697,10 @@ test("FullPlayer: Previous/Next buttons are unchanged (still call previous()/nex
     const mounted = await mount(React.createElement(FullPlayer));
 
     const previous = mounted.container.querySelector(
-        '[aria-label="Previous track"]',
+        '[aria-label="Предыдущий трек"]',
     ) as HTMLButtonElement | null;
     const next = mounted.container.querySelector(
-        '[aria-label="Next track"]',
+        '[aria-label="Следующий трек"]',
     ) as HTMLButtonElement | null;
     assert.ok(previous);
     assert.ok(next);
@@ -728,10 +728,10 @@ test("FullPlayer: skip buttons stay hidden when no long-form media is loaded", a
     const mounted = await mount(React.createElement(FullPlayer));
 
     const skipBack = mounted.container.querySelector(
-        '[aria-label="Skip back 15 seconds"]',
+        '[aria-label="Назад на 15 секунд"]',
     ) as HTMLButtonElement | null;
     const skipForward = mounted.container.querySelector(
-        '[aria-label="Skip forward 15 seconds"]',
+        '[aria-label="Вперёд на 15 секунд"]',
     ) as HTMLButtonElement | null;
 
     assert.equal(skipBack, null);
@@ -759,16 +759,16 @@ test("FullPlayer: skip buttons are disabled and inert while canSeek is false; Pr
     const mounted = await mount(React.createElement(FullPlayer));
 
     const skipBack = mounted.container.querySelector(
-        '[aria-label="Skip back 15 seconds"]',
+        '[aria-label="Назад на 15 секунд"]',
     ) as HTMLButtonElement | null;
     const skipForward = mounted.container.querySelector(
-        '[aria-label="Skip forward 15 seconds"]',
+        '[aria-label="Вперёд на 15 секунд"]',
     ) as HTMLButtonElement | null;
     const previous = mounted.container.querySelector(
-        '[aria-label="Previous track"]',
+        '[aria-label="Предыдущий трек"]',
     ) as HTMLButtonElement | null;
     const next = mounted.container.querySelector(
-        '[aria-label="Next track"]',
+        '[aria-label="Следующий трек"]',
     ) as HTMLButtonElement | null;
     assert.ok(skipBack);
     assert.ok(skipForward);
@@ -846,14 +846,14 @@ test("OverlayPlayer renders Skip back/forward 15 seconds buttons for podcast pla
     );
 
     const skipBack = mounted.container.querySelector(
-        '[aria-label="Skip back 15 seconds"]',
+        '[aria-label="Назад на 15 секунд"]',
     );
     const skipForward = mounted.container.querySelector(
-        '[aria-label="Skip forward 15 seconds"]',
+        '[aria-label="Вперёд на 15 секунд"]',
     );
 
-    assert.ok(skipBack, "expected a 'Skip back 15 seconds' button");
-    assert.ok(skipForward, "expected a 'Skip forward 15 seconds' button");
+    assert.ok(skipBack, "expected a 'Назад на 15 секунд' button");
+    assert.ok(skipForward, "expected a 'Вперёд на 15 секунд' button");
 
     await unmount(mounted);
 });
@@ -866,21 +866,21 @@ test("OverlayPlayer keeps the long-form transport narrow enough for a phone", as
     );
 
     assert.equal(
-        mounted.container.querySelector('[aria-label="Shuffle"]'),
+        mounted.container.querySelector('[aria-label="Перемешать"]'),
         null,
     );
     assert.equal(
-        mounted.container.querySelector('[aria-label="Repeat"]'),
+        mounted.container.querySelector('[aria-label="Повтор выключен"]'),
         null,
     );
     assert.ok(
-        mounted.container.querySelector('[aria-label="Skip back 15 seconds"]'),
+        mounted.container.querySelector('[aria-label="Назад на 15 секунд"]'),
     );
-    assert.ok(mounted.container.querySelector('[aria-label="Previous"]'));
-    assert.ok(mounted.container.querySelector('[aria-label="Next"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Предыдущий трек"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Следующий трек"]'));
     assert.ok(
         mounted.container.querySelector(
-            '[aria-label="Skip forward 15 seconds"]',
+            '[aria-label="Вперёд на 15 секунд"]',
         ),
     );
 
@@ -906,17 +906,17 @@ test("OverlayPlayer keeps the music transport focused on shuffle, previous, next
     );
 
     assert.equal(
-        mounted.container.querySelector('[aria-label="Skip back 15 seconds"]'),
+        mounted.container.querySelector('[aria-label="Назад на 15 секунд"]'),
         null,
     );
     assert.equal(
         mounted.container.querySelector(
-            '[aria-label="Skip forward 15 seconds"]',
+            '[aria-label="Вперёд на 15 секунд"]',
         ),
         null,
     );
-    assert.ok(mounted.container.querySelector('[aria-label="Previous"]'));
-    assert.ok(mounted.container.querySelector('[aria-label="Next"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Предыдущий трек"]'));
+    assert.ok(mounted.container.querySelector('[aria-label="Следующий трек"]'));
 
     await unmount(mounted);
 });
@@ -945,7 +945,7 @@ test("OverlayPlayer exposes both like and dislike controls for music", async () 
     await unmount(mounted);
 });
 
-test("OverlayPlayer: clicking 'Skip back 15 seconds' calls skipBackward(15)", async () => {
+test("OverlayPlayer: clicking 'Назад на 15 секунд' calls skipBackward(15)", async () => {
     const { OverlayPlayer } =
         await import("../../components/player/OverlayPlayer");
     const mounted = await mount(
@@ -953,9 +953,9 @@ test("OverlayPlayer: clicking 'Skip back 15 seconds' calls skipBackward(15)", as
     );
 
     const button = mounted.container.querySelector(
-        '[aria-label="Skip back 15 seconds"]',
+        '[aria-label="Назад на 15 секунд"]',
     ) as HTMLButtonElement | null;
-    assert.ok(button, "expected a 'Skip back 15 seconds' button");
+    assert.ok(button, "expected a 'Назад на 15 секунд' button");
 
     await React.act(async () => {
         button!.click();
@@ -967,7 +967,7 @@ test("OverlayPlayer: clicking 'Skip back 15 seconds' calls skipBackward(15)", as
     await unmount(mounted);
 });
 
-test("OverlayPlayer: clicking 'Skip forward 15 seconds' calls skipForward(15)", async () => {
+test("OverlayPlayer: clicking 'Вперёд на 15 секунд' calls skipForward(15)", async () => {
     const { OverlayPlayer } =
         await import("../../components/player/OverlayPlayer");
     const mounted = await mount(
@@ -975,9 +975,9 @@ test("OverlayPlayer: clicking 'Skip forward 15 seconds' calls skipForward(15)", 
     );
 
     const button = mounted.container.querySelector(
-        '[aria-label="Skip forward 15 seconds"]',
+        '[aria-label="Вперёд на 15 секунд"]',
     ) as HTMLButtonElement | null;
-    assert.ok(button, "expected a 'Skip forward 15 seconds' button");
+    assert.ok(button, "expected a 'Вперёд на 15 секунд' button");
 
     await React.act(async () => {
         button!.click();
@@ -997,10 +997,10 @@ test("OverlayPlayer: Previous/Next buttons are unchanged (still call previous()/
     );
 
     const previous = mounted.container.querySelector(
-        '[aria-label="Previous"]',
+        '[aria-label="Предыдущий трек"]',
     ) as HTMLButtonElement | null;
     const next = mounted.container.querySelector(
-        '[aria-label="Next"]',
+        '[aria-label="Следующий трек"]',
     ) as HTMLButtonElement | null;
     assert.ok(previous);
     assert.ok(next);
@@ -1030,16 +1030,16 @@ test("OverlayPlayer: skip buttons are disabled and inert while canSeek is false;
     );
 
     const skipBack = mounted.container.querySelector(
-        '[aria-label="Skip back 15 seconds"]',
+        '[aria-label="Назад на 15 секунд"]',
     ) as HTMLButtonElement | null;
     const skipForward = mounted.container.querySelector(
-        '[aria-label="Skip forward 15 seconds"]',
+        '[aria-label="Вперёд на 15 секунд"]',
     ) as HTMLButtonElement | null;
     const previous = mounted.container.querySelector(
-        '[aria-label="Previous"]',
+        '[aria-label="Предыдущий трек"]',
     ) as HTMLButtonElement | null;
     const next = mounted.container.querySelector(
-        '[aria-label="Next"]',
+        '[aria-label="Следующий трек"]',
     ) as HTMLButtonElement | null;
     assert.ok(skipBack);
     assert.ok(skipForward);

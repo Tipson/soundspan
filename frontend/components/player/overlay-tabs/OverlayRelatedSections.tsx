@@ -19,6 +19,7 @@ import type {
     RelatedArtist,
     RelatedTrack,
 } from "./overlayRelatedTypes";
+import { ru } from "@/lib/i18n/ru";
 
 interface RelatedSectionShellProps {
     title: string;
@@ -50,7 +51,7 @@ export function RelatedSectionShell({
             {isLoading ? (
                 <div className="flex items-center gap-2 text-gray-400">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Loading...</span>
+                    <span className="text-sm">{ru.player.loading}</span>
                 </div>
             ) : isError ? (
                 <div className="flex items-center gap-3">
@@ -162,8 +163,8 @@ export function SimilarSongsList({
                                 {track.inLibrary
                                     ? track.album?.artist?.name ||
                                       track.artist ||
-                                      "Unknown artist"
-                                    : track.artist || "Unknown artist"}
+                                      ru.common.unknownArtist
+                                    : track.artist || ru.common.unknownArtist}
                             </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">

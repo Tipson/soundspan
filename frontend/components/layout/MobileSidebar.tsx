@@ -25,6 +25,7 @@ import { useToast } from "@/lib/toast-context";
 import { MOBILE_QUICK_LINKS } from "./socialNavigation";
 import { BRAND_NAME } from "@/lib/brand";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { ru } from "@/lib/i18n/ru";
 
 interface MobileSidebarProps {
     isOpen: boolean;
@@ -39,14 +40,14 @@ const quickLinkIcons = {
 } as const;
 
 const personalLinks = [
-    { name: "Liked songs", href: "/playlist/my-liked", icon: Heart },
-    { name: "Playlists", href: "/playlists", icon: ListMusic },
+    { name: ru.library.likedSongs, href: "/playlist/my-liked", icon: Heart },
+    { name: ru.library.playlists, href: "/playlists", icon: ListMusic },
     {
-        name: "Downloads",
+        name: ru.nav.downloads,
         href: "/library?tab=downloads",
         icon: Download,
     },
-    { name: "Import playlist", href: "/import", icon: Upload },
+    { name: ru.nav.importPlaylist, href: "/import", icon: Upload },
 ] as const;
 
 /**
@@ -66,11 +67,11 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     const handleLogout = async () => {
         try {
             await logout();
-            toast.success("Logged out successfully");
+            toast.success(ru.nav.logoutSuccess);
             onClose();
         } catch (error) {
             sharedFrontendLogger.error("Logout error:", error);
-            toast.error("Failed to logout");
+            toast.error(ru.nav.logoutFailed);
         }
     };
 
@@ -95,7 +96,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                 type="button"
                 className="fixed inset-0 z-50 cursor-default bg-black/70 backdrop-blur-[2px]"
                 onClick={onClose}
-                aria-label="Close menu backdrop"
+                aria-label={ru.nav.closeMenuBackdrop}
             />
 
             <aside
@@ -106,7 +107,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                 }}
                 role="dialog"
                 aria-modal="true"
-                aria-label="Navigation menu"
+                aria-label={ru.nav.navigationMenu}
             >
                 <div className="flex min-h-16 items-center justify-between border-b border-white/[0.07] px-4">
                     <Link
@@ -130,7 +131,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         type="button"
                         onClick={onClose}
                         className="flex h-11 w-11 items-center justify-center rounded-xl text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                        aria-label="Close menu"
+                        aria-label={ru.nav.closeMenu}
                     >
                         <X className="h-5 w-5" />
                     </button>
@@ -138,7 +139,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
                 <nav
                     className="flex-1 overflow-y-auto px-3 py-4"
-                    aria-label="Mobile menu"
+                    aria-label={ru.nav.mobileMenu}
                 >
                     <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
                         Listen
@@ -195,10 +196,10 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         type="button"
                         onClick={handleOpenNotifications}
                         className={linkClassName(false)}
-                        aria-label="Open notifications"
+                        aria-label={ru.nav.openNotifications}
                     >
                         <Bell className="h-5 w-5" />
-                        <span>Notifications</span>
+                        <span>{ru.nav.notifications}</span>
                     </button>
                     <Link
                         href="/settings"
@@ -208,7 +209,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         className={linkClassName(pathname === "/settings")}
                     >
                         <Settings className="h-5 w-5" />
-                        <span>Settings</span>
+                        <span>{ru.nav.settings}</span>
                     </Link>
 
                     {user?.role === "admin" ? (
@@ -225,7 +226,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                                 )}
                             >
                                 <Inbox className="h-5 w-5" />
-                                <span>Requests</span>
+                                <span>{ru.nav.requests}</span>
                             </Link>
                             <Link
                                 href="/admin"
@@ -235,7 +236,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                                 className={linkClassName(pathname === "/admin")}
                             >
                                 <Shield className="h-5 w-5" />
-                                <span>Admin</span>
+                                <span>{ru.nav.admin}</span>
                             </Link>
                         </>
                     ) : null}
@@ -248,7 +249,9 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                     >
                         <LogOut className="h-5 w-5" />
-                        <span className="text-[15px] font-medium">Logout</span>
+                        <span className="text-[15px] font-medium">
+                            {ru.nav.logout}
+                        </span>
                     </button>
                 </div>
             </aside>

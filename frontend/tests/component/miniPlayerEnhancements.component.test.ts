@@ -262,8 +262,8 @@ test("MiniPlayer keeps a compact 64px identity, like and play surface", async ()
 
     const html = renderToStaticMarkup(React.createElement(MiniPlayer));
 
-    assert.doesNotMatch(html, /aria-label="Next track"/);
-    const playButton = html.match(/<button[^>]*aria-label="Pause"[^>]*>/)?.[0];
+    assert.doesNotMatch(html, /aria-label="Следующий трек"/);
+    const playButton = html.match(/<button[^>]*aria-label="Пауза"[^>]*>/)?.[0];
     assert.ok(playButton);
     assert.match(playButton, /h-11 w-11/);
     assert.match(html, /min-h-\[64px\]/);
@@ -323,7 +323,7 @@ test("MiniPlayer does not render thumbs for audiobook playback", async () => {
     // Should still render the player (audiobook is media)
     assert.match(
         html,
-        /Test Audiobook|Playback controls/,
+        /Test Audiobook|Управление воспроизведением/,
         "Should render MiniPlayer for audiobook",
     );
     // But should NOT render TrackPreferenceButtons for audiobooks

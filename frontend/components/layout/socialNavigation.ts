@@ -12,15 +12,15 @@ export interface MobileQuickLinkItem {
 }
 
 export const SIDEBAR_NAVIGATION: SidebarNavigationItem[] = [
-    { name: "Home", href: "/" },
-    { name: "Vibe", href: "/vibe", accent: "vibe" },
-    { name: "Library", href: "/library" },
+    { name: ru.nav.home, href: "/" },
+    { name: ru.nav.vibe, href: "/vibe", accent: "vibe" },
+    { name: ru.nav.library, href: "/library" },
 ];
 // No blank line above on purpose (issue #111) — see check-targeted-coverage.mjs.
 export const MOBILE_QUICK_LINKS: MobileQuickLinkItem[] = [
-    { name: "Home", href: "/" },
-    { name: "Vibe", href: "/vibe" },
-    { name: "Library", href: "/library" },
+    { name: ru.nav.home, href: "/" },
+    { name: ru.nav.vibe, href: "/vibe" },
+    { name: ru.nav.library, href: "/library" },
 ];
 
 /**
@@ -31,3 +31,4 @@ export function hasMyHistoryLink(
 ): boolean {
     return links.some((link) => link.href === "/my-history");
 }
+import { ru } from "@/lib/i18n/ru";

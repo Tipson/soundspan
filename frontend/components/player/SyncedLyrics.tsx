@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
+import { ru } from "@/lib/i18n/ru";
 
 interface LyricLine {
     time: number; // milliseconds
@@ -162,7 +163,7 @@ export function SyncedLyrics({
                     className,
                 )}
             >
-                <p className="text-sm">No lyrics available</p>
+                <p className="text-sm">{ru.player.lyricsUnavailable}</p>
             </div>
         );
     }

@@ -21,6 +21,7 @@ import { cn } from "@/utils/cn";
 import { clampTime } from "@/utils/formatTime";
 import { CurrentTrackPreferenceButtons } from "@/components/player/CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Renders the MiniPlayer component.
@@ -110,7 +111,7 @@ export function MiniPlayer() {
                     }}
                     role="button"
                     tabIndex={0}
-                    aria-label="Open full player"
+                    aria-label={ru.player.open}
                 >
                     <motion.div
                         layoutId={artworkLayoutId}
@@ -165,7 +166,7 @@ export function MiniPlayer() {
                             onClick={(e) => e.stopPropagation()}
                             onKeyDown={(e) => e.stopPropagation()}
                             role="group"
-                            aria-label="Track preference"
+                            aria-label={ru.player.preference}
                         >
                             <CurrentTrackPreferenceButtons
                                 trackId={currentTrack.id}
@@ -182,7 +183,7 @@ export function MiniPlayer() {
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                         role="group"
-                        aria-label="Playback controls"
+                        aria-label={ru.player.controls}
                     >
                         <button
                             onClick={() => {
@@ -207,21 +208,21 @@ export function MiniPlayer() {
                             )}
                             aria-label={
                                 audioError
-                                    ? "Retry playback"
+                                    ? ru.player.retry
                                     : isBuffering
-                                      ? "Buffering..."
+                                      ? ru.player.buffering
                                       : isPlaying
-                                        ? "Pause"
-                                        : "Play"
+                                        ? ru.common.pause
+                                        : ru.common.play
                             }
                             title={
                                 audioError
-                                    ? "Retry playback"
+                                    ? ru.player.retry
                                     : isBuffering
-                                      ? "Buffering..."
+                                      ? ru.player.buffering
                                       : isPlaying
-                                        ? "Pause"
-                                        : "Play"
+                                        ? ru.common.pause
+                                        : ru.common.play
                             }
                         >
                             {audioError ? (

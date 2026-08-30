@@ -7,6 +7,7 @@ import { ReactNode, lazy, Suspense } from "react";
 import { useArtistDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { MusicDetailHero } from "@/components/music-detail";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 // Lazy load MetadataEditor - modal component opened on user action
 const MetadataEditor = lazy(() =>
@@ -49,7 +50,7 @@ export function ArtistHero({
         <>
             {displayData.hasUserOverrides && (
                 <span className="mt-1 shrink-0 rounded-full border border-amber-500/30 bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">
-                    Edited
+                    {ru.catalog.edited}
                 </span>
             )}
             {source === "library" && (
@@ -81,17 +82,21 @@ export function ArtistHero({
     const metadata = (
         <>
             {artist.listeners && artist.listeners > 0 && (
-                <span>{artist.listeners.toLocaleString()} listeners</span>
+                <span>{artist.listeners.toLocaleString("ru-RU")} {ru.catalog.listeners}</span>
             )}
             {artist.listeners && artist.listeners > 0 && albums.length > 0 && (
                 <span aria-hidden="true">•</span>
             )}
-            {albums.length > 0 && <span>{albums.length} albums</span>}
+            {albums.length > 0 && (
+                <span>
+                    {albums.length} {pluralRu(albums.length, ["альбом", "альбома", "альбомов"])}
+                </span>
+            )}
             {ownedAlbums.length > 0 && (
                 <>
                     <span aria-hidden="true">•</span>
                     <span className="text-brand-light">
-                        {ownedAlbums.length} saved locally
+                        {ownedAlbums.length} {ru.catalog.savedLocally}
                     </span>
                 </>
             )}
@@ -100,7 +105,7 @@ export function ArtistHero({
 
     return (
         <MusicDetailHero
-            eyebrow="Artist"
+            eyebrow={ru.catalog.artist}
             title={displayData.name}
             artworkShape="round"
             backgroundImage={bgImage}

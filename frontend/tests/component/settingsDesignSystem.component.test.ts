@@ -26,7 +26,7 @@ test("settings navigation exposes the current section", async () => {
         }),
     );
 
-    assert.match(html, /aria-label="Settings sections"/);
+    assert.match(html, /aria-label="Разделы настроек"/);
     assert.match(html, /aria-current="location"[^>]*>Playback</);
     assert.doesNotMatch(html, />Admin</);
 });

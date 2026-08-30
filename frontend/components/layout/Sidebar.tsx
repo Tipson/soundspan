@@ -29,6 +29,7 @@ import {
 } from "@/lib/unifiedPlaylists";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
+import { ru } from "@/lib/i18n/ru";
 
 interface Playlist {
     id: string;
@@ -203,10 +204,10 @@ export function Sidebar() {
             <nav
                 className="px-3 pt-4"
                 role="navigation"
-                aria-label="Main navigation"
+                aria-label={ru.nav.mainAria}
             >
                 <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
-                    Listen
+                    {ru.nav.listen}
                 </p>
                 <div className="space-y-1">
                     {SIDEBAR_NAVIGATION.map((item) => {
@@ -294,12 +295,12 @@ export function Sidebar() {
                     >
                         <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted transition-colors hover:text-white">
                             {effectiveFilter === "others"
-                                ? "Shared playlists"
+                                ? ru.nav.sharedPlaylists
                                 : effectiveFilter === "mine"
-                                  ? "Your playlists"
+                                  ? ru.nav.yourPlaylists
                                   : effectiveFilter === "peers"
-                                    ? "Peer playlists"
-                                    : "All playlists"}
+                                    ? ru.nav.peerPlaylists
+                                    : ru.nav.allPlaylists}
                         </span>
                     </Link>
                     <div className="flex items-center gap-1">
@@ -325,8 +326,8 @@ export function Sidebar() {
                                         ? "border-brand/40 bg-brand/15 text-brand-light"
                                         : "border-white/5 bg-white/[0.04] text-content-muted hover:border-white/10 hover:bg-white/[0.07] hover:text-white",
                                 )}
-                                aria-label="Sort and filter playlists"
-                                title="Sort & Filter"
+                                aria-label={ru.nav.sortAndFilter}
+                                title={ru.nav.sortAndFilter}
                             >
                                 <ArrowUpDown className="h-4 w-4" />
                             </button>
@@ -340,13 +341,13 @@ export function Sidebar() {
                                     }}
                                 >
                                     <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                                        Sort
+                                        {ru.nav.sort}
                                     </div>
                                     {(
                                         [
-                                            ["updated", "Updated date"],
-                                            ["created", "Created date"],
-                                            ["alphabetical", "Alphabetical"],
+                                            ["updated", ru.nav.updatedDate],
+                                            ["created", ru.nav.createdDate],
+                                            ["alphabetical", ru.nav.alphabetical],
                                         ] as const
                                     ).map(([value, label]) => (
                                         <button
@@ -368,7 +369,7 @@ export function Sidebar() {
                                     <div className="mx-2 my-1 border-t border-white/10" />
 
                                     <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                                        Show
+                                        {ru.nav.show}
                                     </div>
                                     {playlistFilterOptions(federation).map(
                                         ([value, label]) => (
@@ -396,8 +397,8 @@ export function Sidebar() {
                             href="/playlists"
                             prefetch={false}
                             className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/5 bg-white/[0.04] text-content-muted transition-colors hover:border-white/10 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                            aria-label="Create playlist"
-                            title="Create Playlist"
+                            aria-label={ru.nav.createPlaylist}
+                            title={ru.nav.createPlaylist}
                         >
                             <Plus className="w-4 h-4" />
                         </Link>

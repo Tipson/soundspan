@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { TwoFactorInput } from "./TwoFactorInput";
+import { ru } from "@/lib/i18n/ru";
 
 function isSecondFactorRequired(message: string): boolean {
     return (
@@ -36,7 +37,7 @@ function useLocalLoginForm() {
     };
     const handleFailure = (caught: unknown): void => {
         const message =
-            caught instanceof Error ? caught.message : "Login failed";
+            caught instanceof Error ? caught.message : ru.auth.loginFailed;
         if (isSecondFactorRequired(message)) {
             setRequires2FA(true);
             setError("");
@@ -99,7 +100,7 @@ export function LocalLoginForm() {
                     onClick={form.resetSecondFactor}
                     className="w-full text-xs text-white/50 hover:text-white/80 transition-colors"
                 >
-                    ← Back to login
+                    ← {ru.auth.backToLogin}
                 </button>
             )}
         </form>
@@ -123,10 +124,10 @@ function LocalSecondFactor({ form }: { form: LocalLoginFormState }) {
         <div className="animate-fade-in space-y-4">
             <div className="p-4 bg-brand/10 border border-brand/20 rounded-lg">
                 <p className="text-white/90 text-sm font-semibold mb-1">
-                    Two-Factor Authentication Required
+                    {ru.auth.twoFactorRequired}
                 </p>
                 <p className="text-white/60 text-xs">
-                    Logging in as <strong>{form.username}</strong>
+                    {ru.auth.loggingInAs} <strong>{form.username}</strong>
                 </p>
             </div>
             <TwoFactorInput
@@ -145,20 +146,20 @@ function LocalCredentialFields({ form }: { form: LocalLoginFormState }) {
         <>
             <CredentialInput
                 id="username"
-                label="Username or Email"
+                label={ru.auth.usernameOrEmail}
                 type="text"
                 value={form.username}
                 onChange={form.setUsername}
-                placeholder="Enter your username or email"
+                placeholder={ru.auth.usernamePlaceholder}
                 autoFocus
             />
             <CredentialInput
                 id="password"
-                label="Password"
+                label={ru.auth.password}
                 type="password"
                 value={form.password}
                 onChange={form.setPassword}
-                placeholder="Enter your password"
+                placeholder={ru.auth.passwordPlaceholder}
             />
         </>
     );
@@ -210,10 +211,10 @@ function SubmitButton({ isLoading }: { isLoading: boolean }) {
                 {isLoading ? (
                     <>
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        Signing in...
+                        {ru.auth.signingIn}
                     </>
                 ) : (
-                    "Sign In"
+                    <>{ru.auth.signIn}</>
                 )}
             </span>
         </button>

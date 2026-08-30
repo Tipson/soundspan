@@ -14,8 +14,8 @@ test("empty search welcomes the listener into one unified music catalog", async 
     );
 
     assert.match(html, /data-search-welcome="true"/);
-    assert.match(html, /Find anything you want to hear/);
-    assert.match(html, /tracks, artists, and albums/i);
+    assert.match(html, /Найдите любую музыку/);
+    assert.match(html, /треки, исполнителей и альбомы/i);
 });
 
 test("empty search stays out of the way after a query starts", async () => {

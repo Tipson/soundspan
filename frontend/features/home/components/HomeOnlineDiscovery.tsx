@@ -8,6 +8,7 @@ import type {
     YtMusicShelfItem,
 } from "@/hooks/useQueries";
 import { SectionHeader } from "./SectionHeader";
+import { ru } from "@/lib/i18n/ru";
 
 const REGIONAL_DUMP_PATTERN =
     /(?:\b(?:schlager|german|germany|deutsch(?:e|land)?|mega\s*hits?\s+der)\b|немецк(?:ая|ие|ой|ую)|германи(?:я|и|ю))/i;
@@ -244,8 +245,8 @@ export function HomeOnlineDiscovery({
 
     return (
         <div className="space-y-8 sm:space-y-10">
-            <HomeMediaRow title="Stations for you" items={stations} />
-            <HomeMediaRow title="New & noteworthy" items={discoveries} />
+            <HomeMediaRow title={ru.home.stations} items={stations} />
+            <HomeMediaRow title={ru.home.newNoteworthy} items={discoveries} />
         </div>
     );
 }

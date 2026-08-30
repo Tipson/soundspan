@@ -31,6 +31,7 @@ import {
     BRAND_NAME_TRADEMARK,
 } from "@/lib/brand";
 import { frontendLogger } from "@/lib/logger";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface Artist {
     id: string;
@@ -191,7 +192,7 @@ function useOidcCodeExchange(
                 setError(
                     caught instanceof Error
                         ? caught.message
-                        : "Unable to complete SSO sign-in",
+                        : ru.auth.completeSsoError,
                 );
                 stripQueryParameter("ssoCode");
                 setState({ failed: true, pending: false });
@@ -251,13 +252,13 @@ function AuthConfigFailure({ onRetry }: { onRetry: () => void }) {
     return (
         <div className="min-h-screen flex items-center justify-center bg-black p-4">
             <div className="max-w-md text-center text-white space-y-4">
-                <p role="alert">Unable to load sign-in options.</p>
+                <p role="alert">{ru.auth.loadOptionsError}</p>
                 <button
                     type="button"
                     onClick={onRetry}
                     className="px-4 py-2 rounded-lg bg-brand text-black font-semibold"
                 >
-                    Retry
+                    {ru.common.retry}
                 </button>
             </div>
         </div>
@@ -300,10 +301,10 @@ function LoginCard({ config, parameters, exchange, error }: LoginCardProps) {
     return (
         <div className="bg-[#111]/90 rounded-lg p-6 md:p-8 border border-white/10 shadow-xl">
             <h1 className="text-2xl font-bold text-white mb-1 text-center">
-                Welcome back
+                {ru.auth.welcomeBack}
             </h1>
             <p className="text-white/60 text-center mb-8">
-                Sign in to continue to {BRAND_NAME}
+                {ru.auth.continueTo} {BRAND_NAME}
             </p>
             {error && (
                 <div
@@ -318,12 +319,12 @@ function LoginCard({ config, parameters, exchange, error }: LoginCardProps) {
                 !parameters.ssoLink &&
                 !parameters.ssoInvite && (
                     <p className="text-center text-white/50 text-sm mt-6">
-                        Have an invite code?{" "}
+                        {ru.auth.inviteQuestion}{" "}
                         <Link
                             href="/register"
                             className="text-brand hover:text-brand-hover transition-colors"
                         >
-                            Create an account
+                            {ru.auth.signUp}
                         </Link>
                     </p>
                 )}
@@ -340,7 +341,7 @@ function selectLoginFlow(
     authenticated: () => void,
 ): ReactNode {
     if (parameters.ssoCode && !exchange.failed) {
-        return <LoadingPageContent message="Completing SSO sign-in…" />;
+        return <LoadingPageContent message={ru.auth.completeSso} />;
     }
     if (parameters.ssoLink) {
         return (
@@ -390,7 +391,7 @@ function RedirectingContent({
 }) {
     return (
         <div className="space-y-4">
-            <LoadingPageContent message="Redirecting to SSO…" />
+            <LoadingPageContent message={ru.auth.redirectSso} />
             <SsoButton providerName={providerName} onClick={onClick} />
         </div>
     );
@@ -417,7 +418,7 @@ function DefaultLoginOptions({
                     aria-hidden="true"
                 >
                     <span className="h-px flex-1 bg-white/10" />
-                    or
+                    {ru.auth.or}
                     <span className="h-px flex-1 bg-white/10" />
                 </div>
             )}
@@ -499,15 +500,16 @@ function ArtistInfo({ artist }: { artist: Artist }) {
     return (
         <div className="absolute bottom-8 left-8 z-10 text-white max-w-md animate-fade-in">
             <p className="text-sm font-medium text-white/60 mb-2">
-                Featured Artist
+                {ru.auth.featuredArtist}
             </p>
             <h2 className="text-3xl md:text-4xl font-bold mb-2 drop-shadow-2xl">
                 {artist.name}
             </h2>
             {artist.albumCount !== undefined && (
                 <p className="text-white/70 text-sm">
-                    {artist.albumCount} album
-                    {artist.albumCount !== 1 ? "s" : ""} in your library
+                    {artist.albumCount}{" "}
+                    {pluralRu(artist.albumCount, ["альбом", "альбома", "альбомов"])}{" "}
+                    {ru.auth.inYourLibrary}
                 </p>
             )}
         </div>

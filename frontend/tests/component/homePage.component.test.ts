@@ -172,9 +172,9 @@ test("Home unifies personal playback and real online discovery", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /Your music, right now/);
+    assert.match(html, /Музыка для вас/);
     assert.match(html, /compact-wave-hero/);
-    assert.match(html, /Continue listening:Again One/);
+    assert.match(html, /Продолжить слушать:Again One/);
     assert.doesNotMatch(html, /Picked for right now:Quick One/);
     assert.match(html, /made-for-you:weekly:1:1/);
     assert.match(html, /online-discovery:true:1/);
@@ -200,7 +200,7 @@ test("Home keeps real personal shelves when generated mixes are unavailable", as
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /Continue listening:Again One/);
+    assert.match(html, /Продолжить слушать:Again One/);
     assert.doesNotMatch(html, /Picked for right now:Quick One/);
     assert.match(html, /made-for-you:none:0:1/);
     assert.doesNotMatch(html, /Daily Mix|Discover Weekly/);

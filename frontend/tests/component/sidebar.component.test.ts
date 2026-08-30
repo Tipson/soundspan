@@ -178,11 +178,11 @@ test("keeps global search in the top bar instead of duplicating it in navigation
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
-    assert.match(html, />Home</);
+    assert.match(html, />Главная</);
     assert.doesNotMatch(html, />Search</);
     assert.doesNotMatch(html, /href="\/search"/);
-    assert.match(html, />Library</);
-    assert.match(html, />Vibe</);
+    assert.match(html, />Коллекция</);
+    assert.match(html, />Моя волна</);
     assert.doesNotMatch(html, />Explore</);
     assert.doesNotMatch(html, />Listen Together</);
     assert.doesNotMatch(html, />Audiobooks</);
@@ -221,7 +221,7 @@ test("desktop sidebar exposes a restrained shell landmark", async () => {
     assert.ok(sidebar);
     assert.match(sidebar, /w-\[224px\]/);
     assert.doesNotMatch(sidebar, /rounded-/);
-    assert.match(html, /aria-label="Create playlist"/);
+    assert.match(html, /aria-label="Создать плейлист"/);
     assert.doesNotMatch(html, /Sync Library/);
 });
 

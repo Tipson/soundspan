@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Renders the Error component.
@@ -22,12 +23,12 @@ export default function Error({
         <div className="flex h-screen items-center justify-center bg-black">
             <div className="text-center">
                 <h2 className="text-2xl font-bold text-white mb-4">
-                    Something went wrong
+                    {ru.errors.title}
                 </h2>
                 <p className="text-gray-400 mb-6">
-                    {error.message || "An unexpected error occurred"}
+                    {error.message || ru.errors.unexpected}
                 </p>
-                <Button onClick={reset}>Try again</Button>
+                <Button onClick={reset}>{ru.common.tryAgain}</Button>
             </div>
         </div>
     );

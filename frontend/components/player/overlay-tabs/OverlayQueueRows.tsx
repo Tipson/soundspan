@@ -16,6 +16,7 @@ import {
     TrackMenuButton,
 } from "@/components/ui/TrackOverflowMenu";
 import type { EpisodeQueueItem, TrackQueueItem } from "@/lib/queue-item";
+import { ru } from "@/lib/i18n/ru";
 
 interface QueueRowSharedProps {
     queueIndex: number;
@@ -93,8 +94,8 @@ function QueueRemoveButton({
                 "h-7 w-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-white transition-colors",
                 className,
             )}
-            title="Remove from queue"
-            aria-label="Remove from queue"
+            title={ru.player.removeQueue}
+            aria-label={ru.player.removeQueue}
         >
             <X className="h-3.5 w-3.5" />
         </button>
@@ -134,7 +135,11 @@ export const OverlayQueueEpisodeRow = memo(function OverlayQueueEpisodeRow({
                     "flex min-w-0 flex-1 items-center gap-3 text-left",
                     isCurrentTrack && "cursor-default",
                 )}
-                title={isCurrentTrack ? "Now playing" : "Play this episode now"}
+                title={
+                    isCurrentTrack
+                        ? ru.player.nowPlaying
+                        : ru.player.playEpisodeNow
+                }
             >
                 <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
                     {item.coverUrl ? (
@@ -217,7 +222,11 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
                     "flex min-w-0 flex-1 items-center gap-3 text-left",
                     isCurrentTrack && "cursor-default",
                 )}
-                title={isCurrentTrack ? "Now playing" : "Play this track now"}
+                title={
+                    isCurrentTrack
+                        ? ru.player.nowPlaying
+                        : ru.player.playTrackNow
+                }
             >
                 <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
                     {track.album?.coverArt ? (
@@ -254,7 +263,7 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
                     </div>
                     <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
                         <p className="min-w-0 truncate text-xs text-gray-400">
-                            {track.artist?.name || "Unknown artist"}
+                            {track.artist?.name || ru.common.unknownArtist}
                         </p>
                         {isCurrentTrack && (
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-hover/40 bg-brand-hover/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-hover">
@@ -295,7 +304,7 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
                                     onRemoveFromQueue(queueIndex);
                                 }}
                                 icon={<X className="h-4 w-4" />}
-                                label="Remove from queue"
+                                label={ru.player.removeQueue}
                                 className="text-red-400 hover:text-red-300"
                             />
                         ) : undefined

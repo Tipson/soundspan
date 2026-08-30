@@ -8,6 +8,7 @@ import type {
 import { Pencil } from "lucide-react";
 import { CoverMosaic } from "@/components/ui/CoverMosaic";
 import { MusicDetailHero } from "@/components/music-detail";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface PlaylistDetailHeroProps {
     name: string;
@@ -52,7 +53,7 @@ export function PlaylistDetailHero({
     const title = isRenaming ? (
         <input
             ref={renameInputRef}
-            aria-label="Playlist name"
+            aria-label={ru.catalog.playlistNameAria}
             value={renameValue}
             onChange={onRenameChange}
             onBlur={onRenameBlur}
@@ -71,7 +72,7 @@ export function PlaylistDetailHero({
                 ref={renameTriggerRef}
                 type="button"
                 onClick={onStartRename}
-                aria-label="Rename playlist"
+                aria-label={ru.catalog.renamePlaylist}
                 className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light active:scale-[0.97] motion-reduce:transition-none"
             >
                 <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -85,7 +86,7 @@ export function PlaylistDetailHero({
             )}
             {ownerName && <span aria-hidden="true">•</span>}
             <span>
-                {trackCount} {trackCount === 1 ? "song" : "songs"}
+                {trackCount} {pluralRu(trackCount, ["трек", "трека", "треков"])}
             </span>
             {durationLabel && (
                 <>

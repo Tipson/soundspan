@@ -1,4 +1,5 @@
 import { Music2 } from "lucide-react";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Renders the LibraryHeader component.
@@ -20,15 +21,13 @@ export function LibraryHeader() {
                 </span>
                 <div className="min-w-0">
                     <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-light">
-                        Your collection
+                        {ru.library.eyebrow}
                     </p>
                     <h1 className="text-[clamp(2.5rem,7vw,5.25rem)] font-black leading-[0.94] tracking-[-0.055em] text-content">
-                        Your Library
+                        {ru.library.title}
                     </h1>
                     <p className="mt-3 max-w-2xl text-sm leading-6 text-content-muted sm:text-base">
-                        Likes and saved music follow your account. Offline
-                        copies stay on the phone or computer where you
-                        downloaded them.
+                        {ru.library.subtitle}
                     </p>
                 </div>
             </div>

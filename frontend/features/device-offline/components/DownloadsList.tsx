@@ -14,9 +14,10 @@ import type { Track } from "@/lib/audio-state-context";
 import { useDeviceOffline } from "../DeviceOfflineProvider";
 import type { DeviceOfflineQueueItem } from "../offlineQueue";
 import type { DeviceOfflineDownloadRecord } from "../types";
+import { ru } from "@/lib/i18n/ru";
 
 function formatBytes(value: number | null): string {
-    if (!value || value < 1) return "Size unavailable";
+    if (!value || value < 1) return ru.downloads.sizeUnavailable;
     const units = ["B", "KB", "MB", "GB"];
     let amount = value;
     let unit = 0;
@@ -31,7 +32,7 @@ function statusCopy(record: DeviceOfflineDownloadRecord): string {
     if (record.status === "ready") return formatBytes(record.totalBytes);
     if (record.status === "downloading") {
         if (record.transferMode === "background") {
-            return "Preparing audio — progress starts when it is ready";
+            return ru.downloads.preparing;
         }
         if (record.bytesReceived > 0 && record.totalBytes) {
             const percent = Math.min(
@@ -40,19 +41,19 @@ function statusCopy(record: DeviceOfflineDownloadRecord): string {
             );
             const suffix =
                 percent >= 100
-                    ? " — verifying device copy"
-                    : " — keep Soundspan open";
-            return `Downloading ${percent}% · ${formatBytes(record.bytesReceived)} of ${formatBytes(record.totalBytes)}${suffix}`;
+                    ? " — проверяем копию на устройстве"
+                    : ` — ${ru.downloads.keepOpen}`;
+            return `${ru.downloads.downloading}: ${percent}% · ${formatBytes(record.bytesReceived)} из ${formatBytes(record.totalBytes)}${suffix}`;
         }
         if (record.bytesReceived > 0) {
-            return `Downloading · ${formatBytes(record.bytesReceived)} received · keep Soundspan open`;
+            return `${ru.downloads.downloading} · получено ${formatBytes(record.bytesReceived)} · ${ru.downloads.keepOpen}`;
         }
-        return "Downloading — keep Soundspan open";
+        return `${ru.downloads.downloading} — ${ru.downloads.keepOpen}`;
     }
     if (record.status === "interrupted") {
-        return `Interrupted — ${record.errorMessage ?? "the transfer stopped before the file was ready"} Retry restarts this track.`;
+        return `${ru.downloads.interrupted} — ${record.errorMessage ?? "передача остановилась до готовности файла"}. Повтор запустит загрузку трека заново.`;
     }
-    return `Failed — ${record.errorMessage ?? "the device copy could not be saved"} Retry this track.`;
+    return `${ru.downloads.failed} — ${record.errorMessage ?? "копию не удалось сохранить"}. ${ru.downloads.retryTrack}.`;
 }
 
 function progressPercent(record: DeviceOfflineDownloadRecord): number | null {
@@ -82,8 +83,8 @@ function managementCopy(
     management: DeviceOfflineDownloadRecord["management"],
 ): string {
     return management === "auto-liked"
-        ? "Automatic from Liked songs"
-        : "Kept offline manually";
+        ? ru.downloads.automaticLiked
+        : ru.downloads.keptManually;
 }
 
 function deleteConfirmation(
@@ -92,22 +93,22 @@ function deleteConfirmation(
 ): string {
     const automaticWarning =
         management === "auto-liked"
-            ? " This automatic copy may download again while automatic liked-song downloads are enabled."
+            ? " Автоматическая копия может загрузиться снова, пока включено автоскачивание любимых треков."
             : "";
-    return `Remove “${title}” only from this device?${automaticWarning} Your Library and copies on other devices will not change.`;
+    return `Удалить «${title}» только с этого устройства?${automaticWarning} Коллекция и копии на других устройствах не изменятся.`;
 }
 
 function queueStatusCopy(item: DeviceOfflineQueueItem): string {
     if (item.status === "processing") {
-        return "Starting device download — keep Soundspan open";
+        return ru.downloads.starting;
     }
     if (item.status === "error") {
-        return item.errorMessage ?? "Device download failed — retry";
+        return item.errorMessage ?? `${ru.downloads.failed} — ${ru.common.retry.toLocaleLowerCase()}`;
     }
     if (item.status === "interrupted") {
-        return "Waiting to resume when this device is online";
+        return ru.downloads.waitingOnline;
     }
-    return "Queued on this device";
+    return ru.downloads.queued;
 }
 
 export function DownloadsList() {
@@ -148,16 +149,16 @@ export function DownloadsList() {
                 {usesPrivateStorage ? (
                     <>
                         <span className="font-medium text-white/85">
-                            Private Soundspan storage.
+                            Личное хранилище Soundspan.
                         </span>{" "}
                         {storage.explanation} {capability.explanation}
                     </>
                 ) : (
                     <>
-                        Device folder:{" "}
+                        Папка на устройстве:{" "}
                         <span className="font-medium text-white/85">
                             {storage.directoryName ??
-                                "selected Soundspan folder"}
+                                "выбранная папка Soundspan"}
                         </span>
                         . {capability.explanation}
                     </>
@@ -168,14 +169,14 @@ export function DownloadsList() {
                 <div>
                     <p className="font-semibold">
                         {storage.status === "unsupported"
-                            ? "Device-folder downloads are unavailable"
+                            ? ru.downloads.folderUnavailable
                             : storage.status === "checking"
-                              ? "Checking device storage…"
+                              ? ru.downloads.checkingStorage
                               : storage.status === "requesting"
-                                ? "Waiting for folder access…"
+                                ? ru.downloads.waitingFolder
                                 : reconnectRememberedFolder
-                                  ? "Reconnect music folder"
-                                  : "Choose a music folder"}
+                                  ? ru.downloads.reconnectFolder
+                                  : ru.downloads.chooseFolder}
                     </p>
                     <p className="mt-1 text-content-muted">
                         {storage.explanation}
@@ -187,21 +188,21 @@ export function DownloadsList() {
                         type="button"
                         aria-label={
                             reconnectRememberedFolder
-                                ? "Reconnect music folder on this device"
-                                : "Choose music folder on this device"
+                                ? ru.downloads.reconnectFolder
+                                : ru.downloads.chooseFolder
                         }
                         onClick={() => {
                             void setupStorage().catch(() =>
                                 toast.error(
-                                    "Could not open that folder. Choose it again and allow file access.",
+                                    ru.downloads.folderError,
                                 ),
                             );
                         }}
                         className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
                     >
                         {reconnectRememberedFolder
-                            ? "Reconnect folder"
-                            : "Choose folder"}
+                            ? "Подключить папку заново"
+                            : "Выбрать папку"}
                     </button>
                 )}
             </div>
@@ -217,10 +218,10 @@ export function DownloadsList() {
                 type="button"
                 onClick={() => void retryStorage()}
                 className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
-                aria-label="Retry reading downloads on this device"
+                aria-label={ru.downloads.retryReading}
             >
                 <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                Retry
+                {ru.common.retry}
             </button>
         </div>
     ) : null;
@@ -238,11 +239,11 @@ export function DownloadsList() {
             <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-6 text-center">
                 <HardDriveDownload className="mb-4 h-10 w-10 text-white/35" />
                 <h2 className="text-lg font-semibold text-white">
-                    No device downloads
+                    На этом устройстве нет загрузок
                 </h2>
                 <p className="mt-2 max-w-md text-sm text-white/50">
-                    Open a track menu from Home, Search, or your library and
-                    choose Download to this device.
+                    Откройте меню трека на главной, в поиске или коллекции и
+                    выберите «Скачать на это устройство».
                 </p>
             </div>
         );
@@ -290,13 +291,13 @@ export function DownloadsList() {
                                         quality: item.quality,
                                     }).catch(() =>
                                         toast.error(
-                                            "Could not retry this download",
+                                            ru.downloads.retryFailed,
                                         ),
                                     );
                                 }}
                                 className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
-                                aria-label={`Retry ${item.track.title}`}
-                                title="Retry download"
+                                aria-label={`${ru.downloads.retry}: ${item.track.title}`}
+                                title={ru.downloads.retry}
                             >
                                 <RotateCcw className="h-4 w-4" />
                             </button>
@@ -316,13 +317,13 @@ export function DownloadsList() {
                                 }
                                 void cancelQueuedDownload(item).catch(() =>
                                     toast.error(
-                                        "Could not remove this device download",
+                                        ru.downloads.removeFailed,
                                     ),
                                 );
                             }}
                             className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"
-                            aria-label={`Remove queued device download of ${item.track.title}`}
-                            title="Remove from this device"
+                            aria-label={`${ru.downloads.removeDevice}: ${item.track.title}`}
+                            title={ru.downloads.removeDevice}
                         >
                             <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </button>
@@ -348,12 +349,12 @@ export function DownloadsList() {
                                             )
                                             .catch(() =>
                                                 toast.error(
-                                                    "This device copy is unavailable. Download it again while online.",
+                                                    ru.downloads.unavailableCopy,
                                                 ),
                                             );
                                     }}
                                     className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand text-black transition hover:brightness-110"
-                                    aria-label={`Play ${record.track.title}`}
+                                    aria-label={`${ru.common.play}: ${record.track.title}`}
                                 >
                                     <Play className="h-4 w-4 fill-current" />
                                 </button>
@@ -362,7 +363,7 @@ export function DownloadsList() {
                                     type="button"
                                     disabled
                                     className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white/30"
-                                    aria-label={`Play ${record.track.title}`}
+                                    aria-label={`${ru.common.play}: ${record.track.title}`}
                                 >
                                     <Play className="h-4 w-4 fill-current" />
                                 </button>
@@ -387,7 +388,7 @@ export function DownloadsList() {
                                     <div
                                         className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"
                                         role="progressbar"
-                                        aria-label={`Download progress for ${record.track.title}`}
+                                        aria-label={`${ru.downloads.progress}: ${record.track.title}`}
                                         aria-valuemin={0}
                                         aria-valuemax={100}
                                         aria-valuenow={percent ?? undefined}
@@ -415,13 +416,13 @@ export function DownloadsList() {
                                         onClick={() => {
                                             void resume(record).catch(() =>
                                                 toast.error(
-                                                    "Could not retry this download",
+                                                    ru.downloads.retryFailed,
                                                 ),
                                             );
                                         }}
                                         className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
-                                        aria-label={`Retry ${record.track.title}`}
-                                        title="Retry download"
+                                        aria-label={`${ru.downloads.retry}: ${record.track.title}`}
+                                        title={ru.downloads.retry}
                                     >
                                         <RotateCcw className="h-4 w-4" />
                                     </button>
@@ -438,12 +439,12 @@ export function DownloadsList() {
                                             void exportDownload(record)
                                                 .then((displayName) =>
                                                     toast.success(
-                                                        `Save action opened for ${displayName}. Choose a device location if asked.`,
+                                                        `Открыто сохранение файла ${displayName}. При необходимости выберите папку на устройстве.`,
                                                     ),
                                                 )
                                                 .catch(() =>
                                                     toast.error(
-                                                        "Could not open the browser save action for this file.",
+                                                        ru.downloads.saveActionFailed,
                                                     ),
                                                 )
                                                 .finally(() =>
@@ -451,8 +452,8 @@ export function DownloadsList() {
                                                 );
                                         }}
                                         className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-45"
-                                        aria-label={`Save ${record.track.title} as a normal file on this device`}
-                                        title="Save as a normal file"
+                                        aria-label={`${ru.downloads.saveNormalFile}: ${record.track.title}`}
+                                        title={ru.downloads.saveNormalFile}
                                     >
                                         <Download
                                             className="h-4 w-4"
@@ -475,16 +476,16 @@ export function DownloadsList() {
                                     }
                                     void deleteDownload(record.key).catch(() =>
                                         toast.error(
-                                            "Could not delete this device copy",
+                                            ru.downloads.deleteFailed,
                                         ),
                                     );
                                 }}
                                 className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"
-                                aria-label={`${isDeviceFileDeleteRecovery(record) ? "Retry deleting" : "Delete device copy of"} ${record.track.title}`}
+                                aria-label={`${isDeviceFileDeleteRecovery(record) ? "Повторить удаление" : "Удалить копию с устройства:"} ${record.track.title}`}
                                 title={
                                     isDeviceFileDeleteRecovery(record)
-                                        ? "Retry deleting device copy"
-                                        : "Delete device copy"
+                                        ? "Повторить удаление копии с устройства"
+                                        : "Удалить копию с устройства"
                                 }
                             >
                                 <Trash2 className="h-4 w-4" />

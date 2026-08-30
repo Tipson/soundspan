@@ -64,7 +64,7 @@ test("renders slider semantics and current value when seeking is enabled", async
     assert.equal(slider.getAttribute("aria-valuemin"), "0");
     assert.equal(slider.getAttribute("aria-valuemax"), "200");
     assert.equal(slider.getAttribute("aria-valuenow"), "30");
-    assert.equal(slider.getAttribute("aria-label"), "Seek");
+    assert.equal(slider.getAttribute("aria-label"), "Перемотка");
     assert.equal((slider as HTMLElement).tabIndex, 0);
 
     await unmount(mounted);

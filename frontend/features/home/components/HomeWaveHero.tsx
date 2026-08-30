@@ -9,6 +9,7 @@ import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import type { PersonalizedHomeFeed, PersonalizedTrack } from "../types";
+import { ru } from "@/lib/i18n/ru";
 
 interface HomeWaveHeroProps {
     personalizedFeed: PersonalizedHomeFeed | null;
@@ -101,10 +102,10 @@ export function HomeWaveHero({
     ]);
 
     const playLabel = isLoading
-        ? "Tuning your Wave"
+        ? ru.vibe.tuning
         : canPlay
-          ? "Play My Wave"
-          : "More signals needed";
+          ? ru.vibe.play
+          : ru.home.moreSignals;
 
     return (
         <section
@@ -124,16 +125,16 @@ export function HomeWaveHero({
                             className="h-4 w-4"
                             aria-hidden="true"
                         />
-                        Endless personal radio
+                        {ru.home.endlessRadio}
                     </p>
                     <h2
                         id="home-wave-title"
                         className="mt-1 text-2xl font-black leading-tight tracking-[-0.035em] text-content sm:text-3xl"
                     >
-                        My Wave
+                        {ru.vibe.title}
                     </h2>
                     <p className="mt-1 text-sm text-content-secondary">
-                        For you · Any mood · Changes with every reaction
+                        {ru.home.waveSummary}
                     </p>
 
                     <div className="mt-4 flex flex-wrap items-center gap-2.5">
@@ -141,7 +142,7 @@ export function HomeWaveHero({
                             type="button"
                             onClick={startWave}
                             disabled={!canPlay}
-                            aria-label="Play My Wave"
+                            aria-label={ru.vibe.play}
                             className="inline-flex min-h-12 items-center gap-2 rounded-full bg-content px-5 py-3 text-sm font-black text-surface shadow-lg shadow-black/20 transition duration-200 active:scale-[0.97] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none"
                         >
                             <Play
@@ -154,7 +155,7 @@ export function HomeWaveHero({
                             href="/vibe"
                             className="inline-flex min-h-12 items-center gap-1 rounded-full border border-white/10 bg-black/20 px-4 py-3 text-sm font-bold text-content-secondary transition-colors duration-200 hover:border-white/20 hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
-                            Tune
+                            {ru.vibe.tune}
                             <ChevronRight
                                 className="h-4 w-4"
                                 aria-hidden="true"

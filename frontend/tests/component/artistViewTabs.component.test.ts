@@ -22,10 +22,10 @@ test("artist view tabs deep-link every view and preserve provider identity", asy
         html,
         /<a[^>]*data-state="active"[^>]*aria-current="page"[^>]*href="\/artist\/Massive%20Attack\?provider=ytmusic&amp;channelId=UCmassiveattack&amp;view=tracks"/,
     );
-    assert.match(html, />Overview</);
-    assert.match(html, />Tracks</);
-    assert.match(html, />Albums</);
-    assert.match(html, />Singles &amp; EPs</);
+    assert.match(html, />Обзор</);
+    assert.match(html, />Треки</);
+    assert.match(html, />Альбомы</);
+    assert.match(html, />Синглы и EP</);
 });
 
 test("artist view parser falls back to overview for unknown URL values", async () => {

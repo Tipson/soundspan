@@ -12,6 +12,7 @@ import {
     BRAND_NAME,
     BRAND_NAME_TRADEMARK,
 } from "@/lib/brand";
+import { ru } from "@/lib/i18n/ru";
 
 function InviteCodePrefill({
     setInviteCode,
@@ -69,7 +70,7 @@ export default function RegisterPage() {
         setError("");
 
         if (password !== confirmPassword) {
-            setError("Passwords do not match");
+            setError(ru.auth.passwordsMismatch);
             return;
         }
 
@@ -86,7 +87,7 @@ export default function RegisterPage() {
             router.push("/");
         } catch (err) {
             setError(
-                err instanceof Error ? err.message : "Registration failed",
+                err instanceof Error ? err.message : ru.auth.registrationFailed,
             );
         } finally {
             setIsLoading(false);
@@ -144,10 +145,10 @@ export default function RegisterPage() {
                     {/* Registration Card */}
                     <div className="bg-[#111]/90 rounded-lg p-6 md:p-8 border border-white/10 shadow-xl">
                         <h1 className="text-2xl font-bold text-white mb-1 text-center">
-                            Create your account
+                            {ru.auth.createTitle}
                         </h1>
                         <p className="text-white/60 text-center mb-8">
-                            Join {BRAND_NAME} with an invite code
+                            {ru.auth.inviteSubtitle}
                         </p>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -162,7 +163,7 @@ export default function RegisterPage() {
                                     htmlFor="inviteCode"
                                     className="block text-sm font-medium text-white/90 mb-1.5"
                                 >
-                                    Invite Code
+                                    {ru.auth.inviteCode}
                                 </label>
                                 <input
                                     id="inviteCode"
@@ -187,7 +188,7 @@ export default function RegisterPage() {
                                     htmlFor="username"
                                     className="block text-sm font-medium text-white/90 mb-1.5"
                                 >
-                                    Username
+                                    {ru.auth.username}
                                 </label>
                                 <input
                                     id="username"
@@ -196,7 +197,7 @@ export default function RegisterPage() {
                                     onChange={(e) =>
                                         setUsername(e.target.value)
                                     }
-                                    placeholder="Choose a username"
+                                    placeholder={ru.auth.chooseUsername}
                                     required
                                     autoCapitalize="none"
                                     autoCorrect="off"
@@ -209,7 +210,7 @@ export default function RegisterPage() {
                                     htmlFor="displayName"
                                     className="block text-sm font-medium text-white/90 mb-1.5"
                                 >
-                                    Display Name
+                                    {ru.auth.displayName}
                                 </label>
                                 <input
                                     id="displayName"
@@ -218,7 +219,7 @@ export default function RegisterPage() {
                                     onChange={(e) =>
                                         setDisplayName(e.target.value)
                                     }
-                                    placeholder="Your display name"
+                                    placeholder={ru.auth.displayNamePlaceholder}
                                     required
                                     className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all duration-200"
                                 />
@@ -229,7 +230,7 @@ export default function RegisterPage() {
                                     htmlFor="email"
                                     className="block text-sm font-medium text-white/90 mb-1.5"
                                 >
-                                    Email
+                                    {ru.auth.email}
                                 </label>
                                 <input
                                     id="email"
@@ -249,7 +250,7 @@ export default function RegisterPage() {
                                     htmlFor="password"
                                     className="block text-sm font-medium text-white/90 mb-1.5"
                                 >
-                                    Password
+                                    {ru.auth.password}
                                 </label>
                                 <input
                                     id="password"
@@ -258,7 +259,7 @@ export default function RegisterPage() {
                                     onChange={(e) =>
                                         setPassword(e.target.value)
                                     }
-                                    placeholder="At least 6 characters"
+                                    placeholder={ru.auth.passwordLength}
                                     required
                                     minLength={6}
                                     autoCapitalize="none"
@@ -272,7 +273,7 @@ export default function RegisterPage() {
                                     htmlFor="confirmPassword"
                                     className="block text-sm font-medium text-white/90 mb-1.5"
                                 >
-                                    Confirm Password
+                                    {ru.auth.confirmPassword}
                                 </label>
                                 <input
                                     id="confirmPassword"
@@ -281,7 +282,7 @@ export default function RegisterPage() {
                                     onChange={(e) =>
                                         setConfirmPassword(e.target.value)
                                     }
-                                    placeholder="Repeat your password"
+                                    placeholder={ru.auth.confirmPasswordPlaceholder}
                                     required
                                     minLength={6}
                                     autoCapitalize="none"
@@ -299,22 +300,22 @@ export default function RegisterPage() {
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
-                                            Creating account...
+                                            {ru.auth.creatingAccount}
                                         </>
                                     ) : (
-                                        "Create Account"
+                                        <>{ru.auth.signUp}</>
                                     )}
                                 </span>
                             </button>
                         </form>
 
                         <p className="text-center text-white/50 text-sm mt-6">
-                            Already have an account?{" "}
+                            {ru.auth.hasAccount}{" "}
                             <Link
                                 href="/login"
                                 className="text-brand hover:text-brand-hover transition-colors"
                             >
-                                Sign in
+                                {ru.auth.signIn}
                             </Link>
                         </p>
                     </div>

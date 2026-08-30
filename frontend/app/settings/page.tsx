@@ -8,6 +8,7 @@ import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
 import { SettingsLayout, SidebarItem } from "@/features/settings/components/ui";
+import { ru } from "@/lib/i18n/ru";
 
 // Section components
 import { AccountSection } from "@/features/settings/components/sections/AccountSection";
@@ -19,15 +20,15 @@ import { IntegrationsSection } from "@/features/settings/components/sections/Int
 
 // Define sidebar items
 const sidebarItems: SidebarItem[] = [
-    { id: "account", label: "Account" },
-    { id: "sign-in-security", label: "Sign-in & Security" },
-    { id: "social", label: "Social" },
-    { id: "history", label: "History & Personalization" },
-    { id: "scrobbling", label: "Scrobbling" },
-    { id: "playback", label: "Playback" },
-    { id: "device-offline", label: "Offline on this device" },
-    { id: "integrations", label: "Integrations" },
-    { id: "api-keys", label: "API Keys" },
+    { id: "account", label: ru.settings.account },
+    { id: "sign-in-security", label: ru.settings.security },
+    { id: "social", label: ru.settings.social },
+    { id: "history", label: ru.settings.history },
+    { id: "scrobbling", label: ru.settings.scrobbling },
+    { id: "playback", label: ru.settings.playback },
+    { id: "device-offline", label: ru.settings.offlineDevice },
+    { id: "integrations", label: ru.settings.integrations },
+    { id: "api-keys", label: ru.settings.apiKeys },
 ];
 
 function renderSectionFallback() {
@@ -88,13 +89,13 @@ export default function SettingsPage() {
         try {
             await saveUserSettings(userSettings);
             setIsSaving(false);
-            saveStatus.setSuccess("Saved");
+            saveStatus.setSuccess(ru.settings.saved);
         } catch (error) {
             logger.error("Failed to save user settings from settings page", {
                 error,
             });
             setIsSaving(false);
-            saveStatus.setError("Failed to save");
+            saveStatus.setError(ru.settings.saveFailed);
         }
     }, [userSettings, saveUserSettings, saveStatus]);
 
@@ -176,7 +177,7 @@ export default function SettingsPage() {
                         disabled={isSaving}
                         className="min-h-11 flex-shrink-0 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-brand/15 transition hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand"
                     >
-                        {isSaving ? "Saving…" : "Save changes"}
+                        {isSaving ? ru.settings.saving : ru.settings.saveChanges}
                     </button>
                 </div>
             </div>

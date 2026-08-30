@@ -1,5 +1,7 @@
 "use client";
 
+import { ru } from "@/lib/i18n/ru";
+
 export interface SidebarItem {
     id: string;
     label: string;
@@ -31,7 +33,7 @@ export function SettingsSidebar({
     return (
         <nav
             className="settings-section-navigation min-w-0 self-start lg:sticky lg:top-6 lg:w-56 lg:shrink-0"
-            aria-label="Settings sections"
+            aria-label={ru.settings.sectionsAria}
         >
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
                 {regularItems.map((item) => (

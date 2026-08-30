@@ -10,6 +10,7 @@ import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import Image from "next/image";
 
 import { BRAND_NAME } from "@/lib/brand";
+import { ru } from "@/lib/i18n/ru";
 
 interface TopBarProps {
     isActivityPanelOpen?: boolean;
@@ -131,7 +132,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                             );
                         }}
                         className="shell-control mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                        aria-label="Open menu"
+                        aria-label="Открыть меню"
                     >
                         <Menu className="w-5 h-5" />
                     </button>
@@ -149,8 +150,8 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 onChange={(e) =>
                                     updateSearchQuery(e.target.value)
                                 }
-                                placeholder="Search music"
-                                aria-label="Search"
+                                placeholder={ru.search.mobilePlaceholder}
+                                aria-label={ru.search.aria}
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
@@ -187,8 +188,8 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                     <button
                                         onClick={() => router.back()}
                                         className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-content-muted transition-colors hover:border-white/10 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                                        aria-label="Go back"
-                                        title="Go back"
+                                        aria-label={ru.search.back}
+                                        title={ru.search.back}
                                     >
                                         <ChevronLeft className="h-5 w-5" />
                                     </button>
@@ -217,8 +218,8 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                         onChange={(e) =>
                                             updateSearchQuery(e.target.value)
                                         }
-                                        placeholder="What do you want to play?"
-                                        aria-label="Search"
+                                        placeholder={ru.search.placeholder}
+                                        aria-label={ru.search.aria}
                                         autoCapitalize="none"
                                         autoCorrect="off"
                                         tabIndex={0}

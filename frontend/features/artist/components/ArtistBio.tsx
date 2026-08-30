@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import { useMemo, useState } from "react";
 import { useIsMobile } from "@/hooks/useMediaQuery";
 import { cn } from "@/utils/cn";
+import { ru } from "@/lib/i18n/ru";
 
 interface ArtistBioProps {
     bio: string;
@@ -33,7 +34,9 @@ export function ArtistBio({ bio }: ArtistBioProps) {
 
     return (
         <section className="max-w-4xl">
-            <h2 className="mb-4 text-2xl font-black tracking-tight">About</h2>
+            <h2 className="mb-4 text-2xl font-black tracking-tight">
+                {ru.catalog.about}
+            </h2>
             <div className="rounded-2xl border border-white/8 bg-white/[0.045] p-5 sm:p-6">
                 <div
                     className={cn(
@@ -53,7 +56,7 @@ export function ArtistBio({ bio }: ArtistBioProps) {
                         onClick={() => setExpandedBio(safeBio)}
                         className="mt-2 text-sm text-brand hover:underline"
                     >
-                        ...more
+                        {ru.catalog.more}
                     </button>
                 )}
             </div>

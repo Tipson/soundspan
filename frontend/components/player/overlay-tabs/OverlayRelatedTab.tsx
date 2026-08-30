@@ -27,6 +27,7 @@ import type {
     RelatedArtist,
     RelatedTrack,
 } from "./overlayRelatedTypes";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Stream matches survive tab switches and track changes without re-calling
@@ -111,7 +112,7 @@ function buildLibraryPlaybackTrack(
         },
         album: {
             id: track.album?.id,
-            title: track.album?.title || "Unknown album",
+            title: track.album?.title || ru.common.unknownAlbum,
             coverArt: track.album?.coverArt || track.album?.coverUrl,
         },
         duration: track.duration || 0,
@@ -135,7 +136,7 @@ function buildStreamPlaybackTrack(
         title: track.title,
         artist: { name: artistName },
         album: {
-            title: track.album?.title || "Related Tracks",
+            title: track.album?.title || ru.player.relatedTracks,
             coverArt: track.album?.coverArt || track.album?.coverUrl,
         },
         duration: match.duration || track.duration || 0,
@@ -350,7 +351,9 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
     const playRelatedTrack = useCallback(
         async (track: RelatedTrack) => {
             const artistName =
-                track.album?.artist?.name || track.artist || "Unknown artist";
+                track.album?.artist?.name ||
+                track.artist ||
+                ru.common.unknownArtist;
 
             if (track.inLibrary && track.id) {
                 playTrack(buildLibraryPlaybackTrack(track, artistName));
@@ -388,7 +391,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
                 }
 
                 toast.error(
-                    "No playable stream found for this related track yet",
+                    ru.player.noPlayableRelated,
                 );
             } finally {
                 setMatchingTrackKey(null);
@@ -404,10 +407,10 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
             className="h-full space-y-5 overflow-y-auto px-4 py-3"
         >
             <RelatedSectionShell
-                title="Similar Songs"
+                title={ru.player.relatedTracks}
                 isLoading={isRelatedTracksLoading}
                 isError={isRelatedTracksError}
-                errorText="Failed to load similar songs."
+                errorText={ru.player.relatedTracksFailed}
                 onRetry={() =>
                     queryClient.invalidateQueries({
                         queryKey: queryKeys.playerRelatedTracks(
@@ -416,7 +419,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
                     })
                 }
                 isEmpty={sortedRelatedTracks.length === 0}
-                emptyText="No similar songs found."
+                emptyText={ru.player.noRelatedTracks}
             >
                 <SimilarSongsList
                     tracks={visibleRelatedTracks}
@@ -427,10 +430,10 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
             </RelatedSectionShell>
 
             <RelatedSectionShell
-                title="Similar Artists"
+                title={ru.player.relatedArtists}
                 isLoading={isRelatedArtistsLoading}
                 isError={isRelatedArtistsError}
-                errorText="Failed to load similar artists."
+                errorText={ru.player.relatedArtistsFailed}
                 onRetry={() =>
                     queryClient.invalidateQueries({
                         queryKey: queryKeys.playerRelatedArtists(
@@ -440,7 +443,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
                     })
                 }
                 isEmpty={relatedArtists.length === 0}
-                emptyText="No similar artists found."
+                emptyText={ru.player.noRelatedArtists}
             >
                 <SimilarArtistsGrid
                     artists={relatedArtists}
@@ -449,10 +452,10 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
             </RelatedSectionShell>
 
             <RelatedSectionShell
-                title="More From This Artist"
+                title={ru.player.moreFromArtist}
                 isLoading={isMoreFromArtistLoading}
                 isError={isMoreFromArtistError}
-                errorText="Failed to load albums."
+                errorText={ru.player.albumsFailed}
                 onRetry={() =>
                     queryClient.invalidateQueries({
                         queryKey: queryKeys.playerRelatedAlbums(
@@ -461,7 +464,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
                     })
                 }
                 isEmpty={moreFromArtist.length === 0}
-                emptyText="No albums found."
+                emptyText={ru.player.noAlbums}
             >
                 <MoreFromArtistGrid
                     albums={moreFromArtist}

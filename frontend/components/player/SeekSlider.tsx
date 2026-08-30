@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { resolveSeekTime } from "./seekKeyboard";
+import { ru } from "@/lib/i18n/ru";
 
 interface SeekSliderProps {
     /** Current progress percentage (0-100) */
@@ -53,7 +54,7 @@ export function SeekSlider({
     variant = "default",
     handleClassName,
     hitZoneClassName,
-    ariaLabel = "Seek",
+    ariaLabel = ru.player.seek,
 }: SeekSliderProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [previewProgress, setPreviewProgress] = useState<number | null>(null);
@@ -217,10 +218,10 @@ export function SeekSlider({
         if (!hasMedia) return undefined;
         if (!canSeek) {
             return downloadProgress !== null
-                ? `Downloading ${downloadProgress}%... Seek will be available when cached`
-                : "Downloading... Seeking will be available when cached";
+                ? `${ru.downloads.downloading}: ${downloadProgress}%. ${ru.player.seekAfterDownload}`
+                : `${ru.downloads.downloading}… ${ru.player.seekAfterDownload}`;
         }
-        return isDragging ? "Release to seek" : "Click or drag to seek";
+        return isDragging ? ru.player.releaseToSeek : ru.player.dragToSeek;
     };
 
     // Variant-specific styles

@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import type { Album } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { PeerBadge } from "@/components/ui/PeerBadge";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface DiscographyProps {
     albums: Album[];
@@ -25,7 +26,7 @@ export function Discography({
     onPlayAlbum,
     sortBy,
     onSortChange,
-    title = "Discography",
+    title = ru.catalog.discography,
 }: DiscographyProps) {
     if (!albums || albums.length === 0) {
         return null;
@@ -43,8 +44,8 @@ export function Discography({
                     }
                     className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-white text-xs focus:outline-none focus:border-white/20 [&>option]:bg-surface-hover [&>option]:text-white"
                 >
-                    <option value="year">Year (Newest)</option>
-                    <option value="dateAdded">Date Added (Recent)</option>
+                    <option value="year">{ru.catalog.yearNewest}</option>
+                    <option value="dateAdded">{ru.catalog.dateAddedRecent}</option>
                 </select>
             </div>
             <div
@@ -54,7 +55,8 @@ export function Discography({
                 {albums.map((album, index) => {
                     const subtitle = [
                         album.year,
-                        album.trackCount && `${album.trackCount} tracks`,
+                        album.trackCount &&
+                            `${album.trackCount} ${pluralRu(album.trackCount, ["трек", "трека", "треков"])}`,
                     ]
                         .filter(Boolean)
                         .join(" • ");

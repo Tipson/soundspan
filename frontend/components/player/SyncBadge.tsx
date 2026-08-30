@@ -6,6 +6,7 @@ import { Crown, Users, Wifi, WifiOff, X } from "lucide-react";
 import { useListenTogether } from "@/lib/listen-together-context";
 import { useIsMobile } from "@/hooks/useMediaQuery";
 import { cn } from "@/utils/cn";
+import { pluralRu } from "@/lib/i18n/ru";
 
 interface SyncBadgeProps {
     /** Use compact styling for the mini/overlay player. */
@@ -105,7 +106,7 @@ const SyncBadge = memo(function SyncBadge({ compact = false }: SyncBadgeProps) {
                     accentClass,
                     "text-[9px] px-1 py-0.5 leading-none",
                 )}
-                title={`Listen Together — ${memberCount} listener${memberCount === 1 ? "" : "s"}`}
+                title={`Совместное прослушивание — ${memberCount} ${pluralRu(memberCount, ["участник", "участника", "участников"])}`}
             >
                 <Users className="w-2.5 h-2.5" />
             </Link>
@@ -154,13 +155,13 @@ const SyncBadge = memo(function SyncBadge({ compact = false }: SyncBadgeProps) {
                 {/* Title */}
                 <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold text-xs text-ai-hover">
-                        {activeGroup.name || "Listen Together"}
+                        {activeGroup.name || "Совместное прослушивание"}
                     </h3>
                     {isMobile && (
                         <button
                             onClick={handleClose}
                             className="text-gray-400 hover:text-white transition-colors p-0.5"
-                            aria-label="Close group info"
+                            aria-label="Закрыть сведения о группе"
                         >
                             <X className="w-3.5 h-3.5" />
                         </button>

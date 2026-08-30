@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/utils/cn";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Renders the UserAvatarMenu component.
@@ -106,10 +107,10 @@ export function UserAvatarMenu() {
         setIsOpen(false);
         try {
             await logout();
-            toast.success("Logged out successfully");
+            toast.success(ru.nav.logoutSuccess);
         } catch (error) {
             sharedFrontendLogger.error("Logout error:", error);
-            toast.error("Failed to logout");
+            toast.error(ru.nav.logoutFailed);
         }
     };
 
@@ -123,7 +124,7 @@ export function UserAvatarMenu() {
                         ? "ring-white/40"
                         : "ring-transparent hover:ring-white/20",
                 )}
-                aria-label="User menu"
+                aria-label={ru.nav.userMenu}
                 aria-haspopup="true"
                 aria-expanded={isOpen}
                 title={displayName}
@@ -164,7 +165,7 @@ export function UserAvatarMenu() {
                                 isScanPolling && "animate-spin",
                             )}
                         />
-                        {isScanPolling ? "Scanning..." : "Scan Library"}
+                        {isScanPolling ? ru.nav.scanning : ru.nav.scanLibrary}
                     </button>
                     <Link
                         href="/settings"

@@ -330,8 +330,8 @@ test("FullPlayer shows retry affordance when audioError is present", async () =>
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const html = renderToStaticMarkup(React.createElement(FullPlayer));
 
-    assert.match(html, /aria-label="Retry playback"/);
-    assert.match(html, /title="Retry playback"/);
+    assert.match(html, /aria-label="Повторить воспроизведение"/);
+    assert.match(html, /title="Повторить воспроизведение"/);
 });
 
 test("FullPlayer exposes both like and dislike controls for music", async () => {

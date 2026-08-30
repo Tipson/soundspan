@@ -131,7 +131,7 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     });
 
     const playButton = container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Play My Wave"]',
+        'button[aria-label="Включить мою волну"]',
     );
     assert.ok(playButton);
     assert.ok(container.querySelector('[data-home-wave-layout="launch"]'));
@@ -155,8 +155,8 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.deepEqual(calls.vibeQueueIds, [["quick", "fresh", "again"]]);
     assert.deepEqual(calls.waveMode, ["for-you"]);
     assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
-    assert.match(container.textContent ?? "", /My Wave/i);
-    assert.match(container.textContent ?? "", /Tune/i);
+    assert.match(container.textContent ?? "", /Моя волна/i);
+    assert.match(container.textContent ?? "", /Настроить/i);
     assert.doesNotMatch(container.textContent ?? "", /Press play/i);
     assert.doesNotMatch(
         container.textContent ?? "",
@@ -183,10 +183,10 @@ test("home Wave hero keeps play disabled while no recommendations are ready", as
     });
 
     const playButton = container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Play My Wave"]',
+        'button[aria-label="Включить мою волну"]',
     );
     assert.ok(playButton?.disabled);
-    assert.match(container.textContent ?? "", /Tuning your Wave/);
+    assert.match(container.textContent ?? "", /Настраиваем мою волну/);
 
     await act(async () => root.unmount());
 });

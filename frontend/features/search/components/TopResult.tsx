@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { Artist, DiscoverResult } from "../types";
 import { getArtistHref, getDiscoveryArtistHref } from "@/utils/artistRoute";
 import { PeerBadge } from "@/components/ui/PeerBadge";
+import { ru } from "@/lib/i18n/ru";
 interface TopResultProps {
     libraryArtist?: Artist;
     discoveryArtist?: DiscoverResult;
@@ -62,7 +63,7 @@ export function TopResult({
                 id="search-top-result-title"
                 className="mb-4 text-xl font-black tracking-[-0.025em] text-content sm:text-2xl"
             >
-                Top result
+                {ru.search.topResult}
             </h2>
             <Link
                 href={artistHref}
@@ -98,7 +99,7 @@ export function TopResult({
                 </div>
                 <div className="relative z-10 min-w-0 flex-1 px-4 sm:px-6">
                     <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.18em] text-content-muted">
-                        Artist
+                        {ru.catalog.artist}
                     </p>
                     <h3 className="truncate text-3xl font-black tracking-[-0.045em] text-content sm:text-4xl">
                         {name}
@@ -115,7 +116,7 @@ export function TopResult({
                 </div>
                 <span className="relative z-10 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-content text-surface shadow-lg transition-transform duration-200 group-hover:scale-[1.04] motion-reduce:transition-none">
                     <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
-                    <span className="sr-only">View artist</span>
+                    <span className="sr-only">{ru.search.viewArtist}</span>
                 </span>
             </Link>
         </section>

@@ -9,10 +9,11 @@ import {
     SettingsSelect,
     SettingsToggle,
 } from "../ui";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 const limitOptions = DEVICE_OFFLINE_AUTO_LIMIT_OPTIONS.map((limit) => ({
     value: String(limit),
-    label: `${limit} songs`,
+    label: `${limit} ${pluralRu(limit, ["трек", "трека", "треков"])}`,
 }));
 
 /** User-owned controls for liked-song files retained on this device. */
@@ -51,7 +52,7 @@ export function DeviceOfflineSettingsSection() {
             await setupStorage();
         } catch {
             setError(
-                "Soundspan could not open that folder. Choose it again and allow file access.",
+                ru.downloads.folderError,
             );
         } finally {
             setIsSaving(false);
@@ -68,7 +69,7 @@ export function DeviceOfflineSettingsSection() {
         try {
             await updateAutomationSettings(patch);
         } catch {
-            setError("Could not update offline settings on this device.");
+            setError("Не удалось обновить офлайн-настройки на этом устройстве.");
         } finally {
             setIsSaving(false);
         }
@@ -77,8 +78,8 @@ export function DeviceOfflineSettingsSection() {
     return (
         <SettingsSection
             id="device-offline"
-            title="Offline on this device"
-            description="Downloads are configured separately on every phone or computer. They are not stored on the Soundspan server and do not automatically appear on another device."
+            title="Офлайн на этом устройстве"
+            description="Загрузки настраиваются отдельно на каждом телефоне или компьютере. Они не хранятся на сервере Soundspan и не появляются автоматически на других устройствах."
         >
             {storageError && (
                 <div
@@ -118,8 +119,8 @@ export function DeviceOfflineSettingsSection() {
                     <>
                         <p className="text-sm font-semibold text-content-heading">
                             {usesPrivateStorage
-                                ? "Private offline storage ready"
-                                : "Device folder ready"}
+                                ? "Личное офлайн-хранилище готово"
+                                : "Папка на устройстве готова"}
                         </p>
                         <p className="mt-1 text-sm text-content-muted">
                             {usesPrivateStorage ? (
@@ -141,14 +142,14 @@ export function DeviceOfflineSettingsSection() {
                         <div>
                             <p className="text-sm font-semibold text-content-heading">
                                 {storage.status === "unsupported"
-                                    ? "Device-folder downloads are unavailable"
+                                    ? ru.downloads.folderUnavailable
                                     : storage.status === "checking"
-                                      ? "Checking device storage…"
+                                      ? ru.downloads.checkingStorage
                                       : storage.status === "requesting"
-                                        ? "Waiting for folder access…"
+                                        ? ru.downloads.waitingFolder
                                         : reconnectRememberedFolder
-                                          ? "Reconnect music folder"
-                                          : "Choose a music folder"}
+                                          ? ru.downloads.reconnectFolder
+                                          : ru.downloads.chooseFolder}
                             </p>
                             <p className="mt-1 text-sm leading-5 text-content-muted">
                                 {storage.explanation}
@@ -160,18 +161,18 @@ export function DeviceOfflineSettingsSection() {
                                 type="button"
                                 aria-label={
                                     reconnectRememberedFolder
-                                        ? "Reconnect music folder on this device"
-                                        : "Choose music folder on this device"
+                                        ? ru.downloads.reconnectFolder
+                                        : ru.downloads.chooseFolder
                                 }
                                 disabled={isSaving}
                                 onClick={() => void chooseStorage()}
                                 className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-brand/40 px-4 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
                             >
                                 {isSaving
-                                    ? "Opening…"
+                                    ? "Открываем…"
                                     : reconnectRememberedFolder
-                                      ? "Reconnect folder"
-                                      : "Choose folder"}
+                                      ? "Подключить папку заново"
+                                      : "Выбрать папку"}
                             </button>
                         )}
                     </div>
@@ -179,8 +180,8 @@ export function DeviceOfflineSettingsSection() {
             </div>
             <SettingsRow
                 htmlFor="device-auto-download-liked"
-                label="Automatically download liked songs on this device"
-                description="Off by default. After offline storage is ready, Soundspan saves liked songs gradually while the app is open, visible, and online, then resumes later after an interruption."
+                label="Автоматически скачивать любимые треки на это устройство"
+                description="По умолчанию выключено. После настройки хранилища Soundspan постепенно сохраняет любимые треки, пока приложение открыто и устройство в сети, а после прерывания продолжает позже."
             >
                 <SettingsToggle
                     id="device-auto-download-liked"
@@ -193,8 +194,8 @@ export function DeviceOfflineSettingsSection() {
             </SettingsRow>
             <SettingsRow
                 htmlFor="device-auto-download-limit"
-                label="Automatic download limit"
-                description="Oldest auto-managed copies are removed first. Tracks you explicitly download are never removed by this limit."
+                label="Лимит автоматических загрузок"
+                description="Сначала удаляются самые старые автоматические копии. Треки, которые вы скачали вручную, этот лимит не удаляет."
             >
                 <SettingsSelect
                     id="device-auto-download-limit"
@@ -209,10 +210,10 @@ export function DeviceOfflineSettingsSection() {
                 />
             </SettingsRow>
             <p className="text-xs leading-5 text-gray-400" aria-live="polite">
-                Automatic copies use at most 2 GB in this device&apos;s
-                Soundspan storage. A plain PWA cannot download reliably in the
-                background; keep Soundspan open until the current transfer
-                finishes.
+                Автоматические копии занимают не более 2 ГБ в хранилище
+                Soundspan на этом устройстве. Обычная PWA не может надёжно
+                скачивать в фоне, поэтому не закрывайте Soundspan до завершения
+                текущей загрузки.
             </p>
             {error && (
                 <p className="mt-2 text-xs text-red-400" role="alert">

@@ -4,6 +4,7 @@ import { BookmarkPlus, Check, Loader2 } from "lucide-react";
 import type { SavedMusicEntityInput } from "@/lib/api";
 import { cn } from "@/utils/cn";
 import { useSavedMusicEntity } from "../hooks/useSavedMusic";
+import { ru } from "@/lib/i18n/ru";
 
 interface SaveMusicEntityButtonProps {
     entity: SavedMusicEntityInput | null;
@@ -22,12 +23,12 @@ export function SaveMusicEntityButton({
 
     const busy = isLoading || isMutating;
     const label = isError
-        ? "Library unavailable"
+        ? ru.library.unavailable
         : isLoading
-          ? "Checking Library"
+          ? ru.library.checking
           : isSaved
-            ? "Remove from Library"
-            : "Save to Library";
+            ? ru.library.remove
+            : ru.library.save;
 
     return (
         <button
@@ -36,8 +37,8 @@ export function SaveMusicEntityButton({
             aria-label={label}
             title={
                 isSaved
-                    ? `Remove ${entity.title} from your Library`
-                    : `Save ${entity.title} to your Library`
+                    ? `${ru.library.remove}: ${entity.title}`
+                    : `${ru.library.save}: ${entity.title}`
             }
             disabled={busy || isError}
             onClick={() => void toggle()}

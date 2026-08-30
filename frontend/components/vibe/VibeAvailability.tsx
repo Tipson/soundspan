@@ -22,6 +22,7 @@ import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { api } from "@/lib/api";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
+import { ru } from "@/lib/i18n/ru";
 import { NowPlayingConnected } from "./NowPlayingConnected";
 import {
     WaveDirectionSheet,
@@ -462,7 +463,7 @@ export function VibeProviderFallback() {
         else play();
     }, [hasActiveWave, isPlaying, pause, play, startWave]);
     const primaryControlLabel =
-        hasActiveWave && isPlaying ? "Pause My Wave" : "Play My Wave";
+        hasActiveWave && isPlaying ? ru.vibe.pause : ru.vibe.play;
     const closeTune = useCallback(() => {
         setIsTuneOpen(false);
         queueMicrotask(() => tuneButtonRef.current?.focus());
@@ -540,22 +541,20 @@ export function VibeProviderFallback() {
                             className="h-4 w-4 text-brand-light"
                             aria-hidden="true"
                         />
-                        Keeps going. Keeps playing as you listen.
+                        {ru.vibe.continuity}
                     </div>
                     <header className="max-w-2xl">
                         <p className="text-[0.68rem] font-bold uppercase tracking-[0.22em] text-brand-light sm:text-xs">
-                            Personal radio, shaped by you
+                            {ru.vibe.personalRadio}
                         </p>
                         <h1
                             id="wave-title"
                             className="mt-3 text-5xl font-black leading-[0.9] tracking-[-0.065em] text-white sm:text-7xl lg:text-[6.6rem]"
                         >
-                            My Wave
+                            {ru.vibe.title}
                         </h1>
                         <p className="mx-auto mt-5 max-w-lg text-sm leading-6 text-content-secondary sm:text-base sm:leading-7">
-                            A personal flow that keeps finding what comes next.
-                            Your listening, likes, dislikes, and skips gently
-                            change its course.
+                            {ru.vibe.subtitle}
                         </p>
                     </header>
 
@@ -599,7 +598,7 @@ export function VibeProviderFallback() {
                             )}
                             <span>
                                 {!hasActiveWave && isLoading
-                                    ? "Tuning My Wave"
+                                    ? ru.vibe.tuning
                                     : primaryControlLabel}
                             </span>
                         </button>
@@ -614,13 +613,15 @@ export function VibeProviderFallback() {
                             className="wave-material flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-content backdrop-blur-xl sm:text-base"
                         >
                             <span className="text-content-muted">
-                                Direction
+                                {ru.vibe.directionLabel}
                             </span>
                             <span>{activeModeDefinition.shortLabel}</span>
                             <span aria-hidden="true" className="text-white/25">
                                 ·
                             </span>
-                            <span className="text-content-muted">Mood</span>
+                            <span className="text-content-muted">
+                                {ru.vibe.moodLabel}
+                            </span>
                             <span className="font-medium text-content-secondary">
                                 {activeMoodDefinition.label}
                             </span>
@@ -637,7 +638,7 @@ export function VibeProviderFallback() {
                                 className="h-4 w-4"
                                 aria-hidden="true"
                             />
-                            Tune
+                            {ru.vibe.tune}
                         </button>
                     </div>
 
@@ -648,8 +649,8 @@ export function VibeProviderFallback() {
                             className={`wave-material mt-4 rounded-full border px-4 py-2 text-sm font-semibold backdrop-blur-xl ${retuneNotice === "updated" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
                         >
                             {retuneNotice === "updated"
-                                ? "Wave updated"
-                                : "Couldn’t update. Your previous Wave keeps playing."}
+                                ? ru.vibe.updated
+                                : ru.vibe.updateFailed}
                         </p>
                     )}
 
@@ -660,21 +661,21 @@ export function VibeProviderFallback() {
                         >
                             <p>
                                 {isError
-                                    ? "My Wave could not load. Check your connection and try again."
-                                    : "Play a few songs, use like and dislike, or add a playlist to shape My Wave."}
+                                    ? ru.vibe.loadFailed
+                                    : ru.vibe.empty}
                             </p>
                             {isError && (
                                 <button
                                     type="button"
                                     onClick={() => void refetch()}
-                                    aria-label="Retry My Wave recommendations"
+                                    aria-label={ru.vibe.retryAria}
                                     className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
                                 >
                                     <RotateCcw
                                         className="h-4 w-4"
                                         aria-hidden="true"
                                     />
-                                    Retry
+                                    {ru.common.retry}
                                 </button>
                             )}
                         </div>
@@ -695,11 +696,10 @@ export function VibeProviderFallback() {
                                                 id="wave-now-playing-title"
                                                 className="text-xs font-bold uppercase tracking-[0.16em] text-brand-light"
                                             >
-                                                Now playing
+                                                {ru.vibe.nowPlaying}
                                             </h2>
                                             <p className="mt-1 text-xs text-content-muted">
-                                                Like, dislike, or skip to guide
-                                                the next pick.
+                                                {ru.vibe.feedbackHint}
                                             </p>
                                         </div>
                                         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
@@ -716,14 +716,14 @@ export function VibeProviderFallback() {
                                                 onClick={() =>
                                                     advanceQueue("manual")
                                                 }
-                                                aria-label="Skip current track"
+                                                aria-label={ru.vibe.skipAria}
                                                 className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-content-body transition-[transform,background-color,border-color] duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
                                             >
                                                 <SkipForward
                                                     className="h-4 w-4"
                                                     aria-hidden="true"
                                                 />
-                                                Skip
+                                                {ru.vibe.skip}
                                             </button>
                                         </div>
                                     </div>
@@ -731,11 +731,10 @@ export function VibeProviderFallback() {
                             ) : (
                                 <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-left">
                                     <p className="text-sm font-semibold text-content">
-                                        Ready when you are
+                                        {ru.vibe.ready}
                                     </p>
                                     <p className="mt-1 text-xs leading-5 text-content-muted">
-                                        Start My Wave and this space becomes
-                                        your feedback console.
+                                        {ru.vibe.readyDescription}
                                     </p>
                                 </div>
                             )}
@@ -743,17 +742,17 @@ export function VibeProviderFallback() {
                             {nextTracks.length > 0 && (
                                 <aside
                                     data-testid="wave-next-preview"
-                                    aria-label="Up next in My Wave"
+                                    aria-label={ru.vibe.upNextAria}
                                     className="min-w-0"
                                 >
                                     <div className="flex items-baseline justify-between gap-3">
                                         <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-content-body">
                                             {hasActiveWave
-                                                ? "Up next"
-                                                : "The Wave starts here"}
+                                                ? ru.vibe.upNext
+                                                : ru.vibe.startsHere}
                                         </h2>
                                         <span className="text-xs text-content-muted">
-                                            Then it keeps going
+                                            {ru.vibe.keepsGoing}
                                         </span>
                                     </div>
                                     <div className="mt-2 grid gap-1.5">

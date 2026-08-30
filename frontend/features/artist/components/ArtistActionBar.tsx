@@ -17,6 +17,7 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { toast } from "sonner";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { MusicDetailActionDock } from "@/components/music-detail";
+import { ru } from "@/lib/i18n/ru";
 
 const BRAND_PLAY = "var(--color-brand-hover)";
 
@@ -64,8 +65,7 @@ export function ArtistActionBar({
 }: ArtistActionBarProps) {
     const showPause = isPlaying && isPlayingThisArtist;
     const showRadio = source === "library" && onStartRadio;
-    const lockMessage =
-        "Listen Together is active — use Add to Queue to add tracks to the shared session.";
+    const lockMessage = ru.catalog.listenTogetherLock;
     const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
         usePlayButtonFeedback();
 
@@ -84,7 +84,7 @@ export function ArtistActionBar({
 
     return (
         <div className="w-full space-y-2">
-            <MusicDetailActionDock label="Artist controls">
+            <MusicDetailActionDock label={ru.catalog.artistControls}>
                 {isInListenTogetherGroup ? (
                     <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
                         <button
@@ -97,14 +97,14 @@ export function ArtistActionBar({
                             ) : (
                                 <Play className="w-5 h-5 fill-current ml-0.5" />
                             )}
-                            <span>{showPause ? "Pause" : "Play All"}</span>
+                            <span>{showPause ? ru.common.pause : ru.common.playAll}</span>
                         </button>
 
                         <button
                             onClick={handleLockedAction}
                             className="h-11 w-11 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-content-muted"
                             title={lockMessage}
-                            aria-label="Shuffle play unavailable during Listen Together"
+                            aria-label={ru.catalog.shuffleUnavailable}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -124,15 +124,15 @@ export function ArtistActionBar({
                             ) : (
                                 <Play className="w-5 h-5 fill-current text-black ml-0.5" />
                             )}
-                            <span>{showPause ? "Pause" : "Play All"}</span>
+                            <span>{showPause ? ru.common.pause : ru.common.playAll}</span>
                         </button>
 
                         {/* Shuffle Button */}
                         <button
                             onClick={onShuffle}
                             className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                            title="Shuffle play"
-                            aria-label="Shuffle play"
+                            title={ru.common.shuffle}
+                            aria-label={ru.common.shuffle}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -147,8 +147,8 @@ export function ArtistActionBar({
                     <button
                         onClick={onAddAllToQueue}
                         className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                        title="Add all to queue"
-                        aria-label="Add all to queue"
+                        title={ru.common.addQueue}
+                        aria-label={ru.common.addQueue}
                     >
                         <ListMusic className="w-5 h-5" />
                     </button>
@@ -158,8 +158,8 @@ export function ArtistActionBar({
                     <button
                         onClick={onAddToPlaylist}
                         className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                        title="Add all to playlist"
-                        aria-label="Add all to playlist"
+                        title={ru.common.addPlaylist}
+                        aria-label={ru.common.addPlaylist}
                     >
                         <Plus className="w-5 h-5" />
                     </button>
@@ -175,8 +175,8 @@ export function ArtistActionBar({
                                 ? "cursor-not-allowed text-white/35"
                                 : "text-white/60 hover:bg-white/10 hover:text-white",
                         )}
-                        title="Like all tracks"
-                        aria-label="Like all tracks"
+                        title={ru.catalog.likeAll}
+                        aria-label={ru.catalog.likeAll}
                     >
                         {isLikingAll ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -191,8 +191,8 @@ export function ArtistActionBar({
                     <button
                         onClick={onStartRadio}
                         className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                        title="Start artist radio"
-                        aria-label="Start artist radio"
+                        title={ru.catalog.artistRadio}
+                        aria-label={ru.catalog.artistRadio}
                     >
                         <Radio className="w-5 h-5" />
                     </button>

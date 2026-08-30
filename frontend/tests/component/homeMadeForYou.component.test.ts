@@ -98,7 +98,7 @@ test("personal Home mixes are distinct, playable, and bounded", async () => {
     assert.equal(mixes.length, 3);
     assert.deepEqual(
         mixes.map((mix) => mix.title),
-        ["Daily blend", "Fresh finds", "Back in rotation"],
+        ["Микс дня", "Новые находки", "Снова в ротации"],
     );
     assert.ok(mixes.every((mix) => mix.tracks.length > 0));
     assert.ok(mixes.every((mix) => mix.tracks.length <= 12));
@@ -146,12 +146,12 @@ test("Home Made For You renders at most six real collections", async () => {
         }),
     );
 
-    assert.match(html, /Made for you/);
+    assert.match(html, /Подобрано для вас/);
     assert.equal((html.match(/data-home-made-card=/g) ?? []).length, 6);
-    assert.match(html, /Daily blend/);
-    assert.match(html, /Fresh finds/);
-    assert.match(html, /Back in rotation/);
-    assert.match(html, /Discover Weekly/);
+    assert.match(html, /Микс дня/);
+    assert.match(html, /Новые находки/);
+    assert.match(html, /Снова в ротации/);
+    assert.match(html, /Открытия недели/);
     assert.match(html, /Mix 0/);
     assert.match(html, /Mix 1/);
     assert.doesNotMatch(html, /Mix 2/);

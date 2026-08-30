@@ -39,6 +39,7 @@ import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaybackQualityBadgeWithStats } from "./PlaybackQualityBadgeWithStats";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { PeerBadge } from "@/components/ui/PeerBadge";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * FullPlayer - UI-only component for desktop bottom player
@@ -229,7 +230,7 @@ export function FullPlayer() {
             data-player-diagnostics="overflow"
         >
             <span className="text-[11px] font-medium text-content-muted">
-                Stream
+                {ru.player.stream}
             </span>
             <PlaybackQualityBadgeWithStats badge={qualityBadge} size="mini" />
         </div>
@@ -364,7 +365,7 @@ export function FullPlayer() {
                         <div
                             className="player-transport flex items-center gap-2 xl:gap-3"
                             role="group"
-                            aria-label="Playback controls"
+                            aria-label={ru.player.controls}
                             data-player-control-group="primary"
                         >
                             {!isLongForm && (
@@ -379,9 +380,9 @@ export function FullPlayer() {
                                     disabled={
                                         !hasMedia || playbackType !== "track"
                                     }
-                                    aria-label="Shuffle"
+                                    aria-label={ru.player.shuffle}
                                     aria-pressed={isShuffle}
-                                    title="Shuffle"
+                                    title={ru.player.shuffle}
                                 >
                                     <Shuffle className="h-[18px] w-[18px]" />
                                 </button>
@@ -392,8 +393,8 @@ export function FullPlayer() {
                                     onClick={() => skipBackward(15)}
                                     className="player-control text-content-muted hover:text-white"
                                     disabled={!hasMedia || !canSeek}
-                                    aria-label="Skip back 15 seconds"
-                                    title="Skip back 15 seconds"
+                                    aria-label={ru.player.skipBack15}
+                                    title={ru.player.skipBack15}
                                 >
                                     <RotateCcw className="h-[18px] w-[18px]" />
                                 </button>
@@ -403,8 +404,8 @@ export function FullPlayer() {
                                 onClick={previous}
                                 className="player-control text-content-muted hover:text-white"
                                 disabled={!hasMedia || queue.length === 0}
-                                aria-label="Previous track"
-                                title="Previous track"
+                                aria-label={ru.player.previous}
+                                title={ru.player.previous}
                             >
                                 <SkipBack className="w-6 h-6" />
                             </button>
@@ -424,21 +425,21 @@ export function FullPlayer() {
                                 disabled={!hasMedia || isBuffering}
                                 aria-label={
                                     audioError
-                                        ? "Retry playback"
+                                        ? ru.player.retry
                                         : isBuffering
-                                          ? "Buffering..."
+                                          ? ru.player.buffering
                                           : isPlaying
-                                            ? "Pause"
-                                            : "Play"
+                                            ? ru.common.pause
+                                            : ru.common.play
                                 }
                                 title={
                                     audioError
-                                        ? "Retry playback"
+                                        ? ru.player.retry
                                         : isBuffering
-                                          ? "Buffering..."
+                                          ? ru.player.buffering
                                           : isPlaying
-                                            ? "Pause"
-                                            : "Play"
+                                            ? ru.common.pause
+                                            : ru.common.play
                                 }
                             >
                                 {hasMedia && !isBuffering && !audioError && (
@@ -459,8 +460,8 @@ export function FullPlayer() {
                                 onClick={next}
                                 className="player-control text-content-muted hover:text-white"
                                 disabled={!hasMedia || queue.length === 0}
-                                aria-label="Next track"
-                                title="Next track"
+                                aria-label={ru.player.next}
+                                title={ru.player.next}
                             >
                                 <SkipForward className="w-6 h-6" />
                             </button>
@@ -470,8 +471,8 @@ export function FullPlayer() {
                                     onClick={() => skipForward(15)}
                                     className="player-control text-content-muted hover:text-white"
                                     disabled={!hasMedia || !canSeek}
-                                    aria-label="Skip forward 15 seconds"
-                                    title="Skip forward 15 seconds"
+                                    aria-label={ru.player.skipForward15}
+                                    title={ru.player.skipForward15}
                                 >
                                     <RotateCw className="h-[18px] w-[18px]" />
                                 </button>
@@ -491,18 +492,18 @@ export function FullPlayer() {
                                     }
                                     aria-label={
                                         repeatMode === "off"
-                                            ? "Repeat off"
+                                            ? ru.player.repeatOff
                                             : repeatMode === "all"
-                                              ? "Repeat all"
-                                              : "Repeat one"
+                                              ? ru.player.repeatAll
+                                              : ru.player.repeatOne
                                     }
                                     aria-pressed={repeatMode !== "off"}
                                     title={
                                         repeatMode === "off"
-                                            ? "Repeat: Off"
+                                            ? ru.player.repeatOff
                                             : repeatMode === "all"
-                                              ? "Repeat: All (loop queue)"
-                                              : "Repeat: One (play current track twice)"
+                                              ? ru.player.repeatAll
+                                              : ru.player.repeatOne
                                     }
                                 >
                                     {repeatMode === "one" ? (
@@ -566,7 +567,9 @@ export function FullPlayer() {
                                     onClick={toggleMute}
                                     className="player-control text-content-muted hover:text-white"
                                     aria-label={
-                                        volume === 0 ? "Unmute" : "Mute"
+                                        volume === 0
+                                            ? ru.player.unmute
+                                            : ru.player.mute
                                     }
                                 >
                                     {isMuted || volume === 0 ? (
@@ -592,7 +595,7 @@ export function FullPlayer() {
                                                 max="100"
                                                 value={volume * 100}
                                                 onChange={handleVolumeChange}
-                                                aria-label="Volume"
+                                                aria-label={ru.player.volume}
                                                 aria-valuemin={0}
                                                 aria-valuemax={100}
                                                 aria-valuenow={Math.round(
@@ -629,13 +632,13 @@ export function FullPlayer() {
                                 disabled={!hasMedia}
                                 aria-label={
                                     playerMode === "overlay"
-                                        ? "Close overlay player"
-                                        : "Open overlay player"
+                                        ? ru.player.close
+                                        : ru.player.open
                                 }
                                 title={
                                     playerMode === "overlay"
-                                        ? "Close overlay player"
-                                        : "Open overlay player"
+                                        ? ru.player.close
+                                        : ru.player.open
                                 }
                             >
                                 {playerMode === "overlay" ? (

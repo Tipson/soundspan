@@ -14,6 +14,7 @@ import {
     OverlayQueueEpisodeRow,
     OverlayQueueTrackRow,
 } from "./OverlayQueueRows";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Rows rendered on the first pass before react-virtuoso measures the
@@ -89,8 +90,8 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
                             type="button"
                             onClick={onClearQueue}
                             className="inline-flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-white"
-                            title="Clear queue"
-                            aria-label="Clear queue"
+                            title={ru.player.clearQueue}
+                            aria-label={ru.player.clearQueue}
                         >
                             <Trash2 className="h-3 w-3" />
                             Clear Queue
@@ -104,7 +105,9 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
 
             {queueTracks.length === 0 ? (
                 <div className="flex min-h-0 flex-1 items-center justify-center px-4">
-                    <p className="text-sm text-gray-400">No tracks in queue.</p>
+                    <p className="text-sm text-gray-400">
+                        {ru.player.emptyQueue}
+                    </p>
                 </div>
             ) : (
                 <div className="min-h-0 flex-1 px-2 py-2">

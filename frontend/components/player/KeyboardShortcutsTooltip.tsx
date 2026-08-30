@@ -2,6 +2,7 @@
 
 import { Info } from "lucide-react";
 import { useState } from "react";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Renders the KeyboardShortcutsTooltip component.
@@ -10,15 +11,15 @@ export function KeyboardShortcutsTooltip() {
     const [isVisible, setIsVisible] = useState(false);
 
     const shortcuts = [
-        { key: "Space", action: "Play / Pause" },
-        { key: "→", action: "Seek forward 10s" },
-        { key: "←", action: "Seek backward 10s" },
-        { key: "↑", action: "Volume up 10%" },
-        { key: "↓", action: "Volume down 10%" },
-        { key: "M", action: "Toggle mute" },
-        { key: "N", action: "Next track" },
-        { key: "P", action: "Previous track" },
-        { key: "S", action: "Toggle shuffle" },
+        { key: "Пробел", action: ru.player.shortcutsList.playPause },
+        { key: "→", action: ru.player.shortcutsList.seekForward },
+        { key: "←", action: ru.player.shortcutsList.seekBackward },
+        { key: "↑", action: ru.player.shortcutsList.volumeUp },
+        { key: "↓", action: ru.player.shortcutsList.volumeDown },
+        { key: "M", action: ru.player.shortcutsList.toggleMute },
+        { key: "N", action: ru.player.shortcutsList.next },
+        { key: "P", action: ru.player.shortcutsList.previous },
+        { key: "S", action: ru.player.shortcutsList.shuffle },
     ];
 
     return (
@@ -28,7 +29,7 @@ export function KeyboardShortcutsTooltip() {
                 onMouseLeave={() => setIsVisible(false)}
                 onClick={() => setIsVisible(!isVisible)}
                 className="p-1.5 rounded transition-colors text-gray-400 hover:text-white"
-                title="Keyboard shortcuts"
+                title={ru.player.shortcuts}
             >
                 <Info className="w-3.5 h-3.5" />
             </button>

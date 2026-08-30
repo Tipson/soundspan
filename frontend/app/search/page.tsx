@@ -39,6 +39,7 @@ import {
     resolvePrimarySongsSurface,
     shouldShowSearchLoadingState,
 } from "@/features/search/searchSongsPriority";
+import { ru } from "@/lib/i18n/ru";
 
 type SearchSectionView = Exclude<SearchResultView, "all"> | null;
 
@@ -234,12 +235,12 @@ export default function SearchPage() {
 
     const activeViewLabel =
         activeView === "tracks"
-            ? "Tracks"
+            ? ru.search.tracks
             : activeView === "albums"
-              ? "Albums"
+              ? ru.search.albums
               : activeView === "artists"
-                ? "Artists"
-                : "Best matches";
+                ? ru.search.artists
+                : ru.search.bestMatches;
 
     const trackStatus =
         primarySongsSurface === "playable" &&
@@ -249,7 +250,7 @@ export default function SearchPage() {
                     aria-hidden="true"
                     className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-brand motion-reduce:animate-none"
                 />
-                Adding more sources…
+                {ru.search.addingSources}
             </span>
         ) : undefined;
 
@@ -258,11 +259,11 @@ export default function SearchPage() {
             <section className="min-w-0 rounded-[1.5rem] border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
                 {primarySongsSurface === "soulseek" ? null : (
                     <SearchSectionHeader
-                        title="Tracks"
+                        title={ru.search.tracks}
                         description={
                             sectionView === null
-                                ? "Popular playable matches from every source"
-                                : "Playable matches loaded progressively from your library and the online catalog"
+                                ? ru.search.popularMatches
+                                : ru.search.progressiveMatches
                         }
                         status={trackStatus}
                     />
@@ -310,8 +311,8 @@ export default function SearchPage() {
                                 >
                                     {isFetchingNextLibraryTracks ||
                                     isDiscoverSearching
-                                        ? "Loading more tracks…"
-                                        : `Load more tracks (${libraryTracks.length + unownedDiscoverTracks.length} loaded)`}
+                                        ? ru.search.loadingMore
+                                        : `${ru.search.loadMore} (${libraryTracks.length + unownedDiscoverTracks.length} ${ru.search.loaded})`}
                                 </button>
                             </div>
                         ) : null}
@@ -375,11 +376,11 @@ export default function SearchPage() {
                     className="relative mb-5 pt-2 sm:mb-6 sm:pt-4"
                 >
                     <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.18em] text-content-muted">
-                        Search
+                        {ru.search.title}
                     </p>
                     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
                         <h1 className="min-w-0 text-balance text-3xl font-black tracking-[-0.045em] text-content sm:text-5xl">
-                            Results for{" "}
+                            {ru.search.resultsFor}{" "}
                             <span className="text-content-secondary">
                                 “{query.trim()}”
                             </span>
@@ -439,7 +440,7 @@ export default function SearchPage() {
                             aria-hidden="true"
                             className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-brand motion-reduce:animate-none"
                         />
-                        Searching online catalog…
+                        {ru.search.onlineCatalog}
                     </p>
                 ) : null}
 
@@ -451,8 +452,8 @@ export default function SearchPage() {
                         />
                         <p className="text-sm text-content-secondary">
                             {isSoulseekSearching || isSoulseekPolling
-                                ? `Searching… (${soulseekResults.length} found)`
-                                : "Searching…"}
+                                ? `${ru.search.loading} (${soulseekResults.length} ${ru.search.found})`
+                                : ru.search.loading}
                         </p>
                     </div>
                 ) : null}
@@ -477,8 +478,8 @@ export default function SearchPage() {
                 hasAlbums ? (
                     <section>
                         <SearchSectionHeader
-                            title="Albums"
-                            description="Full releases and catalog matches"
+                            title={ru.search.albums}
+                            description={ru.search.albumDescription}
                         />
                         <div
                             className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6"
@@ -509,8 +510,8 @@ export default function SearchPage() {
                 hasArtists ? (
                     <section>
                         <SearchSectionHeader
-                            title="Artists"
-                            description="Artists that best match this search"
+                            title={ru.search.artists}
+                            description={ru.search.artistDescription}
                         />
                         <SearchArtistsGrid
                             libraryArtists={libraryArtists}
@@ -531,7 +532,7 @@ export default function SearchPage() {
                 visibleSimilarArtists.length > 0 ? (
                     <SimilarArtistsGrid
                         similarArtists={visibleSimilarArtists}
-                        title="Related Artists"
+                        title={ru.search.relatedArtists}
                     />
                 ) : null}
 
@@ -554,11 +555,10 @@ export default function SearchPage() {
                             id="search-no-results-title"
                             className="mb-2 text-2xl font-black tracking-[-0.035em] text-content"
                         >
-                            Nothing matched “{query.trim()}”
+                            {ru.search.noMatch} “{query.trim()}”
                         </h2>
                         <p className="max-w-md text-sm leading-6 text-content-secondary">
-                            Check the spelling or try a track, artist, or album
-                            name.
+                            {ru.search.noMatchHint}
                         </p>
                     </section>
                 ) : null}
