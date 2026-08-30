@@ -141,7 +141,8 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
 
 mock.module("@/features/device-offline/components/DownloadsList", {
     namedExports: {
-        DownloadsList: () => React.createElement("div", null, "ЗАГРУЗКИ НА УСТРОЙСТВЕ"),
+        DownloadsList: () =>
+            React.createElement("div", null, "ЗАГРУЗКИ НА УСТРОЙСТВЕ"),
     },
 });
 
@@ -179,7 +180,10 @@ test("Library tabs expose account-saved entities and existing device downloads",
     const albumsHtml = renderToStaticMarkup(React.createElement(LibraryPage));
     assert.match(albumsHtml, /Meteora/);
     assert.match(albumsHtml, /Сохранённые альбомы/);
-    assert.match(albumsHtml, /Загрузки выбираются отдельно на каждом устройстве/);
+    assert.match(
+        albumsHtml,
+        /Загрузки выбираются отдельно на каждом устройстве/,
+    );
     assert.match(albumsHtml, /Показать ещё альбомы/);
 
     tab = "downloads";

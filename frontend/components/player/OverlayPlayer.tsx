@@ -789,8 +789,14 @@ export function OverlayPlayer() {
                                                             )
                                                         }
                                                         className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                                        title={ru.player.addToPlaylist}
-                                                        aria-label={ru.player.addToPlaylist}
+                                                        title={
+                                                            ru.player
+                                                                .addToPlaylist
+                                                        }
+                                                        aria-label={
+                                                            ru.player
+                                                                .addToPlaylist
+                                                        }
                                                     >
                                                         <Plus className="h-6 w-6" />
                                                     </button>
@@ -806,8 +812,14 @@ export function OverlayPlayer() {
                                                                     isRadioLoading
                                                                 }
                                                                 className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                                                title={ru.player.startArtistRadio}
-                                                                aria-label={ru.player.startArtistRadio}
+                                                                title={
+                                                                    ru.player
+                                                                        .startArtistRadio
+                                                                }
+                                                                aria-label={
+                                                                    ru.player
+                                                                        .startArtistRadio
+                                                                }
                                                             >
                                                                 {isRadioLoading ? (
                                                                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -834,10 +846,17 @@ export function OverlayPlayer() {
                                                                 )}
                                                                 title={
                                                                     vibeMode
-                                                                        ? ru.player.vibeOff
-                                                                        : ru.player.matchVibe
+                                                                        ? ru
+                                                                              .player
+                                                                              .vibeOff
+                                                                        : ru
+                                                                              .player
+                                                                              .matchVibe
                                                                 }
-                                                                aria-label={ru.player.matchVibe}
+                                                                aria-label={
+                                                                    ru.player
+                                                                        .matchVibe
+                                                                }
                                                             >
                                                                 {isVibeLoading ? (
                                                                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -859,8 +878,12 @@ export function OverlayPlayer() {
                                                                 ? "text-brand-hover"
                                                                 : "text-gray-400 hover:text-white",
                                                         )}
-                                                        title={ru.player.shuffle}
-                                                        aria-label={ru.player.shuffle}
+                                                        title={
+                                                            ru.player.shuffle
+                                                        }
+                                                        aria-label={
+                                                            ru.player.shuffle
+                                                        }
                                                     >
                                                         <Shuffle className="h-5 w-5" />
                                                     </button>
@@ -873,8 +896,12 @@ export function OverlayPlayer() {
                                                         }
                                                         className="player-control text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
                                                         disabled={!canSeek}
-                                                        title={ru.player.skipBack15}
-                                                        aria-label={ru.player.skipBack15}
+                                                        title={
+                                                            ru.player.skipBack15
+                                                        }
+                                                        aria-label={
+                                                            ru.player.skipBack15
+                                                        }
                                                     >
                                                         <RotateCcw className="h-5 w-5" />
                                                     </button>
@@ -884,7 +911,9 @@ export function OverlayPlayer() {
                                                     onClick={previous}
                                                     className="player-control text-white/85 transition-colors hover:text-white"
                                                     title={ru.player.previous}
-                                                    aria-label={ru.player.previous}
+                                                    aria-label={
+                                                        ru.player.previous
+                                                    }
                                                 >
                                                     <SkipBack className="h-8 w-8" />
                                                 </button>
@@ -904,9 +933,11 @@ export function OverlayPlayer() {
                                                         audioError
                                                             ? ru.player.retry
                                                             : isBuffering
-                                                              ? ru.player.buffering
+                                                              ? ru.player
+                                                                    .buffering
                                                               : isPlaying
-                                                                ? ru.common.pause
+                                                                ? ru.common
+                                                                      .pause
                                                                 : ru.common.play
                                                     }
                                                     aria-label={
@@ -944,8 +975,14 @@ export function OverlayPlayer() {
                                                         }
                                                         className="player-control text-white/85 transition-colors hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
                                                         disabled={!canSeek}
-                                                        title={ru.player.skipForward15}
-                                                        aria-label={ru.player.skipForward15}
+                                                        title={
+                                                            ru.player
+                                                                .skipForward15
+                                                        }
+                                                        aria-label={
+                                                            ru.player
+                                                                .skipForward15
+                                                        }
                                                     >
                                                         <RotateCw className="h-5 w-5" />
                                                     </button>
@@ -962,13 +999,18 @@ export function OverlayPlayer() {
                                                         )}
                                                         title={
                                                             repeatMode === "one"
-                                                                ? ru.player.repeatOne
+                                                                ? ru.player
+                                                                      .repeatOne
                                                                 : repeatMode ===
                                                                     "all"
-                                                                  ? ru.player.repeatAll
-                                                                  : ru.player.repeatOff
+                                                                  ? ru.player
+                                                                        .repeatAll
+                                                                  : ru.player
+                                                                        .repeatOff
                                                         }
-                                                        aria-label={ru.player.repeatOff}
+                                                        aria-label={
+                                                            ru.player.repeatOff
+                                                        }
                                                     >
                                                         {repeatMode ===
                                                         "one" ? (

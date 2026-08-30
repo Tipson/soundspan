@@ -347,7 +347,10 @@ export function Sidebar() {
                                         [
                                             ["updated", ru.nav.updatedDate],
                                             ["created", ru.nav.createdDate],
-                                            ["alphabetical", ru.nav.alphabetical],
+                                            [
+                                                "alphabetical",
+                                                ru.nav.alphabetical,
+                                            ],
                                         ] as const
                                     ).map(([value, label]) => (
                                         <button
