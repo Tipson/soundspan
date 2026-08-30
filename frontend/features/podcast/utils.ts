@@ -1,4 +1,4 @@
-export { formatDate } from "@/utils/formatTime";
+export { formatPodcastDateRu as formatDate } from "@/lib/i18n/podcastRu";
 
 /**
  * Executes getContrastColor.

@@ -2,7 +2,7 @@
 
 import { Play, Pause, Loader2 } from "lucide-react";
 import { Podcast, Episode } from "../types";
-import { formatDuration } from "@/utils/formatTime";
+import { formatPodcastDurationRu, podcastRu } from "@/lib/i18n/podcastRu";
 import { formatDate } from "../utils";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 
@@ -60,7 +60,9 @@ export function ContinueListening({
 
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">Continue Listening</h2>
+            <h2 className="text-xl font-bold mb-4">
+                {podcastRu.detail.continueListening}
+            </h2>
             <div className="space-y-2">
                 {/* Previous Episode - Faded */}
                 {previousEpisode && (
@@ -76,7 +78,7 @@ export function ContinueListening({
                                 {previousEpisode.title}
                             </h3>
                             <p className="text-xs text-white/40">
-                                Previous episode
+                                {podcastRu.detail.previousEpisode}
                             </p>
                         </div>
                     </div>
@@ -111,7 +113,9 @@ export function ContinueListening({
                         </h3>
                         <div className="flex items-center gap-3 mt-1 text-xs text-white/50">
                             <span>
-                                {formatDuration(recentEpisode.duration)}
+                                {formatPodcastDurationRu(
+                                    recentEpisode.duration,
+                                )}
                             </span>
                             <span>•</span>
                             <span>{formatDate(recentEpisode.publishedAt)}</span>
@@ -154,7 +158,7 @@ export function ContinueListening({
                                 {nextEpisode.title}
                             </h3>
                             <p className="text-xs text-white/40">
-                                Next episode
+                                {podcastRu.detail.nextEpisode}
                             </p>
                         </div>
                     </div>

@@ -16,6 +16,15 @@ import { useFeatures } from "@/lib/features-context";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import type { PeerPodcastListing } from "@/lib/api/podcasts";
 import { queryKeys } from "@/lib/queryKeys";
+import {
+    formatPageRu,
+    formatPerPageRu,
+    formatPodcastCountRu,
+    formatPodcastSearchEmptyRu,
+    formatPodcastSubscribedRu,
+    podcastRu,
+} from "@/lib/i18n/podcastRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 // Always proxy images through the backend for caching and mobile compatibility
 const getProxiedImageUrl = (imageUrl: string | undefined): string | null => {
@@ -181,7 +190,7 @@ export default function PodcastsPage() {
 
         const trimmedUrl = rssUrl.trim();
         if (!trimmedUrl) {
-            toast.error("Enter an RSS feed URL");
+            toast.error(podcastRu.errors.rssRequired);
             return;
         }
 
@@ -191,11 +200,11 @@ export default function PodcastsPage() {
                 parsedUrl.protocol !== "http:" &&
                 parsedUrl.protocol !== "https:"
             ) {
-                toast.error("RSS URL must start with http:// or https://");
+                toast.error(podcastRu.errors.rssProtocol);
                 return;
             }
         } catch {
-            toast.error("Enter a valid RSS feed URL");
+            toast.error(podcastRu.errors.rssInvalid);
             return;
         }
 
@@ -205,17 +214,15 @@ export default function PodcastsPage() {
 
             if (response.success && response.podcast?.id) {
                 setRssUrl("");
-                toast.success("Podcast subscribed");
+                toast.success(podcastRu.success.subscribed);
                 router.push(`/podcasts/${response.podcast.id}`);
                 return;
             }
 
-            toast.error("Failed to subscribe to RSS feed");
+            toast.error(podcastRu.errors.rssSubscribeFailed);
         } catch (error: unknown) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to subscribe to RSS feed",
+                userFacingError(error, podcastRu.errors.rssSubscribeFailed),
             );
         } finally {
             setIsAddingRss(false);
@@ -240,8 +247,8 @@ export default function PodcastsPage() {
             <div className="relative">
                 <div className="px-4 md:px-8 py-6">
                     <PageHeader
-                        title="Podcasts"
-                        subtitle="Subscribe and stream your favorite shows"
+                        title={podcastRu.main.title}
+                        subtitle={podcastRu.main.subtitle}
                         icon={Mic2}
                         className="mb-4"
                     />
@@ -256,7 +263,7 @@ export default function PodcastsPage() {
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Quick add..."
+                            placeholder={podcastRu.main.quickAdd}
                             className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-ai focus:bg-white/10 transition-all text-sm"
                         />
                         {isSearching && (
@@ -290,7 +297,8 @@ export default function PodcastsPage() {
                                                         src={imageUrl}
                                                         alt={
                                                             result.name ||
-                                                            "Podcast"
+                                                            podcastRu.main
+                                                                .fallbackAlt
                                                         }
                                                         fill
                                                         sizes="48px"
@@ -333,8 +341,9 @@ export default function PodcastsPage() {
                             searchQuery.length >= 2 && (
                                 <div className="absolute top-full left-0 mt-2 w-full bg-surface-sunken border border-white/10 rounded-lg shadow-2xl p-4 z-50">
                                     <p className="text-gray-400 text-sm text-center">
-                                        No podcasts found for &quot;
-                                        {searchQuery}&quot;
+                                        {formatPodcastSearchEmptyRu(
+                                            searchQuery,
+                                        )}
                                     </p>
                                 </div>
                             )}
@@ -355,7 +364,7 @@ export default function PodcastsPage() {
                                             handleAddByRss();
                                         }
                                     }}
-                                    placeholder="Add by RSS URL..."
+                                    placeholder={podcastRu.main.rssPlaceholder}
                                     className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-ai focus:bg-white/10 transition-all text-sm"
                                 />
                             </div>
@@ -364,11 +373,13 @@ export default function PodcastsPage() {
                                 disabled={isAddingRss}
                                 className="h-11 px-4 rounded-full bg-brand-hover hover:bg-brand-light text-black font-semibold text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                {isAddingRss ? "Adding..." : "Add RSS"}
+                                {isAddingRss
+                                    ? podcastRu.main.rssAdding
+                                    : podcastRu.main.addRss}
                             </button>
                         </div>
                         <p className="mt-2 px-2 text-xs text-gray-400">
-                            Example:{" "}
+                            {podcastRu.main.example}{" "}
                             <span className="font-mono">
                                 https://example.com/podcast/feed.xml
                             </span>
@@ -383,7 +394,7 @@ export default function PodcastsPage() {
                     <section>
                         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                             <h2 className="text-xl font-bold text-white">
-                                My Podcasts
+                                {podcastRu.main.myPodcasts}
                             </h2>
                             <div className="flex flex-wrap items-center gap-2">
                                 {/* Sort Dropdown */}
@@ -395,10 +406,14 @@ export default function PodcastsPage() {
                                     className="px-4 py-2 bg-surface-hover border border-white/10 rounded-full text-white text-sm focus:outline-none focus:border-ai [&>option]:bg-surface-hover [&>option]:text-white"
                                     disabled={showMyPodcastsSkeleton}
                                 >
-                                    <option value="title">Title (A-Z)</option>
-                                    <option value="author">Author (A-Z)</option>
+                                    <option value="title">
+                                        {podcastRu.main.sortTitle}
+                                    </option>
+                                    <option value="author">
+                                        {podcastRu.main.sortAuthor}
+                                    </option>
                                     <option value="recent">
-                                        Most Episodes
+                                        {podcastRu.main.sortEpisodes}
                                     </option>
                                 </select>
 
@@ -412,17 +427,15 @@ export default function PodcastsPage() {
                                     className="px-4 py-2 bg-surface-hover border border-white/10 rounded-full text-white text-sm focus:outline-none focus:border-ai [&>option]:bg-surface-hover [&>option]:text-white"
                                     disabled={showMyPodcastsSkeleton}
                                 >
-                                    <option value={25}>25 per page</option>
-                                    <option value={50}>50 per page</option>
-                                    <option value={100}>100 per page</option>
-                                    <option value={250}>250 per page</option>
+                                    {[25, 50, 100, 250].map((count) => (
+                                        <option key={count} value={count}>
+                                            {formatPerPageRu(count)}
+                                        </option>
+                                    ))}
                                 </select>
 
                                 <span className="text-sm text-gray-400">
-                                    {podcasts.length}{" "}
-                                    {podcasts.length === 1
-                                        ? "podcast"
-                                        : "podcasts"}
+                                    {formatPodcastCountRu(podcasts.length)}
                                 </span>
                             </div>
                         </div>
@@ -486,7 +499,7 @@ export default function PodcastsPage() {
                                     disabled={currentPage === 1}
                                     className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    First
+                                    {podcastRu.main.firstPage}
                                 </button>
                                 <button
                                     onClick={() =>
@@ -497,10 +510,10 @@ export default function PodcastsPage() {
                                     disabled={currentPage === 1}
                                     className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Prev
+                                    {podcastRu.main.previousPage}
                                 </button>
                                 <span className="px-4 py-2 text-sm text-white">
-                                    Page {currentPage} of {totalPages}
+                                    {formatPageRu(currentPage, totalPages)}
                                 </span>
                                 <button
                                     onClick={() =>
@@ -511,14 +524,14 @@ export default function PodcastsPage() {
                                     disabled={currentPage === totalPages}
                                     className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Next
+                                    {podcastRu.main.nextPage}
                                 </button>
                                 <button
                                     onClick={() => setCurrentPage(totalPages)}
                                     disabled={currentPage === totalPages}
                                     className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Last
+                                    {podcastRu.main.lastPage}
                                 </button>
                             </div>
                         )}
@@ -529,7 +542,7 @@ export default function PodcastsPage() {
                 {(topPodcasts.length > 0 || showTopPodcastsSkeleton) && (
                     <section>
                         <h2 className="text-xl font-bold text-white mb-6">
-                            Top Podcasts
+                            {podcastRu.main.topPodcasts}
                         </h2>
                         {showTopPodcastsSkeleton ? (
                             <PodcastGridSkeleton count={10} />
@@ -590,7 +603,7 @@ export default function PodcastsPage() {
                 {showGenreDiscoverySkeleton && (
                     <section>
                         <h2 className="text-xl font-bold text-white mb-6">
-                            Loading Discovery
+                            {podcastRu.main.loadingDiscovery}
                         </h2>
                         <PodcastGridSkeleton count={5} />
                     </section>
@@ -598,13 +611,13 @@ export default function PodcastsPage() {
 
                 {/* Genre-based Discovery - Ordered by popularity */}
                 {[
-                    { id: "1303", name: "Comedy" },
-                    { id: "1324", name: "Society & Culture" },
-                    { id: "1489", name: "News" },
-                    { id: "1488", name: "True Crime" },
-                    { id: "1321", name: "Business" },
-                    { id: "1545", name: "Sports" },
-                    { id: "1502", name: "Leisure" },
+                    { id: "1303", name: podcastRu.main.genres.comedy },
+                    { id: "1324", name: podcastRu.main.genres.society },
+                    { id: "1489", name: podcastRu.main.genres.news },
+                    { id: "1488", name: podcastRu.main.genres.trueCrime },
+                    { id: "1321", name: podcastRu.main.genres.business },
+                    { id: "1545", name: podcastRu.main.genres.sports },
+                    { id: "1502", name: podcastRu.main.genres.leisure },
                 ].map(({ id: genreId, name: genreName }) => {
                     const genrePodcasts = relatedPodcasts[genreId] || [];
 
@@ -622,7 +635,7 @@ export default function PodcastsPage() {
                                     }
                                     className="text-sm font-semibold text-gray-400 hover:text-white transition-colors"
                                 >
-                                    View More
+                                    {podcastRu.main.viewMore}
                                 </button>
                             </div>
                             <div
@@ -685,11 +698,10 @@ export default function PodcastsPage() {
                         <div className="flex flex-col items-center justify-center py-24">
                             <Mic2 className="w-24 h-24 text-gray-400 mb-6" />
                             <h2 className="text-2xl font-bold text-white mb-2">
-                                Discover Podcasts
+                                {podcastRu.main.emptyTitle}
                             </h2>
                             <p className="text-gray-400 text-center max-w-md">
-                                Search for podcasts above to subscribe and start
-                                listening
+                                {podcastRu.main.emptyDescription}
                             </p>
                         </div>
                     )}
@@ -718,14 +730,14 @@ function PeerPodcastsSection() {
         try {
             const response = await api.subscribePodcast(listing.feedUrl);
             if (response.success) {
-                toast.success(`Subscribed to ${listing.title}`);
+                toast.success(formatPodcastSubscribedRu(listing.title));
                 await refetch();
                 return;
             }
-            toast.error("Failed to subscribe");
+            toast.error(podcastRu.errors.subscribeFailed);
         } catch (error: unknown) {
             toast.error(
-                error instanceof Error ? error.message : "Failed to subscribe",
+                userFacingError(error, podcastRu.errors.subscribeFailed),
             );
         } finally {
             setSubscribingId(null);
@@ -735,7 +747,7 @@ function PeerPodcastsSection() {
     return (
         <section>
             <h2 className="text-xl font-bold text-white mb-6">
-                From your peers
+                {podcastRu.main.peerPodcasts}
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {listings.map((listing) => (
@@ -773,7 +785,7 @@ function PeerPodcastsSection() {
                             />
                             {listing.subscribed ? (
                                 <span className="text-[10px] uppercase text-gray-500">
-                                    Subscribed
+                                    {podcastRu.main.subscribed}
                                 </span>
                             ) : (
                                 <button
@@ -782,7 +794,7 @@ function PeerPodcastsSection() {
                                     onClick={() => void subscribe(listing)}
                                     className="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-black disabled:opacity-50"
                                 >
-                                    Subscribe
+                                    {podcastRu.main.subscribe}
                                 </button>
                             )}
                         </div>

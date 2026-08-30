@@ -3,7 +3,12 @@
 import { Play, Pause, Check, ArrowUpDown, CheckCircle } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { Podcast, Episode } from "../types";
-import { formatDuration } from "@/utils/formatTime";
+import {
+    formatEpisodeNumberRu,
+    formatPodcastDurationRu,
+    formatSeasonRu,
+    podcastRu,
+} from "@/lib/i18n/podcastRu";
 import { formatDate } from "../utils";
 import { EpisodeOverflowMenu } from "./EpisodeOverflowMenu";
 
@@ -36,7 +41,9 @@ export function EpisodeList({
     return (
         <section>
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-white">All Episodes</h2>
+                <h2 className="text-xl font-bold text-white">
+                    {podcastRu.detail.allEpisodes}
+                </h2>
                 <button
                     onClick={() =>
                         onSortOrderChange(
@@ -46,7 +53,9 @@ export function EpisodeList({
                     className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-sm text-white/70 hover:text-white transition-all"
                 >
                     <ArrowUpDown className="w-4 h-4" />
-                    {sortOrder === "newest" ? "Newest First" : "Oldest First"}
+                    {sortOrder === "newest"
+                        ? podcastRu.detail.newestFirst
+                        : podcastRu.detail.oldestFirst}
                 </button>
             </div>
 
@@ -154,14 +163,20 @@ export function EpisodeList({
                                         {episode.season && (
                                             <>
                                                 <span>•</span>
-                                                <span>S{episode.season}</span>
+                                                <span>
+                                                    {formatSeasonRu(
+                                                        episode.season,
+                                                    )}
+                                                </span>
                                             </>
                                         )}
                                         {episode.episodeNumber && (
                                             <>
                                                 <span>•</span>
                                                 <span>
-                                                    E{episode.episodeNumber}
+                                                    {formatEpisodeNumberRu(
+                                                        episode.episodeNumber,
+                                                    )}
                                                 </span>
                                             </>
                                         )}
@@ -169,7 +184,7 @@ export function EpisodeList({
                                             <>
                                                 <span>•</span>
                                                 <span className="text-green-400">
-                                                    Finished
+                                                    {podcastRu.detail.finished}
                                                 </span>
                                             </>
                                         )}
@@ -190,7 +205,7 @@ export function EpisodeList({
 
                                 {/* Duration */}
                                 <span className="text-xs text-white/40 shrink-0">
-                                    {formatDuration(episode.duration)}
+                                    {formatPodcastDurationRu(episode.duration)}
                                 </span>
 
                                 {/* Queue actions */}
@@ -217,7 +232,9 @@ export function EpisodeList({
                                                 );
                                             }}
                                             className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-1.5 rounded-full hover:bg-white/10"
-                                            title="Mark as complete"
+                                            title={
+                                                podcastRu.detail.markComplete
+                                            }
                                         >
                                             <CheckCircle className="w-4 h-4 text-white/60 hover:text-green-400" />
                                         </button>

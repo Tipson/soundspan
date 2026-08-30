@@ -4,7 +4,7 @@ import DOMPurify from "dompurify";
 import { Plus, Loader2 } from "lucide-react";
 import { PodcastPreview } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
-import { formatDuration } from "@/utils/formatTime";
+import { formatPodcastDurationRu, podcastRu } from "@/lib/i18n/podcastRu";
 import { formatDate } from "../utils";
 
 interface PreviewEpisodesProps {
@@ -24,7 +24,9 @@ export function PreviewEpisodes({
 }: PreviewEpisodesProps) {
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">Latest Episodes</h2>
+            <h2 className="text-xl font-bold mb-4">
+                {podcastRu.detail.latestEpisodes}
+            </h2>
 
             {/* Episode Preview with Blur/Lock Effect */}
             <div className="relative">
@@ -60,7 +62,7 @@ export function PreviewEpisodes({
                                                     <>
                                                         <span>•</span>
                                                         <span>
-                                                            {formatDuration(
+                                                            {formatPodcastDurationRu(
                                                                 episode.duration,
                                                             )}
                                                         </span>
@@ -83,13 +85,15 @@ export function PreviewEpisodes({
                                 {isSubscribing ? (
                                     <>
                                         <Loader2 className="w-5 h-5 animate-spin" />
-                                        <span>Subscribing...</span>
+                                        <span>
+                                            {podcastRu.detail.subscribing}
+                                        </span>
                                     </>
                                 ) : (
                                     <>
                                         <Plus className="w-5 h-5" />
                                         <span>
-                                            Subscribe to Unlock All Episodes
+                                            {podcastRu.detail.unlockEpisodes}
                                         </span>
                                     </>
                                 )}
@@ -99,7 +103,7 @@ export function PreviewEpisodes({
                 ) : (
                     <div className="bg-white/5 rounded-md p-6 text-center">
                         <p className="text-white/50 mb-4">
-                            No episodes available for preview.
+                            {podcastRu.detail.previewEmpty}
                         </p>
                         <button
                             onClick={onSubscribe}
@@ -109,12 +113,12 @@ export function PreviewEpisodes({
                             {isSubscribing ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    <span>Subscribing...</span>
+                                    <span>{podcastRu.detail.subscribing}</span>
                                 </>
                             ) : (
                                 <>
                                     <Plus className="w-5 h-5" />
-                                    <span>Subscribe</span>
+                                    <span>{podcastRu.detail.subscribe}</span>
                                 </>
                             )}
                         </button>
@@ -125,7 +129,9 @@ export function PreviewEpisodes({
             {/* About Section */}
             {previewData.description && (
                 <div className="mt-8">
-                    <h2 className="text-xl font-bold mb-4">About</h2>
+                    <h2 className="text-xl font-bold mb-4">
+                        {podcastRu.detail.about}
+                    </h2>
                     <div className="bg-white/5 rounded-md p-4">
                         <div
                             className="prose prose-invert prose-sm max-w-none text-white/70 [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline"

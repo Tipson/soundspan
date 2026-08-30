@@ -5,6 +5,7 @@ import { EllipsisVertical, ListEnd, ListPlus } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Episode } from "../types";
+import { podcastRu } from "@/lib/i18n/podcastRu";
 
 interface EpisodeOverflowMenuProps {
     episode: Episode;
@@ -96,10 +97,10 @@ export function EpisodeOverflowMenu({
                         : "text-gray-400 hover:bg-[#2a2a2a] hover:text-white",
                     triggerClassName,
                 )}
-                aria-label="Episode actions"
+                aria-label={podcastRu.detail.episodeActions}
                 aria-expanded={isOpen}
                 aria-haspopup="menu"
-                title="Episode actions"
+                title={podcastRu.detail.episodeActions}
             >
                 <EllipsisVertical className="h-4 w-4" />
             </button>
@@ -116,20 +117,20 @@ export function EpisodeOverflowMenu({
                         onClick={handlePlayNext}
                         className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10 hover:text-white"
                         role="menuitem"
-                        title="Play next"
+                        title={podcastRu.detail.playNext}
                     >
                         <ListEnd className="h-4 w-4" />
-                        Play next
+                        {podcastRu.detail.playNext}
                     </button>
                     <button
                         type="button"
                         onClick={handleAddToQueue}
                         className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10 hover:text-white"
                         role="menuitem"
-                        title="Add to queue"
+                        title={podcastRu.detail.addToQueue}
                     >
                         <ListPlus className="h-4 w-4" />
-                        Add to queue
+                        {podcastRu.detail.addToQueue}
                     </button>
                 </div>
             )}

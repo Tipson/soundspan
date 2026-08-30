@@ -2,6 +2,7 @@
 
 import { ExternalLink, Trash2, Plus, Loader2 } from "lucide-react";
 import type { ColorPalette } from "@/hooks/useImageColor";
+import { podcastRu } from "@/lib/i18n/podcastRu";
 
 interface PodcastActionBarProps {
     isSubscribed: boolean;
@@ -38,12 +39,12 @@ export function PodcastActionBar({
                     {isSubscribing ? (
                         <>
                             <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Subscribing...</span>
+                            <span>{podcastRu.detail.subscribing}</span>
                         </>
                     ) : (
                         <>
                             <Plus className="w-5 h-5" />
-                            <span>Subscribe</span>
+                            <span>{podcastRu.detail.subscribe}</span>
                         </>
                     )}
                 </button>
@@ -56,7 +57,7 @@ export function PodcastActionBar({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all"
-                    title="RSS Feed"
+                    title={podcastRu.detail.rssFeed}
                 >
                     <ExternalLink className="w-5 h-5" />
                 </a>
@@ -74,24 +75,26 @@ export function PodcastActionBar({
                             className="flex items-center gap-2 px-4 py-2 rounded-full text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm"
                         >
                             <Trash2 className="w-4 h-4" />
-                            <span className="hidden md:inline">Remove</span>
+                            <span className="hidden md:inline">
+                                {podcastRu.detail.remove}
+                            </span>
                         </button>
                     ) : (
                         <div className="flex items-center gap-2">
                             <span className="text-sm text-white/50 hidden md:inline">
-                                Remove podcast?
+                                {podcastRu.detail.removeQuestion}
                             </span>
                             <button
                                 onClick={onRemove}
                                 className="px-4 py-2 rounded-full text-sm font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all"
                             >
-                                Confirm
+                                {podcastRu.detail.confirm}
                             </button>
                             <button
                                 onClick={() => onShowDeleteConfirm(false)}
                                 className="px-4 py-2 rounded-full text-sm font-medium bg-white/5 text-white/70 hover:bg-white/10 transition-all"
                             >
-                                Cancel
+                                {podcastRu.detail.cancel}
                             </button>
                         </div>
                     )}

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Mic2 } from "lucide-react";
 import { SimilarPodcast } from "../types";
 import { api } from "@/lib/api";
+import { podcastRu } from "@/lib/i18n/podcastRu";
 
 interface SimilarPodcastsProps {
     podcasts: SimilarPodcast[];
@@ -28,7 +29,9 @@ export function SimilarPodcasts({ podcasts }: SimilarPodcastsProps) {
 
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">Fans Also Like</h2>
+            <h2 className="text-xl font-bold mb-4">
+                {podcastRu.detail.similar}
+            </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {podcasts.map((podcast) => {
                     const imageUrl = getProxiedImageUrl(podcast.coverUrl);

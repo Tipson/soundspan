@@ -4,6 +4,11 @@ import { Mic2 } from "lucide-react";
 import Image from "next/image";
 import { ReactNode } from "react";
 import type { ColorPalette } from "@/hooks/useImageColor";
+import {
+    formatEpisodeCountRu,
+    formatInProgressRu,
+    podcastRu,
+} from "@/lib/i18n/podcastRu";
 
 interface PodcastHeroProps {
     title: string;
@@ -93,7 +98,7 @@ export function PodcastHero({
                     {/* Info - Bottom Aligned */}
                     <div className="flex-1 min-w-0 pb-1">
                         <p className="text-xs font-medium text-white/90 mb-1">
-                            Podcast
+                            {podcastRu.detail.type}
                         </p>
                         <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
                             {title}
@@ -115,15 +120,12 @@ export function PodcastHero({
                                 {author}
                             </span>
                             <span className="mx-1">•</span>
-                            <span>
-                                {episodeCount}{" "}
-                                {episodeCount === 1 ? "episode" : "episodes"}
-                            </span>
+                            <span>{formatEpisodeCountRu(episodeCount)}</span>
                             {inProgressCount > 0 && (
                                 <>
                                     <span className="mx-1">•</span>
                                     <span className="text-brand">
-                                        {inProgressCount} in progress
+                                        {formatInProgressRu(inProgressCount)}
                                     </span>
                                 </>
                             )}
