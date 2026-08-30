@@ -10,6 +10,7 @@ GlobalRegistrator.register({ url: "https://soundspan.test/vibe" });
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const state = {
+    userId: "user-1",
     embeddedTracks: 1,
     statusFail: false,
     tracksFail: false,
@@ -34,6 +35,13 @@ const state = {
     playCount: 0,
     currentTrack: null as null | { id: string; title: string },
     personalizedFeed: createPersonalizedFeed(),
+    personalizedFeedResolver: null as
+        | null
+        | ((
+              mode: string,
+              mood: string | null,
+          ) => ReturnType<typeof createPersonalizedFeed>),
+    personalizedFeedError: false,
 };
 
 function createPersonalizedFeed() {
@@ -138,6 +146,16 @@ mock.module("@/lib/features-context", {
             vibeEmbeddings: state.vibeEmbeddings,
             audioAnalysis: state.audioAnalysis,
             loading: false,
+        }),
+    },
+});
+
+mock.module("@/lib/auth-context", {
+    namedExports: {
+        useAuth: () => ({
+            isAuthenticated: true,
+            isLoading: false,
+            user: { id: state.userId, username: state.userId },
         }),
     },
 });
@@ -273,9 +291,11 @@ mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
             state.personalizedMode = mode;
             state.personalizedMood = mood;
             return {
-                data: state.personalizedFeed,
+                data: state.personalizedFeedResolver
+                    ? state.personalizedFeedResolver(mode, mood)
+                    : state.personalizedFeed,
                 isLoading: false,
-                isError: false,
+                isError: state.personalizedFeedError,
             };
         },
     },
@@ -310,6 +330,7 @@ after(() => {
 });
 
 beforeEach(() => {
+    state.userId = "user-1";
     state.embeddedTracks = 1;
     state.statusFail = false;
     state.tracksFail = false;
@@ -334,6 +355,8 @@ beforeEach(() => {
     state.playCount = 0;
     state.currentTrack = null;
     state.personalizedFeed = createPersonalizedFeed();
+    state.personalizedFeedResolver = null;
+    state.personalizedFeedError = false;
     window.localStorage.clear();
     window.history.replaceState({}, "", "https://soundspan.test/vibe");
 });
@@ -422,12 +445,21 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
     const currentTuning = mounted.container.querySelector<HTMLElement>(
         '[data-testid="wave-current-tuning"]',
     );
+    const orbitStage = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-orbit-stage"]',
+    );
+    const continuityStatus = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-continuity-status"]',
+    );
     const heading = mounted.container.querySelector("h1");
 
     assert.ok(surface);
     assert.equal(surface.getAttribute("aria-labelledby"), "wave-title");
     assert.ok(ambientField);
     assert.ok(currentTuning);
+    assert.ok(orbitStage);
+    assert.ok(continuityStatus);
+    assert.match(continuityStatus.textContent ?? "", /keeps going/i);
     assert.equal(heading?.id, "wave-title");
     assert.equal(heading?.textContent?.trim(), "My Wave");
     assert.match(
@@ -446,6 +478,69 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
     assert.equal(playWave.getAttribute("data-testid"), "wave-main-toggle");
     assert.match(playWave.className, /min-h-20/);
     assert.match(playWave.className, /min-w-20/);
+
+    await unmountPage(mounted);
+});
+
+test("the Wave stage previews what comes next without presenting a finite queue", async () => {
+    state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
+    state.vibeModeEnabled = true;
+    const mounted = await mountPage();
+
+    const preview = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-next-preview"]',
+    );
+    assert.ok(preview);
+    assert.match(preview.textContent ?? "", /Up next/i);
+    assert.match(preview.textContent ?? "", /Discovery Track|Shared Pick/i);
+    assert.doesNotMatch(
+        preview.textContent ?? "",
+        /\b\d+\s+(?:tracks?|songs?)\b/i,
+    );
+
+    await unmountPage(mounted);
+});
+
+test("For you keeps recent listens to a rare accent instead of every third track", async () => {
+    state.personalizedFeed.shelves.quickPicks = Array.from(
+        { length: 5 },
+        (_, index) => ({
+            id: `yt:quick-${index + 1}`,
+            title: `Quick ${index + 1}`,
+        }),
+    );
+    state.personalizedFeed.shelves.discovery = Array.from(
+        { length: 5 },
+        (_, index) => ({
+            id: `yt:discovery-${index + 1}`,
+            title: `Discovery ${index + 1}`,
+        }),
+    );
+    state.personalizedFeed.shelves.listenAgain = Array.from(
+        { length: 10 },
+        (_, index) => ({
+            id: `yt:recent-${index + 1}`,
+            title: `Recent ${index + 1}`,
+        }),
+    );
+    const mounted = await mountPage();
+
+    const playWave = findButton(mounted.container, "Play My Wave");
+    assert.ok(playWave);
+    await React.act(async () => playWave.click());
+
+    assert.deepEqual(state.playedTrackIds.slice(0, 6), [
+        "yt:quick-1",
+        "yt:discovery-1",
+        "yt:quick-2",
+        "yt:discovery-2",
+        "yt:quick-3",
+        "yt:recent-1",
+    ]);
+    assert.deepEqual(
+        state.playedTrackIds.filter((id) => id.startsWith("yt:recent-")),
+        ["yt:recent-1", "yt:recent-2"],
+    );
 
     await unmountPage(mounted);
 });
@@ -613,6 +708,77 @@ test("Tune My Wave applies mood independently and keeps both choices in the deep
     await unmountPage(mounted);
 });
 
+test("applied Wave settings persist per account, URL settings override them, and Cancel stays a draft", async () => {
+    state.userId = "listener-a";
+    let mounted = await mountPage();
+    let tune = findButton(mounted.container, "Tune");
+    assert.ok(tune);
+    await React.act(async () => tune?.click());
+
+    let dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    const familiar = findButtonByLabel(dialog, "Familiar");
+    const calm = findButtonByLabel(dialog, "Calm");
+    assert.ok(familiar);
+    assert.ok(calm);
+    await React.act(async () => {
+        familiar.click();
+        calm.click();
+    });
+    const applyFamiliar = findButton(dialog, "Use Familiar");
+    assert.ok(applyFamiliar);
+    await React.act(async () => applyFamiliar.click());
+    await unmountPage(mounted);
+
+    window.history.replaceState({}, "", "https://soundspan.test/vibe");
+    state.userId = "listener-b";
+    mounted = await mountPage();
+    assert.equal(state.personalizedMode, "for-you");
+    assert.equal(state.personalizedMood, null);
+
+    tune = findButton(mounted.container, "Tune");
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+    dialog = mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    const newToMe = findButtonByLabel(dialog, "New to me");
+    const energetic = findButtonByLabel(dialog, "Energetic");
+    assert.ok(newToMe);
+    assert.ok(energetic);
+    await React.act(async () => {
+        newToMe.click();
+        energetic.click();
+    });
+    const cancel = findButton(dialog, "Cancel");
+    assert.ok(cancel);
+    await React.act(async () => cancel.click());
+    await unmountPage(mounted);
+
+    window.history.replaceState({}, "", "https://soundspan.test/vibe");
+    mounted = await mountPage();
+    assert.equal(state.personalizedMode, "for-you");
+    assert.equal(state.personalizedMood, null);
+    await unmountPage(mounted);
+
+    state.userId = "listener-a";
+    window.history.replaceState(
+        {},
+        "",
+        "https://soundspan.test/vibe?mode=new&mood=energetic",
+    );
+    mounted = await mountPage();
+    assert.equal(state.personalizedMode, "new");
+    assert.equal(state.personalizedMood, "energetic");
+    await unmountPage(mounted);
+
+    window.history.replaceState({}, "", "https://soundspan.test/vibe");
+    mounted = await mountPage();
+    assert.equal(state.personalizedMode, "familiar");
+    assert.equal(state.personalizedMood, "calm");
+    await unmountPage(mounted);
+});
+
 test("Tune after Play replaces the upcoming Wave queue with the new direction", async () => {
     const mounted = await mountPage();
     const playWave = findButton(mounted.container, "Play My Wave");
@@ -647,6 +813,94 @@ test("Tune after Play replaces the upcoming Wave queue with the new direction", 
     assert.deepEqual(state.upcomingQueueCalls, [["yt:shared-1"]]);
     assert.equal(state.upcomingPreservesOrder, true);
     assert.deepEqual(state.vibeQueueIds, ["yt:discovery-1", "yt:shared-1"]);
+
+    await unmountPage(mounted);
+});
+
+test("retuning an active Wave keeps the current track, replaces the next picks, and confirms success", async () => {
+    const mounted = await mountPage();
+    const playWave = findButton(mounted.container, "Play My Wave");
+    assert.ok(playWave);
+
+    await React.act(async () => playWave.click());
+    const originalPlayedIds = [...state.playedTrackIds];
+    state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
+    state.personalizedFeedResolver = (_mode, mood) =>
+        mood === "calm"
+            ? {
+                  ...createPersonalizedFeed(),
+                  shelves: {
+                      quickPicks: [{ id: "yt:calm-1", title: "Quiet Current" }],
+                      discovery: [],
+                      listenAgain: [],
+                  },
+              }
+            : createPersonalizedFeed();
+
+    const tune = findButton(mounted.container, "Tune");
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    const calm = findButtonByLabel(dialog, "Calm");
+    assert.ok(calm);
+    await React.act(async () => calm.click());
+
+    const apply = findButton(dialog, "Use For you");
+    assert.ok(apply);
+    await React.act(async () => {
+        apply.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(state.currentTrack.id, "yt:radio-1");
+    assert.deepEqual(state.playedTrackIds, originalPlayedIds);
+    assert.deepEqual(state.upcomingTrackIds, ["yt:calm-1"]);
+    assert.equal(state.upcomingPreservesOrder, true);
+    assert.match(
+        mounted.container.querySelector('[role="status"]')?.textContent ?? "",
+        /Wave updated/i,
+    );
+
+    await unmountPage(mounted);
+});
+
+test("a failed active-Wave retune keeps the existing upcoming queue", async () => {
+    const mounted = await mountPage();
+    const playWave = findButton(mounted.container, "Play My Wave");
+    assert.ok(playWave);
+
+    await React.act(async () => playWave.click());
+    state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
+    const previousQueueIds = [...state.vibeQueueIds];
+
+    const tune = findButton(mounted.container, "Tune");
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    const calm = findButtonByLabel(dialog, "Calm");
+    assert.ok(calm);
+    await React.act(async () => calm.click());
+
+    state.personalizedFeedError = true;
+    const apply = findButton(dialog, "Use For you");
+    assert.ok(apply);
+    await React.act(async () => {
+        apply.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(state.upcomingQueueCalls, []);
+    assert.deepEqual(state.vibeQueueIds, previousQueueIds);
+    assert.match(
+        mounted.container.querySelector('[role="status"]')?.textContent ?? "",
+        /previous Wave keeps playing/i,
+    );
 
     await unmountPage(mounted);
 });

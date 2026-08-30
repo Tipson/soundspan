@@ -58,6 +58,15 @@ mock.module("lucide-react", {
         ThumbsDown: Icon,
     },
 });
+mock.module("@/lib/auth-context", {
+    namedExports: {
+        useAuth: () => ({
+            isAuthenticated: true,
+            isLoading: false,
+            user: { id: "user-1", username: "listener" },
+        }),
+    },
+});
 mock.module("next/link", {
     defaultExport: ({ href, children, ...props }: React.ComponentProps<"a">) =>
         React.createElement("a", { href, ...props }, children),
