@@ -166,6 +166,49 @@ test("Home shelf curation recognizes Russian personal and discovery shelves", as
     );
 });
 
+test("Home shelf curation rejects a neutral shelf when its item titles or subtitles reveal a German regional dump", async () => {
+    const { curateHomeShelves } =
+        await import("../../features/home/components/HomeOnlineDiscovery");
+    const regionalContent = [
+        { title: "Germany essentials" },
+        { title: "Deutschland heute" },
+        { title: "Schlager favourites" },
+        { title: "Megahits der 80er" },
+        { title: "Singalong Hits Germany" },
+        { title: "Neutral mix", subtitle: "Made in Deutschland" },
+    ];
+
+    for (const [index, regionalItem] of regionalContent.entries()) {
+        const curated = curateHomeShelves([
+            {
+                title: "Для вас",
+                contents: [
+                    { title: "Любимые треки", playlistId: "ru-personal" },
+                ],
+            },
+            {
+                title: "Made for you",
+                contents: [{ title: "Daily mix", playlistId: "en-personal" }],
+            },
+            {
+                title: `Listen now ${index}`,
+                contents: [
+                    {
+                        ...regionalItem,
+                        playlistId: `regional-${index}`,
+                    },
+                ],
+            },
+        ]);
+
+        assert.deepEqual(
+            curated.map((shelf) => shelf.title),
+            ["Для вас", "Made for you"],
+            `regional item ${JSON.stringify(regionalItem)} must reject its whole shelf`,
+        );
+    }
+});
+
 test("Home discovery deduplicates chart playlists against provider shelves by playlist id", async () => {
     const { buildHomeDiscoveryRows } =
         await import("../../features/home/components/HomeOnlineDiscovery");

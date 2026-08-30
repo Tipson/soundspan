@@ -20,7 +20,7 @@ import type {
 import { SectionHeader } from "./SectionHeader";
 
 const REGIONAL_DUMP_PATTERN =
-    /(?:\b(?:schlager|german|germany|deutsch(?:e|land)?)\b|немецк(?:ая|ие|ой|ую)|германи(?:я|и|ю))/i;
+    /(?:\b(?:schlager|german|germany|deutsch(?:e|land)?|mega\s*hits?\s+der)\b|немецк(?:ая|ие|ой|ую)|германи(?:я|и|ю))/i;
 const PERSONAL_SHELF_PATTERN =
     /(?:\b(?:for you|made for you|because you|recommended|listen again|your mix|quick picks|radio|station)\b|для вас|сделано для вас|ваш(?:и|у)? микс|слушать снова|радио|станци)/i;
 const DISCOVERY_SHELF_PATTERN =
@@ -100,6 +100,15 @@ function shelfScore(shelf: YtMusicHomeShelf): number {
     return 0;
 }
 
+function isRegionalDumpShelf(shelf: YtMusicHomeShelf): boolean {
+    if (REGIONAL_DUMP_PATTERN.test(shelf.title ?? "")) return true;
+    return (shelf.contents ?? []).some((item) =>
+        REGIONAL_DUMP_PATTERN.test(
+            `${item.title ?? ""} ${item.subtitle ?? ""}`,
+        ),
+    );
+}
+
 /** Keeps only compact, navigable, unique provider shelves for Home. */
 export function curateHomeShelves(
     shelves: YtMusicHomeShelf[],
@@ -129,10 +138,7 @@ export function curateHomeShelves(
             const normalizedTitle = (shelf.title ?? "featured")
                 .trim()
                 .toLocaleLowerCase();
-            if (
-                contents.length === 0 ||
-                REGIONAL_DUMP_PATTERN.test(normalizedTitle)
-            ) {
+            if (contents.length === 0 || isRegionalDumpShelf(shelf)) {
                 return false;
             }
             if (seenTitles.has(normalizedTitle)) return false;
