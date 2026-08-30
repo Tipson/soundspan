@@ -108,27 +108,52 @@ async function click(button: HTMLButtonElement): Promise<void> {
     });
 }
 
-test("shows the interactive-session message when device revocation is forbidden", async (t) => {
+test("показывает русское сообщение при запрете отвязки устройства", async (t) => {
     const harness = await mountDevicePage();
     t.after(harness.unmount);
 
-    await click(findButton("Revoke device"));
+    await click(findButton("Отвязать устройство"));
 
     assert.match(
+        document.body.textContent ?? "",
+        /Для этого действия снова войдите в аккаунт/,
+    );
+    assert.doesNotMatch(
         document.body.textContent ?? "",
         /Interactive session authentication required/,
     );
 });
 
-test("shows the interactive-session message when link-code generation is forbidden", async (t) => {
+test("показывает русское сообщение при запрете создания кода", async (t) => {
     generateFailure = new Error("Interactive session authentication required");
     const harness = await mountDevicePage();
     t.after(harness.unmount);
 
-    await click(findButton("Generate Code"));
+    await click(findButton("Создать код"));
 
     assert.match(
         document.body.textContent ?? "",
+        /Для этого действия снова войдите в аккаунт/,
+    );
+    assert.doesNotMatch(
+        document.body.textContent ?? "",
         /Interactive session authentication required/,
+    );
+});
+
+test("не показывает неизвестную английскую ошибку backend", async (t) => {
+    generateFailure = new Error("Untranslated backend device error");
+    const harness = await mountDevicePage();
+    t.after(harness.unmount);
+
+    await click(findButton("Создать код"));
+
+    assert.match(
+        document.body.textContent ?? "",
+        /Не удалось создать код привязки/,
+    );
+    assert.doesNotMatch(
+        document.body.textContent ?? "",
+        /Untranslated backend device error/,
     );
 });

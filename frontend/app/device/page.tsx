@@ -21,6 +21,8 @@ import {
     AlertCircle,
 } from "lucide-react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { deviceRu } from "@/lib/i18n/listenDeviceRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 interface DeviceLinkCode {
     code: string;
@@ -67,6 +69,7 @@ export default function DeviceLinkPage() {
             setDevices(response);
         } catch (err) {
             sharedFrontendLogger.error("Failed to load devices:", err);
+            setDeviceError(userFacingError(err, deviceRu.loadFailed));
         } finally {
             setIsLoadingDevices(false);
         }
@@ -94,9 +97,7 @@ export default function DeviceLinkPage() {
             setLinkCode(response);
             setTimeRemaining(response.expiresIn);
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to generate code",
-            );
+            setError(userFacingError(err, deviceRu.generateFailed));
         } finally {
             setIsGenerating(false);
         }
@@ -161,9 +162,7 @@ export default function DeviceLinkPage() {
             setDevices((prev) => prev.filter((d) => d.id !== deviceId));
         } catch (err) {
             sharedFrontendLogger.error("Failed to revoke device:", err);
-            setDeviceError(
-                err instanceof Error ? err.message : "Failed to revoke device",
-            );
+            setDeviceError(userFacingError(err, deviceRu.revokeFailed));
         }
     };
 
@@ -197,15 +196,11 @@ export default function DeviceLinkPage() {
                 {/* Title */}
                 <div className="mb-8">
                     <h1 className="text-3xl md:text-4xl font-black text-white mb-2">
-                        Link Device
+                        {deviceRu.title}
                     </h1>
-                    <p className="text-gray-400">
-                        Scan the QR code or enter the code in a compatible
-                        client to link your device
-                    </p>
+                    <p className="text-gray-400">{deviceRu.subtitle}</p>
                     <p className="text-gray-400 text-sm mt-2">
-                        Mobile direction is PWA-first. For native mobile
-                        clients, use Subsonic-compatible apps.
+                        {deviceRu.pwaDirection}
                     </p>
                 </div>
 
@@ -214,7 +209,7 @@ export default function DeviceLinkPage() {
                     <Card className="p-6 bg-white/[0.03] border border-white/5">
                         <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                             <Smartphone className="w-5 h-5" />
-                            Device Link Code
+                            {deviceRu.linkCodeTitle}
                         </h2>
 
                         {error && (
@@ -227,14 +222,13 @@ export default function DeviceLinkPage() {
                         {!linkCode && !isGenerating && (
                             <div className="text-center py-8">
                                 <p className="text-gray-400 mb-4">
-                                    Generate a one-time code to link a
-                                    compatible device
+                                    {deviceRu.generateHint}
                                 </p>
                                 <button
                                     onClick={generateCode}
                                     className="px-6 py-3 bg-brand-hover hover:bg-brand text-black font-medium rounded-full transition-all hover:scale-105"
                                 >
-                                    Generate Code
+                                    {deviceRu.generateCode}
                                 </button>
                             </div>
                         )}
@@ -253,17 +247,16 @@ export default function DeviceLinkPage() {
                                             <Check className="w-8 h-8 text-green-400" />
                                         </div>
                                         <h3 className="text-xl font-bold text-white mb-2">
-                                            Device Linked!
+                                            {deviceRu.linkedTitle}
                                         </h3>
                                         <p className="text-gray-400 mb-4">
-                                            Your device has been successfully
-                                            connected
+                                            {deviceRu.linkedDescription}
                                         </p>
                                         <button
                                             onClick={generateCode}
                                             className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all text-sm"
                                         >
-                                            Link Another Device
+                                            {deviceRu.linkAnother}
                                         </button>
                                     </div>
                                 ) : timeRemaining <= 0 ? (
@@ -272,24 +265,24 @@ export default function DeviceLinkPage() {
                                             <Clock className="w-8 h-8 text-red-400" />
                                         </div>
                                         <h3 className="text-xl font-bold text-white mb-2">
-                                            Code Expired
+                                            {deviceRu.expiredTitle}
                                         </h3>
                                         <p className="text-gray-400 mb-4">
-                                            Generate a new code to continue
+                                            {deviceRu.expiredDescription}
                                         </p>
                                         <button
                                             onClick={generateCode}
                                             className="px-4 py-2 bg-brand-hover hover:bg-brand text-black font-medium rounded-full transition-all"
                                         >
                                             <RefreshCw className="w-4 h-4 inline mr-2" />
-                                            Generate New Code
+                                            {deviceRu.generateNewCode}
                                         </button>
                                     </div>
                                 ) : (
                                     <>
                                         <div className="mb-4">
                                             <p className="text-gray-400 text-sm mb-2">
-                                                Client link URI scheme:
+                                                {deviceRu.uriScheme}
                                             </p>
                                             <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-1 gap-1">
                                                 <span className="px-3 py-1.5 rounded-md text-xs font-medium bg-brand text-black">
@@ -311,7 +304,7 @@ export default function DeviceLinkPage() {
                                         {/* Code Display */}
                                         <div className="mb-4">
                                             <p className="text-gray-400 text-sm mb-2">
-                                                Or enter this code manually:
+                                                {deviceRu.manualCode}
                                             </p>
                                             <div className="flex items-center justify-center gap-2">
                                                 <code className="text-3xl font-mono font-bold text-white tracking-widest bg-white/10 px-4 py-2 rounded-lg">
@@ -325,7 +318,10 @@ export default function DeviceLinkPage() {
                                                             ? "bg-green-500/20 text-green-400"
                                                             : "bg-white/10 hover:bg-white/20 text-gray-400",
                                                     )}
-                                                    title="Copy code"
+                                                    title={deviceRu.copyCode}
+                                                    aria-label={
+                                                        deviceRu.copyCode
+                                                    }
                                                 >
                                                     {copied ? (
                                                         <Check className="w-5 h-5" />
@@ -340,7 +336,7 @@ export default function DeviceLinkPage() {
                                         <div className="flex items-center justify-center gap-2 text-gray-400">
                                             <Clock className="w-4 h-4" />
                                             <span>
-                                                Expires in{" "}
+                                                {deviceRu.expiresIn}{" "}
                                                 {formatTime(timeRemaining)}
                                             </span>
                                         </div>
@@ -353,7 +349,7 @@ export default function DeviceLinkPage() {
                     {/* Linked Devices Section */}
                     <Card className="p-6 bg-white/[0.03] border border-white/5">
                         <h2 className="text-xl font-bold text-white mb-4">
-                            Linked Devices
+                            {deviceRu.linkedDevices}
                         </h2>
 
                         {deviceError && (
@@ -370,7 +366,7 @@ export default function DeviceLinkPage() {
                         ) : devices.length === 0 ? (
                             <div className="text-center py-8 text-gray-400">
                                 <Smartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                                <p>No devices linked yet</p>
+                                <p>{deviceRu.noDevices}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -388,10 +384,12 @@ export default function DeviceLinkPage() {
                                                     {device.name}
                                                 </p>
                                                 <p className="text-gray-400 text-sm">
-                                                    Last used:{" "}
+                                                    {deviceRu.lastUsed}{" "}
                                                     {new Date(
                                                         device.lastUsed,
-                                                    ).toLocaleDateString()}
+                                                    ).toLocaleDateString(
+                                                        "ru-RU",
+                                                    )}
                                                 </p>
                                             </div>
                                         </div>
@@ -400,7 +398,8 @@ export default function DeviceLinkPage() {
                                                 revokeDevice(device.id)
                                             }
                                             className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                                            title="Revoke device"
+                                            title={deviceRu.revokeDevice}
+                                            aria-label={deviceRu.revokeDevice}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -414,43 +413,32 @@ export default function DeviceLinkPage() {
                 {/* Instructions */}
                 <Card className="mt-8 p-6 bg-white/[0.03] border border-white/5">
                     <h2 className="text-xl font-bold text-white mb-4">
-                        How to Link Your Device
+                        {deviceRu.instructionsTitle}
                     </h2>
                     <ol className="space-y-3 text-gray-400">
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
                                 1
                             </span>
-                            <span>
-                                Open a compatible mobile client on your device
-                            </span>
+                            <span>{deviceRu.instructionOpen}</span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
                                 2
                             </span>
-                            <span>
-                                Tap &quot;Scan QR Code&quot; or &quot;Enter
-                                Code&quot; if that client supports this flow
-                            </span>
+                            <span>{deviceRu.instructionChoose}</span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
                                 3
                             </span>
-                            <span>
-                                Scan the QR code above, or manually enter the
-                                6-digit code
-                            </span>
+                            <span>{deviceRu.instructionScan}</span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
                                 4
                             </span>
-                            <span>
-                                Your device will be linked to your account after
-                                the client completes verification
-                            </span>
+                            <span>{deviceRu.instructionVerify}</span>
                         </li>
                     </ol>
                 </Card>

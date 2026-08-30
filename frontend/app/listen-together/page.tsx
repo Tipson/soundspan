@@ -40,6 +40,12 @@ import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { useVisibilityGatedInterval } from "@/hooks/useVisibilityGatedInterval";
 import type { SyncQueueItem } from "@/lib/listen-together-socket";
+import {
+    formatListenerCount,
+    formatReconnectStatus,
+    listenTogetherRu,
+} from "@/lib/i18n/listenDeviceRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -175,8 +181,10 @@ function LobbyView() {
     const handleCreate = async () => {
         if (!canUseListenTogether) {
             toast.error(
-                socketRouteError ??
-                    "Listen Together socket route is not configured",
+                userFacingError(
+                    socketRouteError,
+                    listenTogetherRu.routeUnavailableToast,
+                ),
             );
             return;
         }
@@ -193,8 +201,10 @@ function LobbyView() {
     const handleJoin = async () => {
         if (!canUseListenTogether) {
             toast.error(
-                socketRouteError ??
-                    "Listen Together socket route is not configured",
+                userFacingError(
+                    socketRouteError,
+                    listenTogetherRu.routeUnavailableToast,
+                ),
             );
             return;
         }
@@ -208,8 +218,10 @@ function LobbyView() {
     const handleJoinById = async (groupId: string) => {
         if (!canUseListenTogether) {
             toast.error(
-                socketRouteError ??
-                    "Listen Together socket route is not configured",
+                userFacingError(
+                    socketRouteError,
+                    listenTogetherRu.routeUnavailableToast,
+                ),
             );
             return;
         }
@@ -232,17 +244,20 @@ function LobbyView() {
                     <AlertTriangle className="mt-0.5 h-4 w-4 text-red-400 flex-shrink-0" />
                     <div className="min-w-0">
                         <p className="text-sm font-medium text-red-300">
-                            Listen Together is unavailable
+                            {listenTogetherRu.routeUnavailableTitle}
                         </p>
                         <p className="mt-1 text-sm text-red-200/80">
-                            {socketRouteError}
+                            {userFacingError(
+                                socketRouteError,
+                                listenTogetherRu.routeErrorFallback,
+                            )}
                         </p>
                         <p className="mt-1.5 text-xs text-red-200/60">
-                            Ensure{" "}
+                            {listenTogetherRu.routeSetupPrefix}{" "}
                             <code className="font-mono">
                                 /socket.io/listen-together
                             </code>{" "}
-                            reaches backend Socket.IO. See{" "}
+                            {listenTogetherRu.routeSetupMiddle}{" "}
                             <code className="font-mono">
                                 docs/REVERSE_PROXY_AND_TUNNELS.md
                             </code>
@@ -256,7 +271,7 @@ function LobbyView() {
                             }}
                         >
                             <RefreshCw className="mr-1.5 h-3 w-3" />
-                            Re-check
+                            {listenTogetherRu.retryRoute}
                         </Button>
                     </div>
                 </div>
@@ -265,7 +280,7 @@ function LobbyView() {
             {routeChecking && !routeBlocked && (
                 <div className="flex items-center gap-2 text-sm text-content-secondary px-1">
                     <Wifi className="h-3.5 w-3.5 animate-pulse text-brand" />
-                    Verifying socket route...
+                    {listenTogetherRu.checkingRoute}
                 </div>
             )}
 
@@ -276,15 +291,17 @@ function LobbyView() {
                     {/* Create a Group */}
                     <section>
                         <h3 className="text-sm font-medium text-white mb-1">
-                            Create a Group
+                            {listenTogetherRu.createTitle}
                         </h3>
                         <p className="text-xs text-content-muted mb-4">
-                            Start a session and invite friends
+                            {listenTogetherRu.createDescription}
                         </p>
 
                         <div className="space-y-3">
                             <Input
-                                placeholder="Group name (optional)"
+                                placeholder={
+                                    listenTogetherRu.groupNamePlaceholder
+                                }
                                 value={groupName}
                                 onChange={(e) => setGroupName(e.target.value)}
                             />
@@ -298,8 +315,8 @@ function LobbyView() {
                                     )}
                                     <span className="text-sm text-content-body">
                                         {isPublic
-                                            ? "Public Group"
-                                            : "Private Group"}
+                                            ? listenTogetherRu.publicGroup
+                                            : listenTogetherRu.privateGroup}
                                     </span>
                                 </div>
                                 <button
@@ -307,6 +324,9 @@ function LobbyView() {
                                     onClick={() => setIsPublic((prev) => !prev)}
                                     role="switch"
                                     aria-checked={isPublic}
+                                    aria-label={
+                                        listenTogetherRu.visibilitySwitch
+                                    }
                                     className={cn(
                                         "relative h-6 w-11 rounded-full transition-colors",
                                         isPublic ? "bg-brand" : "bg-[#3a3a3a]",
@@ -327,7 +347,7 @@ function LobbyView() {
                                 <div className="flex items-center gap-2">
                                     <Music className="w-4 h-4 text-brand" />
                                     <span className="text-sm text-content-body">
-                                        Use current queue
+                                        {listenTogetherRu.useCurrentQueue}
                                     </span>
                                 </div>
                                 <button
@@ -337,6 +357,9 @@ function LobbyView() {
                                     }
                                     role="switch"
                                     aria-checked={useCurrentQueue}
+                                    aria-label={
+                                        listenTogetherRu.currentQueueSwitch
+                                    }
                                     className={cn(
                                         "relative h-6 w-11 rounded-full transition-colors",
                                         useCurrentQueue
@@ -372,7 +395,7 @@ function LobbyView() {
                                 ) : (
                                     <Radio className="w-4 h-4 mr-2" />
                                 )}
-                                Create Group
+                                {listenTogetherRu.createTitle}
                             </button>
                         </div>
                     </section>
@@ -380,15 +403,17 @@ function LobbyView() {
                     {/* Join a Group */}
                     <section>
                         <h3 className="text-sm font-medium text-white mb-1">
-                            Join a Group
+                            {listenTogetherRu.joinTitle}
                         </h3>
                         <p className="text-xs text-content-muted mb-4">
-                            Enter an invite code to join
+                            {listenTogetherRu.joinDescription}
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-3">
                             <Input
-                                placeholder="Enter join code"
+                                placeholder={
+                                    listenTogetherRu.joinCodePlaceholder
+                                }
                                 value={joinCode}
                                 onChange={(e) =>
                                     setJoinCode(e.target.value.toUpperCase())
@@ -414,12 +439,17 @@ function LobbyView() {
                                         className="mr-2"
                                     />
                                 )}
-                                Join
+                                {listenTogetherRu.join}
                             </button>
                         </div>
 
                         {error && (
-                            <p className="text-sm text-red-400 mt-2">{error}</p>
+                            <p className="text-sm text-red-400 mt-2">
+                                {userFacingError(
+                                    error,
+                                    listenTogetherRu.actionFailed,
+                                )}
+                            </p>
                         )}
                     </section>
                 </div>
@@ -429,10 +459,10 @@ function LobbyView() {
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <h3 className="text-sm font-medium text-white mb-0.5">
-                                Public Groups
+                                {listenTogetherRu.publicGroups}
                             </h3>
                             <p className="text-xs text-content-muted">
-                                Join an open session
+                                {listenTogetherRu.publicGroupsDescription}
                             </p>
                         </div>
                         <button
@@ -440,6 +470,8 @@ function LobbyView() {
                                 void fetchDiscover(false);
                             }}
                             disabled={isLoadingDiscover}
+                            aria-label={listenTogetherRu.refreshPublicGroups}
+                            title={listenTogetherRu.refreshPublicGroups}
                             className="p-1.5 text-content-disabled hover:text-white hover:bg-white/5 rounded-md transition-colors disabled:opacity-50"
                         >
                             {isLoadingDiscover ? (
@@ -460,7 +492,7 @@ function LobbyView() {
                                 <Users className="w-6 h-6 text-content-disabled" />
                             </div>
                             <p className="text-sm text-content-disabled">
-                                No public groups right now
+                                {listenTogetherRu.noPublicGroups}
                             </p>
                         </div>
                     ) : (
@@ -485,10 +517,9 @@ function LobbyView() {
                                                 {group.name}
                                             </p>
                                             <p className="text-xs text-content-disabled">
-                                                {group.memberCount} listener
-                                                {group.memberCount === 1
-                                                    ? ""
-                                                    : "s"}
+                                                {formatListenerCount(
+                                                    group.memberCount,
+                                                )}
                                                 {group.currentTrack && (
                                                     <span className="text-content-muted">
                                                         {" "}
@@ -503,7 +534,7 @@ function LobbyView() {
                                         </div>
                                     </div>
                                     <span className="text-xs text-content-disabled opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                                        Join
+                                        {listenTogetherRu.join}
                                     </span>
                                 </button>
                             ))}
@@ -557,10 +588,10 @@ function ActiveGroupView() {
         navigator.clipboard
             .writeText(joinCode)
             .then(() => {
-                toast.success("Join code copied!");
+                toast.success(listenTogetherRu.joinCodeCopied);
             })
             .catch(() => {
-                toast.error("Failed to copy");
+                toast.error(listenTogetherRu.copyFailed);
             });
     };
 
@@ -572,10 +603,13 @@ function ActiveGroupView() {
                     <AlertTriangle className="mt-0.5 h-4 w-4 text-red-400 flex-shrink-0" />
                     <div>
                         <p className="text-sm font-medium text-red-300">
-                            Socket route lost
+                            {listenTogetherRu.routeLost}
                         </p>
                         <p className="mt-1 text-sm text-red-200/80">
-                            {socketRouteError}
+                            {userFacingError(
+                                socketRouteError,
+                                listenTogetherRu.routeErrorFallback,
+                            )}
                         </p>
                         <Button
                             variant="ghost"
@@ -585,7 +619,7 @@ function ActiveGroupView() {
                             }}
                         >
                             <RefreshCw className="mr-1.5 h-3 w-3" />
-                            Re-check
+                            {listenTogetherRu.retryRoute}
                         </Button>
                     </div>
                 </div>
@@ -613,31 +647,32 @@ function ActiveGroupView() {
                         </h2>
                         <div className="flex items-center gap-2 mt-0.5">
                             <Badge variant="ai">
-                                {isHost ? "Host" : "Follower"}
+                                {isHost
+                                    ? listenTogetherRu.host
+                                    : listenTogetherRu.follower}
                             </Badge>
                             <span className="flex items-center gap-1 text-xs text-content-disabled">
                                 {routeBlocked ? (
                                     <>
                                         <WifiOff className="w-3 h-3 text-red-500" />{" "}
-                                        Route needed
+                                        {listenTogetherRu.routeNeeded}
                                     </>
                                 ) : isConnected ? (
                                     <>
                                         <Wifi className="w-3 h-3 text-green-500" />{" "}
-                                        Connected
+                                        {listenTogetherRu.connected}
                                     </>
                                 ) : hasConnectedOnce ? (
                                     <>
                                         <WifiOff className="w-3 h-3 text-red-500" />{" "}
-                                        Reconnecting
-                                        {reconnectAttempt > 0
-                                            ? ` (${reconnectAttempt})`
-                                            : "..."}
+                                        {formatReconnectStatus(
+                                            reconnectAttempt,
+                                        )}
                                     </>
                                 ) : (
                                     <>
                                         <Wifi className="w-3 h-3 text-brand animate-pulse" />{" "}
-                                        Connecting...
+                                        {listenTogetherRu.connecting}
                                     </>
                                 )}
                             </span>
@@ -651,7 +686,7 @@ function ActiveGroupView() {
                             </p>
                         ) : (
                             <p className="mt-1.5 text-sm text-content-disabled">
-                                Nothing playing yet
+                                {listenTogetherRu.nothingPlaying}
                             </p>
                         )}
                     </div>
@@ -660,7 +695,8 @@ function ActiveGroupView() {
                 <button
                     onClick={copyCode}
                     className="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-surface-raised border border-surface-active hover:border-brand/30 transition-colors self-start md:self-center"
-                    title="Copy join code"
+                    title={listenTogetherRu.copyJoinCode}
+                    aria-label={listenTogetherRu.copyJoinCode}
                 >
                     <span className="font-mono text-sm font-bold text-brand tracking-widest">
                         {joinCode}
@@ -678,7 +714,7 @@ function ActiveGroupView() {
                 <section>
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="text-xs font-medium text-content-muted uppercase tracking-wider">
-                            Queue ({playback.queue.length})
+                            {listenTogetherRu.queue} ({playback.queue.length})
                         </h3>
                         {canEditQueue && playback.queue.length > 0 && (
                             <button
@@ -686,7 +722,7 @@ function ActiveGroupView() {
                                 onClick={syncClearQueue}
                             >
                                 <Trash2 className="w-3 h-3" />
-                                Clear
+                                {listenTogetherRu.clearQueue}
                             </button>
                         )}
                     </div>
@@ -697,10 +733,10 @@ function ActiveGroupView() {
                                 <Music className="w-6 h-6 text-content-disabled" />
                             </div>
                             <p className="text-sm text-content-disabled">
-                                Queue is empty
+                                {listenTogetherRu.emptyQueue}
                             </p>
                             <p className="text-xs text-[#3f3f3f] mt-1">
-                                Add tracks from your library
+                                {listenTogetherRu.emptyQueueHint}
                             </p>
                         </div>
                     ) : (
@@ -731,7 +767,7 @@ function ActiveGroupView() {
                 <div className="space-y-6">
                     <section>
                         <h3 className="text-xs font-medium text-content-muted uppercase tracking-wider mb-3">
-                            Listeners ({members.length})
+                            {listenTogetherRu.listeners} ({members.length})
                         </h3>
                         <div className="space-y-1">
                             {members.map((member) => (
@@ -754,7 +790,7 @@ function ActiveGroupView() {
                                         {member.isHost && (
                                             <Badge variant="ai">
                                                 <Crown className="w-3 h-3 mr-1" />
-                                                Host
+                                                {listenTogetherRu.host}
                                             </Badge>
                                         )}
                                         <span
@@ -766,8 +802,8 @@ function ActiveGroupView() {
                                             )}
                                             title={
                                                 member.isConnected
-                                                    ? "Connected"
-                                                    : "Disconnected"
+                                                    ? listenTogetherRu.connected
+                                                    : listenTogetherRu.disconnected
                                             }
                                         />
                                     </div>
@@ -782,7 +818,7 @@ function ActiveGroupView() {
                         onClick={leaveGroup}
                     >
                         <LogOut className="w-4 h-4 mr-2" />
-                        Leave Group
+                        {listenTogetherRu.leaveGroup}
                     </Button>
                 </div>
             </div>
@@ -891,7 +927,7 @@ function QueueItem({
                                 onRemove();
                             }}
                             icon={<Trash2 className="h-4 w-4" />}
-                            label="Remove from queue"
+                            label={listenTogetherRu.removeFromQueue}
                             className="text-red-400 hover:text-red-300"
                         />
                     ) : undefined
@@ -937,8 +973,8 @@ export default function ListenTogetherPage() {
             {/* Content */}
             <div className="relative px-4 md:px-8 py-6 pb-32">
                 <PageHeader
-                    title="Listen Together"
-                    subtitle="Sync your music with friends in real-time"
+                    title={listenTogetherRu.title}
+                    subtitle={listenTogetherRu.subtitle}
                     icon={Users}
                     className="mb-6"
                 />
@@ -951,7 +987,7 @@ export default function ListenTogetherPage() {
                         >
                             <GradientSpinner size="lg" />
                             <p className="text-sm text-content-disabled mt-4">
-                                Loading...
+                                {listenTogetherRu.loading}
                             </p>
                         </motion.div>
                     ) : view === "active" ? (
