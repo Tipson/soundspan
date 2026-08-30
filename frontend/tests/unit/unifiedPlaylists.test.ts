@@ -135,10 +135,10 @@ test("filter options gate the peers entry on federation", async () => {
             ([value, label]) => `${value}:${label}`,
         ),
         [
-            "all:All playlists",
-            "mine:Your playlists",
-            "others:Shared playlists",
-            "peers:Peer playlists",
+            "all:Все плейлисты",
+            "mine:Ваши плейлисты",
+            "others:Общие плейлисты",
+            "peers:Плейлисты друзей",
         ],
     );
 });

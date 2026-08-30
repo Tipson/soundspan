@@ -116,6 +116,7 @@ test("YouTube Music artist payload becomes playable tracks and browsable albums"
             image: "https://img/album.jpg",
             year: "1998",
             provider: "ytmusic",
+            releaseType: null,
         },
     ]);
 });

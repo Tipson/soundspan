@@ -5,27 +5,27 @@ import {
     MOBILE_QUICK_LINKS,
 } from "../../components/layout/socialNavigation";
 
-test("sidebar navigation keeps the four primary music destinations", () => {
+test("sidebar navigation keeps the three primary music destinations", () => {
     assert.deepEqual(
         SIDEBAR_NAVIGATION.map(({ name, href }) => ({ name, href })),
         [
-            { name: "Home", href: "/" },
-            { name: "Search", href: "/search" },
-            { name: "Vibe", href: "/vibe" },
-            { name: "Library", href: "/library" },
+            { name: "Главная", href: "/" },
+            { name: "Моя волна", href: "/vibe" },
+            { name: "Коллекция", href: "/library" },
         ],
     );
 });
 
 test("sidebar navigation starts with the unified Home entry", () => {
-    assert.equal(SIDEBAR_NAVIGATION[0].name, "Home");
+    assert.equal(SIDEBAR_NAVIGATION[0].name, "Главная");
     assert.equal(SIDEBAR_NAVIGATION[0].href, "/");
 });
 
 test("sidebar navigation stays music-first without inactive spoken-word sections", () => {
     const names = SIDEBAR_NAVIGATION.map((item) => item.name);
-    assert.ok(names.includes("Library"), "should include Library");
+    assert.ok(names.includes("Коллекция"), "should include Collection");
     assert.ok(!names.includes("Explore"), "Home now owns Explore content");
+    assert.ok(!names.includes("Search"), "search lives in the top bar");
     assert.ok(!names.includes("Listen Together"), "social stays secondary");
     assert.ok(!names.includes("Audiobooks"), "should hide Audiobooks");
     assert.ok(!names.includes("Podcasts"), "should hide Podcasts");
@@ -43,10 +43,9 @@ test("mobile quick links mirror the primary music destinations", () => {
     assert.deepEqual(
         MOBILE_QUICK_LINKS.map(({ name, href }) => ({ name, href })),
         [
-            { name: "Home", href: "/" },
-            { name: "Search", href: "/search" },
-            { name: "Vibe", href: "/vibe" },
-            { name: "Library", href: "/library" },
+            { name: "Главная", href: "/" },
+            { name: "Моя волна", href: "/vibe" },
+            { name: "Коллекция", href: "/library" },
         ],
     );
 });
