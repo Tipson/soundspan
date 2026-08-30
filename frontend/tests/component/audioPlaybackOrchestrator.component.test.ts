@@ -3,9 +3,9 @@ import * as realPlaybackRecoveryPolicy from "../../lib/audio-engine/playbackReco
 import {
     isPlaybackAutoRestartSuppressed,
     markRemoteTrackChange,
-    playbackAdvanceOriginRef,
     setPlaybackAutoRestartSuppressed,
     writePlaybackAdvanceOrigin,
+    writePlaybackReplacementIntent,
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
 import { afterEach, before, beforeEach, mock, test } from "node:test";
 import type {
@@ -663,7 +663,7 @@ const resetHarnessState = (): void => {
 
     runtimeEngineMode = "howler";
     listenTogetherSnapshot = null;
-    playbackAdvanceOriginRef.current = null;
+    writePlaybackAdvanceOrigin(null, null);
     setPlaybackAutoRestartSuppressed(false);
     podcastCacheStatus = {
         cached: true,
@@ -2076,6 +2076,43 @@ test("three play events without playback progress trip the error breaker", async
     assert.equal(controlCalls.next, 2);
 });
 
+test("a manual selection rejects a late failure from its superseded occurrence", async () => {
+    mock.timers.enable();
+    const tracks = [
+        makeTrack("manual-stale-1"),
+        makeTrack("manual-stale-2"),
+        makeTrack("manual-fresh"),
+        makeTrack("manual-next"),
+    ];
+    audioState.currentTrack = tracks[0];
+    audioState.queue = tracks;
+
+    renderOrchestrator();
+    await flushAsync();
+
+    await failPlayingTrack();
+    selectTrack(tracks, 1);
+    await flushAsync();
+    await failPlayingTrack();
+    assert.equal(controlCalls.next, 2);
+
+    writePlaybackReplacementIntent(tracks[1].id);
+    await emitFatalLoadError();
+    assert.equal(
+        loggerCalls.warn.some((args) =>
+            String(args[0]).includes("circuit breaker tripped"),
+        ),
+        false,
+    );
+    assert.doesNotMatch(toastErrors.join(" "), /multiple tracks failed/i);
+
+    selectTrack(tracks, 2);
+    await flushAsync();
+    await failPlayingTrack();
+    assert.equal(controlCalls.next, 3);
+    assert.equal(isPlaybackAutoRestartSuppressed(), false);
+});
+
 test("listen-together host error advances preserve consecutive failures until the breaker trips", async () => {
     mock.timers.enable();
     const tracks = [
@@ -3127,6 +3164,35 @@ test("preempts in-flight load when track switches before initial load settles", 
                 check.isLoading === true,
         ),
     );
+});
+
+test("preempts an in-flight load when a duplicate playlist occurrence is selected", async () => {
+    playbackState.isPlaying = false;
+    const firstOccurrence = makeTrack("duplicate-track", {
+        playlistItemId: "playlist-item-a",
+    });
+    const secondOccurrence = makeTrack("duplicate-track", {
+        playlistItemId: "playlist-item-b",
+    });
+    audioState.currentTrack = firstOccurrence;
+    audioState.queue = [firstOccurrence, secondOccurrence];
+    audioState.currentIndex = 0;
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+
+    audioState.currentTrack = secondOccurrence;
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync();
+
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(
+        engine.loadCalls[1]?.args[0],
+        "https://stream.test/direct/duplicate-track",
+    );
+    assert.ok(engine.stopCalls >= 1);
 });
 
 test("podcast cached seek falls back to reload when direct seek misses target", async () => {

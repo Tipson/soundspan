@@ -74,6 +74,7 @@ import {
     QUEUE_CLEARED_AT_KEY_SUFFIX,
 } from "@/lib/playback-state-cadence";
 import { useVibeModeControls } from "@/lib/audio/useVibeModeControls";
+import { applyTrackClick } from "@/lib/audio-engine/playbackOccurrence";
 
 const LAST_PLAYBACK_STATE_SAVE_AT_KEY = createMigratingStorageKey(
     LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX,
@@ -468,13 +469,13 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
     const playTrack = useCallback(
         (track: Track) => {
-            writePlaybackAdvanceOrigin(
-                "manual",
-                state.currentTrack?.id ?? null,
-            );
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
+                writePlaybackAdvanceOrigin(
+                    "manual",
+                    state.currentTrack?.id ?? null,
+                );
                 const queueTrack = toListenTogetherQueueTrack(track);
                 if (!queueTrack) {
                     toast.error("Failed to prepare track for Listen Together");
@@ -500,7 +501,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                     });
                 return;
             }
-
+            if (applyTrackClick(state, playbackState, track)) return;
             // If vibe mode is on and this track isn't in the vibe queue, disable vibe mode
             if (state.vibeMode && !state.vibeQueueIds.includes(track.id)) {
                 state.setVibeMode(false);
@@ -525,10 +526,6 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
     const playTracks = useCallback(
         (tracks: Track[], startIndex = 0, isVibeQueue = false) => {
-            writePlaybackAdvanceOrigin(
-                "manual",
-                state.currentTrack?.id ?? null,
-            );
             const playbackState = getPlaybackView();
             if (tracks.length === 0) {
                 return;
@@ -536,6 +533,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
+                writePlaybackAdvanceOrigin(
+                    "manual",
+                    state.currentTrack?.id ?? null,
+                );
                 const safeStartIndex = Math.min(
                     Math.max(startIndex, 0),
                     tracks.length - 1,
@@ -590,6 +591,14 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
+            const normalizedStartIndex = Math.min(
+                Math.max(startIndex, 0),
+                tracks.length - 1,
+            );
+            const startTrack = tracks[normalizedStartIndex];
+            if (!startTrack?.id) return;
+            if (applyTrackClick(state, playbackState, startTrack)) return;
+
             queueDebugLog("playTracks()", {
                 tracksLen: tracks.length,
                 startIndex,
@@ -597,15 +606,6 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 startTrackId: tracks[startIndex]?.id,
                 isVibeQueue,
             });
-
-            const normalizedStartIndex = Math.min(
-                Math.max(startIndex, 0),
-                tracks.length - 1,
-            );
-            const startTrack = tracks[normalizedStartIndex];
-            if (!startTrack?.id) {
-                return;
-            }
 
             // If not a vibe queue and vibe mode is on, disable it
             if (!isVibeQueue && state.vibeMode) {

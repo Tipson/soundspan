@@ -18,6 +18,7 @@ import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session"
 import { frontendLogger } from "@/lib/logger";
 import type { UnavailableYtMusicRecoveryOutcome } from "@/lib/audio/unavailableYtMusicRecovery";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
+import { isPlaybackFailureSupersededByManualIntent } from "@/lib/audio-engine/playbackAdvanceOrigin";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -93,6 +94,18 @@ export function createPlaybackErrorHandler({
     } = refs;
 
     return async (data: AudioEngineErrorPayload): Promise<void> => {
+        if (
+            playbackType === "track" &&
+            currentTrack &&
+            isPlaybackFailureSupersededByManualIntent(currentTrack.id)
+        ) {
+            orchestratorLogger.info(
+                "Ignored playback error from a superseded manual occurrence",
+                { trackId: currentTrack.id },
+            );
+            return;
+        }
+
         if (data.code === "NotAllowedError" || data.recoverable === true) {
             orchestratorLogger.warn(
                 "Playback deferred for browser-owned recovery",

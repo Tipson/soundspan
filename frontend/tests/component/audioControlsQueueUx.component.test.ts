@@ -839,3 +839,46 @@ test("repeat toggle resets two prior failures before the next failure", async ()
     assert.equal(tripped, false);
     assert.equal(breaker.getErrorCount(), 1);
 });
+
+test("clicking the playing occurrence toggles pause and resume without rebuilding its queue", async () => {
+    const currentTrack = {
+        ...makeTrack("repeat-click", "artist-1"),
+        playlistItemId: "playlist-item-a",
+        youtubeVideoId: "AAAAAAAAAAA",
+    };
+    const queue = [currentTrack, makeTrack("up-next", "artist-2")];
+    const state = createDeferredAudioState({
+        queue,
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+    });
+    const playback = createPlaybackStub({ currentTime: 42, duration: 200 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+
+    controls.playTracks([{ ...currentTrack }, queue[1]], 0);
+    state.commit();
+    assert.equal(playback.isPlaying, false);
+    assert.equal(playback.currentTime, 42);
+    assert.equal(state.queue, queue);
+
+    controls.playTrack({ ...currentTrack });
+    state.commit();
+    assert.equal(playback.isPlaying, true);
+    assert.equal(playback.currentTime, 42);
+    assert.equal(state.queue, queue);
+
+    controls.playTrack({
+        ...currentTrack,
+        playlistItemId: "playlist-item-b",
+    });
+    state.commit();
+    assert.equal(playback.isPlaying, true);
+    assert.equal(playback.currentTime, 0);
+    assert.equal(
+        (state.currentTrack as { playlistItemId?: string }).playlistItemId,
+        "playlist-item-b",
+    );
+    assert.notEqual(state.queue, queue);
+});

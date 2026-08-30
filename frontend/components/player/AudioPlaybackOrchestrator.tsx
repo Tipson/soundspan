@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { resolveNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
 import { restartPlaybackProgressConfirmation } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { consumePlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { resolvePlaybackOccurrenceMediaIdentity } from "@/lib/audio-engine/playbackOccurrence";
 import { resolveQueueAdvance } from "@/lib/audio/queue-advance-policy";
 import {
     getListenTogetherSessionSnapshot,
@@ -854,7 +855,10 @@ export const AudioPlaybackOrchestrator = memo(
             outputStateRef.current = { volume, isMuted };
 
             const currentMediaId = currentTrack
-                ? resolveDeviceOfflineMediaIdentity(currentTrack)
+                ? resolvePlaybackOccurrenceMediaIdentity(
+                      currentTrack,
+                      resolveDeviceOfflineMediaIdentity(currentTrack),
+                  )
                 : currentAudiobook?.id || currentPodcast?.id || null;
 
             if (!currentMediaId) {

@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Rapid manual track changes invalidate late callbacks from the superseded audio source before they can stop or autoplay the replacement, and replacement-only intent no longer lets queue actions hide a genuine playback failure. Clicking the currently playing queue occurrence now pauses and resumes it without rebuilding the queue, while repeated playlist occurrences remain distinct.
 - An active Vibe mood now travels with the player session, so endless provider continuation keeps the selected context after navigating away from the Vibe page instead of silently reverting to an unfiltered Wave.
 - Public YouTube Music search uses an isolated provider-safe English interface context while retaining the Russian regional catalog and Unicode queries, so `Кино`, `Цой`, `sqwoz bab`, and `Linkin Park` no longer collapse to cached empty results; Home and Explore keep their configured Russian presentation locale.
 - Starting a track from an ordinary playlist now snapshots every playable row in visible order and begins at the selected occurrence instead of replacing the queue with one track; imported provider rows retain their YouTube/TIDAL preference identity and metadata for like/unlike actions.
