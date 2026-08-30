@@ -1,6 +1,8 @@
 # Soundspan product design system
 
-Status: design phase
+Status: deployed release candidate — physical device acceptance pending
+
+Implementation baseline: `ebf89affd7a639bde640ef7d54e4aa58cc633541`
 
 ## Product thesis
 
