@@ -1,8 +1,10 @@
 # Soundspan product design system
 
-Status: canonical redesign implemented; local design QA passed
+Status: canonical redesign implemented; design QA and production verification passed
 
-Implementation baseline: `2a43c1a71dde1671f37eecf539dbff1a09919412`
+Implementation baseline: `5411c7232620b7a185abcad5413b238d8d585f85`
+
+Production image: `local/soundspan:2.6.1-redesign-5411c72`
 
 Authoritative visual targets:
 
