@@ -103,7 +103,10 @@ function queueStatusCopy(item: DeviceOfflineQueueItem): string {
         return ru.downloads.starting;
     }
     if (item.status === "error") {
-        return item.errorMessage ?? `${ru.downloads.failed} — ${ru.common.retry.toLocaleLowerCase()}`;
+        return (
+            item.errorMessage ??
+            `${ru.downloads.failed} — ${ru.common.retry.toLocaleLowerCase()}`
+        );
     }
     if (item.status === "interrupted") {
         return ru.downloads.waitingOnline;
@@ -193,15 +196,13 @@ export function DownloadsList() {
                         }
                         onClick={() => {
                             void setupStorage().catch(() =>
-                                toast.error(
-                                    ru.downloads.folderError,
-                                ),
+                                toast.error(ru.downloads.folderError),
                             );
                         }}
                         className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
                     >
                         {reconnectRememberedFolder
-                            ? "Подключить папку заново"
+                            ? "Разрешить доступ"
                             : "Выбрать папку"}
                     </button>
                 )}
@@ -290,9 +291,7 @@ export function DownloadsList() {
                                             item.track.title,
                                         quality: item.quality,
                                     }).catch(() =>
-                                        toast.error(
-                                            ru.downloads.retryFailed,
-                                        ),
+                                        toast.error(ru.downloads.retryFailed),
                                     );
                                 }}
                                 className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
@@ -316,9 +315,7 @@ export function DownloadsList() {
                                     return;
                                 }
                                 void cancelQueuedDownload(item).catch(() =>
-                                    toast.error(
-                                        ru.downloads.removeFailed,
-                                    ),
+                                    toast.error(ru.downloads.removeFailed),
                                 );
                             }}
                             className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"
@@ -349,7 +346,8 @@ export function DownloadsList() {
                                             )
                                             .catch(() =>
                                                 toast.error(
-                                                    ru.downloads.unavailableCopy,
+                                                    ru.downloads
+                                                        .unavailableCopy,
                                                 ),
                                             );
                                     }}
@@ -444,7 +442,8 @@ export function DownloadsList() {
                                                 )
                                                 .catch(() =>
                                                     toast.error(
-                                                        ru.downloads.saveActionFailed,
+                                                        ru.downloads
+                                                            .saveActionFailed,
                                                     ),
                                                 )
                                                 .finally(() =>
@@ -475,9 +474,7 @@ export function DownloadsList() {
                                         return;
                                     }
                                     void deleteDownload(record.key).catch(() =>
-                                        toast.error(
-                                            ru.downloads.deleteFailed,
-                                        ),
+                                        toast.error(ru.downloads.deleteFailed),
                                     );
                                 }}
                                 className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"

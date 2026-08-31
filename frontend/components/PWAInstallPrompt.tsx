@@ -23,14 +23,6 @@ function isStandaloneDisplayMode(): boolean {
     );
 }
 
-function isDismissedRecently(): boolean {
-    const dismissedAt = localStorage.getItem("pwa-prompt-dismissed");
-    if (!dismissedAt) return false;
-    const dismissedTime = parseInt(dismissedAt, 10);
-    const sevenDays = 7 * 24 * 60 * 60 * 1000;
-    return Date.now() - dismissedTime < sevenDays;
-}
-
 /**
  * Renders the PWAInstallPrompt component.
  */
@@ -52,23 +44,14 @@ export function PWAInstallPrompt() {
     );
 
     useEffect(() => {
-        const revealTimeouts: number[] = [];
-        const revealLater = (delay: number) => {
-            revealTimeouts.push(
-                window.setTimeout(() => {
-                    if (!isDismissedRecently()) setShowPrompt(true);
-                }, delay),
-            );
-        };
-
-        // Listen for beforeinstallprompt (Chrome, Edge, etc.)
+        // Capture the native browser prompt, but keep the persistent sidebar
+        // action as the single entry point for installation.
         const handleBeforeInstallPrompt = (e: Event) => {
             e.preventDefault();
             const installPrompt = e as BeforeInstallPromptEvent;
             deferredPromptRef.current = installPrompt;
             setDeferredPrompt(installPrompt);
             setPromptView("install");
-            if (!isDismissedRecently()) revealLater(3000);
         };
 
         const handleInstallRequest = () => {
@@ -99,11 +82,6 @@ export function PWAInstallPrompt() {
         window.addEventListener("request-pwa-install", handleInstallRequest);
         window.addEventListener("appinstalled", handleAppInstalled);
 
-        // For iOS, show instructions after delay if on mobile
-        if (isIOS && !isInstalled && !isDismissedRecently()) {
-            revealLater(5000);
-        }
-
         return () => {
             window.removeEventListener(
                 "beforeinstallprompt",
@@ -114,7 +92,6 @@ export function PWAInstallPrompt() {
                 handleInstallRequest,
             );
             window.removeEventListener("appinstalled", handleAppInstalled);
-            revealTimeouts.forEach((timeout) => window.clearTimeout(timeout));
         };
     }, [isIOS, isInstalled]);
 

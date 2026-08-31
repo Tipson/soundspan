@@ -66,7 +66,7 @@ const CachedImage = memo(function CachedImage({
     // thumbnails lazy by default, but let above-the-fold artwork use priority.
     const { loading, ...propsWithoutLoading } = props;
     const imageProps = props.priority
-        ? propsWithoutLoading
+        ? { ...propsWithoutLoading, loading: "eager" as const }
         : { ...props, loading: loading ?? "lazy" };
 
     return (

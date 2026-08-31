@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Imported YouTube Music playlists now build radio from their playable remote items, retain playlist order when provider recommendations are unavailable, and display artwork mosaics from remote album or track covers instead of empty placeholders.
+- Repeated YouTube Music startup failures pause on the current queue item instead of cascading through the remaining queue, while one unsupported video can still fall through to the existing alternate-search and auto-skip recovery. Provider verification challenges also arm a short process-wide extraction cooldown without blocking cached audio.
+- The PWA install prompt opens only from the persistent install action instead of duplicating itself automatically, and a remembered device-download folder asks to allow access again rather than misleadingly asking the user to select the folder again.
 - YouTube Music spool downloads now prefer the best audio rendition whose reported size fits the per-track byte limit, so long ambient tracks no longer select an oversized HLS rendition, fail at 64 MiB, and require a hard page refresh when a smaller playable rendition is available.
 - Add-to-playlist now lists only playlists the account can modify, prevents duplicate create submissions, retries a failed bulk add against the already-created playlist, and keeps partial bulk failures visible without closing the selector.
 - My Wave remains a non-scrolling desktop stage even at 1366 x 768: its core contracts instead of clipping controls, while the tuning sheet retains its own internal scroll and current/next feedback stays above the expanded player dock.

@@ -182,6 +182,7 @@ def stream_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[A
 
     ytmusic_stream._spool_tasks.clear()
     ytmusic_stream._spool_pending_jobs = 0
+    ytmusic_stream._provider_challenge_cooldown_until = 0.0
     monkeypatch.setattr(ytmusic_stream, "YTMUSIC_SPOOL_DIR", tmp_path)
     executor = CapturingExecutor()
     try:
@@ -190,6 +191,7 @@ def stream_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[A
     finally:
         ytmusic_stream._spool_tasks.clear()
         ytmusic_stream._spool_pending_jobs = 0
+        ytmusic_stream._provider_challenge_cooldown_until = 0.0
         executor.shutdown()
 
 
@@ -383,6 +385,48 @@ def test_spool_formats_prefer_audio_that_fits_the_per_track_budget(
     assert "filesize_approx<67108865" in selector
     assert "filesize<67108865" in selector
     assert selector.endswith("/wa")
+
+
+def test_provider_challenge_maps_to_retryable_503_and_arms_cooldown(
+    stream_module: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    error = stream_module._stream_extraction_http_error(
+        VIDEO_ID,
+        "yt-dlp test extraction",
+        RuntimeError("Sign in to confirm you're not a bot"),
+    )
+
+    assert error.status_code == 503
+    assert error.detail == {
+        "error": "provider_challenge",
+        "message": "YouTube Music temporarily requires verification. Retry later.",
+        "video_id": VIDEO_ID,
+    }
+    assert int(error.headers["Retry-After"]) > 0
+    with pytest.raises(HTTPException) as raised:
+        stream_module._raise_if_provider_challenge_cooldown(VIDEO_ID)
+    assert raised.value.status_code == 503
+
+
+def test_cached_spool_remains_available_during_provider_challenge_cooldown(
+    stream_module: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cached = tmp_path / f"{VIDEO_ID}-{QUALITY}.webm"
+    cached.write_bytes(b"cached-audio")
+    stream_module._provider_challenge_cooldown_until = time.monotonic() + 90
+
+    class UnexpectedYoutubeDL:
+        def __init__(self, _options: dict[str, Any]) -> None:
+            raise AssertionError("cached spool must bypass provider extraction")
+
+    import yt_dlp
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", UnexpectedYoutubeDL)
+
+    assert stream_module._download_ytmusic_spool_sync(VIDEO_ID, QUALITY) == (
+        str(cached),
+        "audio/webm",
+    )
 
 
 def test_spool_progress_hook_rejects_oversized_download(

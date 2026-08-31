@@ -8,7 +8,12 @@ import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
-import type { PersonalizedHomeFeed, PersonalizedTrack } from "../types";
+import type {
+    PersonalizedHomeFeed,
+    PersonalizedHomeMode,
+    PersonalizedHomeMood,
+    PersonalizedTrack,
+} from "../types";
 import { ru } from "@/lib/i18n/ru";
 
 interface HomeWaveHeroProps {
@@ -18,13 +23,18 @@ interface HomeWaveHeroProps {
 
 function balancedUniqueTracks(
     shelves: PersonalizedHomeFeed["shelves"] | undefined,
+    mode: PersonalizedHomeMode,
+    mood: PersonalizedHomeMood | null,
 ): PersonalizedTrack[] {
     if (!shelves) return [];
-    const sources = [
-        shelves.quickPicks,
-        shelves.discovery,
-        shelves.listenAgain,
-    ];
+    const sources =
+        mood === "favorites"
+            ? [shelves.quickPicks, shelves.listenAgain, shelves.discovery]
+            : mood === "forgotten" || mode === "familiar"
+              ? [shelves.listenAgain, shelves.quickPicks, shelves.discovery]
+              : mood !== null || mode === "new"
+                ? [shelves.discovery, shelves.quickPicks, shelves.listenAgain]
+                : [shelves.quickPicks, shelves.discovery, shelves.listenAgain];
     const positions = sources.map(() => 0);
     const seen = new Set<string>();
     const result: PersonalizedTrack[] = [];
@@ -56,16 +66,18 @@ export function HomeWaveHero({
 }: HomeWaveHeroProps) {
     const { playTracks } = useAudioControls();
     const {
+        waveMode,
+        waveMood,
         setIsShuffle,
         setShuffleIndices,
         setVibeMode,
         setVibeQueueIds,
         setVibeSourceFeatures,
-        setWaveMode,
     } = useAudioState();
     const tracks = useMemo(
-        () => balancedUniqueTracks(personalizedFeed?.shelves),
-        [personalizedFeed?.shelves],
+        () =>
+            balancedUniqueTracks(personalizedFeed?.shelves, waveMode, waveMood),
+        [personalizedFeed?.shelves, waveMode, waveMood],
     );
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
     const focusTrack = useMemo(
@@ -79,7 +91,6 @@ export function HomeWaveHero({
 
     const startWave = useCallback(() => {
         if (queue.length === 0) return;
-        setWaveMode("for-you");
         setIsShuffle(false);
         setShuffleIndices([]);
         playTracks(queue, 0, true);
@@ -94,7 +105,6 @@ export function HomeWaveHero({
         setVibeSourceFeatures,
         setIsShuffle,
         setShuffleIndices,
-        setWaveMode,
     ]);
 
     const playLabel = isLoading
@@ -119,7 +129,7 @@ export function HomeWaveHero({
                         src={focusCoverUrl}
                         alt=""
                         fill
-                        loading="eager"
+                        priority
                         sizes="(min-width: 1024px) 1100px, 100vw"
                         className="scale-125 object-cover opacity-65 blur-[48px] saturate-150 transition duration-700 group-hover:scale-[1.28] motion-reduce:transition-none"
                     />
@@ -127,6 +137,7 @@ export function HomeWaveHero({
                 <span className="absolute inset-0 bg-[radial-gradient(circle_at_68%_42%,rgba(212,116,61,0.34),transparent_30%),radial-gradient(circle_at_88%_48%,rgba(122,42,163,0.38),transparent_34%)]" />
                 <span className="absolute inset-0 bg-gradient-to-r from-surface via-surface/80 to-surface/20" />
                 <span className="absolute inset-0 bg-gradient-to-t from-surface/75 via-transparent to-black/15" />
+                <span className="absolute inset-0 bg-gradient-to-b from-transparent from-45% via-surface/35 via-78% to-surface" />
             </div>
 
             <div className="relative grid min-h-[16.25rem] items-center gap-7 px-5 py-4 sm:grid-cols-[12.5rem_minmax(0,1fr)] sm:px-7 lg:grid-cols-[13.75rem_minmax(0,1fr)] lg:gap-8 lg:px-0">
@@ -139,7 +150,7 @@ export function HomeWaveHero({
                             src={focusCoverUrl}
                             alt={focusTrack?.album.title ?? ""}
                             fill
-                            loading="eager"
+                            priority
                             sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 144px"
                             className="object-cover"
                         />

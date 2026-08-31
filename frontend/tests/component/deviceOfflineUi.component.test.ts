@@ -416,7 +416,7 @@ test("Downloads reconnects a remembered folder without offering a destructive fo
 
     assert.match(
         view.container.textContent ?? "",
-        /Подключить папку с музыкой заново/i,
+        /Разрешить доступ к папке с музыкой/i,
     );
     assert.equal(
         view.container.querySelector(
@@ -425,7 +425,7 @@ test("Downloads reconnects a remembered folder without offering a destructive fo
         null,
     );
     const reconnect = view.container.querySelector(
-        'button[aria-label="Подключить папку с музыкой заново"]',
+        'button[aria-label="Разрешить доступ к папке с музыкой"]',
     ) as HTMLButtonElement;
     assert.ok(reconnect);
     await React.act(async () => {
@@ -598,7 +598,7 @@ test("offline settings reconnect a remembered folder instead of claiming to choo
         React.createElement(DeviceOfflineSettingsSection),
     );
 
-    assert.match(view.container.textContent ?? "", /Подключить папку заново/i);
+    assert.match(view.container.textContent ?? "", /Разрешить доступ/i);
     assert.equal(
         view.container.querySelector(
             'button[aria-label="Выбрать папку с музыкой"]',
@@ -606,7 +606,7 @@ test("offline settings reconnect a remembered folder instead of claiming to choo
         null,
     );
     const reconnect = view.container.querySelector(
-        'button[aria-label="Подключить папку с музыкой заново"]',
+        'button[aria-label="Разрешить доступ к папке с музыкой"]',
     ) as HTMLButtonElement;
     assert.ok(reconnect);
     await React.act(async () => {

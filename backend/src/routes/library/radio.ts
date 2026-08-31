@@ -31,6 +31,7 @@ import {
     toLikedResponseTrack,
 } from "../../services/libraryTrackPreferences";
 import { sendRouteError } from "../../utils/routeErrorResponse";
+import { buildRemotePlaylistRadio } from "../../services/playlistRemoteRadio";
 import {
     buildMultiTrackRadio,
     getRadioArtistCapForLimit,
@@ -1162,7 +1163,6 @@ export async function handleGetRadio(req: Request, res: Response) {
             break;
 
         case "playlist": {
-            // Playlist radio — seeds from the playlist's local tracks
             if (!radioValue) {
                 return sendRouteError(
                     res,
@@ -1197,7 +1197,6 @@ export async function handleGetRadio(req: Request, res: Response) {
                     `[Radio:playlist] Seeding from My Liked: ${seedTrackIds.length} tracks`,
                 );
             } else {
-                // Regular playlist — verify ownership or public visibility
                 const playlist = await prisma.playlist.findUnique({
                     where: { id: radioValue },
                     select: { userId: true, isPublic: true },
@@ -1212,8 +1211,6 @@ export async function handleGetRadio(req: Request, res: Response) {
                         "Access denied to private playlist",
                     );
                 }
-
-                // Only local tracks have analysis data
                 const items = await prisma.playlistItem.findMany({
                     where: {
                         playlistId: radioValue,
@@ -1234,8 +1231,11 @@ export async function handleGetRadio(req: Request, res: Response) {
             }
 
             if (seedTrackIds.length === 0) {
-                trackIds = [];
-                break;
+                if (radioValue === MY_LIKED_PLAYLIST_ID)
+                    return res.json({ tracks: [] });
+                return res.json({
+                    tracks: await buildRemotePlaylistRadio(radioValue, limitNum),
+                });
             }
 
             const playlistResult = await buildMultiTrackRadio(

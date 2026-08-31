@@ -13,6 +13,7 @@ const forbiddenCalls = {
     popularArtists: 0,
 };
 const featureState = { discovery: true, autoPlaylists: true };
+const personalizedFeedCalls: unknown[][] = [];
 
 const queryResult = <T>(data: T) => ({
     data,
@@ -27,6 +28,12 @@ mock.module("@/lib/auth-context", {
 mock.module("@/lib/features-context", {
     namedExports: {
         useFeatures: () => featureState,
+    },
+});
+
+mock.module("@/lib/audio-state-context", {
+    namedExports: {
+        useAudioState: () => ({ waveMode: "new", waveMood: "focus" }),
     },
 });
 
@@ -70,20 +77,23 @@ mock.module("@/lib/query-events", {
 
 mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
     namedExports: {
-        usePersonalizedHomeFeed: () => ({
-            data: {
-                shelves: {
-                    quickPicks: [{ id: "quick" }],
-                    listenAgain: [],
-                    discovery: [],
+        usePersonalizedHomeFeed: (...args: unknown[]) => {
+            personalizedFeedCalls.push(args);
+            return {
+                data: {
+                    shelves: {
+                        quickPicks: [{ id: "quick" }],
+                        listenAgain: [],
+                        discovery: [],
+                    },
+                    degraded: false,
+                    reason: null,
+                    seedCount: 1,
                 },
-                degraded: false,
-                reason: null,
-                seedCount: 1,
-            },
-            isLoading: false,
-            isError: false,
-        }),
+                isLoading: false,
+                isError: false,
+            };
+        },
     },
 });
 
@@ -139,6 +149,7 @@ beforeEach(() => {
     forbiddenCalls.popularArtists = 0;
     featureState.discovery = true;
     featureState.autoPlaylists = true;
+    personalizedFeedCalls.length = 0;
 });
 
 test("Home does not mount generic Last.fm shelves on the personal landing", async () => {
@@ -189,4 +200,5 @@ test("Home loads the personal online feed without legacy local-media queries", a
     });
     assert.equal("recentPodcasts" in result, false);
     assert.equal("recentAudiobooks" in result, false);
+    assert.deepEqual(personalizedFeedCalls, [[12, true, "new", "focus"]]);
 });

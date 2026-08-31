@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useFeatures } from "@/lib/features-context";
 import { frontendLogger as log } from "@/lib/logger";
 import { useUserSettingsExplorePrefs } from "@/features/explore/hooks/useUserSettingsExplorePrefs";
+import { useAudioState } from "@/lib/audio-state-context";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
 import type { Mix, PersonalizedHomeFeed } from "../types";
 import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
@@ -41,9 +42,15 @@ export interface UseHomeDataReturn {
 export function useHomeData(): UseHomeDataReturn {
     const { isAuthenticated } = useAuth();
     const { discovery, autoPlaylists } = useFeatures();
+    const { waveMode, waveMood } = useAudioState();
     const { showYtMusicExplore } = useUserSettingsExplorePrefs();
     const queryClient = useQueryClient();
-    const personalizedQuery = usePersonalizedHomeFeed(12, isAuthenticated);
+    const personalizedQuery = usePersonalizedHomeFeed(
+        12,
+        isAuthenticated,
+        waveMode,
+        waveMood,
+    );
 
     useEffect(() => {
         const handleMixesUpdated = () => {

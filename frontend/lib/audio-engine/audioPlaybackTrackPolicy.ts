@@ -125,6 +125,38 @@ export function isLikelyTransientStreamError(error: unknown): boolean {
     );
 }
 
+/**
+ * Browsers collapse an HTTP 503 returned by an audio URL into media error 4.
+ * For YouTube-backed tracks this is a temporary provider-startup failure, not
+ * evidence that the next queue entry is permanently unavailable.
+ */
+export function isProviderStartupFailure(input: {
+    track: RuntimeProviderTrack | null;
+    code?: string;
+    error: unknown;
+    priorConsecutiveErrors?: number;
+}): boolean {
+    if (!input.track) return false;
+    const sourceType = resolveDirectTrackSourceType(input.track);
+    if (sourceType !== "ytmusic") {
+        return false;
+    }
+    const message = (
+        input.error instanceof Error
+            ? input.error.message
+            : String(input.error || "")
+    ).toLowerCase();
+    if (
+        message.includes("provider_challenge") ||
+        message.includes("failed to extract stream")
+    ) {
+        return true;
+    }
+    const genericSourceRejection =
+        input.code === "4" || message.includes("media_err_src_not_supported");
+    return genericSourceRejection && (input.priorConsecutiveErrors ?? 0) > 0;
+}
+
 export function resolveAudioLoadTimeoutPolicy(
     playbackType: "track" | "audiobook" | "podcast" | null,
     track: RuntimeProviderTrack | null,

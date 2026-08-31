@@ -3,6 +3,7 @@ import test from "node:test";
 import {
     getNextTrackInfo,
     isLikelyTransientStreamError,
+    isProviderStartupFailure,
     resolveAudioLoadTimeoutPolicy,
     resolveDirectTrackSourceType,
     shouldAttemptOuterTransientRecovery,
@@ -63,6 +64,34 @@ test("does not restart outer recovery after the engine exhausts its budget", () 
             error: new Error("network timeout"),
         }),
         true,
+    );
+});
+
+test("classifies a YouTube source rejection as a temporary provider startup failure", () => {
+    assert.equal(
+        isProviderStartupFailure({
+            track: { streamSource: "youtube" },
+            code: "4",
+            error: new Error("MEDIA_ERR_SRC_NOT_SUPPORTED"),
+        }),
+        false,
+    );
+    assert.equal(
+        isProviderStartupFailure({
+            track: { streamSource: "youtube" },
+            code: "4",
+            error: new Error("MEDIA_ERR_SRC_NOT_SUPPORTED"),
+            priorConsecutiveErrors: 1,
+        }),
+        true,
+    );
+    assert.equal(
+        isProviderStartupFailure({
+            track: { streamSource: "local" },
+            code: "4",
+            error: new Error("MEDIA_ERR_SRC_NOT_SUPPORTED"),
+        }),
+        false,
     );
 });
 

@@ -109,6 +109,41 @@ test("explicit install request opens the captured browser install flow", async (
     await mounted.unmount();
 });
 
+test("capturing the browser install event does not duplicate the sidebar install action", async () => {
+    const mounted = await mountPrompt();
+    const originalSetTimeout = window.setTimeout;
+    window.setTimeout = ((callback: TimerHandler) => {
+        if (typeof callback === "function") callback();
+        return 1;
+    }) as typeof window.setTimeout;
+    const beforeInstallPrompt = new Event("beforeinstallprompt", {
+        cancelable: true,
+    }) as Event & {
+        prompt: () => Promise<void>;
+        userChoice: Promise<{ outcome: "dismissed" }>;
+    };
+    beforeInstallPrompt.prompt = async () => undefined;
+    beforeInstallPrompt.userChoice = Promise.resolve({ outcome: "dismissed" });
+
+    await React.act(async () => {
+        window.dispatchEvent(beforeInstallPrompt);
+    });
+    window.setTimeout = originalSetTimeout;
+
+    assert.equal(
+        mounted.container.textContent,
+        "",
+        "the install UI must open only from the persistent sidebar action",
+    );
+
+    await React.act(async () => {
+        window.dispatchEvent(new CustomEvent("request-pwa-install"));
+    });
+    assert.match(mounted.container.textContent ?? "", /Установить приложение/);
+
+    await mounted.unmount();
+});
+
 test("PWA prompt clears mobile and desktop player chrome with safe gaps", async () => {
     const mounted = await mountPrompt();
 

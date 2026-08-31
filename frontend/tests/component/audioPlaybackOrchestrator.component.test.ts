@@ -1957,6 +1957,49 @@ test("offline playback failure pauses once without cascading through the queue",
     assert.doesNotMatch(toastErrors.join(" "), /multiple tracks failed/i);
 });
 
+test("temporary YouTube source rejection stops on the current track without cascading", async () => {
+    enableWindowMetrics();
+    playbackState.isPlaying = true;
+    const failedTrack = makeTrack("provider-challenge-track", {
+        title: "Temporarily blocked track",
+        streamSource: "youtube",
+        youtubeVideoId: "challenge01",
+    });
+    audioState.currentTrack = failedTrack;
+    audioState.queue = [failedTrack, makeTrack("must-not-auto-skip")];
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("loaderror", {
+        error: new Error("provider_challenge"),
+        code: "4",
+        recoverable: false,
+    });
+    await flushAsync(10);
+
+    assert.equal(controlCalls.next, 0);
+    assert.equal(engine.reloadCalls, 0);
+    assert.equal(engine.stopCalls, 1);
+    assert.equal(playbackMachine.state, "ERROR");
+    assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+    assert.equal(playbackState.isPlaying, false);
+    assert.equal(playbackState.isBuffering, false);
+    assert.equal(audioState.currentTrack?.id, failedTrack.id);
+    assert.ok(toastErrors.length <= 1);
+    if (toastErrors[0]) {
+        assert.match(toastErrors[0], /временно недоступен/i);
+    }
+    assert.doesNotMatch(toastErrors.join(" "), /Пробуем следующий трек/i);
+    assert.ok(
+        getServerSignalEvents("player.playback_error").some(
+            (event) =>
+                (event.fields as Record<string, unknown> | undefined)?.stage ===
+                "provider_startup_paused",
+        ),
+        JSON.stringify(apiCalls.reportPlaybackClientMetric),
+    );
+});
+
 test("offline load timeout stops without retrying or advancing the queue", async (t) => {
     mock.timers.enable({ apis: ["setTimeout"] });
     const navigatorDescriptor = Object.getOwnPropertyDescriptor(

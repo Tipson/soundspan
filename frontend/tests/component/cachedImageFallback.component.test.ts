@@ -64,7 +64,7 @@ test("CachedImage keeps lazy loading by default but lets priority images load ea
         );
     });
     assert.equal(capturedImageProps?.priority, true);
-    assert.equal(capturedImageProps?.loading, undefined);
+    assert.equal(capturedImageProps?.loading, "eager");
 
     await React.act(async () => root.unmount());
     container.remove();

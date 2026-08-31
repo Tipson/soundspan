@@ -77,6 +77,7 @@ YTMUSIC_SPOOL_TRACK_MAX_BYTES = max(
 # Stay below the backend's 120-second timeout so callers receive this sidecar's 504.
 YTMUSIC_SPOOL_TIMEOUT = env_float("YTMUSIC_SPOOL_TIMEOUT", "110")
 YTMUSIC_SPOOL_CONCURRENCY = max(1, min(4, env_int("YTMUSIC_SPOOL_CONCURRENCY", "2")))
+_PROVIDER_CHALLENGE_COOLDOWN_SECONDS = 90.0
 _SPOOL_PARTIAL_STALE_SECONDS = 900
 _SPOOL_EVICT_MIN_AGE_SECONDS = 60
 _SPOOL_MAX_PENDING_JOBS = 8
@@ -88,6 +89,8 @@ _yt_dlp_spool_executor = ThreadPoolExecutor(
 _spool_tasks: dict[str, asyncio.Task[tuple[str, str]]] = {}
 _spool_pending_jobs = 0
 _spool_prune_lock = threading.Lock()
+_provider_challenge_lock = threading.Lock()
+_provider_challenge_cooldown_until = 0.0
 
 
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -153,6 +156,45 @@ def _is_permanently_unavailable_error(error_message: str) -> bool:
     return any(pattern.search(error_message) for pattern in _PERMANENT_UNAVAILABLE_PATTERNS)
 
 
+def _is_provider_challenge_error(error_message: str) -> bool:
+    """Detect YouTube's temporary anonymous-client verification challenge."""
+    normalized = error_message.lower()
+    return "sign in to confirm you" in normalized and "not a bot" in normalized
+
+
+def _provider_challenge_http_error(video_id: str, retry_after: int) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            "error": "provider_challenge",
+            "message": "YouTube Music temporarily requires verification. Retry later.",
+            "video_id": video_id,
+        },
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def _arm_provider_challenge_cooldown() -> int:
+    """Arm one process-wide cooldown and return its rounded retry delay."""
+    global _provider_challenge_cooldown_until
+    now = time.monotonic()
+    with _provider_challenge_lock:
+        _provider_challenge_cooldown_until = max(
+            _provider_challenge_cooldown_until,
+            now + _PROVIDER_CHALLENGE_COOLDOWN_SECONDS,
+        )
+        return max(1, int(_provider_challenge_cooldown_until - now + 0.999))
+
+
+def _raise_if_provider_challenge_cooldown(video_id: str) -> None:
+    """Avoid hammering YouTube while its verification challenge is active."""
+    now = time.monotonic()
+    with _provider_challenge_lock:
+        remaining = _provider_challenge_cooldown_until - now
+    if remaining > 0:
+        raise _provider_challenge_http_error(video_id, max(1, int(remaining + 0.999)))
+
+
 def _stream_extraction_http_error(
     video_id: str, error_label: str, error: Exception
 ) -> HTTPException:
@@ -176,6 +218,14 @@ def _stream_extraction_http_error(
                 "video_id": video_id,
             },
         )
+    if _is_provider_challenge_error(error_str):
+        retry_after = _arm_provider_challenge_cooldown()
+        log.warning(
+            "%s hit YouTube provider challenge; extraction paused for %ss",
+            error_label,
+            retry_after,
+        )
+        return _provider_challenge_http_error(video_id, retry_after)
     if _is_permanently_unavailable_error(error_str):
         log.error(
             "%s failed: %s",
@@ -227,6 +277,7 @@ def _extract_stream_info(
     if cached and cached.get("expires_at", 0) > time.time():
         log.debug(f"Stream URL cache hit for {cache_key}")
         return cached
+    _raise_if_provider_challenge_cooldown(video_id)
     _extract_pacer.wait()
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -579,6 +630,8 @@ def _download_ytmusic_spool_sync(video_id: str, quality: str) -> tuple[str, str]
     existing = _find_spooled_file(video_id, quality)
     if existing is not None:
         return str(existing), _spool_content_type(existing)
+
+    _raise_if_provider_challenge_cooldown(video_id)
 
     started_at = time.monotonic()
     ydl_opts = _build_ytmusic_spool_options(

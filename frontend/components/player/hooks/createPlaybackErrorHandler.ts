@@ -8,6 +8,7 @@ import {
 } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import {
     resolveDirectTrackSourceType,
+    isProviderStartupFailure,
     shouldAttemptOuterTransientRecovery,
 } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import {
@@ -136,6 +137,13 @@ export function createPlaybackErrorHandler({
         const sourceType = currentTrack
             ? resolveDirectTrackSourceType(currentTrack)
             : "unknown";
+        const providerStartupFailure = isProviderStartupFailure({
+            track: currentTrack,
+            code: data.code,
+            error: data.error,
+            priorConsecutiveErrors:
+                refs.consecutiveErrorBreakerRef.current.getErrorCount(),
+        });
 
         if (
             playbackType === "track" &&
@@ -173,6 +181,35 @@ export function createPlaybackErrorHandler({
                 error: errorMessage,
                 stage: "pre_recovery",
             });
+            if (providerStartupFailure) {
+                releasePlaybackSource();
+                finishFailedPlay();
+                playbackStateMachine.forceTransition("ERROR", {
+                    error: errorMessage,
+                });
+                setIsPlaying(false);
+                setIsBuffering(false);
+                recoverablePlayErrorPendingRef.current = false;
+                isUserInitiatedRef.current = false;
+                heartbeatRef.current?.stop();
+                clearPendingTrackErrorSkip();
+                clearStartupPlaybackRecovery();
+                clearTransientTrackRecovery(true);
+                toast.error(
+                    "Несколько треков YouTube Music подряд не загрузились. Текущий трек сохранён — повторите запуск немного позже.",
+                    {
+                        id: "youtube-provider-temporarily-unavailable",
+                        duration: 6000,
+                    },
+                );
+                logPlaybackClientMetric("player.playback_error", {
+                    trackId: currentTrack?.id ?? null,
+                    sourceType,
+                    error: errorMessage,
+                    stage: "provider_startup_paused",
+                });
+                return;
+            }
             const failedTrackId = currentTrack?.id ?? null;
             const transientScheduled =
                 shouldAttemptOuterTransientRecovery({

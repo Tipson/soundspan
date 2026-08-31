@@ -59,6 +59,8 @@ mock.module("@/lib/audio-controls-context", {
 mock.module("@/lib/audio-state-context", {
     namedExports: {
         useAudioState: () => ({
+            waveMode: "new",
+            waveMood: "focus",
             setIsShuffle: (value: unknown) => calls.isShuffle.push(value),
             setShuffleIndices: (value: unknown[]) =>
                 calls.shuffleIndices.push(value),
@@ -152,7 +154,7 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.ok(
         calls.images.every(
             (props) =>
-                props.priority === undefined && props.loading === "eager",
+                props.priority === true && props.loading === undefined,
         ),
     );
 
@@ -164,15 +166,15 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
         (calls.playTracks[0]?.[0] as Array<{ id: string }>).map(
             (item) => item.id,
         ),
-        ["quick", "fresh", "again"],
+        ["fresh", "quick", "again"],
     );
     assert.deepEqual(calls.playTracks[0]?.slice(1), [0, true]);
     assert.deepEqual(calls.isShuffle, [false]);
     assert.deepEqual(calls.shuffleIndices, [[]]);
     assert.deepEqual(calls.vibeMode, [true]);
     assert.deepEqual(calls.vibeSourceFeatures, [null]);
-    assert.deepEqual(calls.vibeQueueIds, [["quick", "fresh", "again"]]);
-    assert.deepEqual(calls.waveMode, ["for-you"]);
+    assert.deepEqual(calls.vibeQueueIds, [["fresh", "quick", "again"]]);
+    assert.deepEqual(calls.waveMode, []);
     assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
     assert.match(container.textContent ?? "", /Моя волна/i);
     assert.match(container.textContent ?? "", /Настроить/i);

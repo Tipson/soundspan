@@ -171,7 +171,7 @@ export function DeviceOfflineSettingsSection() {
                                 {isSaving
                                     ? "Открываем…"
                                     : reconnectRememberedFolder
-                                      ? "Подключить папку заново"
+                                      ? "Разрешить доступ"
                                       : "Выбрать папку"}
                             </button>
                         )}

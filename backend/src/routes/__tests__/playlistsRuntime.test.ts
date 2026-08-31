@@ -458,7 +458,16 @@ describe("playlists route runtime", () => {
                             album: { coverUrl: "/covers/album.jpg" },
                         },
                     },
-                    { id: "i-2", sort: 1, track: null },
+                    {
+                        id: "i-2",
+                        sort: 1,
+                        track: null,
+                        trackTidal: null,
+                        trackYtMusic: {
+                            thumbnailUrl: "https://img.test/yt-cover.jpg",
+                            albumEntity: null,
+                        },
+                    },
                 ],
             },
             {
@@ -493,7 +502,14 @@ describe("playlists route runtime", () => {
                             album: { coverArt: "/covers/album.jpg" },
                         },
                     },
-                    { id: "i-2", track: null },
+                    {
+                        id: "i-2",
+                        track: {
+                            album: {
+                                coverArt: "https://img.test/yt-cover.jpg",
+                            },
+                        },
+                    },
                 ],
             }),
             expect.objectContaining({
@@ -563,6 +579,21 @@ describe("playlists route runtime", () => {
                             track: {
                                 select: {
                                     album: { select: { coverUrl: true } },
+                                },
+                            },
+                            trackTidal: {
+                                select: {
+                                    albumEntity: {
+                                        select: { coverUrl: true },
+                                    },
+                                },
+                            },
+                            trackYtMusic: {
+                                select: {
+                                    thumbnailUrl: true,
+                                    albumEntity: {
+                                        select: { coverUrl: true },
+                                    },
                                 },
                             },
                         },

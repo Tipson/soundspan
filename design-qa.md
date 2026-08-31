@@ -16,6 +16,13 @@
   - `design-system/soundspan/qa/evidence/vibe-polish-production-mobile-390x844.png`
 - Current mobile Home capture:
   `design-system/soundspan/qa/evidence/home-polish-production-mobile-390x844.png`
+- Local release-candidate Home and playlist captures:
+  - `design-system/soundspan/qa/evidence/home-fixes-local-1487x1058.png`
+  - `design-system/soundspan/qa/evidence/home-fixes-local-mobile-390x844.png`
+  - `design-system/soundspan/qa/evidence/playlists-collage-local-1487x1058.png`
+  - `design-system/soundspan/qa/evidence/playlists-collage-local-mobile-390x844.png`
+- Local release-candidate source comparison:
+  `design-system/soundspan/qa/evidence/home-reference-vs-local-2974x1058.png`
 - Earlier comparison history remains in
   `design-system/soundspan/qa/comparison/home-full-comparison.png` and
   `design-system/soundspan/qa/comparison/home-shell-player-comparison.png`.
@@ -124,6 +131,25 @@ are intentional product constraints:
 - **Downloaded state:** verified ready tracks receive the compact downloaded icon;
   non-downloaded tracks keep the title row visually quiet.
 
+### Iteration 4 — passed locally, awaiting publication
+
+- **Playlist artwork:** owned and imported playlist cards now resolve up to four
+  local, YouTube Music, or TIDAL covers into the existing 2 × 2 mosaic instead of
+  showing an empty note placeholder for provider-only items.
+- **Home atmosphere:** the artwork-derived field uses a continuous transparent-to-
+  surface vertical fade in addition to its horizontal contrast scrim, so the
+  color resolves into the black content background without a hard shelf edge.
+- **Single install entry:** the browser install event is retained for the explicit
+  sidebar action, but no delayed duplicate install card appears on its own.
+- **Responsive evidence:** the 1487 × 1058 desktop captures and 390 × 844 mobile
+  captures show no horizontal overflow. Playlist mosaics remain legible in two
+  mobile columns, while the Home hero keeps both primary actions inside its card.
+- **Visual comparison:** the native 2974 × 1058 source-versus-candidate composite
+  preserves the selected mock's shell proportions, central search, artwork-led
+  Wave hierarchy, right recency rail, near-black surfaces, and violet/amber action
+  language. Live catalog art and the user's reduced sidebar hierarchy remain the
+  intentional differences.
+
 ## Responsive and interaction evidence
 
 - Desktop Home: sidebar/main-column adjacency, top-bar ownership, semantic Home
@@ -160,5 +186,8 @@ mobile-browser smoke checks passed after deployment. The main container remained
 healthy with zero restarts, and the companion streamer stayed on its previous
 healthy image without recreation. Final subjective visual acceptance remains
 with the product owner.
+
+The Iteration 4 candidate is verified only in the local browser and is not yet
+published. Its factual captures are listed above for owner review before release.
 
 final result: passed
