@@ -9,34 +9,34 @@ import { discoverRu } from "@/lib/i18n/discoverRu";
  */
 export function HowItWorks() {
     return (
-        <Card className="p-6 bg-[#111]/50  border-white/5">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-white">
-                <Sparkles className="w-5 h-5 text-ai-hover" />
+        <Card className="rounded-2xl border-line bg-surface-elevated p-5 sm:p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-content">
+                <Sparkles className="size-5 text-ai-hover" aria-hidden="true" />
                 {discoverRu.howItWorks.title}
             </h3>
-            <div className="space-y-3 text-sm text-gray-400">
+            <div className="grid gap-3 text-sm leading-6 text-content-muted md:grid-cols-2">
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
                     <p>{discoverRu.howItWorks.history}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
                     <p>{discoverRu.howItWorks.variety}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
                     <p>{discoverRu.howItWorks.providers}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
                     <p>{discoverRu.howItWorks.badges}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
                     <p>{discoverRu.howItWorks.repeats}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
                     <p>{discoverRu.howItWorks.noWrites}</p>
                 </div>
             </div>

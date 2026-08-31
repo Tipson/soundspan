@@ -7,13 +7,15 @@ interface LoadingScreenProps {
 /**
  * Renders the LoadingScreen component.
  */
-export function LoadingScreen({ message = "Loading..." }: LoadingScreenProps) {
+export function LoadingScreen({ message = "Загрузка…" }: LoadingScreenProps) {
     return (
-        <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="flex min-h-screen items-center justify-center bg-surface">
             <div className="flex flex-col items-center gap-4">
                 <GradientSpinner size="lg" />
                 {message && (
-                    <p className="text-white text-sm font-medium">{message}</p>
+                    <p className="text-sm font-medium text-content-muted">
+                        {message}
+                    </p>
                 )}
             </div>
         </div>

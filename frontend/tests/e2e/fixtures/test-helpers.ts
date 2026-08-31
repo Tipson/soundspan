@@ -8,7 +8,7 @@ export async function loginAsTestUser(page: Page): Promise<void> {
     await page.goto("/login");
     await page.locator("#username").fill(username);
     await page.locator("#password").fill(password);
-    await page.getByRole("button", { name: "Sign In" }).click();
+    await page.getByRole("button", { name: "Войти", exact: true }).click();
     await page.waitForURL(/\/($|\?|home)/);
 }
 

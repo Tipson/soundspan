@@ -23,12 +23,14 @@ const EmptyState = memo(function EmptyState({
     action,
 }: EmptyStateProps) {
     return (
-        <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center px-4">
-            <div className="mb-4 text-gray-400">{icon}</div>
-            <h3 className="text-lg md:text-xl font-medium text-white mb-2">
+        <div className="flex flex-col items-center justify-center px-4 py-12 text-center md:py-16">
+            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-surface-elevated text-brand">
+                {icon}
+            </div>
+            <h3 className="mb-2 text-lg font-semibold text-content md:text-xl">
                 {title}
             </h3>
-            <p className="text-sm md:text-base text-gray-400 mb-6 max-w-md">
+            <p className="mb-6 max-w-md text-sm leading-6 text-content-muted md:text-base">
                 {description}
             </p>
             {children}

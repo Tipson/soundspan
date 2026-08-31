@@ -2,62 +2,62 @@
 
 @theme {
     /* Brand */
-    --color-brand: #7c9cff;
-    --color-brand-dark: #5d78dd;
-    --color-brand-hover: #a9bcff;
-    --color-brand-light: #c9d4ff;
+    --color-brand: #8fa8ff;
+    --color-brand-dark: #6e85df;
+    --color-brand-hover: #b3c3ff;
+    --color-brand-light: #d8e0ff;
 
     /* AI */
-    --color-ai: #2323ff;
-    --color-ai-dark: #1a1acc;
-    --color-ai-hover: #5b5bff;
+    --color-ai: #9a8cff;
+    --color-ai-dark: #7365cf;
+    --color-ai-hover: #c2b8ff;
 
     /* Surfaces */
-    --color-surface: #07080b;
-    --color-surface-active: #18202c;
-    --color-surface-elevated: #10151e;
-    --color-surface-highlight: #18202c;
-    --color-surface-hover: #18202c;
-    --color-surface-overlay: #10151e;
-    --color-surface-raised: #0b0e14;
-    --color-surface-sunken: #0b0e14;
+    --color-surface: #080a0f;
+    --color-surface-active: #222a36;
+    --color-surface-elevated: #1a202a;
+    --color-surface-highlight: #222a36;
+    --color-surface-hover: #222a36;
+    --color-surface-overlay: #1a202a;
+    --color-surface-raised: #11151d;
+    --color-surface-sunken: #11151d;
 
     /* Lines */
-    --color-line: #252a36;
-    --color-line-muted: #353b4a;
-    --color-line-strong: #454d60;
+    --color-line: #2a3240;
+    --color-line-muted: #3b4657;
+    --color-line-strong: #57647a;
 
     /* Content */
-    --color-content: #ffffff;
-    --color-content-body: #d8dae2;
-    --color-content-disabled: #5d6270;
-    --color-content-muted: #747987;
-    --color-content-secondary: #a2a6b3;
+    --color-content: #f7f8fc;
+    --color-content-body: #e1e5ec;
+    --color-content-disabled: #707988;
+    --color-content-muted: #aeb6c5;
+    --color-content-secondary: #c4cad5;
 
     /* Status */
-    --color-error: #ef4444;
-    --color-success: #22c55e;
-    --color-warning: #f59e0b;
+    --color-error: #ff738e;
+    --color-success: #64d8a8;
+    --color-warning: #f2c46d;
 }
 
 :root {
     /* soundspan Design System - Dark Theme Only */
 
     /* Soundspan music foundation */
-    --music-canvas: #07080b;
-    --music-stage: #0b0e14;
-    --music-surface: #10151e;
-    --music-raised: #18202c;
-    --music-soft: var(--music-raised);
-    --music-ink: #f7f7fa;
-    --music-ink-body: #d8dae2;
-    --music-ink-muted: #a2a6b3;
-    --music-ink-faint: #747987;
-    --music-action: #7c9cff;
-    --music-action-strong: #a9bcff;
-    --music-positive: #63d59a;
-    --music-negative: #ff718d;
-    --music-warning: #f4c76e;
+    --music-canvas: #080a0f;
+    --music-stage: #11151d;
+    --music-surface: #1a202a;
+    --music-raised: #222a36;
+    --music-soft: #2a3442;
+    --music-ink: #f7f8fc;
+    --music-ink-body: #e1e5ec;
+    --music-ink-muted: #c4cad5;
+    --music-ink-faint: #aeb6c5;
+    --music-action: #8fa8ff;
+    --music-action-strong: #b3c3ff;
+    --music-positive: #64d8a8;
+    --music-negative: #ff738e;
+    --music-warning: #f2c46d;
     --music-line: rgb(255 255 255 / 0.08);
     --music-line-strong: rgb(255 255 255 / 0.14);
     --music-radius-control: 10px;
@@ -81,23 +81,23 @@
     /* Borders */
     --border-subtle: var(--music-line); /* Subtle borders (default) */
     --border-interactive: var(--music-line-strong); /* Interactive elements */
-    --border-focus: #657fce; /* Focus, selected states */
+    --border-focus: var(--music-action); /* Focus, selected states */
 
     /* Text Colors */
     --text-primary: var(--music-ink); /* Primary headers */
     --text-body: var(--music-ink-body); /* Body text */
     --text-secondary: var(--music-ink-muted); /* Secondary info */
     --text-muted: var(--music-ink-faint); /* Timestamps, meta */
-    --text-disabled: #5d6270; /* Disabled */
+    --text-disabled: #707988; /* Disabled */
 
     /* Actions */
     --color-primary: var(--music-action); /* PRIMARY CTA ONLY */
-    --color-ai: #2323ff; /* AI features - Electric Blue */
-    --color-ai-dark: #1a1acc; /* AI selected */
+    --color-ai: #9a8cff; /* Legacy semantic alias for assisted features */
+    --color-ai-dark: #7365cf; /* Legacy selected state */
 
     /* Status */
     --color-success: var(--music-positive);
-    --color-warning: #f59e0b;
+    --color-warning: var(--music-warning);
     --color-error: var(--music-negative);
     --color-info: var(--music-action);
 
@@ -124,6 +124,7 @@ body {
     line-height: 1.5;
     min-height: 100vh;
     min-height: 100dvh;
+    overflow-x: clip;
 }
 
 h1,
@@ -157,6 +158,11 @@ select {
     -webkit-tap-highlight-color: transparent;
 }
 
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--music-action);
+    outline-offset: 3px;
+}
+
 .brand-wordmark {
     font-family: var(--font-polea), var(--font-interface);
     text-transform: lowercase;
@@ -164,14 +170,15 @@ select {
     line-height: 1;
 }
 
-/* AI-blue glow for the Vibe navigation entry */
+/* Vibe signal uses the same restrained musical accent as the rest of the app. */
 .nav-vibe-glow {
-    color: var(--color-ai-hover);
-    text-shadow: 0 0 12px color-mix(in srgb, var(--color-ai) 65%, transparent);
+    color: var(--music-action-strong);
+    text-shadow: 0 0 14px
+        color-mix(in srgb, var(--music-action) 28%, transparent);
 }
 
 .nav-vibe-glow:hover {
-    color: var(--color-brand-light);
+    color: var(--music-ink);
 }
 
 /* =====================================================
@@ -346,13 +353,11 @@ select {
 
 .settings-section-navigation {
     z-index: 10;
-    border: 1px solid var(--music-line);
+    border: 0;
     border-radius: var(--music-radius-card);
     padding: 8px;
-    background: color-mix(in srgb, var(--music-surface) 88%, transparent);
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
-        0 18px 46px color-mix(in srgb, black 24%, transparent);
+    background: color-mix(in srgb, var(--music-stage) 88%, transparent);
+    box-shadow: 0 18px 46px color-mix(in srgb, black 18%, transparent);
     backdrop-filter: blur(18px) saturate(120%);
 }
 
@@ -397,19 +402,11 @@ select {
 }
 
 .settings-section-card {
-    border: 1px solid var(--music-line);
+    border: 0;
     border-radius: var(--music-radius-card);
     padding: 20px;
-    background:
-        linear-gradient(
-            145deg,
-            color-mix(in srgb, white 3%, transparent),
-            transparent 38%
-        ),
-        color-mix(in srgb, var(--music-surface) 94%, transparent);
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
-        0 22px 60px color-mix(in srgb, black 18%, transparent);
+    background: color-mix(in srgb, var(--music-stage) 72%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
 }
 
 .settings-row + .settings-row {
@@ -429,9 +426,6 @@ select {
 
 .mobile-shell-frame {
     padding-top: calc(var(--app-topbar-height) + var(--safe-area-top));
-    padding-bottom: calc(
-        var(--app-bottom-nav-height) + var(--safe-area-bottom)
-    );
 }
 
 .mobile-app-stage {
@@ -442,7 +436,6 @@ select {
 
 .mobile-stage-content {
     min-height: 100%;
-    padding-bottom: calc(var(--app-mini-player-height) + 12px);
 }
 
 .mobile-player-dock {
@@ -469,11 +462,11 @@ select {
 .shell-signal-progress {
     background: linear-gradient(
         90deg,
-        var(--color-brand),
-        var(--color-ai-hover),
-        var(--color-brand-light)
+        var(--music-action),
+        var(--music-action-strong)
     );
-    box-shadow: 0 0 14px color-mix(in srgb, var(--color-ai) 65%, transparent);
+    box-shadow: 0 0 14px
+        color-mix(in srgb, var(--music-action) 36%, transparent);
 }
 
 .mobile-bottom-navigation {
@@ -495,14 +488,10 @@ select {
     border: 0;
     border-top: 1px solid color-mix(in srgb, white 8%, transparent);
     border-radius: 0;
-    background:
-        linear-gradient(
-            110deg,
-            color-mix(in srgb, var(--music-action) 5%, transparent),
-            transparent 42%
-        ),
-        color-mix(in srgb, var(--music-stage) 94%, transparent);
-    box-shadow: 0 -14px 34px color-mix(in srgb, black 28%, transparent);
+    background: color-mix(in srgb, var(--music-stage) 96%, transparent);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 3%, transparent),
+        0 -18px 48px color-mix(in srgb, black 26%, transparent);
     backdrop-filter: blur(20px) saturate(132%);
 }
 
@@ -588,19 +577,19 @@ select {
 }
 
 .overlay-player-artwork {
-    border: 1px solid color-mix(in srgb, white 12%, transparent);
-    border-radius: 26px;
+    border: 0;
+    border-radius: 22px;
     box-shadow:
         inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
         0 34px 88px rgb(0 0 0 / 0.48);
 }
 
 .overlay-player-metadata {
-    border: 1px solid color-mix(in srgb, white 8%, transparent);
-    border-radius: 24px;
-    background: color-mix(in srgb, var(--music-stage) 58%, transparent);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
-    backdrop-filter: blur(22px) saturate(125%);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
 }
 
 .overlay-player-transport {
@@ -730,21 +719,24 @@ button:disabled {
 /* Scrollbar Styling - Desktop only */
 @media (min-width: 769px) {
     ::-webkit-scrollbar {
-        width: 12px;
+        width: 8px;
+        height: 8px;
     }
 
     ::-webkit-scrollbar-track {
-        background: var(--bg-primary);
+        background: transparent;
     }
 
     ::-webkit-scrollbar-thumb {
-        background: var(--bg-hover);
-        border-radius: 6px;
-        border: 2px solid var(--bg-primary);
+        background: color-mix(in srgb, var(--music-ink-muted) 28%, transparent);
+        border-radius: 999px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-        background: var(--border-focus);
+        background: color-mix(in srgb, var(--music-ink-muted) 48%, transparent);
+        background-clip: padding-box;
     }
 }
 

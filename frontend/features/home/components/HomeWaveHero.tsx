@@ -49,7 +49,7 @@ function balancedUniqueTracks(
     return result;
 }
 
-/** Personal-radio hero with an immediate, playable My Wave action. */
+/** Compact personal-radio quick start for the first Home viewport. */
 export function HomeWaveHero({
     personalizedFeed,
     isLoading,
@@ -109,41 +109,38 @@ export function HomeWaveHero({
 
     return (
         <section
-            data-home-wave-layout="launch"
+            data-home-wave-layout="quick-start"
             aria-labelledby="home-wave-title"
-            className="group relative isolate overflow-hidden rounded-[1.25rem] bg-surface-raised/80 shadow-xl shadow-black/20"
+            className="group relative isolate overflow-hidden rounded-2xl border border-white/8 bg-surface-raised/80 shadow-lg shadow-black/15"
         >
             <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 bg-gradient-to-r from-brand/20 via-ai/[0.06] to-transparent opacity-80 transition-opacity duration-300 group-hover:opacity-100 motion-reduce:transition-none"
             />
 
-            <div className="relative grid min-h-[9.5rem] items-center gap-5 px-5 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:px-6 lg:min-h-[10.5rem] lg:px-8">
+            <div className="relative grid min-h-[8.75rem] items-center gap-4 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:px-5 lg:grid-cols-[minmax(0,1fr)_13rem] lg:px-6">
                 <div className="relative z-20 min-w-0">
                     <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-light">
-                        <AudioWaveform
-                            className="h-4 w-4"
-                            aria-hidden="true"
-                        />
+                        <AudioWaveform className="h-4 w-4" aria-hidden="true" />
                         {ru.home.endlessRadio}
                     </p>
                     <h2
                         id="home-wave-title"
-                        className="mt-1 text-2xl font-black leading-tight tracking-[-0.035em] text-content sm:text-3xl"
+                        className="mt-1 text-2xl font-black leading-tight tracking-[-0.035em] text-content sm:text-[1.75rem]"
                     >
                         {ru.vibe.title}
                     </h2>
-                    <p className="mt-1 text-sm text-content-secondary">
+                    <p className="mt-1 line-clamp-2 max-w-2xl text-sm leading-5 text-content-secondary">
                         {ru.home.waveSummary}
                     </p>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-2.5">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button
                             type="button"
                             onClick={startWave}
                             disabled={!canPlay}
                             aria-label={ru.vibe.play}
-                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-content px-5 py-3 text-sm font-black text-surface shadow-lg shadow-black/20 transition duration-200 active:scale-[0.97] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none"
+                            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-content px-5 py-2.5 text-sm font-black text-surface shadow-lg shadow-black/20 transition duration-200 active:scale-[0.97] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none"
                         >
                             <Play
                                 className="h-5 w-5 fill-current"
@@ -153,7 +150,7 @@ export function HomeWaveHero({
                         </button>
                         <Link
                             href="/vibe"
-                            className="inline-flex min-h-12 items-center gap-1 rounded-full border border-white/10 bg-black/20 px-4 py-3 text-sm font-bold text-content-secondary transition-colors duration-200 hover:border-white/20 hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            className="inline-flex min-h-11 items-center gap-1 rounded-full border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-bold text-content-secondary transition-colors duration-200 hover:border-white/20 hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
                             {ru.vibe.tune}
                             <ChevronRight
@@ -162,23 +159,22 @@ export function HomeWaveHero({
                             />
                         </Link>
                     </div>
-
                 </div>
 
-                <div className="relative hidden h-28 w-52 sm:block lg:h-32 lg:w-64">
+                <div className="relative hidden h-24 w-44 sm:block lg:w-52">
                     {coverTracks.length > 0 ? (
                         coverTracks.map((track, index) => {
                             const positions = [
-                                "left-0 top-3 -rotate-[7deg]",
+                                "left-0 top-2 -rotate-[7deg]",
                                 "left-1/2 top-0 z-10 -translate-x-1/2",
-                                "right-0 top-3 rotate-[7deg]",
+                                "right-0 top-2 rotate-[7deg]",
                             ];
                             return (
                                 <span
                                     key={track.album.coverArt}
                                     data-wave-cover
                                     aria-hidden="true"
-                                    className={`absolute aspect-square h-24 overflow-hidden rounded-[0.9rem] bg-surface-highlight shadow-2xl shadow-black/50 lg:h-28 ${positions[index]}`}
+                                    className={`absolute aspect-square h-20 overflow-hidden rounded-xl bg-surface-highlight shadow-xl shadow-black/45 transition-transform duration-300 group-hover:-translate-y-1 motion-reduce:transition-none lg:h-24 ${positions[index]}`}
                                 >
                                     <CachedImage
                                         src={api.getCoverArtUrl(
@@ -187,7 +183,7 @@ export function HomeWaveHero({
                                         )}
                                         alt=""
                                         fill
-                                        sizes="112px"
+                                        sizes="96px"
                                         className="object-cover"
                                     />
                                     <span className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
@@ -197,9 +193,9 @@ export function HomeWaveHero({
                     ) : (
                         <span
                             aria-hidden="true"
-                            className="absolute left-1/2 top-1/2 grid h-24 w-24 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/20 text-brand-light"
+                            className="absolute left-1/2 top-1/2 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/20 text-brand-light"
                         >
-                            <AudioWaveform className="h-12 w-12" />
+                            <AudioWaveform className="h-10 w-10" />
                         </span>
                     )}
                 </div>

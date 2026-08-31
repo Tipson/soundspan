@@ -82,17 +82,15 @@ export function HorizontalCarousel({
                     type="button"
                     onClick={() => scroll("left")}
                     className={cn(
-                        "absolute left-0 top-1/2 -translate-y-1/2 z-10",
-                        "h-11 w-11 rounded-full bg-black/80 ",
-                        "flex items-center justify-center",
-                        "opacity-0 transition-opacity group-hover/carousel:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none",
-                        "hover:bg-black hover:scale-105 transition-all",
-                        "border border-white/10 shadow-lg",
-                        "-translate-x-1/2",
+                        "absolute left-0 top-1/2 z-10 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl",
+                        "border border-line bg-surface-overlay text-content shadow-xl",
+                        "opacity-0 transition-[opacity,background-color,border-color,transform] duration-150 group-hover/carousel:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none",
+                        "hover:border-line-muted hover:bg-surface-elevated active:scale-[0.98]",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
                     )}
                     aria-label={ru.common.scrollLeft}
                 >
-                    <ChevronLeft className="w-5 h-5 text-white" />
+                    <ChevronLeft className="size-5" />
                 </button>
             )}
 
@@ -117,17 +115,15 @@ export function HorizontalCarousel({
                     type="button"
                     onClick={() => scroll("right")}
                     className={cn(
-                        "absolute right-0 top-1/2 -translate-y-1/2 z-10",
-                        "h-11 w-11 rounded-full bg-black/80 ",
-                        "flex items-center justify-center",
-                        "opacity-0 transition-opacity group-hover/carousel:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none",
-                        "hover:bg-black hover:scale-105 transition-all",
-                        "border border-white/10 shadow-lg",
-                        "translate-x-1/2",
+                        "absolute right-0 top-1/2 z-10 flex size-11 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl",
+                        "border border-line bg-surface-overlay text-content shadow-xl",
+                        "opacity-0 transition-[opacity,background-color,border-color,transform] duration-150 group-hover/carousel:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none",
+                        "hover:border-line-muted hover:bg-surface-elevated active:scale-[0.98]",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
                     )}
                     aria-label={ru.common.scrollRight}
                 >
-                    <ChevronRight className="w-5 h-5 text-white" />
+                    <ChevronRight className="size-5" />
                 </button>
             )}
         </div>

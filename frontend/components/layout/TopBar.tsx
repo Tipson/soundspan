@@ -14,18 +14,23 @@ import { ru } from "@/lib/i18n/ru";
 
 interface TopBarProps {
     isActivityPanelOpen?: boolean;
+    onActivityPanelToggle?: () => void;
 }
 
 /**
  * Renders the TopBar component.
  */
-export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
+export function TopBar({
+    isActivityPanelOpen = false,
+    onActivityPanelToggle,
+}: TopBarProps = {}) {
     const pathname = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
+    const isMobileSearchCanvas = isMobileOrTablet && pathname === "/search";
     const routeSearchQuery =
         pathname === "/search" ? (searchParams.get("q") ?? "") : "";
     const routeSearchKey = `${pathname}\u0000${routeSearchQuery}`;
@@ -95,12 +100,16 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                     return;
                 }
                 e.preventDefault();
-                searchInputRef.current?.focus();
+                if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                } else if (isMobileOrTablet) {
+                    router.push("/search");
+                }
             }
         };
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
-    }, []);
+    }, [isMobileOrTablet, router]);
 
     return (
         <header
@@ -121,7 +130,7 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                     : undefined,
             }}
         >
-            {/* Mobile keeps only the three controls that earn the scarce width. */}
+            {/* Mobile keeps navigation lightweight until Search owns the canvas. */}
             {isMobileOrTablet ? (
                 <>
                     <button
@@ -137,35 +146,70 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                         <Menu className="w-5 h-5" />
                     </button>
 
-                    <form onSubmit={handleSearch} className="flex-1 min-w-0">
-                        <div
-                            className="group relative"
-                            data-tv-section="search-input"
-                            data-shell-search="persistent"
+                    {isMobileSearchCanvas ? (
+                        <form
+                            onSubmit={handleSearch}
+                            className="min-w-0 flex-1"
                         >
-                            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) =>
-                                    updateSearchQuery(e.target.value)
-                                }
-                                placeholder={ru.search.mobilePlaceholder}
+                            <div
+                                className="group relative"
+                                data-tv-section="search-input"
+                                data-shell-search="canvas"
+                            >
+                                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
+                                <input
+                                    ref={searchInputRef}
+                                    autoFocus
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) =>
+                                        updateSearchQuery(e.target.value)
+                                    }
+                                    placeholder={ru.search.mobilePlaceholder}
+                                    aria-label={ru.search.aria}
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    tabIndex={0}
+                                    className="shell-search-field h-11 w-full min-w-0 rounded-xl pl-10 pr-3 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/15"
+                                />
+                            </div>
+                        </form>
+                    ) : (
+                        <>
+                            <Link
+                                href="/"
+                                className="group flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                            >
+                                <Image
+                                    src="/assets/images/soundspan.webp"
+                                    alt={BRAND_NAME}
+                                    width={30}
+                                    height={30}
+                                    sizes="30px"
+                                    className="flex-shrink-0 transition-transform duration-200 group-active:scale-95 motion-reduce:transform-none motion-reduce:transition-none"
+                                />
+                                <span className="brand-wordmark hidden truncate text-xl font-bold text-white min-[360px]:inline">
+                                    {BRAND_NAME}
+                                </span>
+                            </Link>
+                            <Link
+                                href="/search"
+                                data-shell-search="action"
+                                className="shell-control ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none"
                                 aria-label={ru.search.aria}
-                                autoCapitalize="none"
-                                autoCorrect="off"
-                                tabIndex={0}
-                                className="shell-search-field h-11 w-full min-w-0 rounded-xl pl-10 pr-3 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/15"
-                            />
-                        </div>
-                    </form>
+                                title={ru.search.aria}
+                            >
+                                <Search className="h-5 w-5" />
+                            </Link>
+                        </>
+                    )}
                 </>
             ) : (
                 <>
-                    <div className="flex w-[224px] flex-shrink-0 items-center px-4">
+                    <div className="flex w-[216px] flex-shrink-0 items-center px-4">
                         <Link
                             href="/"
-                            className="group flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                            className="group flex min-h-11 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         >
                             <Image
                                 src="/assets/images/soundspan.webp"
@@ -233,14 +277,20 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                         </div>
                     </div>
 
-                    <div className="flex w-[224px] flex-shrink-0 items-center justify-end gap-2 px-4">
+                    <div className="flex w-[216px] flex-shrink-0 items-center justify-end gap-2 px-4">
                         <ActivityPanelToggle
                             pollingEnabled={!isActivityPanelOpen}
+                            onToggle={onActivityPanelToggle}
                         />
                         <UserAvatarMenu />
                     </div>
                 </>
             )}
+            <span
+                data-shell-spectral-seam="true"
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-brand/40 to-transparent"
+            />
         </header>
     );
 }

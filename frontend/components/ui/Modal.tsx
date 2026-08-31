@@ -103,7 +103,7 @@ export function Modal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-black/60 ">
+        <div className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-5">
             <div
                 ref={dialogRef}
                 role="dialog"
@@ -111,27 +111,27 @@ export function Modal({
                 aria-labelledby={titleId}
                 tabIndex={-1}
                 className={cn(
-                    "bg-gradient-to-br from-surface-overlay to-surface-raised border border-line rounded-sm shadow-2xl max-w-md w-full p-6",
+                    "max-h-[min(90dvh,760px)] w-full max-w-md overflow-y-auto rounded-t-[24px] border border-line bg-surface-overlay p-5 shadow-2xl sm:rounded-[24px] sm:p-6",
                     className,
                 )}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-surface-active">
-                    <h2 id={titleId} className="text-lg font-medium text-white">
+                <div className="mb-5 flex items-center justify-between gap-4 border-b border-line pb-4">
+                    <h2 id={titleId} className="text-xl font-semibold text-content">
                         {title}
                     </h2>
                     <Button
                         variant="icon"
                         onClick={onClose}
                         aria-label={ru.common.close}
-                        className="hover:text-gray-300"
+                        className="-mr-2"
                     >
                         <X className="w-5 h-5" />
                     </Button>
                 </div>
 
                 {/* Content */}
-                <div className="mb-6">{children}</div>
+                <div className={cn(footer && "mb-6")}>{children}</div>
 
                 {/* Footer */}
                 {footer && (

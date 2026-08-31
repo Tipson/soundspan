@@ -6,6 +6,8 @@ import Image from "next/image";
 import { Mic2, ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 
 interface Podcast {
@@ -100,7 +102,11 @@ export default function GenrePage() {
 
     // Load initial podcasts
     useEffect(() => {
-        loadMorePodcasts();
+        const initialLoadTimer = window.setTimeout(() => {
+            void loadMorePodcasts();
+        }, 0);
+
+        return () => window.clearTimeout(initialLoadTimer);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: initial load should not re-trigger when loadMorePodcasts identity changes
     }, []);
 
@@ -111,96 +117,125 @@ export default function GenrePage() {
 
     if (!genre) {
         return (
-            <div className="flex items-center justify-center h-screen">
-                <p className="text-white">Жанр не найден</p>
+            <div
+                data-routed-surface="podcast-genre"
+                className="min-h-screen bg-surface px-4 py-8"
+            >
+                <EmptyState
+                    icon={<Mic2 />}
+                    title="Жанр не найден"
+                    description="Вернитесь к каталогу подкастов и выберите другой жанр."
+                    action={{
+                        label: "К подкастам",
+                        onClick: () => router.push("/podcasts"),
+                    }}
+                />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-black to-surface-sunken text-white p-6 md:p-8">
-            {/* Header */}
-            <div className="mb-8">
-                <button
-                    onClick={() => router.push("/podcasts")}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-4"
-                >
-                    <ArrowLeft className="w-5 h-5" />
-                    Назад к подкастам
-                </button>
-                <h1 className="text-4xl md:text-5xl font-bold">{genre.name}</h1>
-                <p className="text-gray-400 mt-2">
-                    {podcasts.length}{" "}
-                    {podcasts.length % 10 === 1 && podcasts.length % 100 !== 11
-                        ? "подкаст"
-                        : podcasts.length % 10 >= 2 &&
-                            podcasts.length % 10 <= 4 &&
-                            (podcasts.length % 100 < 10 ||
-                                podcasts.length % 100 >= 20)
-                          ? "подкаста"
-                          : "подкастов"}
-                </p>
-            </div>
+        <div
+            data-routed-surface="podcast-genre"
+            className="min-h-screen bg-surface"
+        >
+            <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+                <PageHeader
+                    title={genre.name}
+                    subtitle={`${podcasts.length} ${
+                        podcasts.length % 10 === 1 &&
+                        podcasts.length % 100 !== 11
+                            ? "подкаст"
+                            : podcasts.length % 10 >= 2 &&
+                                podcasts.length % 10 <= 4 &&
+                                (podcasts.length % 100 < 10 ||
+                                    podcasts.length % 100 >= 20)
+                              ? "подкаста"
+                              : "подкастов"
+                    }`}
+                    icon={Mic2}
+                    actions={
+                        <button
+                            type="button"
+                            aria-label="Назад к подкастам"
+                            onClick={() => router.push("/podcasts")}
+                            className="flex min-h-11 items-center gap-2 rounded-xl border border-line bg-surface-elevated px-4 text-sm font-semibold text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        >
+                            <ArrowLeft className="h-5 w-5" />
+                            <span className="hidden sm:inline">
+                                Назад к подкастам
+                            </span>
+                        </button>
+                    }
+                />
 
-            {/* Podcast Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {podcasts.map((podcast) => (
-                    <button
-                        type="button"
-                        key={podcast.id}
-                        onClick={() => handlePodcastClick(podcast)}
-                        className="group rounded-lg border border-surface-active bg-gradient-to-br from-surface-sunken to-surface-sunken p-4 text-left transition-all hover:from-surface-elevated hover:to-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                {/* Podcast Grid */}
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                    {podcasts.map((podcast) => (
+                        <button
+                            type="button"
+                            key={podcast.id}
+                            onClick={() => handlePodcastClick(podcast)}
+                            className="group w-full rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
+                        >
+                            <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-full bg-surface-elevated shadow-lg shadow-black/20">
+                                {podcast.coverUrl ? (
+                                    <Image
+                                        src={podcast.coverUrl}
+                                        alt={podcast.title}
+                                        fill
+                                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                                        className="object-cover transition-transform duration-200 group-hover:scale-105 motion-reduce:transform-none motion-reduce:transition-none"
+                                        unoptimized
+                                    />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center">
+                                        <Mic2 className="h-16 w-16 text-content-muted" />
+                                    </div>
+                                )}
+                            </div>
+                            <h3 className="truncate text-sm font-bold text-content">
+                                {podcast.title}
+                            </h3>
+                            <p className="truncate text-xs text-content-muted">
+                                {podcast.author}
+                            </p>
+                        </button>
+                    ))}
+                </div>
+
+                {/* Loading indicator */}
+                {loading && (
+                    <div
+                        className="flex items-center justify-center py-8"
+                        role="status"
+                        aria-label="Загружаем подкасты"
                     >
-                        <div className="relative w-full aspect-square bg-surface-elevated rounded-full mb-3 overflow-hidden">
-                            {podcast.coverUrl ? (
-                                <Image
-                                    src={podcast.coverUrl}
-                                    alt={podcast.title}
-                                    fill
-                                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                                    className="object-cover group-hover:scale-105 transition-transform"
-                                    unoptimized
-                                />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                    <Mic2 className="w-16 h-16 text-gray-400" />
-                                </div>
-                            )}
-                        </div>
-                        <h3 className="font-bold text-white truncate text-sm">
-                            {podcast.title}
-                        </h3>
-                        <p className="text-xs text-gray-400 truncate">
-                            {podcast.author}
-                        </p>
-                    </button>
-                ))}
+                        <GradientSpinner size="md" />
+                    </div>
+                )}
+
+                {/* Intersection observer target */}
+                <div ref={loadMoreRef} className="h-20" />
+
+                {/* End of results */}
+                {!hasMore && podcasts.length > 0 && (
+                    <div className="border-t border-line py-8 text-center text-content-muted">
+                        Вы посмотрели все подкасты
+                    </div>
+                )}
+
+                {/* No results */}
+                {!loading && podcasts.length === 0 && (
+                    <section className="border-y border-line">
+                        <EmptyState
+                            icon={<Mic2 />}
+                            title="Подкасты не найдены"
+                            description="Попробуйте открыть другой жанр или вернитесь в общий каталог."
+                        />
+                    </section>
+                )}
             </div>
-
-            {/* Loading indicator */}
-            {loading && (
-                <div className="flex justify-center items-center py-8">
-                    <GradientSpinner size="md" />
-                </div>
-            )}
-
-            {/* Intersection observer target */}
-            <div ref={loadMoreRef} className="h-20" />
-
-            {/* End of results */}
-            {!hasMore && podcasts.length > 0 && (
-                <div className="text-center py-8 text-gray-400">
-                    Вы посмотрели все подкасты
-                </div>
-            )}
-
-            {/* No results */}
-            {!loading && podcasts.length === 0 && (
-                <div className="text-center py-20">
-                    <Mic2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-400">Подкасты не найдены</p>
-                </div>
-            )}
         </div>
     );
 }

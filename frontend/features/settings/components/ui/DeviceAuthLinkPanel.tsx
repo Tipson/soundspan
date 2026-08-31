@@ -43,7 +43,7 @@ function PanelIcon({
 function NumberedStep({ number, children }: NumberedStepProps) {
     return (
         <div className="flex items-start gap-3">
-            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold mt-0.5">
+            <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-black">
                 {number}
             </span>
             {children}
@@ -63,19 +63,23 @@ function CodeStep({
     return (
         <NumberedStep number={1}>
             <div className="space-y-2">
-                <p className="text-sm text-gray-300">
+                <p className="text-sm text-content-secondary">
                     {pasteInstruction}
-                    <span className="text-gray-400 text-xs ml-1">
+                    <span className="ml-1 text-xs text-content-muted">
                         (код уже скопирован)
                     </span>
                 </p>
                 <div className="flex items-center gap-3">
-                    <code className="px-4 py-2 text-lg font-mono font-bold tracking-wider bg-surface-hover text-white rounded-lg border border-[#444] select-all">
+                    <code className="select-all rounded-xl border border-line bg-surface-highlight px-4 py-2 font-mono text-lg font-bold tracking-wider text-content">
                         {userCode}
                     </code>
                     <button
                         onClick={onCopyCode}
-                        className="p-2 text-gray-400 hover:text-white transition-colors"
+                        type="button"
+                        aria-label={
+                            copied ? "Код скопирован" : "Скопировать код"
+                        }
+                        className="grid min-h-11 min-w-11 place-items-center rounded-xl text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         title="Скопировать код"
                     >
                         {copied ? (
@@ -98,7 +102,7 @@ function WaitingRow({
 }: Pick<DeviceAuthLinkPanelProps, "timeLeftSeconds">) {
     return (
         <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-gray-400">
+            <div className="flex items-center gap-2 text-sm text-content-muted">
                 <PanelIcon icon={Loader2} className="w-3 h-3 animate-spin" />
                 <span>Ожидаем завершения входа…</span>
             </div>
@@ -107,7 +111,7 @@ function WaitingRow({
                     className={`text-xs tabular-nums ${
                         timeLeftSeconds < 120
                             ? "text-amber-400/70"
-                            : "text-gray-400"
+                            : "text-content-muted"
                     }`}
                 >
                     Истекает через {formatTime(timeLeftSeconds)}
@@ -120,17 +124,19 @@ function WaitingRow({
 /** Renders reusable instructions and controls for a device-code authentication session. */
 export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
     return (
-        <div className="p-4 bg-[#252525] rounded-lg border border-line-strong space-y-4">
+        <div className="space-y-4 rounded-2xl border border-line bg-surface-elevated p-4">
             <div className="space-y-3">
-                <p className="text-sm text-gray-300">{props.introText}</p>
+                <p className="text-sm text-content-secondary">
+                    {props.introText}
+                </p>
                 <CodeStep {...props} />
                 <NumberedStep number={2}>
-                    <p className="text-sm text-gray-300">
+                    <p className="text-sm text-content-secondary">
                         {props.signInInstruction}
                     </p>
                 </NumberedStep>
                 <NumberedStep number={3}>
-                    <p className="text-sm text-gray-300">
+                    <p className="text-sm text-content-secondary">
                         Вернитесь сюда — страница обновится автоматически
                     </p>
                 </NumberedStep>
@@ -140,8 +146,7 @@ export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
                     href={props.verificationUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-600/20 text-blue-400 rounded-full
-                        hover:bg-blue-600/30 border border-blue-500/30 transition-colors"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 py-2 text-sm font-semibold text-brand-light transition-colors hover:bg-brand/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 >
                     <PanelIcon icon={ExternalLink} className="w-4 h-4" />
                     {props.openLinkLabel}
@@ -149,8 +154,9 @@ export function DeviceAuthLinkPanel(props: DeviceAuthLinkPanelProps) {
             )}
             <WaitingRow timeLeftSeconds={props.timeLeftSeconds} />
             <button
+                type="button"
                 onClick={props.onCancel}
-                className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.05] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
             >
                 Отмена
             </button>

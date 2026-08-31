@@ -15,6 +15,8 @@ test("SearchFilters renders the supported result views as query-preserving links
     );
 
     assert.match(html, /aria-label="Тип результатов поиска"/);
+    assert.match(html, /data-overflow-cue="horizontal"/);
+    assert.match(html, /min-h-11/);
     assert.match(html, /href="\/search\?q=massive%20attack">Всё<\/a>/);
     assert.match(
         html,

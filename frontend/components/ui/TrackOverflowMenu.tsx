@@ -13,6 +13,9 @@ import {
     Disc3,
     AudioWaveform,
     Radio,
+    Check,
+    Download,
+    Loader2,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useAudioControls } from "@/lib/audio-controls-context";
@@ -387,10 +390,10 @@ export function TrackOverflowMenu({
                     type="button"
                     onClick={handleToggle}
                     className={cn(
-                        "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-full p-2 transition-colors",
+                        "flex size-11 items-center justify-center rounded-xl p-0 opacity-100 transition-colors focus-visible:ring-2 focus-visible:ring-brand sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100",
                         isOpen
-                            ? "bg-[#2a2a2a] text-white"
-                            : "text-gray-400 hover:bg-[#2a2a2a] hover:text-white",
+                            ? "bg-surface-active text-content"
+                            : "text-content-muted hover:bg-surface-hover hover:text-content",
                         triggerClassName,
                     )}
                     aria-label={ru.trackMenu.actions}
@@ -404,7 +407,7 @@ export function TrackOverflowMenu({
                 {isOpen && (
                     <div
                         className={cn(
-                            "absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-md border border-white/10 bg-[#111111] p-1 shadow-xl",
+                            "absolute right-0 top-full z-30 mt-1 min-w-[220px] rounded-2xl border border-line bg-surface-overlay p-1.5 shadow-2xl",
                             menuClassName,
                         )}
                         role="menu"
@@ -444,12 +447,12 @@ export function TrackOverflowMenu({
                                 icon={
                                     deviceRecord?.status === "ready" &&
                                     !isAutoManagedReady ? (
-                                        <span aria-hidden="true">✓</span>
+                                        <Check className="h-4 w-4" />
                                     ) : deviceRecord?.status ===
                                       "downloading" ? (
-                                        <span aria-hidden="true">…</span>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                        <span aria-hidden="true">↓</span>
+                                        <Download className="h-4 w-4" />
                                     )
                                 }
                                 label={deviceDownloadLabel}
@@ -557,10 +560,10 @@ function MenuButton({
             onClick={onClick}
             disabled={disabled}
             className={cn(
-                "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors",
+                "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors",
                 disabled
-                    ? "cursor-not-allowed text-red-300/80"
-                    : "text-gray-200 hover:bg-white/10 hover:text-white",
+                    ? "cursor-not-allowed text-error/75"
+                    : "text-content-body hover:bg-surface-hover hover:text-content",
                 customClassName,
             )}
             role="menuitem"

@@ -602,7 +602,7 @@ function withQueryClient(element: React.ReactElement) {
 // FullPlayer
 // ---------------------------------------------------------------------------
 
-test("FullPlayer keeps the music transport focused on shuffle, previous, next, and repeat", async () => {
+test("FullPlayer keeps the compact music transport focused on previous, play, and next", async () => {
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const mounted = await mount(React.createElement(FullPlayer));
 

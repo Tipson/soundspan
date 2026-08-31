@@ -21,7 +21,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                     "focus:outline-none focus:ring-1",
                     error
                         ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/20"
-                        : "border-line focus:border-[#1db954]/50 focus:ring-ai/20",
+                        : "border-line focus:border-brand/50 focus:ring-brand/20",
                     className,
                 )}
                 {...props}
@@ -47,7 +47,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
                     "focus:outline-none focus:ring-1",
                     error
                         ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/20"
-                        : "border-line focus:border-[#1db954]/50 focus:ring-ai/20",
+                        : "border-line focus:border-brand/50 focus:ring-brand/20",
                     className,
                 )}
                 {...props}
@@ -73,7 +73,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                     "focus:outline-none",
                     error
                         ? "border-red-500/50 focus:border-red-500"
-                        : "border-line focus:border-[#1db954]/50",
+                        : "border-line focus:border-brand/50",
                     className,
                 )}
                 {...props}

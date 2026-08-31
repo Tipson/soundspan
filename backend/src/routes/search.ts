@@ -596,6 +596,7 @@ function transformSearchResults(serviceResults: SearchResults) {
         artists: serviceResults.artists,
         albums: serviceResults.albums.map((album) => ({
             id: album.id,
+            rgMbid: album.rgMbid,
             title: album.title,
             artistId: album.artistId,
             year: album.year,

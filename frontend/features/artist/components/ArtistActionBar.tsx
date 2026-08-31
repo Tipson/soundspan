@@ -83,13 +83,16 @@ export function ArtistActionBar({
     };
 
     return (
-        <div className="w-full space-y-2">
-            <MusicDetailActionDock label={ru.catalog.artistControls}>
+        <div className="w-full space-y-2" data-artist-action-dock="editorial">
+            <MusicDetailActionDock
+                label={ru.catalog.artistControls}
+                className="rounded-none border-x-0 border-b-0 bg-transparent p-0 shadow-none backdrop-blur-none supports-[backdrop-filter]:bg-transparent"
+            >
                 {isInListenTogetherGroup ? (
                     <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
                         <button
                             onClick={handleLockedAction}
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-semibold text-content-muted shadow-lg sm:flex-none"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-semibold text-content-muted shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light sm:flex-none"
                             title={lockMessage}
                         >
                             {showPause ? (
@@ -97,12 +100,16 @@ export function ArtistActionBar({
                             ) : (
                                 <Play className="w-5 h-5 fill-current ml-0.5" />
                             )}
-                            <span>{showPause ? ru.common.pause : ru.common.playAll}</span>
+                            <span>
+                                {showPause
+                                    ? ru.common.pause
+                                    : ru.common.playAll}
+                            </span>
                         </button>
 
                         <button
                             onClick={handleLockedAction}
-                            className="h-11 w-11 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-content-muted"
+                            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                             title={lockMessage}
                             aria-label={ru.catalog.shuffleUnavailable}
                         >
@@ -114,7 +121,7 @@ export function ArtistActionBar({
                         {/* Play Button */}
                         <button
                             onClick={handlePlayPauseClick}
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] motion-reduce:transition-none sm:flex-none"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none sm:flex-none"
                             style={{ backgroundColor: BRAND_PLAY }}
                         >
                             {showPlaySpinner ? (
@@ -124,13 +131,17 @@ export function ArtistActionBar({
                             ) : (
                                 <Play className="w-5 h-5 fill-current text-black ml-0.5" />
                             )}
-                            <span>{showPause ? ru.common.pause : ru.common.playAll}</span>
+                            <span>
+                                {showPause
+                                    ? ru.common.pause
+                                    : ru.common.playAll}
+                            </span>
                         </button>
 
                         {/* Shuffle Button */}
                         <button
                             onClick={onShuffle}
-                            className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             title={ru.common.shuffle}
                             aria-label={ru.common.shuffle}
                         >
@@ -146,7 +157,7 @@ export function ArtistActionBar({
                 {onAddAllToQueue && (
                     <button
                         onClick={onAddAllToQueue}
-                        className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         title={ru.common.addQueue}
                         aria-label={ru.common.addQueue}
                     >
@@ -157,7 +168,7 @@ export function ArtistActionBar({
                 {onAddToPlaylist && (
                     <button
                         onClick={onAddToPlaylist}
-                        className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         title={ru.common.addPlaylist}
                         aria-label={ru.common.addPlaylist}
                     >
@@ -170,7 +181,7 @@ export function ArtistActionBar({
                         onClick={onLikeAll}
                         disabled={isLikingAll}
                         className={cn(
-                            "h-11 w-11 rounded-full flex items-center justify-center transition-all",
+                            "flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                             isLikingAll
                                 ? "cursor-not-allowed text-white/35"
                                 : "text-white/60 hover:bg-white/10 hover:text-white",
@@ -190,7 +201,7 @@ export function ArtistActionBar({
                 {showRadio && (
                     <button
                         onClick={onStartRadio}
-                        className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         title={ru.catalog.artistRadio}
                         aria-label={ru.catalog.artistRadio}
                     >

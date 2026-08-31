@@ -202,6 +202,7 @@ export function Sidebar() {
     const sidebarContent = (
         <>
             <nav
+                data-shell-navigation="primary"
                 className="px-3 pt-4"
                 role="navigation"
                 aria-label={ru.nav.mainAria}
@@ -277,8 +278,9 @@ export function Sidebar() {
 
             {/* Playlists Section */}
             <div
+                data-shell-playlists="secondary"
                 className={cn(
-                    "flex-1 overflow-hidden flex flex-col",
+                    "min-h-0 overflow-hidden flex flex-col",
                     isMobileOrTablet ? "mt-8" : "mt-4",
                 )}
             >
@@ -291,9 +293,9 @@ export function Sidebar() {
                     <Link
                         href="/playlists"
                         prefetch={false}
-                        className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="flex min-h-11 min-w-0 flex-1 items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                     >
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted transition-colors hover:text-white">
+                        <span className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted transition-colors hover:text-white">
                             {effectiveFilter === "others"
                                 ? ru.nav.sharedPlaylists
                                 : effectiveFilter === "mine"
@@ -321,7 +323,7 @@ export function Sidebar() {
                                     });
                                 }}
                                 className={cn(
-                                    "flex h-9 w-9 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
+                                    "flex h-11 w-11 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
                                     isFiltered
                                         ? "border-brand/40 bg-brand/15 text-brand-light"
                                         : "border-white/5 bg-white/[0.04] text-content-muted hover:border-white/10 hover:bg-white/[0.07] hover:text-white",
@@ -399,7 +401,7 @@ export function Sidebar() {
                         <Link
                             href="/playlists"
                             prefetch={false}
-                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/5 bg-white/[0.04] text-content-muted transition-colors hover:border-white/10 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] text-content-muted transition-colors hover:border-white/10 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                             aria-label={ru.nav.createPlaylist}
                             title={ru.nav.createPlaylist}
                         >
@@ -409,7 +411,7 @@ export function Sidebar() {
                 </div>
                 <div
                     className={cn(
-                        "flex-1 overflow-y-auto space-y-1 scrollbar-thin scrollbar-track-transparent",
+                        "max-h-[min(44vh,28rem)] overflow-y-auto space-y-1 scrollbar-thin scrollbar-track-transparent",
                         isMobileOrTablet ? "px-6" : "px-3",
                     )}
                 >
@@ -574,7 +576,7 @@ export function Sidebar() {
             {!isMobileOrTablet && (
                 <aside
                     data-shell-sidebar="desktop"
-                    className="shell-sidebar relative z-10 flex w-[224px] flex-shrink-0 flex-col overflow-hidden"
+                    className="shell-sidebar relative z-10 flex w-[216px] flex-shrink-0 flex-col overflow-hidden"
                 >
                     {sidebarContent}
                 </aside>

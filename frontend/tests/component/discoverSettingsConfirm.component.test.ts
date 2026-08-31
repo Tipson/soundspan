@@ -127,3 +127,27 @@ test("cancelling the clear-playlist dialog leaves the playlist unchanged", async
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 0);
     assert.equal(onPlaylistCleared.mock.callCount(), 0);
 });
+
+test("settings controls have visible names and mobile-sized targets", async (t) => {
+    const harness = await mountDiscoverSettings(() => undefined);
+    t.after(harness.unmount);
+
+    const sliders = Array.from(
+        harness.container.querySelectorAll<HTMLInputElement>(
+            'input[type="range"]',
+        ),
+    );
+    assert.equal(sliders.length, 2);
+    assert.match(
+        sliders[0]?.labels?.[0]?.textContent ?? "",
+        /Размер плейлиста/,
+    );
+    assert.match(
+        sliders[1]?.labels?.[0]?.textContent ?? "",
+        /Не повторять альбомы/,
+    );
+    assert.match(
+        findButton(harness.container, "Удалить плейлист").className,
+        /min-h-11/,
+    );
+});

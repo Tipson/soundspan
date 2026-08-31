@@ -27,7 +27,7 @@ export function SettingsSection({
             id={id}
             data-settings-section="true"
             aria-labelledby={titleId}
-            className="settings-section-card scroll-mt-28"
+            className="settings-section-card scroll-mt-40 border border-line bg-surface-raised/45 shadow-xl shadow-black/10"
         >
             <div className="mb-5 md:mb-6">
                 <div className="flex items-center gap-2">
@@ -46,7 +46,7 @@ export function SettingsSection({
                 )}
             </div>
 
-            <div className="space-y-1.5">{children}</div>
+            <div className="space-y-1">{children}</div>
 
             {showSeparator && (
                 <div className="mt-6 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent md:hidden" />

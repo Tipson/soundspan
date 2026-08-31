@@ -608,6 +608,9 @@ export const ru = {
         verifyAndSignIn: "Подтвердить и войти",
         linkSsoFailed: "Не удалось связать аккаунт с SSO",
         loginFailed: "Не удалось войти",
+        invalidCredentials: "Неверное имя пользователя или пароль",
+        invalidSecondFactor: "Неверный код двухфакторной аутентификации",
+        invalidRecoveryCode: "Неверный код восстановления",
         backToLogin: "Назад ко входу",
         twoFactorRequired: "Нужна двухфакторная аутентификация",
         loggingInAs: "Вход для пользователя",
@@ -712,6 +715,9 @@ const KNOWN_USER_ERROR_COPY: Readonly<Record<string, string>> = {
     "Cannot unlink the last sign-in method": ru.errors.lastSignInMethod,
     "Invalid or expired OIDC code": ru.auth.ssoCodeInvalid,
     "Invalid invite code": ru.auth.invalidInviteCode,
+    "Invalid credentials": ru.auth.invalidCredentials,
+    "Invalid 2FA token": ru.auth.invalidSecondFactor,
+    "Invalid recovery code": ru.auth.invalidRecoveryCode,
 };
 
 /** Keeps known server errors useful without leaking untranslated copy into UI. */

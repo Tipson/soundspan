@@ -417,7 +417,7 @@ export default function MyLikedPlaylistPage() {
         <div className="min-h-screen">
             <MusicDetailHero
                 eyebrow={ru.playlist.playlist}
-                title={data.playlist.name}
+                title={ru.library.likedSongs}
                 artworkShape="square"
                 backgroundImage={coverUrl}
                 metadata={
@@ -465,80 +465,86 @@ export default function MyLikedPlaylistPage() {
                         </div>
                     </>
                 }
+                actions={
+                    likedTracks.length > 0 ? (
+                        <MusicDetailActionDock
+                            label={ru.playlist.likedControls}
+                        >
+                            <div
+                                data-detail-action-tier="primary"
+                                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                            >
+                                <button
+                                    onClick={handlePlayAll}
+                                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] motion-reduce:transition-none sm:flex-none"
+                                >
+                                    {showPlaySpinner ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                    ) : isThisPlaylistPlaying && isPlaying ? (
+                                        <Pause className="h-5 w-5 fill-current" />
+                                    ) : (
+                                        <Play className="ml-0.5 h-5 w-5 fill-current" />
+                                    )}
+                                    <span>
+                                        {isThisPlaylistPlaying && isPlaying
+                                            ? ru.common.pause
+                                            : ru.common.playAll}
+                                    </span>
+                                </button>
+                                {likedTracks.length > 1 && (
+                                    <button
+                                        onClick={handleShuffle}
+                                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                        title={ru.playlist.shufflePlay}
+                                        aria-label={ru.playlist.shufflePlay}
+                                    >
+                                        <Shuffle className="h-5 w-5" />
+                                    </button>
+                                )}
+                            </div>
+                            <div
+                                data-detail-action-tier="secondary"
+                                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                            >
+                                <DeviceCollectionDownloadButton
+                                    tracks={deviceDownloadTracks}
+                                    collectionId="playlist:my-liked"
+                                    collectionLabel={ru.library.likedSongs}
+                                />
+                                <button
+                                    onClick={handleAddAllToQueue}
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    title={ru.playlist.addAllQueue}
+                                    aria-label={ru.playlist.addAllQueue}
+                                >
+                                    <ListMusic className="h-5 w-5" />
+                                </button>
+                                <button
+                                    onClick={() =>
+                                        setShowPlaylistSelector(true)
+                                    }
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    title={ru.playlist.addAllPlaylist}
+                                    aria-label={ru.playlist.addAllPlaylist}
+                                >
+                                    <Plus className="h-5 w-5" />
+                                </button>
+                                <button
+                                    onClick={handleStartRadio}
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    title={ru.playlist.startRadio}
+                                    aria-label={ru.playlist.startRadio}
+                                >
+                                    <Radio className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </MusicDetailActionDock>
+                    ) : undefined
+                }
             />
 
-            {/* Action Bar */}
-            <div className="relative z-10 mx-auto -mt-5 max-w-[1800px] px-4 pb-5 sm:px-6 lg:px-8">
-                <MusicDetailActionDock label={ru.playlist.likedControls}>
-                    {likedTracks.length > 0 && (
-                        <button
-                            onClick={handlePlayAll}
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] motion-reduce:transition-none sm:flex-none"
-                        >
-                            {showPlaySpinner ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : isThisPlaylistPlaying && isPlaying ? (
-                                <Pause className="h-5 w-5 fill-current" />
-                            ) : (
-                                <Play className="h-5 w-5 fill-current ml-0.5" />
-                            )}
-                            <span>
-                                {isThisPlaylistPlaying && isPlaying
-                                    ? ru.common.pause
-                                    : ru.common.playAll}
-                            </span>
-                        </button>
-                    )}
-                    {likedTracks.length > 1 && (
-                        <button
-                            onClick={handleShuffle}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.shufflePlay}
-                            aria-label={ru.playlist.shufflePlay}
-                        >
-                            <Shuffle className="h-5 w-5" />
-                        </button>
-                    )}
-                    <DeviceCollectionDownloadButton
-                        tracks={deviceDownloadTracks}
-                        collectionId="playlist:my-liked"
-                        collectionLabel={data.playlist.name}
-                    />
-                    {likedTracks.length > 0 && (
-                        <button
-                            onClick={handleAddAllToQueue}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.addAllQueue}
-                            aria-label={ru.playlist.addAllQueue}
-                        >
-                            <ListMusic className="h-5 w-5" />
-                        </button>
-                    )}
-                    {likedTracks.length > 0 && (
-                        <button
-                            onClick={() => setShowPlaylistSelector(true)}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.addAllPlaylist}
-                            aria-label={ru.playlist.addAllPlaylist}
-                        >
-                            <Plus className="h-5 w-5" />
-                        </button>
-                    )}
-                    {likedTracks.length > 0 && (
-                        <button
-                            onClick={handleStartRadio}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.startRadio}
-                            aria-label={ru.playlist.startRadio}
-                        >
-                            <Radio className="h-5 w-5" />
-                        </button>
-                    )}
-                </MusicDetailActionDock>
-            </div>
-
             {/* Track List */}
-            <div className="mx-auto max-w-[1800px] px-4 pb-32 pt-2 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-[1800px] px-4 pt-2 sm:px-6 lg:px-8">
                 {likedTracks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-24 text-center">
                         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/5">

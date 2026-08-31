@@ -41,7 +41,8 @@ export function ArtistViewTabs({
     return (
         <nav
             aria-label={ru.catalog.artistContentAria}
-            className="scrollbar-hide overflow-x-auto"
+            data-overflow-cue="horizontal"
+            className="scrollbar-hide snap-x snap-mandatory overflow-x-auto"
         >
             <div className="flex min-w-max gap-2 py-1">
                 {VIEW_OPTIONS.map((option) => (
@@ -53,6 +54,7 @@ export function ArtistViewTabs({
                             searchParams,
                             option.value,
                         )}
+                        className="min-h-11 snap-start px-4"
                     >
                         {option.label}
                     </FilterChip>

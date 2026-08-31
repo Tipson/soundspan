@@ -8,11 +8,14 @@ import { createFrontendLogger } from "@/lib/logger";
 import { RestartModal } from "@/components/ui/RestartModal";
 import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
 import { SettingsLayout } from "@/features/settings/components/ui";
 import { useFeatures } from "@/lib/features-context";
 import { getPersonalStreamingAdminSidebarItems } from "@/features/settings/personalStreamingAdminSections";
 import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
+import { AlertCircle } from "lucide-react";
 
 function renderSectionFallback() {
     return (
@@ -172,15 +175,7 @@ export default function AdminPage() {
     );
 
     if (authLoading) {
-        return (
-            <div
-                className="flex items-center justify-center min-h-screen bg-surface"
-                role="status"
-                aria-label={adminActivityRu.admin.loading}
-            >
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message={adminActivityRu.admin.loading} />;
     }
 
     if (!isAuthenticated || !isAdmin) {
@@ -188,35 +183,31 @@ export default function AdminPage() {
     }
 
     if (systemSettingsLoading) {
-        return (
-            <div
-                className="flex items-center justify-center min-h-screen bg-surface"
-                role="status"
-                aria-label={adminActivityRu.admin.loading}
-            >
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message={adminActivityRu.admin.loading} />;
     }
 
     if (systemSettingsLoadError || !systemSettings) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-surface gap-4 px-4">
-                <p className="text-red-400 text-sm text-center">
-                    {adminActivityRu.admin.loadFailed}
-                </p>
-                <button
-                    onClick={() => loadSystemSettings()}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-full transition-colors"
-                >
-                    {adminActivityRu.admin.retry}
-                </button>
+            <div
+                data-routed-surface="admin"
+                className="min-h-screen bg-surface px-4 py-8"
+            >
+                <EmptyState
+                    icon={<AlertCircle />}
+                    title={adminActivityRu.admin.loadFailed}
+                    description="Проверьте соединение с сервером и повторите загрузку настроек."
+                    action={{
+                        label: adminActivityRu.admin.retry,
+                        onClick: () => void loadSystemSettings(),
+                        variant: "secondary",
+                    }}
+                />
             </div>
         );
     }
 
     return (
-        <>
+        <div data-routed-surface="admin" className="min-h-screen bg-surface">
             <SettingsLayout
                 sidebarItems={sidebarItems}
                 isAdmin={true}
@@ -263,20 +254,19 @@ export default function AdminPage() {
                 )}
 
                 {/* Save Button - Fixed at bottom */}
-                <div className="sticky bottom-0 pt-8 pb-8">
+                <div className="sticky bottom-0 border-t border-line bg-surface/95 pb-8 pt-5 backdrop-blur-sm">
                     <div className="relative">
                         <button
+                            data-admin-save="true"
                             onClick={handleSaveAll}
                             disabled={isSaving}
-                            className="w-full bg-white text-black font-semibold py-3 px-4 rounded-full
-                                hover:scale-[1.02] active:scale-[0.98] transition-transform
-                                disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                            className="min-h-12 w-full rounded-xl bg-brand px-4 py-3 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                         >
                             {isSaving
                                 ? adminActivityRu.admin.saving
                                 : adminActivityRu.admin.save}
                         </button>
-                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-surface/90 backdrop-blur-sm px-3 py-0.5 rounded-full">
+                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-surface/90 px-3 py-0.5 backdrop-blur-sm">
                             <InlineStatus {...saveStatus.props} />
                         </div>
                     </div>
@@ -288,6 +278,6 @@ export default function AdminPage() {
                 onClose={() => setShowRestartModal(false)}
                 changedServices={changedServices}
             />
-        </>
+        </div>
     );
 }

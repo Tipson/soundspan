@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Trash2, Loader2 } from "lucide-react";
@@ -75,18 +76,22 @@ export function DiscoverSettings({
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
-            <Card className="p-6">
-                <h2 className="text-xl font-bold mb-4">
+        <div>
+            <Card className="rounded-2xl border-line bg-surface-elevated p-5 sm:p-6">
+                <h2 className="mb-5 text-xl font-semibold text-content">
                     {discoverRu.settings.title}
                 </h2>
                 <div className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium mb-2">
+                        <label
+                            htmlFor="discover-playlist-size"
+                            className="mb-1 block text-sm font-semibold text-content"
+                        >
                             {discoverRu.settings.playlistSize}:{" "}
                             {discoverTrackCount(config?.playlistSize || 10)}
                         </label>
                         <input
+                            id="discover-playlist-size"
                             type="range"
                             min="5"
                             max="50"
@@ -98,15 +103,18 @@ export function DiscoverSettings({
                                     parseInt(e.target.value),
                                 )
                             }
-                            className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-ai"
+                            className="h-11 w-full cursor-pointer appearance-none rounded-lg bg-transparent accent-brand [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-surface-active [&::-webkit-slider-thumb]:mt-[-6px] [&::-webkit-slider-thumb]:size-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand"
                         />
-                        <p className="text-xs text-gray-400 mt-2">
+                        <p className="text-xs leading-5 text-content-muted">
                             {discoverRu.settings.sizeHint}
                         </p>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium mb-2">
+                        <label
+                            htmlFor="discover-album-exclusion"
+                            className="mb-1 block text-sm font-semibold text-content"
+                        >
                             {discoverRu.settings.albumExclusion}:{" "}
                             {(config?.exclusionMonths ?? 6) === 0
                                 ? discoverRu.settings.disabled
@@ -115,6 +123,7 @@ export function DiscoverSettings({
                                   )}
                         </label>
                         <input
+                            id="discover-album-exclusion"
                             type="range"
                             min="0"
                             max="12"
@@ -126,27 +135,27 @@ export function DiscoverSettings({
                                     parseInt(e.target.value),
                                 )
                             }
-                            className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-ai"
+                            className="h-11 w-full cursor-pointer appearance-none rounded-lg bg-transparent accent-brand [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-surface-active [&::-webkit-slider-thumb]:mt-[-6px] [&::-webkit-slider-thumb]:size-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand"
                         />
-                        <p className="text-xs text-gray-400 mt-2">
+                        <p className="text-xs leading-5 text-content-muted">
                             {discoverRu.settings.exclusionHint}
                         </p>
                     </div>
 
                     {/* Clear Playlist */}
-                    <div className="pt-4 border-t border-white/10">
-                        <label className="block text-sm font-medium mb-2">
+                    <div className="border-t border-line pt-5">
+                        <p className="mb-2 text-sm font-semibold text-content">
                             {discoverRu.settings.clear}
-                        </label>
-                        <p className="text-xs text-gray-400 mb-3">
+                        </p>
+                        <p className="mb-4 text-xs leading-5 text-content-muted">
                             {discoverRu.settings.clearHint}
                         </p>
-                        <button
+                        <Button
+                            variant="danger"
                             onClick={() => {
                                 if (!isClearing) setShowClearConfirm(true);
                             }}
                             disabled={isClearing}
-                            className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isClearing ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -156,7 +165,7 @@ export function DiscoverSettings({
                             {isClearing
                                 ? discoverRu.settings.clearing
                                 : discoverRu.settings.remove}
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </Card>

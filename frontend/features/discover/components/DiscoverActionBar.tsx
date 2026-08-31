@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { Button } from "@/components/ui/Button";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import type { DiscoverPlaylist, DiscoverConfig } from "../types";
 import { discoverRu } from "@/lib/i18n/discoverRu";
@@ -83,18 +84,19 @@ export function DiscoverActionBar({
     };
 
     return (
-        <div className="bg-gradient-to-b from-surface-hover/60 to-transparent px-4 md:px-8 py-4">
-            <div className="flex items-center gap-4">
+        <div className="rounded-2xl border border-line bg-surface-elevated p-2 sm:p-3">
+            <div className="flex flex-wrap items-center gap-2">
                 {/* Play Button */}
                 {playlist && playlist.tracks.length > 0 && (
-                    <button
+                    <Button
+                        variant="ai"
                         onClick={handlePlayToggle}
                         disabled={isGenerating}
                         className={cn(
-                            "flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg transition-all border font-semibold text-sm",
+                            "rounded-full px-5 text-sm",
                             isGenerating
-                                ? "bg-white/5 border-transparent text-white/50 cursor-not-allowed"
-                                : "bg-ai-dark/20 hover:bg-ai-dark/30 border-ai/30 text-white hover:scale-105",
+                                ? "cursor-not-allowed"
+                                : "shadow-lg shadow-ai/5",
                         )}
                     >
                         {showSpinner ? (
@@ -109,65 +111,60 @@ export function DiscoverActionBar({
                                 ? discoverRu.action.pause
                                 : discoverRu.action.playAll}
                         </span>
-                    </button>
+                    </Button>
                 )}
 
                 {/* Shuffle Button */}
                 {playlist && playlist.tracks.length > 0 && onShuffle && (
-                    <button
+                    <Button
+                        variant="icon"
                         onClick={onShuffle}
                         disabled={isGenerating}
-                        className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center transition-all",
-                            isGenerating
-                                ? "text-white/30 cursor-not-allowed"
-                                : "text-white/60 hover:text-white hover:bg-white/10",
-                        )}
                         title={discoverRu.action.shuffleAll}
+                        aria-label={discoverRu.action.shuffleAll}
                     >
-                        <Shuffle className="w-5 h-5" />
-                    </button>
+                        <Shuffle className="size-5" />
+                    </Button>
                 )}
 
                 {/* Add to Queue Button */}
                 {playlist && playlist.tracks.length > 0 && onAddAllToQueue && (
-                    <button
+                    <Button
+                        variant="icon"
                         onClick={onAddAllToQueue}
                         disabled={isGenerating}
-                        className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center transition-all",
-                            isGenerating
-                                ? "text-white/30 cursor-not-allowed"
-                                : "text-white/60 hover:text-white hover:bg-white/10",
-                        )}
                         title={discoverRu.action.addAllToQueue}
+                        aria-label={discoverRu.action.addAllToQueue}
                     >
-                        <ListMusic className="w-5 h-5" />
-                    </button>
+                        <ListMusic className="size-5" />
+                    </Button>
                 )}
 
                 {/* Add to Playlist Button */}
                 {playlist && playlist.tracks.length > 0 && onAddToPlaylist && (
-                    <button
+                    <Button
+                        variant="icon"
                         onClick={onAddToPlaylist}
-                        className="h-8 w-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all"
                         title={discoverRu.action.addAllToPlaylist}
+                        aria-label={discoverRu.action.addAllToPlaylist}
                     >
-                        <Plus className="w-5 h-5" />
-                    </button>
+                        <Plus className="size-5" />
+                    </Button>
                 )}
 
                 {/* Regenerate Button (icon only) */}
-                <button
+                <Button
+                    variant="icon"
                     onClick={onGenerate}
                     disabled={isGenerating || !config?.enabled}
-                    className={cn(
-                        "h-8 w-8 rounded-full flex items-center justify-center transition-all",
-                        isGenerating || !config?.enabled
-                            ? "text-white/30 cursor-not-allowed"
-                            : "text-white/60 hover:text-white hover:bg-white/10",
-                    )}
                     title={
+                        isGenerating
+                            ? getStatusText() || discoverRu.action.generating
+                            : playlist
+                              ? discoverRu.action.regenerate
+                              : discoverRu.action.generate
+                    }
+                    aria-label={
                         isGenerating
                             ? getStatusText() || discoverRu.action.generating
                             : playlist
@@ -178,27 +175,30 @@ export function DiscoverActionBar({
                     {isGenerating ? (
                         <GradientSpinner size="sm" />
                     ) : (
-                        <RefreshCw className="w-5 h-5" />
+                        <RefreshCw className="size-5" />
                     )}
-                </button>
+                </Button>
 
-                {/* Spacer to push Settings to far right */}
-                <div className="flex-1" />
+                {isGenerating && (
+                    <span
+                        aria-live="polite"
+                        className="min-w-0 flex-1 truncate px-1 text-xs font-medium text-content-muted"
+                    >
+                        {getStatusText()}
+                    </span>
+                )}
 
                 {/* Settings Button (far right) */}
-                <button
+                <Button
+                    variant="icon"
                     onClick={onToggleSettings}
                     disabled={isGenerating}
-                    className={cn(
-                        "h-8 w-8 rounded-full flex items-center justify-center transition-all",
-                        isGenerating
-                            ? "text-white/30 cursor-not-allowed"
-                            : "text-white/60 hover:text-white hover:bg-white/10",
-                    )}
+                    className="ml-auto"
                     title={discoverRu.action.settings}
+                    aria-label={discoverRu.action.settings}
                 >
-                    <Settings className="w-5 h-5" />
-                </button>
+                    <Settings className="size-5" />
+                </Button>
             </div>
         </div>
     );

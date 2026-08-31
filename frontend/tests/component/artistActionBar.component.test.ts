@@ -164,6 +164,8 @@ test("ArtistActionBar icon controls are touch-sized and have accessible names", 
     }
     assert.match(html, /w-full/);
     assert.match(html, /sm:w-fit/);
+    assert.match(html, /data-artist-action-dock="editorial"/);
+    assert.match(html, /border-x-0/);
 });
 
 test("ArtistActionBar hides Add to Queue when callback is not provided", async () => {

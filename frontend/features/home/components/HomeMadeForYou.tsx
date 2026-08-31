@@ -233,7 +233,7 @@ export function HomeMadeForYou({
     );
 
     return (
-        <section aria-label={ru.home.madeForYou}>
+        <section data-home-rail="mixes" aria-label={ru.home.madeForYou}>
             <SectionHeader
                 title={ru.home.madeForYou}
                 rightAction={
@@ -260,7 +260,7 @@ export function HomeMadeForYou({
             <p className="-mt-2 mb-4 max-w-2xl text-sm leading-6 text-content-muted">
                 {ru.home.madeForYouSubtitle}
             </p>
-            <div className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[72vw] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[11rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-4 lg:overflow-visible xl:grid-cols-6">
+            <div className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible xl:grid-cols-6">
                 {visiblePersonalMixes.map((mix, index) => (
                     <div
                         key={mix.key}

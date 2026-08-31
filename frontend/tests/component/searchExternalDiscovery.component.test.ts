@@ -325,3 +325,24 @@ test("provider albums link to the existing playable YouTube Music album page", a
     assert.match(html, /1998/);
     assert.match(html, /\/browse-proxied\/https:\/\/img\/mezzanine.jpg/);
 });
+
+test("library album shadows keep the canonical discovery deep-link", async () => {
+    const { LibraryAlbumsGrid } =
+        await import("../../features/search/components/LibraryAlbumsGrid");
+    const html = renderToStaticMarkup(
+        React.createElement(LibraryAlbumsGrid, {
+            albums: [
+                {
+                    id: "local-shadow-cuid",
+                    rgMbid: "release-group-from-zero",
+                    title: "From Zero",
+                    artist: { name: "Linkin Park" },
+                    source: "local",
+                },
+            ],
+        } as never),
+    );
+
+    assert.match(html, /href="\/album\/release-group-from-zero"/);
+    assert.doesNotMatch(html, /href="\/album\/local-shadow-cuid"/);
+});

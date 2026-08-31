@@ -20,7 +20,9 @@ provider artist identities remain available even when a same-name local artist
 exists. When an exact local shadow duplicates a canonical provider artist or
 album, search keeps one card and uses the provider route so the full online
 profile/catalog opens; non-canonical discovery metadata cannot displace a local
-entity. Canonical native or resolvable TV album identities open through the
+entity. Local catalog shadows retain their canonical release-group identity in
+album links, allowing the album page to fall through to online discovery when
+the local record has no playable tracks. Canonical native or resolvable TV album identities open through the
 existing playable album route while channels and ordinary playlists are rejected.
 The primary search surface is music-only and uses URL-backed All, Tracks,
 Artists, and Albums views. Dormant podcast/audiobook components remain for
@@ -28,10 +30,13 @@ upstream compatibility but are not queried or rendered here. All immediately
 shows a confident exact-aware artist beside five popular tracks across owned
 and external sources; no primary result is hidden behind a Show all gate. Its
 single Albums shelf contains at most six owned and provider albums total.
-Tracks requests and renders at most 50 tracks across those sources. Clicking a
-visible result snapshots only visible playable rows in screen order, excluding
-hidden, offline, and unmatched rows. Obvious long-form/video presentations are
-ranked after songs. The route uses the same editorial spacing, translucent
+Tracks starts with a bounded 50-item window for a fast response, then offers
+progressive 50-item expansion while either the local offset contract or the
+provider reports more results; the initial window is never described as the
+complete catalog. Clicking a visible result snapshots only visible playable
+rows in screen order, excluding hidden, offline, and unmatched rows. Obvious
+long-form/video presentations are ranked after songs. The route uses the same
+editorial spacing, translucent
 surfaces, card geometry, and responsive hierarchy as Home and catalog detail
 pages, with a dedicated 375px single-column layout and a two-column primary
 result at desktop widths.

@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { TwoFactorInput } from "./TwoFactorInput";
-import { ru } from "@/lib/i18n/ru";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 
 function isSecondFactorRequired(message: string): boolean {
     return (
@@ -43,7 +43,7 @@ function useLocalLoginForm() {
             setError("");
             return;
         }
-        setError(message);
+        setError(userFacingError(caught, ru.auth.loginFailed));
         setTwoFactorToken("");
         if (!isSecondFactorError(message)) setRequires2FA(false);
     };
@@ -98,7 +98,7 @@ export function LocalLoginForm() {
                 <button
                     type="button"
                     onClick={form.resetSecondFactor}
-                    className="w-full text-xs text-white/50 hover:text-white/80 transition-colors"
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-xl px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.05] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 >
                     ← {ru.auth.backToLogin}
                 </button>
@@ -112,7 +112,7 @@ function LoginError({ message }: { message: string }) {
     return (
         <div
             role="alert"
-            className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-400 animate-shake"
+            className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm leading-5 text-red-200"
         >
             {message}
         </div>
@@ -122,11 +122,11 @@ function LoginError({ message }: { message: string }) {
 function LocalSecondFactor({ form }: { form: LocalLoginFormState }) {
     return (
         <div className="animate-fade-in space-y-4">
-            <div className="p-4 bg-brand/10 border border-brand/20 rounded-lg">
-                <p className="text-white/90 text-sm font-semibold mb-1">
+            <div className="rounded-2xl border border-brand/20 bg-brand/10 p-4">
+                <p className="mb-1 text-sm font-semibold text-content">
                     {ru.auth.twoFactorRequired}
                 </p>
-                <p className="text-white/60 text-xs">
+                <p className="text-xs text-content-secondary">
                     {ru.auth.loggingInAs} <strong>{form.username}</strong>
                 </p>
             </div>
@@ -151,6 +151,7 @@ function LocalCredentialFields({ form }: { form: LocalLoginFormState }) {
                 value={form.username}
                 onChange={form.setUsername}
                 placeholder={ru.auth.usernamePlaceholder}
+                autoComplete="username"
                 autoFocus
             />
             <CredentialInput
@@ -160,6 +161,7 @@ function LocalCredentialFields({ form }: { form: LocalLoginFormState }) {
                 value={form.password}
                 onChange={form.setPassword}
                 placeholder={ru.auth.passwordPlaceholder}
+                autoComplete="current-password"
             />
         </>
     );
@@ -172,6 +174,7 @@ interface CredentialInputProps {
     value: string;
     onChange: (value: string) => void;
     placeholder: string;
+    autoComplete: string;
     autoFocus?: boolean;
 }
 
@@ -180,7 +183,7 @@ function CredentialInput(props: CredentialInputProps) {
         <div>
             <label
                 htmlFor={props.id}
-                className="block text-sm font-medium text-white/90 mb-1.5"
+                className="mb-1.5 block text-sm font-medium text-content"
             >
                 {props.label}
             </label>
@@ -192,9 +195,10 @@ function CredentialInput(props: CredentialInputProps) {
                 placeholder={props.placeholder}
                 required
                 autoFocus={props.autoFocus}
+                autoComplete={props.autoComplete}
                 autoCapitalize="none"
                 autoCorrect="off"
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all duration-200"
+                className="min-h-12 w-full rounded-2xl border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
             />
         </div>
     );
@@ -205,7 +209,7 @@ function SubmitButton({ isLoading }: { isLoading: boolean }) {
         <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand px-5 py-3 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
         >
             <span className="flex items-center justify-center gap-2">
                 {isLoading ? (

@@ -111,6 +111,9 @@ test("DiscoverActionBar renders all consolidated buttons when playlist has track
     assert.match(html, /title="Добавить всё в плейлист"/);
     assert.match(html, /title="Собрать заново"/);
     assert.match(html, /title="Настройки"/);
+    assert.match(html, /aria-label="Перемешать всё"/);
+    assert.match(html, /aria-label="Настройки"/);
+    assert.match(html, /min-h-11/);
 });
 
 test("DiscoverActionBar hides play-related buttons when playlist is null", async () => {

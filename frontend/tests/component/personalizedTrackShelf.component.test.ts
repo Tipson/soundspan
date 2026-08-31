@@ -146,6 +146,7 @@ test("personalized shelf plays the complete provider queue from the selected tra
     assert.match(container.textContent ?? "", /Alpha/);
     assert.match(container.textContent ?? "", /Artist B/);
     assert.match(container.innerHTML, /YT/);
+    assert.ok(container.querySelector('[data-home-rail="tracks"]'));
     const scrollContainer = container.querySelector(
         '[data-testid="personalized-track-shelf-scroll"]',
     );

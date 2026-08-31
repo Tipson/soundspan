@@ -9,8 +9,10 @@ import { BRAND_DEEP_LINK_SCHEME } from "@/lib/brand";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { QRCodeSVG } from "qrcode.react";
-import { Card } from "@/components/ui/Card";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { PageHeader } from "@/components/layout/PageHeader";
 import {
     Smartphone,
     RefreshCw,
@@ -76,9 +78,15 @@ export default function DeviceLinkPage() {
     }, []);
 
     useEffect(() => {
-        if (isAuthenticated) {
-            loadDevices();
+        if (!isAuthenticated) {
+            return;
         }
+
+        const loadTimer = window.setTimeout(() => {
+            void loadDevices();
+        }, 0);
+
+        return () => window.clearTimeout(loadTimer);
     }, [isAuthenticated, loadDevices]);
 
     // Generate a new link code
@@ -175,58 +183,44 @@ export default function DeviceLinkPage() {
     };
 
     if (authLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message="Проверяем устройства…" />;
     }
 
     return (
-        <div className="min-h-screen relative pb-24">
-            {/* Header gradient */}
-            <div className="absolute inset-0 pointer-events-none">
-                <div
-                    className="absolute inset-0 bg-gradient-to-b from-ai/10 via-transparent to-transparent"
-                    style={{ height: "50vh" }}
+        <div data-consumer-surface="device" className="min-h-screen bg-surface">
+            <div className="relative mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+                <PageHeader
+                    title={deviceRu.title}
+                    subtitle={`${deviceRu.subtitle} ${deviceRu.pwaDirection}`}
+                    icon={Smartphone}
                 />
-            </div>
 
-            <div className="relative max-w-4xl mx-auto px-6 md:px-8 py-8">
-                {/* Title */}
-                <div className="mb-8">
-                    <h1 className="text-3xl md:text-4xl font-black text-white mb-2">
-                        {deviceRu.title}
-                    </h1>
-                    <p className="text-gray-400">{deviceRu.subtitle}</p>
-                    <p className="text-gray-400 text-sm mt-2">
-                        {deviceRu.pwaDirection}
-                    </p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-8">
+                <div className="grid gap-10 md:grid-cols-2">
                     {/* QR Code Section */}
-                    <Card className="p-6 bg-white/[0.03] border border-white/5">
-                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                    <section className="border-y border-line py-6">
+                        <h2 className="mb-4 flex items-center gap-2 text-2xl font-black tracking-[-0.03em] text-content">
                             <Smartphone className="w-5 h-5" />
                             {deviceRu.linkCodeTitle}
                         </h2>
 
                         {error && (
-                            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2">
+                            <div
+                                role="alert"
+                                className="mb-4 flex items-center gap-2 rounded-xl border border-error/25 bg-error/10 p-3 text-sm text-error"
+                            >
                                 <AlertCircle className="w-4 h-4" />
                                 {error}
                             </div>
                         )}
 
                         {!linkCode && !isGenerating && (
-                            <div className="text-center py-8">
-                                <p className="text-gray-400 mb-4">
+                            <div className="py-8 text-center">
+                                <p className="mb-4 text-content-muted">
                                     {deviceRu.generateHint}
                                 </p>
                                 <button
                                     onClick={generateCode}
-                                    className="px-6 py-3 bg-brand-hover hover:bg-brand text-black font-medium rounded-full transition-all hover:scale-105"
+                                    className="min-h-11 rounded-xl bg-brand px-6 py-3 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                 >
                                     {deviceRu.generateCode}
                                 </button>
@@ -243,36 +237,36 @@ export default function DeviceLinkPage() {
                             <div className="text-center">
                                 {codeUsed ? (
                                     <div className="py-8">
-                                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                                            <Check className="w-8 h-8 text-green-400" />
+                                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success/15">
+                                            <Check className="h-8 w-8 text-success" />
                                         </div>
-                                        <h3 className="text-xl font-bold text-white mb-2">
+                                        <h3 className="mb-2 text-xl font-bold text-content">
                                             {deviceRu.linkedTitle}
                                         </h3>
-                                        <p className="text-gray-400 mb-4">
+                                        <p className="mb-4 text-content-muted">
                                             {deviceRu.linkedDescription}
                                         </p>
                                         <button
                                             onClick={generateCode}
-                                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all text-sm"
+                                            className="min-h-11 rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm font-semibold text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                         >
                                             {deviceRu.linkAnother}
                                         </button>
                                     </div>
                                 ) : timeRemaining <= 0 ? (
                                     <div className="py-8">
-                                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
-                                            <Clock className="w-8 h-8 text-red-400" />
+                                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error/15">
+                                            <Clock className="h-8 w-8 text-error" />
                                         </div>
-                                        <h3 className="text-xl font-bold text-white mb-2">
+                                        <h3 className="mb-2 text-xl font-bold text-content">
                                             {deviceRu.expiredTitle}
                                         </h3>
-                                        <p className="text-gray-400 mb-4">
+                                        <p className="mb-4 text-content-muted">
                                             {deviceRu.expiredDescription}
                                         </p>
                                         <button
                                             onClick={generateCode}
-                                            className="px-4 py-2 bg-brand-hover hover:bg-brand text-black font-medium rounded-full transition-all"
+                                            className="min-h-11 rounded-xl bg-brand px-4 py-2 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                         >
                                             <RefreshCw className="w-4 h-4 inline mr-2" />
                                             {deviceRu.generateNewCode}
@@ -281,11 +275,11 @@ export default function DeviceLinkPage() {
                                 ) : (
                                     <>
                                         <div className="mb-4">
-                                            <p className="text-gray-400 text-sm mb-2">
+                                            <p className="mb-2 text-sm text-content-muted">
                                                 {deviceRu.uriScheme}
                                             </p>
-                                            <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-1 gap-1">
-                                                <span className="px-3 py-1.5 rounded-md text-xs font-medium bg-brand text-black">
+                                            <div className="inline-flex gap-1 rounded-xl border border-line bg-surface-elevated p-1">
+                                                <span className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-surface">
                                                     {BRAND_DEEP_LINK_SCHEME}://
                                                 </span>
                                             </div>
@@ -303,20 +297,20 @@ export default function DeviceLinkPage() {
 
                                         {/* Code Display */}
                                         <div className="mb-4">
-                                            <p className="text-gray-400 text-sm mb-2">
+                                            <p className="mb-2 text-sm text-content-muted">
                                                 {deviceRu.manualCode}
                                             </p>
                                             <div className="flex items-center justify-center gap-2">
-                                                <code className="text-3xl font-mono font-bold text-white tracking-widest bg-white/10 px-4 py-2 rounded-lg">
+                                                <code className="rounded-xl bg-surface-elevated px-4 py-2 font-mono text-3xl font-bold tracking-widest text-content">
                                                     {linkCode.code}
                                                 </code>
                                                 <button
                                                     onClick={copyCode}
                                                     className={cn(
-                                                        "p-2 rounded-lg transition-all",
+                                                        "flex h-11 w-11 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                                                         copied
-                                                            ? "bg-green-500/20 text-green-400"
-                                                            : "bg-white/10 hover:bg-white/20 text-gray-400",
+                                                            ? "bg-success/15 text-success"
+                                                            : "bg-surface-elevated text-content-muted hover:bg-surface-hover hover:text-content",
                                                     )}
                                                     title={deviceRu.copyCode}
                                                     aria-label={
@@ -333,7 +327,7 @@ export default function DeviceLinkPage() {
                                         </div>
 
                                         {/* Timer */}
-                                        <div className="flex items-center justify-center gap-2 text-gray-400">
+                                        <div className="flex items-center justify-center gap-2 text-content-muted">
                                             <Clock className="w-4 h-4" />
                                             <span>
                                                 {deviceRu.expiresIn}{" "}
@@ -344,16 +338,19 @@ export default function DeviceLinkPage() {
                                 )}
                             </div>
                         )}
-                    </Card>
+                    </section>
 
                     {/* Linked Devices Section */}
-                    <Card className="p-6 bg-white/[0.03] border border-white/5">
-                        <h2 className="text-xl font-bold text-white mb-4">
+                    <section className="border-y border-line py-6">
+                        <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
                             {deviceRu.linkedDevices}
                         </h2>
 
                         {deviceError && (
-                            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2">
+                            <div
+                                role="alert"
+                                className="mb-4 flex items-center gap-2 rounded-xl border border-error/25 bg-error/10 p-3 text-sm text-error"
+                            >
                                 <AlertCircle className="w-4 h-4" />
                                 {deviceError}
                             </div>
@@ -364,26 +361,27 @@ export default function DeviceLinkPage() {
                                 <GradientSpinner size="sm" />
                             </div>
                         ) : devices.length === 0 ? (
-                            <div className="text-center py-8 text-gray-400">
-                                <Smartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                                <p>{deviceRu.noDevices}</p>
-                            </div>
+                            <EmptyState
+                                icon={<Smartphone />}
+                                title={deviceRu.noDevices}
+                                description={deviceRu.generateHint}
+                            />
                         ) : (
-                            <div className="space-y-3">
+                            <div className="divide-y divide-line border-y border-line">
                                 {devices.map((device) => (
                                     <div
                                         key={device.id}
-                                        className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
+                                        className="flex items-center justify-between gap-3 px-1 py-3 transition-colors hover:bg-surface-elevated/60 motion-reduce:transition-none"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-ai/20 flex items-center justify-center">
-                                                <Smartphone className="w-5 h-5 text-ai-hover" />
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand/15">
+                                                <Smartphone className="h-5 w-5 text-brand-light" />
                                             </div>
                                             <div>
-                                                <p className="text-white font-medium">
+                                                <p className="font-medium text-content">
                                                     {device.name}
                                                 </p>
-                                                <p className="text-gray-400 text-sm">
+                                                <p className="text-sm text-content-muted">
                                                     {deviceRu.lastUsed}{" "}
                                                     {new Date(
                                                         device.lastUsed,
@@ -397,7 +395,7 @@ export default function DeviceLinkPage() {
                                             onClick={() =>
                                                 revokeDevice(device.id)
                                             }
-                                            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                            className="flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error motion-reduce:transition-none"
                                             title={deviceRu.revokeDevice}
                                             aria-label={deviceRu.revokeDevice}
                                         >
@@ -407,41 +405,41 @@ export default function DeviceLinkPage() {
                                 ))}
                             </div>
                         )}
-                    </Card>
+                    </section>
                 </div>
 
                 {/* Instructions */}
-                <Card className="mt-8 p-6 bg-white/[0.03] border border-white/5">
-                    <h2 className="text-xl font-bold text-white mb-4">
+                <section className="mt-10 border-t border-line pt-7">
+                    <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
                         {deviceRu.instructionsTitle}
                     </h2>
-                    <ol className="space-y-3 text-gray-400">
+                    <ol className="max-w-3xl space-y-3 text-content-muted">
                         <li className="flex gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
+                            <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-bold text-brand-light">
                                 1
                             </span>
                             <span>{deviceRu.instructionOpen}</span>
                         </li>
                         <li className="flex gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
+                            <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-bold text-brand-light">
                                 2
                             </span>
                             <span>{deviceRu.instructionChoose}</span>
                         </li>
                         <li className="flex gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
+                            <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-bold text-brand-light">
                                 3
                             </span>
                             <span>{deviceRu.instructionScan}</span>
                         </li>
                         <li className="flex gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand/20 text-brand text-sm font-bold flex items-center justify-center">
+                            <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-bold text-brand-light">
                                 4
                             </span>
                             <span>{deviceRu.instructionVerify}</span>
                         </li>
                     </ol>
-                </Card>
+                </section>
             </div>
         </div>
     );

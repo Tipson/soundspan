@@ -183,7 +183,7 @@ export const TrackList = memo(function TrackList({
                                     e.stopPropagation();
                                     onPreview(track, e);
                                 }}
-                                className="p-2 rounded-full bg-surface-hover hover:bg-[#2a2a2a] transition-colors text-white"
+                                className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-hover text-content transition-colors hover:bg-surface-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                 aria-label={
                                     isPreviewPlaying
                                         ? "Поставить фрагмент на паузу"
@@ -267,7 +267,7 @@ export const TrackList = memo(function TrackList({
                 : 0;
             if (index === 0 || currentDisc !== prevDisc) {
                 return (
-                    <div className="flex items-center gap-2 px-3 md:px-4 py-2.5 bg-[#0d0d0d] border-b border-surface-active">
+                    <div className="flex items-center gap-2 border-b border-surface-active bg-surface-sunken px-3 py-2.5 md:px-4">
                         <Disc className="w-3.5 h-3.5 text-gray-400" />
                         <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                             Диск {currentDisc}

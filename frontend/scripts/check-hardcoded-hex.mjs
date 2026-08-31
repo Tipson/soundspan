@@ -3,7 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-export const BASELINE = 130;
+export const BASELINE = 7;
 export const HEX_UTILITY_REGEX =
     /(bg|text|border|ring|ring-offset|from|via|to|shadow|fill|stroke|divide|outline|accent|caret|decoration|placeholder)-\[#[0-9a-fA-F]{3,6}\]/g;
 

@@ -74,7 +74,7 @@ export function SettingsInput({
                 placeholder={placeholder}
                 disabled={disabled}
                 className={`
-                    min-h-11 w-full bg-surface-elevated text-content text-sm
+                    min-h-11 w-full bg-surface-elevated text-content text-base sm:text-sm
                     px-3.5 py-2.5 rounded-xl
                     border border-line outline-none
                     ${SETTINGS_FIELD_FOCUS_RING}
@@ -92,7 +92,7 @@ export function SettingsInput({
                     aria-label={
                         showPassword ? "Скрыть пароль" : "Показать пароль"
                     }
-                    className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover"
+                    className="absolute right-0 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover"
                 >
                     {showPassword ? (
                         <EyeOff className="w-4 h-4" />

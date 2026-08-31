@@ -9,12 +9,14 @@ test.describe("Playback", () => {
     test("home page shows player area", async ({ page }) => {
         await page.goto("/");
 
-        // Should show "Not Playing" or similar player status
         await expect(
-            page
-                .locator("text=/Not Playing|Now Playing|Select something/i")
-                .first(),
+            page.getByRole("group", {
+                name: "Управление воспроизведением",
+            }),
         ).toBeVisible({ timeout: 5000 });
+        await expect(
+            page.getByRole("button", { name: "Воспроизвести" }).last(),
+        ).toBeDisabled();
     });
 
     test("album page accessible and shows tracks", async ({ page }) => {
@@ -40,18 +42,18 @@ test.describe("Playback", () => {
     test("overlay Up Next keeps current queue row centered after tab switch", async ({
         page,
     }) => {
-        await page.goto("/library");
+        await page.goto("/playlist/my-liked");
 
-        await page.locator('button[title="Shuffle Library"]').click();
+        await page.getByRole("button", { name: "Воспроизвести всё" }).click();
 
         const openOverlayButton = page.getByRole("button", {
-            name: "Open overlay player",
+            name: "Открыть плеер",
         });
         await expect(openOverlayButton).toBeEnabled({ timeout: 20000 });
 
         // Move away from queue index 0 so the centering assertion can detect regressions.
         const nextTrackButton = page.getByRole("button", {
-            name: "Next track",
+            name: "Следующий трек",
         });
         for (let i = 0; i < 5; i += 1) {
             if (!(await nextTrackButton.isEnabled())) break;
@@ -62,11 +64,11 @@ test.describe("Playback", () => {
         await openOverlayButton.click();
 
         const upNextTab = page.getByRole("button", {
-            name: "Up Next",
+            name: "Далее",
             exact: true,
         });
         const lyricsTab = page.getByRole("button", {
-            name: "Lyrics",
+            name: "Текст",
             exact: true,
         });
 
@@ -76,7 +78,7 @@ test.describe("Playback", () => {
         // playing row are mounted, so the playing row is the render sentinel.
         const currentQueueRow = page
             .locator("[data-queue-index]")
-            .filter({ has: page.locator('button[title="Now playing"]') })
+            .filter({ has: page.locator('button[title="Сейчас играет"]') })
             .first();
         await expect(currentQueueRow).toBeVisible({ timeout: 10000 });
 

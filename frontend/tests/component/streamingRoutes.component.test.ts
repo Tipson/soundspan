@@ -969,7 +969,7 @@ test("artist route puts playable music before the long About section", async () 
     const html = renderToStaticMarkup(React.createElement(ArtistPage));
 
     assert.ok(html.indexOf("popular-tracks") < html.indexOf("artist-bio"));
-    assert.match(html, /pb-32/);
+    assert.doesNotMatch(html, /data-artist-page-canvas="open"[^>]*\bpb-/);
 });
 
 test("artist popular-track selection starts the visible artist queue at that row", async () => {
@@ -1116,6 +1116,11 @@ test("YouTube Music Tracks view waits for release aggregation instead of showing
     artistState.providerCatalogHasNextPage = true;
     const partialHtml = renderToStaticMarkup(React.createElement(ArtistPage));
     assert.match(partialHtml, /Показать ещё треки/);
+    assert.match(
+        partialHtml,
+        /aria-label="Загрузить следующую часть каталога треков"/,
+    );
+    assert.match(partialHtml, /Каталог загружается постепенно/);
     assert.doesNotMatch(partialHtml, /Нет доступных треков/);
 
     artistState.providerCatalogHasNextPage = false;

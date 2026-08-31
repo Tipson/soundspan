@@ -14,6 +14,8 @@ mock.module("lucide-react", {
     namedExports: {
         Check: icon("check"),
         Inbox: icon("inbox"),
+        AlertTriangle: icon("alert-triangle"),
+        RefreshCw: icon("refresh-cw"),
         X: icon("x"),
     },
 });
@@ -50,6 +52,9 @@ mock.module("next/link", {
 interface QueryState {
     data: unknown[] | undefined;
     isLoading: boolean;
+    isError?: boolean;
+    error?: unknown;
+    refetch?: () => Promise<unknown>;
 }
 
 const state: {
@@ -124,6 +129,9 @@ test("admin view lists requests with requester and review actions", async () => 
     assert.match(html, />Одобрить</);
     assert.match(html, />Отклонить</);
     assert.match(html, /1 на рассмотрении/);
+    assert.match(html, /data-utility-page="requests"/);
+    assert.match(html, /data-page-header="editorial"/);
+    assert.match(html, /min-h-11/);
     assert.doesNotMatch(html, />Отменить</);
 });
 
@@ -206,4 +214,26 @@ test("empty state guides users toward the library", async () => {
 
     assert.match(html, /Вы пока ничего не запросили/);
     assert.match(html, /href="\/library"/);
+});
+
+test("request loading failures render a retryable semantic state", async () => {
+    state.auth = {
+        user: { id: "user-1", role: "user" },
+        isAuthenticated: true,
+        isLoading: false,
+    };
+    state.mineQuery = {
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error: new Error("backend detail"),
+        refetch: async () => ({}),
+    };
+
+    const { default: RequestsPage } = await import("../../app/requests/page");
+    const html = renderToStaticMarkup(React.createElement(RequestsPage));
+
+    assert.match(html, /role="alert"/);
+    assert.match(html, /Не удалось загрузить запросы/);
+    assert.match(html, />Повторить</);
 });

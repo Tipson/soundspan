@@ -35,7 +35,7 @@ function SecondFactorField({
         <div>
             <label
                 htmlFor={id}
-                className="block text-sm font-medium text-white/90 mb-1.5"
+                className="mb-1.5 block text-sm font-medium text-content"
             >
                 {label}
             </label>
@@ -58,9 +58,10 @@ function SecondFactorField({
                 autoCapitalize="none"
                 autoCorrect="off"
                 inputMode={useRecoveryCode ? "text" : "numeric"}
-                className="w-full px-4 py-2.5 bg-white/5 border border-brand/30 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-transparent transition-all duration-200 text-center text-2xl tracking-widest"
+                autoComplete="one-time-code"
+                className="min-h-12 w-full rounded-2xl border border-brand/30 bg-surface-elevated px-4 py-3 text-center text-2xl tracking-widest text-content outline-none transition-colors placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/25"
             />
-            <p className="text-xs text-white/50 mt-2">
+            <p className="mt-2 text-xs text-content-muted">
                 {useRecoveryCode
                     ? ru.auth.recoveryHint
                     : ru.auth.authenticationHint}
@@ -92,7 +93,7 @@ export function TwoFactorInput({
                         onValueChange("");
                         onRecoveryCodeChange(!useRecoveryCode);
                     }}
-                    className="text-xs text-brand hover:text-brand-light transition-colors underline"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl px-3 text-xs font-semibold text-brand-light underline transition-colors hover:bg-white/[0.05] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 >
                     {useRecoveryCode
                         ? ru.auth.useAuthenticator

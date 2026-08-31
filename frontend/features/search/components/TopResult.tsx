@@ -73,6 +73,7 @@ export function TopResult({
     return (
         <section
             data-tv-section="search-top-result"
+            data-search-artist-feature="editorial"
             aria-labelledby="search-top-result-title"
             className="min-w-0"
         >
@@ -84,14 +85,14 @@ export function TopResult({
             </h2>
             <Link
                 href={artistHref}
-                className="group relative isolate flex min-h-[13.5rem] w-full items-end overflow-hidden rounded-[1.5rem] border border-white/[0.09] bg-white/[0.035] p-5 shadow-xl shadow-black/20 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.16] hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:min-h-[15rem] sm:p-6"
+                className="group relative isolate flex min-h-[13.5rem] w-full items-end overflow-hidden border-y border-white/[0.09] px-1 py-5 transition duration-200 hover:border-white/[0.17] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:min-h-[15rem] sm:py-6"
                 data-tv-card
                 data-tv-card-index={0}
                 tabIndex={0}
             >
                 <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/25 via-brand/[0.04] to-transparent"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-brand/20 via-brand/[0.035] to-transparent opacity-80 transition-opacity duration-200 group-hover:opacity-100 motion-reduce:transition-none"
                 />
                 <div className="relative z-10 h-24 w-24 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface-elevated shadow-2xl shadow-black/40 sm:h-28 sm:w-28">
                     {imageUrl ? (
@@ -131,7 +132,7 @@ export function TopResult({
                             />
                         )}
                 </div>
-                <span className="relative z-10 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-content text-surface shadow-lg transition-transform duration-200 group-hover:scale-[1.04] motion-reduce:transition-none">
+                <span className="relative z-10 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-content text-surface shadow-lg transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
                     <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
                     <span className="sr-only">{ru.search.viewArtist}</span>
                 </span>

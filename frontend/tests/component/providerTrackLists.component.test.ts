@@ -236,6 +236,11 @@ test("album TrackList shows preview controls, queue badges, and provider badges"
 
     assert.match(html, /ФРАГМЕНТ/);
     assert.match(html, /Поставить фрагмент на паузу/);
+    const previewButton = html.match(
+        /<button[^>]*aria-label="Поставить фрагмент на паузу"[^>]*>/,
+    )?.[0];
+    assert.ok(previewButton);
+    assert.match(previewButton, /h-11 w-11/);
     assert.match(html, /В ОЧЕРЕДИ/);
     assert.match(html, /TIDAL/);
     assert.match(html, /YT/);
@@ -313,9 +318,11 @@ test("artist PopularTracks limits visible items and renders provider states", as
     // Plus button (add to queue) renders as icon-only
     assert.doesNotMatch(html, /Add All to Queue/);
     assert.match(html, /Добавить показанные популярные треки в очередь/);
+    assert.match(html, /h-11 w-11 shrink-0/);
     // "See more" toggle visible since there are 6 tracks (> 5 collapsed)
     assert.match(html, /Показать ещё/);
     assert.match(html, /href=\"\/artist\/artist-1\/popular\"/);
+    assert.match(html, /min-h-11/);
     assert.match(html, /ИЩЕМ/);
     assert.match(html, /YT/);
     assert.match(html, /В ОЧЕРЕДИ/);

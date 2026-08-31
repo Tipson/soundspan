@@ -10,11 +10,13 @@ test.describe("Settings", () => {
         await page.goto("/settings");
 
         await expect(
-            page.getByRole("heading", { name: /settings/i }),
+            page.getByRole("heading", { name: "Настройки" }),
         ).toBeVisible();
 
         // Should have Account section (use first() since multiple elements match)
-        await expect(page.locator("text=Account").first()).toBeVisible({
+        await expect(
+            page.getByText("Аккаунт", { exact: true }).first(),
+        ).toBeVisible({
             timeout: 5000,
         });
     });
@@ -23,7 +25,9 @@ test.describe("Settings", () => {
         await page.goto("/settings");
 
         // Should have Playback section (use first() since multiple elements match)
-        await expect(page.locator("text=Playback").first()).toBeVisible({
+        await expect(
+            page.getByText("Воспроизведение", { exact: true }).first(),
+        ).toBeVisible({
             timeout: 5000,
         });
     });
@@ -32,14 +36,14 @@ test.describe("Settings", () => {
         await page.goto("/settings");
 
         const openHistoryLink = page.getByRole("link", {
-            name: /open my history/i,
+            name: "Открыть мою историю",
         });
         await expect(openHistoryLink).toBeVisible({ timeout: 5000 });
         await openHistoryLink.click();
 
         await expect(page).toHaveURL(/\/my-history/);
         await expect(
-            page.getByRole("heading", { name: /my history/i }),
+            page.getByRole("heading", { name: "Моя история" }),
         ).toBeVisible({ timeout: 10000 });
     });
 });

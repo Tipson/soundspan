@@ -112,6 +112,16 @@ test("показывает русское сообщение при запрет
     const harness = await mountDevicePage();
     t.after(harness.unmount);
 
+    assert.ok(document.querySelector('[data-consumer-surface="device"]'));
+    assert.ok(document.querySelector('[data-page-header="editorial"]'));
+    assert.ok(
+        Array.from(document.querySelectorAll("button")).every(
+            (button) =>
+                button.className.includes("min-h-11") ||
+                button.className.includes("h-11") ||
+                button.className.includes("size-11"),
+        ),
+    );
     await click(findButton("Отвязать устройство"));
 
     assert.match(

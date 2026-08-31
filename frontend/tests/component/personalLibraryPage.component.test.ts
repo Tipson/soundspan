@@ -152,22 +152,20 @@ test("Library overview is a personal collection hub without server catalog contr
     const html = renderToStaticMarkup(React.createElement(LibraryPage));
 
     assert.match(html, /Моя коллекция/);
-    assert.match(html, /Любимые треки/);
+    assert.match(html, /Лайкнутые/);
     assert.match(html, /Плейлисты/);
     assert.match(html, /Сохранённые альбомы/);
     assert.match(html, /Сохранённые исполнители/);
-    assert.match(html, /Показать все/);
     assert.match(html, /Загрузки на этом устройстве/);
     assert.match(html, /Сохранено в аккаунте/);
-    assert.match(html, /Только на этом устройстве/);
+    assert.match(html, /data-library-view="liked"/);
+    assert.match(html, /href="\/playlist\/my-liked"/);
+    assert.match(html, /24 трека/);
     assert.match(html, /обычными файлами/i);
     assert.match(html, /профилю браузера/i);
-    assert.match(html, /очистка данных сайта не удаляет/i);
     assert.match(html, /1 офлайн-трек/);
     assert.doesNotMatch(html, /4 офлайн-трека/);
     assert.doesNotMatch(html, /copies stay in this browser/i);
-    assert.match(html, /Meteora/);
-    assert.match(html, /Linkin Park/);
     assert.doesNotMatch(html, /Shuffle Library/);
     assert.doesNotMatch(html, />Owned</);
     assert.doesNotMatch(html, />Discovery</);

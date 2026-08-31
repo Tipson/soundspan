@@ -147,6 +147,7 @@ test("Home Made For You renders at most six real collections", async () => {
     );
 
     assert.match(html, /Подобрано для вас/);
+    assert.match(html, /data-home-rail="mixes"/);
     assert.equal((html.match(/data-home-made-card=/g) ?? []).length, 6);
     assert.match(html, /Микс дня/);
     assert.match(html, /Новые находки/);

@@ -242,7 +242,7 @@ export function SeekSlider({
                     container: "h-1",
                     track: "bg-white/20",
                     progress: isActive
-                        ? "bg-gradient-to-r from-brand to-[#38bdf8]"
+                        ? "bg-gradient-to-r from-brand to-brand-light"
                         : "bg-white/40",
                 };
             default:

@@ -21,16 +21,66 @@ import { TasteProfileSettingsSection } from "@/features/taste-profile";
 
 // Define sidebar items
 const sidebarItems: SidebarItem[] = [
-    { id: "account", label: ru.settings.account },
-    { id: "taste-profile", label: "Музыкальные вкусы" },
-    { id: "sign-in-security", label: ru.settings.security },
-    { id: "social", label: ru.settings.social },
-    { id: "history", label: ru.settings.history },
-    { id: "scrobbling", label: ru.settings.scrobbling },
-    { id: "playback", label: ru.settings.playback },
-    { id: "device-offline", label: ru.settings.offlineDevice },
-    { id: "integrations", label: ru.settings.integrations },
-    { id: "api-keys", label: ru.settings.apiKeys },
+    {
+        id: "account",
+        label: ru.settings.account,
+        groupId: "profile",
+        groupLabel: "Профиль",
+    },
+    {
+        id: "taste-profile",
+        label: "Музыкальные вкусы",
+        groupId: "profile",
+        groupLabel: "Профиль",
+    },
+    {
+        id: "social",
+        label: ru.settings.social,
+        groupId: "profile",
+        groupLabel: "Профиль",
+    },
+    {
+        id: "sign-in-security",
+        label: ru.settings.security,
+        groupId: "security",
+        groupLabel: "Безопасность",
+    },
+    {
+        id: "api-keys",
+        label: ru.settings.apiKeys,
+        groupId: "security",
+        groupLabel: "Безопасность",
+    },
+    {
+        id: "playback",
+        label: ru.settings.playback,
+        groupId: "listening",
+        groupLabel: "Прослушивание",
+    },
+    {
+        id: "history",
+        label: ru.settings.history,
+        groupId: "listening",
+        groupLabel: "Прослушивание",
+    },
+    {
+        id: "scrobbling",
+        label: ru.settings.scrobbling,
+        groupId: "listening",
+        groupLabel: "Прослушивание",
+    },
+    {
+        id: "device-offline",
+        label: ru.settings.offlineDevice,
+        groupId: "offline",
+        groupLabel: "Офлайн",
+    },
+    {
+        id: "integrations",
+        label: ru.settings.integrations,
+        groupId: "services",
+        groupLabel: "Сервисы",
+    },
 ];
 
 function renderSectionFallback() {
@@ -131,8 +181,6 @@ export default function SettingsPage() {
 
             {user?.id && <TasteProfileSettingsSection accountId={user.id} />}
 
-            <SignInSecuritySection />
-
             {/* Social */}
             <SocialSection
                 settings={userSettings}
@@ -142,11 +190,10 @@ export default function SettingsPage() {
                 }
             />
 
-            {/* History & Personalization */}
-            <PlaybackHistorySection />
+            <SignInSecuritySection />
 
-            {/* Scrobbling */}
-            <ScrobblingSection />
+            {/* API Keys */}
+            <APIKeysSection />
 
             {/* Playback */}
             <PlaybackSection
@@ -160,6 +207,12 @@ export default function SettingsPage() {
                 }
             />
 
+            {/* History & Personalization */}
+            <PlaybackHistorySection />
+
+            {/* Scrobbling */}
+            <ScrobblingSection />
+
             <DeviceOfflineSettingsSection />
 
             {/* Integrations (YouTube Music + TIDAL — visible to all users) */}
@@ -167,9 +220,6 @@ export default function SettingsPage() {
                 settings={userSettings}
                 onUpdate={updateUserSettings}
             />
-
-            {/* API Keys */}
-            <APIKeysSection />
 
             <div className="sticky bottom-3 z-20 pt-4 md:bottom-4 md:pt-6">
                 <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.1] bg-surface-overlay/90 p-2.5 shadow-2xl shadow-black/30 backdrop-blur-xl md:justify-end">

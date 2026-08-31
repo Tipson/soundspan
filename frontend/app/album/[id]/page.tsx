@@ -49,13 +49,13 @@ interface AlbumPageProps {
 
 function AlbumTracksSkeleton() {
     return (
-        <section>
-            <div className="rounded-xl border border-white/10 bg-[#111111]/60 overflow-hidden">
-                <div className="space-y-2 p-4 md:p-5">
+        <section aria-label={albumRu.loading}>
+            <div className="overflow-hidden border-y border-white/10 bg-surface-sunken/60">
+                <div className="divide-y divide-white/[0.06]">
                     {Array.from({ length: 8 }).map((_, index) => (
                         <div
                             key={index}
-                            className="h-12 animate-pulse rounded-lg bg-white/[0.07]"
+                            className="h-14 animate-pulse bg-white/[0.05] motion-reduce:animate-none"
                         />
                     ))}
                 </div>
@@ -227,10 +227,13 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     <h1 className="text-2xl font-bold mb-4">
                         {albumRu.loadErrorTitle}
                     </h1>
-                    <p className="text-gray-400 mb-4">{albumRu.notFound}</p>
+                    <p className="mb-4 text-content-muted">
+                        {albumRu.notFound}
+                    </p>
                     <button
+                        type="button"
                         onClick={() => router.push("/albums")}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                        className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     >
                         {albumRu.backToAlbums}
                     </button>
@@ -303,7 +306,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     };
 
     return (
-        <div className="flex min-h-screen flex-col pb-32 md:pb-24">
+        <div className="flex min-h-screen flex-col">
             <AlbumHero
                 album={album}
                 source={source || "discovery"}

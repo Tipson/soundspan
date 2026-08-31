@@ -63,7 +63,7 @@ export function DiscoverPodcastsGrid({
                             <h3 className="text-base font-bold text-white line-clamp-1 mb-1">
                                 {podcast.name}
                             </h3>
-                            <p className="text-sm text-[#b3b3b3] line-clamp-1">
+                            <p className="line-clamp-1 text-sm text-content-muted">
                                 {podcast.artist ||
                                     searchExtrasRu.podcastFallback}
                             </p>

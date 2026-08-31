@@ -67,9 +67,9 @@ export function SimilarArtistsGrid({
                             data-tv-card
                             data-tv-card-index={index}
                             tabIndex={0}
-                            className="group min-w-0 rounded-2xl border border-transparent bg-white/[0.025] p-3 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.1] hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-4"
+                            className="group min-w-0 rounded-xl p-1.5 transition duration-200 hover:-translate-y-0.5 hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
                         >
-                            <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-elevated shadow-lg shadow-black/15 sm:mb-4">
+                            <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-elevated shadow-lg shadow-black/20">
                                 {imageUrl ? (
                                     <Image
                                         src={imageUrl}

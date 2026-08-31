@@ -5,13 +5,10 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import {
-    AudioWaveform,
     Bell,
     Download,
     Heart,
-    Home,
     Inbox,
-    Library,
     ListMusic,
     LogOut,
     Settings,
@@ -22,7 +19,6 @@ import {
 import { cn } from "@/utils/cn";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
-import { MOBILE_QUICK_LINKS } from "./socialNavigation";
 import { BRAND_NAME } from "@/lib/brand";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { ru } from "@/lib/i18n/ru";
@@ -32,12 +28,6 @@ interface MobileSidebarProps {
     onClose: () => void;
     hasActiveSessions: boolean;
 }
-
-const quickLinkIcons = {
-    "/": Home,
-    "/vibe": AudioWaveform,
-    "/library": Library,
-} as const;
 
 const personalLinks = [
     { name: ru.library.likedSongs, href: "/playlist/my-liked", icon: Heart },
@@ -84,7 +74,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
     const linkClassName = (active: boolean) =>
         cn(
-            "flex min-h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
+            "flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
             active
                 ? "bg-white/[0.09] text-white"
                 : "text-content-secondary hover:bg-white/[0.055] hover:text-white",
@@ -100,7 +90,8 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             />
 
             <aside
-                className="mobile-sidebar-sheet fixed inset-y-0 left-0 z-[60] flex w-[min(86vw,304px)] flex-col overflow-hidden"
+                data-shell-drawer="account"
+                className="mobile-sidebar-sheet fixed inset-y-0 left-0 z-[60] flex w-[min(86vw,304px)] flex-col overflow-hidden rounded-r-[1.75rem] shadow-[24px_0_80px_rgba(0,0,0,0.48)]"
                 style={{
                     paddingTop: "var(--safe-area-top)",
                     paddingBottom: "var(--safe-area-bottom)",
@@ -112,7 +103,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                 <div className="flex min-h-16 items-center justify-between border-b border-white/[0.07] px-4">
                     <Link
                         href="/"
-                        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         onClick={onClose}
                     >
                         <Image
@@ -142,35 +133,6 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     aria-label={ru.nav.mobileMenu}
                 >
                     <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
-                        {ru.nav.listen}
-                    </p>
-                    <div className="space-y-1">
-                        {MOBILE_QUICK_LINKS.map((link) => {
-                            const Icon =
-                                quickLinkIcons[
-                                    link.href as keyof typeof quickLinkIcons
-                                ];
-                            const active =
-                                link.href === "/"
-                                    ? pathname === "/"
-                                    : pathname.startsWith(link.href);
-                            return (
-                                <Link
-                                    key={link.href}
-                                    href={link.href}
-                                    aria-current={active ? "page" : undefined}
-                                    aria-label={link.name}
-                                    className={linkClassName(active)}
-                                >
-                                    <Icon className="h-5 w-5" />
-                                    <span>{link.name}</span>
-                                </Link>
-                            );
-                        })}
-                    </div>
-
-                    <div className="my-4 border-t border-white/[0.07]" />
-                    <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
                         Ваша музыка
                     </p>
                     <div className="space-y-1">
@@ -192,6 +154,9 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     </div>
 
                     <div className="my-4 border-t border-white/[0.07]" />
+                    <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
+                        Аккаунт
+                    </p>
                     <button
                         type="button"
                         onClick={handleOpenNotifications}
@@ -246,7 +211,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     <button
                         type="button"
                         onClick={handleLogout}
-                        className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                        className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                     >
                         <LogOut className="h-5 w-5" />
                         <span className="text-[15px] font-medium">

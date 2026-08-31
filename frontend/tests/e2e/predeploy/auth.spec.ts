@@ -6,7 +6,7 @@ test.describe("Authentication", () => {
         await page.goto("/login");
         await page.locator("#username").fill(username);
         await page.locator("#password").fill(password);
-        await page.getByRole("button", { name: "Sign In" }).click();
+        await page.getByRole("button", { name: "Войти", exact: true }).click();
         await page.waitForURL(/\/($|\?|home)/);
         await expect(page).not.toHaveURL(/login/);
     });
@@ -15,10 +15,9 @@ test.describe("Authentication", () => {
         await page.goto("/login");
         await page.locator("#username").fill("invalid-user");
         await page.locator("#password").fill("wrong-password");
-        await page.getByRole("button", { name: "Sign In" }).click();
-        // Error can be "Invalid credentials" or "Not authenticated"
+        await page.getByRole("button", { name: "Войти", exact: true }).click();
         await expect(
-            page.locator("text=/Invalid|Not authenticated/i"),
+            page.locator("text=/невер|не удалось войти|аутентификац/i"),
         ).toBeVisible({ timeout: 5000 });
     });
 
@@ -32,8 +31,8 @@ test.describe("Authentication", () => {
     test("logout clears session and redirects to login", async ({ page }) => {
         await loginAsTestUser(page);
 
-        await page.getByRole("button", { name: "User menu" }).click();
-        await page.getByRole("button", { name: "Log out" }).click();
+        await page.getByRole("button", { name: "Меню пользователя" }).click();
+        await page.getByRole("button", { name: "Выйти" }).click();
 
         await expect(page).toHaveURL(/login/, { timeout: 5000 });
     });

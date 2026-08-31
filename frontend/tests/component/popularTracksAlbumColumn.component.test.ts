@@ -326,6 +326,8 @@ test("tracks view exposes every returned track as the ordered playback context",
         '[data-track-id="all-7"]',
     );
     assert.ok(seventhRow, "expected the full returned track list");
+    assert.match(container.innerHTML, /data-artist-tracks-canvas="open"/);
+    assert.match(container.innerHTML, />Популярные треки<\/h2>/);
     assert.equal(container.textContent?.includes("See more"), false);
     await React.act(async () => seventhRow.click());
 

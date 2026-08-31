@@ -816,7 +816,7 @@ describe("search service", () => {
             limit: 4,
         });
         expect(redisClient.get).toHaveBeenCalledWith(
-            "search:all:v1:book:4::all",
+            "search:all:p2:v1:book:4::all",
         );
         expect(cacheHit.audiobooks).toEqual([
             expect.objectContaining({
@@ -950,6 +950,7 @@ describe("search service", () => {
         jest.spyOn(searchService, "searchAlbums").mockResolvedValueOnce([
             {
                 id: "album-10",
+                rgMbid: "release-group-10",
                 title: "Album 10",
                 artistId: "artist-10",
                 artistName: "Artist 10",
@@ -1072,7 +1073,7 @@ describe("search service", () => {
             offset: 40,
         });
 
-        const cacheKey = "search:artists:v1:radiohead:10:40::all";
+        const cacheKey = "search:artists:p2:v1:radiohead:10:40::all";
         expect(redisClient.get).toHaveBeenCalledWith(cacheKey);
         expect(redisClient.setEx).toHaveBeenCalledWith(
             cacheKey,
@@ -1092,7 +1093,7 @@ describe("search service", () => {
         };
         getSearchCacheVersion.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
         redisClient.get.mockImplementation(async (key: string) =>
-            key === "search:artists:v1:radiohead:20:0::all"
+            key === "search:artists:p2:v1:radiohead:20:0::all"
                 ? JSON.stringify(oldResults)
                 : null,
         );
@@ -1115,11 +1116,11 @@ describe("search service", () => {
 
         expect(redisClient.get).toHaveBeenNthCalledWith(
             1,
-            "search:artists:v1:radiohead:20:0::all",
+            "search:artists:p2:v1:radiohead:20:0::all",
         );
         expect(redisClient.get).toHaveBeenNthCalledWith(
             2,
-            "search:artists:v2:radiohead:20:0::all",
+            "search:artists:p2:v2:radiohead:20:0::all",
         );
         expect(searchArtists).toHaveBeenCalledTimes(1);
     });

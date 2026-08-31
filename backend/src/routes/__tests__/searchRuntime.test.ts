@@ -244,6 +244,7 @@ describe("search route runtime behavior", () => {
             albums: [
                 {
                     id: "album-1",
+                    rgMbid: "release-group-kid-a",
                     title: "Kid A",
                     artistId: "artist-1",
                     artistName: "Radiohead",
@@ -298,6 +299,7 @@ describe("search route runtime behavior", () => {
                 albums: [
                     expect.objectContaining({
                         id: "album-1",
+                        rgMbid: "release-group-kid-a",
                         title: "Kid A",
                         artist: expect.objectContaining({
                             id: "artist-1",

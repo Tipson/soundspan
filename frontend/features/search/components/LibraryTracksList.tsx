@@ -184,7 +184,7 @@ export function LibraryTracksList({
                         <TrackPreferenceButtons
                             trackId={track.id}
                             mode="both"
-                            buttonSizeClassName="h-8 w-8"
+                            buttonSizeClassName="h-11 w-11"
                             iconSizeClassName="h-4 w-4"
                             metadata={buildPreferenceMetadata({
                                 id: track.id,
@@ -195,6 +195,7 @@ export function LibraryTracksList({
                             })}
                         />
                         <TrackOverflowMenu
+                            triggerClassName="h-11 w-11 p-0"
                             track={{
                                 id: track.id,
                                 title: track.displayTitle ?? track.title,

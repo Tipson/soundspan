@@ -109,7 +109,7 @@ export function PlaybackHistorySection() {
             >
                 <Link
                     href={MY_HISTORY_ROUTE}
-                    className="inline-flex items-center px-4 py-2 bg-[#1f1f1f] text-sm text-white rounded-full border border-white/10 hover:bg-[#2a2a2a] transition-colors"
+                    className="inline-flex min-h-11 items-center rounded-full border border-line-strong bg-surface-active px-4 py-2 text-sm text-content transition-colors hover:bg-surface-hover"
                 >
                     Открыть мою историю
                 </Link>

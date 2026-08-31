@@ -18,15 +18,19 @@ const Card = memo(
             },
             ref,
         ) => {
-            const baseStyles = "rounded-md p-3 transition-colors duration-200";
+            const baseStyles =
+                "rounded-2xl p-4 transition-[background-color,border-color,transform] duration-200 ease-out";
 
             const variantStyles = {
-                default: cn("bg-transparent", hover && "hover:bg-white/5"),
-                ai: cn(
-                    "bg-gradient-to-br from-surface-sunken to-surface-raised border border-surface-active",
-                    hover && "hover:border-yellow-500/30",
+                default: cn(
+                    "bg-transparent",
+                    hover && "hover:bg-surface-elevated/70",
                 ),
-                metric: "bg-surface-raised border border-surface-active",
+                ai: cn(
+                    "border border-ai/20 bg-gradient-to-br from-ai/8 to-surface-raised",
+                    hover && "hover:border-ai/40",
+                ),
+                metric: "border border-line bg-surface-raised",
             };
 
             return (

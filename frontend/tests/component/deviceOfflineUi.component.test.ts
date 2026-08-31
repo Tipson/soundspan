@@ -1276,7 +1276,7 @@ test("Library exposes Downloads as a directly selectable personal-collection tab
         await import("../../features/library/components/LibraryTabs");
     const view = await render(
         React.createElement(LibraryTabs, {
-            activeTab: "overview",
+            activeTab: "liked",
         }),
     );
     const downloadsLink = [...view.container.querySelectorAll("a")].find(

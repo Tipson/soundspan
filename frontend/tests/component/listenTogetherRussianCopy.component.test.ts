@@ -110,6 +110,16 @@ test("лобби совместного прослушивания показы�
         assert.match(copy, /\/socket\.io\/listen-together/);
         assert.doesNotMatch(copy, /Untranslated backend group error/);
         assert.doesNotMatch(copy, /Untranslated socket routing error/);
+        assert.ok(
+            container.querySelector('[data-utility-page="listen-together"]'),
+        );
+        assert.ok(container.querySelector('[data-page-header="editorial"]'));
+        assert.ok(container.querySelector('[role="alert"]'));
+        assert.ok(
+            Array.from(container.querySelectorAll("button")).some((button) =>
+                button.className.includes("min-h-11"),
+            ),
+        );
     } finally {
         await React.act(async () => root.unmount());
         container.remove();

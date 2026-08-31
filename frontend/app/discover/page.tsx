@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, Music2 } from "lucide-react";
+import { RefreshCw, Music2, Sparkles } from "lucide-react";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useAudioState, usePlaybackStatus } from "@/lib/audio-context";
 import { useDiscoverData } from "@/features/discover/hooks/useDiscoverData";
 import { useDiscoverActions } from "@/features/discover/hooks/useDiscoverActions";
@@ -37,28 +40,32 @@ export default function DiscoverWeeklyPage() {
     const { discovery, loading: featuresLoading } = useFeatures();
 
     if (featuresLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message="Проверяем доступность подборки…" />;
     }
 
     if (!discovery) {
         return (
-            <div className="p-6">
-                <h1 className="text-xl font-semibold text-white mb-4">
-                    {discoverRu.name}
-                </h1>
-                <div className="bg-surface-raised border border-surface-active rounded-lg p-6">
-                    <p className="text-content-secondary mb-2">
-                        {discoverRu.unavailableTitle}
-                    </p>
-                    <p className="text-sm text-content-muted">
-                        {discoverRu.unavailableHint}
-                    </p>
+            <main
+                data-utility-page="discover"
+                className="min-h-screen px-4 py-6 md:px-8"
+            >
+                <div className="mx-auto w-full max-w-7xl">
+                    <PageHeader
+                        title={discoverRu.name}
+                        subtitle={discoverRu.description}
+                        icon={Sparkles}
+                    />
+                    <div className="rounded-3xl border border-line bg-surface-elevated">
+                        <EmptyState
+                            icon={
+                                <Music2 className="size-7" aria-hidden="true" />
+                            }
+                            title={discoverRu.unavailableTitle}
+                            description={discoverRu.unavailableHint}
+                        />
+                    </div>
                 </div>
-            </div>
+            </main>
         );
     }
 
@@ -184,131 +191,159 @@ function DiscoverWeeklyPageContent() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <GradientSpinner size="md" />
-            </div>
+            <main
+                data-utility-page="discover"
+                className="min-h-screen px-4 py-6 md:px-8"
+            >
+                <div className="mx-auto w-full max-w-7xl">
+                    <DiscoverHero playlist={null} config={null} />
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        className="mt-4 flex min-h-64 flex-col items-center justify-center gap-4 rounded-3xl border border-line bg-surface-elevated text-content-muted"
+                    >
+                        <GradientSpinner size="md" />
+                        <p className="text-sm font-medium">
+                            Загружаем подборку…
+                        </p>
+                    </div>
+                </div>
+            </main>
         );
     }
 
     return (
-        <div className="min-h-screen">
-            <DiscoverHero playlist={displayPlaylist} config={config} />
+        <main
+            data-utility-page="discover"
+            className="min-h-screen px-4 py-6 md:px-8"
+        >
+            <div className="mx-auto w-full max-w-7xl">
+                <DiscoverHero playlist={displayPlaylist} config={config} />
 
-            <DiscoverActionBar
-                playlist={displayPlaylist}
-                config={config}
-                isPlaylistPlaying={isPlaylistPlaying || false}
-                isPlaying={isPlaying}
-                onPlayToggle={
-                    isPlaylistPlaying && isPlaying
-                        ? handleTogglePlay
-                        : handlePlayPlaylist
-                }
-                onGenerate={handleGenerate}
-                onToggleSettings={() => setShowSettings(!showSettings)}
-                onAddToPlaylist={handleAddAllToPlaylist}
-                onShuffle={handleShufflePlaylist}
-                onAddAllToQueue={handleAddAllToQueue}
-                isGenerating={isGenerating}
-                batchStatus={batchStatus}
-            />
-
-            {showSettings && (
-                <DiscoverSettings
+                <DiscoverActionBar
+                    playlist={displayPlaylist}
                     config={config}
-                    onUpdateConfig={setConfig}
-                    onPlaylistCleared={reloadData}
+                    isPlaylistPlaying={isPlaylistPlaying || false}
+                    isPlaying={isPlaying}
+                    onPlayToggle={
+                        isPlaylistPlaying && isPlaying
+                            ? handleTogglePlay
+                            : handlePlayPlaylist
+                    }
+                    onGenerate={handleGenerate}
+                    onToggleSettings={() => setShowSettings(!showSettings)}
+                    onAddToPlaylist={handleAddAllToPlaylist}
+                    onShuffle={handleShufflePlaylist}
+                    onAddAllToQueue={handleAddAllToQueue}
+                    isGenerating={isGenerating}
+                    batchStatus={batchStatus}
                 />
-            )}
 
-            {/* Track Listing */}
-            <div className="px-2 md:px-8 pb-32">
-                {hasPlaylistContent ? (
-                    <div className="space-y-6">
-                        {hasDiscoverTracks ? (
-                            <>
-                                <p className="text-xs text-gray-400">
-                                    {discoverRu.sourceMix}:{" "}
-                                    {providerCounts.local} {discoverRu.local}
-                                    {providerCounts.tidal > 0
-                                        ? ` • ${providerCounts.tidal} TIDAL — ${discoverRu.gapFill}`
-                                        : ""}
-                                    {providerCounts.youtube > 0
-                                        ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
-                                        : ""}
-                                </p>
-                                <TrackList
-                                    tracks={displayPlaylist?.tracks || []}
-                                    isMatching={isMatching}
-                                    currentTrack={currentTrack}
-                                    isPlaying={isPlaying}
-                                    onPlayTrack={handlePlayTrack}
-                                    onTogglePlay={handleTogglePlay}
-                                />
-                            </>
-                        ) : (
-                            <p className="text-sm text-gray-400">
-                                {discoverRu.status.finishingList}
-                            </p>
-                        )}
-
-                        <UnavailableAlbums
-                            unavailable={displayPlaylist?.unavailable || []}
-                            currentPreview={currentPreview}
-                            onTogglePreview={handleTogglePreview}
+                {showSettings && (
+                    <div className="mt-4">
+                        <DiscoverSettings
+                            config={config}
+                            onUpdateConfig={setConfig}
+                            onPlaylistCleared={reloadData}
                         />
-
-                        <HowItWorks />
-                    </div>
-                ) : shouldShowResolvingState ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <GradientSpinner size="md" />
-                        <h3 className="mt-4 text-lg font-medium text-white">
-                            {discoverRu.status.loadingLatest}
-                        </h3>
-                        <p className="mt-1 text-sm text-gray-400 max-w-md">
-                            {discoverRu.status.loadingLatestHint}
-                        </p>
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <div className="w-20 h-20 bg-gradient-to-br from-ai-dark/20 to-yellow-600/20 rounded-full flex items-center justify-center mb-4 shadow-xl border border-white/10">
-                            <Music2 className="w-10 h-10 text-ai-hover" />
-                        </div>
-                        <h3 className="text-lg font-medium text-white mb-1">
-                            {discoverRu.status.emptyTitle}
-                        </h3>
-                        <p className="text-sm text-gray-400 mb-6 max-w-md">
-                            {discoverRu.status.emptyHint}
-                        </p>
-                        <button
-                            onClick={handleGenerate}
-                            disabled={isGenerating}
-                            className={cn(
-                                "flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold transition-all",
-                                isGenerating
-                                    ? "bg-white/5 cursor-not-allowed opacity-50"
-                                    : "bg-ai-dark/20 hover:bg-ai-dark/30 border border-ai/30 hover:scale-105",
-                            )}
-                        >
-                            {isGenerating ? (
-                                <>
-                                    <GradientSpinner size="sm" />
-                                    {batchStatus?.status === "scanning"
-                                        ? discoverRu.status.finalizing
-                                        : batchStatus?.status === "generating"
-                                          ? discoverRu.status.refreshing
-                                          : `${discoverRu.status.working} ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
-                                </>
-                            ) : (
-                                <>
-                                    <RefreshCw className="w-5 h-5" />
-                                    {discoverRu.action.generateNow}
-                                </>
-                            )}
-                        </button>
                     </div>
                 )}
+
+                {/* Track Listing */}
+                <div className="mt-6">
+                    {hasPlaylistContent ? (
+                        <div className="space-y-6">
+                            {hasDiscoverTracks ? (
+                                <>
+                                    <p className="rounded-xl border border-line bg-surface-elevated px-4 py-3 text-xs leading-5 text-content-muted">
+                                        {discoverRu.sourceMix}:{" "}
+                                        {providerCounts.local}{" "}
+                                        {discoverRu.local}
+                                        {providerCounts.tidal > 0
+                                            ? ` • ${providerCounts.tidal} TIDAL — ${discoverRu.gapFill}`
+                                            : ""}
+                                        {providerCounts.youtube > 0
+                                            ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
+                                            : ""}
+                                    </p>
+                                    <TrackList
+                                        tracks={displayPlaylist?.tracks || []}
+                                        isMatching={isMatching}
+                                        currentTrack={currentTrack}
+                                        isPlaying={isPlaying}
+                                        onPlayTrack={handlePlayTrack}
+                                        onTogglePlay={handleTogglePlay}
+                                    />
+                                </>
+                            ) : (
+                                <p className="text-sm text-content-muted">
+                                    {discoverRu.status.finishingList}
+                                </p>
+                            )}
+
+                            <UnavailableAlbums
+                                unavailable={displayPlaylist?.unavailable || []}
+                                currentPreview={currentPreview}
+                                onTogglePreview={handleTogglePreview}
+                            />
+
+                            <HowItWorks />
+                        </div>
+                    ) : shouldShowResolvingState ? (
+                        <div
+                            role="status"
+                            aria-live="polite"
+                            className="flex flex-col items-center justify-center rounded-3xl border border-line bg-surface-elevated px-5 py-16 text-center"
+                        >
+                            <GradientSpinner size="md" />
+                            <h3 className="mt-4 text-lg font-semibold text-content">
+                                {discoverRu.status.loadingLatest}
+                            </h3>
+                            <p className="mt-1 max-w-md text-sm leading-6 text-content-muted">
+                                {discoverRu.status.loadingLatestHint}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="rounded-3xl border border-line bg-surface-elevated">
+                            <EmptyState
+                                icon={
+                                    <Music2
+                                        className="size-7"
+                                        aria-hidden="true"
+                                    />
+                                }
+                                title={discoverRu.status.emptyTitle}
+                                description={discoverRu.status.emptyHint}
+                            >
+                                <Button
+                                    variant="ai"
+                                    onClick={handleGenerate}
+                                    disabled={isGenerating}
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <GradientSpinner size="sm" />
+                                            {batchStatus?.status === "scanning"
+                                                ? discoverRu.status.finalizing
+                                                : batchStatus?.status ===
+                                                    "generating"
+                                                  ? discoverRu.status.refreshing
+                                                  : `${discoverRu.status.working} ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <RefreshCw
+                                                className="size-5"
+                                                aria-hidden="true"
+                                            />
+                                            {discoverRu.action.generateNow}
+                                        </>
+                                    )}
+                                </Button>
+                            </EmptyState>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <PlaylistSelector
@@ -318,6 +353,6 @@ function DiscoverWeeklyPageContent() {
                 isLoading={isAddingToPlaylist}
                 loadingMessage={discoverRu.toast.adding}
             />
-        </div>
+        </main>
     );
 }

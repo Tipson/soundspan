@@ -33,27 +33,37 @@ export function RestartModal({
     return (
         <>
             {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-black/80 z-50 "
+            <button
+                type="button"
+                aria-label={ru.common.close}
+                className="fixed inset-0 z-50 bg-black/80"
                 onClick={onClose}
             />
 
             {/* Modal */}
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div className="bg-[#111] border border-surface-active rounded-lg shadow-2xl max-w-md w-full">
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="restart-modal-title"
+                className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4"
+            >
+                <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-line-strong bg-surface shadow-2xl">
                     {/* Header */}
                     <div className="flex items-center justify-between p-6 border-b border-surface-active">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                                <Check className="w-6 h-6 text-green-500" />
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/20">
+                                <Check className="h-6 w-6 text-success" />
                             </div>
-                            <h2 className="text-xl font-semibold text-white">
+                            <h2
+                                id="restart-modal-title"
+                                className="text-xl font-semibold text-content"
+                            >
                                 Настройки сохранены
                             </h2>
                         </div>
                         <button
                             onClick={onClose}
-                            className="text-gray-400 hover:text-white transition-colors"
+                            className="grid min-h-11 min-w-11 place-items-center rounded-full text-content-muted transition-colors hover:bg-surface-hover hover:text-content"
                             aria-label={ru.common.close}
                             title={ru.common.close}
                         >
@@ -63,7 +73,7 @@ export function RestartModal({
 
                     {/* Content */}
                     <div className="p-6 space-y-4">
-                        <p className="text-gray-300">
+                        <p className="text-content-secondary">
                             Настройки сохранены, а файл
                             <code className="text-ai-hover bg-surface px-1.5 py-0.5 rounded mx-1">
                                 .env
@@ -73,11 +83,11 @@ export function RestartModal({
 
                         {changedServices.length > 0 && (
                             <>
-                                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4">
-                                    <p className="text-sm font-medium text-yellow-500 mb-2">
+                                <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
+                                    <p className="mb-2 text-sm font-medium text-warning">
                                         Требуется перезапуск
                                     </p>
-                                    <p className="text-sm text-gray-300 mb-3">
+                                    <p className="mb-3 text-sm text-content-secondary">
                                         Чтобы применить изменения, перезапустите
                                         следующие сервисы:
                                     </p>
@@ -85,9 +95,9 @@ export function RestartModal({
                                         {changedServices.map((service) => (
                                             <li
                                                 key={service}
-                                                className="text-sm text-gray-300 flex items-center gap-2"
+                                                className="flex items-center gap-2 text-sm text-content-secondary"
                                             >
-                                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                                                <span className="h-1.5 w-1.5 rounded-full bg-warning" />
                                                 {service}
                                             </li>
                                         ))}
@@ -95,7 +105,7 @@ export function RestartModal({
                                 </div>
 
                                 <div>
-                                    <p className="text-sm text-gray-400 mb-2">
+                                    <p className="mb-2 text-sm text-content-muted">
                                         Выполните команду в терминале:
                                     </p>
                                     <div className="relative">
@@ -108,9 +118,9 @@ export function RestartModal({
                                             title="Скопировать в буфер обмена"
                                         >
                                             {copied ? (
-                                                <Check className="w-4 h-4 text-green-500" />
+                                                <Check className="h-4 w-4 text-success" />
                                             ) : (
-                                                <Copy className="w-4 h-4 text-gray-400" />
+                                                <Copy className="h-4 w-4 text-content-muted" />
                                             )}
                                         </button>
                                     </div>
@@ -119,8 +129,8 @@ export function RestartModal({
                         )}
 
                         {changedServices.length === 0 && (
-                            <div className="bg-green-500/10 border border-green-500/30 rounded-md p-4">
-                                <p className="text-sm text-gray-300">
+                            <div className="rounded-xl border border-success/30 bg-success/10 p-4">
+                                <p className="text-sm text-content-secondary">
                                     Перезапуск не требуется: изменения уже
                                     применены.
                                 </p>

@@ -479,7 +479,7 @@ export function UserManagementSection() {
                 </div>
 
                 {/* Connected Users */}
-                <div className="py-4 px-4 bg-[#151515] rounded-lg mb-4 border border-white/5">
+                <div className="mb-4 rounded-xl border border-line bg-surface-elevated px-4 py-4">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-medium text-white">
                             {adminManagementRu.users.connectedNow}

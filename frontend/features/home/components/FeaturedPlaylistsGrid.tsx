@@ -33,12 +33,13 @@ const PlaylistCard = memo(function PlaylistCard({
 
     return (
         <CarouselItem>
-            <div
+            <button
+                type="button"
                 onClick={handleClick}
                 data-tv-card
                 data-tv-card-index={index}
-                tabIndex={0}
-                className="p-3 rounded-md group cursor-pointer hover:bg-white/5 transition-colors"
+                aria-label={playlist.title}
+                className="group w-full rounded-xl p-3 text-left transition-colors hover:bg-surface-hover"
             >
                 <div className="relative aspect-square mb-3 rounded-md overflow-hidden bg-surface-highlight shadow-lg">
                     {playlist.imageUrl ? (
@@ -48,7 +49,7 @@ const PlaylistCard = memo(function PlaylistCard({
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#AD47FF]/30 to-[#AD47FF]/10">
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand/30 to-brand/10">
                             <Music2 className="w-10 h-10 text-gray-400" />
                         </div>
                     )}
@@ -61,7 +62,7 @@ const PlaylistCard = memo(function PlaylistCard({
                         ? `${playlist.trackCount} ${pluralRu(playlist.trackCount, ["трек", "трека", "треков"])}`
                         : (playlist.description ?? "")}
                 </p>
-            </div>
+            </button>
         </CarouselItem>
     );
 });

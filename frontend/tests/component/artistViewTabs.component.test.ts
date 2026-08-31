@@ -26,6 +26,8 @@ test("artist view tabs deep-link every view and preserve provider identity", asy
     assert.match(html, />Треки</);
     assert.match(html, />Альбомы</);
     assert.match(html, />Синглы и EP</);
+    assert.match(html, /data-overflow-cue="horizontal"/);
+    assert.match(html, /min-h-11/);
 });
 
 test("artist view parser falls back to overview for unknown URL values", async () => {

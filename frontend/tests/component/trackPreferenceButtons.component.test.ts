@@ -24,7 +24,7 @@ mock.module("lucide-react", {
         Heart: (props: Record<string, unknown>) =>
             React.createElement("svg", {
                 ...props,
-                "data-icon": "heart-outline",
+                "data-icon": props["data-icon"] ?? "heart-outline",
             }),
         ThumbsDown: (props: Record<string, unknown>) =>
             React.createElement("svg", props),
@@ -89,6 +89,8 @@ test("renders like control without circular chrome", async () => {
     assert.doesNotMatch(html, /data-icon="thumbs-down-outline"/);
     assert.match(html, /h-11 w-11/);
     assert.match(html, /h-6 w-6/);
+    assert.match(html, /rounded-xl/);
+    assert.match(html, /focus-visible:ring-brand/);
     assert.doesNotMatch(html, /rounded-full/);
     assert.doesNotMatch(html, /\bborder\b/);
 });

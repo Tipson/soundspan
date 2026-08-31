@@ -126,10 +126,15 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     {tasteProfileGate}
                     <div
                         data-shell-frame="mobile"
+                        data-shell-direction="spectral-stage"
                         className="mobile-shell-frame h-dvh overflow-hidden"
+                        style={{ paddingBottom: 0 }}
                     >
                         <MediaControlsHandler />
-                        <TopBar isActivityPanelOpen={activityPanel.isOpen} />
+                        <TopBar
+                            isActivityPanelOpen={activityPanel.isOpen}
+                            onActivityPanelToggle={activityPanel.toggle}
+                        />
 
                         {/* Sidebar - renders MobileSidebar for hamburger menu */}
                         <Sidebar />
@@ -151,7 +156,14 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                                 data-shell-canvas="open"
                                 className="mobile-app-stage relative overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
                             >
-                                <div className="mobile-stage-content">
+                                <div
+                                    data-shell-bottom-inset-owner="content"
+                                    className="mobile-stage-content"
+                                    style={{
+                                        paddingBottom:
+                                            "calc(var(--app-mini-player-height) + var(--app-bottom-nav-height) + var(--safe-area-bottom) + 12px)",
+                                    }}
+                                >
                                     {children}
                                 </div>
                             </main>
@@ -180,10 +192,14 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                 {tasteProfileGate}
                 <div
                     data-shell-frame="desktop"
+                    data-shell-direction="spectral-stage"
                     className="desktop-shell-frame h-dvh overflow-hidden"
                 >
                     <MediaControlsHandler />
-                    <TopBar isActivityPanelOpen={activityPanel.isOpen} />
+                    <TopBar
+                        isActivityPanelOpen={activityPanel.isOpen}
+                        onActivityPanelToggle={activityPanel.toggle}
+                    />
                     <div
                         data-shell-workspace="desktop"
                         className="desktop-shell-workspace flex min-h-0 flex-1 gap-0 overflow-hidden"

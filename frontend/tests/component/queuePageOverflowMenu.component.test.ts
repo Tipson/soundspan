@@ -256,6 +256,10 @@ test("Queue page Next Up tracks render TrackOverflowMenu trigger", async () => {
 
     const html = renderToStaticMarkup(React.createElement(QueuePage));
 
+    assert.match(html, /data-consumer-surface="queue"/);
+    assert.match(html, /data-queue-track-surface="open"/);
+    assert.doesNotMatch(html, /data-testid="card"/);
+
     // Should have overflow menu triggers for Now Playing + each Next Up track (1 + 2)
     const triggerMatches = html.match(/aria-haspopup="menu"/g);
     assert.ok(triggerMatches, "Should render overflow menu triggers");
@@ -306,6 +310,16 @@ test("Queue page keeps Move Up/Down and Play buttons alongside overflow menu", a
         html,
         /title="Воспроизвести сейчас"/,
         "Should keep Play now button",
+    );
+    assert.match(
+        html,
+        /data-queue-row-actions="responsive" class="[^"]*\bflex\b[^"]*"/,
+        "Direct queue actions should remain visible on touch layouts",
+    );
+    assert.doesNotMatch(
+        html,
+        /data-queue-row-actions="responsive" class="[^"]*\bhidden\b/,
+        "Direct queue actions should not be hidden on mobile",
     );
 });
 

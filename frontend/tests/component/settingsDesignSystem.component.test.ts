@@ -10,15 +10,31 @@ GlobalRegistrator.register({ url: "https://soundspan.test/settings" });
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-test("settings navigation exposes the current section", async () => {
+test("settings navigation exposes groups and the current section as two levels", async () => {
     const { SettingsSidebar } =
         await import("../../features/settings/components/ui/SettingsSidebar");
     const html = renderToStaticMarkup(
         React.createElement(SettingsSidebar, {
             items: [
-                { id: "account", label: "Account" },
-                { id: "playback", label: "Playback" },
-                { id: "admin", label: "Admin", adminOnly: true },
+                {
+                    id: "account",
+                    label: "Account",
+                    groupId: "profile",
+                    groupLabel: "Profile",
+                },
+                {
+                    id: "playback",
+                    label: "Playback",
+                    groupId: "listening",
+                    groupLabel: "Listening",
+                },
+                {
+                    id: "admin",
+                    label: "Admin",
+                    groupId: "system",
+                    groupLabel: "System",
+                    adminOnly: true,
+                },
             ],
             activeSection: "playback",
             onSectionClick: () => undefined,
@@ -26,8 +42,17 @@ test("settings navigation exposes the current section", async () => {
         }),
     );
 
-    assert.match(html, /aria-label="Разделы настроек"/);
+    assert.match(
+        html,
+        /data-settings-navigation-level="groups"[^>]+aria-label="Группы настроек"/,
+    );
+    assert.match(
+        html,
+        /data-settings-navigation-level="sections"[^>]+aria-label="Разделы настроек"/,
+    );
+    assert.match(html, /aria-current="page"[^>]*>Listening</);
     assert.match(html, /aria-current="location"[^>]*>Playback</);
+    assert.match(html, /min-h-11/);
     assert.doesNotMatch(html, />Admin</);
 });
 
@@ -113,6 +138,8 @@ test("settings layout uses the existing application main landmark", async () => 
     );
 
     assert.doesNotMatch(html, /<main(?:\s|>)/);
+    assert.match(html, /data-settings-layout="two-level"/);
+    assert.doesNotMatch(html, /lg:grid-cols-\[14rem_minmax\(0,1fr\)\]/);
 });
 
 test("settings navigation deep-links sections and restores them without forced motion", async () => {
@@ -139,8 +166,18 @@ test("settings navigation deep-links sections and restores them without forced m
                 SettingsLayout,
                 {
                     sidebarItems: [
-                        { id: "account", label: "Account" },
-                        { id: "playback", label: "Playback" },
+                        {
+                            id: "account",
+                            label: "Account",
+                            groupId: "profile",
+                            groupLabel: "Profile",
+                        },
+                        {
+                            id: "playback",
+                            label: "Playback",
+                            groupId: "listening",
+                            groupLabel: "Listening",
+                        },
                     ],
                     isAdmin: false,
                 } as React.ComponentProps<typeof SettingsLayout>,
@@ -150,8 +187,18 @@ test("settings navigation deep-links sections and restores them without forced m
         );
     });
 
+    const listeningButton = Array.from(
+        container.querySelectorAll<HTMLButtonElement>(
+            '[data-settings-navigation-level="groups"] button',
+        ),
+    ).find((button) => button.textContent === "Listening");
+    assert.ok(listeningButton);
+    await React.act(async () => listeningButton.click());
+
     const playbackButton = Array.from(
-        container.querySelectorAll<HTMLButtonElement>("nav button"),
+        container.querySelectorAll<HTMLButtonElement>(
+            '[data-settings-navigation-level="sections"] button',
+        ),
     ).find((button) => button.textContent === "Playback");
     assert.ok(playbackButton);
     await React.act(async () => playbackButton.click());
@@ -167,8 +214,9 @@ test("settings navigation deep-links sections and restores them without forced m
     );
     assert.deepEqual(scrollCalls.at(-1), { id: "account", behavior: "auto" });
     assert.equal(
-        container.querySelector<HTMLButtonElement>("nav button[aria-current]")
-            ?.textContent,
+        container.querySelector<HTMLButtonElement>(
+            '[data-settings-navigation-level="sections"] button[aria-current]',
+        )?.textContent,
         "Account",
     );
 

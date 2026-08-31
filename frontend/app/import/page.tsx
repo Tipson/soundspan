@@ -21,6 +21,8 @@ import {
 } from "@/lib/i18n/utilityPagesRu";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { formatTime } from "@/utils/formatTime";
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -112,7 +114,7 @@ export function ImportResolutionBadge({
     if (source === "local") {
         return (
             <span
-                className="shrink-0 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded"
+                className="shrink-0 rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-bold text-success"
                 title={importPageRu.localBadge}
             >
                 {importPageRu.localBadge}
@@ -130,7 +132,7 @@ export function ImportResolutionBadge({
 
     return (
         <span
-            className="shrink-0 text-[10px] font-bold bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded"
+            className="shrink-0 rounded bg-error/15 px-1.5 py-0.5 text-[10px] font-bold text-error"
             title={importPageRu.unresolvedBadge}
         >
             {importPageRu.unresolvedBadge}
@@ -148,32 +150,32 @@ export function PreviewTrackResolutionList({
 }) {
     if (tracks.length === 0) {
         return (
-            <div className="p-4 text-sm text-gray-400">
+            <div className="p-4 text-sm text-content-muted">
                 {importPageRu.noTracks}
             </div>
         );
     }
 
     return (
-        <div className="max-h-96 overflow-y-auto divide-y divide-white/5">
+        <div className="max-h-96 divide-y divide-line overflow-y-auto">
             {tracks.map((track, idx) => (
                 <div
                     key={`${track.index}-${track.artist}-${track.title}-${idx}`}
-                    className="px-4 py-3 hover:bg-white/5"
+                    className="px-4 py-3 transition-colors hover:bg-surface-elevated/70 motion-reduce:transition-none"
                 >
                     <div className="flex items-start gap-3">
-                        <span className="text-xs text-gray-400 w-6 text-right pt-0.5">
+                        <span className="w-6 pt-0.5 text-right text-xs tabular-nums text-content-muted">
                             {idx + 1}
                         </span>
                         <div className="flex-1 min-w-0">
-                            <div className="text-sm text-white truncate">
+                            <div className="truncate text-sm text-content">
                                 {track.title}
                             </div>
-                            <div className="text-xs text-gray-400 truncate">
+                            <div className="truncate text-xs text-content-muted">
                                 {track.artist}
                                 {track.album ? ` • ${track.album}` : ""}
                             </div>
-                            <div className="text-[11px] text-gray-400 mt-1">
+                            <div className="mt-1 text-[11px] text-content-muted">
                                 {getResolutionSubtitle(track)}
                             </div>
                         </div>
@@ -181,7 +183,7 @@ export function PreviewTrackResolutionList({
                             <ImportResolutionBadge source={track.source} />
                             {typeof track.duration === "number" &&
                                 track.duration > 0 && (
-                                    <span className="text-[11px] text-gray-400">
+                                    <span className="text-[11px] tabular-nums text-content-muted">
                                         {formatTime(track.duration)}
                                     </span>
                                 )}
@@ -369,57 +371,54 @@ function ImportPageContent() {
         ? result.summary.total - result.summary.unresolved
         : 0;
     return (
-        <div className="min-h-screen relative">
-            <div className="absolute inset-0 pointer-events-none">
-                <div
-                    className="absolute inset-0 bg-linear-to-b from-brand/15 via-blue-900/10 to-transparent"
-                    style={{ height: "35vh" }}
+        <div data-consumer-surface="import" className="min-h-screen bg-surface">
+            <div className="relative mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+                <PageHeader
+                    title={ru.import.playlistTitle}
+                    subtitle={ru.import.servicesOrFile}
+                    icon={Music4}
+                    actions={
+                        <button
+                            type="button"
+                            aria-label={importPageRu.back}
+                            onClick={() => router.back()}
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface-elevated text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                        >
+                            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                    }
                 />
-                <div
-                    className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-brand/8 via-transparent to-transparent"
-                    style={{ height: "25vh" }}
-                />
-            </div>
-
-            <div className="relative max-w-3xl mx-auto px-6 py-6">
-                <div className="flex items-center gap-4 mb-6">
-                    <button
-                        aria-label={importPageRu.back}
-                        onClick={() => router.back()}
-                        className="p-2 hover:bg-white/5 rounded-full transition-colors"
-                    >
-                        <ArrowLeft className="w-5 h-5 text-gray-400" />
-                    </button>
-                    <div>
-                        <h1 className="text-2xl font-bold text-white">
-                            {ru.import.playlistTitle}
-                        </h1>
-                        <p className="text-sm text-gray-400">
-                            {ru.import.servicesOrFile}
-                        </p>
-                    </div>
-                </div>
 
                 {step === "input" && (
-                    <div className="space-y-4">
-                        <div className="flex gap-1 bg-white/5 rounded-lg p-1">
+                    <div className="space-y-6">
+                        <div
+                            role="tablist"
+                            aria-label="Способ импорта"
+                            className="flex gap-1 border-y border-line py-2"
+                        >
                             <button
+                                type="button"
+                                role="tab"
+                                aria-selected={importMode === "url"}
                                 onClick={() => setImportMode("url")}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                                className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                     importMode === "url"
-                                        ? "bg-white/10 text-white"
-                                        : "text-gray-400 hover:text-gray-300"
+                                        ? "bg-surface-hover text-content"
+                                        : "text-content-muted hover:bg-surface-elevated hover:text-content"
                                 }`}
                             >
                                 <Link className="w-4 h-4" />
                                 {ru.import.urlMode}
                             </button>
                             <button
+                                type="button"
+                                role="tab"
+                                aria-selected={importMode === "file"}
                                 onClick={() => setImportMode("file")}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-colors ${
+                                className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                     importMode === "file"
-                                        ? "bg-white/10 text-white"
-                                        : "text-gray-400 hover:text-gray-300"
+                                        ? "bg-surface-hover text-content"
+                                        : "text-content-muted hover:bg-surface-elevated hover:text-content"
                                 }`}
                             >
                                 <FileUp className="w-4 h-4" />
@@ -430,11 +429,15 @@ function ImportPageContent() {
                         {importMode === "url" && (
                             <>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    <label
+                                        htmlFor="playlist-import-url"
+                                        className="mb-2 block text-sm font-medium text-content-secondary"
+                                    >
                                         {ru.import.urlLabel}
                                     </label>
                                     <input
                                         type="text"
+                                        id="playlist-import-url"
                                         value={urlInput}
                                         onChange={(event) =>
                                             setUrlInput(event.target.value)
@@ -442,7 +445,7 @@ function ImportPageContent() {
                                         placeholder={
                                             importPageRu.urlPlaceholder
                                         }
-                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-colors"
+                                        className="min-h-12 w-full rounded-xl border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
                                         onKeyDown={(event) =>
                                             event.key === "Enter" &&
                                             void handleSubmitBackgroundJob(
@@ -450,10 +453,10 @@ function ImportPageContent() {
                                             )
                                         }
                                     />
-                                    <p className="text-xs text-gray-400 mt-2">
+                                    <p className="mt-2 text-xs text-content-muted">
                                         {importPageRu.urlHint}
                                     </p>
-                                    <p className="mt-2 text-xs leading-5 text-gray-400">
+                                    <p className="mt-2 text-xs leading-5 text-content-muted">
                                         {importPageRu.spotifyBoundary}
                                     </p>
                                 </div>
@@ -467,18 +470,18 @@ function ImportPageContent() {
                                         disabled={
                                             isJobSubmitting || !urlInput.trim()
                                         }
-                                        className="w-full py-3 rounded-full font-medium bg-brand text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                                        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                                     >
                                         {isJobSubmitting ? (
                                             <>
-                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
                                                 {ru.import.starting}
                                             </>
                                         ) : (
                                             <>{ru.import.start}</>
                                         )}
                                     </button>
-                                    <p className="text-center text-xs text-gray-400">
+                                    <p className="text-center text-xs text-content-muted">
                                         {ru.import.backgroundHint}
                                     </p>
                                 </div>
@@ -488,26 +491,27 @@ function ImportPageContent() {
                         {importMode === "file" && (
                             <>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    <label className="mb-2 block text-sm font-medium text-content-secondary">
                                         {ru.import.m3uLabel}
                                     </label>
-                                    <div
+                                    <button
+                                        type="button"
                                         onClick={() =>
                                             fileInputRef.current?.click()
                                         }
-                                        className="w-full bg-white/5 border border-dashed border-white/20 rounded-lg px-4 py-8 text-center cursor-pointer hover:border-white/40 hover:bg-white/[0.07] transition-colors"
+                                        className="min-h-32 w-full cursor-pointer rounded-xl border border-dashed border-line-strong bg-surface-elevated px-4 py-8 text-center transition-colors hover:border-brand/50 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                     >
-                                        <FileUp className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                        <FileUp className="mx-auto mb-2 h-8 w-8 text-content-muted" />
                                         {m3uFileName ? (
-                                            <p className="text-sm text-white">
+                                            <p className="text-sm text-content">
                                                 {m3uFileName}
                                             </p>
                                         ) : (
-                                            <p className="text-sm text-gray-400">
+                                            <p className="text-sm text-content-muted">
                                                 {ru.import.selectM3u}
                                             </p>
                                         )}
-                                    </div>
+                                    </button>
                                     <input
                                         ref={fileInputRef}
                                         type="file"
@@ -515,17 +519,21 @@ function ImportPageContent() {
                                         className="hidden"
                                         onChange={handleM3uFileSelect}
                                     />
-                                    <p className="text-xs text-gray-400 mt-2">
+                                    <p className="mt-2 text-xs text-content-muted">
                                         {importPageRu.m3uMatchHint}
                                     </p>
                                 </div>
                                 {m3uContent && (
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        <label
+                                            htmlFor="m3u-playlist-name"
+                                            className="mb-2 block text-sm font-medium text-content-secondary"
+                                        >
                                             {ru.import.playlistName}
                                         </label>
                                         <input
                                             type="text"
+                                            id="m3u-playlist-name"
                                             value={m3uPlaylistName}
                                             onChange={(event) =>
                                                 setM3uPlaylistName(
@@ -536,18 +544,18 @@ function ImportPageContent() {
                                                 ru.import
                                                     .playlistNamePlaceholder
                                             }
-                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand transition-colors"
+                                            className="min-h-12 w-full rounded-xl border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
                                         />
                                     </div>
                                 )}
                                 <button
                                     onClick={() => void fetchM3uPreview()}
                                     disabled={isPreviewLoading || !m3uContent}
-                                    className="w-full py-3 rounded-full font-medium bg-brand text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                                 >
                                     {isPreviewLoading ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
                                             {ru.import.matching}
                                         </>
                                     ) : (
@@ -560,16 +568,16 @@ function ImportPageContent() {
                 )}
 
                 {step === "preview" && preview && (
-                    <div className="space-y-4">
-                        <div className="flex items-start gap-4 p-4 bg-white/5 rounded-lg">
-                            <div className="w-12 h-12 rounded-md bg-white/10 flex items-center justify-center">
-                                <Music4 className="w-6 h-6 text-gray-300" />
+                    <div className="space-y-6">
+                        <div className="flex items-start gap-4 border-y border-line py-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-elevated">
+                                <Music4 className="h-6 w-6 text-content-secondary" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <h2 className="text-lg font-bold text-white truncate">
+                                <h2 className="truncate text-lg font-bold text-content">
                                     {preview.playlistName}
                                 </h2>
-                                <p className="text-sm text-gray-400">
+                                <p className="text-sm text-content-muted">
                                     {formatImportSongsFound(
                                         preview.summary.total,
                                     )}
@@ -577,90 +585,94 @@ function ImportPageContent() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                            <div className="text-center py-3 bg-white/5 rounded-lg">
-                                <div className="text-xl font-bold text-white">
+                        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-5">
+                            <div className="bg-surface px-3 py-4 text-center">
+                                <div className="text-xl font-bold tabular-nums text-content">
                                     {preview.summary.total}
                                 </div>
-                                <div className="text-xs text-gray-400">
+                                <div className="text-xs text-content-muted">
                                     {ru.import.total}
                                 </div>
                             </div>
-                            <div className="text-center py-3 bg-emerald-500/10 rounded-lg">
-                                <div className="text-xl font-bold text-emerald-300">
+                            <div className="bg-surface px-3 py-4 text-center">
+                                <div className="text-xl font-bold tabular-nums text-success">
                                     {preview.summary.local}
                                 </div>
-                                <div className="text-xs text-gray-400">
+                                <div className="text-xs text-content-muted">
                                     {importPageRu.localSummary}
                                 </div>
                             </div>
-                            <div className="text-center py-3 bg-red-500/10 rounded-lg">
-                                <div className="text-xl font-bold text-red-300">
+                            <div className="bg-surface px-3 py-4 text-center">
+                                <div className="text-xl font-bold tabular-nums text-content">
                                     {preview.summary.youtube}
                                 </div>
-                                <div className="text-xs text-gray-400">
+                                <div className="text-xs text-content-muted">
                                     YouTube
                                 </div>
                             </div>
-                            <div className="text-center py-3 bg-[#00BFFF]/10 rounded-lg">
-                                <div className="text-xl font-bold text-[#00BFFF]">
+                            <div className="bg-surface px-3 py-4 text-center">
+                                <div className="text-xl font-bold tabular-nums text-brand-light">
                                     {preview.summary.tidal}
                                 </div>
-                                <div className="text-xs text-gray-400">
+                                <div className="text-xs text-content-muted">
                                     TIDAL
                                 </div>
                             </div>
-                            <div className="text-center py-3 bg-red-500/10 rounded-lg">
-                                <div className="text-xl font-bold text-red-400">
+                            <div className="bg-surface px-3 py-4 text-center">
+                                <div className="text-xl font-bold tabular-nums text-error">
                                     {preview.summary.unresolved}
                                 </div>
-                                <div className="text-xs text-gray-400">
+                                <div className="text-xs text-content-muted">
                                     {ru.import.unresolved}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="bg-white/5 rounded-lg overflow-hidden">
-                            <div className="px-4 py-3 border-b border-white/5">
-                                <h3 className="text-sm font-medium text-white">
+                        <section className="overflow-hidden border-y border-line">
+                            <div className="border-b border-line px-4 py-3">
+                                <h3 className="text-sm font-semibold text-content">
                                     {ru.import.resolutionPreview}
                                 </h3>
                             </div>
                             <PreviewTrackResolutionList
                                 tracks={preview.resolved}
                             />
-                        </div>
+                        </section>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <label
+                                htmlFor="resolved-playlist-name"
+                                className="mb-2 block text-sm font-medium text-content-secondary"
+                            >
                                 {ru.import.playlistName}
                             </label>
                             <input
                                 type="text"
+                                id="resolved-playlist-name"
                                 value={playlistName}
                                 onChange={(event) =>
                                     setPlaylistName(event.target.value)
                                 }
                                 placeholder={ru.import.playlistNamePlaceholder}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1DB954]/50 focus:border-[#1DB954] transition-colors"
+                                className="min-h-12 w-full rounded-xl border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
                             />
                         </div>
 
                         <div className="flex items-center gap-3 pt-2">
                             <button
                                 onClick={returnToInput}
-                                className="px-6 py-3 rounded-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+                                className="min-h-12 rounded-xl px-6 py-3 text-sm font-semibold text-content-muted transition-colors hover:bg-surface-elevated hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             >
                                 {ru.import.back}
                             </button>
                             <button
                                 onClick={() => void handleExecute()}
                                 disabled={isExecuting || importableCount <= 0}
-                                className="flex-1 py-3 rounded-full font-medium bg-[#1DB954] text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                                className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                             >
                                 {isExecuting ? (
                                     <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
                                         {ru.import.importing}
                                     </>
                                 ) : importableCount > 0 ? (
@@ -674,31 +686,34 @@ function ImportPageContent() {
                 )}
 
                 {step === "executing" && (
-                    <div className="text-center py-12">
-                        <Loader2 className="w-10 h-10 text-[#1DB954] animate-spin mx-auto mb-4" />
-                        <h2 className="text-lg font-bold text-white mb-1">
+                    <div
+                        data-consumer-state="loading"
+                        className="border-y border-line py-14 text-center"
+                    >
+                        <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-brand motion-reduce:animate-none" />
+                        <h2 className="mb-1 text-lg font-bold text-content">
                             {ru.import.creatingPlaylist}
                         </h2>
-                        <p className="text-sm text-gray-400">
+                        <p className="text-sm text-content-muted">
                             {ru.import.buildingPlaylist}
                         </p>
                     </div>
                 )}
 
                 {step === "complete" && result && (
-                    <div className="text-center py-12">
-                        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-[#1DB954]">
-                            <Check className="w-7 h-7 text-black" />
+                    <div className="border-y border-line py-14 text-center">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success/15">
+                            <Check className="h-7 w-7 text-success" />
                         </div>
-                        <h2 className="text-lg font-bold text-white mb-1">
+                        <h2 className="mb-1 text-lg font-bold text-content">
                             {ru.import.complete}
                         </h2>
-                        <p className="text-sm text-gray-400">
+                        <p className="text-sm text-content-muted">
                             {ru.import.added} {completedImportableCount}{" "}
                             {ru.import.toNewPlaylist}
                         </p>
                         {result.summary.unresolved > 0 && (
-                            <p className="text-sm text-amber-400 mt-2">
+                            <p className="mt-2 text-sm text-warning">
                                 {formatImportSkipped(result.summary.unresolved)}
                             </p>
                         )}
@@ -706,7 +721,7 @@ function ImportPageContent() {
                         <div className="flex items-center justify-center gap-3 mt-6">
                             <button
                                 onClick={resetFlow}
-                                className="px-5 py-2.5 rounded-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+                                className="min-h-11 rounded-xl px-5 py-2.5 text-sm font-semibold text-content-muted transition-colors hover:bg-surface-elevated hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             >
                                 {ru.import.importAnother}
                             </button>
@@ -716,7 +731,7 @@ function ImportPageContent() {
                                         `/playlist/${result.playlistId}`,
                                     )
                                 }
-                                className="px-5 py-2.5 rounded-full text-sm font-medium bg-[#1DB954] text-black hover:brightness-110 transition-all"
+                                className="min-h-11 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             >
                                 {ru.import.viewPlaylist}
                             </button>
@@ -733,13 +748,7 @@ function ImportPageContent() {
  */
 export default function ImportPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="min-h-screen flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-brand animate-spin" />
-                </div>
-            }
-        >
+        <Suspense fallback={<LoadingScreen message="Открываем импорт…" />}>
             <ImportPageContent />
         </Suspense>
     );

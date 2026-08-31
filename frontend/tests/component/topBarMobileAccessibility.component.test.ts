@@ -59,7 +59,7 @@ mock.module("@/utils/cn", {
     },
 });
 
-test("mobile top bar keeps only menu and persistent search at 320px", async () => {
+test("mobile top bar keeps menu, identity, and search action at 320px", async () => {
     const { TopBar } = await import("../../components/layout/TopBar");
     const html = renderToStaticMarkup(React.createElement(TopBar));
 
@@ -72,7 +72,7 @@ test("mobile top bar keeps only menu and persistent search at 320px", async () =
         html,
         /padding-right:calc\(0\.75rem \+ var\(--safe-area-right\)\)/,
     );
-    for (const label of ["Открыть меню"]) {
+    for (const label of ["Открыть меню", "Поиск"]) {
         const control = html.match(
             new RegExp(`<(?:button|a)[^>]*aria-label="${label}"[^>]*>`),
         )?.[0];
@@ -82,10 +82,24 @@ test("mobile top bar keeps only menu and persistent search at 320px", async () =
     assert.doesNotMatch(html, /aria-label="Назад"/);
     assert.doesNotMatch(html, /aria-label="Главная"/);
     assert.doesNotMatch(html, /aria-label="Уведомления"/);
+    assert.match(html, /href="\/search"/);
+    assert.match(html, /data-shell-search="action"/);
+    assert.doesNotMatch(html, /placeholder="Поиск музыки"/);
+    assert.match(html, /soundspan/i);
+    assert.match(html, /data-shell-topbar="mobile"/);
+    assert.match(html, /data-shell-spectral-seam="true"/);
+});
+
+test("mobile search destination expands into the focused result field", async () => {
+    state.pathname = "/search";
+
+    const { TopBar } = await import("../../components/layout/TopBar");
+    const html = renderToStaticMarkup(React.createElement(TopBar));
+
+    assert.match(html, /data-shell-search="canvas"/);
     assert.match(html, /aria-label="Поиск"[^>]*class="[^"]*h-11/);
     assert.match(html, /placeholder="Поиск музыки"/);
-    assert.match(html, /data-shell-topbar="mobile"/);
-    assert.match(html, /data-shell-search="persistent"/);
+    assert.doesNotMatch(html, /data-shell-search="action"/);
 });
 
 test("desktop top bar keeps global search centered in the music shell", async () => {
@@ -97,8 +111,9 @@ test("desktop top bar keeps global search centered in the music shell", async ()
     assert.match(html, /data-shell-topbar="desktop"/);
     assert.match(html, /placeholder="Что хотите послушать\?"/);
     assert.match(html, /max-w-\[720px\]/);
-    assert.match(html, /w-\[224px\]/);
+    assert.match(html, /w-\[216px\]/);
     assert.match(html, /aria-label="Назад"/);
     assert.match(html, />\/<\/kbd>/);
     assert.match(html, /data-shell-search="persistent"/);
+    assert.match(html, /data-shell-spectral-seam="true"/);
 });

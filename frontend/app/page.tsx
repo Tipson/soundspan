@@ -46,18 +46,23 @@ export default function HomePage() {
     return (
         <div
             data-home-layout="music-canvas"
-            className="relative min-h-screen overflow-x-clip bg-transparent pb-40 pt-4 sm:pb-32 sm:pt-6"
+            className="relative min-h-screen overflow-x-clip bg-transparent pt-3 sm:pt-5"
         >
             <div className="relative mx-auto w-full max-w-[1720px] px-4 sm:px-7 lg:px-10 2xl:px-12">
-                <div className="space-y-8 sm:space-y-10">
-                    <header className="max-w-3xl pt-1 sm:pt-2">
+                <div className="space-y-7 sm:space-y-9">
+                    <header className="max-w-3xl pt-1">
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-content-muted">
                             {ru.nav.home}
                         </p>
-                        <h1 className="mt-1 text-[clamp(2rem,4vw,3.5rem)] font-black leading-[0.98] tracking-[-0.045em] text-content">
+                        <h1 className="mt-1 text-[clamp(1.75rem,3vw,2.5rem)] font-black leading-tight tracking-[-0.04em] text-content">
                             {ru.home.greeting}
                         </h1>
                     </header>
+
+                    <HomeWaveHero
+                        personalizedFeed={personalizedFeed}
+                        isLoading={isPersonalizedLoading}
+                    />
 
                     {isPersonalizedLoading && !personalizedFeed && (
                         <section
@@ -87,11 +92,6 @@ export default function HomePage() {
                             tracks={personalizedFeed.shelves.listenAgain}
                         />
                     )}
-
-                    <HomeWaveHero
-                        personalizedFeed={personalizedFeed}
-                        isLoading={isPersonalizedLoading}
-                    />
 
                     <HomeMadeForYou
                         discoverWeekly={discoverWeekly}

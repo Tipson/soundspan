@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/utils/formatTime";
 import { useAuth } from "@/lib/auth-context";
@@ -16,15 +18,7 @@ import {
     useAudioControls,
 } from "@/lib/audio-context";
 import { useToast } from "@/lib/toast-context";
-import {
-    ArrowLeft,
-    Book,
-    Clock,
-    Play,
-    Pause,
-    CheckCircle,
-    Loader2,
-} from "lucide-react";
+import { ArrowLeft, Book, Clock, Play, Pause, CheckCircle } from "lucide-react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 
 interface Audiobook {
@@ -89,17 +83,24 @@ export default function SeriesDetailPage() {
     };
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <Loader2 className="w-8 h-8 text-ai animate-spin" />
-            </div>
-        );
+        return <LoadingScreen message="Загружаем цикл аудиокниг…" />;
     }
 
     if (books.length === 0) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">В этом цикле нет книг</p>
+            <div
+                data-routed-surface="audiobook-series"
+                className="min-h-screen bg-surface px-4 py-8"
+            >
+                <EmptyState
+                    icon={<Book />}
+                    title="В этом цикле нет книг"
+                    description="Вернитесь в каталог и выберите другой цикл."
+                    action={{
+                        label: "К аудиокнигам",
+                        onClick: () => router.push("/audiobooks"),
+                    }}
+                />
             </div>
         );
     }
@@ -110,84 +111,72 @@ export default function SeriesDetailPage() {
     const totalDuration = books.reduce((sum, book) => sum + book.duration, 0);
 
     return (
-        <div className="min-h-screen bg-black">
-            {/* Hero Section */}
-            <div className="relative bg-gradient-to-b from-blue-900/30 to-transparent pb-8">
-                <div className="max-w-7xl mx-auto px-8 py-12">
-                    <div className="flex flex-col md:flex-row gap-8 items-start">
-                        {/* Series Cover */}
-                        <div className="relative w-64 h-64 flex-shrink-0 rounded-lg overflow-hidden shadow-2xl bg-surface-elevated">
-                            {firstBook.coverUrl &&
-                            getCoverUrl(firstBook.coverUrl, 500) ? (
-                                <Image
-                                    src={getCoverUrl(firstBook.coverUrl, 500)!}
-                                    alt={seriesName}
-                                    fill
-                                    sizes="256px"
-                                    className="object-cover"
-                                    unoptimized
-                                />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                    <Book className="w-24 h-24 text-gray-400" />
-                                </div>
-                            )}
-                        </div>
+        <div
+            data-routed-surface="audiobook-series"
+            className="min-h-screen bg-surface"
+        >
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+                <PageHeader
+                    title={seriesName}
+                    subtitle={`${author} · ${books.length} ${
+                        books.length === 1
+                            ? "книга"
+                            : books.length >= 2 && books.length <= 4
+                              ? "книги"
+                              : "книг"
+                    } · ${formatDuration(totalDuration)}`}
+                    icon={Book}
+                    actions={
+                        <Button
+                            variant="ghost"
+                            onClick={() => router.back()}
+                            className="min-h-11"
+                        >
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Назад
+                        </Button>
+                    }
+                />
 
-                        {/* Series Info */}
-                        <div className="flex-1">
-                            <div className="text-sm font-bold text-white/90 mb-2">
-                                ЦИКЛ
+                <section className="mb-10 flex flex-col gap-6 border-y border-line py-6 sm:flex-row sm:items-center">
+                    <div className="relative aspect-square w-40 flex-shrink-0 overflow-hidden rounded-xl bg-surface-elevated shadow-2xl shadow-black/20 sm:w-52">
+                        {firstBook.coverUrl &&
+                        getCoverUrl(firstBook.coverUrl, 500) ? (
+                            <Image
+                                src={getCoverUrl(firstBook.coverUrl, 500)!}
+                                alt={seriesName}
+                                fill
+                                sizes="(max-width: 640px) 160px, 208px"
+                                className="object-cover"
+                                unoptimized
+                            />
+                        ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                                <Book className="h-20 w-20 text-content-muted" />
                             </div>
-                            <h1 className="text-5xl md:text-7xl font-bold text-white mb-6">
-                                {seriesName}
-                            </h1>
-
-                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-300 mb-6">
-                                <span className="font-semibold">{author}</span>
-                                <span>•</span>
-                                <span>
-                                    {books.length}{" "}
-                                    {books.length === 1
-                                        ? "книга"
-                                        : books.length >= 2 && books.length <= 4
-                                          ? "книги"
-                                          : "книг"}
-                                </span>
-                                <span>•</span>
-                                <span>{formatDuration(totalDuration)}</span>
-                            </div>
-
-                            {genres.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-6">
-                                    {genres.slice(0, 5).map((genre) => (
-                                        <Badge key={genre} variant="default">
-                                            {genre}
-                                        </Badge>
-                                    ))}
-                                </div>
-                            )}
-
-                            <Button
-                                variant="ghost"
-                                onClick={() => router.back()}
-                                className="mb-6"
-                            >
-                                <ArrowLeft className="w-4 h-4 mr-2" />
-                                Назад
-                            </Button>
-                        </div>
+                        )}
                     </div>
-                </div>
-            </div>
+                    <div className="min-w-0 flex-1">
+                        <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-content-muted">
+                            Цикл аудиокниг
+                        </p>
+                        {genres.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                                {genres.slice(0, 5).map((genre) => (
+                                    <Badge key={genre} variant="default">
+                                        {genre}
+                                    </Badge>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </section>
 
-            {/* Books List */}
-            <div className="max-w-7xl mx-auto px-8 pb-24">
-                <h2 className="text-2xl font-bold text-white mb-6">
+                <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
                     Книги цикла
                 </h2>
 
-                <div className="space-y-2">
+                <div className="divide-y divide-line border-y border-line">
                     {books.map((book, index) => {
                         const isCurrentBook =
                             currentAudiobook?.id === book.id &&
@@ -195,24 +184,24 @@ export default function SeriesDetailPage() {
                         const isBookPlaying = isCurrentBook && isPlaying;
 
                         return (
-                            <Card
+                            <div
                                 key={book.id}
-                                className="p-4 hover:bg-surface-elevated transition-colors group"
+                                className="group px-1 py-4 transition-colors hover:bg-surface-elevated/60 motion-reduce:transition-none sm:px-3"
                             >
-                                <div className="flex items-center gap-4">
+                                <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                                     {/* Book Number */}
                                     <div className="w-8 text-center">
                                         {isBookPlaying ? (
                                             <div className="flex items-center justify-center">
                                                 <div className="w-4 h-4 flex items-center justify-center">
                                                     <div className="grid grid-cols-2 gap-0.5">
-                                                        <div className="w-1 h-3 bg-ai animate-pulse" />
-                                                        <div className="w-1 h-3 bg-ai animate-pulse delay-75" />
+                                                        <div className="h-3 w-1 animate-pulse bg-brand motion-reduce:animate-none" />
+                                                        <div className="h-3 w-1 animate-pulse bg-brand delay-75 motion-reduce:animate-none" />
                                                     </div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <span className="text-gray-400 font-medium">
+                                            <span className="font-medium text-content-muted">
                                                 {book.series?.sequence ||
                                                     index + 1}
                                             </span>
@@ -239,7 +228,7 @@ export default function SeriesDetailPage() {
                                                 />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center">
-                                                    <Book className="w-6 h-6 text-gray-400" />
+                                                    <Book className="h-6 w-6 text-content-muted" />
                                                 </div>
                                             )}
                                         </div>
@@ -250,29 +239,29 @@ export default function SeriesDetailPage() {
                                         href={`/audiobooks/${book.id}`}
                                         className="flex-1 min-w-0 cursor-pointer"
                                     >
-                                        <h3 className="text-white font-medium truncate hover:underline">
+                                        <h3 className="truncate font-medium text-content hover:underline">
                                             {book.title}
                                         </h3>
-                                        <p className="text-sm text-gray-400 truncate">
+                                        <p className="truncate text-sm text-content-muted">
                                             {book.narrator || book.author}
                                         </p>
                                     </Link>
 
                                     {/* Progress/Status */}
                                     {book.progress?.isFinished ? (
-                                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                                        <CheckCircle className="h-5 w-5 flex-shrink-0 text-success" />
                                     ) : book.progress &&
                                       book.progress.progress > 0 ? (
                                         <div className="flex items-center gap-2 flex-shrink-0">
-                                            <div className="w-24 h-1 bg-surface-elevated rounded-full overflow-hidden">
+                                            <div className="h-1 w-24 overflow-hidden rounded-full bg-surface-elevated">
                                                 <div
-                                                    className="h-full bg-ai"
+                                                    className="h-full bg-brand"
                                                     style={{
                                                         width: `${book.progress.progress}%`,
                                                     }}
                                                 />
                                             </div>
-                                            <span className="text-xs text-gray-400">
+                                            <span className="text-xs text-content-muted">
                                                 {Math.round(
                                                     book.progress.progress,
                                                 )}
@@ -282,7 +271,7 @@ export default function SeriesDetailPage() {
                                     ) : null}
 
                                     {/* Duration */}
-                                    <div className="flex items-center gap-2 text-sm text-gray-400 flex-shrink-0">
+                                    <div className="hidden flex-shrink-0 items-center gap-2 text-sm text-content-muted md:flex">
                                         <Clock className="w-4 h-4" />
                                         {formatDuration(book.duration)}
                                     </div>
@@ -304,6 +293,11 @@ export default function SeriesDetailPage() {
                                             }
                                         }}
                                         className="flex-shrink-0"
+                                        aria-label={
+                                            isBookPlaying
+                                                ? `Пауза: ${book.title}`
+                                                : `Слушать: ${book.title}`
+                                        }
                                     >
                                         {isBookPlaying ? (
                                             <Pause className="w-4 h-4" />
@@ -312,7 +306,7 @@ export default function SeriesDetailPage() {
                                         )}
                                     </Button>
                                 </div>
-                            </Card>
+                            </div>
                         );
                     })}
                 </div>

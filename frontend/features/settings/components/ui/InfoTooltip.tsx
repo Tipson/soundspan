@@ -20,14 +20,18 @@ export function InfoTooltip({ text }: InfoTooltipProps) {
                 onMouseEnter={() => setShowTooltip(true)}
                 onMouseLeave={() => setShowTooltip(false)}
                 onClick={() => setShowTooltip((current) => !current)}
-                className="inline-flex items-center rounded p-0.5 text-gray-400 hover:text-white transition-colors"
+                aria-expanded={showTooltip}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 aria-label="Подробнее"
                 title="Подробнее"
             >
-                <Info className="h-3.5 w-3.5" />
+                <Info className="h-4 w-4" />
             </button>
             {showTooltip && (
-                <span className="absolute left-0 top-full z-30 mt-1 w-72 rounded-md border border-white/15 bg-surface-overlay p-2 text-[11px] leading-relaxed text-gray-300 shadow-2xl">
+                <span
+                    role="tooltip"
+                    className="absolute left-0 top-full z-30 mt-1 w-72 rounded-xl border border-line bg-surface-overlay p-3 text-xs leading-5 text-content-secondary shadow-2xl"
+                >
                     {text}
                 </span>
             )}

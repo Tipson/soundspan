@@ -43,6 +43,8 @@ import { ru } from "@/lib/i18n/ru";
 
 type SearchSectionView = Exclude<SearchResultView, "all"> | null;
 
+const POPULAR_TRACKS_LABEL = "Популярные треки";
+
 /** Render one music-first search with entity-scoped result views. */
 export default function SearchPage() {
     const searchParams = useSearchParams();
@@ -256,10 +258,26 @@ export default function SearchPage() {
 
     const tracksSection =
         hasSearched && showTracksView && primarySongsSurface !== "empty" ? (
-            <section className="min-w-0 rounded-[1.5rem] border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
+            <section
+                data-search-tracks-surface="open"
+                aria-label={
+                    sectionView === null
+                        ? POPULAR_TRACKS_LABEL
+                        : ru.search.tracks
+                }
+                className={
+                    sectionView === null
+                        ? "min-w-0 border-t border-white/[0.08] pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0"
+                        : "min-w-0"
+                }
+            >
                 {primarySongsSurface === "soulseek" ? null : (
                     <SearchSectionHeader
-                        title={ru.search.tracks}
+                        title={
+                            sectionView === null
+                                ? POPULAR_TRACKS_LABEL
+                                : ru.search.tracks
+                        }
                         description={
                             sectionView === null
                                 ? ru.search.popularMatches
@@ -286,9 +304,10 @@ export default function SearchPage() {
                         {isTracksView &&
                         (hasNextLibraryTracks ||
                             canRequestMoreDiscoverTracks) ? (
-                            <div className="mt-4 flex justify-center">
+                            <div className="mt-5 flex flex-col items-center gap-2 border-t border-white/[0.07] pt-5">
                                 <button
                                     type="button"
+                                    aria-label="Загрузить следующую часть каталога треков"
                                     onClick={() => {
                                         if (hasNextLibraryTracks) {
                                             void fetchNextLibraryTracks();
@@ -307,7 +326,7 @@ export default function SearchPage() {
                                         isFetchingNextLibraryTracks ||
                                         isDiscoverSearching
                                     }
-                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
+                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition duration-200 hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none"
                                 >
                                     {isFetchingNextLibraryTracks ||
                                     isDiscoverSearching
@@ -328,7 +347,7 @@ export default function SearchPage() {
                         {[1, 2, 3].map((index) => (
                             <div
                                 key={index}
-                                className="flex animate-pulse items-center gap-4 rounded-lg bg-white/5 p-3"
+                                className="flex animate-pulse items-center gap-4 border-b border-white/[0.06] p-3 motion-reduce:animate-none"
                             >
                                 <div className="h-10 w-10 rounded bg-white/10" />
                                 <div className="flex-1 space-y-2">
@@ -344,17 +363,19 @@ export default function SearchPage() {
 
     const topResult =
         hasSearched && sectionView === null && hasTopResult ? (
-            <TopResult
-                libraryArtist={exactLibraryTopArtist}
-                discoveryArtist={exactDiscoveryTopArtist}
-                preferDiscovery={shouldPreferDiscoveryTopResult}
-            />
+            <div data-search-primary-result="artist" className="min-w-0">
+                <TopResult
+                    libraryArtist={exactLibraryTopArtist}
+                    discoveryArtist={exactDiscoveryTopArtist}
+                    preferDiscovery={shouldPreferDiscoveryTopResult}
+                />
+            </div>
         ) : null;
 
     return (
         <div
             data-search-results-canvas="true"
-            className="relative mx-auto min-h-full max-w-[1520px] overflow-x-clip px-3 pb-40 pt-3 sm:px-6 sm:pb-32 sm:pt-5 lg:px-8"
+            className="relative mx-auto min-h-full max-w-[1520px] overflow-x-clip px-3 pt-3 sm:px-6 sm:pt-5 lg:px-8"
         >
             <div
                 aria-hidden="true"
@@ -445,7 +466,7 @@ export default function SearchPage() {
                 ) : null}
 
                 {showPrimaryLoadingState ? (
-                    <div className="relative z-10 flex min-h-[18rem] flex-col items-center justify-center rounded-[1.5rem] border border-white/[0.08] bg-white/[0.025] py-16">
+                    <div className="relative z-10 flex min-h-[18rem] flex-col items-center justify-center border-y border-white/[0.08] py-16">
                         <span
                             aria-hidden="true"
                             className="mb-4 h-12 w-12 animate-spin rounded-full border-[3px] border-white/10 border-t-brand motion-reduce:animate-none"
@@ -461,7 +482,7 @@ export default function SearchPage() {
                 {topResult && tracksSection ? (
                     <div
                         data-search-primary-grid="true"
-                        className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(17rem,0.85fr)_minmax(0,1.35fr)]"
+                        className="grid grid-cols-1 items-start gap-7 lg:grid-cols-[minmax(17rem,0.82fr)_minmax(0,1.45fr)] lg:gap-8"
                     >
                         {topResult}
                         {tracksSection}
@@ -543,7 +564,7 @@ export default function SearchPage() {
                 !ytPlaylistInfo ? (
                     <section
                         aria-labelledby="search-no-results-title"
-                        className="flex min-h-[22rem] flex-col items-center justify-center rounded-[1.5rem] border border-white/[0.08] bg-white/[0.025] px-6 py-16 text-center"
+                        className="flex min-h-[22rem] flex-col items-center justify-center border-y border-white/[0.08] px-6 py-16 text-center"
                     >
                         <span className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-white/[0.05] text-content-muted">
                             <SearchIcon

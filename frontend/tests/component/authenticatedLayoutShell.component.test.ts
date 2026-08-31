@@ -120,6 +120,7 @@ test("desktop shell exposes one open canvas instead of a framed content card", a
     );
 
     assert.match(html, /data-shell-frame="desktop"/);
+    assert.match(html, /data-shell-direction="spectral-stage"/);
     assert.match(html, /data-shell-workspace="desktop"/);
     assert.match(html, /data-shell-surface="content"/);
     assert.match(html, /data-shell-canvas="open"/);
@@ -143,6 +144,7 @@ test("mobile shell keeps safe chrome around an unframed content canvas", async (
     );
 
     assert.match(html, /data-shell-frame="mobile"/);
+    assert.match(html, /data-shell-direction="spectral-stage"/);
     assert.match(html, /data-shell-surface="content"/);
     assert.match(html, /data-shell-canvas="open"/);
     assert.match(html, /data-marker="topbar"/);
@@ -154,4 +156,41 @@ test("mobile shell keeps safe chrome around an unframed content canvas", async (
     );
     assert.match(html, /mobile-app-stage/);
     assert.doesNotMatch(html, /mobile-app-stage[^\"]*rounded-/);
+    assert.equal(
+        (html.match(/data-shell-bottom-inset-owner=/g) ?? []).length,
+        1,
+    );
+    const shellFrame = html.match(
+        /<div[^>]*data-shell-frame="mobile"[^>]*>/,
+    )?.[0];
+    assert.ok(shellFrame);
+    assert.match(shellFrame, /padding-bottom:0/);
+    const contentInset = html.match(
+        /<div[^>]*data-shell-bottom-inset-owner="content"[^>]*>/,
+    )?.[0];
+    assert.ok(contentInset);
+    assert.match(
+        contentInset,
+        /padding-bottom:calc\(var\(--app-mini-player-height\) \+ var\(--app-bottom-nav-height\) \+ var\(--safe-area-bottom\) \+ 12px\)/,
+    );
+});
+
+test("tablet shell reuses the single mobile bottom inset owner", async () => {
+    state.isTablet = true;
+
+    const { AuthenticatedLayout } =
+        await import("../../components/layout/AuthenticatedLayout");
+    const html = renderToStaticMarkup(
+        React.createElement(AuthenticatedLayout, null, "music-content"),
+    );
+
+    assert.match(html, /data-shell-frame="mobile"/);
+    assert.equal(
+        (html.match(/data-shell-bottom-inset-owner=/g) ?? []).length,
+        1,
+    );
+    assert.match(
+        html,
+        /padding-bottom:calc\(var\(--app-mini-player-height\) \+ var\(--app-bottom-nav-height\) \+ var\(--safe-area-bottom\) \+ 12px\)/,
+    );
 });

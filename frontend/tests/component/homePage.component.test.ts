@@ -179,9 +179,13 @@ test("Home unifies personal playback and real online discovery", async () => {
     assert.match(html, /made-for-you:weekly:1:1/);
     assert.match(html, /online-discovery:true:1/);
     assert.ok(
-        html.indexOf("Continue listening") < html.indexOf("compact-wave-hero"),
+        html.indexOf("compact-wave-hero") <
+            html.indexOf("Продолжить слушать:Again One"),
     );
-    assert.ok(html.indexOf("compact-wave-hero") < html.indexOf("made-for-you"));
+    assert.ok(
+        html.indexOf("Продолжить слушать:Again One") <
+            html.indexOf("made-for-you"),
+    );
     assert.ok(html.indexOf("made-for-you") < html.indexOf("online-discovery"));
     assert.doesNotMatch(html, /home-quick-actions/);
 });

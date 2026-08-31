@@ -10,16 +10,13 @@ test("core smoke: login → play album → play/pause/next/prev", async ({
     await page.goto("/login");
     await page.locator("#username").fill(username);
     await page.locator("#password").fill(password);
-    await page.getByRole("button", { name: "Sign In" }).click();
+    await page.getByRole("button", { name: "Войти", exact: true }).click();
 
     // Login redirects to / (assuming onboarding was already completed by the API smoke test)
     await page.waitForURL(/\/($|\?)/);
 
-    // Navigate to albums and open the first one
-    await page.goto("/albums");
-    await expect(
-        page.getByRole("heading", { name: "All Albums" }),
-    ).toBeVisible();
+    // Open the album collection and choose the first release.
+    await page.goto("/library?tab=albums");
 
     const firstAlbum = page.locator('a[href^="/album/"]').first();
     const albumCount = await firstAlbum.count();
@@ -27,23 +24,23 @@ test("core smoke: login → play album → play/pause/next/prev", async ({
     await firstAlbum.click();
 
     // Start playback
-    await page.getByLabel("Play all").click();
+    await page.getByLabel("Воспроизвести всё").click();
 
     // Mini player should reflect playing state
     const playPause = page
-        .locator('button[title="Pause"], button[title="Play"]')
+        .locator('button[title="Пауза"], button[title="Воспроизвести"]')
         .first();
-    await expect(playPause).toHaveAttribute("title", "Pause");
+    await expect(playPause).toHaveAttribute("title", "Пауза");
 
     // Toggle pause/play
     await playPause.click();
-    await expect(playPause).toHaveAttribute("title", "Play");
+    await expect(playPause).toHaveAttribute("title", "Воспроизвести");
     await playPause.click();
-    await expect(playPause).toHaveAttribute("title", "Pause");
+    await expect(playPause).toHaveAttribute("title", "Пауза");
 
     // Next/Previous should be available for tracks (library content)
-    const nextBtn = page.locator('button[title="Next"]');
-    const prevBtn = page.locator('button[title="Previous"]');
+    const nextBtn = page.locator('button[title="Следующий трек"]');
+    const prevBtn = page.locator('button[title="Предыдущий трек"]');
     await expect(nextBtn).toBeVisible();
     await expect(prevBtn).toBeVisible();
 

@@ -202,6 +202,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                             })}
                         />
                         <TrackOverflowMenu
+                            triggerClassName="h-11 w-11 p-0"
                             track={{
                                 id: track.id,
                                 title: track.displayTitle ?? track.title,
@@ -243,24 +244,37 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
     );
 
     return (
-        <section id="popular" className="scroll-mt-28">
-            <div className="mb-4 flex items-center justify-between gap-2">
-                <h2 className="text-2xl font-black tracking-tight">
-                    {popularHref ? (
-                        <Link
-                            href={popularHref}
-                            className="inline-flex items-center hover:text-brand transition-colors"
-                        >
-                            Популярное
-                        </Link>
-                    ) : (
-                        "Популярное"
-                    )}
-                </h2>
+        <section
+            id="popular"
+            className="scroll-mt-28"
+            data-artist-tracks-canvas="open"
+        >
+            <div className="mb-5 flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.18em] text-content-muted">
+                        Каталог исполнителя
+                    </p>
+                    <h2 className="text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                        {popularHref ? (
+                            <Link
+                                href={popularHref}
+                                className="inline-flex min-h-11 items-center rounded-lg py-1 transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            >
+                                Популярные треки
+                            </Link>
+                        ) : (
+                            "Популярные треки"
+                        )}
+                    </h2>
+                    <p className="mt-1 text-sm text-content-secondary">
+                        После выбранного трека очередь продолжится в показанном
+                        порядке.
+                    </p>
+                </div>
                 {onAddAllToQueue && (
                     <button
                         onClick={() => onAddAllToQueue(visibleTracks)}
-                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         title="Добавить показанные популярные треки в очередь"
                         aria-label="Добавить показанные популярные треки в очередь"
                     >
@@ -268,7 +282,10 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                     </button>
                 )}
             </div>
-            <MusicDetailTrackSurface label={`Треки исполнителя ${artist.name}`}>
+            <MusicDetailTrackSurface
+                label={`Треки исполнителя ${artist.name}`}
+                className="rounded-none border-x-0 bg-transparent shadow-none"
+            >
                 <TrackList
                     items={visibleTracks}
                     toRowItem={toRowItem}

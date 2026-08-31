@@ -19,11 +19,11 @@ import type { ReactNode } from "react";
 import { discoverRu } from "@/lib/i18n/discoverRu";
 
 const tierColors: Record<string, string> = {
-    high: "text-green-400",
-    medium: "text-yellow-400",
-    explore: "text-orange-400",
+    high: "text-success",
+    medium: "text-warning",
+    explore: "text-brand",
     wildcard: "text-ai-hover",
-    low: "text-orange-400",
+    low: "text-brand",
     wild: "text-ai-hover",
 };
 
@@ -65,15 +65,14 @@ function getSourceBadge(
         if (isMatching) {
             label = discoverRu.source.loading;
             badgeClassName =
-                "bg-gray-500/20 text-gray-300 border border-gray-400/30 animate-pulse";
+                "animate-pulse border border-line-muted bg-surface-active text-content-muted motion-reduce:animate-none";
         } else {
             label = discoverRu.source.preview;
-            badgeClassName =
-                "bg-blue-500/20 text-blue-400 border border-blue-500/30";
+            badgeClassName = "border border-ai/30 bg-ai/10 text-ai-hover";
         }
     } else {
         label = discoverRu.source.local;
-        badgeClassName = "bg-emerald-500/20 text-emerald-400";
+        badgeClassName = "border border-success/25 bg-success/10 text-success";
     }
 
     return (
@@ -135,10 +134,10 @@ export function TrackList({
             const sourceBadge = getSourceBadge(track, isMatching);
             return {
                 artistContent: (
-                    <p className="text-xs text-gray-400 truncate">
+                    <p className="truncate text-xs text-content-muted">
                         <Link
                             href={`/artist/${encodeURIComponent(track.artist)}`}
-                            className="hover:underline hover:text-white"
+                            className="hover:text-content hover:underline"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {track.artist}
@@ -150,13 +149,13 @@ export function TrackList({
                 ),
                 middleColumns: (
                     <>
-                        <p className="hidden md:flex items-center text-sm text-gray-400 truncate">
+                        <p className="hidden items-center truncate text-sm text-content-muted md:flex">
                             {track.album}
                         </p>
                         <div className="hidden md:flex items-center justify-center">
                             <span
                                 className={cn(
-                                    "px-2 py-0.5 rounded-full text-xs font-medium bg-white/5",
+                                    "rounded-full border border-line bg-surface-elevated px-2 py-0.5 text-xs font-medium",
                                     tierColors[track.tier],
                                 )}
                             >

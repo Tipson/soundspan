@@ -1,8 +1,10 @@
 # Soundspan product design system
 
-Status: deployed technical release candidate — visual acceptance failed; redesign in progress
+Status: selected redesign direction — implementation in progress
 
-Implementation baseline: `ebf89affd7a639bde640ef7d54e4aa58cc633541`
+Implementation baseline: `2a43c1a71dde1671f37eecf539dbff1a09919412`
+
+Selected visual target: [`references/editorial-flow-selected.png`](references/editorial-flow-selected.png)
 
 ## Product thesis
 
@@ -21,9 +23,10 @@ artwork-led ambient field and continuous Wave behavior.
 contrast. Album artwork, the active track, and the selected Wave mood provide
 the color. Only one area on a screen may be visually dominant.
 
-The signature element is the **ambient wave field**: a restrained color field
-derived from the current artwork or selected mood. It connects the Home hero,
-Vibe, full player, and compact player. It is not used on Settings or dense lists.
+The signature element is the **spectral seam**: a restrained 2–3 px signal from
+the current artwork or selected mood that links active navigation, progress, and
+the player. A larger ambient field is reserved for Vibe and the full player. It
+is not used on Settings or dense lists.
 
 Avoid:
 
@@ -41,20 +44,20 @@ Avoid:
 
 | Token | Value | Purpose |
 |---|---:|---|
-| `--music-canvas` | `#07080b` | App background |
-| `--music-stage` | `#0c0e13` | Main content stage |
-| `--music-surface` | `#12151c` | Cards and list surfaces |
-| `--music-raised` | `#181c25` | Menus, selected rows, overlays |
-| `--music-soft` | `#202532` | Strong hover and pressed states |
-| `--music-ink` | `#f7f7fa` | Primary text |
-| `--music-ink-body` | `#d8dae2` | Body text |
-| `--music-ink-muted` | `#a2a6b3` | Metadata |
-| `--music-ink-faint` | `#747987` | Disabled and tertiary copy |
-| `--music-action` | `#7c9cff` | Primary actions and focus |
-| `--music-action-strong` | `#a9bcff` | Hovered action |
-| `--music-positive` | `#63d59a` | Liked/saved/success |
-| `--music-negative` | `#ff718d` | Disliked/error |
-| `--music-warning` | `#f4c76e` | Recoverable attention |
+| `--music-canvas` | `#080a0f` | App background |
+| `--music-stage` | `#11151d` | Main content stage |
+| `--music-surface` | `#1a202a` | Cards and list surfaces |
+| `--music-raised` | `#222a36` | Menus, selected rows, overlays |
+| `--music-soft` | `#2a3442` | Strong hover and pressed states |
+| `--music-ink` | `#f7f8fc` | Primary text |
+| `--music-ink-body` | `#e1e5ec` | Body text |
+| `--music-ink-muted` | `#c4cad5` | Metadata |
+| `--music-ink-faint` | `#aeb6c5` | Tertiary copy that remains AA on raised surfaces |
+| `--music-action` | `#8fa8ff` | Primary actions and focus |
+| `--music-action-strong` | `#b3c3ff` | Hovered action |
+| `--music-positive` | `#64d8a8` | Liked/saved/success |
+| `--music-negative` | `#ff738e` | Disliked/error |
+| `--music-warning` | `#f2c46d` | Recoverable attention |
 | `--music-line` | `rgb(255 255 255 / 0.08)` | Default separation |
 | `--music-line-strong` | `rgb(255 255 255 / 0.14)` | Interactive boundary |
 
@@ -97,17 +100,21 @@ AA.
 
 ### Desktop shell
 
-- Compact left navigation holds only Home, Search, Vibe, Library, and personal
-  playlists.
+- Compact left navigation holds only Home, Vibe, Library, and a bounded set of
+  personal playlists. Search is an action in the top bar, not a duplicate
+  destination.
 - Search is globally available in the top bar; the Search route is a result
   canvas, not a second navigation concept.
 - The main stage owns the artwork color and page hierarchy.
-- The player is a stable bottom dock, visually connected to the current artwork,
-  with playback in the center and preference/queue actions grouped predictably.
+- The player is a stable bottom dock, visually connected by the spectral seam,
+  with Previous / Play / Next in the center and no more than four visible
+  utility groups. Shuffle, repeat, diagnostics, and rare actions progressively
+  disclose in the full player or overflow.
 
 ### Mobile PWA
 
-- Bottom navigation contains no more than four primary destinations.
+- Bottom navigation contains Home, Vibe, Library, and Search as the fourth
+  action. Search opens the result canvas with immediate focus.
 - A compact player sits immediately above it; tapping opens a full-screen player.
 - Sheets replace centered dialogs for Wave tuning, downloads, and track actions.
 - Safe-area insets and offline state are part of the component contract.

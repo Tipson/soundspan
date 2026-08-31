@@ -43,14 +43,15 @@ export function AudiobookCard({
                     ? `/audiobooks/series/${encodeURIComponent(title)}`
                     : `/audiobooks/${id}`
             }
+            data-audiobook-card="open"
             data-tv-card
             data-tv-card-index={index}
-            tabIndex={0}
+            className="group block rounded-xl transition duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none"
         >
-            <div className="cursor-pointer group relative h-full flex flex-col">
+            <div className="relative flex h-full cursor-pointer flex-col p-1.5 sm:p-2">
                 {/* Book Cover Container - Fixed Aspect Ratio */}
                 <div className="relative flex-shrink-0">
-                    <div className="aspect-[2/3] rounded-sm overflow-hidden bg-gradient-to-br from-[#2a2a2a] to-surface-hover shadow-2xl relative">
+                    <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-linear-to-br from-surface-highlight to-surface-elevated shadow-2xl shadow-black/20">
                         {resolvedCoverUrl ? (
                             <CachedImage
                                 src={resolvedCoverUrl}
@@ -63,21 +64,21 @@ export function AudiobookCard({
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                                <Book className="w-16 h-16 text-gray-400" />
+                                <Book className="h-16 w-16 text-content-muted" />
                             </div>
                         )}
 
                         {/* Book Spine Shadow */}
-                        <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-r from-black/40 to-transparent pointer-events-none" />
+                        <div className="pointer-events-none absolute bottom-0 left-0 top-0 w-2 bg-linear-to-r from-surface-sunken/60 to-transparent" />
 
                         {/* Book Gloss */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/20 pointer-events-none" />
+                        <div className="pointer-events-none absolute inset-0 bg-linear-to-br from-content/5 via-transparent to-surface-sunken/25" />
 
                         {/* Progress Bar */}
                         {progress && !progress.isFinished && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/60">
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-surface-sunken/80">
                                 <div
-                                    className="h-full bg-ai"
+                                    className="h-full bg-brand"
                                     style={{ width: `${progress.progress}%` }}
                                 />
                             </div>
@@ -85,14 +86,14 @@ export function AudiobookCard({
 
                         {/* Completion Badge */}
                         {progress?.isFinished && (
-                            <div className="absolute top-2 right-2 bg-green-500 rounded-full p-1.5 shadow-lg">
-                                <CheckCircle className="w-3 h-3 text-white" />
+                            <div className="absolute right-2 top-2 rounded-full bg-success p-1.5 shadow-lg">
+                                <CheckCircle className="h-3 w-3 text-surface" />
                             </div>
                         )}
 
                         {/* Series Badge (for series cards only) */}
                         {seriesBadge && (
-                            <div className="absolute top-2 right-2 bg-ai rounded px-2 py-1 text-xs font-bold shadow-lg">
+                            <div className="absolute right-2 top-2 rounded-lg bg-brand px-2 py-1 text-xs font-bold text-surface shadow-lg">
                                 {seriesBadge}
                             </div>
                         )}
@@ -109,15 +110,15 @@ export function AudiobookCard({
                     </div>
 
                     {/* Shelf Shadow */}
-                    <div className="absolute -bottom-1 left-0 right-0 h-2 bg-gradient-to-b from-surface-hover/50 to-transparent rounded-b-sm" />
+                    <div className="absolute -bottom-1 left-0 right-0 h-2 rounded-b-xl bg-linear-to-b from-surface-hover/50 to-transparent" />
                 </div>
 
                 {/* Text Container - Fixed Height for Uniformity */}
-                <div className="mt-3 px-1 h-14 flex flex-col justify-start">
-                    <h3 className="text-sm font-bold text-white line-clamp-2 leading-tight">
+                <div className="mt-3 flex h-14 flex-col justify-start px-1">
+                    <h3 className="line-clamp-2 text-sm font-bold leading-tight text-content">
                         {title}
                     </h3>
-                    <p className="text-xs text-gray-400 line-clamp-1 mt-1">
+                    <p className="mt-1 line-clamp-1 text-xs text-content-muted">
                         {author}
                     </p>
                 </div>

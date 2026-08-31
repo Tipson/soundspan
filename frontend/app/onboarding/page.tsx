@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useId, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import Image from "next/image";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useFeatures } from "@/lib/features-context";
 import { useAuth } from "@/lib/auth-context";
 import { revokeAuthenticatedRuntime } from "@/lib/auth-runtime";
-import { BRAND_NAME } from "@/lib/brand";
+import { BookOpen, Check, Minus, Music2, Search, Zap } from "lucide-react";
+import { AuthPanel, AuthStage } from "@/features/auth/components/AuthStage";
 import {
     formatOnboardingConnectionFailure,
     formatOnboardingConnectionSuccess,
@@ -207,640 +207,623 @@ export default function OnboardingPage() {
     };
 
     return (
-        <div className="min-h-screen relative overflow-hidden">
-            {/* Dark background (matches login) */}
-            <div className="absolute inset-0 bg-[#000]">
-                <div className="absolute inset-0 bg-gradient-to-br from-brand/5 via-transparent to-transparent" />
-            </div>
-
+        <AuthStage width="wide">
             {/* Show loading spinner while checking session */}
             {initialLoading ? (
-                <div className="relative z-10 min-h-screen flex items-center justify-center">
+                <div className="flex items-center justify-center py-20">
                     <div className="text-center">
                         <GradientSpinner size="lg" />
-                        <p className="text-white/60 mt-4">
+                        <p
+                            className="mt-4 text-content-secondary"
+                            role="status"
+                        >
                             {onboardingRu.loading}
                         </p>
                     </div>
                 </div>
             ) : (
-                <div className="relative z-10 min-h-screen flex items-center justify-center p-6">
-                    <div className="w-full max-w-4xl">
-                        {/* Logo/Brand */}
-                        <div className="text-center mb-8">
-                            <div className="inline-flex items-center gap-4 mb-4">
-                                <div className="relative">
-                                    <div className="absolute inset-0 bg-white/10 blur-xl rounded-full" />
-                                    <Image
-                                        src="/assets/images/soundspan.webp"
-                                        alt={BRAND_NAME}
-                                        width={48}
-                                        height={48}
-                                        sizes="48px"
-                                        className="relative z-10 drop-shadow-2xl"
+                <div className="w-full">
+                    <header className="mb-7 text-center">
+                        <p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-brand-light">
+                            Первичная настройка
+                        </p>
+                        <h1 className="mt-2 text-2xl font-black tracking-[-0.035em] text-content sm:text-3xl">
+                            {onboardingRu.welcome}
+                        </h1>
+                    </header>
+
+                    {/* Progress Steps */}
+                    <div
+                        className="mb-7 flex items-start justify-center gap-1 sm:gap-3"
+                        aria-label="Шаги первичной настройки"
+                    >
+                        {[
+                            { num: 1, label: onboardingRu.stepAccount },
+                            {
+                                num: 2,
+                                label: onboardingRu.stepIntegrations,
+                            },
+                            {
+                                num: 3,
+                                label: onboardingRu.stepEnrichment,
+                            },
+                        ].map((s, idx) => (
+                            <div
+                                key={s.num}
+                                className="flex min-w-0 items-center"
+                                aria-current={
+                                    s.num === step ? "step" : undefined
+                                }
+                            >
+                                <div className="flex flex-col items-center">
+                                    <div
+                                        className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold transition-colors ${
+                                            s.num === step
+                                                ? "bg-brand text-black shadow-lg shadow-brand/20"
+                                                : s.num < step
+                                                  ? "border border-line bg-white/[0.05] text-content-secondary"
+                                                  : "border border-line bg-white/[0.03] text-content-muted"
+                                        }`}
+                                    >
+                                        {s.num}
+                                    </div>
+                                    <span
+                                        className={`mt-2 max-w-20 text-center text-[0.68rem] leading-4 transition-colors sm:max-w-none sm:text-xs ${
+                                            s.num === step
+                                                ? "text-brand font-medium"
+                                                : "text-content-muted"
+                                        }`}
+                                    >
+                                        {s.label}
+                                    </span>
+                                </div>
+                                {idx < 2 && (
+                                    <div
+                                        className={`mx-1.5 mt-4 h-0.5 w-6 transition-colors sm:mx-4 sm:w-16 ${
+                                            s.num < step
+                                                ? "bg-brand/25"
+                                                : "bg-white/10"
+                                        }`}
                                     />
-                                </div>
-                                <h1 className="brand-wordmark text-4xl font-bold bg-gradient-to-r from-white via-white to-gray-200 bg-clip-text text-transparent drop-shadow-2xl">
-                                    {BRAND_NAME}
-                                </h1>
-                            </div>
-                            <p className="text-white/60 text-lg">
-                                {onboardingRu.welcome}
-                            </p>
-                        </div>
-
-                        {/* Progress Steps */}
-                        <div className="flex items-center justify-center gap-3 mb-8">
-                            {[
-                                { num: 1, label: onboardingRu.stepAccount },
-                                {
-                                    num: 2,
-                                    label: onboardingRu.stepIntegrations,
-                                },
-                                {
-                                    num: 3,
-                                    label: onboardingRu.stepEnrichment,
-                                },
-                            ].map((s, idx) => (
-                                <div key={s.num} className="flex items-center">
-                                    <div className="flex flex-col items-center">
-                                        <div
-                                            className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm transition-all ${
-                                                s.num === step
-                                                    ? "bg-brand text-black shadow-lg shadow-brand/20 scale-110"
-                                                    : s.num < step
-                                                      ? "bg-white/5 text-white/80 border border-white/10"
-                                                      : "bg-white/5 text-white/40 border border-white/10"
-                                            }`}
-                                        >
-                                            {s.num}
-                                        </div>
-                                        <span
-                                            className={`text-xs mt-2 transition-all ${
-                                                s.num === step
-                                                    ? "text-brand font-medium"
-                                                    : "text-white/40"
-                                            }`}
-                                        >
-                                            {s.label}
-                                        </span>
-                                    </div>
-                                    {idx < 2 && (
-                                        <div
-                                            className={`w-16 h-0.5 mx-4 mb-6 transition-all ${
-                                                s.num < step
-                                                    ? "bg-brand/25"
-                                                    : "bg-white/10"
-                                            }`}
-                                        />
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Main Content Card */}
-                        <div className="bg-[#111]/90 rounded-lg border border-white/10 shadow-xl  overflow-hidden">
-                            <div className="p-6 md:p-8">
-                                {step === 1 && (
-                                    <div className="space-y-6">
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-white mb-1">
-                                                {onboardingRu.createAccount}
-                                            </h2>
-                                            <p className="text-white/60">
-                                                {
-                                                    onboardingRu.createAccountDescription
-                                                }
-                                            </p>
-                                        </div>
-
-                                        <form
-                                            onSubmit={handleRegister}
-                                            className="space-y-4 mt-8"
-                                        >
-                                            <div>
-                                                <label className="block text-sm font-medium text-white/90 mb-1.5">
-                                                    {onboardingRu.username}
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={username}
-                                                    onChange={(e) =>
-                                                        setUsername(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
-                                                    placeholder={
-                                                        onboardingRu.usernamePlaceholder
-                                                    }
-                                                    required
-                                                    minLength={3}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-white/90 mb-1.5">
-                                                    {onboardingRu.password}
-                                                </label>
-                                                <input
-                                                    type="password"
-                                                    value={password}
-                                                    onChange={(e) =>
-                                                        setPassword(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    className={`w-full px-4 py-3 bg-white/5 border rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all  ${
-                                                        showPasswordTooShort
-                                                            ? "border-red-500/50"
-                                                            : "border-white/10"
-                                                    }`}
-                                                    placeholder={
-                                                        onboardingRu.passwordPlaceholder
-                                                    }
-                                                    required
-                                                    minLength={6}
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-white/90 mb-1.5">
-                                                    {
-                                                        onboardingRu.confirmPassword
-                                                    }
-                                                </label>
-                                                <input
-                                                    type="password"
-                                                    value={confirmPassword}
-                                                    onChange={(e) =>
-                                                        setConfirmPassword(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    className={`w-full px-4 py-3 bg-white/5 border rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all  ${
-                                                        showPasswordMismatch
-                                                            ? "border-red-500/50"
-                                                            : "border-white/10"
-                                                    }`}
-                                                    placeholder={
-                                                        onboardingRu.confirmPasswordPlaceholder
-                                                    }
-                                                    required
-                                                />
-                                            </div>
-
-                                            {error && (
-                                                <div className="bg-red-500/10  border border-red-500/30 rounded-lg p-4 text-sm text-red-400">
-                                                    {error}
-                                                </div>
-                                            )}
-
-                                            <button
-                                                type="submit"
-                                                disabled={loading}
-                                                className="w-full py-3.5 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed relative group overflow-hidden mt-8 focus:outline-none focus:ring-2 focus:ring-brand/30"
-                                            >
-                                                <span className="relative z-10 flex items-center justify-center gap-2">
-                                                    {loading ? (
-                                                        <>
-                                                            <GradientSpinner size="sm" />
-                                                            {
-                                                                onboardingRu.creatingAccount
-                                                            }
-                                                        </>
-                                                    ) : (
-                                                        onboardingRu.continue
-                                                    )}
-                                                </span>
-                                            </button>
-                                        </form>
-                                    </div>
                                 )}
+                            </div>
+                        ))}
+                    </div>
 
-                                {step === 2 && (
-                                    <div className="space-y-6">
+                    {/* Main Content Card */}
+                    <AuthPanel className="overflow-hidden">
+                        <div>
+                            {step === 1 && (
+                                <div className="space-y-6">
+                                    <div>
+                                        <h2 className="mb-1 text-2xl font-black tracking-[-0.03em] text-content">
+                                            {onboardingRu.createAccount}
+                                        </h2>
+                                        <p className="text-sm leading-6 text-content-secondary">
+                                            {
+                                                onboardingRu.createAccountDescription
+                                            }
+                                        </p>
+                                    </div>
+
+                                    <form
+                                        onSubmit={handleRegister}
+                                        className="space-y-4 mt-8"
+                                    >
                                         <div>
-                                            <h2 className="text-2xl font-bold text-white mb-1">
-                                                {onboardingRu.connectServices}
-                                            </h2>
-                                            <p className="text-white/60">
-                                                {
-                                                    onboardingRu.connectServicesDescription
+                                            <label
+                                                htmlFor="onboarding-username"
+                                                className="mb-1.5 block text-sm font-medium text-content"
+                                            >
+                                                {onboardingRu.username}
+                                            </label>
+                                            <input
+                                                id="onboarding-username"
+                                                name="username"
+                                                type="text"
+                                                value={username}
+                                                onChange={(e) =>
+                                                    setUsername(e.target.value)
                                                 }
-                                            </p>
+                                                className="min-h-12 w-full rounded-2xl border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
+                                                placeholder={
+                                                    onboardingRu.usernamePlaceholder
+                                                }
+                                                required
+                                                minLength={3}
+                                                autoComplete="username"
+                                                autoCapitalize="none"
+                                                autoCorrect="off"
+                                            />
                                         </div>
 
-                                        <div className="space-y-4 mt-8">
-                                            {/* Lidarr */}
-                                            <IntegrationCard
-                                                title={onboardingRu.lidarr}
-                                                description={
-                                                    onboardingRu.lidarrDescription
+                                        <div>
+                                            <label
+                                                htmlFor="onboarding-password"
+                                                className="mb-1.5 block text-sm font-medium text-content"
+                                            >
+                                                {onboardingRu.password}
+                                            </label>
+                                            <input
+                                                id="onboarding-password"
+                                                name="password"
+                                                type="password"
+                                                value={password}
+                                                onChange={(e) =>
+                                                    setPassword(e.target.value)
                                                 }
-                                                localPort="localhost:8686"
-                                                icon={
-                                                    <svg
-                                                        className="w-6 h-6"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
-                                                        />
-                                                    </svg>
+                                                className={`min-h-12 w-full rounded-2xl border bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted focus:ring-2 focus:ring-brand/20 sm:text-sm ${
+                                                    showPasswordTooShort
+                                                        ? "border-red-500/50"
+                                                        : "border-line hover:border-line-muted focus:border-brand/60"
+                                                }`}
+                                                placeholder={
+                                                    onboardingRu.passwordPlaceholder
                                                 }
-                                                enabled={lidarr.enabled}
-                                                onToggle={() =>
-                                                    setLidarr({
-                                                        ...lidarr,
-                                                        enabled:
-                                                            !lidarr.enabled,
-                                                    })
-                                                }
-                                                url={lidarr.url}
-                                                apiKey={lidarr.apiKey}
-                                                onUrlChange={(url) =>
-                                                    setLidarr({
-                                                        ...lidarr,
-                                                        url,
-                                                    })
-                                                }
-                                                onApiKeyChange={(apiKey) =>
-                                                    setLidarr({
-                                                        ...lidarr,
-                                                        apiKey,
-                                                    })
-                                                }
-                                                onTest={() =>
-                                                    testConnection("lidarr")
-                                                }
-                                                loading={loading}
+                                                required
+                                                minLength={6}
+                                                autoComplete="new-password"
                                             />
+                                        </div>
 
-                                            {/* Audiobookshelf */}
-                                            <IntegrationCard
-                                                title={
-                                                    onboardingRu.audiobookshelf
-                                                }
-                                                description={
-                                                    onboardingRu.audiobookshelfDescription
-                                                }
-                                                localPort="localhost:13378"
-                                                icon={
-                                                    <svg
-                                                        className="w-6 h-6"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                                                        />
-                                                    </svg>
-                                                }
-                                                enabled={audiobookshelf.enabled}
-                                                onToggle={() =>
-                                                    setAudiobookshelf({
-                                                        ...audiobookshelf,
-                                                        enabled:
-                                                            !audiobookshelf.enabled,
-                                                    })
-                                                }
-                                                url={audiobookshelf.url}
-                                                apiKey={audiobookshelf.apiKey}
-                                                onUrlChange={(url) =>
-                                                    setAudiobookshelf({
-                                                        ...audiobookshelf,
-                                                        url,
-                                                    })
-                                                }
-                                                onApiKeyChange={(apiKey) =>
-                                                    setAudiobookshelf({
-                                                        ...audiobookshelf,
-                                                        apiKey,
-                                                    })
-                                                }
-                                                onTest={() =>
-                                                    testConnection(
-                                                        "audiobookshelf",
+                                        <div>
+                                            <label
+                                                htmlFor="onboarding-confirm-password"
+                                                className="mb-1.5 block text-sm font-medium text-content"
+                                            >
+                                                {onboardingRu.confirmPassword}
+                                            </label>
+                                            <input
+                                                id="onboarding-confirm-password"
+                                                name="confirmPassword"
+                                                type="password"
+                                                value={confirmPassword}
+                                                onChange={(e) =>
+                                                    setConfirmPassword(
+                                                        e.target.value,
                                                     )
                                                 }
-                                                loading={loading}
-                                            />
-
-                                            {/* Soulseek */}
-                                            <SoulseekCard
-                                                enabled={soulseek.enabled}
-                                                onToggle={() =>
-                                                    setSoulseek({
-                                                        ...soulseek,
-                                                        enabled:
-                                                            !soulseek.enabled,
-                                                    })
+                                                className={`min-h-12 w-full rounded-2xl border bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors placeholder:text-content-muted focus:ring-2 focus:ring-brand/20 sm:text-sm ${
+                                                    showPasswordMismatch
+                                                        ? "border-red-500/50"
+                                                        : "border-line hover:border-line-muted focus:border-brand/60"
+                                                }`}
+                                                placeholder={
+                                                    onboardingRu.confirmPasswordPlaceholder
                                                 }
-                                                username={soulseek.username}
-                                                password={soulseek.password}
-                                                onUsernameChange={(username) =>
-                                                    setSoulseek({
-                                                        ...soulseek,
-                                                        username,
-                                                    })
-                                                }
-                                                onPasswordChange={(password) =>
-                                                    setSoulseek({
-                                                        ...soulseek,
-                                                        password,
-                                                    })
-                                                }
-                                                onTest={() =>
-                                                    testConnection("soulseek")
-                                                }
-                                                loading={loading}
+                                                required
+                                                minLength={6}
+                                                autoComplete="new-password"
                                             />
                                         </div>
-
-                                        {success && (
-                                            <div className="flex items-center gap-2 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                                                <p className="text-sm text-green-500">
-                                                    {success}
-                                                </p>
-                                            </div>
-                                        )}
 
                                         {error && (
-                                            <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-                                                <p className="text-sm text-red-500">
-                                                    {error}
-                                                </p>
+                                            <div
+                                                role="alert"
+                                                className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm leading-5 text-red-200"
+                                            >
+                                                {error}
                                             </div>
                                         )}
 
-                                        <div className="flex gap-3 mt-8">
-                                            <button
-                                                onClick={() => setStep(3)}
-                                                onKeyDown={(e) =>
-                                                    e.key === "Enter" &&
-                                                    setStep(3)
-                                                }
-                                                tabIndex={0}
-                                                className="flex-1 bg-white/5 border border-white/10 text-white/70 font-medium py-3.5 rounded-lg hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-brand/30"
-                                            >
-                                                {onboardingRu.skipForNow}
-                                            </button>
-                                            <button
-                                                onClick={handleNextStep}
-                                                onKeyDown={(e) =>
-                                                    e.key === "Enter" &&
-                                                    !loading &&
-                                                    handleNextStep()
-                                                }
-                                                disabled={loading}
-                                                tabIndex={0}
-                                                className="flex-1 py-3.5 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/30"
-                                            >
-                                                {loading
-                                                    ? onboardingRu.saving
-                                                    : onboardingRu.continue}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
+                                        <button
+                                            type="submit"
+                                            disabled={loading}
+                                            className="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand px-5 py-3 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                                        >
+                                            <span className="relative z-10 flex items-center justify-center gap-2">
+                                                {loading ? (
+                                                    <>
+                                                        <GradientSpinner size="sm" />
+                                                        {
+                                                            onboardingRu.creatingAccount
+                                                        }
+                                                    </>
+                                                ) : (
+                                                    onboardingRu.continue
+                                                )}
+                                            </span>
+                                        </button>
+                                    </form>
+                                </div>
+                            )}
 
-                                {step === 3 && (
-                                    <div className="space-y-6">
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-white mb-1">
-                                                {onboardingRu.analysisFeatures}
-                                            </h2>
-                                            <p className="text-white/60">
-                                                {
-                                                    onboardingRu.analysisFeaturesDescription
-                                                }
+                            {step === 2 && (
+                                <div className="space-y-6">
+                                    <div>
+                                        <h2 className="mb-1 text-2xl font-black tracking-[-0.03em] text-content">
+                                            {onboardingRu.connectServices}
+                                        </h2>
+                                        <p className="text-sm leading-6 text-content-secondary">
+                                            {
+                                                onboardingRu.connectServicesDescription
+                                            }
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-4 mt-8">
+                                        {/* Lidarr */}
+                                        <IntegrationCard
+                                            title={onboardingRu.lidarr}
+                                            description={
+                                                onboardingRu.lidarrDescription
+                                            }
+                                            localPort="localhost:8686"
+                                            icon={
+                                                <Music2
+                                                    className="h-6 w-6"
+                                                    aria-hidden="true"
+                                                />
+                                            }
+                                            enabled={lidarr.enabled}
+                                            onToggle={() =>
+                                                setLidarr({
+                                                    ...lidarr,
+                                                    enabled: !lidarr.enabled,
+                                                })
+                                            }
+                                            url={lidarr.url}
+                                            apiKey={lidarr.apiKey}
+                                            onUrlChange={(url) =>
+                                                setLidarr({
+                                                    ...lidarr,
+                                                    url,
+                                                })
+                                            }
+                                            onApiKeyChange={(apiKey) =>
+                                                setLidarr({
+                                                    ...lidarr,
+                                                    apiKey,
+                                                })
+                                            }
+                                            onTest={() =>
+                                                testConnection("lidarr")
+                                            }
+                                            loading={loading}
+                                        />
+
+                                        {/* Audiobookshelf */}
+                                        <IntegrationCard
+                                            title={onboardingRu.audiobookshelf}
+                                            description={
+                                                onboardingRu.audiobookshelfDescription
+                                            }
+                                            localPort="localhost:13378"
+                                            icon={
+                                                <BookOpen
+                                                    className="h-6 w-6"
+                                                    aria-hidden="true"
+                                                />
+                                            }
+                                            enabled={audiobookshelf.enabled}
+                                            onToggle={() =>
+                                                setAudiobookshelf({
+                                                    ...audiobookshelf,
+                                                    enabled:
+                                                        !audiobookshelf.enabled,
+                                                })
+                                            }
+                                            url={audiobookshelf.url}
+                                            apiKey={audiobookshelf.apiKey}
+                                            onUrlChange={(url) =>
+                                                setAudiobookshelf({
+                                                    ...audiobookshelf,
+                                                    url,
+                                                })
+                                            }
+                                            onApiKeyChange={(apiKey) =>
+                                                setAudiobookshelf({
+                                                    ...audiobookshelf,
+                                                    apiKey,
+                                                })
+                                            }
+                                            onTest={() =>
+                                                testConnection("audiobookshelf")
+                                            }
+                                            loading={loading}
+                                        />
+
+                                        {/* Soulseek */}
+                                        <SoulseekCard
+                                            enabled={soulseek.enabled}
+                                            onToggle={() =>
+                                                setSoulseek({
+                                                    ...soulseek,
+                                                    enabled: !soulseek.enabled,
+                                                })
+                                            }
+                                            username={soulseek.username}
+                                            password={soulseek.password}
+                                            onUsernameChange={(username) =>
+                                                setSoulseek({
+                                                    ...soulseek,
+                                                    username,
+                                                })
+                                            }
+                                            onPasswordChange={(password) =>
+                                                setSoulseek({
+                                                    ...soulseek,
+                                                    password,
+                                                })
+                                            }
+                                            onTest={() =>
+                                                testConnection("soulseek")
+                                            }
+                                            loading={loading}
+                                        />
+                                    </div>
+
+                                    {success && (
+                                        <div
+                                            role="status"
+                                            className="flex items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/10 p-4"
+                                        >
+                                            <p className="text-sm text-green-500">
+                                                {success}
                                             </p>
                                         </div>
+                                    )}
 
-                                        <div className="bg-surface-raised border border-white/10 rounded-lg p-6 mt-8">
-                                            <h3 className="text-lg font-semibold text-white mb-4">
-                                                {
-                                                    onboardingRu.detectedAnalysisFeatures
-                                                }
-                                            </h3>
-
-                                            {featuresLoading ? (
-                                                <div className="flex items-center gap-3 text-gray-400">
-                                                    <GradientSpinner size="sm" />
-                                                    <span>
-                                                        {
-                                                            onboardingRu.detectingFeatures
-                                                        }
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-4">
-                                                    <div
-                                                        className={`p-4 rounded-lg border ${musicCNN ? "bg-green-500/5 border-green-500/20" : "bg-white/5 border-white/10"}`}
-                                                    >
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <span
-                                                                className={
-                                                                    musicCNN
-                                                                        ? "text-green-400"
-                                                                        : "text-gray-400"
-                                                                }
-                                                            >
-                                                                {musicCNN
-                                                                    ? "\u2713"
-                                                                    : "\u2014"}
-                                                            </span>
-                                                            <span
-                                                                className={`font-medium ${musicCNN ? "text-white" : "text-gray-400"}`}
-                                                            >
-                                                                {
-                                                                    onboardingRu.musicCnnTitle
-                                                                }
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-sm text-white/50 ml-7">
-                                                            {
-                                                                onboardingRu.musicCnnDescription
-                                                            }
-                                                        </p>
-                                                    </div>
-                                                    <div
-                                                        className={`p-4 rounded-lg border ${vibeEmbeddings ? "bg-green-500/5 border-green-500/20" : "bg-white/5 border-white/10"}`}
-                                                    >
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <span
-                                                                className={
-                                                                    vibeEmbeddings
-                                                                        ? "text-green-400"
-                                                                        : "text-gray-400"
-                                                                }
-                                                            >
-                                                                {vibeEmbeddings
-                                                                    ? "\u2713"
-                                                                    : "\u2014"}
-                                                            </span>
-                                                            <span
-                                                                className={`font-medium ${vibeEmbeddings ? "text-white" : "text-gray-400"}`}
-                                                            >
-                                                                {
-                                                                    onboardingRu.clapTitle
-                                                                }
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-sm text-white/50 ml-7">
-                                                            {
-                                                                onboardingRu.clapDescription
-                                                            }
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="mt-6 pt-4 border-t border-white/10">
-                                                <p className="text-sm text-gray-400">
-                                                    {musicCNN ||
-                                                    vibeEmbeddings ? (
-                                                        <>
-                                                            {
-                                                                onboardingRu.analysisCapacityLead
-                                                            }{" "}
-                                                            Откройте{" "}
-                                                            <a
-                                                                href="https://github.com/soundspan/soundspan/blob/main/docs/DEPLOYMENT.md"
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-brand hover:underline"
-                                                            >
-                                                                {
-                                                                    onboardingRu.deploymentGuide
-                                                                }
-                                                            </a>{" "}
-                                                            {
-                                                                onboardingRu.analysisCapacityTail
-                                                            }{" "}
-                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
-                                                                docker-compose.override.lite-mode.yml
-                                                            </code>{" "}
-                                                            {
-                                                                onboardingRu.copyTo
-                                                            }{" "}
-                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
-                                                                docker-compose.override.yml
-                                                            </code>{" "}
-                                                            {
-                                                                onboardingRu.andRestart
-                                                            }
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            {
-                                                                onboardingRu.liteModeLead
-                                                            }{" "}
-                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
-                                                                docker-compose.override.yml
-                                                            </code>{" "}
-                                                            {
-                                                                onboardingRu.restartWith
-                                                            }{" "}
-                                                            <code className="bg-gray-700 px-1.5 py-0.5 rounded text-xs">
-                                                                docker compose
-                                                                up -d
-                                                            </code>
-                                                            .
-                                                        </>
-                                                    )}
-                                                </p>
-                                            </div>
+                                    {error && (
+                                        <div
+                                            role="alert"
+                                            className="flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 p-4"
+                                        >
+                                            <p className="text-sm text-red-500">
+                                                {error}
+                                            </p>
                                         </div>
+                                    )}
 
-                                        <div className="bg-surface-raised border border-white/10 rounded-lg p-6">
-                                            <div className="flex items-start gap-4">
-                                                <div className="w-12 h-12 bg-brand/10 border border-brand/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                    <svg
-                                                        className="w-6 h-6 text-brand"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M13 10V3L4 14h7v7l9-11h-7z"
-                                                        />
-                                                    </svg>
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-lg font-bold text-white mb-2">
+                                    <div className="flex gap-3 mt-8">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStep(3)}
+                                            className="inline-flex min-h-12 flex-1 items-center justify-center rounded-full border border-line bg-white/[0.04] px-4 py-3 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.09] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                                        >
+                                            {onboardingRu.skipForNow}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleNextStep}
+                                            disabled={loading}
+                                            className="inline-flex min-h-12 flex-1 items-center justify-center rounded-full bg-brand px-4 py-3 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
+                                        >
+                                            {loading
+                                                ? onboardingRu.saving
+                                                : onboardingRu.continue}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {step === 3 && (
+                                <div className="space-y-6">
+                                    <div>
+                                        <h2 className="mb-1 text-2xl font-black tracking-[-0.03em] text-content">
+                                            {onboardingRu.analysisFeatures}
+                                        </h2>
+                                        <p className="text-sm leading-6 text-content-secondary">
+                                            {
+                                                onboardingRu.analysisFeaturesDescription
+                                            }
+                                        </p>
+                                    </div>
+
+                                    <div className="mt-8 rounded-2xl border border-line bg-surface-elevated/65 p-5 sm:p-6">
+                                        <h3 className="mb-4 text-lg font-semibold text-content">
+                                            {
+                                                onboardingRu.detectedAnalysisFeatures
+                                            }
+                                        </h3>
+
+                                        {featuresLoading ? (
+                                            <div className="flex items-center gap-3 text-content-muted">
+                                                <GradientSpinner size="sm" />
+                                                <span>
+                                                    {
+                                                        onboardingRu.detectingFeatures
+                                                    }
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div
+                                                    className={`p-4 rounded-lg border ${musicCNN ? "bg-green-500/5 border-green-500/20" : "bg-white/5 border-white/10"}`}
+                                                >
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <span
+                                                            className={
+                                                                musicCNN
+                                                                    ? "text-green-400"
+                                                                    : "text-content-muted"
+                                                            }
+                                                        >
+                                                            {musicCNN ? (
+                                                                <Check
+                                                                    className="h-4 w-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                            ) : (
+                                                                <Minus
+                                                                    className="h-4 w-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                            )}
+                                                        </span>
+                                                        <span className="font-medium text-content">
+                                                            {
+                                                                onboardingRu.musicCnnTitle
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                    <p className="ml-7 text-sm text-content-muted">
                                                         {
-                                                            onboardingRu.artistEnrichment
+                                                            onboardingRu.musicCnnDescription
                                                         }
-                                                    </h3>
-                                                    <p className="text-white/60 text-sm leading-relaxed">
+                                                    </p>
+                                                </div>
+                                                <div
+                                                    className={`p-4 rounded-lg border ${vibeEmbeddings ? "bg-green-500/5 border-green-500/20" : "bg-white/5 border-white/10"}`}
+                                                >
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <span
+                                                            className={
+                                                                vibeEmbeddings
+                                                                    ? "text-green-400"
+                                                                    : "text-content-muted"
+                                                            }
+                                                        >
+                                                            {vibeEmbeddings ? (
+                                                                <Check
+                                                                    className="h-4 w-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                            ) : (
+                                                                <Minus
+                                                                    className="h-4 w-4"
+                                                                    aria-hidden="true"
+                                                                />
+                                                            )}
+                                                        </span>
+                                                        <span className="font-medium text-content">
+                                                            {
+                                                                onboardingRu.clapTitle
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                    <p className="ml-7 text-sm text-content-muted">
                                                         {
-                                                            onboardingRu.artistEnrichmentDescription
+                                                            onboardingRu.clapDescription
                                                         }
                                                     </p>
                                                 </div>
                                             </div>
-                                        </div>
-
-                                        {error && (
-                                            <div className="flex items-center gap-2 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                                                <p className="text-red-500 text-sm">
-                                                    {error}
-                                                </p>
-                                            </div>
                                         )}
 
-                                        <div className="flex gap-3 mt-8">
-                                            <button
-                                                onClick={handleNextStep}
-                                                onKeyDown={(e) =>
-                                                    e.key === "Enter" &&
-                                                    !loading &&
-                                                    handleNextStep()
-                                                }
-                                                disabled={loading}
-                                                className="w-full py-3.5 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark transition-all duration-200 disabled:opacity-50 disabled:hover:scale-100 relative group overflow-hidden focus:outline-none focus:ring-2 focus:ring-brand/30"
-                                            >
-                                                <span className="relative z-10 flex items-center justify-center gap-2">
-                                                    {loading ? (
-                                                        <>
-                                                            <GradientSpinner size="sm" />
+                                        <div className="mt-6 pt-4 border-t border-white/10">
+                                            <p className="text-sm leading-6 text-content-muted">
+                                                {musicCNN || vibeEmbeddings ? (
+                                                    <>
+                                                        {
+                                                            onboardingRu.analysisCapacityLead
+                                                        }{" "}
+                                                        Откройте{" "}
+                                                        <a
+                                                            href="https://github.com/soundspan/soundspan/blob/main/docs/DEPLOYMENT.md"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-brand hover:underline"
+                                                        >
                                                             {
-                                                                onboardingRu.finishingSetup
+                                                                onboardingRu.deploymentGuide
                                                             }
-                                                        </>
-                                                    ) : (
-                                                        onboardingRu.completeSetup
-                                                    )}
-                                                </span>
-                                            </button>
+                                                        </a>{" "}
+                                                        {
+                                                            onboardingRu.analysisCapacityTail
+                                                        }{" "}
+                                                        <code className="rounded bg-surface-highlight px-1.5 py-0.5 text-xs text-content-secondary">
+                                                            docker-compose.override.lite-mode.yml
+                                                        </code>{" "}
+                                                        {onboardingRu.copyTo}{" "}
+                                                        <code className="rounded bg-surface-highlight px-1.5 py-0.5 text-xs text-content-secondary">
+                                                            docker-compose.override.yml
+                                                        </code>{" "}
+                                                        {
+                                                            onboardingRu.andRestart
+                                                        }
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {
+                                                            onboardingRu.liteModeLead
+                                                        }{" "}
+                                                        <code className="rounded bg-surface-highlight px-1.5 py-0.5 text-xs text-content-secondary">
+                                                            docker-compose.override.yml
+                                                        </code>{" "}
+                                                        {
+                                                            onboardingRu.restartWith
+                                                        }{" "}
+                                                        <code className="rounded bg-surface-highlight px-1.5 py-0.5 text-xs text-content-secondary">
+                                                            docker compose up -d
+                                                        </code>
+                                                        .
+                                                    </>
+                                                )}
+                                            </p>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        </div>
 
-                        {/* Footer */}
-                        <p className="text-center text-white/40 text-sm mt-6">
-                            © 2025 {BRAND_NAME}. {onboardingRu.footerTagline}
-                        </p>
-                    </div>
+                                    <div className="rounded-2xl border border-line bg-surface-elevated/65 p-5 sm:p-6">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-12 h-12 bg-brand/10 border border-brand/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                                <Zap
+                                                    className="h-6 w-6 text-brand"
+                                                    aria-hidden="true"
+                                                />
+                                            </div>
+                                            <div>
+                                                <h3 className="mb-2 text-lg font-bold text-content">
+                                                    {
+                                                        onboardingRu.artistEnrichment
+                                                    }
+                                                </h3>
+                                                <p className="text-sm leading-relaxed text-content-secondary">
+                                                    {
+                                                        onboardingRu.artistEnrichmentDescription
+                                                    }
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {error && (
+                                        <div
+                                            role="alert"
+                                            className="flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 p-4"
+                                        >
+                                            <p className="text-red-500 text-sm">
+                                                {error}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-3 mt-8">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStep(2)}
+                                            disabled={loading}
+                                            className="inline-flex min-h-12 items-center justify-center rounded-full border border-line bg-white/[0.04] px-5 py-3 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.09] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
+                                        >
+                                            Назад
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleNextStep}
+                                            disabled={loading}
+                                            className="inline-flex min-h-12 flex-1 items-center justify-center rounded-full bg-brand px-5 py-3 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
+                                        >
+                                            <span className="relative z-10 flex items-center justify-center gap-2">
+                                                {loading ? (
+                                                    <>
+                                                        <GradientSpinner size="sm" />
+                                                        {
+                                                            onboardingRu.finishingSetup
+                                                        }
+                                                    </>
+                                                ) : (
+                                                    onboardingRu.completeSetup
+                                                )}
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </AuthPanel>
                 </div>
             )}
-        </div>
+        </AuthStage>
     );
 }
 
@@ -883,63 +866,92 @@ function IntegrationCard({
     loading,
     useSoulseekCreds = false,
 }: IntegrationCardProps) {
+    const fieldId = useId().replaceAll(":", "");
+    const urlId = `${fieldId}-url`;
+    const apiKeyId = `${fieldId}-api-key`;
+    const usernameId = `${fieldId}-username`;
+    const passwordId = `${fieldId}-password`;
+
     return (
         <div
-            className={`border rounded-lg transition-all ${
+            className={`rounded-2xl border transition-colors ${
                 enabled
                     ? "bg-surface-raised border-brand/25"
-                    : "bg-white/5 border-white/10"
+                    : "border-line bg-white/[0.035]"
             }`}
         >
             <div className="p-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="flex items-start justify-between gap-3 sm:items-center">
+                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                         <div
                             className={`w-9 h-9 rounded-lg flex items-center justify-center ${
                                 enabled
                                     ? "bg-brand/10 border border-brand/20 text-brand"
-                                    : "bg-white/5 border border-white/10 text-white/40"
+                                    : "border border-line bg-white/[0.04] text-content-muted"
                             }`}
                         >
                             {icon}
                         </div>
-                        <div>
-                            <h3 className="text-white font-bold">{title}</h3>
-                            <p className="text-sm text-white/50">
+                        <div className="min-w-0">
+                            <h3 className="font-bold text-content">{title}</h3>
+                            <p className="text-sm leading-5 text-content-muted">
                                 {description}
                             </p>
                         </div>
                     </div>
                     <button
+                        type="button"
                         onClick={onToggle}
-                        onKeyDown={(e) => e.key === "Enter" && onToggle()}
-                        tabIndex={0}
-                        className={`relative w-11 h-6 rounded-lg transition-all ${
-                            enabled ? "bg-brand" : "bg-white/20"
-                        } focus:outline-none focus:ring-2 focus:ring-brand/30`}
+                        role="switch"
+                        aria-checked={enabled}
+                        aria-label={`${enabled ? "Отключить" : "Включить"} ${title}`}
+                        className="grid min-h-11 min-w-11 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                     >
-                        <div
-                            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-brand rounded-lg transition-all shadow-lg ${
-                                enabled ? "translate-x-5" : ""
+                        <span
+                            aria-hidden="true"
+                            className={`relative h-6 w-11 rounded-full transition-colors ${
+                                enabled ? "bg-brand" : "bg-white/20"
                             }`}
-                        />
+                        >
+                            <span
+                                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-lg transition-transform ${
+                                    enabled ? "translate-x-5" : ""
+                                }`}
+                            />
+                        </span>
                     </button>
                 </div>
 
                 {enabled && (
                     <div className="space-y-3 mt-4 pt-4 border-t border-white/10">
-                        <input
-                            type="url"
-                            value={url}
-                            onChange={(e) => onUrlChange(e.target.value)}
-                            placeholder={`${onboardingRu.serverUrlPlaceholder} (например, http://${
-                                localPort || "localhost:PORT"
-                            })`}
-                            className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
-                        />
+                        <div>
+                            <label
+                                htmlFor={urlId}
+                                className="mb-1.5 block text-xs font-semibold text-content-secondary"
+                            >
+                                Адрес сервера
+                            </label>
+                            <input
+                                id={urlId}
+                                name={`${fieldId}-url`}
+                                type="url"
+                                value={url}
+                                onChange={(e) => onUrlChange(e.target.value)}
+                                placeholder={`${onboardingRu.serverUrlPlaceholder} (например, http://${
+                                    localPort || "localhost:PORT"
+                                })`}
+                                autoComplete="url"
+                                className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-base text-content outline-none transition-colors placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
+                            />
+                        </div>
                         {useSoulseekCreds ? (
                             <>
+                                <label htmlFor={usernameId} className="sr-only">
+                                    Имя пользователя Soulseek
+                                </label>
                                 <input
+                                    id={usernameId}
+                                    name={`${fieldId}-username`}
                                     type="text"
                                     value={username || ""}
                                     onChange={(e) =>
@@ -948,9 +960,15 @@ function IntegrationCard({
                                     placeholder={
                                         onboardingRu.soulseekUsernamePlaceholder
                                     }
-                                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
+                                    autoComplete="username"
+                                    className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-base text-content outline-none placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
                                 />
+                                <label htmlFor={passwordId} className="sr-only">
+                                    Пароль Soulseek
+                                </label>
                                 <input
+                                    id={passwordId}
+                                    name={`${fieldId}-password`}
                                     type="password"
                                     value={password || ""}
                                     onChange={(e) =>
@@ -959,22 +977,34 @@ function IntegrationCard({
                                     placeholder={
                                         onboardingRu.soulseekPasswordPlaceholder
                                     }
-                                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
+                                    autoComplete="current-password"
+                                    className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-base text-content outline-none placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
                                 />
-                                <p className="text-xs text-white/50 mt-2">
+                                <p className="mt-2 text-xs text-content-muted">
                                     {onboardingRu.soulseekCredentialsHint}
                                 </p>
                             </>
                         ) : (
-                            <input
-                                type="password"
-                                value={apiKey || ""}
-                                onChange={(e) =>
-                                    onApiKeyChange?.(e.target.value)
-                                }
-                                placeholder={onboardingRu.apiKeyPlaceholder}
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
-                            />
+                            <div>
+                                <label
+                                    htmlFor={apiKeyId}
+                                    className="mb-1.5 block text-xs font-semibold text-content-secondary"
+                                >
+                                    Ключ API
+                                </label>
+                                <input
+                                    id={apiKeyId}
+                                    name={`${fieldId}-api-key`}
+                                    type="password"
+                                    value={apiKey || ""}
+                                    onChange={(e) =>
+                                        onApiKeyChange?.(e.target.value)
+                                    }
+                                    placeholder={onboardingRu.apiKeyPlaceholder}
+                                    autoComplete="off"
+                                    className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-base text-content outline-none placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
+                                />
+                            </div>
                         )}
                         <button
                             onClick={onTest}
@@ -992,7 +1022,7 @@ function IntegrationCard({
                                     : !username || !password)
                             }
                             tabIndex={0}
-                            className="w-full bg-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand/30"
+                            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-line bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-content transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {onboardingRu.testConnection}
                         </button>
@@ -1024,82 +1054,107 @@ function SoulseekCard({
     onTest,
     loading,
 }: SoulseekCardProps) {
+    const fieldId = useId().replaceAll(":", "");
+    const usernameId = `${fieldId}-username`;
+    const passwordId = `${fieldId}-password`;
+
     return (
         <div
-            className={`border rounded-lg transition-all ${
+            className={`rounded-2xl border transition-colors ${
                 enabled
                     ? "bg-surface-raised border-brand/25"
-                    : "bg-white/5 border-white/10"
+                    : "border-line bg-white/[0.035]"
             }`}
         >
             <div className="p-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="flex items-start justify-between gap-3 sm:items-center">
+                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                         <div
                             className={`w-9 h-9 rounded-lg flex items-center justify-center ${
                                 enabled
                                     ? "bg-brand/10 border border-brand/20 text-brand"
-                                    : "bg-white/5 border border-white/10 text-white/40"
+                                    : "border border-line bg-white/[0.04] text-content-muted"
                             }`}
                         >
-                            <svg
-                                className="w-6 h-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                />
-                            </svg>
+                            <Search className="h-6 w-6" aria-hidden="true" />
                         </div>
-                        <div>
-                            <h3 className="text-white font-bold">Soulseek</h3>
-                            <p className="text-sm text-white/50">
+                        <div className="min-w-0">
+                            <h3 className="font-bold text-content">Soulseek</h3>
+                            <p className="text-sm leading-5 text-content-muted">
                                 {onboardingRu.soulseekDescription}
                             </p>
                         </div>
                     </div>
                     <button
+                        type="button"
                         onClick={onToggle}
-                        onKeyDown={(e) => e.key === "Enter" && onToggle()}
-                        tabIndex={0}
-                        className={`relative w-11 h-6 rounded-lg transition-all ${
-                            enabled ? "bg-brand" : "bg-white/20"
-                        } focus:outline-none focus:ring-2 focus:ring-brand/30`}
+                        role="switch"
+                        aria-checked={enabled}
+                        aria-label={`${enabled ? "Отключить" : "Включить"} Soulseek`}
+                        className="grid min-h-11 min-w-11 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                     >
-                        <div
-                            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-brand rounded-lg transition-all shadow-lg ${
-                                enabled ? "translate-x-5" : ""
+                        <span
+                            aria-hidden="true"
+                            className={`relative h-6 w-11 rounded-full transition-colors ${
+                                enabled ? "bg-brand" : "bg-white/20"
                             }`}
-                        />
+                        >
+                            <span
+                                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-lg transition-transform ${
+                                    enabled ? "translate-x-5" : ""
+                                }`}
+                            />
+                        </span>
                     </button>
                 </div>
 
                 {enabled && (
                     <div className="space-y-3 mt-4 pt-4 border-t border-white/10">
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => onUsernameChange(e.target.value)}
-                            placeholder={
-                                onboardingRu.soulseekUsernamePlaceholder
-                            }
-                            className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
-                        />
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => onPasswordChange(e.target.value)}
-                            placeholder={
-                                onboardingRu.soulseekPasswordPlaceholder
-                            }
-                            className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all "
-                        />
-                        <p className="text-xs text-white/50">
+                        <div>
+                            <label
+                                htmlFor={usernameId}
+                                className="mb-1.5 block text-xs font-semibold text-content-secondary"
+                            >
+                                Имя пользователя Soulseek
+                            </label>
+                            <input
+                                id={usernameId}
+                                name={`${fieldId}-username`}
+                                type="text"
+                                value={username}
+                                onChange={(e) =>
+                                    onUsernameChange(e.target.value)
+                                }
+                                placeholder={
+                                    onboardingRu.soulseekUsernamePlaceholder
+                                }
+                                autoComplete="username"
+                                className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-base text-content outline-none placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label
+                                htmlFor={passwordId}
+                                className="mb-1.5 block text-xs font-semibold text-content-secondary"
+                            >
+                                Пароль Soulseek
+                            </label>
+                            <input
+                                id={passwordId}
+                                name={`${fieldId}-password`}
+                                type="password"
+                                value={password}
+                                onChange={(e) =>
+                                    onPasswordChange(e.target.value)
+                                }
+                                placeholder={
+                                    onboardingRu.soulseekPasswordPlaceholder
+                                }
+                                autoComplete="current-password"
+                                className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-base text-content outline-none placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
+                            />
+                        </div>
+                        <p className="text-xs text-content-muted">
                             {onboardingRu.createSoulseekAccount}{" "}
                             <a
                                 href="https://www.slsknet.org/news/node/1"
@@ -1121,7 +1176,7 @@ function SoulseekCard({
                             }
                             disabled={loading || !username || !password}
                             tabIndex={0}
-                            className="w-full bg-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand/30"
+                            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-line bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-content transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {onboardingRu.testConnection}
                         </button>

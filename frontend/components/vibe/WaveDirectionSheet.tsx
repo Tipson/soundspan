@@ -85,6 +85,7 @@ export const WAVE_MOODS: readonly {
 interface WaveDirectionSheetProps {
     activeMode: WaveFeedMode;
     activeMood: WaveMood | null;
+    isWaveActive?: boolean;
     onApply: (mode: WaveFeedMode, mood: WaveMood | null) => void;
     onClose: () => void;
 }
@@ -117,6 +118,7 @@ function nextRadioIndex(
 export function WaveDirectionSheet({
     activeMode,
     activeMood,
+    isWaveActive = false,
     onApply,
     onClose,
 }: WaveDirectionSheetProps) {
@@ -168,6 +170,7 @@ export function WaveDirectionSheet({
         () => WAVE_MOODS.find((mood) => mood.id === draftMood) ?? WAVE_MOODS[0],
         [draftMood],
     );
+    const applyLabel = isWaveActive ? "Обновить волну" : "Сохранить настройку";
     const handleRadioKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
         const currentIndex = WAVE_MODES.findIndex(
             (mode) => mode.id === draftMode,
@@ -382,9 +385,16 @@ export function WaveDirectionSheet({
                 </div>
 
                 <div className="mt-6 grid gap-4 border-t border-white/8 pt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                    <p className="text-sm text-content-secondary">
-                        {ru.vibe.selected}: {selectedDefinition.shortLabel} ·{" "}
-                        {selectedMoodDefinition.label}. {ru.vibe.tuneAnytime}
+                    <p className="text-sm leading-5 text-content-secondary">
+                        <span className="block font-semibold text-content-body">
+                            {ru.vibe.selected}: {selectedDefinition.shortLabel}{" "}
+                            · {selectedMoodDefinition.label}
+                        </span>
+                        <span className="mt-1 block">
+                            {isWaveActive
+                                ? "Текущий трек продолжит играть, дальше — новая настройка."
+                                : "Настройка сохранится для следующего запуска волны."}
+                        </span>
                     </p>
                     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                         <button
@@ -397,9 +407,10 @@ export function WaveDirectionSheet({
                         <button
                             type="button"
                             onClick={() => onApply(draftMode, draftMood)}
+                            aria-label={`${applyLabel}: ${selectedDefinition.label}, ${selectedMoodDefinition.label}`}
                             className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
                         >
-                            {ru.vibe.use}: {selectedDefinition.label}
+                            {applyLabel}
                         </button>
                     </div>
                 </div>

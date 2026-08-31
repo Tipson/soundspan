@@ -81,6 +81,7 @@ test("onboarding is a Russian accessible dialog and explains that it does not cr
     const dialog = mounted.container.querySelector('[role="dialog"]');
 
     assert.ok(dialog);
+    assert.equal(dialog.getAttribute("data-taste-stage"), "spectral");
     assert.equal(dialog.getAttribute("aria-modal"), "true");
     assert.ok(dialog.getAttribute("aria-labelledby"));
     assert.ok(dialog.getAttribute("aria-describedby"));

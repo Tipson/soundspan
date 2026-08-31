@@ -214,7 +214,7 @@ function AlbumGrid({
     requestControls,
 }: Omit<AvailableAlbumsProps, "artistName">) {
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {albums.map((album, index) => (
                 <LazyAlbumCard
                     key={album.id}
@@ -260,7 +260,7 @@ export function AvailableAlbums({
             {/* Studio Albums Section */}
             {studioAlbums.length > 0 && (
                 <section>
-                    <h2 className="text-xl font-bold mb-4">
+                    <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
                         {ru.catalog.availableAlbums}
                     </h2>
                     <div data-tv-section="available-albums">
@@ -281,7 +281,7 @@ export function AvailableAlbums({
             {/* EPs, Singles & Demos Section */}
             {epsAndSingles.length > 0 && (
                 <section>
-                    <h2 className="text-xl font-bold mb-4">
+                    <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
                         {ru.catalog.singles}
                     </h2>
                     <div data-tv-section="available-eps-singles">

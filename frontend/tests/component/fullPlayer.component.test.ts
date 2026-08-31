@@ -310,6 +310,9 @@ test("FullPlayer presents an 80px identity, transport and actions dock", async (
     assert.match(html, /data-player-region="identity"/);
     assert.match(html, /data-player-region="transport"/);
     assert.match(html, /data-player-region="actions"/);
+    assert.match(html, /data-player-control-budget="transport-3-utilities-4"/);
+    assert.doesNotMatch(html, /data-compact-dock-control="shuffle"/);
+    assert.doesNotMatch(html, /data-compact-dock-control="repeat"/);
 });
 
 test("FullPlayer keeps stream diagnostics inside track overflow", async () => {

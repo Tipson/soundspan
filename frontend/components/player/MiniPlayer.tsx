@@ -141,16 +141,16 @@ export function MiniPlayer() {
                     <div className="min-w-0 flex-1">
                         {audioError ? (
                             <>
-                                <p className="truncate text-sm font-semibold text-red-300">
+                                <p className="truncate text-sm font-semibold text-error">
                                     Ошибка воспроизведения
                                 </p>
-                                <p className="truncate text-xs text-red-200/70">
+                                <p className="truncate text-xs text-error/75">
                                     Нажмите «Повторить», чтобы переподключиться
                                 </p>
                             </>
                         ) : (
                             <>
-                                <p className="truncate text-[13px] font-semibold text-white min-[360px]:text-sm">
+                                <p className="truncate text-[13px] font-semibold text-content min-[360px]:text-sm">
                                     {title}
                                 </p>
                                 <p className="mt-0.5 truncate text-xs text-content-muted">
@@ -201,10 +201,10 @@ export function MiniPlayer() {
                             className={cn(
                                 "h-11 w-11 rounded-full transition shadow-md flex items-center justify-center",
                                 audioError
-                                    ? "bg-red-500 text-white hover:bg-red-400"
+                                    ? "bg-error text-content hover:brightness-110"
                                     : isBuffering
-                                      ? "bg-white/80 text-black"
-                                      : "bg-white text-black hover:scale-105",
+                                      ? "bg-content/80 text-surface"
+                                      : "bg-content text-surface hover:scale-105",
                             )}
                             aria-label={
                                 audioError

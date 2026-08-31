@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Inbox, X } from "lucide-react";
+import { AlertTriangle, Check, Inbox, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/utils/cn";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import type { MusicRequest } from "@/lib/api/requests";
 import {
     REQUEST_FILTER_OPTIONS,
@@ -55,17 +58,18 @@ function RequestFilterPills(props: {
         <div
             role="group"
             aria-label={libraryOperationsRu.requests.filterAria}
-            className="flex flex-wrap items-center gap-1 rounded-full bg-white/5 p-1"
+            className="flex flex-wrap items-center gap-1 rounded-2xl border border-line bg-surface-elevated p-1"
         >
             {REQUEST_FILTER_OPTIONS.map((option) => (
                 <button
                     key={option.value}
                     onClick={() => props.onChange(option.value)}
+                    aria-pressed={props.filter === option.value}
                     className={cn(
-                        "px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                        "min-h-11 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover",
                         props.filter === option.value
-                            ? "bg-brand text-black"
-                            : "text-gray-400 hover:text-white",
+                            ? "bg-brand text-surface"
+                            : "text-content-muted hover:bg-surface-hover hover:text-content",
                     )}
                 >
                     {requestFilterLabelRu(option.value)}
@@ -82,22 +86,24 @@ function ReviewActions(props: {
 }) {
     return (
         <div className="flex items-center gap-2">
-            <button
+            <Button
+                variant="primary"
                 onClick={props.onApprove}
                 disabled={props.busy}
-                className="flex items-center gap-1.5 rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-black transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full px-3.5 text-xs"
             >
                 <Check className="h-3.5 w-3.5" />
                 {libraryOperationsRu.requests.approve}
-            </button>
-            <button
+            </Button>
+            <Button
+                variant="secondary"
                 onClick={props.onDeny}
                 disabled={props.busy}
-                className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-all hover:bg-red-500/20 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full px-3.5 text-xs hover:border-error/30 hover:bg-error/10 hover:text-error"
             >
                 <X className="h-3.5 w-3.5" />
                 {libraryOperationsRu.requests.decline}
-            </button>
+            </Button>
         </div>
     );
 }
@@ -116,9 +122,9 @@ function RequestRow(props: {
     const showCancel =
         !props.isAdmin && canCancelRequest(request, props.viewerId);
     return (
-        <li className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+        <li className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-elevated px-4 py-4 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-white">
+                <p className="truncate text-sm font-semibold text-content">
                     <Link
                         href={requestArtistHref(request)}
                         className="hover:underline"
@@ -133,7 +139,7 @@ function RequestRow(props: {
                         {request.albumTitle}
                     </Link>
                 </p>
-                <p className="truncate text-xs text-gray-400">
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-content-muted sm:truncate">
                     {props.isAdmin && request.user
                         ? `${libraryOperationsRu.requests.requestedBy} ${request.user.username} · `
                         : ""}
@@ -155,38 +161,47 @@ function RequestRow(props: {
                 />
             )}
             {showCancel && (
-                <button
+                <Button
+                    variant="secondary"
                     onClick={() => props.onCancel(request.id)}
                     disabled={props.busy}
-                    className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-all hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-full px-3.5 text-xs sm:w-auto"
                 >
                     {libraryOperationsRu.requests.cancel}
-                </button>
+                </Button>
             )}
         </li>
     );
 }
 
-function EmptyState(props: { isAdmin: boolean; filtered: boolean }) {
+function RequestEmptyState(props: { isAdmin: boolean; filtered: boolean }) {
+    const description = props.filtered
+        ? libraryOperationsRu.requests.filteredEmpty
+        : props.isAdmin
+          ? libraryOperationsRu.requests.adminEmpty
+          : libraryOperationsRu.requests.userEmpty;
+
     return (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-6 py-12 text-center">
-            <Inbox className="h-8 w-8 text-white/30" />
-            <p className="text-sm text-gray-400">
-                {props.filtered
-                    ? libraryOperationsRu.requests.filteredEmpty
+        <EmptyState
+            icon={<Inbox className="size-7" aria-hidden="true" />}
+            title={
+                props.filtered
+                    ? "По этому фильтру ничего нет"
                     : props.isAdmin
-                      ? libraryOperationsRu.requests.adminEmpty
-                      : libraryOperationsRu.requests.userEmpty}
-            </p>
+                      ? "Очередь запросов пуста"
+                      : "Запросов пока нет"
+            }
+            description={description}
+        >
             {!props.isAdmin && (
                 <Link
                     href="/library"
-                    className="text-sm font-medium text-brand hover:underline"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-line bg-surface-elevated px-5 py-2.5 text-sm font-semibold text-content transition-colors hover:bg-surface-hover"
                 >
                     {libraryOperationsRu.requests.browseLibrary}
                 </Link>
             )}
-        </div>
+        </EmptyState>
     );
 }
 
@@ -276,11 +291,7 @@ export default function RequestsPage() {
     const mineQuery = useMyMusicRequests(Boolean(isAuthenticated) && !isAdmin);
 
     if (authLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message="Загружаем запросы…" />;
     }
     if (!isAuthenticated) return null;
 
@@ -291,37 +302,79 @@ export default function RequestsPage() {
     ).length;
 
     return (
-        <div className="min-h-screen px-4 py-6 md:px-8">
-            <PageHeader
-                title={
-                    isAdmin
-                        ? libraryOperationsRu.requests.title
-                        : libraryOperationsRu.requests.myTitle
-                }
-                subtitle={
-                    isAdmin
-                        ? libraryOperationsRu.requests.adminSubtitle
-                        : libraryOperationsRu.requests.userSubtitle
-                }
-                icon={Inbox}
-                badge={
-                    pendingCount > 0 ? (
-                        <Badge variant="warning">
-                            {formatPendingRequestsRu(pendingCount)}
-                        </Badge>
-                    ) : null
-                }
-                actions={
-                    <RequestFilterPills filter={filter} onChange={setFilter} />
-                }
-            />
-            <div className="mx-auto mt-6 max-w-4xl">
+        <main
+            data-utility-page="requests"
+            className="min-h-screen px-4 py-6 md:px-8"
+        >
+            <div className="mx-auto w-full max-w-6xl">
+                <PageHeader
+                    title={
+                        isAdmin
+                            ? libraryOperationsRu.requests.title
+                            : libraryOperationsRu.requests.myTitle
+                    }
+                    subtitle={
+                        isAdmin
+                            ? libraryOperationsRu.requests.adminSubtitle
+                            : libraryOperationsRu.requests.userSubtitle
+                    }
+                    icon={Inbox}
+                    badge={
+                        pendingCount > 0 ? (
+                            <Badge variant="warning">
+                                {formatPendingRequestsRu(pendingCount)}
+                            </Badge>
+                        ) : null
+                    }
+                    actions={
+                        <RequestFilterPills
+                            filter={filter}
+                            onChange={setFilter}
+                        />
+                    }
+                />
                 {activeQuery.isLoading ? (
-                    <div className="flex justify-center py-16">
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        className="flex flex-col items-center justify-center gap-3 py-16 text-content-muted"
+                    >
                         <GradientSpinner size="md" />
+                        <span className="text-sm">Загружаем запросы…</span>
+                    </div>
+                ) : activeQuery.isError ? (
+                    <div
+                        role="alert"
+                        className="flex flex-col items-start gap-4 rounded-2xl border border-error/25 bg-error/5 p-5 sm:flex-row sm:items-center"
+                    >
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-error/10 text-error">
+                            <AlertTriangle
+                                className="size-5"
+                                aria-hidden="true"
+                            />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <h2 className="font-semibold text-content">
+                                Не удалось загрузить запросы
+                            </h2>
+                            <p className="mt-1 text-sm leading-6 text-content-muted">
+                                Проверьте соединение и попробуйте ещё раз.
+                            </p>
+                        </div>
+                        <Button
+                            variant="secondary"
+                            className="w-full sm:w-auto"
+                            onClick={() => void activeQuery.refetch()}
+                        >
+                            <RefreshCw className="size-4" aria-hidden="true" />
+                            Повторить
+                        </Button>
                     </div>
                 ) : rows.length === 0 ? (
-                    <EmptyState isAdmin={isAdmin} filtered={filter !== "all"} />
+                    <RequestEmptyState
+                        isAdmin={isAdmin}
+                        filtered={filter !== "all"}
+                    />
                 ) : (
                     <RequestList
                         rows={rows}
@@ -330,6 +383,6 @@ export default function RequestsPage() {
                     />
                 )}
             </div>
-        </div>
+        </main>
     );
 }

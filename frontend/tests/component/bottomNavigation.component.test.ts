@@ -46,7 +46,7 @@ mock.module("@/hooks/useMediaQuery", {
     },
 });
 
-test("mobile navigation leaves search to the persistent top bar", async () => {
+test("mobile navigation keeps search in the persistent header", async () => {
     const { BottomNavigation } =
         await import("../../components/layout/BottomNavigation");
     const html = renderToStaticMarkup(React.createElement(BottomNavigation));
@@ -78,6 +78,11 @@ test("mobile navigation leaves search to the persistent top bar", async () => {
         assert.ok(link, `missing ${label}`);
         assert.match(link, /min-h-11/);
     }
+
+    assert.equal(
+        (html.match(/data-shell-primary-destination=/g) ?? []).length,
+        3,
+    );
 
     assert.ok(libraryClick);
     const hardNavigations: string[] = [];

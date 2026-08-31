@@ -254,6 +254,7 @@ export function DiscoverTracksList({
                         >
                             <TrackOverflowMenu
                                 track={actionTrack}
+                                triggerClassName="h-11 w-11 p-0"
                                 showPlayNext={isPlayable}
                                 showAddToQueue={isPlayable}
                                 showAddToPlaylist={isPlayable}

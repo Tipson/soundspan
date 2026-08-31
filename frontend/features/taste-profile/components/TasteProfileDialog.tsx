@@ -239,7 +239,7 @@ export function TasteProfileDialog({
 
     return (
         <div
-            className="fixed inset-0 z-[10020] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-5"
+            className="fixed inset-0 z-[10020] flex items-end justify-center overflow-hidden bg-black/75 backdrop-blur-sm sm:items-center sm:p-5"
             role="presentation"
             onMouseDown={(event) => {
                 if (
@@ -252,14 +252,19 @@ export function TasteProfileDialog({
             }}
         >
             <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/15 via-transparent to-brand-light/10"
+            />
+            <div
                 ref={dialogRef}
                 role="dialog"
+                data-taste-stage="spectral"
                 aria-modal="true"
                 aria-labelledby={titleId}
                 aria-describedby={descriptionId}
                 aria-busy={isSaving}
                 tabIndex={-1}
-                className="wave-material max-h-[92dvh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-surface-raised/95 px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-5 shadow-2xl shadow-black/70 backdrop-blur-2xl sm:max-w-3xl sm:rounded-[2rem] sm:p-7"
+                className="wave-material relative max-h-[92dvh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-surface-raised/95 px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-5 shadow-2xl shadow-black/70 backdrop-blur-2xl sm:max-w-3xl sm:rounded-[2rem] sm:p-7"
             >
                 <header className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 sm:gap-4">
                     <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-brand/25 bg-brand/12 text-brand-light">

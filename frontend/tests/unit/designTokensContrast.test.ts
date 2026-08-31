@@ -53,6 +53,51 @@ test("text and brand tokens meet the normal-text contrast floor", () => {
     }
 });
 
+test("the spectral-stage palette stays on the approved semantic values", () => {
+    assert.deepEqual(
+        {
+            canvas: DESIGN_TOKENS.surface,
+            stage: DESIGN_TOKENS["surface-raised"],
+            surface: DESIGN_TOKENS["surface-elevated"],
+            active: DESIGN_TOKENS["surface-active"],
+            ink: DESIGN_TOKENS.content,
+            muted: DESIGN_TOKENS["content-muted"],
+            signal: DESIGN_TOKENS.brand,
+        },
+        {
+            canvas: "#080a0f",
+            stage: "#11151d",
+            surface: "#1a202a",
+            active: "#222a36",
+            ink: "#f7f8fc",
+            muted: "#aeb6c5",
+            signal: "#8fa8ff",
+        },
+    );
+});
+
+test("secondary copy remains readable on every shared application surface", () => {
+    const surfaces = [
+        DESIGN_TOKENS.surface,
+        DESIGN_TOKENS["surface-raised"],
+        DESIGN_TOKENS["surface-elevated"],
+        DESIGN_TOKENS["surface-active"],
+    ];
+
+    for (const foreground of [
+        DESIGN_TOKENS["content-muted"],
+        DESIGN_TOKENS["content-secondary"],
+        DESIGN_TOKENS["content-body"],
+    ]) {
+        for (const background of surfaces) {
+            assert.ok(
+                contrastRatio(foreground, background) >= AA_NORMAL,
+                `${foreground} must remain readable on ${background}`,
+            );
+        }
+    }
+});
+
 test("gray-500 and gray-600 document contrast failures on surface", () => {
     assert.ok(contrastRatio("#6b7280", DESIGN_TOKENS.surface) < AA_NORMAL);
     assert.ok(contrastRatio("#4b5563", DESIGN_TOKENS.surface) < AA_NORMAL);

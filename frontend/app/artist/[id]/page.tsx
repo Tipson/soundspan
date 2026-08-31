@@ -18,6 +18,7 @@ import { useListenTogether } from "@/lib/listen-together-context";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { resolvePreferenceTrackId } from "@/lib/trackRef";
 import { shuffleArray } from "@/utils/shuffle";
+import { Music2 } from "lucide-react";
 
 // Hooks
 import { useArtistData } from "@/features/artist/hooks/useArtistData";
@@ -39,6 +40,7 @@ import { PopularTracks } from "@/features/artist/components/PopularTracks";
 import { Discography } from "@/features/artist/components/Discography";
 import { AvailableAlbums } from "@/features/artist/components/AvailableAlbums";
 import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
+import { ArtistTrackContinuation } from "@/features/artist/components/ArtistTrackContinuation";
 import { ProviderAlbumsGrid } from "@/features/search/components/ProviderAlbumsGrid";
 import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
 import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
@@ -54,8 +56,6 @@ import {
 import {
     artistRu,
     formatArtistAlbumPlaying,
-    formatArtistLoadMoreTracks,
-    formatArtistProviderLoadMoreTracks,
     formatArtistRadioPlaying,
     formatArtistSharedRadioMessage,
 } from "@/lib/i18n/musicPagesRu";
@@ -69,12 +69,14 @@ function ListSectionSkeleton({
 }) {
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">{title}</h2>
-            <div className="space-y-2">
+            <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                {title}
+            </h2>
+            <div className="divide-y divide-white/[0.06] border-y border-white/[0.08]">
                 {Array.from({ length: rows }).map((_, index) => (
                     <div
                         key={`${title}-row-${index}`}
-                        className="h-12 rounded-md bg-white/5 animate-pulse"
+                        className="h-14 animate-pulse bg-white/[0.035] motion-reduce:animate-none"
                     />
                 ))}
             </div>
@@ -91,12 +93,14 @@ function GridSectionSkeleton({
 }) {
     return (
         <section>
-            <h2 className="text-xl font-bold mb-4">{title}</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                {title}
+            </h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                 {Array.from({ length: columns }).map((_, index) => (
                     <div
                         key={`${title}-grid-${index}`}
-                        className="aspect-square rounded-md bg-white/5 animate-pulse"
+                        className="aspect-square animate-pulse rounded-xl bg-white/5 motion-reduce:animate-none"
                     />
                 ))}
             </div>
@@ -112,7 +116,7 @@ function ArtistViewEmptyState({
     description: string;
 }) {
     return (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-12 text-center">
+        <div className="border-y border-white/[0.08] px-5 py-14 text-center">
             <h2 className="text-xl font-bold text-white">{title}</h2>
             <p className="mx-auto mt-2 max-w-xl text-sm text-gray-400">
                 {description}
@@ -551,7 +555,10 @@ export default function ArtistPage() {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center space-y-4">
-                    <div className="text-6xl text-white/20">♪</div>
+                    <Music2
+                        className="mx-auto h-14 w-14 text-white/20"
+                        aria-hidden="true"
+                    />
                     <h1 className="text-2xl font-semibold text-white">
                         {artistRu.notFound}
                     </h1>
@@ -560,7 +567,7 @@ export default function ArtistPage() {
                     </p>
                     <button
                         onClick={() => router.back()}
-                        className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-white transition-colors"
+                        className="min-h-11 rounded-lg bg-neutral-800 px-4 py-2 text-white transition-colors hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                     >
                         {artistRu.goBack}
                     </button>
@@ -570,7 +577,10 @@ export default function ArtistPage() {
     }
 
     return (
-        <div className="flex min-h-screen flex-col pb-32 md:pb-24">
+        <div
+            data-artist-page-canvas="open"
+            className="flex min-h-screen flex-col"
+        >
             <ArtistHero
                 artist={artist}
                 source={source || "discovery"}
@@ -646,8 +656,8 @@ export default function ArtistPage() {
                     }}
                 />
 
-                <div className="relative mx-auto w-full max-w-[1800px] space-y-10 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-                    <div className="sticky top-2 z-20 rounded-[18px] border border-white/[0.08] bg-black/55 p-2 shadow-[0_18px_48px_rgb(0_0_0/0.2)] backdrop-blur-xl">
+                <div className="relative mx-auto w-full max-w-[1600px] space-y-10 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+                    <div className="sticky top-2 z-20 -mx-1 border-y border-white/[0.08] bg-surface/85 px-1 py-2 backdrop-blur-xl">
                         <ArtistViewTabs
                             activeView={activeView}
                             pathname={pathname}
@@ -689,53 +699,40 @@ export default function ArtistPage() {
                         />
                     ) : null}
 
-                    {activeView === "tracks" &&
-                        libraryArtistTracksEnabled &&
-                        artistTracksQuery.hasNextPage && (
-                            <div className="-mt-7 flex justify-center">
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        void artistTracksQuery.fetchNextPage()
-                                    }
-                                    disabled={
-                                        artistTracksQuery.isFetchingNextPage
-                                    }
-                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
-                                >
-                                    {artistTracksQuery.isFetchingNextPage
-                                        ? artistRu.loadingTracks
-                                        : formatArtistLoadMoreTracks(
-                                              artistTracksQuery.tracks.length,
-                                              artistTracksQuery.total,
-                                          )}
-                                </button>
-                            </div>
-                        )}
-
-                    {activeView === "tracks" &&
-                        providerCatalogEnabled &&
-                        providerArtistTracksQuery.hasNextPage && (
-                            <div className="-mt-7 flex justify-center">
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        providerArtistTracksQuery.fetchNextPage()
-                                    }
-                                    disabled={
-                                        providerArtistTracksQuery.isFetchingNextPage
-                                    }
-                                    className="min-h-11 rounded-full border border-white/15 bg-white/[0.04] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-wait disabled:opacity-60"
-                                >
-                                    {providerArtistTracksQuery.isFetchingNextPage
-                                        ? artistRu.loadingTracks
-                                        : formatArtistProviderLoadMoreTracks(
+                    {activeView === "tracks" ? (
+                        <ArtistTrackContinuation
+                            visibleTrackCount={visibleArtistTracks.length}
+                            library={
+                                libraryArtistTracksEnabled &&
+                                artistTracksQuery.hasNextPage
+                                    ? {
+                                          loaded: artistTracksQuery.tracks
+                                              .length,
+                                          total: artistTracksQuery.total,
+                                          isFetching:
+                                              artistTracksQuery.isFetchingNextPage,
+                                          loadMore: () =>
+                                              artistTracksQuery.fetchNextPage(),
+                                      }
+                                    : undefined
+                            }
+                            provider={
+                                providerCatalogEnabled &&
+                                providerArtistTracksQuery.hasNextPage
+                                    ? {
+                                          loadedReleases:
                                               providerArtistTracksQuery.loadedReleaseCount,
+                                          totalReleases:
                                               providerArtistTracksQuery.totalReleaseCount,
-                                          )}
-                                </button>
-                            </div>
-                        )}
+                                          isFetching:
+                                              providerArtistTracksQuery.isFetchingNextPage,
+                                          loadMore: () =>
+                                              providerArtistTracksQuery.fetchNextPage(),
+                                      }
+                                    : undefined
+                            }
+                        />
+                    ) : null}
 
                     {showReleases &&
                         (activeView === "albums" || activeView === "singles") &&
@@ -775,7 +772,7 @@ export default function ArtistPage() {
 
                     {showReleases && visibleProviderAlbums.length > 0 && (
                         <section>
-                            <h2 className="mb-4 text-xl font-bold">
+                            <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
                                 {activeView === "singles"
                                     ? artistRu.singlesAndEps
                                     : artistRu.albums}

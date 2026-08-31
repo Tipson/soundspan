@@ -241,6 +241,30 @@ test("shows the configured SSO button and local login form", async (t) => {
 
     assert.equal(findButton("Войти через Acme ID").disabled, false);
     assert.ok(findInput("Имя пользователя или почта"));
+    assert.ok(document.querySelector('[data-auth-stage="spectral"]'));
+});
+
+test("localizes rejected local credentials without exposing backend copy", async (t) => {
+    login.mock.mockImplementationOnce(async () => {
+        throw new Error("Invalid credentials");
+    });
+    const harness = await mountLoginPage();
+    t.after(harness.unmount);
+    await waitFor(() => document.querySelector("#username") !== null);
+
+    await React.act(async () => {
+        typeInto(findInput("Имя пользователя или почта"), "listener");
+        typeInto(findInput("Пароль"), "wrong-password");
+    });
+    await click(findButton("Войти"));
+    await waitFor(
+        () =>
+            document.body.textContent?.includes(
+                "Неверное имя пользователя или пароль",
+            ) === true,
+    );
+
+    assert.doesNotMatch(document.body.textContent ?? "", /Invalid credentials/);
 });
 
 test("hides the SSO button when OIDC is disabled", async (t) => {

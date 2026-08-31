@@ -34,18 +34,23 @@ export function Discography({
 
     return (
         <section>
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">{title}</h2>
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <h2 className="text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                    {title}
+                </h2>
                 {/* Sort Dropdown */}
                 <select
                     value={sortBy}
+                    aria-label="Сортировка дискографии"
                     onChange={(e) =>
                         onSortChange(e.target.value as "year" | "dateAdded")
                     }
-                    className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-white text-xs focus:outline-none focus:border-white/20 [&>option]:bg-surface-hover [&>option]:text-white"
+                    className="min-h-11 rounded-full border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light [&>option]:bg-surface-hover [&>option]:text-white"
                 >
                     <option value="year">{ru.catalog.yearNewest}</option>
-                    <option value="dateAdded">{ru.catalog.dateAddedRecent}</option>
+                    <option value="dateAdded">
+                        {ru.catalog.dateAddedRecent}
+                    </option>
                 </select>
             </div>
             <div

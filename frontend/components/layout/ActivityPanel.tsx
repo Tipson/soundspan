@@ -283,7 +283,7 @@ export function ActivityPanel({
         <aside
             data-activity-panel-layout="overlay"
             aria-label={adminActivityRu.activity.aria}
-            className="fixed bottom-[calc(6.5rem+var(--safe-area-bottom))] right-3 top-[4.5rem] z-[90] flex w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d0d]/98 shadow-2xl shadow-black/60 backdrop-blur-xl"
+            className="fixed bottom-[calc(6.5rem+var(--safe-area-bottom))] right-3 top-[4.5rem] z-[90] flex w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-line-strong bg-surface/95 shadow-2xl shadow-black/60 backdrop-blur-xl"
         >
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
                 <h2 className="whitespace-nowrap text-base font-semibold text-white">
@@ -386,7 +386,11 @@ export function ActivityPanel({
  */
 export function ActivityPanelToggle({
     pollingEnabled = true,
-}: { pollingEnabled?: boolean } = {}) {
+    onToggle,
+}: {
+    pollingEnabled?: boolean;
+    onToggle?: () => void;
+} = {}) {
     const { downloadStatus } = useDownloadContext();
     const { user } = useAuth();
     const { notifications } = useNotifications({ enabled: pollingEnabled });
@@ -410,8 +414,12 @@ export function ActivityPanelToggle({
 
     return (
         <button
-            onClick={() =>
-                window.dispatchEvent(new CustomEvent("toggle-activity-panel"))
+            onClick={
+                onToggle ??
+                (() =>
+                    window.dispatchEvent(
+                        new CustomEvent("toggle-activity-panel"),
+                    ))
             }
             className={cn(
                 "relative p-2 rounded-full transition-all",

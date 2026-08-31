@@ -89,9 +89,13 @@ test("Home discovery keeps provider rows without duplicating Vibe mood controls"
     );
 
     assert.match(html, /Станции для вас/);
+    assert.match(html, /data-home-rail="stations"/);
+    assert.match(html, /data-home-card-shape="landscape"/);
     assert.doesNotMatch(html, /Your provider mix/);
     assert.match(html, /Personal station/);
     assert.match(html, /Новое и заметное/);
+    assert.match(html, /data-home-rail="discoveries"/);
+    assert.match(html, /data-home-card-shape="square"/);
     assert.match(html, /Fresh album/);
     assert.match(html, /Chart track/);
     assert.match(html, /href="\/explore\/yt-playlist\/chart"/);

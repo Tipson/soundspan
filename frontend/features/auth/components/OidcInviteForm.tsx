@@ -41,7 +41,7 @@ export function OidcInviteForm(props: OidcInviteFormProps) {
     const form = useOidcInviteForm(props);
     return (
         <form onSubmit={form.handleSubmit} className="space-y-4">
-            <p className="text-sm text-white/70">
+            <p className="text-sm leading-6 text-content-secondary">
                 {ru.auth.oidcInviteDescription}
             </p>
             <InviteError message={form.error} />
@@ -49,7 +49,7 @@ export function OidcInviteForm(props: OidcInviteFormProps) {
             <button
                 type="submit"
                 disabled={form.isLoading}
-                className="w-full py-3 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark disabled:opacity-50"
+                className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand px-5 py-3 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
             >
                 {form.isLoading && (
                     <Loader2 className="inline w-5 h-5 mr-2 animate-spin" />
@@ -65,7 +65,7 @@ function InviteError({ message }: { message: string }) {
     return (
         <div
             role="alert"
-            className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-400"
+            className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm leading-5 text-red-200"
         >
             {message}
         </div>
@@ -77,7 +77,7 @@ function InviteCodeField({ form }: { form: OidcInviteFormState }) {
         <div>
             <label
                 htmlFor="oidcInviteCode"
-                className="block text-sm font-medium text-white/90 mb-1.5"
+                className="mb-1.5 block text-sm font-medium text-content"
             >
                 {ru.auth.inviteCode}
             </label>
@@ -90,7 +90,8 @@ function InviteCodeField({ form }: { form: OidcInviteFormState }) {
                 autoFocus
                 autoCapitalize="characters"
                 autoCorrect="off"
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+                autoComplete="one-time-code"
+                className="min-h-12 w-full rounded-2xl border border-line bg-surface-elevated px-4 py-3 text-center text-base font-semibold tracking-[0.18em] text-content outline-none transition-colors hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
             />
         </div>
     );

@@ -361,6 +361,8 @@ test("renders empty-state copy and hides action buttons when there are no tracks
 
     const html = renderWithQueryClient(MyLikedPlaylistPage);
 
+    assert.match(html, /<h1[^>]*>Любимые треки<\/h1>/);
+    assert.doesNotMatch(html, />My Liked</);
     assert.match(html, /Любимых треков пока нет/);
     assert.match(html, /Нажмите на сердечко рядом с треком/);
 
@@ -386,6 +388,13 @@ test("renders consolidated action bar buttons when tracks exist", async () => {
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить всё в плейлист"/);
     assert.match(html, /title="Запустить радио по плейлисту"/);
+    const hero = html.match(
+        /<header[^>]*data-music-detail="hero"[^>]*>[\s\S]*?<\/header>/,
+    )?.[0];
+    assert.ok(hero);
+    assert.match(hero, /data-music-detail="actions"/);
+    assert.match(hero, /data-detail-action-tier="primary"/);
+    assert.match(hero, /data-detail-action-tier="secondary"/);
 });
 
 test("My Liked offers a manual device download for downloadable tracks only", async () => {
@@ -420,7 +429,7 @@ test("My Liked offers a manual device download for downloadable tracks only", as
 
     assert.match(html, /data-testid="device-collection-download"/);
     assert.match(html, /data-collection-id="playlist:my-liked"/);
-    assert.match(html, /data-collection-label="My Liked"/);
+    assert.match(html, /data-collection-label="Любимые треки"/);
     assert.match(html, /data-track-ids="local-1,yt:video-1"/);
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Button } from "@/components/ui/Button";
+import { SystemState } from "@/app/_components/SystemState";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { ru } from "@/lib/i18n/ru";
 
@@ -20,16 +20,11 @@ export default function Error({
     }, [error]);
 
     return (
-        <div className="flex h-screen items-center justify-center bg-black">
-            <div className="text-center">
-                <h2 className="text-2xl font-bold text-white mb-4">
-                    {ru.errors.title}
-                </h2>
-                <p className="text-gray-400 mb-6">
-                    {error.message || ru.errors.unexpected}
-                </p>
-                <Button onClick={reset}>{ru.common.tryAgain}</Button>
-            </div>
-        </div>
+        <SystemState
+            kind="error"
+            title={ru.errors.title}
+            description="Страница не ответила как ожидалось. Повторите попытку — музыка и настройки останутся на месте."
+            action={{ label: ru.common.tryAgain, onClick: reset }}
+        />
     );
 }

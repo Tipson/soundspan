@@ -240,7 +240,11 @@ export function PersonalizedTrackShelf({
     if (tracks.length === 0) return null;
 
     return (
-        <section aria-labelledby={titleId} className="relative min-w-0">
+        <section
+            data-home-rail="tracks"
+            aria-labelledby={titleId}
+            className="relative min-w-0"
+        >
             <div className="mb-3 flex items-end justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2.5">
@@ -301,7 +305,7 @@ export function PersonalizedTrackShelf({
                 ref={scrollContainerRef}
                 role="list"
                 data-testid="personalized-track-shelf-scroll"
-                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(252px,78vw)] gap-2 overflow-x-auto overscroll-x-contain scroll-smooth sm:auto-cols-[minmax(286px,360px)] motion-reduce:scroll-auto"
+                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(240px,68vw)] gap-2 overflow-x-auto overscroll-x-contain scroll-smooth sm:auto-cols-[minmax(272px,320px)] motion-reduce:scroll-auto"
             >
                 {tracks.map((track, index) => {
                     const imageUrl = trackImageUrl(track);

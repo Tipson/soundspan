@@ -1,3 +1,8 @@
+"use client";
+
+import { useContext } from "react";
+import { SettingsFieldContext } from "./settingsFieldContext";
+
 interface SettingsToggleProps {
     id?: string;
     checked: boolean;
@@ -14,6 +19,8 @@ export function SettingsToggle({
     onChange,
     disabled,
 }: SettingsToggleProps) {
+    const rowContext = useContext(SettingsFieldContext);
+
     return (
         <label className="relative inline-flex min-h-11 min-w-11 items-center justify-center cursor-pointer">
             <input
@@ -22,6 +29,7 @@ export function SettingsToggle({
                 checked={checked}
                 onChange={(e) => onChange(e.target.checked)}
                 disabled={disabled}
+                aria-labelledby={rowContext?.labelId}
                 className="sr-only peer"
             />
             <div

@@ -17,6 +17,7 @@ export interface Artist {
 
 export interface Album {
     id: string;
+    rgMbid?: string;
     title: string;
     coverUrl?: string;
     albumId?: string;

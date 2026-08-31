@@ -29,32 +29,41 @@ export function PageHeader({
     actions,
 }: PageHeaderProps) {
     return (
-        <div className={cn("mb-6", className)}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <div data-page-header="editorial" className={cn("mb-8", className)}>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
                 <div className="min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                        <Icon
-                            className={cn(
-                                "w-8 h-8 text-brand shrink-0",
-                                iconClassName,
-                            )}
-                        />
-                        <h1
-                            className={cn(
-                                "text-3xl font-bold text-white",
-                                titleClassName,
-                            )}
-                        >
-                            {title}
-                        </h1>
-                        {badge}
+                    <div className="mb-2 flex items-center gap-3">
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+                            <Icon
+                                className={cn("size-6", iconClassName)}
+                                aria-hidden="true"
+                            />
+                        </span>
+                        <div className="flex min-w-0 flex-wrap items-center gap-3">
+                            <h1
+                                className={cn(
+                                    "text-balance text-[clamp(2rem,5vw,3.5rem)] font-bold tracking-[-0.035em] text-content",
+                                    titleClassName,
+                                )}
+                            >
+                                {title}
+                            </h1>
+                            {badge}
+                        </div>
                     </div>
-                    <p className={cn("text-white/60 mt-1", subtitleClassName)}>
+                    <p
+                        className={cn(
+                            "max-w-2xl text-sm leading-6 text-content-muted sm:text-base",
+                            subtitleClassName,
+                        )}
+                    >
                         {subtitle}
                     </p>
                 </div>
                 {actions ? (
-                    <div className="flex items-center gap-2">{actions}</div>
+                    <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto sm:justify-end sm:pb-0">
+                        {actions}
+                    </div>
                 ) : null}
             </div>
         </div>

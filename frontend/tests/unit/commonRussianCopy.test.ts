@@ -4,7 +4,6 @@ import test from "node:test";
 
 const surfaceFiles = [
     "app/audiobooks/series/[name]/page.tsx",
-    "app/peer-playlists/[peerId]/[remoteId]/page.tsx",
     "app/podcasts/genre/[genreId]/page.tsx",
     "app/search/loading.tsx",
     "app/setup/page.tsx",

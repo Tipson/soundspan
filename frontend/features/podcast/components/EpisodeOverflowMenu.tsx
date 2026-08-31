@@ -93,8 +93,8 @@ export function EpisodeOverflowMenu({
                 className={cn(
                     "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-full p-2 transition-colors",
                     isOpen
-                        ? "bg-[#2a2a2a] text-white"
-                        : "text-gray-400 hover:bg-[#2a2a2a] hover:text-white",
+                        ? "bg-surface-active text-content"
+                        : "text-content-muted hover:bg-surface-hover hover:text-content",
                     triggerClassName,
                 )}
                 aria-label={podcastRu.detail.episodeActions}
@@ -107,15 +107,16 @@ export function EpisodeOverflowMenu({
 
             {isOpen && (
                 <div
-                    className="absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-md border border-white/10 bg-[#111111] p-1 shadow-xl"
+                    className="absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-xl border border-line-strong bg-surface-raised p-1 shadow-xl"
                     role="menu"
+                    tabIndex={-1}
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                 >
                     <button
                         type="button"
                         onClick={handlePlayNext}
-                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10 hover:text-white"
+                        className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
                         role="menuitem"
                         title={podcastRu.detail.playNext}
                     >
@@ -125,7 +126,7 @@ export function EpisodeOverflowMenu({
                     <button
                         type="button"
                         onClick={handleAddToQueue}
-                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10 hover:text-white"
+                        className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
                         role="menuitem"
                         title={podcastRu.detail.addToQueue}
                     >

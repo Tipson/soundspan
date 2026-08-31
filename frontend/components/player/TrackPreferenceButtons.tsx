@@ -32,28 +32,6 @@ function isConfirmedThumbsDown(value: unknown): boolean {
     );
 }
 
-interface FilledHeartIconProps {
-    className?: string;
-    "data-icon"?: string;
-}
-
-function HeartFilledIcon({
-    className,
-    "data-icon": dataIcon,
-}: FilledHeartIconProps) {
-    return (
-        <svg
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className={className}
-            aria-hidden="true"
-            data-icon={dataIcon}
-        >
-            <path d="M12 21.35 10.55 20.03C5.4 15.36 2 12.27 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.77-3.4 6.86-8.55 11.53z" />
-        </svg>
-    );
-}
-
 interface TrackPreferenceButtonsContentProps {
     className?: string;
     buttonSizeClassName: string;
@@ -91,13 +69,13 @@ function TrackPreferenceButtonsContent({
     const showDislike = mode !== "up-only";
 
     const baseButtonClass = cn(
-        "inline-flex items-center justify-center rounded-md bg-transparent p-0 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:cursor-not-allowed disabled:opacity-40",
+        "inline-flex items-center justify-center rounded-xl bg-transparent p-0 transition-[color,background-color,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40 enabled:active:scale-95",
         buttonSizeClassName,
     );
 
     return (
         <div
-            className={cn("flex items-center gap-2", className)}
+            className={cn("flex items-center gap-1", className)}
             role="group"
             aria-label="Оценка трека"
         >
@@ -111,8 +89,8 @@ function TrackPreferenceButtonsContent({
                     className={cn(
                         baseButtonClass,
                         isLiked
-                            ? "text-white"
-                            : "text-white/70 hover:text-white",
+                            ? "bg-success/10 text-success"
+                            : "text-content-muted hover:bg-surface-hover hover:text-content",
                     )}
                     disabled={!canToggleLike || isPreferenceSaving}
                     aria-label={likeLabel}
@@ -120,8 +98,9 @@ function TrackPreferenceButtonsContent({
                     title={likeLabel}
                 >
                     {isLiked ? (
-                        <HeartFilledIcon
+                        <Heart
                             className={iconSizeClassName}
+                            fill="currentColor"
                             data-icon="heart-filled"
                         />
                     ) : (
@@ -142,8 +121,8 @@ function TrackPreferenceButtonsContent({
                     className={cn(
                         baseButtonClass,
                         isDisliked
-                            ? "text-red-300"
-                            : "text-white/70 hover:text-white",
+                            ? "bg-error/10 text-error"
+                            : "text-content-muted hover:bg-surface-hover hover:text-content",
                     )}
                     disabled={!canToggleDislike || isPreferenceSaving}
                     aria-label={dislikeLabel}

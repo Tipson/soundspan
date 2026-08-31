@@ -134,7 +134,7 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
         'button[aria-label="Включить мою волну"]',
     );
     assert.ok(playButton);
-    assert.ok(container.querySelector('[data-home-wave-layout="launch"]'));
+    assert.ok(container.querySelector('[data-home-wave-layout="quick-start"]'));
     assert.equal(container.querySelectorAll("[data-wave-cover]").length, 3);
 
     await act(async () => {

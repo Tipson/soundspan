@@ -6,31 +6,36 @@ test.describe("Social and History", () => {
         await loginAsTestUser(page);
     });
 
-    test("activity panel social tab renders", async ({ page }) => {
+    test("activity panel opens for a non-admin user", async ({ page }) => {
         await page.goto("/");
 
         const toggle = page
-            .getByRole("button", { name: /toggle activity panel/i })
+            .getByRole("button", {
+                name: /открыть или закрыть панель активности/i,
+            })
             .first();
-        const hasToggle = await toggle
-            .isVisible({ timeout: 2000 })
-            .catch(() => false);
-        if (hasToggle) {
-            await toggle.click();
-        } else {
-            await page.evaluate(() => {
-                window.dispatchEvent(new CustomEvent("open-activity-panel"));
-            });
-        }
+        await expect(toggle).toBeVisible({ timeout: 5000 });
+        await toggle.click();
 
-        const socialTab = page.getByRole("button", { name: /social/i }).first();
-        await expect(socialTab).toBeVisible({ timeout: 5000 });
-        await socialTab.click();
-
-        await expect(page.getByText("Activity").first()).toBeVisible({
+        const notificationsTab = page
+            .getByRole("button", { name: /^уведомления$/i })
+            .first();
+        await expect(notificationsTab).toBeVisible({ timeout: 5000 });
+        await expect(page.getByText("Активность").first()).toBeVisible({
             timeout: 5000,
         });
-        await expect(socialTab).toHaveClass(/border-b-2/, { timeout: 5000 });
+        await expect(notificationsTab).toHaveClass(/border-b-2/, {
+            timeout: 5000,
+        });
+        await page
+            .getByRole("button", {
+                name: "Закрыть панель активности",
+                exact: true,
+            })
+            .click();
+        await expect(page.getByText("Активность").first()).toBeHidden({
+            timeout: 5000,
+        });
     });
 
     test("my history page loads and shows queue-style actions", async ({
@@ -39,19 +44,19 @@ test.describe("Social and History", () => {
         await page.goto("/my-history");
 
         await expect(
-            page.getByRole("heading", { name: /my history/i }),
+            page.getByRole("heading", { name: /история прослушиваний/i }),
         ).toBeVisible({ timeout: 10000 });
 
-        const emptyState = page.getByText("No listening history yet");
-        const playNowButton = page
-            .getByRole("button", { name: "Play now" })
+        const emptyState = page.getByText("История пока пуста");
+        const trackActionsButton = page
+            .getByRole("button", { name: "Действия с треком" })
             .first();
 
         const resolvedState = await Promise.race([
             emptyState
                 .waitFor({ state: "visible", timeout: 10000 })
                 .then(() => "empty" as const),
-            playNowButton
+            trackActionsButton
                 .waitFor({ state: "visible", timeout: 10000 })
                 .then(() => "actions" as const),
         ]);
@@ -61,12 +66,13 @@ test.describe("Social and History", () => {
             return;
         }
 
-        await expect(playNowButton).toBeVisible({ timeout: 5000 });
+        await expect(trackActionsButton).toBeVisible({ timeout: 5000 });
+        await trackActionsButton.click();
         await expect(
-            page.getByRole("button", { name: "Add to queue" }).first(),
+            page.getByRole("menuitem", { name: "Добавить в очередь" }).first(),
         ).toBeVisible({ timeout: 5000 });
         await expect(
-            page.getByRole("button", { name: "Add to playlist" }).first(),
+            page.getByRole("menuitem", { name: "Добавить в плейлист" }).first(),
         ).toBeVisible({ timeout: 5000 });
     });
 
@@ -74,10 +80,10 @@ test.describe("Social and History", () => {
         await page.goto("/settings");
 
         await expect(
-            page.locator("text=Share online presence").first(),
+            page.locator("text=Показывать, что я в сети").first(),
         ).toBeVisible({ timeout: 10000 });
         await expect(
-            page.locator("text=Share listening status").first(),
+            page.locator("text=Показывать, что я слушаю").first(),
         ).toBeVisible({ timeout: 10000 });
     });
 
@@ -87,15 +93,15 @@ test.describe("Social and History", () => {
         await page.goto("/");
 
         const mainNav = page.getByRole("navigation", {
-            name: /main navigation/i,
+            name: /основная навигация/i,
         });
         await expect(
-            mainNav.getByRole("link", { name: /my history/i }),
+            mainNav.getByRole("link", { name: /история/i }),
         ).toHaveCount(0);
 
         await page.goto("/settings");
         await expect(
-            page.getByRole("link", { name: /open my history/i }),
+            page.getByRole("link", { name: /открыть мою историю/i }),
         ).toBeVisible({ timeout: 10000 });
     });
 
@@ -105,30 +111,24 @@ test.describe("Social and History", () => {
         await page.goto("/");
 
         const toggle = page
-            .getByRole("button", { name: /toggle activity panel/i })
+            .getByRole("button", {
+                name: /открыть или закрыть панель активности/i,
+            })
             .first();
-        const hasToggle = await toggle
-            .isVisible({ timeout: 2000 })
-            .catch(() => false);
-        if (hasToggle) {
-            await toggle.click();
-        } else {
-            await page.evaluate(() => {
-                window.dispatchEvent(new CustomEvent("open-activity-panel"));
-            });
-        }
+        await expect(toggle).toBeVisible({ timeout: 5000 });
+        await toggle.click();
 
         await expect(
-            page.getByRole("button", { name: /^notifications$/i }),
+            page.getByRole("button", { name: /^уведомления$/i }),
         ).toBeVisible({ timeout: 5000 });
         await expect(
-            page.getByRole("button", { name: /^social$/i }),
-        ).toBeVisible({ timeout: 5000 });
-        await expect(
-            page.getByRole("button", { name: /^active$/i }),
+            page.getByRole("button", { name: /^сейчас онлайн$/i }),
         ).toHaveCount(0);
         await expect(
-            page.getByRole("button", { name: /^history$/i }),
+            page.getByRole("button", { name: /^активные$/i }),
+        ).toHaveCount(0);
+        await expect(
+            page.getByRole("button", { name: /^история$/i }),
         ).toHaveCount(0);
     });
 });

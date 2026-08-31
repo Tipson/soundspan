@@ -290,6 +290,46 @@ test("AlbumActionBar icon controls are touch-sized and have accessible names", a
     assert.match(html, /sm:w-fit/);
 });
 
+test("AlbumActionBar separates listening intent from secondary collection actions", async () => {
+    const { AlbumActionBar } =
+        await import("../../features/album/components/AlbumActionBar");
+
+    const html = renderToStaticMarkup(
+        React.createElement(AlbumActionBar, {
+            ...baseProps,
+            librarySaveControl: React.createElement(
+                "button",
+                null,
+                "Сохранить в коллекцию",
+            ),
+            deviceDownloadControl: React.createElement(
+                "button",
+                null,
+                "Загрузить на это устройство",
+            ),
+        }),
+    );
+
+    const primary = html.match(
+        /<div[^>]*data-detail-action-tier="primary"[^>]*>[\s\S]*?<\/div>/,
+    )?.[0];
+    const secondary = html.match(
+        /<div[^>]*data-detail-action-tier="secondary"[^>]*>[\s\S]*?<\/div>/,
+    )?.[0];
+    assert.ok(primary);
+    assert.ok(secondary);
+    assert.match(primary, /Воспроизвести всё/);
+    assert.match(primary, /Перемешать/);
+    assert.doesNotMatch(primary, /Добавить всё в очередь/);
+    assert.match(secondary, /Сохранить в коллекцию/);
+    assert.match(secondary, /Загрузить на это устройство/);
+    assert.match(secondary, /Добавить всё в очередь/);
+    assert.ok(
+        html.indexOf('data-detail-action-tier="primary"') <
+            html.indexOf('data-detail-action-tier="secondary"'),
+    );
+});
+
 test("AlbumActionBar hides acquisition controls for a synthetic remote release group", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");

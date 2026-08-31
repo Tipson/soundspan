@@ -413,11 +413,11 @@ test("Vibe replaces an unusable analysis surface with a plain-language My Wave l
     const mounted = await mountPage();
 
     assert.match(mounted.container.textContent ?? "", /Моя волна/);
+    assert.match(mounted.container.textContent ?? "", /учитывает ваши вкусы/i);
     assert.match(
         mounted.container.textContent ?? "",
-        /учитывает ваши вкусы/i,
+        /подстраивается, пока вы слушаете/i,
     );
-    assert.match(mounted.container.textContent ?? "", /подстраивается, пока вы слушаете/i);
     assert.doesNotMatch(mounted.container.textContent ?? "", /tracks ready/i);
     assert.doesNotMatch(
         mounted.container.textContent ?? "",
@@ -452,6 +452,9 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
         '[data-testid="wave-continuity-status"]',
     );
     const heading = mounted.container.querySelector("h1");
+    const description = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-description"]',
+    );
 
     assert.ok(surface);
     assert.equal(surface.getAttribute("aria-labelledby"), "wave-title");
@@ -459,13 +462,16 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
     assert.ok(currentTuning);
     assert.ok(orbitStage);
     assert.ok(continuityStatus);
-    assert.match(continuityStatus.textContent ?? "", /подстраивается, пока вы слушаете/i);
+    assert.match(
+        continuityStatus.textContent ?? "",
+        /подстраивается, пока вы слушаете/i,
+    );
     assert.equal(heading?.id, "wave-title");
     assert.equal(heading?.textContent?.trim(), "Моя волна");
-    assert.match(
-        mounted.container.textContent ?? "",
-        /продолжится дальше/i,
-    );
+    assert.ok(description);
+    assert.match(description.className, /line-clamp-2/);
+    assert.doesNotMatch(heading?.className ?? "", /6\.6rem/);
+    assert.match(mounted.container.textContent ?? "", /продолжится дальше/i);
     assert.doesNotMatch(
         mounted.container.textContent ?? "",
         /\b\d+\s+(?:tracks?|songs?)\s+(?:ready|queued)\b/i,
@@ -476,6 +482,12 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
     const playWave = findButton(mounted.container, "Включить мою волну");
     assert.ok(playWave);
     assert.equal(playWave.getAttribute("data-testid"), "wave-main-toggle");
+    assert.equal(
+        mounted.container.querySelectorAll(
+            'button[data-testid="wave-main-toggle"]',
+        ).length,
+        1,
+    );
     assert.match(playWave.className, /min-h-20/);
     assert.match(playWave.className, /min-w-20/);
 
@@ -568,10 +580,7 @@ test("My Wave remains the primary Vibe page when local audio analysis is disable
     const mounted = await mountPage();
 
     assert.match(mounted.container.textContent ?? "", /Моя волна/);
-    assert.match(
-        mounted.container.textContent ?? "",
-        /учитывает ваши вкусы/i,
-    );
+    assert.match(mounted.container.textContent ?? "", /учитывает ваши вкусы/i);
     assert.doesNotMatch(
         mounted.container.textContent ?? "",
         /Feature not available|DCLAP/i,
@@ -630,11 +639,15 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
     assert.equal(newToMe.getAttribute("aria-checked"), "true");
     assert.equal(state.personalizedMode, "for-you");
 
-    const applyNew = findButton(dialog, "Применить: Больше нового");
+    const applyNew = findButton(dialog, "Сохранить настройку");
     assert.ok(applyNew);
     await React.act(async () => applyNew.click());
     assert.equal(state.personalizedMode, "new");
     assert.deepEqual(state.upcomingQueueCalls, []);
+    assert.match(
+        mounted.container.querySelector('[role="status"]')?.textContent ?? "",
+        /Настройка сохранена.*следующем запуске/i,
+    );
     assert.equal(mounted.container.querySelector('[role="dialog"]'), null);
 
     const reopenTune = findButton(mounted.container, "Настроить");
@@ -648,7 +661,7 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
     assert.ok(reopenedFamiliar);
     await React.act(async () => reopenedFamiliar.click());
 
-    const applyFamiliar = findButton(reopenedDialog, "Применить: Знакомое");
+    const applyFamiliar = findButton(reopenedDialog, "Сохранить настройку");
     assert.ok(applyFamiliar);
     await React.act(async () => applyFamiliar.click());
     assert.equal(state.personalizedMode, "familiar");
@@ -695,7 +708,7 @@ test("Tune My Wave applies mood independently and keeps both choices in the deep
     assert.equal(state.personalizedMode, "familiar");
     assert.equal(state.personalizedMood, "calm");
 
-    const apply = findButton(dialog, "Применить: Больше нового");
+    const apply = findButton(dialog, "Сохранить настройку");
     assert.ok(apply);
     await React.act(async () => apply.click());
 
@@ -726,7 +739,7 @@ test("applied Wave settings persist per account, URL settings override them, and
         familiar.click();
         calm.click();
     });
-    const applyFamiliar = findButton(dialog, "Применить: Знакомое");
+    const applyFamiliar = findButton(dialog, "Сохранить настройку");
     assert.ok(applyFamiliar);
     await React.act(async () => applyFamiliar.click());
     await unmountPage(mounted);
@@ -801,7 +814,7 @@ test("Tune after Play replaces the upcoming Wave queue with the new direction", 
     assert.ok(newToMe);
     await React.act(async () => newToMe.click());
 
-    const applyNew = findButton(dialog, "Применить: Больше нового");
+    const applyNew = findButton(dialog, "Обновить волну");
     assert.ok(applyNew);
     await React.act(async () => {
         applyNew.click();
@@ -848,7 +861,7 @@ test("retuning an active Wave keeps the current track, replaces the next picks, 
     assert.ok(calm);
     await React.act(async () => calm.click());
 
-    const apply = findButton(dialog, "Применить: Для вас");
+    const apply = findButton(dialog, "Обновить волну");
     assert.ok(apply);
     await React.act(async () => {
         apply.click();
@@ -888,7 +901,7 @@ test("a failed active-Wave retune keeps the existing upcoming queue", async () =
     await React.act(async () => calm.click());
 
     state.personalizedFeedError = true;
-    const apply = findButton(dialog, "Применить: Для вас");
+    const apply = findButton(dialog, "Обновить волну");
     assert.ok(apply);
     await React.act(async () => {
         apply.click();
@@ -1002,7 +1015,7 @@ test("Familiar mode falls back to quick picks when listening history is empty", 
 
     assert.ok(familiar);
     await React.act(async () => familiar.click());
-    const applyFamiliar = findButton(dialog, "Применить: Знакомое");
+    const applyFamiliar = findButton(dialog, "Сохранить настройку");
     assert.ok(applyFamiliar);
     await React.act(async () => applyFamiliar.click());
     const playWave = findButton(mounted.container, "Включить мою волну");

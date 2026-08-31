@@ -4,7 +4,7 @@ export default function Loading() {
         <div
             role="status"
             aria-label="Загрузка результатов поиска"
-            className="mx-auto min-h-full max-w-[1520px] px-3 pb-40 pt-5 sm:px-6 sm:pb-32 lg:px-8"
+            className="mx-auto min-h-full max-w-[1520px] px-3 pt-5 sm:px-6 lg:px-8"
         >
             <div className="mb-6 space-y-3" aria-hidden="true">
                 <div className="h-3 w-16 animate-pulse rounded-full bg-white/[0.07]" />

@@ -23,9 +23,6 @@ import {
     ChevronUp,
     ChevronDown,
     Music as MusicIcon,
-    Shuffle,
-    Repeat,
-    Repeat1,
     Loader2,
     RefreshCw,
 } from "lucide-react";
@@ -52,8 +49,6 @@ export function FullPlayer() {
         currentAudiobook,
         currentPodcast,
         playbackType,
-        isShuffle,
-        repeatMode,
         queue,
     } = useAudioState();
     const { volume, isMuted, playerMode } = useAudioVolumeMode();
@@ -80,8 +75,6 @@ export function FullPlayer() {
         seek,
         setVolume,
         toggleMute,
-        toggleShuffle,
-        toggleRepeat,
         skipForward,
         skipBackward,
     } = useAudioControls();
@@ -267,6 +260,11 @@ export function FullPlayer() {
                         hasMedia && "cursor-pointer",
                     )}
                     data-player-layout="identity-transport-actions"
+                    data-player-control-budget={
+                        isLongForm
+                            ? "longform-5-utilities-4"
+                            : "transport-3-utilities-4"
+                    }
                     onClick={handleBarClick}
                 >
                     <div
@@ -311,12 +309,12 @@ export function FullPlayer() {
                                     prefetch={false}
                                     className="block min-w-0 hover:underline"
                                 >
-                                    <h4 className="truncate text-sm font-semibold leading-5 text-white">
+                                    <h4 className="truncate text-sm font-semibold leading-5 text-content">
                                         {title}
                                     </h4>
                                 </Link>
                             ) : (
-                                <h4 className="truncate text-sm font-semibold leading-5 text-white">
+                                <h4 className="truncate text-sm font-semibold leading-5 text-content">
                                     {title}
                                 </h4>
                             )}
@@ -368,30 +366,10 @@ export function FullPlayer() {
                             aria-label={ru.player.controls}
                             data-player-control-group="primary"
                         >
-                            {!isLongForm && (
-                                <button
-                                    onClick={toggleShuffle}
-                                    className={cn(
-                                        "player-control",
-                                        isShuffle
-                                            ? "text-[var(--music-positive)]"
-                                            : "text-content-muted hover:text-white",
-                                    )}
-                                    disabled={
-                                        !hasMedia || playbackType !== "track"
-                                    }
-                                    aria-label={ru.player.shuffle}
-                                    aria-pressed={isShuffle}
-                                    title={ru.player.shuffle}
-                                >
-                                    <Shuffle className="h-[18px] w-[18px]" />
-                                </button>
-                            )}
-
                             {isLongForm && (
                                 <button
                                     onClick={() => skipBackward(15)}
-                                    className="player-control text-content-muted hover:text-white"
+                                    className="player-control text-content-muted hover:text-content"
                                     disabled={!hasMedia || !canSeek}
                                     aria-label={ru.player.skipBack15}
                                     title={ru.player.skipBack15}
@@ -402,7 +380,7 @@ export function FullPlayer() {
 
                             <button
                                 onClick={previous}
-                                className="player-control text-content-muted hover:text-white"
+                                className="player-control text-content-muted hover:text-content"
                                 disabled={!hasMedia || queue.length === 0}
                                 aria-label={ru.player.previous}
                                 title={ru.player.previous}
@@ -415,12 +393,12 @@ export function FullPlayer() {
                                 className={cn(
                                     "player-control-primary group relative flex h-12 w-12 items-center justify-center rounded-full",
                                     audioError
-                                        ? "bg-red-500 text-white hover:scale-[1.04] hover:bg-red-400"
+                                        ? "bg-error text-content hover:scale-[1.04] hover:brightness-110"
                                         : hasMedia && !isBuffering
-                                          ? "bg-white text-black hover:scale-[1.04] shadow-lg shadow-white/20 hover:shadow-white/30"
+                                          ? "bg-content text-surface hover:scale-[1.04] shadow-lg shadow-black/25"
                                           : isBuffering
-                                            ? "bg-white/80 text-black"
-                                            : "bg-gray-700 text-gray-400 cursor-not-allowed",
+                                            ? "bg-content/80 text-surface"
+                                            : "cursor-not-allowed bg-surface-active text-content-disabled",
                                 )}
                                 disabled={!hasMedia || isBuffering}
                                 aria-label={
@@ -443,7 +421,7 @@ export function FullPlayer() {
                                 }
                             >
                                 {hasMedia && !isBuffering && !audioError && (
-                                    <div className="absolute inset-0 rounded-full bg-white blur-md opacity-0 group-hover:opacity-50 transition-opacity duration-200" />
+                                    <div className="absolute inset-0 rounded-full bg-content blur-md opacity-0 transition-opacity duration-200 group-hover:opacity-30" />
                                 )}
                                 {audioError ? (
                                     <RefreshCw className="w-6 h-6 relative z-10" />
@@ -458,7 +436,7 @@ export function FullPlayer() {
 
                             <button
                                 onClick={next}
-                                className="player-control text-content-muted hover:text-white"
+                                className="player-control text-content-muted hover:text-content"
                                 disabled={!hasMedia || queue.length === 0}
                                 aria-label={ru.player.next}
                                 title={ru.player.next}
@@ -469,7 +447,7 @@ export function FullPlayer() {
                             {isLongForm && (
                                 <button
                                     onClick={() => skipForward(15)}
-                                    className="player-control text-content-muted hover:text-white"
+                                    className="player-control text-content-muted hover:text-content"
                                     disabled={!hasMedia || !canSeek}
                                     aria-label={ru.player.skipForward15}
                                     title={ru.player.skipForward15}
@@ -478,41 +456,6 @@ export function FullPlayer() {
                                 </button>
                             )}
 
-                            {!isLongForm && (
-                                <button
-                                    onClick={toggleRepeat}
-                                    className={cn(
-                                        "player-control",
-                                        repeatMode !== "off"
-                                            ? "text-[var(--music-positive)]"
-                                            : "text-content-muted hover:text-white",
-                                    )}
-                                    disabled={
-                                        !hasMedia || playbackType !== "track"
-                                    }
-                                    aria-label={
-                                        repeatMode === "off"
-                                            ? ru.player.repeatOff
-                                            : repeatMode === "all"
-                                              ? ru.player.repeatAll
-                                              : ru.player.repeatOne
-                                    }
-                                    aria-pressed={repeatMode !== "off"}
-                                    title={
-                                        repeatMode === "off"
-                                            ? ru.player.repeatOff
-                                            : repeatMode === "all"
-                                              ? ru.player.repeatAll
-                                              : ru.player.repeatOne
-                                    }
-                                >
-                                    {repeatMode === "one" ? (
-                                        <Repeat1 className="h-[18px] w-[18px]" />
-                                    ) : (
-                                        <Repeat className="h-[18px] w-[18px]" />
-                                    )}
-                                </button>
-                            )}
                         </div>
                     </div>
 
@@ -551,7 +494,7 @@ export function FullPlayer() {
                                 <TrackOverflowMenu
                                     track={currentTrack}
                                     showPlayNext={false}
-                                    triggerClassName="!flex !h-10 !w-10 !items-center !justify-center !p-0 !opacity-100 text-content-muted hover:text-white"
+                                    triggerClassName="!flex !h-10 !w-10 !items-center !justify-center !p-0 !opacity-100 text-content-muted hover:text-content"
                                     menuClassName="bottom-full top-auto mb-1 mt-0 z-[10001]"
                                     extraItemsAfter={playerDiagnostics}
                                 />
@@ -565,7 +508,7 @@ export function FullPlayer() {
                             >
                                 <button
                                     onClick={toggleMute}
-                                    className="player-control text-content-muted hover:text-white"
+                                    className="player-control text-content-muted hover:text-content"
                                     aria-label={
                                         volume === 0
                                             ? ru.player.unmute
@@ -603,7 +546,7 @@ export function FullPlayer() {
                                                 )}
                                                 aria-valuetext={`${Math.round(volume * 100)} percent`}
                                                 style={{
-                                                    background: `linear-gradient(to right, #fff ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)`,
+                                                    background: `linear-gradient(to right, var(--music-ink) ${volume * 100}%, var(--music-line-strong) ${volume * 100}%)`,
                                                 }}
                                                 className="absolute w-24 h-1 rounded-full appearance-none cursor-pointer -rotate-90 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-white/30"
                                             />
@@ -626,7 +569,7 @@ export function FullPlayer() {
                                 className={cn(
                                     "player-control",
                                     hasMedia
-                                        ? "text-content-muted hover:text-white"
+                                        ? "text-content-muted hover:text-content"
                                         : "cursor-not-allowed text-content-disabled",
                                 )}
                                 disabled={!hasMedia}

@@ -53,35 +53,23 @@ import {
     ArrowDown,
     ArrowUp,
     ArrowUpToLine,
-    Pause,
     Trash2,
-    Shuffle,
-    Eye,
-    EyeOff,
     ListMusic,
-    Heart,
     Volume2,
     RefreshCw,
     AlertCircle,
     X,
     Loader2,
-    Radio,
-    Globe,
-    GlobeLock,
-    Share2,
 } from "lucide-react";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { useCollectionLikeAll } from "@/hooks/useCollectionLikeAll";
-import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
 import { ShareLinkModal } from "@/components/ui/ShareLinkModal";
 import { RadioPlaylistActions } from "./RadioPlaylistActions";
 import { formatPlaylistDuration } from "./playlistDuration";
 import { queryKeys } from "@/lib/queryKeys";
-import {
-    MusicDetailActionDock,
-    MusicDetailTrackSurface,
-} from "@/components/music-detail";
+import { MusicDetailTrackSurface } from "@/components/music-detail";
 import { PlaylistDetailHero } from "@/features/playlist/components/PlaylistDetailHero";
+import { PlaylistDetailActionDock } from "@/features/playlist/components/PlaylistDetailActionDock";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 import {
     buildPlaylistCoverUrls,
@@ -545,6 +533,11 @@ export default function PlaylistDetailPage() {
         playTracks(playableTracks, 0);
     };
 
+    const handleShufflePlaylist = () => {
+        if (playableTracks.length < 2) return;
+        playTracks(shuffleArray(playableTracks), 0);
+    };
+
     const handlePlayTrack = (itemId: string) => {
         const item = trackItems.find((entry) => entry.id === itemId);
         if (!item) return;
@@ -633,213 +626,48 @@ export default function PlaylistDetailPage() {
                 onRenameBlur={handleRename}
                 onRenameKeyDown={handleRenameKeyDown}
                 onStartRename={handleStartRename}
+                actions={
+                    <PlaylistDetailActionDock
+                        playlistId={playlistId}
+                        playlistName={playlist.name}
+                        trackItemCount={trackItems.length}
+                        playableTracks={playableTracks}
+                        isThisPlaylistPlaying={isThisPlaylistPlaying}
+                        isPlaying={isPlaying}
+                        showPlaySpinner={showPlaySpinner}
+                        isAllLiked={isAllLiked}
+                        isApplyingLikeAll={isApplyingLikeAll}
+                        isOwner={playlist.isOwner}
+                        isPublic={playlist.isPublic}
+                        isHidden={playlist.isHidden}
+                        isTogglingShare={isTogglingShare}
+                        isHiding={isHiding}
+                        radioActions={
+                            <RadioPlaylistActions
+                                enabled={Boolean(
+                                    playlist.isOwner &&
+                                    playlist.mixId?.startsWith(
+                                        "radio-ephemeral:",
+                                    ),
+                                )}
+                                playlistId={playlistId}
+                            />
+                        }
+                        onPlay={handlePlayPlaylist}
+                        onShuffle={handleShufflePlaylist}
+                        onAddAllToQueue={handleAddAllToQueue}
+                        onToggleLikeAll={() => void toggleLikeAll()}
+                        onStartRadio={() => void handleStartRadio()}
+                        onToggleShare={() => void handleToggleShare()}
+                        onOpenShare={() => setShowShareModal(true)}
+                        onToggleHide={() => void handleToggleHide()}
+                        onDelete={() => setShowDeleteConfirm(true)}
+                    />
+                }
             />
 
-            {/* Action Bar */}
-            <div className="relative z-10 mx-auto -mt-5 max-w-[1800px] px-4 pb-5 sm:px-6 lg:px-8">
-                <MusicDetailActionDock
-                    label={ru.playlist.controls}
-                    className="sm:!w-full"
-                >
-                    {/* Play Button */}
-                    {trackItems.length > 0 && (
-                        <button
-                            onClick={handlePlayPlaylist}
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] motion-reduce:transition-none sm:flex-none"
-                        >
-                            {showPlaySpinner ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : isThisPlaylistPlaying && isPlaying ? (
-                                <Pause className="w-5 h-5 fill-current" />
-                            ) : (
-                                <Play className="w-5 h-5 fill-current ml-0.5" />
-                            )}
-                            <span>
-                                {isThisPlaylistPlaying && isPlaying
-                                    ? ru.common.pause
-                                    : ru.common.playAll}
-                            </span>
-                        </button>
-                    )}
-
-                    {/* Shuffle Button */}
-                    {playableTracks.length > 1 && (
-                        <button
-                            onClick={() => {
-                                if (playableTracks.length === 0) return;
-                                // Shuffle the tracks
-                                const shuffled = shuffleArray(playableTracks);
-                                playTracks(shuffled, 0);
-                            }}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.shufflePlay}
-                            aria-label={ru.playlist.shufflePlay}
-                        >
-                            <Shuffle className="w-5 h-5" />
-                        </button>
-                    )}
-
-                    {/* Add to Queue Button */}
-                    {playableTracks.length > 0 && (
-                        <button
-                            onClick={handleAddAllToQueue}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.addAllQueue}
-                            aria-label={ru.playlist.addAllQueue}
-                        >
-                            <ListMusic className="w-5 h-5" />
-                        </button>
-                    )}
-
-                    {playableTracks.length > 0 && (
-                        <button
-                            onClick={toggleLikeAll}
-                            disabled={isApplyingLikeAll}
-                            className={cn(
-                                "flex h-11 w-11 items-center justify-center rounded-full transition-colors active:scale-[0.97] motion-reduce:transition-none",
-                                isApplyingLikeAll
-                                    ? "cursor-not-allowed text-white/35"
-                                    : isAllLiked
-                                      ? "text-brand hover:bg-white/10"
-                                      : "text-white/60 hover:bg-white/10 hover:text-white",
-                            )}
-                            title={
-                                isAllLiked
-                                    ? ru.playlist.unlikeAll
-                                    : ru.playlist.likeAll
-                            }
-                            aria-label={
-                                isAllLiked
-                                    ? ru.playlist.unlikeAll
-                                    : ru.playlist.likeAll
-                            }
-                        >
-                            {isApplyingLikeAll ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Heart
-                                    className={cn(
-                                        "h-4 w-4",
-                                        isAllLiked && "fill-current",
-                                    )}
-                                />
-                            )}
-                        </button>
-                    )}
-                    <DeviceCollectionDownloadButton
-                        tracks={playableTracks}
-                        collectionId={`playlist:${playlistId}`}
-                        collectionLabel={playlist.name}
-                    />
-                    {trackItems.length > 0 && (
-                        <button
-                            onClick={handleStartRadio}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.startRadio}
-                            aria-label={ru.playlist.startRadio}
-                        >
-                            <Radio className="w-5 h-5" />
-                        </button>
-                    )}
-                    <RadioPlaylistActions
-                        enabled={Boolean(
-                            playlist.isOwner &&
-                            playlist.mixId?.startsWith("radio-ephemeral:"),
-                        )}
-                        playlistId={playlistId}
-                    />
-
-                    <div className="flex-1" />
-
-                    {playlist.isOwner && (
-                        <button
-                            onClick={handleToggleShare}
-                            disabled={isTogglingShare}
-                            className={cn(
-                                "flex h-11 w-11 items-center justify-center rounded-full transition-colors active:scale-[0.97] motion-reduce:transition-none",
-                                playlist.isPublic
-                                    ? "text-brand hover:text-brand-dark"
-                                    : "text-white/40 hover:text-white",
-                                isTogglingShare &&
-                                    "opacity-50 cursor-not-allowed",
-                            )}
-                            title={
-                                playlist.isPublic
-                                    ? ru.playlist.makePrivate
-                                    : ru.playlist.shareWithOthers
-                            }
-                            aria-label={
-                                playlist.isPublic
-                                    ? ru.playlist.makePrivate
-                                    : ru.playlist.shareWithOthers
-                            }
-                        >
-                            {playlist.isPublic ? (
-                                <Globe className="w-5 h-5" />
-                            ) : (
-                                <GlobeLock className="w-5 h-5" />
-                            )}
-                        </button>
-                    )}
-
-                    {/* Share Link Button (owner only) */}
-                    {playlist.isOwner && (
-                        <button
-                            type="button"
-                            onClick={() => setShowShareModal(true)}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.shareLink}
-                            aria-label={ru.playlist.shareLink}
-                        >
-                            <Share2 className="w-5 h-5" />
-                        </button>
-                    )}
-
-                    {/* Hide Button */}
-                    <button
-                        onClick={handleToggleHide}
-                        disabled={isHiding}
-                        className={cn(
-                            "flex h-11 w-11 items-center justify-center rounded-full transition-colors active:scale-[0.97] motion-reduce:transition-none",
-                            playlist.isHidden
-                                ? "text-brand hover:text-brand-dark"
-                                : "text-white/40 hover:text-white",
-                            isHiding && "opacity-50 cursor-not-allowed",
-                        )}
-                        title={
-                            playlist.isHidden
-                                ? ru.playlist.show
-                                : ru.playlist.hide
-                        }
-                        aria-label={
-                            playlist.isHidden
-                                ? ru.playlist.show
-                                : ru.playlist.hide
-                        }
-                    >
-                        {playlist.isHidden ? (
-                            <Eye className="w-5 h-5" />
-                        ) : (
-                            <EyeOff className="w-5 h-5" />
-                        )}
-                    </button>
-
-                    {/* Delete Button */}
-                    {playlist.isOwner && (
-                        <button
-                            onClick={() => setShowDeleteConfirm(true)}
-                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-red-500/10 hover:text-red-300 active:scale-[0.97] motion-reduce:transition-none"
-                            title={ru.playlist.delete}
-                            aria-label={ru.playlist.delete}
-                        >
-                            <Trash2 className="w-5 h-5" />
-                        </button>
-                    )}
-                </MusicDetailActionDock>
-            </div>
-
             {/* Track Listing */}
-            <div className="mx-auto max-w-[1800px] px-4 pb-32 pt-2 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-[1800px] px-4 pt-2 sm:px-6 lg:px-8">
                 {/* Show failed/pending count if any */}
                 {playlist.pendingCount > 0 && (
                     <div className="mb-4 flex items-center gap-2 rounded-2xl border border-red-500/30 bg-red-900/20 px-4 py-3">
@@ -890,22 +718,28 @@ export default function PlaylistDetailPage() {
                                 return (
                                     <div
                                         key={`pending-${pending.id}`}
-                                        className="grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_120px] gap-4 px-4 py-2 rounded-md opacity-60 hover:opacity-80 group transition-opacity"
+                                        className="group grid grid-cols-[44px_1fr_auto] gap-3 border-b border-white/[0.06] px-3 py-2 opacity-70 transition-opacity hover:opacity-100 motion-reduce:transition-none md:grid-cols-[44px_minmax(200px,2fr)_minmax(100px,1fr)_auto] md:px-4"
                                     >
                                         <div className="flex items-center justify-center">
                                             <AlertCircle className="w-4 h-4 text-red-400" />
                                         </div>
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <div className="w-10 h-10 bg-surface-highlight rounded shrink-0 overflow-hidden flex items-center justify-center">
+                                            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded bg-surface-highlight">
                                                 <button
+                                                    type="button"
                                                     onClick={() =>
                                                         handlePlayPreview(
                                                             pending.id,
                                                         )
                                                     }
-                                                    className="w-full h-full flex items-center justify-center hover:bg-white/10 transition-colors"
+                                                    className="flex h-11 w-11 items-center justify-center transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light motion-reduce:transition-none"
                                                     title={
                                                         ru.playlist.preview30
+                                                    }
+                                                    aria-label={
+                                                        isPreviewPlaying
+                                                            ? `Остановить фрагмент «${pending.title}»`
+                                                            : `Воспроизвести фрагмент «${pending.title}»`
                                                     }
                                                 >
                                                     {isPreviewPlaying ? (
@@ -933,6 +767,7 @@ export default function PlaylistDetailPage() {
                                             </span>
                                             {downloadsEnabled && (
                                                 <button
+                                                    type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleRetryPendingTrack(
@@ -941,7 +776,7 @@ export default function PlaylistDetailPage() {
                                                     }}
                                                     disabled={isRetrying}
                                                     className={cn(
-                                                        "p-1.5 rounded-full hover:bg-white/10 transition-all",
+                                                        "flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                                                         isRetrying
                                                             ? "text-brand"
                                                             : "text-gray-400 hover:text-white",
@@ -950,6 +785,7 @@ export default function PlaylistDetailPage() {
                                                         ru.playlist
                                                             .retryDownload
                                                     }
+                                                    aria-label={`Повторить загрузку «${pending.title}»`}
                                                 >
                                                     {isRetrying ? (
                                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -960,6 +796,7 @@ export default function PlaylistDetailPage() {
                                             )}
                                             {playlist.isOwner && (
                                                 <button
+                                                    type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleRemovePendingTrack(
@@ -967,8 +804,9 @@ export default function PlaylistDetailPage() {
                                                         );
                                                     }}
                                                     disabled={isRemoving}
-                                                    className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-red-400 transition-all"
+                                                    className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white/10 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 motion-reduce:transition-none"
                                                     title={ru.playlist.remove}
+                                                    aria-label={`Удалить недоступный трек «${pending.title}»`}
                                                 >
                                                     {isRemoving ? (
                                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1214,7 +1052,7 @@ export default function PlaylistDetailPage() {
                                                                 localTrackId!
                                                             }
                                                             mode="up-only"
-                                                            buttonSizeClassName="h-8 w-8"
+                                                            buttonSizeClassName="h-11 w-11"
                                                             iconSizeClassName="h-4 w-4"
                                                         />
                                                         <TrackOverflowMenu
@@ -1270,7 +1108,7 @@ export default function PlaylistDetailPage() {
                                                         <TrackPreferenceButtons
                                                             trackId={track!.id}
                                                             mode="up-only"
-                                                            buttonSizeClassName="h-8 w-8"
+                                                            buttonSizeClassName="h-11 w-11"
                                                             iconSizeClassName="h-4 w-4"
                                                             metadata={buildPreferenceMetadata(
                                                                 {
@@ -1368,6 +1206,7 @@ export default function PlaylistDetailPage() {
                                                     <>
                                                         {index > 0 && (
                                                             <button
+                                                                type="button"
                                                                 onClick={(
                                                                     e,
                                                                 ) => {
@@ -1378,8 +1217,12 @@ export default function PlaylistDetailPage() {
                                                                             1,
                                                                     );
                                                                 }}
-                                                                className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                                                                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                                                 title={
+                                                                    ru.playlist
+                                                                        .moveUp
+                                                                }
+                                                                aria-label={
                                                                     ru.playlist
                                                                         .moveUp
                                                                 }
@@ -1391,6 +1234,7 @@ export default function PlaylistDetailPage() {
                                                             trackItems.length -
                                                                 1 && (
                                                             <button
+                                                                type="button"
                                                                 onClick={(
                                                                     e,
                                                                 ) => {
@@ -1401,8 +1245,12 @@ export default function PlaylistDetailPage() {
                                                                             1,
                                                                     );
                                                                 }}
-                                                                className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                                                                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                                                 title={
+                                                                    ru.playlist
+                                                                        .moveDown
+                                                                }
+                                                                aria-label={
                                                                     ru.playlist
                                                                         .moveDown
                                                                 }
@@ -1411,14 +1259,19 @@ export default function PlaylistDetailPage() {
                                                             </button>
                                                         )}
                                                         <button
+                                                            type="button"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 handleRemoveTrack(
                                                                     removeTargetId,
                                                                 );
                                                             }}
-                                                            className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-400 transition-all"
+                                                            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 motion-reduce:transition-none"
                                                             title={
+                                                                ru.playlist
+                                                                    .remove
+                                                            }
+                                                            aria-label={
                                                                 ru.playlist
                                                                     .remove
                                                             }

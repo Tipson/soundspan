@@ -331,7 +331,7 @@ test("All replaces an exact local album shadow with one canonical provider card"
     assert.deepEqual(calls.providerAlbumIds, [["MPREb_from-zero"]]);
 });
 
-test("All keeps the canonical artist and five popular tracks visible without a Show all gate", async () => {
+test("All opens with the canonical artist, popular tracks, and albums on one editorial canvas", async () => {
     const SearchPage = (await import("../../app/search/page")).default;
     const html = renderToStaticMarkup(React.createElement(SearchPage));
 
@@ -346,7 +346,9 @@ test("All keeps the canonical artist and five popular tracks visible without a S
     assert.match(html, /massive attack/);
     assert.match(html, /data-search-primary-grid="true"/);
 
-    assert.match(html, />Треки<\/h2>/);
+    assert.match(html, /data-search-primary-result="artist"/);
+    assert.match(html, /data-search-tracks-surface="open"/);
+    assert.match(html, />Популярные треки<\/h2>/);
     assert.doesNotMatch(html, /Show all/);
     assert.deepEqual(calls.libraryTrackLimits, [3]);
     assert.deepEqual(calls.discoverTrackLimits, [2]);
@@ -355,6 +357,12 @@ test("All keeps the canonical artist and five popular tracks visible without a S
     assert.deepEqual(calls.embeddedAlbumGrids, [true, true]);
     assert.equal(calls.searchData[0]?.libraryType, "all");
     assert.equal(calls.searchData[0]?.libraryLimit, 20);
+
+    const artistIndex = html.indexOf('data-search-primary-result="artist"');
+    const tracksIndex = html.indexOf('data-search-tracks-surface="open"');
+    const albumsIndex = html.indexOf("library-albums");
+    assert.ok(artistIndex >= 0 && artistIndex < tracksIndex);
+    assert.ok(tracksIndex < albumsIndex);
 });
 
 test("Tracks renders the complete loaded prefix and offers honest continuation", async () => {

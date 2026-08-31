@@ -174,9 +174,12 @@ export function SettingsLayout({
     }, [sidebarItems, isAdmin]);
 
     return (
-        <div className="settings-page min-h-full">
-            <div className="relative mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10 xl:px-10">
-                <header className="mb-7 max-w-2xl md:mb-10">
+        <div
+            data-settings-layout="two-level"
+            className="settings-page min-h-full"
+        >
+            <div className="relative mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-10 xl:px-10">
+                <header className="mb-6 max-w-2xl md:mb-8">
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-light">
                         {ru.settings.eyebrow}
                     </p>
@@ -188,20 +191,18 @@ export function SettingsLayout({
                     </p>
                 </header>
 
-                <div className="grid items-start gap-5 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-8">
-                    <SettingsSidebar
-                        items={sidebarItems}
-                        activeSection={activeSection}
-                        onSectionClick={handleSectionClick}
-                        isAdmin={isAdmin}
-                    />
+                <SettingsSidebar
+                    items={sidebarItems}
+                    activeSection={activeSection}
+                    onSectionClick={handleSectionClick}
+                    isAdmin={isAdmin}
+                />
 
-                    <div
-                        ref={mainContentRef}
-                        className="min-w-0 space-y-4 md:space-y-5"
-                    >
-                        {children}
-                    </div>
+                <div
+                    ref={mainContentRef}
+                    className="min-w-0 space-y-4 md:space-y-5 [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:touch-manipulation"
+                >
+                    {children}
                 </div>
             </div>
         </div>

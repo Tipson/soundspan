@@ -14,6 +14,7 @@ const state = {
     preferenceProps: [] as Array<{
         trackId?: string;
         mode?: string;
+        buttonSizeClassName?: string;
         metadata?: {
             title?: string;
             artist?: string;
@@ -117,6 +118,7 @@ mock.module("@/components/player/TrackPreferenceButtons", {
         TrackPreferenceButtons: (props: {
             trackId?: string;
             mode?: string;
+            buttonSizeClassName?: string;
             metadata?: {
                 title?: string;
                 artist?: string;
@@ -491,6 +493,13 @@ test("playlist detail renders consolidated action bar buttons", async () => {
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить все треки в любимые"/);
     assert.match(html, /title="Запустить радио по плейлисту"/);
+    const hero = html.match(
+        /<header[^>]*data-music-detail="hero"[^>]*>[\s\S]*?<\/header>/,
+    )?.[0];
+    assert.ok(hero);
+    assert.match(hero, /data-music-detail="actions"/);
+    assert.match(hero, /data-detail-action-tier="primary"/);
+    assert.match(hero, /data-detail-action-tier="secondary"/);
 });
 
 test("playlist detail offers a device download for playable tracks only", async () => {
@@ -580,6 +589,12 @@ test("playlist rows keep the compact like-only preference control", async () => 
     assert.equal(compactPreferenceCount, 3);
     assert.doesNotMatch(html, /data-preference-mode="both"/);
     assert.deepEqual(
+        state.preferenceProps.map(
+            ({ buttonSizeClassName }) => buttonSizeClassName,
+        ),
+        ["h-11 w-11", "h-11 w-11", "h-11 w-11"],
+    );
+    assert.deepEqual(
         state.preferenceProps.map(({ trackId, metadata }) => ({
             trackId,
             metadata,
@@ -608,6 +623,47 @@ test("playlist rows keep the compact like-only preference control", async () => 
             },
         ],
     );
+});
+
+test("pending playlist rows expose named 44px recovery controls", async () => {
+    const playlist = state.playlist;
+    assert.ok(playlist);
+    state.playlist = {
+        ...playlist,
+        pendingCount: 1,
+        pendingTracks: [
+            {
+                pending: {
+                    id: "pending-1",
+                    title: "Missing Song",
+                    artist: "Missing Artist",
+                    album: "Missing Album",
+                },
+            },
+        ],
+    };
+
+    const mod = await import("../../app/playlist/[id]/page");
+    const queryClient = new QueryClient();
+    const html = renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            React.createElement(mod.default),
+        ),
+    );
+
+    for (const label of [
+        "Воспроизвести фрагмент «Missing Song»",
+        "Повторить загрузку «Missing Song»",
+        "Удалить недоступный трек «Missing Song»",
+    ]) {
+        const button = html.match(
+            new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`),
+        )?.[0];
+        assert.ok(button, `missing ${label}`);
+        assert.match(button, /h-11 w-11/);
+    }
 });
 
 test("playlist detail renders provider badges and unplayable fallback messaging", async () => {

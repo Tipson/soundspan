@@ -59,8 +59,6 @@ interface PlaybackControlsProps {
     showSpinner: boolean;
     onPlayPause: () => void;
     onShuffle: () => void;
-    onShare: () => void;
-    canShare: boolean;
 }
 
 function PlaybackControls(props: PlaybackControlsProps) {
@@ -79,7 +77,9 @@ function PlaybackControls(props: PlaybackControlsProps) {
                 ) : (
                     <Play className="w-5 h-5 fill-current text-black ml-0.5" />
                 )}
-                <span>{props.showPause ? ru.common.pause : ru.common.playAll}</span>
+                <span>
+                    {props.showPause ? ru.common.pause : ru.common.playAll}
+                </span>
             </button>
             <button
                 type="button"
@@ -90,17 +90,6 @@ function PlaybackControls(props: PlaybackControlsProps) {
             >
                 <Shuffle className="w-5 h-5" />
             </button>
-            {props.canShare && (
-                <button
-                    type="button"
-                    onClick={props.onShare}
-                    className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                    title={ru.catalog.shareAlbum}
-                    aria-label={ru.catalog.shareAlbum}
-                >
-                    <Share2 className="w-5 h-5" />
-                </button>
-            )}
         </>
     );
 }
@@ -165,15 +154,9 @@ function AlbumPreferenceButton(props: {
                       ? "text-brand hover:bg-white/10"
                       : "text-white/60 hover:bg-white/10 hover:text-white",
             )}
-            title={
-                props.liked
-                    ? ru.catalog.unlikeAlbum
-                    : ru.catalog.likeAlbum
-            }
+            title={props.liked ? ru.catalog.unlikeAlbum : ru.catalog.likeAlbum}
             aria-label={
-                props.liked
-                    ? ru.catalog.unlikeAlbum
-                    : ru.catalog.likeAlbum
+                props.liked ? ru.catalog.unlikeAlbum : ru.catalog.likeAlbum
             }
         >
             {props.applying ? (
@@ -216,18 +199,17 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     <ListMusic className="w-5 h-5" />
                 </button>
             )}
-            {!props.visibility.isLibraryVisible &&
-                props.visibility.canShareAlbum && (
-                    <button
-                        type="button"
-                        onClick={props.onShare}
-                        className="h-11 w-11 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                        title={ru.catalog.shareAlbum}
-                        aria-label={ru.catalog.shareAlbum}
-                    >
-                        <Share2 className="w-5 h-5" />
-                    </button>
-                )}
+            {props.visibility.canShareAlbum && (
+                <button
+                    type="button"
+                    onClick={props.onShare}
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                    title={ru.catalog.shareAlbum}
+                    aria-label={ru.catalog.shareAlbum}
+                >
+                    <Share2 className="h-5 w-5" />
+                </button>
+            )}
             {props.visibility.canShowAddToPlaylist && (
                 <button
                     type="button"
@@ -298,37 +280,44 @@ function ActionControlRow(props: {
     }
     return (
         <MusicDetailActionDock label={ru.catalog.albumControls}>
-            {actions.isInListenTogetherGroup && visibility.hasLockedControls ? (
-                <LockedControls
-                    visibility={visibility}
-                    showPause={props.showPause}
-                />
-            ) : (
-                <>
-                    {visibility.isLibraryVisible && (
+            <div
+                data-detail-action-tier="primary"
+                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+            >
+                {actions.isInListenTogetherGroup &&
+                visibility.hasLockedControls ? (
+                    <LockedControls
+                        visibility={visibility}
+                        showPause={props.showPause}
+                    />
+                ) : (
+                    visibility.isLibraryVisible && (
                         <PlaybackControls
                             showPause={props.showPause}
                             showSpinner={props.showSpinner}
                             onPlayPause={props.onPlayPause}
                             onShuffle={actions.onShuffle}
-                            onShare={props.onShare}
-                            canShare={visibility.canShareAlbum}
                         />
-                    )}
-                </>
-            )}
-            <SecondaryControls
-                visibility={visibility}
-                onAddAllToQueue={actions.onAddAllToQueue}
-                onAddToPlaylist={actions.onAddToPlaylist}
-                onShare={props.onShare}
-                onToggleAlbumLike={actions.onToggleAlbumLike}
-                liked={actions.isAlbumLiked ?? false}
-                applying={actions.isApplyingAlbumPreference ?? false}
-                onDeleteAlbum={actions.onDeleteAlbum}
-                librarySaveControl={actions.librarySaveControl}
-                deviceDownloadControl={actions.deviceDownloadControl}
-            />
+                    )
+                )}
+            </div>
+            <div
+                data-detail-action-tier="secondary"
+                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+            >
+                <SecondaryControls
+                    visibility={visibility}
+                    onAddAllToQueue={actions.onAddAllToQueue}
+                    onAddToPlaylist={actions.onAddToPlaylist}
+                    onShare={props.onShare}
+                    onToggleAlbumLike={actions.onToggleAlbumLike}
+                    liked={actions.isAlbumLiked ?? false}
+                    applying={actions.isApplyingAlbumPreference ?? false}
+                    onDeleteAlbum={actions.onDeleteAlbum}
+                    librarySaveControl={actions.librarySaveControl}
+                    deviceDownloadControl={actions.deviceDownloadControl}
+                />
+            </div>
         </MusicDetailActionDock>
     );
 }

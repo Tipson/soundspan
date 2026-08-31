@@ -172,19 +172,44 @@ export function buildHomeDiscoveryRows({
     return { stations, discoveries };
 }
 
-function HomeMediaCard({ item }: { item: HomeMediaItem }) {
+type HomeMediaVariant = "station" | "discovery";
+
+function HomeMediaCard({
+    item,
+    variant,
+}: {
+    item: HomeMediaItem;
+    variant: HomeMediaVariant;
+}) {
+    const isStation = variant === "station";
+
     return (
         <Link
             href={item.href}
-            className="group block min-w-0 snap-start rounded-[1.125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+            data-home-card-shape={isStation ? "landscape" : "square"}
+            className={
+                isStation
+                    ? "group flex min-h-28 min-w-0 snap-start items-center gap-3 overflow-hidden rounded-2xl border border-white/8 bg-white/[0.035] p-2 transition-colors duration-200 hover:border-white/15 hover:bg-white/[0.065] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface motion-reduce:transition-none"
+                    : "group block min-w-0 snap-start rounded-[1.125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+            }
         >
-            <span className="relative mb-3 block aspect-square overflow-hidden rounded-[1.125rem] bg-surface-highlight shadow-lg shadow-black/25">
+            <span
+                className={
+                    isStation
+                        ? "relative block h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-surface-highlight shadow-lg shadow-black/25"
+                        : "relative mb-3 block aspect-square overflow-hidden rounded-[1.125rem] bg-surface-highlight shadow-lg shadow-black/25"
+                }
+            >
                 {item.imageUrl ? (
                     <CachedImage
                         src={item.imageUrl}
                         alt=""
                         fill
-                        sizes="(max-width: 640px) 44vw, 190px"
+                        sizes={
+                            isStation
+                                ? "96px"
+                                : "(max-width: 640px) 44vw, 190px"
+                        }
                         className="object-cover transition duration-300 group-hover:scale-[1.035] motion-reduce:transition-none"
                     />
                 ) : (
@@ -197,14 +222,18 @@ function HomeMediaCard({ item }: { item: HomeMediaItem }) {
                 )}
                 <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
             </span>
-            <span className="block truncate text-sm font-bold text-content sm:text-[0.9375rem]">
-                {item.title}
-            </span>
-            {item.subtitle && (
-                <span className="mt-1 line-clamp-2 block text-xs leading-5 text-content-muted">
-                    {item.subtitle}
+            <span className={isStation ? "min-w-0 pr-2" : "block min-w-0"}>
+                <span
+                    className={`${isStation ? "line-clamp-2" : "truncate"} block text-sm font-bold text-content sm:text-[0.9375rem]`}
+                >
+                    {item.title}
                 </span>
-            )}
+                {item.subtitle && (
+                    <span className="mt-1 line-clamp-2 block text-xs leading-5 text-content-muted">
+                        {item.subtitle}
+                    </span>
+                )}
+            </span>
         </Link>
     );
 }
@@ -212,18 +241,33 @@ function HomeMediaCard({ item }: { item: HomeMediaItem }) {
 function HomeMediaRow({
     title,
     items,
+    variant,
 }: {
     title: string;
     items: HomeMediaItem[];
+    variant: HomeMediaVariant;
 }) {
     if (items.length === 0) return null;
 
     return (
-        <section aria-label={title}>
+        <section
+            data-home-rail={variant === "station" ? "stations" : "discoveries"}
+            aria-label={title}
+        >
             <SectionHeader title={title} />
-            <div className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[44vw] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[11rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-4 lg:overflow-visible xl:grid-cols-6">
+            <div
+                className={`scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:gap-4 lg:grid-flow-row lg:overflow-visible ${
+                    variant === "station"
+                        ? "auto-cols-[minmax(17rem,78vw)] sm:auto-cols-[20rem] lg:grid-cols-3 xl:grid-cols-4"
+                        : "auto-cols-[44vw] sm:auto-cols-[10.75rem] lg:grid-cols-5 xl:grid-cols-6"
+                }`}
+            >
                 {items.map((item) => (
-                    <HomeMediaCard key={item.key} item={item} />
+                    <HomeMediaCard
+                        key={item.key}
+                        item={item}
+                        variant={variant}
+                    />
                 ))}
             </div>
         </section>
@@ -245,8 +289,16 @@ export function HomeOnlineDiscovery({
 
     return (
         <div className="space-y-8 sm:space-y-10">
-            <HomeMediaRow title={ru.home.stations} items={stations} />
-            <HomeMediaRow title={ru.home.newNoteworthy} items={discoveries} />
+            <HomeMediaRow
+                title={ru.home.stations}
+                items={stations}
+                variant="station"
+            />
+            <HomeMediaRow
+                title={ru.home.newNoteworthy}
+                items={discoveries}
+                variant="discovery"
+            />
         </div>
     );
 }

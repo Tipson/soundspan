@@ -69,6 +69,7 @@ export function BottomNavigation() {
                         <Link
                             key={item.name}
                             href={item.href}
+                            data-shell-primary-destination={item.href}
                             onClick={
                                 item.href === "/library"
                                     ? (event) => {
@@ -91,6 +92,13 @@ export function BottomNavigation() {
                             aria-label={item.name}
                             aria-current={isActive ? "page" : undefined}
                         >
+                            <span
+                                aria-hidden="true"
+                                className={cn(
+                                    "absolute top-1 h-0.5 w-5 rounded-full bg-gradient-to-r from-brand via-ai to-brand-hover transition-opacity",
+                                    isActive ? "opacity-100" : "opacity-0",
+                                )}
+                            />
                             <span
                                 className={cn(
                                     "flex h-7 min-w-10 items-center justify-center rounded-full px-2 transition-colors",

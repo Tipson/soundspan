@@ -5,18 +5,24 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import {
     ArrowLeft,
-    Play,
-    Pause,
-    Music2,
-    ListMusic,
-    Shuffle,
-    Plus,
     Heart,
+    ListMusic,
     Loader2,
+    Music2,
+    Pause,
+    Play,
+    Plus,
+    Shuffle,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
+import {
+    MusicDetailActionDock,
+    MusicDetailHero,
+    MusicDetailTrackSurface,
+} from "@/components/music-detail";
 import { cn } from "@/utils/cn";
 import { decodeRouteId } from "@/utils/routeId";
 import {
@@ -44,19 +50,12 @@ export interface BrowseCollectionPageProps {
 type Copy = ReturnType<typeof browseCollectionCopy>;
 type Actions = ReturnType<typeof useBrowseCollectionActions>;
 
-/**
- * Shared detail page for TIDAL browse collections (playlists and mixes).
- * The per-route pages are thin wrappers that supply the fetcher and noun.
- */
+/** Shared detail page for provider browse playlists and mixes. */
 export function BrowseCollectionPage(props: BrowseCollectionPageProps) {
+    const loadingLabel =
+        props.kind === "mix" ? "Загружаем микс…" : "Загружаем плейлист…";
     return (
-        <Suspense
-            fallback={
-                <div className="min-h-screen flex items-center justify-center">
-                    <GradientSpinner size="lg" />
-                </div>
-            }
-        >
+        <Suspense fallback={<LoadingScreen message={loadingLabel} />}>
             <BrowseCollectionPageContent {...props} />
         </Suspense>
     );
@@ -70,6 +69,8 @@ function BrowseCollectionPageContent({
     const router = useRouter();
     const collectionId = decodeRouteId(params.id as string);
     const copy = browseCollectionCopy(kind);
+    const loadingLabel =
+        kind === "mix" ? "Загружаем микс…" : "Загружаем плейлист…";
 
     const { collection, isLoading, error } = useBrowseCollection(
         collectionId,
@@ -82,35 +83,91 @@ function BrowseCollectionPageContent({
     );
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message={loadingLabel} />;
     }
 
     if (error || !collection) {
         return <CollectionNotFound copy={copy} error={error} router={router} />;
     }
 
+    const imageUrl = collection.thumbnailUrl
+        ? api.getTidalBrowseImageUrl(collection.thumbnailUrl)
+        : null;
+    const totalDuration = collection.tracks.reduce(
+        (sum, track) => sum + track.duration,
+        0,
+    );
+
     return (
-        <div className="min-h-screen">
-            <CollectionHero collection={collection} copy={copy} />
-            <CollectionActionBar
-                collection={collection}
-                actions={actions}
-                router={router}
-            />
-            <div className="px-2 md:px-8 pb-32">
-                {collection.tracks.length > 0 ? (
-                    <BrowseTrackList
-                        tracks={collection.tracks}
-                        onPlayTrack={actions.handlePlayTrack}
+        <div className="min-h-screen bg-surface">
+            <MusicDetailHero
+                eyebrow={copy.heroLabel}
+                title={collection.title}
+                artworkShape="square"
+                backgroundImage={imageUrl}
+                metadata={
+                    <>
+                        <span>
+                            {collection.trackCount}{" "}
+                            {pluralRu(collection.trackCount, [
+                                "трек",
+                                "трека",
+                                "треков",
+                            ])}
+                        </span>
+                        {totalDuration > 0 && (
+                            <>
+                                <span aria-hidden="true">•</span>
+                                <span>
+                                    {formatTotalDuration(totalDuration)}
+                                </span>
+                            </>
+                        )}
+                    </>
+                }
+                artwork={
+                    imageUrl ? (
+                        <Image
+                            src={imageUrl}
+                            alt={collection.title}
+                            fill
+                            sizes="(max-width: 640px) 176px, 224px"
+                            className="object-cover"
+                            priority
+                            unoptimized
+                        />
+                    ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand/20 via-ai/10 to-surface-highlight">
+                            <Music2
+                                className="h-16 w-16 text-content-muted"
+                                aria-hidden="true"
+                            />
+                        </div>
+                    )
+                }
+                actions={
+                    <CollectionActionDock
+                        collection={collection}
+                        actions={actions}
+                        router={router}
                     />
+                }
+            />
+
+            <main className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+                {collection.tracks.length > 0 ? (
+                    <MusicDetailTrackSurface
+                        label={`${collection.title}: треки`}
+                    >
+                        <BrowseTrackList
+                            tracks={collection.tracks}
+                            onPlayTrack={actions.handlePlayTrack}
+                        />
+                    </MusicDetailTrackSurface>
                 ) : (
                     <EmptyTracks message={copy.emptyMessage} />
                 )}
-            </div>
+            </main>
 
             <PlaylistSelector
                 isOpen={actions.showPlaylistSelector}
@@ -133,114 +190,25 @@ function CollectionNotFound({
     router: ReturnType<typeof useRouter>;
 }) {
     return (
-        <div className="min-h-screen relative">
-            <div className="absolute inset-0 pointer-events-none">
-                <div
-                    className="absolute inset-0 bg-gradient-to-b from-[#00BFFF]/15 via-[#00BFFF]/10 to-transparent"
-                    style={{ height: "35vh" }}
-                />
-            </div>
-            <div className="relative px-4 md:px-8 py-6">
-                <button
-                    onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
-                >
-                    <ArrowLeft className="w-5 h-5" />
-                    Назад
-                </button>
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                        <Music2 className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <h3 className="text-lg font-medium text-white mb-2">
-                        {copy.notFoundTitle}
-                    </h3>
-                    <p className="text-sm text-gray-400 mb-6 max-w-sm">
-                        {error || copy.notFoundFallback}
-                    </p>
-                    <button
-                        onClick={() => router.push("/explore")}
-                        className="px-6 py-2.5 rounded-full bg-white text-black text-sm font-medium hover:scale-105 transition-transform"
-                    >
-                        Смотреть подборки
-                    </button>
-                </div>
-            </div>
-        </div>
+        <main
+            role="alert"
+            className="flex min-h-screen items-center justify-center bg-surface px-4"
+        >
+            <EmptyState
+                icon={<Music2 className="h-7 w-7" aria-hidden="true" />}
+                title={copy.notFoundTitle}
+                description={error || copy.notFoundFallback}
+                action={{
+                    label: "Назад",
+                    onClick: () => router.back(),
+                    variant: "secondary",
+                }}
+            />
+        </main>
     );
 }
 
-function CollectionHero({
-    collection,
-    copy,
-}: {
-    collection: TidalBrowseCollection;
-    copy: Copy;
-}) {
-    const totalDuration =
-        collection.tracks.reduce((sum, track) => sum + track.duration, 0) || 0;
-
-    return (
-        <div className="relative bg-gradient-to-b from-[#00BFFF]/20 via-surface-hover to-transparent pt-16 pb-10 px-4 md:px-8">
-            <div className="flex items-end gap-6">
-                <div className="relative w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
-                    {collection.thumbnailUrl ? (
-                        <Image
-                            src={api.getTidalBrowseImageUrl(
-                                collection.thumbnailUrl,
-                            )}
-                            alt={collection.title}
-                            fill
-                            sizes="(max-width: 768px) 140px, 192px"
-                            className="object-cover"
-                            unoptimized
-                        />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#00BFFF]/30 to-[#00BFFF]/10">
-                            <Music2 className="w-16 h-16 text-gray-400" />
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex-1 min-w-0 pb-1">
-                    <div className="flex items-center gap-2 mb-1">
-                        <svg
-                            viewBox="0 0 12 8"
-                            className="w-4 h-4 text-[#00BFFF]"
-                            fill="currentColor"
-                        >
-                            <path d="M2 0 L4 2 L2 4 L0 2Z" />
-                            <path d="M6 0 L8 2 L6 4 L4 2Z" />
-                            <path d="M10 0 L12 2 L10 4 L8 2Z" />
-                            <path d="M6 4 L8 6 L6 8 L4 6Z" />
-                        </svg>
-                        <p className="text-xs font-medium text-white/90">
-                            {copy.heroLabel}
-                        </p>
-                    </div>
-                    <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
-                        {collection.title}
-                    </h1>
-                    <div className="flex items-center gap-1 text-sm text-white/70">
-                        <span>
-                            {collection.trackCount}{" "}
-                            {pluralRu(collection.trackCount, [
-                                "трек",
-                                "трека",
-                                "треков",
-                            ])}
-                        </span>
-                        {totalDuration > 0 && (
-                            <span>, {formatTotalDuration(totalDuration)}</span>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function CollectionActionBar({
+function CollectionActionDock({
     collection,
     actions,
     router,
@@ -250,96 +218,103 @@ function CollectionActionBar({
     router: ReturnType<typeof useRouter>;
 }) {
     return (
-        <div className="bg-gradient-to-b from-surface-hover/60 to-transparent px-4 md:px-8 py-4">
-            <div className="flex items-center gap-4">
+        <MusicDetailActionDock label={`${collection.title}: действия`}>
+            <div
+                data-detail-action-tier="primary"
+                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+            >
                 <button
+                    type="button"
                     onClick={actions.handleTogglePlay}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#00BFFF] hover:bg-[#00BFFF]/80 hover:scale-105 shadow-lg transition-all font-semibold text-sm text-white"
+                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none"
                 >
                     {actions.showPlaySpinner ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <Loader2 className="h-5 w-5 animate-spin" />
                     ) : actions.isThisCollectionPlaying && actions.isPlaying ? (
-                        <Pause className="w-5 h-5 fill-current" />
+                        <Pause className="h-5 w-5 fill-current" />
                     ) : (
-                        <Play className="w-5 h-5 fill-current ml-0.5" />
+                        <Play className="ml-0.5 h-5 w-5 fill-current" />
                     )}
                     <span>
                         {actions.isThisCollectionPlaying && actions.isPlaying
                             ? "Пауза"
-                            : "Включить всё"}
+                            : "Воспроизвести всё"}
                     </span>
                 </button>
 
                 {collection.tracks.length > 1 && (
                     <button
+                        type="button"
                         onClick={actions.handleShuffle}
-                        className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         title="Перемешать"
                         aria-label="Перемешать и воспроизвести"
                     >
-                        <Shuffle className="w-5 h-5" />
+                        <Shuffle className="h-5 w-5" />
                     </button>
                 )}
+            </div>
 
+            <div
+                data-detail-action-tier="secondary"
+                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+            >
                 <button
+                    type="button"
                     onClick={actions.handleAddToQueue}
-                    className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     title="Добавить всё в очередь"
                     aria-label="Добавить все треки в очередь"
                 >
-                    <ListMusic className="w-5 h-5" />
+                    <ListMusic className="h-5 w-5" />
                 </button>
 
                 <button
+                    type="button"
                     onClick={() => actions.setShowPlaylistSelector(true)}
-                    className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     title="Добавить всё в плейлист"
                     aria-label="Добавить все треки в плейлист"
                 >
-                    <Plus className="w-5 h-5" />
+                    <Plus className="h-5 w-5" />
                 </button>
 
                 {actions.likeableTracks.length > 0 && (
                     <LikeAllButton actions={actions} />
                 )}
 
-                <div className="flex-1" />
-
                 <button
+                    type="button"
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                 >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span className="hidden sm:inline">Назад</span>
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                    <span>Назад</span>
                 </button>
             </div>
-        </div>
+        </MusicDetailActionDock>
     );
 }
 
 function LikeAllButton({ actions }: { actions: Actions }) {
+    const label = actions.isAllLiked
+        ? "Убрать отметку «Нравится» у всех треков"
+        : "Отметить все треки как понравившиеся";
     return (
         <button
+            type="button"
             onClick={actions.toggleLikeAll}
             disabled={actions.isApplyingLikeAll}
             className={cn(
-                "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+                "flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                 actions.isApplyingLikeAll
-                    ? "cursor-not-allowed text-white/35"
+                    ? "cursor-not-allowed text-content-muted opacity-50"
                     : actions.isAllLiked
                       ? "text-brand hover:bg-white/10"
-                      : "text-white/60 hover:bg-white/10 hover:text-white",
+                      : "text-content-secondary hover:bg-white/10 hover:text-content",
             )}
-            title={
-                actions.isAllLiked
-                    ? "Убрать отметку «Нравится» у всех треков"
-                    : "Отметить все треки как понравившиеся"
-            }
-            aria-label={
-                actions.isAllLiked
-                    ? "Убрать отметку «Нравится» у всех треков"
-                    : "Отметить все треки как понравившиеся"
-            }
+            title={label}
+            aria-label={label}
         >
             {actions.isApplyingLikeAll ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -357,14 +332,10 @@ function LikeAllButton({ actions }: { actions: Actions }) {
 
 function EmptyTracks({ message }: { message: string }) {
     return (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-20 h-20 bg-surface-highlight rounded-full flex items-center justify-center mb-4">
-                <Music2 className="w-10 h-10 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-white mb-1">
-                Треки не найдены
-            </h3>
-            <p className="text-sm text-gray-400">{message}</p>
-        </div>
+        <EmptyState
+            icon={<Music2 className="h-7 w-7" aria-hidden="true" />}
+            title="Треки не найдены"
+            description={message}
+        />
     );
 }

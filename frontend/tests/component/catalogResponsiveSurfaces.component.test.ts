@@ -14,7 +14,10 @@ mock.module("lucide-react", {
         Download: Icon,
         Heart: Icon,
         ListMusic: Icon,
+        Loader2: Icon,
         Music: Icon,
+        Play: Icon,
+        Trash2: Icon,
         UserRound: Icon,
     },
 });
@@ -44,6 +47,33 @@ mock.module("@/hooks/useMetadataDisplay", {
             coverUrl: album.coverArt,
             hasUserOverrides: false,
         }),
+    },
+});
+
+mock.module("@/components/ui/CachedImage", {
+    namedExports: {
+        CachedImage: (props: Record<string, unknown>) =>
+            React.createElement("img", {
+                src: String(props.src ?? ""),
+                alt: String(props.alt ?? ""),
+            }),
+    },
+});
+
+mock.module("@/hooks/usePlayButtonFeedback", {
+    namedExports: {
+        usePlayButtonFeedback: () => ({
+            showSpinner: false,
+            trigger: () => undefined,
+        }),
+    },
+});
+
+mock.module("@/lib/api", {
+    namedExports: {
+        api: {
+            getCoverArtUrl: (value: string) => value,
+        },
     },
 });
 
@@ -92,9 +122,10 @@ test("Library tabs announce horizontal overflow and retain touch-sized targets",
     const { LibraryTabs } =
         await import("../../features/library/components/LibraryTabs");
     const html = renderToStaticMarkup(
-        React.createElement(LibraryTabs, { activeTab: "overview" }),
+        React.createElement(LibraryTabs, { activeTab: "liked" }),
     );
 
+    assert.match(html, /data-library-tabs="collection"/);
     assert.match(html, /data-overflow-cue="horizontal"/);
     assert.match(
         html,
@@ -102,6 +133,17 @@ test("Library tabs announce horizontal overflow and retain touch-sized targets",
     );
     assert.match(html, /min-h-11/);
     assert.match(html, /snap-x/);
+    assert.equal((html.match(/data-library-tab=/g) ?? []).length, 5);
+    for (const label of [
+        "Лайкнутые",
+        "Плейлисты",
+        "Альбомы",
+        "Исполнители",
+        "Загрузки",
+    ]) {
+        assert.match(html, new RegExp(`>${label}<`));
+    }
+    assert.doesNotMatch(html, />Обзор</);
 });
 
 test("Library overview makes account and device ownership explicit", async () => {
@@ -119,6 +161,70 @@ test("Library overview makes account and device ownership explicit", async () =>
 
     assert.match(html, /Сохранено в аккаунте/);
     assert.match(html, /Доступно на всех устройствах, где вы вошли в аккаунт/);
-    assert.match(html, /Только на этом устройстве/);
+    assert.match(html, /Загрузки на этом устройстве/);
     assert.match(html, /2 офлайн-трека/);
+    assert.match(html, /data-library-overview="split"/);
+    assert.match(html, /data-library-scope="account"/);
+    assert.match(html, /data-library-scope="device"/);
+});
+
+test("legacy Library grids keep complete titles and named 44px card actions", async () => {
+    const { AlbumsGrid } =
+        await import("../../features/library/components/AlbumsGrid");
+    const { ArtistsGrid } =
+        await import("../../features/library/components/ArtistsGrid");
+
+    const albumHtml = renderToStaticMarkup(
+        React.createElement(AlbumsGrid, {
+            albums: [
+                {
+                    id: "album-1",
+                    title: "Очень длинное название альбома без потери смысла",
+                    artist: { id: "artist-1", name: "Исполнитель" },
+                },
+            ],
+            onPlay: async () => undefined,
+            onDelete: () => undefined,
+            canDelete: true,
+        }),
+    );
+    const artistHtml = renderToStaticMarkup(
+        React.createElement(ArtistsGrid, {
+            artists: [
+                {
+                    id: "artist-1",
+                    name: "Очень длинное имя исполнителя без обрезания",
+                },
+            ],
+            onPlay: async () => undefined,
+            onDelete: () => undefined,
+            canDelete: true,
+        }),
+    );
+
+    for (const [html, labels] of [
+        [
+            albumHtml,
+            [
+                "Воспроизвести альбом «Очень длинное название альбома без потери смысла»",
+                "Удалить альбом «Очень длинное название альбома без потери смысла»",
+            ],
+        ],
+        [
+            artistHtml,
+            [
+                "Воспроизвести исполнителя «Очень длинное имя исполнителя без обрезания»",
+                "Удалить исполнителя «Очень длинное имя исполнителя без обрезания»",
+            ],
+        ],
+    ] as const) {
+        assert.match(html, /line-clamp-2/);
+        for (const label of labels) {
+            const button = html.match(
+                new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`),
+            )?.[0];
+            assert.ok(button, `missing ${label}`);
+            assert.match(button, /h-11 w-11/);
+        }
+    }
 });

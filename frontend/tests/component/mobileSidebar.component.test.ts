@@ -118,7 +118,7 @@ test("returns null when closed", async () => {
     assert.equal(html, "");
 });
 
-test("keeps search in the top bar and moves notifications into the account drawer", async () => {
+test("keeps primary navigation outside the account drawer", async () => {
     const { MobileSidebar } =
         await import("../../components/layout/MobileSidebar");
 
@@ -130,28 +130,30 @@ test("keeps search in the top bar and moves notifications into the account drawe
         }),
     );
 
-    assert.match(html, />Слушать</);
-    assert.match(html, />Главная</);
+    assert.match(html, /data-shell-drawer="account"/);
+    assert.doesNotMatch(html, />Слушать</);
+    assert.doesNotMatch(html, />Главная</);
     assert.doesNotMatch(html, />Поиск</);
     assert.doesNotMatch(html, /href="\/search"/);
-    assert.match(html, />Коллекция</);
-    assert.match(html, />Моя волна</);
+    assert.doesNotMatch(html, />Коллекция</);
+    assert.doesNotMatch(html, />Моя волна</);
     assert.match(html, />Любимые треки</);
     assert.match(html, />Загрузки</);
     assert.match(html, />Импорт плейлиста</);
     assert.match(html, />Ваша музыка</);
+    assert.match(html, />Аккаунт</);
     assert.doesNotMatch(html, />Listen|Your music</);
     const notifications = html.match(
         /<button[^>]*aria-label="Открыть уведомления"[^>]*>/,
     )?.[0];
     assert.ok(notifications);
-    assert.match(notifications, /min-h-11/);
+    assert.match(notifications, /min-h-12/);
     assert.doesNotMatch(html, />Обзор</);
     assert.doesNotMatch(html, />Совместное прослушивание</);
     assert.doesNotMatch(html, /Моя история/);
 });
 
-test("marks Vibe as current without exposing a social quick link", async () => {
+test("does not duplicate Vibe inside the account drawer", async () => {
     state.pathname = "/vibe";
 
     const { MobileSidebar } =
@@ -165,8 +167,8 @@ test("marks Vibe as current without exposing a social quick link", async () => {
         }),
     );
 
-    assert.match(html, /href="\/vibe"/);
-    assert.match(html, /aria-current="page"/);
+    assert.doesNotMatch(html, /href="\/vibe"/);
+    assert.doesNotMatch(html, />Моя волна</);
     assert.doesNotMatch(html, /eq-bars|Совместное прослушивание/);
 });
 

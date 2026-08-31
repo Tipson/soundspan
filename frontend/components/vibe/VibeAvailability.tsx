@@ -234,9 +234,9 @@ export function VibeProviderFallback() {
         null,
     );
     const [isTuneOpen, setIsTuneOpen] = useState(false);
-    const [retuneNotice, setRetuneNotice] = useState<"updated" | "kept" | null>(
-        null,
-    );
+    const [retuneNotice, setRetuneNotice] = useState<
+        "updated" | "kept" | "saved" | null
+    >(null);
     const tuneButtonRef = useRef<HTMLButtonElement>(null);
     const readWaveSelectionOwnerRef = useRef<string | null>(null);
     const pendingRetuneRef = useRef<{
@@ -474,6 +474,7 @@ export function VibeProviderFallback() {
                 vibeMode && (mode !== activeMode || mood !== activeMood);
             pendingRetuneRef.current = shouldRetune ? { mode, mood } : null;
             if (shouldRetune) setRetuneNotice(null);
+            else if (!vibeMode) setRetuneNotice("saved");
             setActiveMode(mode);
             setActiveMood(mood);
             setWaveMode(mode);
@@ -532,10 +533,10 @@ export function VibeProviderFallback() {
                     <div className="absolute inset-0 bg-[linear-gradient(115deg,transparent_15%,rgb(255_255_255/0.035)_48%,transparent_72%)]" />
                 </div>
 
-                <div className="relative flex flex-1 flex-col items-center justify-center px-5 pb-12 pt-10 text-center sm:px-10 sm:pb-14 sm:pt-12 lg:px-16">
+                <div className="relative flex flex-1 flex-col items-center justify-start px-5 pb-8 pt-7 text-center sm:px-10 sm:pb-10 sm:pt-9 lg:px-16">
                     <div
                         data-testid="wave-continuity-status"
-                        className="wave-material mb-6 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3.5 py-2 text-xs font-semibold tracking-wide text-content-body backdrop-blur-xl"
+                        className="wave-material mb-4 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3.5 py-2 text-xs font-semibold tracking-wide text-content-body backdrop-blur-xl"
                     >
                         <AudioWaveform
                             className="h-4 w-4 text-brand-light"
@@ -549,18 +550,21 @@ export function VibeProviderFallback() {
                         </p>
                         <h1
                             id="wave-title"
-                            className="mt-3 text-5xl font-black leading-[0.9] tracking-[-0.065em] text-white sm:text-7xl lg:text-[6.6rem]"
+                            className="mt-2 text-4xl font-black leading-[0.94] tracking-[-0.055em] text-white sm:text-5xl lg:text-6xl"
                         >
                             {ru.vibe.title}
                         </h1>
-                        <p className="mx-auto mt-5 max-w-lg text-sm leading-6 text-content-secondary sm:text-base sm:leading-7">
+                        <p
+                            data-testid="wave-description"
+                            className="mx-auto mt-3 line-clamp-2 max-w-xl text-sm leading-6 text-content-secondary sm:text-base"
+                        >
                             {ru.vibe.subtitle}
                         </p>
                     </header>
 
                     <div
                         data-testid="wave-orbit-stage"
-                        className="relative mt-9 grid h-48 w-48 place-items-center sm:h-56 sm:w-56"
+                        className="relative mt-6 grid h-40 w-40 place-items-center sm:h-44 sm:w-44"
                     >
                         <span
                             aria-hidden="true"
@@ -578,21 +582,21 @@ export function VibeProviderFallback() {
                             disabled={!hasActiveWave && !canPlay}
                             aria-label={primaryControlLabel}
                             aria-pressed={hasActiveWave && isPlaying}
-                            className="group relative z-10 flex h-36 min-h-20 w-36 min-w-20 flex-col items-center justify-center gap-2 rounded-full bg-white px-4 text-center text-sm font-black text-black shadow-2xl shadow-black/40 transition-[transform,background-color,box-shadow] duration-200 ease-out hover:scale-[1.035] hover:bg-brand-light hover:shadow-brand/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-transparent disabled:scale-100 disabled:bg-white/15 disabled:text-content-muted motion-reduce:transition-none sm:h-40 sm:w-40 sm:text-base"
+                            className="group relative z-10 flex h-28 min-h-20 w-28 min-w-20 flex-col items-center justify-center gap-1.5 rounded-full bg-white px-4 text-center text-sm font-black text-black shadow-2xl shadow-black/40 transition-[transform,background-color,box-shadow] duration-200 ease-out hover:scale-[1.035] hover:bg-brand-light hover:shadow-brand/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-transparent disabled:scale-100 disabled:bg-white/15 disabled:text-content-muted motion-reduce:transition-none sm:h-32 sm:w-32 sm:text-base"
                         >
                             {!hasActiveWave && isLoading ? (
                                 <Loader2
-                                    className="h-10 w-10 animate-spin motion-reduce:animate-none"
+                                    className="h-8 w-8 animate-spin motion-reduce:animate-none"
                                     aria-hidden="true"
                                 />
                             ) : hasActiveWave && isPlaying ? (
                                 <Pause
-                                    className="h-11 w-11 fill-current"
+                                    className="h-9 w-9 fill-current"
                                     aria-hidden="true"
                                 />
                             ) : (
                                 <Play
-                                    className="ml-1 h-11 w-11 fill-current"
+                                    className="ml-1 h-9 w-9 fill-current"
                                     aria-hidden="true"
                                 />
                             )}
@@ -606,11 +610,11 @@ export function VibeProviderFallback() {
 
                     <div
                         data-testid="wave-current-tuning"
-                        className="mt-7 flex max-w-xl flex-col items-center gap-3"
+                        className="mt-5 flex w-full max-w-2xl flex-wrap items-center justify-center gap-2"
                     >
                         <p
                             aria-live="polite"
-                            className="wave-material flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-content backdrop-blur-xl sm:text-base"
+                            className="wave-material flex min-h-11 flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-content backdrop-blur-xl"
                         >
                             <span className="text-content-muted">
                                 {ru.vibe.directionLabel}
@@ -646,11 +650,13 @@ export function VibeProviderFallback() {
                         <p
                             role="status"
                             aria-live="polite"
-                            className={`wave-material mt-4 rounded-full border px-4 py-2 text-sm font-semibold backdrop-blur-xl ${retuneNotice === "updated" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
+                            className={`wave-material mt-3 rounded-full border px-4 py-2 text-sm font-semibold backdrop-blur-xl ${retuneNotice === "updated" || retuneNotice === "saved" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
                         >
-                            {retuneNotice === "updated"
-                                ? ru.vibe.updated
-                                : ru.vibe.updateFailed}
+                            {retuneNotice === "saved"
+                                ? "Настройка сохранена — она применится при следующем запуске."
+                                : retuneNotice === "updated"
+                                  ? ru.vibe.updated
+                                  : ru.vibe.updateFailed}
                         </p>
                     )}
 
@@ -660,9 +666,7 @@ export function VibeProviderFallback() {
                             role={isError ? "alert" : "status"}
                         >
                             <p>
-                                {isError
-                                    ? ru.vibe.loadFailed
-                                    : ru.vibe.empty}
+                                {isError ? ru.vibe.loadFailed : ru.vibe.empty}
                             </p>
                             {isError && (
                                 <button
@@ -818,6 +822,7 @@ export function VibeProviderFallback() {
                 <WaveDirectionSheet
                     activeMode={activeMode}
                     activeMood={activeMood}
+                    isWaveActive={vibeMode}
                     onApply={applyDirection}
                     onClose={closeTune}
                 />

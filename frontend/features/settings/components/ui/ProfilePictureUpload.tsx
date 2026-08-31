@@ -92,7 +92,7 @@ export function ProfilePictureUpload({
     const isBusy = isUploading || isRemoving;
 
     return (
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
             {/* Avatar preview */}
             <div className="relative w-12 h-12 rounded-full overflow-hidden bg-white/10 text-white/80 text-lg font-semibold flex items-center justify-center shrink-0">
                 {hasPicture && user ? (
@@ -124,7 +124,7 @@ export function ProfilePictureUpload({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isBusy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-white/10 hover:bg-white/15 text-white transition-colors disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-white/[0.07] px-3 py-2 text-xs font-semibold text-content transition-colors hover:bg-white/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
             >
                 <Upload className="w-3.5 h-3.5" />
                 Загрузить
@@ -134,7 +134,7 @@ export function ProfilePictureUpload({
                     type="button"
                     onClick={handleRemove}
                     disabled={isBusy}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-white/10 hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-colors disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-white/[0.07] px-3 py-2 text-xs font-semibold text-content-muted transition-colors hover:bg-red-500/20 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
                     Удалить

@@ -206,6 +206,13 @@ function findButton(container: HTMLElement, text: string): HTMLButtonElement {
 test("explains Spotify import boundaries and names the back button", async () => {
     const { container, unmount } = await mountImportPage();
 
+    assert.ok(container.querySelector('[data-consumer-surface="import"]'));
+    assert.ok(container.querySelector('[data-page-header="editorial"]'));
+    const modeTabs = Array.from(
+        container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    assert.equal(modeTabs.length, 2);
+    assert.ok(modeTabs.every((tab) => tab.className.includes("min-h-11")));
     assert.ok(container.querySelector('button[aria-label="Назад"]'));
     assert.match(
         container.textContent || "",
