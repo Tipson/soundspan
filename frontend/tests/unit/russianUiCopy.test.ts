@@ -6,9 +6,12 @@ import { pluralRu, ru, userFacingError } from "../../lib/i18n/ru";
 test("основная навигация и ключевые музыкальные поверхности используют русскую микрокопию", () => {
     assert.deepEqual(
         [ru.nav.home, ru.nav.vibe, ru.nav.library],
-        ["Главная", "Моя волна", "Коллекция"],
+        ["Главная", "Волна", "Моя музыка"],
     );
-    assert.equal(ru.search.placeholder, "Что хотите послушать?");
+    assert.equal(
+        ru.search.placeholder,
+        "Найти трек, исполнителя, альбом или плейлист",
+    );
     assert.equal(ru.library.title, "Моя коллекция");
     assert.equal(ru.vibe.tuneTitle, "Настроить мою волну");
 });

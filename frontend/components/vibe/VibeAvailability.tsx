@@ -490,7 +490,7 @@ export function VibeProviderFallback() {
     return (
         <main
             data-wave-mode={activeMode}
-            className="relative min-h-full overflow-x-hidden bg-surface p-0 sm:p-3 lg:p-5"
+            className="relative h-full min-h-0 overflow-hidden bg-surface p-0 sm:p-3 lg:p-5"
         >
             <style>{`
                 @media (prefers-reduced-transparency: reduce) {
@@ -500,11 +500,68 @@ export function VibeProviderFallback() {
                         backdrop-filter: none !important;
                     }
                 }
+
+                @media (min-width: 1025px) and (max-height: 850px) {
+                    .wave-density-core {
+                        justify-content: center !important;
+                        padding-top: 0.625rem !important;
+                        padding-bottom: 0.625rem !important;
+                    }
+
+                    .wave-density-continuity,
+                    .wave-density-subtitle {
+                        display: none !important;
+                    }
+
+                    .wave-density-title {
+                        margin-top: 0.2rem !important;
+                        font-size: clamp(2.1rem, 5.2vh, 2.75rem) !important;
+                    }
+
+                    .wave-density-orbit {
+                        width: 7rem !important;
+                        height: 7rem !important;
+                        margin-top: 0.4rem !important;
+                    }
+
+                    .wave-density-toggle {
+                        width: 5.75rem !important;
+                        height: 5.75rem !important;
+                        min-width: 5.75rem !important;
+                        min-height: 5.75rem !important;
+                        font-size: 0.8rem !important;
+                    }
+
+                    .wave-density-toggle svg {
+                        width: 1.5rem !important;
+                        height: 1.5rem !important;
+                    }
+
+                    .wave-density-tuning,
+                    .wave-density-notice,
+                    .wave-density-empty {
+                        margin-top: 0.5rem !important;
+                    }
+
+                    .wave-density-bottom {
+                        padding-top: 0.5rem !important;
+                        padding-bottom: 0.5rem !important;
+                    }
+
+                    .wave-density-now {
+                        padding: 0.625rem !important;
+                    }
+
+                    .wave-density-next-row {
+                        padding-top: 0.2rem !important;
+                        padding-bottom: 0.2rem !important;
+                    }
+                }
             `}</style>
             <section
                 data-testid="wave-surface"
                 aria-labelledby="wave-title"
-                className="relative isolate mx-auto flex min-h-[calc(100dvh-5rem)] max-w-[96rem] flex-col overflow-hidden bg-surface-raised shadow-2xl shadow-black/35 sm:min-h-[calc(100dvh-7rem)] sm:rounded-[2rem] sm:border sm:border-white/10"
+                className="relative isolate mx-auto flex h-full min-h-0 max-w-[96rem] flex-col overflow-hidden bg-surface-raised shadow-2xl shadow-black/35 sm:rounded-[2rem] sm:border sm:border-white/10"
             >
                 <div
                     data-testid="wave-ambient-field"
@@ -533,10 +590,10 @@ export function VibeProviderFallback() {
                     <div className="absolute inset-0 bg-[linear-gradient(115deg,transparent_15%,rgb(255_255_255/0.035)_48%,transparent_72%)]" />
                 </div>
 
-                <div className="relative flex flex-1 flex-col items-center justify-start px-5 pb-8 pt-7 text-center sm:px-10 sm:pb-10 sm:pt-9 lg:px-16">
+                <div className="wave-density-core relative flex min-h-0 flex-1 flex-col items-center justify-start px-5 pb-8 pt-7 text-center sm:px-10 sm:pb-10 sm:pt-9 lg:px-16">
                     <div
                         data-testid="wave-continuity-status"
-                        className="wave-material mb-4 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3.5 py-2 text-xs font-semibold tracking-wide text-content-body backdrop-blur-xl"
+                        className="wave-density-continuity wave-material mb-4 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3.5 py-2 text-xs font-semibold tracking-wide text-content-body backdrop-blur-xl"
                     >
                         <AudioWaveform
                             className="h-4 w-4 text-brand-light"
@@ -550,13 +607,13 @@ export function VibeProviderFallback() {
                         </p>
                         <h1
                             id="wave-title"
-                            className="mt-2 text-4xl font-black leading-[0.94] tracking-[-0.055em] text-white sm:text-5xl lg:text-6xl"
+                            className="wave-density-title mt-2 text-4xl font-black leading-[0.94] tracking-[-0.055em] text-white sm:text-5xl lg:text-6xl"
                         >
                             {ru.vibe.title}
                         </h1>
                         <p
                             data-testid="wave-description"
-                            className="mx-auto mt-3 line-clamp-2 max-w-xl text-sm leading-6 text-content-secondary sm:text-base"
+                            className="wave-density-subtitle mx-auto mt-3 line-clamp-2 max-w-xl text-sm leading-6 text-content-secondary sm:text-base"
                         >
                             {ru.vibe.subtitle}
                         </p>
@@ -564,7 +621,7 @@ export function VibeProviderFallback() {
 
                     <div
                         data-testid="wave-orbit-stage"
-                        className="relative mt-6 grid h-40 w-40 place-items-center sm:h-44 sm:w-44"
+                        className="wave-density-orbit relative mt-6 grid h-40 w-40 place-items-center sm:h-44 sm:w-44"
                     >
                         <span
                             aria-hidden="true"
@@ -582,7 +639,7 @@ export function VibeProviderFallback() {
                             disabled={!hasActiveWave && !canPlay}
                             aria-label={primaryControlLabel}
                             aria-pressed={hasActiveWave && isPlaying}
-                            className="group relative z-10 flex h-28 min-h-20 w-28 min-w-20 flex-col items-center justify-center gap-1.5 rounded-full bg-white px-4 text-center text-sm font-black text-black shadow-2xl shadow-black/40 transition-[transform,background-color,box-shadow] duration-200 ease-out hover:scale-[1.035] hover:bg-brand-light hover:shadow-brand/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-transparent disabled:scale-100 disabled:bg-white/15 disabled:text-content-muted motion-reduce:transition-none sm:h-32 sm:w-32 sm:text-base"
+                            className="wave-density-toggle group relative z-10 flex h-28 min-h-20 w-28 min-w-20 flex-col items-center justify-center gap-1.5 rounded-full bg-white px-4 text-center text-sm font-black text-black shadow-2xl shadow-black/40 transition-[transform,background-color,box-shadow] duration-200 ease-out hover:scale-[1.035] hover:bg-brand-light hover:shadow-brand/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-transparent disabled:scale-100 disabled:bg-white/15 disabled:text-content-muted motion-reduce:transition-none sm:h-32 sm:w-32 sm:text-base"
                         >
                             {!hasActiveWave && isLoading ? (
                                 <Loader2
@@ -610,7 +667,7 @@ export function VibeProviderFallback() {
 
                     <div
                         data-testid="wave-current-tuning"
-                        className="mt-5 flex w-full max-w-2xl flex-wrap items-center justify-center gap-2"
+                        className="wave-density-tuning mt-5 flex w-full max-w-2xl flex-wrap items-center justify-center gap-2"
                     >
                         <p
                             aria-live="polite"
@@ -650,7 +707,7 @@ export function VibeProviderFallback() {
                         <p
                             role="status"
                             aria-live="polite"
-                            className={`wave-material mt-3 rounded-full border px-4 py-2 text-sm font-semibold backdrop-blur-xl ${retuneNotice === "updated" || retuneNotice === "saved" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
+                            className={`wave-density-notice wave-material mt-3 rounded-full border px-4 py-2 text-sm font-semibold backdrop-blur-xl ${retuneNotice === "updated" || retuneNotice === "saved" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
                         >
                             {retuneNotice === "saved"
                                 ? "Настройка сохранена — она применится при следующем запуске."
@@ -662,7 +719,7 @@ export function VibeProviderFallback() {
 
                     {!isLoading && tracks.length === 0 && (
                         <div
-                            className="wave-material mt-7 max-w-lg rounded-2xl border border-white/10 bg-black/35 px-5 py-4 text-sm leading-6 text-content-secondary backdrop-blur-xl"
+                            className="wave-density-empty wave-material mt-7 max-w-lg rounded-2xl border border-white/10 bg-black/35 px-5 py-4 text-sm leading-6 text-content-secondary backdrop-blur-xl"
                             role={isError ? "alert" : "status"}
                         >
                             <p>
@@ -687,12 +744,13 @@ export function VibeProviderFallback() {
                 </div>
 
                 {(currentTrack || nextTracks.length > 0) && (
-                    <div className="wave-material relative border-t border-white/10 bg-black/30 px-4 py-4 backdrop-blur-2xl sm:px-6 min-[1025px]:px-8">
+                    <div className="wave-density-bottom wave-material relative shrink-0 border-t border-white/10 bg-black/30 px-4 py-4 backdrop-blur-2xl sm:px-6 min-[1025px]:px-8">
                         <div className="mx-auto grid max-w-6xl gap-4 min-[900px]:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)] min-[900px]:items-center">
                             {currentTrack ? (
                                 <section
+                                    data-testid="wave-now-playing-panel"
                                     aria-labelledby="wave-now-playing-title"
-                                    className="min-w-0 rounded-2xl bg-white/[0.045] p-3 sm:p-4"
+                                    className="wave-density-now min-w-0 rounded-2xl bg-white/[0.045] p-3 sm:p-4"
                                 >
                                     <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
                                         <div className="min-w-0">
@@ -716,6 +774,7 @@ export function VibeProviderFallback() {
                                                 showPlaybackToggle={false}
                                             />
                                             <button
+                                                data-testid="wave-skip"
                                                 type="button"
                                                 onClick={() =>
                                                     advanceQueue("manual")
@@ -776,7 +835,7 @@ export function VibeProviderFallback() {
                                             return (
                                                 <div
                                                     key={track.id}
-                                                    className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/[0.04]"
+                                                    className="wave-density-next-row flex min-w-0 items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/[0.04]"
                                                 >
                                                     {cover ? (
                                                         // eslint-disable-next-line @next/next/no-img-element

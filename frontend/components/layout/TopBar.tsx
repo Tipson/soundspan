@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Search, Menu, ChevronLeft } from "lucide-react";
+import { AudioWaveform, Home, Library, Menu, Search } from "lucide-react";
 import { ActivityPanelToggle } from "./ActivityPanel";
 import { UserAvatarMenu } from "./UserAvatarMenu";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
@@ -114,7 +114,7 @@ export function TopBar({
     return (
         <header
             data-shell-topbar={isMobileOrTablet ? "mobile" : "desktop"}
-            className="shell-topbar pwa-titlebar-drag fixed inset-x-0 top-0 z-50 flex items-center"
+            className={`shell-topbar pwa-titlebar-drag z-50 flex items-center ${isMobileOrTablet ? "fixed inset-x-0 top-0" : "relative shrink-0"}`}
             style={{
                 height: isMobileOrTablet
                     ? "calc(var(--app-topbar-height) + var(--safe-area-top))"
@@ -205,86 +205,92 @@ export function TopBar({
                     )}
                 </>
             ) : (
-                <>
-                    <div className="flex w-[216px] flex-shrink-0 items-center px-4">
-                        <Link
-                            href="/"
-                            className="group flex min-h-11 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                        >
-                            <Image
-                                src="/assets/images/soundspan.webp"
-                                alt={BRAND_NAME}
-                                width={38}
-                                height={38}
-                                sizes="38px"
-                                className="transition-transform duration-200 group-hover:scale-[1.04]"
-                            />
-                            <span className="brand-wordmark text-[1.85rem] font-bold text-white">
-                                {BRAND_NAME}
-                            </span>
-                        </Link>
-                    </div>
-
-                    <div className="flex min-w-0 flex-1 items-center justify-center px-4">
-                        <div className="flex w-full max-w-[720px] items-center gap-2">
-                            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center">
-                                {pathname !== "/" ? (
-                                    <button
-                                        onClick={() => router.back()}
-                                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-content-muted transition-colors hover:border-white/10 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                                        aria-label={ru.search.back}
-                                        title={ru.search.back}
-                                    >
-                                        <ChevronLeft className="h-5 w-5" />
-                                    </button>
-                                ) : (
-                                    <span
-                                        className="h-11 w-11"
+                <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(16rem,520px)_auto] items-center gap-2 px-4 xl:gap-4 xl:px-8">
+                    <nav
+                        data-shell-top-navigation="desktop"
+                        aria-label="Быстрая навигация"
+                        className="flex min-w-0 items-center gap-1"
+                    >
+                        {[
+                            { href: "/", label: ru.nav.home, icon: Home },
+                            {
+                                href: "/vibe",
+                                label: ru.nav.vibe,
+                                icon: AudioWaveform,
+                            },
+                            {
+                                href: "/library",
+                                label: ru.nav.library,
+                                icon: Library,
+                            },
+                        ].map((item) => {
+                            const isActive =
+                                item.href === "/"
+                                    ? pathname === "/"
+                                    : pathname.startsWith(item.href);
+                            const Icon = item.icon;
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    aria-current={isActive ? "page" : undefined}
+                                    className={`group relative flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${isActive ? "text-white" : "text-content-muted hover:bg-white/[0.04] hover:text-white"}`}
+                                >
+                                    <Icon
+                                        className="h-[18px] w-[18px]"
+                                        strokeWidth={isActive ? 2.35 : 1.9}
                                         aria-hidden="true"
                                     />
-                                )}
-                            </div>
+                                    <span>{item.label}</span>
+                                    {isActive && (
+                                        <span
+                                            aria-hidden="true"
+                                            className="absolute inset-x-3 -bottom-[11px] h-0.5 rounded-full bg-gradient-to-r from-warning via-ai to-brand"
+                                        />
+                                    )}
+                                </Link>
+                            );
+                        })}
+                    </nav>
 
-                            <form
-                                onSubmit={handleSearch}
-                                className="min-w-0 flex-1"
-                            >
-                                <div
-                                    className="group relative"
-                                    data-tv-section="search-input"
-                                    data-shell-search="persistent"
-                                >
-                                    <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
-                                    <input
-                                        ref={searchInputRef}
-                                        type="text"
-                                        value={searchQuery}
-                                        onChange={(e) =>
-                                            updateSearchQuery(e.target.value)
-                                        }
-                                        placeholder={ru.search.placeholder}
-                                        aria-label={ru.search.aria}
-                                        autoCapitalize="none"
-                                        autoCorrect="off"
-                                        tabIndex={0}
-                                        className="shell-search-field h-12 w-full rounded-2xl pl-12 pr-14 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/15"
-                                    />
-                                    <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-semibold text-content-muted">
-                                        /
-                                    </kbd>
-                                </div>
-                            </form>
+                    <form
+                        onSubmit={handleSearch}
+                        className="mx-auto w-full max-w-[520px]"
+                    >
+                        <div
+                            className="group relative"
+                            data-tv-section="search-input"
+                            data-shell-search="persistent"
+                        >
+                            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) =>
+                                    updateSearchQuery(e.target.value)
+                                }
+                                placeholder={ru.search.placeholder}
+                                aria-label={ru.search.aria}
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                tabIndex={0}
+                                className="shell-search-field h-11 w-full rounded-2xl pl-12 pr-14 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/20"
+                            />
+                            <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-semibold text-content-muted">
+                                /
+                            </kbd>
                         </div>
-                    </div>
+                    </form>
 
-                    <div className="flex w-[216px] flex-shrink-0 items-center justify-end gap-2 px-4">
+                    <div className="flex items-center justify-end gap-2">
                         <ActivityPanelToggle
                             pollingEnabled={!isActivityPanelOpen}
                             onToggle={onActivityPanelToggle}
                         />
                         <UserAvatarMenu />
                     </div>
-                </>
+                </div>
             )}
             <span
                 data-shell-spectral-seam="true"

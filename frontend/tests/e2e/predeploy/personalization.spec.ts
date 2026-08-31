@@ -47,7 +47,7 @@ test.describe("Personalization candidate", () => {
 
         await page.goto("/");
         await expect(
-            page.locator('[data-home-layout="music-canvas"]'),
+            page.locator('[data-home-layout="personal-dashboard"]'),
         ).toBeVisible({
             timeout: 30000,
         });
@@ -86,7 +86,7 @@ test.describe("Personalization candidate", () => {
         await page.setViewportSize({ width: 1440, height: 900 });
         await page.goto("/");
         await expect(
-            page.locator('[data-home-layout="music-canvas"]'),
+            page.locator('[data-home-layout="personal-dashboard"]'),
         ).toBeVisible({
             timeout: 30000,
         });

@@ -288,7 +288,7 @@ export function HomeOnlineDiscovery({
         : { stations: [], discoveries: [] };
 
     return (
-        <div className="space-y-8 sm:space-y-10">
+        <div className="relative z-10 space-y-8 sm:space-y-10">
             <HomeMediaRow
                 title={ru.home.stations}
                 items={stations}

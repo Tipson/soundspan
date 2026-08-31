@@ -183,8 +183,8 @@ test("keeps global search in the top bar instead of duplicating it in navigation
     assert.match(html, />Главная</);
     assert.doesNotMatch(html, />Search</);
     assert.doesNotMatch(html, /href="\/search"/);
-    assert.match(html, />Коллекция</);
-    assert.match(html, />Моя волна</);
+    assert.match(html, />Моя музыка</);
+    assert.match(html, />Волна</);
     assert.doesNotMatch(html, />Explore</);
     assert.doesNotMatch(html, />Listen Together</);
     assert.doesNotMatch(html, />Audiobooks</);
@@ -212,21 +212,27 @@ test("keeps prefetch enabled for primary sidebar navigation links", async () => 
     }
 });
 
-test("desktop sidebar exposes a restrained shell landmark", async () => {
+test("desktop sidebar exposes only the compact personal music shortcuts", async () => {
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
     assert.match(html, /data-shell-sidebar="desktop"/);
     assert.match(html, /data-shell-navigation="primary"/);
-    assert.match(html, /data-shell-playlists="secondary"/);
+    assert.match(html, /data-shell-library-shortcuts="compact"/);
     const sidebar = html.match(
         /<aside[^>]*data-shell-sidebar="desktop"[^>]*>/,
     )?.[0];
     assert.ok(sidebar);
-    assert.match(sidebar, /w-\[216px\]/);
+    assert.match(sidebar, /w-\[248px\]/);
     assert.doesNotMatch(sidebar, /rounded-/);
+    assert.match(html, /href="\/playlist\/my-liked"/);
+    assert.match(html, /href="\/playlists"/);
+    assert.match(html, />Любимые треки</);
+    assert.match(html, />Плейлисты</);
     assert.match(html, /aria-label="Создать плейлист"/);
-    assert.match(html, /max-h-\[min\(44vh,28rem\)\]/);
+    assert.doesNotMatch(html, /Сортировка и фильтры|Все плейлисты/);
+    assert.doesNotMatch(html, /max-h-\[min\(44vh,28rem\)\]/);
+    assert.doesNotMatch(html, /Peer Jams|peer-badge:/);
     assert.doesNotMatch(html, /Sync Library/);
 });
 
@@ -239,7 +245,7 @@ test("desktop Library navigation can enter the precached Downloads shell offline
     assert.match(libraryLink[0], /data-has-on-click="true"/);
 });
 
-test("renders badged peer playlists in the unified list when federated", async () => {
+test("keeps remote playlist details on the Playlists page instead of the shell", async () => {
     state.federation = true;
     state.peerPlaylists = [
         {
@@ -255,24 +261,54 @@ test("renders badged peer playlists in the unified list when federated", async (
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
-    assert.match(html, /Peer Jams/);
-    assert.match(html, /peer-badge:Family server/);
-    assert.match(html, /href="\/peer-playlists\/peer-a\/remote-1"/);
-    assert.match(html, /Автор: Sam/);
-    assert.match(html, /4 трека/);
+    assert.doesNotMatch(html, /Peer Jams/);
+    assert.doesNotMatch(html, /peer-badge:Family server/);
+    assert.match(html, /href="\/playlists"/);
 });
 
-test("renders the pinned liked playlist and empty state in Russian", async () => {
+test("renders the liked shortcut in Russian without an empty playlist panel", async () => {
     state.likedTotal = 21;
 
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderToStaticMarkup(React.createElement(Sidebar));
 
     assert.match(html, /Любимые треки/);
-    assert.match(html, /Плейлист.*21 трек/);
-    assert.match(html, /Плейлистов пока нет/);
-    assert.match(html, /Создайте первый плейлист/);
+    assert.match(html, /21 трек/);
+    assert.doesNotMatch(html, /Плейлистов пока нет/);
+    assert.doesNotMatch(html, /Создайте первый плейлист/);
     assert.doesNotMatch(html, /My Liked|No playlists yet/);
+});
+
+test("marks a playlist detail route as part of Playlists", async () => {
+    state.pathname = "/playlist/playlist-42";
+
+    const { Sidebar } = await import("../../components/layout/Sidebar");
+    const html = renderToStaticMarkup(React.createElement(Sidebar));
+
+    const playlistsLink = html.match(/<a[^>]*href="\/playlists"[^>]*>/)?.[0];
+    const likedLink = html.match(
+        /<a[^>]*href="\/playlist\/my-liked"[^>]*>/,
+    )?.[0];
+    assert.ok(playlistsLink);
+    assert.ok(likedLink);
+    assert.match(playlistsLink, /aria-current="page"/);
+    assert.doesNotMatch(likedLink, /aria-current="page"/);
+});
+
+test("keeps My Liked active without also selecting Playlists", async () => {
+    state.pathname = "/playlist/my-liked";
+
+    const { Sidebar } = await import("../../components/layout/Sidebar");
+    const html = renderToStaticMarkup(React.createElement(Sidebar));
+
+    const playlistsLink = html.match(/<a[^>]*href="\/playlists"[^>]*>/)?.[0];
+    const likedLink = html.match(
+        /<a[^>]*href="\/playlist\/my-liked"[^>]*>/,
+    )?.[0];
+    assert.ok(playlistsLink);
+    assert.ok(likedLink);
+    assert.doesNotMatch(playlistsLink, /aria-current="page"/);
+    assert.match(likedLink, /aria-current="page"/);
 });
 
 test("hides peer playlists without federation", async () => {

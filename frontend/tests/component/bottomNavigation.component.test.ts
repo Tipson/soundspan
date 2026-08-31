@@ -54,11 +54,11 @@ test("mobile navigation keeps search in the persistent header", async () => {
     assert.match(html, /aria-label="Главная"/);
     assert.doesNotMatch(html, /aria-label="Поиск"/);
     assert.doesNotMatch(html, /href="\/search"/);
-    assert.match(html, /aria-label="Моя волна"/);
+    assert.match(html, /aria-label="Волна"/);
     assert.match(html, /href="\/vibe"/);
-    assert.match(html, /aria-label="Коллекция"/);
+    assert.match(html, /aria-label="Моя музыка"/);
     assert.match(html, /href="\/library"/);
-    assert.match(html, /aria-label="Моя волна" aria-current="page"/);
+    assert.match(html, /aria-label="Волна" aria-current="page"/);
     assert.doesNotMatch(html, /aria-label="Обзор"/);
     assert.doesNotMatch(html, /Аудиокниги/);
     assert.doesNotMatch(html, /Подкасты/);
@@ -71,7 +71,7 @@ test("mobile navigation keeps search in the persistent header", async () => {
     )?.[0];
     assert.ok(navigation);
     assert.doesNotMatch(navigation, /border-t/);
-    for (const label of ["Главная", "Моя волна", "Коллекция"]) {
+    for (const label of ["Главная", "Волна", "Моя музыка"]) {
         const link = html.match(
             new RegExp(`<a[^>]*aria-label="${label}"[^>]*>`),
         )?.[0];

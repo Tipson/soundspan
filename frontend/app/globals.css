@@ -2,62 +2,62 @@
 
 @theme {
     /* Brand */
-    --color-brand: #8fa8ff;
-    --color-brand-dark: #6e85df;
-    --color-brand-hover: #b3c3ff;
-    --color-brand-light: #d8e0ff;
+    --color-brand: #a970ff;
+    --color-brand-dark: #7f4bd3;
+    --color-brand-hover: #c497ff;
+    --color-brand-light: #decaff;
 
     /* AI */
-    --color-ai: #9a8cff;
-    --color-ai-dark: #7365cf;
-    --color-ai-hover: #c2b8ff;
+    --color-ai: #d866c7;
+    --color-ai-dark: #a73e96;
+    --color-ai-hover: #f19ae5;
 
     /* Surfaces */
-    --color-surface: #080a0f;
-    --color-surface-active: #222a36;
-    --color-surface-elevated: #1a202a;
-    --color-surface-highlight: #222a36;
-    --color-surface-hover: #222a36;
-    --color-surface-overlay: #1a202a;
-    --color-surface-raised: #11151d;
-    --color-surface-sunken: #11151d;
+    --color-surface: #090909;
+    --color-surface-active: #28272b;
+    --color-surface-elevated: #1c1b1e;
+    --color-surface-highlight: #28272b;
+    --color-surface-hover: #28272b;
+    --color-surface-overlay: #1c1b1e;
+    --color-surface-raised: #121214;
+    --color-surface-sunken: #101011;
 
     /* Lines */
-    --color-line: #2a3240;
-    --color-line-muted: #3b4657;
-    --color-line-strong: #57647a;
+    --color-line: #2b292f;
+    --color-line-muted: #403c47;
+    --color-line-strong: #615a69;
 
     /* Content */
-    --color-content: #f7f8fc;
-    --color-content-body: #e1e5ec;
-    --color-content-disabled: #707988;
-    --color-content-muted: #aeb6c5;
-    --color-content-secondary: #c4cad5;
+    --color-content: #faf8fc;
+    --color-content-body: #e8e3eb;
+    --color-content-disabled: #77717d;
+    --color-content-muted: #aaa3b0;
+    --color-content-secondary: #cdc6d1;
 
     /* Status */
     --color-error: #ff738e;
     --color-success: #64d8a8;
-    --color-warning: #f2c46d;
+    --color-warning: #f0a45c;
 }
 
 :root {
     /* soundspan Design System - Dark Theme Only */
 
     /* Soundspan music foundation */
-    --music-canvas: #080a0f;
-    --music-stage: #11151d;
-    --music-surface: #1a202a;
-    --music-raised: #222a36;
-    --music-soft: #2a3442;
-    --music-ink: #f7f8fc;
-    --music-ink-body: #e1e5ec;
-    --music-ink-muted: #c4cad5;
-    --music-ink-faint: #aeb6c5;
-    --music-action: #8fa8ff;
-    --music-action-strong: #b3c3ff;
+    --music-canvas: #090909;
+    --music-stage: #121214;
+    --music-surface: #1c1b1e;
+    --music-raised: #28272b;
+    --music-soft: #343138;
+    --music-ink: #faf8fc;
+    --music-ink-body: #e8e3eb;
+    --music-ink-muted: #cdc6d1;
+    --music-ink-faint: #aaa3b0;
+    --music-action: #a970ff;
+    --music-action-strong: #c497ff;
     --music-positive: #64d8a8;
     --music-negative: #ff738e;
-    --music-warning: #f2c46d;
+    --music-warning: #f0a45c;
     --music-line: rgb(255 255 255 / 0.08);
     --music-line-strong: rgb(255 255 255 / 0.14);
     --music-radius-control: 10px;
@@ -88,12 +88,12 @@
     --text-body: var(--music-ink-body); /* Body text */
     --text-secondary: var(--music-ink-muted); /* Secondary info */
     --text-muted: var(--music-ink-faint); /* Timestamps, meta */
-    --text-disabled: #707988; /* Disabled */
+    --text-disabled: #77717d; /* Disabled */
 
     /* Actions */
     --color-primary: var(--music-action); /* PRIMARY CTA ONLY */
-    --color-ai: #9a8cff; /* Legacy semantic alias for assisted features */
-    --color-ai-dark: #7365cf; /* Legacy selected state */
+    --color-ai: #d866c7; /* Legacy semantic alias for assisted features */
+    --color-ai-dark: #a73e96; /* Legacy selected state */
 
     /* Status */
     --color-success: var(--music-positive);
@@ -103,10 +103,10 @@
 
     /* Authenticated music shell geometry */
     --app-topbar-height: 60px;
-    --app-topbar-height-desktop: 64px;
+    --app-topbar-height-desktop: 88px;
     --app-bottom-nav-height: 60px;
     --app-mini-player-height: 68px;
-    --app-player-height-desktop: 80px;
+    --app-player-height-desktop: 128px;
 }
 
 * {
@@ -186,13 +186,9 @@ select {
    ===================================================== */
 
 .shell-topbar {
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--music-canvas) 94%, transparent),
-        color-mix(in srgb, var(--music-canvas) 78%, transparent)
-    );
-    box-shadow: 0 14px 34px color-mix(in srgb, black 16%, transparent);
-    backdrop-filter: blur(18px) saturate(130%);
+    background: color-mix(in srgb, var(--music-canvas) 94%, transparent);
+    box-shadow: 0 1px 0 color-mix(in srgb, white 5%, transparent);
+    backdrop-filter: blur(22px) saturate(125%);
 }
 
 .desktop-shell-frame,
@@ -203,12 +199,11 @@ select {
 }
 
 .desktop-shell-frame {
-    padding-top: var(--app-topbar-height-desktop);
     background:
         radial-gradient(
-            ellipse at 45% -10%,
-            color-mix(in srgb, var(--music-action) 7%, transparent),
-            transparent 48rem
+            ellipse at 72% -18%,
+            color-mix(in srgb, var(--color-ai) 6%, transparent),
+            transparent 46rem
         ),
         var(--music-canvas);
 }
@@ -217,11 +212,11 @@ select {
 .mobile-app-stage {
     background:
         radial-gradient(
-            ellipse at 18% -8%,
-            color-mix(in srgb, var(--music-action) 7%, transparent),
-            transparent 44rem
+            ellipse at 82% -12%,
+            color-mix(in srgb, var(--color-ai) 5%, transparent),
+            transparent 40rem
         ),
-        linear-gradient(180deg, var(--music-stage), var(--music-canvas) 32rem);
+        linear-gradient(180deg, var(--music-canvas), var(--music-canvas));
     border: 0;
     box-shadow: none;
     overscroll-behavior: contain;
@@ -230,7 +225,7 @@ select {
 .shell-sidebar {
     border: 0;
     border-right: 1px solid color-mix(in srgb, white 6%, transparent);
-    background: color-mix(in srgb, var(--music-canvas) 74%, transparent);
+    background: color-mix(in srgb, var(--music-canvas) 97%, black);
     box-shadow: none;
     backdrop-filter: blur(18px) saturate(120%);
 }
@@ -265,6 +260,18 @@ select {
 .shell-control:active,
 .shell-nav-item:active {
     transform: scale(0.96);
+}
+
+.shell-sidebar-link[aria-current="page"]::before {
+    position: absolute;
+    left: -12px;
+    width: 3px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--music-warning);
+    box-shadow: 0 0 18px
+        color-mix(in srgb, var(--music-warning) 62%, transparent);
+    content: "";
 }
 
 .shell-search-field {

@@ -1,10 +1,28 @@
 # Soundspan product design system
 
-Status: selected redesign direction — implementation in progress
+Status: canonical redesign implemented; local design QA passed
 
 Implementation baseline: `2a43c1a71dde1671f37eecf539dbff1a09919412`
 
-Selected visual target: [`references/editorial-flow-selected.png`](references/editorial-flow-selected.png)
+Authoritative visual targets:
+
+- Home, shell, and player: [`references/canonical-home-target.png`](references/canonical-home-target.png)
+- Sidebar proportions and density: [`references/canonical-sidebar-target.png`](references/canonical-sidebar-target.png)
+
+These two images are the acceptance references for hierarchy, density, geometry,
+and visual atmosphere. The earlier
+[`references/editorial-flow-selected.png`](references/editorial-flow-selected.png)
+is retained as exploration history, but it is not authoritative where it
+conflicts with the canonical targets or the contracts below.
+
+Reference dimensions are 1487×1058 for Home and 205×747 for the sidebar crop.
+Visual QA compares the implementation at the same 1487×1058 viewport before
+responsive extrapolation is accepted.
+
+Acceptance evidence and the full comparison history are recorded in
+[`../../design-qa.md`](../../design-qa.md). Responsive browser captures live in
+[`qa/evidence`](qa/evidence), with native-size source/implementation pairs in
+[`qa/comparison`](qa/comparison).
 
 ## Product thesis
 
@@ -44,26 +62,46 @@ Avoid:
 
 | Token | Value | Purpose |
 |---|---:|---|
-| `--music-canvas` | `#080a0f` | App background |
-| `--music-stage` | `#11151d` | Main content stage |
-| `--music-surface` | `#1a202a` | Cards and list surfaces |
-| `--music-raised` | `#222a36` | Menus, selected rows, overlays |
-| `--music-soft` | `#2a3442` | Strong hover and pressed states |
-| `--music-ink` | `#f7f8fc` | Primary text |
-| `--music-ink-body` | `#e1e5ec` | Body text |
-| `--music-ink-muted` | `#c4cad5` | Metadata |
-| `--music-ink-faint` | `#aeb6c5` | Tertiary copy that remains AA on raised surfaces |
-| `--music-action` | `#8fa8ff` | Primary actions and focus |
-| `--music-action-strong` | `#b3c3ff` | Hovered action |
+| `--music-canvas` | `#090909` | App background |
+| `--music-stage` | `#121214` | Main content stage |
+| `--music-surface` | `#1c1b1e` | Cards and list surfaces |
+| `--music-raised` | `#28272b` | Menus, selected rows, overlays |
+| `--music-soft` | `#343138` | Strong hover and pressed states |
+| `--music-ink` | `#faf8fc` | Primary text |
+| `--music-ink-body` | `#e8e3eb` | Body text |
+| `--music-ink-muted` | `#cdc6d1` | Metadata |
+| `--music-ink-faint` | `#aaa3b0` | Tertiary copy that remains AA on raised surfaces |
+| `--music-action` | `#a970ff` | Primary actions and focus fallback |
+| `--music-action-strong` | `#c497ff` | Hovered action fallback |
 | `--music-positive` | `#64d8a8` | Liked/saved/success |
 | `--music-negative` | `#ff738e` | Disliked/error |
-| `--music-warning` | `#f2c46d` | Recoverable attention |
+| `--music-warning` | `#f0a45c` | Recoverable attention |
 | `--music-line` | `rgb(255 255 255 / 0.08)` | Default separation |
 | `--music-line-strong` | `rgb(255 255 255 / 0.14)` | Interactive boundary |
 
 Artwork-derived colors are contextual variables (`--artwork-a`, `--artwork-b`)
-with safe indigo/blue fallbacks. They must never reduce text contrast below WCAG
-AA.
+with safe violet/amber fallbacks. They provide the Home hero and player
+atmosphere; permanent chrome remains neutral. They must never reduce text
+contrast below WCAG AA.
+
+The runtime `--color-*` aliases mirror this foundation and are canonical:
+
+- Brand: `brand #a970ff`, `brand-dark #7f4bd3`,
+  `brand-hover #c497ff`, `brand-light #decaff`.
+- Assisted features: `ai #d866c7`, `ai-dark #a73e96`,
+  `ai-hover #f19ae5`.
+- Surfaces: `surface #090909`, `surface-sunken #101011`,
+  `surface-raised #121214`, `surface-elevated/overlay #1c1b1e`, and
+  `surface-active/highlight/hover #28272b`.
+- Lines: `line #2b292f`, `line-muted #403c47`, `line-strong #615a69`.
+- Content: `content #faf8fc`, `content-body #e8e3eb`,
+  `content-secondary #cdc6d1`, `content-muted #aaa3b0`, and
+  `content-disabled #77717d`.
+- Status: `success #64d8a8`, `error #ff738e`, `warning #f0a45c`.
+
+`frontend/styles/tokens.ts`, the `@theme` block, and this document must change
+together. Contrast tests remain the gate for text, focus rings, and shared
+surfaces.
 
 ### Typography
 
@@ -100,21 +138,31 @@ AA.
 
 ### Desktop shell
 
-- Compact left navigation holds only Home, Vibe, Library, and a bounded set of
-  personal playlists. Search is an action in the top bar, not a duplicate
-  destination.
+- The canonical wide layout uses a fixed 232–248 px sidebar, a fluid main stage,
+  and a fixed 112–132 px player. At the 1487×1058 reference viewport the target
+  proportions are approximately 247 px sidebar and 131 px player.
+- Sidebar primary navigation contains only `Главная`, `Волна`, and
+  `Моя музыка`. Its compact library section contains only `Любимые треки` and
+  `Плейлисты`, with an optional compact add action next to Playlists.
+- Do not add `Недавние`, Podcasts, a long playlist list, separate Artist/Album/
+  Track destinations, or an `All playlists` sort toolbar to the sidebar.
 - Search is globally available in the top bar; the Search route is a result
-  canvas, not a second navigation concept.
-- The main stage owns the artwork color and page hierarchy.
-- The player is a stable bottom dock, visually connected by the spectral seam,
-  with Previous / Play / Next in the center and no more than four visible
-  utility groups. Shuffle, repeat, diagnostics, and rare actions progressively
-  disclose in the full player or overflow.
+  canvas, not a sidebar destination. The top bar must not duplicate the three
+  primary sidebar destinations.
+- The main stage owns artwork color and page hierarchy. Permanent shell chrome
+  remains neutral so the current artwork is the only ambient color source.
+- The player is a stable three-zone bottom dock: identity on the left,
+  two-level transport and timeline in the center, and current-track utilities
+  on the right. Music transport visibly exposes Shuffle / Previous / Play-Pause
+  / Next / Repeat. Diagnostics and rare actions remain in overflow.
+- Content reserves player height; neither the player nor its popovers may cover
+  playable rows or cause layout movement when the track changes.
 
 ### Mobile PWA
 
-- Bottom navigation contains Home, Vibe, Library, and Search as the fourth
-  action. Search opens the result canvas with immediate focus.
+- Bottom navigation contains `Главная`, `Волна`, and `Моя музыка`. Search opens
+  from the persistent header control with immediate focus; it is not a second
+  navigation destination.
 - A compact player sits immediately above it; tapping opens a full-screen player.
 - Sheets replace centered dialogs for Wave tuning, downloads, and track actions.
 - Safe-area insets and offline state are part of the component contract.
@@ -138,18 +186,37 @@ Mobile carousels show a partial next card as an overflow cue.
 
 ### Home
 
-- Opens with one contextual Wave action, not a marketing explanation.
-- Shows 5–7 ranked sections at most: jump back in, daily mixes, discovery,
-  listen again, relevant stations, new releases, and one contextual mood row.
-- Provider shelves are deduplicated, taste-ranked, and hidden when irrelevant.
+- Opens with the artwork-led `Моя волна` hero from the canonical Home target:
+  roughly 225 px artwork, a concise personal explanation, one primary
+  `Запустить` action, and a secondary `Настроить` action.
+- The first desktop viewport prioritizes `Продолжить прослушивание`, a compact
+  right-side `Недавно слушали` list, and `Миксы для вас`. `Недавно слушали`
+  belongs here, never in the sidebar.
+- At 1487×1058, Continue cards are approximately 180 px wide in four columns;
+  the recent rail is approximately 280–300 px wide. Artwork and readable
+  metadata carry hierarchy instead of nested bordered panels.
+- Additional ranked sections may follow below the fold, with 5–7 sections at
+  most: daily mixes, discovery, listen again, relevant stations, and new
+  releases. Provider shelves are deduplicated, taste-ranked, and hidden when
+  irrelevant.
+- Desktop shelves expose `Показать все` or restrained previous/next controls;
+  they do not show native horizontal scrollbars.
 
 ### Vibe
 
-- Uses a full-stage ambient field and one dominant Play/Pause action.
+- On desktop, Vibe occupies the available area between top bar and player using
+  `100dvh`-based sizing. The document itself must not scroll.
+- Uses a full-stage artwork-derived ambient field and one dominant Play/Pause
+  action. The current track, direction, mood, and feedback remain visible in
+  the fitted stage rather than becoming a long settings page.
 - `Direction` (`For you`, `New`, `Familiar`) and `Mood/scenario` (`Calm`,
   `Energetic`, `Focus`, `Workout`, `Forgotten`, `Favorites`) are independent.
-- Tuning opens a bottom sheet or compact desktop sheet. Every option changes the
-  candidate ranking; no decorative inactive filters are allowed.
+- Tuning opens an overlay sheet. The sheet owns any required internal scroll and
+  keeps the current song playing; closing it returns to the same Vibe state.
+  On mobile only, minimal internal scrolling is acceptable when safe-area and
+  44 px touch targets cannot otherwise fit.
+- Every tuning option changes candidate ranking; no decorative inactive filters
+  are allowed. The chosen direction and mood persist across navigation.
 - Like, dislike, and skip stay next to the current track and affect this account.
 
 ### Search

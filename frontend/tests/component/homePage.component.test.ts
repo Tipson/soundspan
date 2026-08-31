@@ -62,19 +62,20 @@ mock.module("@/features/home/components/HomeQuickActions", {
     namedExports: { HomeQuickActions: marker("home-quick-actions") },
 });
 
-mock.module("@/features/home/components/PersonalizedTrackShelf", {
+mock.module("@/features/home/components/HomeListeningDashboard", {
     namedExports: {
-        PersonalizedTrackShelf: ({
-            title,
+        HomeListeningDashboard: ({
             tracks,
+            children,
         }: {
-            title: string;
             tracks: Array<{ title: string }>;
+            children?: React.ReactNode;
         }) =>
             React.createElement(
                 "div",
-                { "data-personalized-shelf": title },
-                `${title}:${tracks.map((track) => track.title).join(",")}`,
+                { "data-listening-dashboard": true },
+                `listening-dashboard:${tracks.map((track) => track.title).join(",")}`,
+                children,
             ),
     },
 });
@@ -172,19 +173,18 @@ test("Home unifies personal playback and real online discovery", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /Музыка для вас/);
+    assert.match(html, /data-home-layout="personal-dashboard"/);
+    assert.match(html, /data-home-region="wave"/);
     assert.match(html, /compact-wave-hero/);
-    assert.match(html, /Продолжить слушать:Again One/);
-    assert.doesNotMatch(html, /Picked for right now:Quick One/);
+    assert.match(html, /listening-dashboard:Again One,Quick One,Fresh One/);
+    assert.match(html, /data-home-region="mixes"/);
     assert.match(html, /made-for-you:weekly:1:1/);
     assert.match(html, /online-discovery:true:1/);
     assert.ok(
-        html.indexOf("compact-wave-hero") <
-            html.indexOf("Продолжить слушать:Again One"),
+        html.indexOf("compact-wave-hero") < html.indexOf("listening-dashboard"),
     );
     assert.ok(
-        html.indexOf("Продолжить слушать:Again One") <
-            html.indexOf("made-for-you"),
+        html.indexOf("listening-dashboard") < html.indexOf("made-for-you"),
     );
     assert.ok(html.indexOf("made-for-you") < html.indexOf("online-discovery"));
     assert.doesNotMatch(html, /home-quick-actions/);
@@ -204,8 +204,7 @@ test("Home keeps real personal shelves when generated mixes are unavailable", as
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /Продолжить слушать:Again One/);
-    assert.doesNotMatch(html, /Picked for right now:Quick One/);
+    assert.match(html, /listening-dashboard:Again One,Quick One,Fresh One/);
     assert.match(html, /made-for-you:none:0:1/);
     assert.doesNotMatch(html, /Daily Mix|Discover Weekly/);
 });

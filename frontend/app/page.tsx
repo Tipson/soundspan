@@ -2,25 +2,47 @@
 
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { HomeMadeForYou } from "@/features/home/components/HomeMadeForYou";
+import { HomeListeningDashboard } from "@/features/home/components/HomeListeningDashboard";
 import { HomeOnlineDiscovery } from "@/features/home/components/HomeOnlineDiscovery";
 import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
-import { PersonalizedTrackShelf } from "@/features/home/components/PersonalizedTrackShelf";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
 import { ru } from "@/lib/i18n/ru";
 
 function PlaylistSkeleton() {
     return (
-        <div className="flex gap-3 overflow-hidden" aria-hidden="true">
-            {[...Array(6)].map((_, index) => (
-                <div
-                    key={index}
-                    className="w-[140px] shrink-0 p-3 sm:w-[160px] md:w-[170px]"
-                >
-                    <div className="mb-3 aspect-square animate-pulse rounded-lg bg-white/5" />
-                    <div className="mb-2 h-4 w-3/4 animate-pulse rounded bg-white/5" />
-                    <div className="h-3 w-1/2 animate-pulse rounded bg-white/5" />
+        <div
+            className="relative z-10 grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_18rem]"
+            aria-hidden="true"
+        >
+            <div className="min-w-0">
+                <div className="mb-4 h-6 w-48 animate-pulse rounded-lg bg-white/[0.07]" />
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    {[...Array(4)].map((_, index) => (
+                        <div key={index} className="min-w-0">
+                            <div className="aspect-[1.08/1] animate-pulse rounded-2xl bg-white/[0.055]" />
+                            <div className="mt-3 h-4 w-4/5 animate-pulse rounded bg-white/[0.06]" />
+                            <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-white/[0.045]" />
+                        </div>
+                    ))}
                 </div>
-            ))}
+            </div>
+            <div className="hidden xl:block">
+                <div className="mb-4 h-6 w-40 animate-pulse rounded-lg bg-white/[0.07]" />
+                <div className="space-y-2">
+                    {[...Array(4)].map((_, index) => (
+                        <div
+                            key={index}
+                            className="flex items-center gap-3 p-1"
+                        >
+                            <div className="h-12 w-12 shrink-0 animate-pulse rounded-lg bg-white/[0.055]" />
+                            <div className="min-w-0 flex-1">
+                                <div className="h-4 w-4/5 animate-pulse rounded bg-white/[0.06]" />
+                                <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-white/[0.045]" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }
@@ -43,33 +65,33 @@ export default function HomePage() {
 
     if (isLoading) return <LoadingScreen />;
 
+    const listeningTracks = personalizedFeed
+        ? [
+              ...personalizedFeed.shelves.listenAgain,
+              ...personalizedFeed.shelves.quickPicks,
+              ...personalizedFeed.shelves.discovery,
+          ]
+        : [];
+
     return (
         <div
-            data-home-layout="music-canvas"
-            className="relative min-h-screen overflow-x-clip bg-transparent pt-3 sm:pt-5"
+            data-home-layout="personal-dashboard"
+            className="relative min-h-full overflow-x-clip bg-transparent"
         >
-            <div className="relative mx-auto w-full max-w-[1720px] px-4 sm:px-7 lg:px-10 2xl:px-12">
-                <div className="space-y-7 sm:space-y-9">
-                    <header className="max-w-3xl pt-1">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-content-muted">
-                            {ru.nav.home}
-                        </p>
-                        <h1 className="mt-1 text-[clamp(1.75rem,3vw,2.5rem)] font-black leading-tight tracking-[-0.04em] text-content">
-                            {ru.home.greeting}
-                        </h1>
-                    </header>
-
-                    <HomeWaveHero
-                        personalizedFeed={personalizedFeed}
-                        isLoading={isPersonalizedLoading}
-                    />
+            <div className="relative mx-auto w-full max-w-[1660px] px-4 pb-10 pt-4 sm:px-7 sm:pt-6 lg:px-10 xl:px-12 2xl:px-14">
+                <div className="space-y-8 lg:space-y-10">
+                    <div data-home-region="wave">
+                        <HomeWaveHero
+                            personalizedFeed={personalizedFeed}
+                            isLoading={isPersonalizedLoading}
+                        />
+                    </div>
 
                     {isPersonalizedLoading && !personalizedFeed && (
                         <section
                             aria-label={ru.home.loadingRecommendations}
-                            className="rounded-2xl border border-white/8 bg-white/[0.035] p-5"
+                            data-home-region="listening-skeleton"
                         >
-                            <div className="mb-4 h-7 w-40 animate-pulse rounded bg-white/10" />
                             <PlaylistSkeleton />
                         </section>
                     )}
@@ -79,27 +101,23 @@ export default function HomePage() {
                             "provider_unavailable") && (
                         <p
                             role="status"
-                            className="rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning"
+                            className="relative z-10 rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning"
                         >
                             {ru.home.unavailable}
                         </p>
                     )}
 
-                    {personalizedFeed && (
-                        <PersonalizedTrackShelf
-                            title={ru.home.continueListening}
-                            subtitle={ru.home.continueSubtitle}
-                            tracks={personalizedFeed.shelves.listenAgain}
-                        />
-                    )}
-
-                    <HomeMadeForYou
-                        discoverWeekly={discoverWeekly}
-                        mixes={mixes}
-                        personalizedFeed={personalizedFeed}
-                        isRefreshingMixes={isRefreshingMixes}
-                        handleRefreshMixes={handleRefreshMixes}
-                    />
+                    <HomeListeningDashboard tracks={listeningTracks}>
+                        <div data-home-region="mixes">
+                            <HomeMadeForYou
+                                discoverWeekly={discoverWeekly}
+                                mixes={mixes}
+                                personalizedFeed={personalizedFeed}
+                                isRefreshingMixes={isRefreshingMixes}
+                                handleRefreshMixes={handleRefreshMixes}
+                            />
+                        </div>
+                    </HomeListeningDashboard>
 
                     <HomeOnlineDiscovery
                         enabled={showYtMusicExplore}

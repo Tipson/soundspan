@@ -14,7 +14,7 @@ import { StaticPlaylistCard } from "./StaticPlaylistCard";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 
 const MAX_PERSONAL_MIX_TRACKS = 12;
-const MAX_HOME_MADE_CARDS = 6;
+const MAX_HOME_MADE_CARDS = 5;
 
 interface HomePersonalMix {
     key: string;
@@ -237,30 +237,35 @@ export function HomeMadeForYou({
             <SectionHeader
                 title={ru.home.madeForYou}
                 rightAction={
-                    autoPlaylists ? (
-                        <button
-                            type="button"
-                            onClick={() => void handleRefreshMixes()}
-                            disabled={isRefreshingMixes}
-                            aria-label={
-                                isRefreshingMixes
-                                    ? ru.home.refreshing
-                                    : ru.home.refresh
-                            }
-                            className="grid min-h-11 min-w-11 place-items-center rounded-full text-content-muted transition duration-200 hover:bg-white/[0.07] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-45 motion-reduce:transition-none"
+                    <div className="flex items-center gap-1.5">
+                        <Link
+                            href="/playlists"
+                            className="inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
-                            <RefreshCw
-                                className={`h-4 w-4 ${isRefreshingMixes ? "animate-spin motion-reduce:animate-none" : ""}`}
-                                aria-hidden="true"
-                            />
-                        </button>
-                    ) : undefined
+                            Показать все
+                        </Link>
+                        {autoPlaylists && (
+                            <button
+                                type="button"
+                                onClick={() => void handleRefreshMixes()}
+                                disabled={isRefreshingMixes}
+                                aria-label={
+                                    isRefreshingMixes
+                                        ? ru.home.refreshing
+                                        : ru.home.refresh
+                                }
+                                className="grid min-h-11 min-w-11 place-items-center rounded-full text-content-muted transition duration-200 hover:bg-white/[0.07] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-45 motion-reduce:transition-none"
+                            >
+                                <RefreshCw
+                                    className={`h-4 w-4 ${isRefreshingMixes ? "animate-spin motion-reduce:animate-none" : ""}`}
+                                    aria-hidden="true"
+                                />
+                            </button>
+                        )}
+                    </div>
                 }
             />
-            <p className="-mt-2 mb-4 max-w-2xl text-sm leading-6 text-content-muted">
-                {ru.home.madeForYouSubtitle}
-            </p>
-            <div className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible xl:grid-cols-6">
+            <div className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible">
                 {visiblePersonalMixes.map((mix, index) => (
                     <div
                         key={mix.key}

@@ -122,7 +122,7 @@ test("personal Home mixes are distinct, playable, and bounded", async () => {
     assert.equal(new Set(visibleTrackIds).size, visibleTrackIds.length);
 });
 
-test("Home Made For You renders at most six real collections", async () => {
+test("Home Made For You renders at most five distinct real collections", async () => {
     const { HomeMadeForYou } =
         await import("../../features/home/components/HomeMadeForYou");
     const html = renderToStaticMarkup(
@@ -146,16 +146,15 @@ test("Home Made For You renders at most six real collections", async () => {
         }),
     );
 
-    assert.match(html, /Подобрано для вас/);
+    assert.match(html, /Миксы для вас/);
     assert.match(html, /data-home-rail="mixes"/);
-    assert.equal((html.match(/data-home-made-card=/g) ?? []).length, 6);
+    assert.equal((html.match(/data-home-made-card=/g) ?? []).length, 5);
     assert.match(html, /Микс дня/);
     assert.match(html, /Новые находки/);
     assert.match(html, /Снова в ротации/);
     assert.match(html, /Открытия недели/);
     assert.match(html, /Mix 0/);
-    assert.match(html, /Mix 1/);
-    assert.doesNotMatch(html, /Mix 2/);
+    assert.doesNotMatch(html, /Mix 1/);
 });
 
 test("Home Made For You hides the whole shelf when nothing is playable", async () => {

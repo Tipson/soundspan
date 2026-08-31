@@ -1,46 +1,26 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import {
-    ArrowUpDown,
     AudioWaveform,
+    Download,
     Heart,
     Home,
     Library,
+    ListMusic,
     Plus,
 } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { api } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { useLikedPlaylistQuery } from "@/hooks/useQueries";
+import { pluralRu, ru } from "@/lib/i18n/ru";
+import { cn } from "@/utils/cn";
+import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
 import { MobileSidebar } from "./MobileSidebar";
 import { SIDEBAR_NAVIGATION } from "./socialNavigation";
-import { useLikedPlaylistQuery } from "@/hooks/useQueries";
-import { usePeerPlaylists } from "@/features/social/hooks/usePeerPlaylists";
-import { useFeatures } from "@/lib/features-context";
-import { PeerBadge } from "@/components/ui/PeerBadge";
-import {
-    buildUnifiedPlaylistRows,
-    playlistFilterOptions,
-    type UnifiedPlaylistFilter,
-    type UnifiedPlaylistSort,
-} from "@/lib/unifiedPlaylists";
-import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
-import { pluralRu, ru } from "@/lib/i18n/ru";
-
-interface Playlist {
-    id: string;
-    name: string;
-    trackCount: number;
-    createdAt?: string;
-    updatedAt?: string;
-    isHidden?: boolean;
-    isOwner?: boolean;
-    user?: { username: string };
-}
 
 const sidebarNavigationIcons = {
     "/": Home,
@@ -48,115 +28,34 @@ const sidebarNavigationIcons = {
     "/library": Library,
 } as const;
 
-type PlaylistSort = UnifiedPlaylistSort;
-type PlaylistFilter = UnifiedPlaylistFilter;
-
-/**
- * Renders the Sidebar component.
- */
+/** Compact desktop navigation and the mobile menu entry point. */
 export function Sidebar() {
     const pathname = usePathname();
-    const { isAuthenticated } = useAuth();
-    // Listen Together is intentionally outside primary navigation, so the
-    // sidebar must not start its optional polling loop.
-    const hasActiveSessions = false;
-    const likedQuery = useLikedPlaylistQuery(1);
-    const likedTotal = likedQuery.data?.total ?? 0;
-    const { federation } = useFeatures();
-    const { playlists: peerPlaylists } = usePeerPlaylists();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [playlists, setPlaylists] = useState<Playlist[]>([]);
-    const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
-    const [playlistSort, setPlaylistSort] = useState<PlaylistSort>("updated");
-    const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
-    const [isSortFilterOpen, setIsSortFilterOpen] = useState(false);
-    const [sortFilterPos, setSortFilterPos] = useState<{
-        top: number;
-        left: number;
-    } | null>(null);
-    const sortFilterRef = useRef<HTMLDivElement>(null);
-    const sortFilterBtnRef = useRef<HTMLButtonElement>(null);
-    const hasLoadedPlaylists = useRef(false);
+    const likedQuery = useLikedPlaylistQuery(1);
+    const likedTotal = likedQuery.data?.total ?? 0;
+    const isLikedRoute = pathname === "/playlist/my-liked";
+    const isPlaylistsRoute =
+        pathname.startsWith("/playlists") ||
+        (pathname.startsWith("/playlist/") && !isLikedRoute);
 
-    // Load playlists only once
     useEffect(() => {
-        let loadingTimeout: NodeJS.Timeout | null = null;
-
-        const loadPlaylists = async () => {
-            if (
-                !isAuthenticated ||
-                isMobileOrTablet ||
-                hasLoadedPlaylists.current
-            ) {
-                return;
-            }
-
-            // Delay showing loading state to avoid flicker
-            loadingTimeout = setTimeout(() => setIsLoadingPlaylists(true), 200);
-            hasLoadedPlaylists.current = true;
-            try {
-                const data = await api.getPlaylists();
-                setPlaylists(data);
-            } catch (error) {
-                sharedFrontendLogger.error("Failed to load playlists:", error);
-                hasLoadedPlaylists.current = false; // Allow retry on error
-            } finally {
-                if (loadingTimeout) clearTimeout(loadingTimeout);
-                setIsLoadingPlaylists(false);
-            }
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setIsMobileMenuOpen(false);
         };
-
-        loadPlaylists();
-
-        // Listen for playlist events to refresh playlists
-        const handlePlaylistEvent = async () => {
-            if (!isAuthenticated || isMobileOrTablet) return;
-            try {
-                const data = await api.getPlaylists();
-                setPlaylists(data);
-            } catch (error) {
-                sharedFrontendLogger.error(
-                    "Failed to reload playlists:",
-                    error,
-                );
-            }
-        };
-
-        window.addEventListener("playlist-created", handlePlaylistEvent);
-        window.addEventListener("playlist-updated", handlePlaylistEvent);
-        window.addEventListener("playlist-deleted", handlePlaylistEvent);
-
-        return () => {
-            if (loadingTimeout) {
-                clearTimeout(loadingTimeout);
-            }
-            window.removeEventListener("playlist-created", handlePlaylistEvent);
-            window.removeEventListener("playlist-updated", handlePlaylistEvent);
-            window.removeEventListener("playlist-deleted", handlePlaylistEvent);
-        };
-    }, [isAuthenticated, isMobileOrTablet]);
-
-    // Close mobile menu on escape key
-    useEffect(() => {
-        const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === "Escape") setIsMobileMenuOpen(false);
-        };
-
         if (isMobileMenuOpen) {
             document.addEventListener("keydown", handleEscape);
             document.body.style.overflow = "hidden";
         }
-
         return () => {
             document.removeEventListener("keydown", handleEscape);
             document.body.style.overflow = "unset";
         };
     }, [isMobileMenuOpen]);
 
-    // Listen for toggle event from TopBar
     useEffect(() => {
         const handleToggle = () => setIsMobileMenuOpen(true);
         window.addEventListener("toggle-mobile-menu", handleToggle);
@@ -164,69 +63,59 @@ export function Sidebar() {
             window.removeEventListener("toggle-mobile-menu", handleToggle);
     }, []);
 
-    // Close sort/filter popover on outside click
-    useEffect(() => {
-        if (!isSortFilterOpen) return;
-        const handleClick = (e: MouseEvent) => {
-            if (
-                sortFilterRef.current &&
-                !sortFilterRef.current.contains(e.target as Node)
-            ) {
-                setIsSortFilterOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
-    }, [isSortFilterOpen]);
+    if (pathname === "/login" || pathname === "/register") return null;
 
-    // Don't show sidebar on login/register pages
-    // (Check after all hooks to comply with Rules of Hooks)
-    if (pathname === "/login" || pathname === "/register") {
-        return null;
+    if (isMobileOrTablet) {
+        return (
+            <MobileSidebar
+                isOpen={isMobileMenuOpen}
+                onClose={() => setIsMobileMenuOpen(false)}
+                hasActiveSessions={false}
+            />
+        );
     }
 
-    // Merge local and (when federated) peer playlists into one filtered,
-    // sorted spectrum. A stored "peers" filter degrades to "all" if the
-    // federation feature is off so the list never renders empty and stuck.
-    const effectiveFilter =
-        !federation && playlistFilter === "peers" ? "all" : playlistFilter;
-    const filteredSortedPlaylists = buildUnifiedPlaylistRows(
-        playlists,
-        federation ? peerPlaylists : [],
-        { filter: effectiveFilter, sort: playlistSort },
-    );
+    return (
+        <aside
+            data-shell-sidebar="desktop"
+            className="shell-sidebar relative z-10 flex w-[248px] flex-shrink-0 flex-col overflow-hidden"
+        >
+            <Link
+                href="/"
+                className="group flex h-[88px] shrink-0 items-center gap-2.5 px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light"
+                aria-label={`${BRAND_NAME} — ${ru.nav.home}`}
+            >
+                <Image
+                    src="/assets/images/soundspan.webp"
+                    alt=""
+                    width={34}
+                    height={34}
+                    sizes="34px"
+                    className="transition-transform duration-200 group-hover:scale-[1.04] motion-reduce:transition-none"
+                />
+                <span className="brand-wordmark text-[1.65rem] font-bold text-white">
+                    {BRAND_NAME}
+                </span>
+            </Link>
 
-    const isFiltered = playlistFilter !== "all" || playlistSort !== "updated";
-
-    // Render sidebar content inline to prevent component recreation
-    const sidebarContent = (
-        <>
             <nav
                 data-shell-navigation="primary"
-                className="px-3 pt-4"
-                role="navigation"
+                className="px-3 pt-1"
                 aria-label={ru.nav.mainAria}
             >
-                <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
-                    {ru.nav.listen}
-                </p>
                 <div className="space-y-1">
                     {SIDEBAR_NAVIGATION.map((item) => {
                         const isActive =
                             item.href === "/"
                                 ? pathname === "/"
                                 : pathname.startsWith(item.href);
-                        const badge = "badge" in item ? item.badge : null;
-                        const hasVibeAccent =
-                            item.accent === "vibe" && !isActive;
                         const Icon =
                             sidebarNavigationIcons[
                                 item.href as keyof typeof sidebarNavigationIcons
                             ];
-
                         return (
                             <Link
-                                key={item.name}
+                                key={item.href}
                                 href={item.href}
                                 onClick={
                                     item.href === "/library"
@@ -245,342 +134,106 @@ export function Sidebar() {
                                 }
                                 aria-current={isActive ? "page" : undefined}
                                 className={cn(
-                                    "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
+                                    "shell-sidebar-link group relative flex min-h-11 items-center gap-3 rounded-xl px-4 text-sm font-semibold transition-[background-color,color,transform] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light active:scale-[0.985] motion-reduce:transition-none",
                                     isActive
-                                        ? "bg-white/[0.09] text-white"
-                                        : "text-content-secondary hover:bg-white/[0.055] hover:text-white",
+                                        ? "bg-white/[0.085] text-white"
+                                        : "text-content-secondary hover:bg-white/[0.05] hover:text-white",
                                 )}
                             >
-                                {isActive ? (
-                                    <span
-                                        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand-hover"
-                                        aria-hidden="true"
-                                    />
-                                ) : null}
                                 <Icon
                                     className={cn(
-                                        "h-[18px] w-[18px] flex-shrink-0",
-                                        hasVibeAccent && "text-ai-hover",
+                                        "h-[19px] w-[19px] shrink-0",
+                                        item.accent === "vibe" &&
+                                            !isActive &&
+                                            "text-ai-hover",
                                     )}
-                                    strokeWidth={isActive ? 2.4 : 2}
+                                    strokeWidth={isActive ? 2.35 : 1.9}
+                                    aria-hidden="true"
                                 />
                                 <span>{item.name}</span>
-                                {badge && (
-                                    <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-brand/20 text-brand border border-brand/30">
-                                        {badge}
-                                    </span>
-                                )}
                             </Link>
                         );
                     })}
                 </div>
             </nav>
 
-            {/* Playlists Section */}
             <div
-                data-shell-playlists="secondary"
-                className={cn(
-                    "min-h-0 overflow-hidden flex flex-col",
-                    isMobileOrTablet ? "mt-8" : "mt-4",
-                )}
+                data-shell-library-shortcuts="compact"
+                className="mx-4 mt-5 border-t border-white/[0.08] pt-5"
             >
-                <div
-                    className={cn(
-                        "flex items-center justify-between group",
-                        isMobileOrTablet ? "mb-4 px-6" : "mb-2 px-3",
-                    )}
-                >
+                <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-content-muted">
+                    Библиотека
+                </p>
+                <div className="space-y-1">
                     <Link
-                        href="/playlists"
+                        href="/playlist/my-liked"
                         prefetch={false}
-                        className="flex min-h-11 min-w-0 flex-1 items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        aria-current={isLikedRoute ? "page" : undefined}
+                        className={cn(
+                            "group flex min-h-12 items-center gap-3 rounded-xl px-3 text-content-secondary transition-colors duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
+                            isLikedRoute && "bg-white/[0.085] text-white",
+                        )}
                     >
-                        <span className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted transition-colors hover:text-white">
-                            {effectiveFilter === "others"
-                                ? ru.nav.sharedPlaylists
-                                : effectiveFilter === "mine"
-                                  ? ru.nav.yourPlaylists
-                                  : effectiveFilter === "peers"
-                                    ? ru.nav.peerPlaylists
-                                    : ru.nav.allPlaylists}
+                        <Heart
+                            className="h-[18px] w-[18px] shrink-0 text-ai-hover"
+                            aria-hidden="true"
+                        />
+                        <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold">
+                                {ru.library.likedSongs}
+                            </span>
+                            <span className="block truncate text-[11px] text-content-muted">
+                                {likedTotal > 0
+                                    ? `${likedTotal} ${pluralRu(likedTotal, ["трек", "трека", "треков"])}`
+                                    : "Ваши любимые треки"}
+                            </span>
                         </span>
                     </Link>
+
                     <div className="flex items-center gap-1">
-                        <div ref={sortFilterRef} className="relative">
-                            <button
-                                ref={sortFilterBtnRef}
-                                onClick={() => {
-                                    setIsSortFilterOpen((v) => {
-                                        if (!v && sortFilterBtnRef.current) {
-                                            const rect =
-                                                sortFilterBtnRef.current.getBoundingClientRect();
-                                            setSortFilterPos({
-                                                top: rect.top,
-                                                left: rect.right + 8,
-                                            });
-                                        }
-                                        return !v;
-                                    });
-                                }}
-                                className={cn(
-                                    "flex h-11 w-11 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
-                                    isFiltered
-                                        ? "border-brand/40 bg-brand/15 text-brand-light"
-                                        : "border-white/5 bg-white/[0.04] text-content-muted hover:border-white/10 hover:bg-white/[0.07] hover:text-white",
-                                )}
-                                aria-label={ru.nav.sortAndFilter}
-                                title={ru.nav.sortAndFilter}
-                            >
-                                <ArrowUpDown className="h-4 w-4" />
-                            </button>
-
-                            {isSortFilterOpen && sortFilterPos && (
-                                <div
-                                    className="fixed w-44 bg-surface-hover border border-white/10 rounded-lg shadow-xl shadow-black/40 py-1 z-[10000]"
-                                    style={{
-                                        top: sortFilterPos.top,
-                                        left: sortFilterPos.left,
-                                    }}
-                                >
-                                    <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                                        {ru.nav.sort}
-                                    </div>
-                                    {(
-                                        [
-                                            ["updated", ru.nav.updatedDate],
-                                            ["created", ru.nav.createdDate],
-                                            [
-                                                "alphabetical",
-                                                ru.nav.alphabetical,
-                                            ],
-                                        ] as const
-                                    ).map(([value, label]) => (
-                                        <button
-                                            key={value}
-                                            onClick={() =>
-                                                setPlaylistSort(value)
-                                            }
-                                            className={cn(
-                                                "w-full text-left px-3 py-1.5 text-sm transition-colors",
-                                                playlistSort === value
-                                                    ? "text-white bg-white/5"
-                                                    : "text-gray-400 hover:text-white hover:bg-white/5",
-                                            )}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-
-                                    <div className="mx-2 my-1 border-t border-white/10" />
-
-                                    <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                                        {ru.nav.show}
-                                    </div>
-                                    {playlistFilterOptions(federation).map(
-                                        ([value, label]) => (
-                                            <button
-                                                key={value}
-                                                onClick={() =>
-                                                    setPlaylistFilter(value)
-                                                }
-                                                className={cn(
-                                                    "w-full text-left px-3 py-1.5 text-sm transition-colors",
-                                                    playlistFilter === value
-                                                        ? "text-white bg-white/5"
-                                                        : "text-gray-400 hover:text-white hover:bg-white/5",
-                                                )}
-                                            >
-                                                {label}
-                                            </button>
-                                        ),
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
                         <Link
                             href="/playlists"
                             prefetch={false}
-                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] text-content-muted transition-colors hover:border-white/10 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                            aria-current={isPlaylistsRoute ? "page" : undefined}
+                            className={cn(
+                                "group flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-content-secondary transition-colors duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
+                                isPlaylistsRoute &&
+                                    "bg-white/[0.085] text-white",
+                            )}
+                        >
+                            <ListMusic
+                                className="h-[18px] w-[18px] shrink-0"
+                                aria-hidden="true"
+                            />
+                            <span>Плейлисты</span>
+                        </Link>
+                        <Link
+                            href="/playlists?create=1"
+                            prefetch={false}
                             aria-label={ru.nav.createPlaylist}
                             title={ru.nav.createPlaylist}
+                            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-content-muted transition-colors duration-200 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
-                            <Plus className="w-4 h-4" />
+                            <Plus className="h-4 w-4" aria-hidden="true" />
                         </Link>
                     </div>
                 </div>
-                <div
-                    className={cn(
-                        "max-h-[min(44vh,28rem)] overflow-y-auto space-y-1 scrollbar-thin scrollbar-track-transparent",
-                        isMobileOrTablet ? "px-6" : "px-3",
-                    )}
-                >
-                    {/* Pinned: My Liked */}
-                    {likedTotal > 0 &&
-                        (() => {
-                            const isLikedActive =
-                                pathname === "/playlist/my-liked";
-                            return (
-                                <Link
-                                    href="/playlist/my-liked"
-                                    prefetch={false}
-                                    className={cn(
-                                        "group block rounded-xl border px-3 py-2.5 transition-colors",
-                                        isLikedActive
-                                            ? "border-brand/25 bg-brand/10 text-white"
-                                            : "border-transparent text-content-secondary hover:border-white/5 hover:bg-white/[0.045] hover:text-white",
-                                    )}
-                                >
-                                    <div className="flex items-center gap-1.5">
-                                        <Heart className="w-3.5 h-3.5 shrink-0 text-brand fill-brand relative z-10" />
-                                        <div
-                                            className={cn(
-                                                "relative z-10 flex-1 truncate text-sm font-medium",
-                                                isLikedActive
-                                                    ? "font-semibold"
-                                                    : "",
-                                            )}
-                                        >
-                                            {ru.library.likedSongs}
-                                        </div>
-                                    </div>
-                                    <div
-                                        className={cn(
-                                            "text-xs truncate relative z-10 mt-0.5 transition-colors duration-200",
-                                            isLikedActive
-                                                ? "text-gray-400"
-                                                : "text-gray-400 group-hover:text-gray-400",
-                                        )}
-                                    >
-                                        Плейлист &bull; {likedTotal}{" "}
-                                        {pluralRu(likedTotal, [
-                                            "трек",
-                                            "трека",
-                                            "треков",
-                                        ])}
-                                    </div>
-                                </Link>
-                            );
-                        })()}
-                    {isLoadingPlaylists ? (
-                        // Loading skeleton with shimmer
-                        <>
-                            {[1, 2, 3, 4, 5].map((i) => (
-                                <div
-                                    key={i}
-                                    className="px-3 py-2.5 rounded-lg relative overflow-hidden bg-white/[0.02] border-l-2 border-transparent"
-                                >
-                                    <div className="h-4 bg-white/5 rounded w-3/4 mb-2 relative"></div>
-                                    <div className="h-3 bg-white/5 rounded w-1/2 relative"></div>
-                                </div>
-                            ))}
-                        </>
-                    ) : filteredSortedPlaylists.length > 0 ? (
-                        filteredSortedPlaylists.map((playlist) => {
-                            const isActive = pathname === playlist.href;
-                            const isShared =
-                                playlist.kind === "local" && !playlist.isOwner;
-                            return (
-                                <Link
-                                    key={playlist.key}
-                                    href={playlist.href}
-                                    prefetch={false}
-                                    className={cn(
-                                        "group block rounded-xl border px-3 py-2.5 transition-colors",
-                                        isActive
-                                            ? "border-brand/25 bg-brand/10 text-white"
-                                            : "border-transparent text-content-secondary hover:border-white/5 hover:bg-white/[0.045] hover:text-white",
-                                    )}
-                                >
-                                    <div className="flex items-center gap-1.5">
-                                        <div
-                                            className={cn(
-                                                "relative z-10 flex-1 truncate text-sm font-medium",
-                                                isActive ? "font-semibold" : "",
-                                            )}
-                                        >
-                                            {playlist.name}
-                                        </div>
-                                        {playlist.kind === "peer" && (
-                                            <PeerBadge
-                                                peerName={playlist.peerName}
-                                                online={true}
-                                                className="relative z-10 shrink-0"
-                                            />
-                                        )}
-                                        {isShared && (
-                                            <span
-                                                className="shrink-0 w-1.5 h-1.5 rounded-full bg-ai"
-                                                title={`Поделился: ${
-                                                    playlist.ownerName ||
-                                                    "неизвестный пользователь"
-                                                }`}
-                                            />
-                                        )}
-                                    </div>
-                                    <div
-                                        className={cn(
-                                            "text-xs truncate relative z-10 mt-0.5 transition-colors duration-200",
-                                            isActive
-                                                ? "text-gray-400"
-                                                : "text-gray-400 group-hover:text-gray-400",
-                                        )}
-                                    >
-                                        {playlist.kind === "peer" || isShared
-                                            ? `Автор: ${
-                                                  playlist.ownerName ||
-                                                  "неизвестный пользователь"
-                                              }`
-                                            : "Плейлист"}{" "}
-                                        • {playlist.trackCount}{" "}
-                                        {pluralRu(playlist.trackCount, [
-                                            "трек",
-                                            "трека",
-                                            "треков",
-                                        ])}
-                                    </div>
-                                </Link>
-                            );
-                        })
-                    ) : (
-                        <div className="px-4 py-8 text-center">
-                            <div className="text-sm text-gray-400 mb-2">
-                                {isFiltered
-                                    ? "Нет подходящих плейлистов"
-                                    : "Плейлистов пока нет"}
-                            </div>
-                            <div className="text-xs text-gray-400">
-                                {isFiltered
-                                    ? "Попробуйте изменить фильтр"
-                                    : "Создайте первый плейлист"}
-                            </div>
-                        </div>
-                    )}
-                </div>
             </div>
-        </>
-    );
 
-    return (
-        <>
-            {/* Mobile Sidebar */}
-            {isMobileOrTablet && (
-                <MobileSidebar
-                    isOpen={isMobileMenuOpen}
-                    onClose={() => setIsMobileMenuOpen(false)}
-                    hasActiveSessions={hasActiveSessions}
-                />
-            )}
-
-            {/* Desktop Sidebar */}
-            {!isMobileOrTablet && (
-                <aside
-                    data-shell-sidebar="desktop"
-                    className="shell-sidebar relative z-10 flex w-[216px] flex-shrink-0 flex-col overflow-hidden"
+            <div className="mt-auto p-4">
+                <button
+                    type="button"
+                    onClick={() =>
+                        window.dispatchEvent(
+                            new CustomEvent("request-pwa-install"),
+                        )
+                    }
+                    className="flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-white/15 bg-white/[0.025] px-2 text-[11px] font-semibold text-content-secondary transition-colors duration-200 hover:border-white/25 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                 >
-                    {sidebarContent}
-                </aside>
-            )}
-        </>
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    Установить приложение
+                </button>
+            </div>
+        </aside>
     );
 }

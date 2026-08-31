@@ -283,7 +283,7 @@ export function ActivityPanel({
         <aside
             data-activity-panel-layout="overlay"
             aria-label={adminActivityRu.activity.aria}
-            className="fixed bottom-[calc(6.5rem+var(--safe-area-bottom))] right-3 top-[4.5rem] z-[90] flex w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-line-strong bg-surface/95 shadow-2xl shadow-black/60 backdrop-blur-xl"
+            className="fixed bottom-[calc(var(--app-player-height-desktop)+var(--safe-area-bottom)+12px)] right-3 top-[calc(var(--app-topbar-height-desktop)+var(--safe-area-top)+12px)] z-[90] flex w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-line-strong bg-surface/95 shadow-2xl shadow-black/60 backdrop-blur-xl"
         >
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
                 <h2 className="whitespace-nowrap text-base font-semibold text-white">

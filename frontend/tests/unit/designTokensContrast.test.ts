@@ -65,13 +65,13 @@ test("the spectral-stage palette stays on the approved semantic values", () => {
             signal: DESIGN_TOKENS.brand,
         },
         {
-            canvas: "#080a0f",
-            stage: "#11151d",
-            surface: "#1a202a",
-            active: "#222a36",
-            ink: "#f7f8fc",
-            muted: "#aeb6c5",
-            signal: "#8fa8ff",
+            canvas: "#090909",
+            stage: "#121214",
+            surface: "#1c1b1e",
+            active: "#28272b",
+            ink: "#faf8fc",
+            muted: "#aaa3b0",
+            signal: "#a970ff",
         },
     );
 });
@@ -79,9 +79,13 @@ test("the spectral-stage palette stays on the approved semantic values", () => {
 test("secondary copy remains readable on every shared application surface", () => {
     const surfaces = [
         DESIGN_TOKENS.surface,
+        DESIGN_TOKENS["surface-sunken"],
         DESIGN_TOKENS["surface-raised"],
         DESIGN_TOKENS["surface-elevated"],
+        DESIGN_TOKENS["surface-overlay"],
         DESIGN_TOKENS["surface-active"],
+        DESIGN_TOKENS["surface-highlight"],
+        DESIGN_TOKENS["surface-hover"],
     ];
 
     for (const foreground of [

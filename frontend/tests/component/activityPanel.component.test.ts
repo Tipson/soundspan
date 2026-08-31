@@ -324,6 +324,16 @@ test("open desktop activity overlays content instead of shrinking it", async () 
     );
 
     assert.match(html, /data-activity-panel-layout="overlay"/);
+    assert.match(
+        html,
+        /top-\[calc\(var\(--app-topbar-height-desktop\)\+var\(--safe-area-top\)\+12px\)\]/,
+        "desktop panel must begin below the top bar and its safe gap",
+    );
+    assert.match(
+        html,
+        /bottom-\[calc\(var\(--app-player-height-desktop\)\+var\(--safe-area-bottom\)\+12px\)\]/,
+        "desktop panel must stop above the player dock and its safe gap",
+    );
     assert.doesNotMatch(html, /Открыть панель активности/);
 });
 

@@ -10,8 +10,8 @@ test("sidebar navigation keeps the three primary music destinations", () => {
         SIDEBAR_NAVIGATION.map(({ name, href }) => ({ name, href })),
         [
             { name: "Главная", href: "/" },
-            { name: "Моя волна", href: "/vibe" },
-            { name: "Коллекция", href: "/library" },
+            { name: "Волна", href: "/vibe" },
+            { name: "Моя музыка", href: "/library" },
         ],
     );
 });
@@ -23,7 +23,7 @@ test("sidebar navigation starts with the unified Home entry", () => {
 
 test("sidebar navigation stays music-first without inactive spoken-word sections", () => {
     const names = SIDEBAR_NAVIGATION.map((item) => item.name);
-    assert.ok(names.includes("Коллекция"), "should include Collection");
+    assert.ok(names.includes("Моя музыка"), "should include My Music");
     assert.ok(!names.includes("Explore"), "Home now owns Explore content");
     assert.ok(!names.includes("Search"), "search lives in the top bar");
     assert.ok(!names.includes("Listen Together"), "social stays secondary");
@@ -44,8 +44,8 @@ test("mobile quick links mirror the primary music destinations", () => {
         MOBILE_QUICK_LINKS.map(({ name, href }) => ({ name, href })),
         [
             { name: "Главная", href: "/" },
-            { name: "Моя волна", href: "/vibe" },
-            { name: "Коллекция", href: "/library" },
+            { name: "Волна", href: "/vibe" },
+            { name: "Моя музыка", href: "/library" },
         ],
     );
 });

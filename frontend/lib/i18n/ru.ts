@@ -33,8 +33,8 @@ export const ru = {
     },
     nav: {
         home: "Главная",
-        vibe: "Моя волна",
-        library: "Коллекция",
+        vibe: "Волна",
+        library: "Моя музыка",
         settings: "Настройки",
         notifications: "Уведомления",
         requests: "Запросы",
@@ -70,7 +70,7 @@ export const ru = {
         redirecting: "Перенаправляем…",
     },
     search: {
-        placeholder: "Что хотите послушать?",
+        placeholder: "Найти трек, исполнителя, альбом или плейлист",
         mobilePlaceholder: "Поиск музыки",
         aria: "Поиск",
         back: "Назад",
@@ -121,7 +121,7 @@ export const ru = {
         artist: "Исполнитель",
         podcast: "Подкаст",
         audiobook: "Аудиокнига",
-        madeForYou: "Подобрано для вас",
+        madeForYou: "Миксы для вас",
         madeForYouSubtitle: "Разные подборки на основе ваших прослушиваний.",
         continueListening: "Продолжить слушать",
         stations: "Станции для вас",
@@ -133,7 +133,9 @@ export const ru = {
         continueSubtitle:
             "Вернитесь к музыке, которая осталась в вашей ротации.",
         endlessRadio: "Бесконечное персональное радио",
-        waveSummary: "Для вас · Любое настроение · Меняется с каждой реакцией",
+        waveSummary:
+            "Индивидуальный поток музыки на основе ваших лайков, пропусков и привычек.",
+        startWave: "Запустить",
         moreSignals: "Нужно больше данных о вкусах",
         refreshing: "Обновляем персональные подборки",
         refresh: "Обновить персональные подборки",

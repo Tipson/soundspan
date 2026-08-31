@@ -820,7 +820,7 @@ test("FullPlayer: skip buttons are disabled and inert while canSeek is false; Pr
 // OverlayPlayer
 // ---------------------------------------------------------------------------
 
-test("OverlayPlayer leaves the complete desktop dock and seekbar uncovered", async () => {
+test("OverlayPlayer leaves desktop chrome and the player dock uncovered", async () => {
     isMobileViewport = false;
     const { OverlayPlayer } =
         await import("../../components/player/OverlayPlayer");
@@ -833,8 +833,16 @@ test("OverlayPlayer leaves the complete desktop dock and seekbar uncovered", asy
     );
     assert.ok(overlay);
     assert.ok(
-        overlay.classList.contains("bottom-[104px]"),
-        "desktop overlay must stop above the 96px player and its 8px outer padding",
+        overlay.classList.contains(
+            "top-[calc(var(--app-topbar-height-desktop)+var(--safe-area-top)+12px)]",
+        ),
+        "desktop overlay must start below the top bar and its safe gap",
+    );
+    assert.ok(
+        overlay.classList.contains(
+            "bottom-[calc(var(--app-player-height-desktop)+var(--safe-area-bottom)+12px)]",
+        ),
+        "desktop overlay must stop above the player dock and its safe gap",
     );
 
     await unmount(mounted);

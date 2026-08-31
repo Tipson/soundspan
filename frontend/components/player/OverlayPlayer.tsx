@@ -505,8 +505,10 @@ export function OverlayPlayer() {
                       }
             }
             className={cn(
-                "overlay-player-stage fixed inset-0 z-[9999] flex flex-col overflow-hidden",
-                !isMobileOrTablet && "bottom-[104px]",
+                "overlay-player-stage fixed inset-x-0 z-[9999] flex flex-col overflow-hidden",
+                isMobileOrTablet
+                    ? "inset-y-0"
+                    : "bottom-[calc(var(--app-player-height-desktop)+var(--safe-area-bottom)+12px)] top-[calc(var(--app-topbar-height-desktop)+var(--safe-area-top)+12px)]",
             )}
             onTouchStart={
                 isMobileOrTablet ? trackSwipeHandlers.onTouchStart : undefined

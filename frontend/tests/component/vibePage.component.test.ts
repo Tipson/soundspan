@@ -494,6 +494,74 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
     await unmountPage(mounted);
 });
 
+test("My Wave stays bounded to the app viewport while its tune sheet owns overflow", async () => {
+    const mounted = await mountPage();
+
+    const page = mounted.container.querySelector<HTMLElement>(
+        "main[data-wave-mode]",
+    );
+    const surface = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-surface"]',
+    );
+    assert.ok(page);
+    assert.ok(surface);
+
+    const pageClasses = new Set(page.className.split(/\s+/));
+    const surfaceClasses = new Set(surface.className.split(/\s+/));
+    for (const className of ["h-full", "min-h-0", "overflow-hidden"]) {
+        assert.equal(
+            pageClasses.has(className),
+            true,
+            `Wave page must include ${className}`,
+        );
+        assert.equal(
+            surfaceClasses.has(className),
+            true,
+            `Wave surface must include ${className}`,
+        );
+    }
+    assert.equal(
+        [...surfaceClasses].some((className) =>
+            className.startsWith("min-h-[calc("),
+        ),
+        false,
+        "Wave surface must not grow beyond the shell viewport",
+    );
+
+    const compactCore =
+        mounted.container.querySelector<HTMLElement>(".wave-density-core");
+    assert.ok(compactCore);
+    assert.match(compactCore.className, /\bmin-h-0\b/);
+    const responsiveStyles = Array.from(
+        mounted.container.querySelectorAll("style"),
+    )
+        .map((style) => style.textContent ?? "")
+        .join("\n");
+    assert.match(
+        responsiveStyles,
+        /min-width:\s*1025px[\s\S]*max-height:\s*850px/,
+        "Short desktop Vibe must compact without unlocking page overflow",
+    );
+
+    const tune = findButton(mounted.container, "Настроить");
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+
+    const dialog = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-tune-sheet"]',
+    );
+    assert.ok(dialog);
+    const dialogClasses = new Set(dialog.className.split(/\s+/));
+    assert.equal(dialogClasses.has("overflow-y-auto"), true);
+    assert.equal(
+        [...dialogClasses].some((className) => className.startsWith("max-h-[")),
+        true,
+        "Tune sheet must keep a bounded internal scroll area",
+    );
+
+    await unmountPage(mounted);
+});
+
 test("the Wave stage previews what comes next without presenting a finite queue", async () => {
     state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
     state.vibeModeEnabled = true;
@@ -502,7 +570,20 @@ test("the Wave stage previews what comes next without presenting a finite queue"
     const preview = mounted.container.querySelector<HTMLElement>(
         '[data-testid="wave-next-preview"]',
     );
+    const nowPlayingPanel = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-now-playing-panel"]',
+    );
+    const skipButton = mounted.container.querySelector<HTMLButtonElement>(
+        '[data-testid="wave-skip"]',
+    );
     assert.ok(preview);
+    assert.ok(nowPlayingPanel);
+    assert.ok(skipButton);
+    assert.match(
+        nowPlayingPanel.parentElement?.parentElement?.className ?? "",
+        /\bshrink-0\b/,
+        "Active Wave feedback must remain a non-collapsing bottom region",
+    );
     assert.match(preview.textContent ?? "", /Далее/i);
     assert.match(preview.textContent ?? "", /Discovery Track|Shared Pick/i);
     assert.doesNotMatch(

@@ -25,6 +25,9 @@ import {
     Music as MusicIcon,
     Loader2,
     RefreshCw,
+    Repeat,
+    Repeat1,
+    Shuffle,
 } from "lucide-react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/utils/cn";
@@ -50,6 +53,9 @@ export function FullPlayer() {
         currentPodcast,
         playbackType,
         queue,
+        isShuffle,
+        repeatMode,
+        vibeMode,
     } = useAudioState();
     const { volume, isMuted, playerMode } = useAudioVolumeMode();
 
@@ -75,6 +81,8 @@ export function FullPlayer() {
         seek,
         setVolume,
         toggleMute,
+        toggleShuffle,
+        toggleRepeat,
         skipForward,
         skipBackward,
     } = useAudioControls();
@@ -152,6 +160,12 @@ export function FullPlayer() {
     const isLongForm =
         playbackType === "podcast" || playbackType === "audiobook";
     const { qualityBadge } = useStreamBitrate();
+    const repeatLabel =
+        repeatMode === "one"
+            ? ru.player.repeatOne
+            : repeatMode === "all"
+              ? ru.player.repeatAll
+              : ru.player.repeatOff;
 
     // Determine if seeking is allowed
     const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,52 +244,63 @@ export function FullPlayer() {
     ) : null;
 
     return (
-        <div
-            className="desktop-player-dock relative flex-shrink-0"
+        <footer
+            className="desktop-player-dock relative isolate flex-shrink-0"
             data-player-surface="desktop"
+            aria-label="Плеер"
         >
-            <div className="desktop-player-surface relative h-20">
+            <div className="desktop-player-surface relative h-32 overflow-visible">
+                {coverUrl && hasMedia ? (
+                    <div
+                        className="pointer-events-none absolute inset-0 overflow-hidden"
+                        aria-hidden="true"
+                        data-player-artwork-atmosphere
+                    >
+                        <CachedImage
+                            key={`player-atmosphere-${coverUrl}`}
+                            src={coverUrl}
+                            alt=""
+                            fill
+                            sizes="100vw"
+                            className="scale-125 object-cover opacity-[0.5] blur-3xl saturate-150"
+                            priority
+                            unoptimized
+                        />
+                    </div>
+                ) : null}
                 <div
-                    className="absolute inset-x-0 top-0 z-[10000]"
-                    data-seek-zone
-                >
-                    <SeekSlider
-                        progress={progress}
-                        duration={duration}
-                        currentTime={displayTime}
-                        onSeek={handleSeek}
-                        canSeek={canSeek}
-                        hasMedia={hasMedia}
-                        downloadProgress={downloadProgress}
-                        variant="default"
-                        alwaysShowHandle
-                        handleClassName="w-2.5 h-2.5 shadow-xl shadow-black/50"
-                        className="h-[2px] rounded-none"
-                        hitZoneClassName="pb-4"
-                    />
-                </div>
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-warning/30 via-ai/15 to-brand/25"
+                    aria-hidden="true"
+                    data-player-spectral-glow
+                />
+                <div
+                    className="pointer-events-none absolute inset-0 bg-black/55 backdrop-blur-2xl"
+                    aria-hidden="true"
+                    data-player-scrim
+                />
                 <div
                     className={cn(
-                        "desktop-player-layout grid h-full grid-cols-[minmax(220px,1fr)_auto_minmax(220px,1fr)] items-center gap-4 px-4 pt-0.5",
+                        "desktop-player-layout relative z-10 grid h-full grid-cols-[minmax(240px,1fr)_minmax(360px,1.35fr)_minmax(240px,1fr)] grid-rows-[76px_36px] items-center gap-x-6 px-6 py-2",
                         hasMedia && "cursor-pointer",
                     )}
                     data-player-layout="identity-transport-actions"
                     data-player-control-budget={
                         isLongForm
                             ? "longform-5-utilities-4"
-                            : "transport-3-utilities-4"
+                            : "music-5-utilities-4"
                     }
                     onClick={handleBarClick}
                 >
                     <div
-                        className="flex min-w-0 items-center gap-3"
+                        className="row-span-2 flex min-w-0 items-center gap-4"
                         data-player-region="identity"
+                        aria-label="Сейчас играет"
                     >
                         {mediaLink ? (
                             <Link
                                 href={mediaLink}
                                 prefetch={false}
-                                className="group relative h-12 w-12 flex-shrink-0"
+                                className="group relative h-[88px] w-[88px] flex-shrink-0"
                             >
                                 <div className="absolute inset-0 rounded-[10px] bg-white/15 opacity-0 blur-md transition-opacity duration-200 group-hover:opacity-100" />
                                 <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[10px] bg-surface-hover shadow-lg ring-1 ring-white/10">
@@ -285,20 +310,33 @@ export function FullPlayer() {
                                             src={coverUrl}
                                             alt={title}
                                             fill
-                                            sizes="48px"
+                                            sizes="88px"
                                             className="object-cover"
                                             priority
                                             unoptimized
                                         />
                                     ) : (
-                                        <MusicIcon className="h-5 w-5 text-content-muted" />
+                                        <MusicIcon className="h-7 w-7 text-content-muted" />
                                     )}
                                 </div>
                             </Link>
                         ) : (
-                            <div className="relative h-12 w-12 flex-shrink-0">
+                            <div className="relative h-[88px] w-[88px] flex-shrink-0">
                                 <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[10px] bg-surface-hover shadow-lg ring-1 ring-white/10">
-                                    <MusicIcon className="h-5 w-5 text-content-muted" />
+                                    {coverUrl ? (
+                                        <CachedImage
+                                            key={coverUrl}
+                                            src={coverUrl}
+                                            alt={title}
+                                            fill
+                                            sizes="88px"
+                                            className="object-cover"
+                                            priority
+                                            unoptimized
+                                        />
+                                    ) : (
+                                        <MusicIcon className="h-7 w-7 text-content-muted" />
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -309,12 +347,12 @@ export function FullPlayer() {
                                     prefetch={false}
                                     className="block min-w-0 hover:underline"
                                 >
-                                    <h4 className="truncate text-sm font-semibold leading-5 text-content">
+                                    <h4 className="truncate text-base font-semibold leading-6 text-content">
                                         {title}
                                     </h4>
                                 </Link>
                             ) : (
-                                <h4 className="truncate text-sm font-semibold leading-5 text-content">
+                                <h4 className="truncate text-base font-semibold leading-6 text-content">
                                     {title}
                                 </h4>
                             )}
@@ -325,7 +363,7 @@ export function FullPlayer() {
                                         prefetch={false}
                                         className="min-w-0 hover:underline"
                                     >
-                                        <p className="truncate text-xs leading-4 text-content-muted">
+                                        <p className="truncate text-[13px] leading-5 text-content-muted">
                                             {subtitle}
                                         </p>
                                     </Link>
@@ -335,12 +373,12 @@ export function FullPlayer() {
                                         prefetch={false}
                                         className="min-w-0 hover:underline"
                                     >
-                                        <p className="truncate text-xs leading-4 text-content-muted">
+                                        <p className="truncate text-[13px] leading-5 text-content-muted">
                                             {subtitle}
                                         </p>
                                     </Link>
                                 ) : (
-                                    <p className="truncate text-xs leading-4 text-content-muted">
+                                    <p className="truncate text-[13px] leading-5 text-content-muted">
                                         {subtitle}
                                     </p>
                                 )}
@@ -357,8 +395,10 @@ export function FullPlayer() {
                     </div>
 
                     <div
-                        className="flex items-center justify-center"
+                        className="col-start-2 row-start-1 flex items-center justify-center self-end"
                         data-player-region="transport"
+                        data-player-level="controls"
+                        aria-label={ru.player.controls}
                     >
                         <div
                             className="player-transport flex items-center gap-2 xl:gap-3"
@@ -366,6 +406,25 @@ export function FullPlayer() {
                             aria-label={ru.player.controls}
                             data-player-control-group="primary"
                         >
+                            {!isLongForm && (
+                                <button
+                                    onClick={toggleShuffle}
+                                    className={cn(
+                                        "player-control transition-colors",
+                                        isShuffle
+                                            ? "bg-white/10 text-brand-hover"
+                                            : "text-content-muted hover:text-content",
+                                    )}
+                                    disabled={!hasMedia || vibeMode}
+                                    aria-label={ru.player.shuffle}
+                                    aria-pressed={isShuffle}
+                                    title={ru.player.shuffle}
+                                    data-player-control="shuffle"
+                                >
+                                    <Shuffle className="h-5 w-5" />
+                                </button>
+                            )}
+
                             {isLongForm && (
                                 <button
                                     onClick={() => skipBackward(15)}
@@ -456,27 +515,73 @@ export function FullPlayer() {
                                 </button>
                             )}
 
+                            {!isLongForm && (
+                                <button
+                                    onClick={toggleRepeat}
+                                    className={cn(
+                                        "player-control transition-colors",
+                                        repeatMode !== "off"
+                                            ? "bg-white/10 text-brand-hover"
+                                            : "text-content-muted hover:text-content",
+                                    )}
+                                    disabled={!hasMedia}
+                                    aria-label={repeatLabel}
+                                    aria-pressed={repeatMode !== "off"}
+                                    title={repeatLabel}
+                                    data-player-control="repeat"
+                                    data-repeat-mode={repeatMode}
+                                >
+                                    {repeatMode === "one" ? (
+                                        <Repeat1 className="h-5 w-5" />
+                                    ) : (
+                                        <Repeat className="h-5 w-5" />
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
 
                     <div
-                        className="player-utilities flex min-w-0 items-center justify-end gap-1"
-                        data-player-region="actions"
-                        data-player-control-group="utilities"
+                        className="col-start-2 row-start-2 flex min-w-0 items-center gap-3 self-start"
+                        data-player-level="timeline"
+                        data-seek-zone
                     >
                         <span
-                            className={cn(
-                                "mr-2 hidden whitespace-nowrap text-[11px] font-medium tabular-nums 2xl:block",
-                                hasMedia
-                                    ? "text-content-secondary"
-                                    : "text-content-muted",
-                            )}
+                            className="w-10 flex-shrink-0 text-right text-[11px] font-medium tabular-nums text-content-secondary"
+                            data-player-time="current"
                         >
                             {formatTime(displayTime)}
-                            {" / "}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <SeekSlider
+                                progress={progress}
+                                duration={duration}
+                                currentTime={displayTime}
+                                onSeek={handleSeek}
+                                canSeek={canSeek}
+                                hasMedia={hasMedia}
+                                downloadProgress={downloadProgress}
+                                variant="minimal"
+                                alwaysShowHandle
+                                handleClassName="h-2.5 w-2.5 shadow-xl shadow-black/50"
+                                className="h-[3px]"
+                                hitZoneClassName="py-2"
+                            />
+                        </div>
+                        <span
+                            className="w-10 flex-shrink-0 text-[11px] font-medium tabular-nums text-content-secondary"
+                            data-player-time="duration"
+                        >
                             {formatTime(duration)}
                         </span>
+                    </div>
 
+                    <div
+                        className="player-utilities col-start-3 row-span-2 row-start-1 flex min-w-0 items-center justify-end gap-1"
+                        data-player-region="actions"
+                        data-player-control-group="utilities"
+                        aria-label="Действия с текущим треком"
+                    >
                         <div className="flex items-center gap-1">
                             {currentTrack && playbackType === "track" ? (
                                 <CurrentTrackPreferenceButtons
@@ -594,6 +699,6 @@ export function FullPlayer() {
                     </div>
                 </div>
             </div>
-        </div>
+        </footer>
     );
 }

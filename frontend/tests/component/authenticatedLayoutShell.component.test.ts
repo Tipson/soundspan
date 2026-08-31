@@ -112,7 +112,7 @@ beforeEach(() => {
     state.isTablet = false;
 });
 
-test("desktop shell exposes one open canvas instead of a framed content card", async () => {
+test("desktop shell keeps the sidebar full-height and the top bar inside the main column", async () => {
     const { AuthenticatedLayout } =
         await import("../../components/layout/AuthenticatedLayout");
     const html = renderToStaticMarkup(
@@ -122,10 +122,18 @@ test("desktop shell exposes one open canvas instead of a framed content card", a
     assert.match(html, /data-shell-frame="desktop"/);
     assert.match(html, /data-shell-direction="spectral-stage"/);
     assert.match(html, /data-shell-workspace="desktop"/);
+    assert.match(html, /data-shell-main-column="desktop"/);
     assert.match(html, /data-shell-surface="content"/);
     assert.match(html, /data-shell-canvas="open"/);
-    assert.match(html, /desktop-shell-workspace[^\"]*gap-0/);
     assert.doesNotMatch(html, /desktop-content-stage[^\"]*rounded-/);
+    const sidebarIndex = html.indexOf('data-marker="sidebar"');
+    const mainColumnIndex = html.indexOf('data-shell-main-column="desktop"');
+    const topbarIndex = html.indexOf('data-marker="topbar"');
+    const playerIndex = html.indexOf('data-marker="player"');
+    assert.ok(sidebarIndex > -1);
+    assert.ok(mainColumnIndex > sidebarIndex);
+    assert.ok(topbarIndex > mainColumnIndex);
+    assert.ok(playerIndex > topbarIndex);
     assert.match(html, /data-marker="sidebar"/);
     assert.match(html, /data-marker="player"/);
     assert.match(html, /data-marker="taste-profile-gate"/);

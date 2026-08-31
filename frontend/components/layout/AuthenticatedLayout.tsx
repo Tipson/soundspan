@@ -196,25 +196,33 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     className="desktop-shell-frame h-dvh overflow-hidden"
                 >
                     <MediaControlsHandler />
-                    <TopBar
-                        isActivityPanelOpen={activityPanel.isOpen}
-                        onActivityPanelToggle={activityPanel.toggle}
-                    />
                     <div
                         data-shell-workspace="desktop"
-                        className="desktop-shell-workspace flex min-h-0 flex-1 gap-0 overflow-hidden"
+                        className="desktop-shell-workspace flex min-h-0 flex-1 overflow-hidden"
                     >
                         <Sidebar />
-                        <main
-                            id="main-content"
-                            tabIndex={-1}
-                            data-app-scroll-container
-                            data-shell-surface="content"
-                            data-shell-canvas="open"
-                            className="desktop-content-stage relative min-w-0 flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
+                        <div
+                            data-shell-main-column="desktop"
+                            className="desktop-shell-main-column flex min-w-0 flex-1 flex-col overflow-hidden"
                         >
-                            {children}
-                        </main>
+                            <TopBar
+                                isActivityPanelOpen={activityPanel.isOpen}
+                                onActivityPanelToggle={activityPanel.toggle}
+                            />
+                            <main
+                                id="main-content"
+                                tabIndex={-1}
+                                data-app-scroll-container
+                                data-shell-scroll-mode={
+                                    pathname === "/vibe" ? "locked" : "page"
+                                }
+                                data-shell-surface="content"
+                                data-shell-canvas="open"
+                                className={`desktop-content-stage relative min-h-0 min-w-0 flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 ${pathname === "/vibe" ? "overflow-hidden" : "overflow-y-auto"}`}
+                            >
+                                {children}
+                            </main>
+                        </div>
                         <ActivityPanel
                             isOpen={activityPanel.isOpen}
                             onToggle={activityPanel.toggle}

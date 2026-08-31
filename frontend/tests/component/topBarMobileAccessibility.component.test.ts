@@ -13,6 +13,8 @@ const state = {
 mock.module("lucide-react", {
     namedExports: {
         Home: Icon,
+        AudioWaveform: Icon,
+        Library: Icon,
         Search: Icon,
         Menu: Icon,
         Bell: Icon,
@@ -102,17 +104,32 @@ test("mobile search destination expands into the focused result field", async ()
     assert.doesNotMatch(html, /data-shell-search="action"/);
 });
 
-test("desktop top bar keeps global search centered in the music shell", async () => {
+test("desktop top bar combines destination tabs with the persistent search", async () => {
     state.isMobile = false;
 
     const { TopBar } = await import("../../components/layout/TopBar");
     const html = renderToStaticMarkup(React.createElement(TopBar));
 
     assert.match(html, /data-shell-topbar="desktop"/);
-    assert.match(html, /placeholder="Что хотите послушать\?"/);
-    assert.match(html, /max-w-\[720px\]/);
-    assert.match(html, /w-\[216px\]/);
-    assert.match(html, /aria-label="Назад"/);
+    assert.match(html, /data-shell-top-navigation="desktop"/);
+    for (const href of ["/", "/vibe", "/library"]) {
+        assert.match(
+            html,
+            new RegExp(
+                `href="${href === "/" ? "\\/" : href.replaceAll("/", "\\/")}"`,
+            ),
+        );
+    }
+    assert.match(html, />Главная</);
+    assert.match(html, />Волна</);
+    assert.match(html, />Моя музыка</);
+    assert.match(
+        html,
+        /placeholder="Найти трек, исполнителя, альбом или плейлист"/,
+    );
+    assert.match(html, /max-w-\[520px\]/);
+    assert.doesNotMatch(html, /w-\[216px\]/);
+    assert.doesNotMatch(html, /aria-label="Назад"/);
     assert.match(html, />\/<\/kbd>/);
     assert.match(html, /data-shell-search="persistent"/);
     assert.match(html, /data-shell-spectral-seam="true"/);
