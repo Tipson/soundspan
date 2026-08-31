@@ -1,10 +1,12 @@
 # Soundspan product design system
 
-Status: release candidate implemented and design-QA verified; publication pending
+Status: published and post-deploy verified on 2026-08-31
 
-Pre-release base commit: `5411c7232620b7a185abcad5413b238d8d585f85`.
-The current release-candidate changes do not yet have a published image or
-production-verification claim.
+Published source commit: `59aa0c3e30e0a974cc0f0f5168b88ffd9968b0a1`.
+Production image: `local/soundspan:2.6.1-redesign-59aa0c3`
+(`sha256:21164ec09fade19376bfa81e60b3c21e8d036ae1f645b794c17dd9819d01c205`).
+The companion YouTube Music streamer stayed on its previous image and was not
+recreated during this release.
 
 Authoritative visual targets:
 
@@ -24,8 +26,8 @@ responsive extrapolation is accepted.
 Acceptance evidence and the full comparison history are recorded in
 [`../../design-qa.md`](../../design-qa.md). Responsive browser captures live in
 [`qa/evidence`](qa/evidence), with native-size source/implementation pairs in
-[`qa/comparison`](qa/comparison). These files are prepublication evidence; their
-existence and filenames do not by themselves prove a production deployment.
+[`qa/comparison`](qa/comparison). Deployment status is recorded separately above
+because evidence filenames alone are not proof of a production deployment.
 
 ## Product thesis
 

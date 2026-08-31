@@ -32,8 +32,9 @@ deterministic audio response so transient playback availability could not distor
 the visual state.
 
 The `*-production-*` strings are immutable artifact filenames used by the capture
-run. This QA document records a release candidate only; it does not claim that
-the candidate has been published or verified in production.
+run. The candidate was subsequently published from commit
+`59aa0c3e30e0a974cc0f0f5168b88ffd9968b0a1`; deployment evidence is recorded in
+the release-status section below rather than inferred from these filenames.
 
 ## Required fidelity surfaces
 
@@ -151,8 +152,13 @@ are intentional product constraints:
 
 ## Release status
 
-Design QA for the current release candidate passed. Publication, production
-image assignment, and post-deploy smoke verification are still pending and are
-not asserted by this document.
+Design QA passed and the candidate was published on 2026-08-31 as
+`local/soundspan:2.6.1-redesign-59aa0c3`
+(`sha256:21164ec09fade19376bfa81e60b3c21e8d036ae1f645b794c17dd9819d01c205`).
+The runtime, provider, public-route, schema, desktop-browser, and 390 x 844
+mobile-browser smoke checks passed after deployment. The main container remained
+healthy with zero restarts, and the companion streamer stayed on its previous
+healthy image without recreation. Final subjective visual acceptance remains
+with the product owner.
 
 final result: passed
