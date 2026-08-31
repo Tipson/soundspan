@@ -128,6 +128,17 @@ test("listening dashboard splits one unique queue into continuation cards and re
         "desktop columns should respond to the available dashboard width so 1280px keeps three readable cards and the 1487px reference fits four",
     );
 
+    const playOverlay = mounted.container.querySelector<HTMLElement>(
+        "[data-home-play-overlay]",
+    );
+    assert.ok(playOverlay, "continuation artwork should expose a play overlay");
+    assert.ok(
+        playOverlay.classList.contains("bg-white/80"),
+        "the hover play control should remain translucent over artwork",
+    );
+    assert.ok(playOverlay.classList.contains("opacity-0"));
+    assert.ok(playOverlay.classList.contains("group-hover:opacity-100"));
+
     await mounted.unmount();
 });
 

@@ -189,6 +189,7 @@ function PlaylistCard({
 
                     {/* Play button overlay */}
                     <button
+                        data-playlist-play-overlay
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -196,9 +197,9 @@ function PlaylistCard({
                             onPlay(playlist.id);
                         }}
                         className={cn(
-                            "absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full bg-brand text-surface",
-                            "shadow-lg shadow-black/40 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none",
-                            "hover:scale-105 hover:bg-brand-hover",
+                            "absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-brand/80 text-surface backdrop-blur-md",
+                            "shadow-lg shadow-black/40 transition-[opacity,transform,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none",
+                            "hover:scale-105 hover:bg-brand/90",
                             "opacity-100 sm:translate-y-2 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100 sm:focus-visible:translate-y-0 sm:focus-visible:opacity-100",
                         )}
                         title="Воспроизвести плейлист"

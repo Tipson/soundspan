@@ -150,6 +150,34 @@ are intentional product constraints:
   language. Live catalog art and the user's reduced sidebar hierarchy remain the
   intentional differences.
 
+### Iteration 5 — passed locally, awaiting publication
+
+- **Source visual truth:** the reported states are
+  `C:/Users/Dartum/AppData/Local/Temp/codex-clipboard-a74d4687-e971-4361-8ecd-cc3b02234238.png`
+  (Home, desktop) and
+  `C:/Users/Dartum/AppData/Local/Temp/codex-clipboard-1ea533fe-0e61-4dc4-9527-8cfffe398278.png`
+  (Playlists, mobile).
+- **[P1] Embedded letterbox bars in YouTube artwork.** Provider `hqdefault`
+  thumbnails carried their own 4:3 black bands, so `object-cover` could not
+  remove them. The shared artwork resolver now prefers YouTube's reliable 16:9
+  `mqdefault` variant while leaving ordinary album artwork untouched.
+- **[P2] Playlist/play affordance was visually heavy.** Home and playlist card
+  controls now use translucent, blurred surfaces. At pointer breakpoints they
+  appear on card hover or keyboard focus; on touch screens the playlist control
+  remains visible because hover is unavailable.
+- **Native-size comparison:**
+  `design-system/soundspan/qa/evidence/home-artwork-reference-vs-fix-2974x1058.png`
+  places the 1487 × 1058 reported Home state on the left and the post-fix
+  1487 × 1058 implementation on the right. The embedded bars are absent without
+  changing the card geometry, typography, spacing, copy, or ambient palette.
+- **Interaction evidence:**
+  `design-system/soundspan/qa/evidence/home-artwork-crop-rest-1487x1058.png`,
+  `design-system/soundspan/qa/evidence/home-artwork-crop-hover-1487x1058.png`,
+  and
+  `design-system/soundspan/qa/evidence/playlists-translucent-hover-1487x1058.png`
+  cover rest and hover states at `deviceScaleFactor: 1`. No actionable P0, P1,
+  or P2 visual mismatch remains for this change.
+
 ## Responsive and interaction evidence
 
 - Desktop Home: sidebar/main-column adjacency, top-bar ownership, semantic Home

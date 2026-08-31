@@ -131,7 +131,10 @@ export function HomeListeningDashboard({
                                             />
                                         )}
                                         <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/5 to-transparent" />
-                                        <span className="absolute bottom-3 right-3 grid h-10 w-10 translate-y-1 place-items-center rounded-full bg-white text-black opacity-0 shadow-xl transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 motion-reduce:transition-none">
+                                        <span
+                                            data-home-play-overlay
+                                            className="absolute bottom-3 right-3 grid h-10 w-10 translate-y-1 place-items-center rounded-full border border-white/30 bg-white/80 text-black opacity-0 shadow-xl backdrop-blur-sm transition-[opacity,transform,background-color] duration-200 group-hover:translate-y-0 group-hover:bg-white/90 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 motion-reduce:transition-none"
+                                        >
                                             <Play
                                                 className="ml-0.5 h-4 w-4 fill-current"
                                                 aria-hidden="true"

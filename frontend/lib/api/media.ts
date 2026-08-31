@@ -1,6 +1,13 @@
 import type { PlaybackClientMetricInput } from "../api";
 import type { ApiClientConstructor } from "./core";
 
+const YOUTUBE_LETTERBOX_THUMBNAIL =
+    /^(https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\/vi\/[^/?#]+\/)hqdefault(\.jpg(?:[?#].*)?)$/i;
+
+function preferWideYouTubeThumbnail(coverId: string): string {
+    return coverId.replace(YOUTUBE_LETTERBOX_THUMBNAIL, "$1mqdefault$2");
+}
+
 /** Add media-domain operations to an API client base class. */
 export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class MediaApi extends Base {
@@ -58,7 +65,9 @@ export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
                     coverId.startsWith("native:"))
             ) {
                 // Pass as query parameter to avoid URL encoding issues
-                const params = new URLSearchParams({ url: coverId });
+                const params = new URLSearchParams({
+                    url: preferWideYouTubeThumbnail(coverId),
+                });
                 if (size) params.append("size", size.toString());
                 return `${baseUrl}/api/library/cover-art?${params.toString()}`;
             }

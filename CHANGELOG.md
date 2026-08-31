@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- YouTube Music artwork now uses reliable wide thumbnails without embedded letterbox bars, and artwork play controls use a translucent hover/focus treatment on pointer devices.
 - Imported YouTube Music playlists now build radio from their playable remote items, retain playlist order when provider recommendations are unavailable, and display artwork mosaics from remote album or track covers instead of empty placeholders.
 - Repeated YouTube Music startup failures pause on the current queue item instead of cascading through the remaining queue, while one unsupported video can still fall through to the existing alternate-search and auto-skip recovery. Provider verification challenges also arm a short process-wide extraction cooldown without blocking cached audio.
 - The PWA install prompt opens only from the persistent install action instead of duplicating itself automatically, and a remembered device-download folder asks to allow access again rather than misleadingly asking the user to select the folder again.

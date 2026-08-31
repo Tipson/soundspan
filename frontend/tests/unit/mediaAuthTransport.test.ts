@@ -131,6 +131,24 @@ test("cover-art and browse-image URLs stay same-origin and never embed the acces
     client.clearToken();
 });
 
+test("cover-art URLs request the wide YouTube thumbnail without embedded letterbox bars", () => {
+    const client = new MediaClient("https://api.soundspan.test");
+
+    const coverUrl = client.getCoverArtUrl(
+        "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+        520,
+    );
+    const proxiedSource = new URL(
+        coverUrl,
+        window.location.origin,
+    ).searchParams.get("url");
+
+    assert.equal(
+        proxiedSource,
+        "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
+    );
+});
+
 test("profile-picture image URLs use the same clean authenticated proxy path", () => {
     const client = new SettingsClient("https://api.soundspan.test");
     client.setToken(ACCESS_TOKEN, "refresh-secret");
