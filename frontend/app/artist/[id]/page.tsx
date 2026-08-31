@@ -484,9 +484,6 @@ export default function ArtistPage() {
         setIsAddingToPlaylist(true);
         try {
             await addAllToPlaylist(artist, albums, playlistId);
-            setShowPlaylistSelector(false);
-        } catch {
-            // Modal stays open so the user can retry or dismiss
         } finally {
             setIsAddingToPlaylist(false);
         }

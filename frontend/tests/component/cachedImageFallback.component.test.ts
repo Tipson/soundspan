@@ -33,6 +33,43 @@ beforeEach(() => {
     capturedImageProps = null;
 });
 
+test("CachedImage keeps lazy loading by default but lets priority images load eagerly", async () => {
+    const { CachedImage } = await import("../../components/ui/CachedImage");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(CachedImage, {
+                src: "/lazy-cover.jpg",
+                alt: "Lazy cover",
+                width: 40,
+                height: 40,
+            }),
+        );
+    });
+    assert.equal(capturedImageProps?.loading, "lazy");
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(CachedImage, {
+                src: "/priority-cover.jpg",
+                alt: "Priority cover",
+                width: 40,
+                height: 40,
+                priority: true,
+            }),
+        );
+    });
+    assert.equal(capturedImageProps?.priority, true);
+    assert.equal(capturedImageProps?.loading, undefined);
+
+    await React.act(async () => root.unmount());
+    container.remove();
+});
+
 test("CachedImage replaces a failed thumbnail and retries when src changes", async () => {
     const { CachedImage } = await import("../../components/ui/CachedImage");
     const { createRoot } = await import("react-dom/client");

@@ -20,10 +20,12 @@ import { useAuth } from "@/lib/auth-context";
 import { BRAND_SLUG } from "@/lib/brand";
 import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { useAudioState } from "@/lib/audio-state-context";
+import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
 import { api } from "@/lib/api";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { ru } from "@/lib/i18n/ru";
 import { NowPlayingConnected } from "./NowPlayingConnected";
+import { VibeAmbientMotion } from "./VibeAmbientMotion";
 import {
     WaveDirectionSheet,
     WAVE_MOODS,
@@ -239,12 +241,11 @@ export function VibeProviderFallback() {
     >(null);
     const tuneButtonRef = useRef<HTMLButtonElement>(null);
     const readWaveSelectionOwnerRef = useRef<string | null>(null);
-    const pendingRetuneRef = useRef<{
+    const [pendingRetune, setPendingRetune] = useState<{
         mode: WaveFeedMode;
         mood: WaveMood | null;
     } | null>(null);
-    const { advanceQueue, pause, play, playTracks, setUpcoming } =
-        useAudioControls();
+    const { advanceQueue, pause, play, playTracks } = useAudioControls();
     const { isPlaying } = usePlaybackStatus();
     const {
         currentTrack,
@@ -278,15 +279,16 @@ export function VibeProviderFallback() {
             }
             readWaveSelectionOwnerRef.current = ownerId;
             const selection = readWaveSelection(ownerId);
-            pendingRetuneRef.current =
+            const shouldRetuneActiveWave =
                 vibeMode &&
-                (selection.mode !== waveMode || selection.mood !== waveMood)
-                    ? selection
-                    : null;
+                (selection.mode !== waveMode || selection.mood !== waveMood);
+            setPendingRetune(shouldRetuneActiveWave ? selection : null);
             setActiveMode(selection.mode);
             setActiveMood(selection.mood);
-            setWaveMode(selection.mode);
-            setWaveMood(selection.mood);
+            if (!shouldRetuneActiveWave) {
+                setWaveMode(selection.mode);
+                setWaveMood(selection.mood);
+            }
         });
         return () => {
             mounted = false;
@@ -299,10 +301,9 @@ export function VibeProviderFallback() {
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
 
     useEffect(() => {
-        const pendingRetune = pendingRetuneRef.current;
         if (!pendingRetune) return;
         if (!vibeMode) {
-            pendingRetuneRef.current = null;
+            setPendingRetune(null);
             return;
         }
         if (
@@ -313,27 +314,43 @@ export function VibeProviderFallback() {
             return;
         }
 
+        // Listen Together owns a separate server-authoritative queue. Do not
+        // turn a personal Wave retune into an accidental group queue append;
+        // keep the saved selection for the next standalone Wave launch.
+        if (isListenTogetherActiveOrPending()) {
+            setPendingRetune(null);
+            queueMicrotask(() => setRetuneNotice("saved"));
+            return;
+        }
+
         if (isError || queue.length === 0) {
-            pendingRetuneRef.current = null;
             queueMicrotask(() => setRetuneNotice("kept"));
             return;
         }
 
-        pendingRetuneRef.current = null;
         const currentTrackId = currentTrack?.id ?? null;
-        const upcoming = currentTrackId
+        const retunedQueue = currentTrackId
             ? queue.filter((track) => track.id !== currentTrackId)
             : queue;
 
-        // Keep the audible track intact, but replace every later item with
-        // the newly ranked direction as soon as its feed is ready.
-        setUpcoming(upcoming, true);
+        if (retunedQueue.length === 0) {
+            queueMicrotask(() => setRetuneNotice("kept"));
+            return;
+        }
+
+        setPendingRetune(null);
+        // Applying a changed direction is an explicit request to leave the
+        // current selection. Replace the whole ordered Wave queue and start
+        // its first newly ranked track; filtering the audible identity avoids
+        // immediately replaying the same song when it appears in both feeds.
+        setIsShuffle(false);
+        setShuffleIndices([]);
+        playTracks(retunedQueue, 0, true);
+        setVibeMode(true);
         setVibeSourceFeatures(null);
-        setVibeQueueIds(
-            currentTrackId
-                ? [currentTrackId, ...upcoming.map((track) => track.id)]
-                : upcoming.map((track) => track.id),
-        );
+        setVibeQueueIds(retunedQueue.map((track) => track.id));
+        setWaveMode(pendingRetune.mode);
+        setWaveMood(pendingRetune.mood);
         queueMicrotask(() => setRetuneNotice("updated"));
     }, [
         activeMode,
@@ -341,17 +358,27 @@ export function VibeProviderFallback() {
         currentTrack?.id,
         isError,
         isLoading,
+        playTracks,
+        pendingRetune,
         queue,
-        setUpcoming,
+        setIsShuffle,
+        setShuffleIndices,
+        setVibeMode,
         setVibeQueueIds,
         setVibeSourceFeatures,
+        setWaveMode,
+        setWaveMood,
         vibeMode,
     ]);
     useEffect(() => {
         if (!retuneNotice) return;
+        // A failed active-Wave retune remains actionable until the user
+        // retries or chooses another direction. Auto-dismiss only transient
+        // success/save confirmations, never the sole recovery control.
+        if (retuneNotice === "kept" && pendingRetune) return;
         const timeout = window.setTimeout(() => setRetuneNotice(null), 3200);
         return () => window.clearTimeout(timeout);
-    }, [retuneNotice]);
+    }, [pendingRetune, retuneNotice]);
     const activeModeDefinition =
         WAVE_MODES.find((mode) => mode.id === activeMode) ?? WAVE_MODES[0];
     const activeMoodDefinition =
@@ -431,7 +458,12 @@ export function VibeProviderFallback() {
     const canPlay = queue.length > 0 && !isLoading;
     const startWave = useCallback(() => {
         if (queue.length === 0) return;
+        setPendingRetune(null);
         setRetuneNotice(null);
+        if (isListenTogetherActiveOrPending()) {
+            setRetuneNotice("saved");
+            return;
+        }
         setWaveMode(activeMode);
         setWaveMood(activeMood);
         setIsShuffle(false);
@@ -471,26 +503,48 @@ export function VibeProviderFallback() {
     const applyDirection = useCallback(
         (mode: WaveFeedMode, mood: WaveMood | null) => {
             const shouldRetune =
-                vibeMode && (mode !== activeMode || mood !== activeMood);
-            pendingRetuneRef.current = shouldRetune ? { mode, mood } : null;
+                vibeMode && (mode !== waveMode || mood !== waveMood);
+            const shouldRefetchPending =
+                shouldRetune &&
+                pendingRetune?.mode === mode &&
+                pendingRetune.mood === mood;
+            setPendingRetune(shouldRetune ? { mode, mood } : null);
             if (shouldRetune) setRetuneNotice(null);
             else if (!vibeMode) setRetuneNotice("saved");
+            else setRetuneNotice(null);
             setActiveMode(mode);
             setActiveMood(mood);
-            setWaveMode(mode);
-            setWaveMood(mood);
+            if (!vibeMode) {
+                setWaveMode(mode);
+                setWaveMood(mood);
+            }
             persistWaveSelection(ownerId, mode, mood);
             replaceWaveSelection(mode, mood);
             setIsTuneOpen(false);
             queueMicrotask(() => tuneButtonRef.current?.focus());
+            if (shouldRefetchPending) void refetch();
         },
-        [activeMode, activeMood, ownerId, setWaveMode, setWaveMood, vibeMode],
+        [
+            ownerId,
+            pendingRetune,
+            refetch,
+            setWaveMode,
+            setWaveMood,
+            vibeMode,
+            waveMode,
+            waveMood,
+        ],
     );
+
+    const retryRetune = useCallback(() => {
+        setRetuneNotice(null);
+        void refetch();
+    }, [refetch]);
 
     return (
         <main
             data-wave-mode={activeMode}
-            className="relative h-full min-h-0 overflow-hidden bg-surface p-0 sm:p-3 lg:p-5"
+            className={`relative h-full min-h-0 overflow-hidden bg-surface px-0 pt-0 ${currentTrack ? "pb-[calc(var(--app-mini-player-height)+var(--app-bottom-nav-height)+var(--safe-area-bottom)+4px)]" : "pb-[calc(var(--app-bottom-nav-height)+var(--safe-area-bottom))]"} sm:p-3 lg:p-5`}
         >
             <style>{`
                 @media (prefers-reduced-transparency: reduce) {
@@ -498,6 +552,47 @@ export function VibeProviderFallback() {
                         background-color: var(--color-surface-raised) !important;
                         -webkit-backdrop-filter: none !important;
                         backdrop-filter: none !important;
+                    }
+                }
+
+                @media (max-width: 767px) and (max-height: 900px) {
+                    .wave-density-core {
+                        padding-top: 1rem !important;
+                        padding-bottom: 0.75rem !important;
+                    }
+
+                    .wave-density-continuity,
+                    .wave-density-subtitle {
+                        display: none !important;
+                    }
+
+                    .wave-density-orbit {
+                        width: 8rem !important;
+                        height: 8rem !important;
+                        margin-top: 0.75rem !important;
+                    }
+
+                    .wave-density-tuning,
+                    .wave-density-notice,
+                    .wave-density-empty {
+                        margin-top: 0.75rem !important;
+                    }
+
+                    .wave-density-bottom {
+                        padding-top: 0.625rem !important;
+                        padding-bottom: 0.625rem !important;
+                    }
+
+                    .wave-density-bottom-grid {
+                        gap: 0.5rem !important;
+                    }
+
+                    .wave-density-now {
+                        padding: 0.625rem !important;
+                    }
+
+                    .wave-density-next-row:nth-child(n + 2) {
+                        display: none !important;
                     }
                 }
 
@@ -519,16 +614,17 @@ export function VibeProviderFallback() {
                     }
 
                     .wave-density-orbit {
-                        width: 7rem !important;
-                        height: 7rem !important;
+                        width: 7.75rem !important;
+                        height: 7.75rem !important;
                         margin-top: 0.4rem !important;
                     }
 
                     .wave-density-toggle {
-                        width: 5.75rem !important;
-                        height: 5.75rem !important;
-                        min-width: 5.75rem !important;
-                        min-height: 5.75rem !important;
+                        width: 6.5rem !important;
+                        height: 6.5rem !important;
+                        min-width: 6.5rem !important;
+                        min-height: 6.5rem !important;
+                        padding-inline: 0.5rem !important;
                         font-size: 0.8rem !important;
                     }
 
@@ -585,6 +681,18 @@ export function VibeProviderFallback() {
                     />
                     <div
                         className={`absolute left-[30%] top-[18%] h-[64%] w-[58%] -rotate-12 rounded-[48%] opacity-65 blur-[5rem] transition-[background-color,transform] duration-700 ease-out motion-reduce:transition-none ${spectralField.accent}`}
+                    />
+                    <VibeAmbientMotion
+                        trackId={
+                            currentTrack?.id ??
+                            nextTracks[0]?.id ??
+                            `${activeMode}:${activeMood ?? "any"}`
+                        }
+                        bpm={currentTrack?.audioFeatures?.bpm}
+                        energy={currentTrack?.audioFeatures?.energy}
+                        mode={activeMode}
+                        mood={activeMood}
+                        isPlaying={hasActiveWave && isPlaying}
                     />
                     <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/15 to-black/60" />
                     <div className="absolute inset-0 bg-[linear-gradient(115deg,transparent_15%,rgb(255_255_255/0.035)_48%,transparent_72%)]" />
@@ -657,7 +765,7 @@ export function VibeProviderFallback() {
                                     aria-hidden="true"
                                 />
                             )}
-                            <span>
+                            <span className="max-w-full leading-[1.05] [text-wrap:balance]">
                                 {!hasActiveWave && isLoading
                                     ? ru.vibe.tuning
                                     : primaryControlLabel}
@@ -704,17 +812,32 @@ export function VibeProviderFallback() {
                     </div>
 
                     {retuneNotice && (
-                        <p
+                        <div
                             role="status"
                             aria-live="polite"
-                            className={`wave-density-notice wave-material mt-3 rounded-full border px-4 py-2 text-sm font-semibold backdrop-blur-xl ${retuneNotice === "updated" || retuneNotice === "saved" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
+                            className={`wave-density-notice wave-material mt-3 flex flex-wrap items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold backdrop-blur-xl ${retuneNotice === "updated" || retuneNotice === "saved" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
                         >
-                            {retuneNotice === "saved"
-                                ? "Настройка сохранена — она применится при следующем запуске."
-                                : retuneNotice === "updated"
-                                  ? ru.vibe.updated
-                                  : ru.vibe.updateFailed}
-                        </p>
+                            <span>
+                                {retuneNotice === "saved"
+                                    ? "Настройка сохранена — она применится при следующем запуске."
+                                    : retuneNotice === "updated"
+                                      ? ru.vibe.updated
+                                      : ru.vibe.updateFailed}
+                            </span>
+                            {retuneNotice === "kept" && pendingRetune && (
+                                <button
+                                    type="button"
+                                    onClick={retryRetune}
+                                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-current/25 px-4 py-2 text-sm font-bold transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current motion-reduce:transition-none"
+                                >
+                                    <RotateCcw
+                                        className="h-4 w-4"
+                                        aria-hidden="true"
+                                    />
+                                    {ru.common.retry}
+                                </button>
+                            )}
+                        </div>
                     )}
 
                     {!isLoading && tracks.length === 0 && (
@@ -728,7 +851,11 @@ export function VibeProviderFallback() {
                             {isError && (
                                 <button
                                     type="button"
-                                    onClick={() => void refetch()}
+                                    onClick={
+                                        pendingRetune
+                                            ? retryRetune
+                                            : () => void refetch()
+                                    }
                                     aria-label={ru.vibe.retryAria}
                                     className="mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
                                 >
@@ -745,7 +872,7 @@ export function VibeProviderFallback() {
 
                 {(currentTrack || nextTracks.length > 0) && (
                     <div className="wave-density-bottom wave-material relative shrink-0 border-t border-white/10 bg-black/30 px-4 py-4 backdrop-blur-2xl sm:px-6 min-[1025px]:px-8">
-                        <div className="mx-auto grid max-w-6xl gap-4 min-[900px]:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)] min-[900px]:items-center">
+                        <div className="wave-density-bottom-grid mx-auto grid max-w-6xl gap-4 min-[900px]:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)] min-[900px]:items-center">
                             {currentTrack ? (
                                 <section
                                     data-testid="wave-now-playing-panel"
@@ -882,6 +1009,7 @@ export function VibeProviderFallback() {
                     activeMode={activeMode}
                     activeMood={activeMood}
                     isWaveActive={vibeMode}
+                    isRetunePending={Boolean(pendingRetune)}
                     onApply={applyDirection}
                     onClose={closeTune}
                 />

@@ -40,6 +40,12 @@ function toRowItem(track: Track): TrackRowItem {
         displayTitle: track.displayTitle,
         artistName: track.artist?.name ?? "",
         duration: track.duration,
+        streamSource:
+            track.streamSource === "tidal" || track.streamSource === "youtube"
+                ? track.streamSource
+                : undefined,
+        tidalTrackId: track.tidalTrackId,
+        youtubeVideoId: track.youtubeVideoId,
         coverArtUrl: track.album?.coverArt
             ? api.getCoverArtUrl(track.album.coverArt, 80)
             : null,

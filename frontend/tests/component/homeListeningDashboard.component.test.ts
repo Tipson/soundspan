@@ -117,6 +117,17 @@ test("listening dashboard splits one unique queue into continuation cards and re
     assert.equal(state.played[0].index, 4);
     assert.equal(state.played[0].tracks.length, 6);
 
+    const continuationGrid = mounted.container.querySelector<HTMLElement>(
+        '[data-home-region="continue-listening"] [role="list"]',
+    );
+    assert.ok(continuationGrid);
+    assert.ok(
+        continuationGrid.classList.contains(
+            "xl:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]",
+        ),
+        "desktop columns should respond to the available dashboard width so 1280px keeps three readable cards and the 1487px reference fits four",
+    );
+
     await mounted.unmount();
 });
 

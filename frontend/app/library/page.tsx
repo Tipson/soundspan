@@ -6,9 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowRight, Heart } from "lucide-react";
 import { useLikedPlaylistQuery, usePlaylistsQuery } from "@/hooks/useQueries";
 import { DownloadsList } from "@/features/device-offline/components/DownloadsList";
-import { useDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
 import { LibraryHeader } from "@/features/library/components/LibraryHeader";
-import { LibraryOverview } from "@/features/library/components/LibraryOverview";
 import {
     LibraryTabs,
     type LibraryTab,
@@ -22,18 +20,12 @@ import type {
 } from "@/features/library/types";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 
-const LIBRARY_TABS = new Set<LibraryTab>([
-    "liked",
-    "playlists",
-    "albums",
-    "artists",
-    "downloads",
-]);
+const LIBRARY_TABS = new Set<LibraryTab>(["playlists", "albums", "artists"]);
 
 function activeLibraryTab(value: string | null): LibraryTab {
     return value && LIBRARY_TABS.has(value as LibraryTab)
         ? (value as LibraryTab)
-        : "liked";
+        : "playlists";
 }
 
 function isPlaylistItem(value: unknown): value is PersonalPlaylistItem {
@@ -76,15 +68,20 @@ function toPersonalPlaylist(value: unknown): PersonalPlaylist | null {
 }
 
 function SectionHeading({
+    id,
     title,
     description,
 }: {
+    id?: string;
     title: string;
     description: string;
 }) {
     return (
         <div className="mb-4">
-            <h2 className="text-xl font-black tracking-tight text-content sm:text-2xl">
+            <h2
+                id={id}
+                className="text-xl font-black tracking-tight text-content sm:text-2xl"
+            >
                 {title}
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-5 text-content-muted">
@@ -102,10 +99,6 @@ export default function LibraryPage() {
     const artistCollection = useSavedMusicEntities("artist");
     const playlistsQuery = usePlaylistsQuery();
     const likedQuery = useLikedPlaylistQuery(1);
-    const { records: deviceDownloads } = useDeviceOffline();
-    const readyDeviceDownloadTotal = deviceDownloads.filter(
-        (record) => record.status === "ready",
-    ).length;
 
     const playlists = useMemo(
         () =>
@@ -126,24 +119,17 @@ export default function LibraryPage() {
             <LibraryHeader />
 
             <main className="relative mx-auto max-w-[1800px] space-y-8 px-4 pt-8 sm:space-y-10 sm:px-6 sm:pt-10 lg:px-8">
-                <LibraryOverview
-                    likedTotal={likedTotal}
-                    playlistTotal={playlists.length}
-                    albumTotal={albumCollection.total}
-                    artistTotal={artistCollection.total}
-                    downloadTotal={readyDeviceDownloadTotal}
-                />
-
                 <LibraryTabs activeTab={activeTab} />
 
-                {activeTab === "liked" && (
+                {activeTab === "playlists" && (
                     <section
-                        data-library-view="liked"
-                        aria-labelledby="liked-library-title"
+                        data-library-view="playlists"
+                        aria-labelledby="playlist-library-title"
                     >
                         <SectionHeading
-                            title="Лайкнутые"
-                            description="Треки, сохранённые в вашем аккаунте"
+                            id="playlist-library-title"
+                            title={ru.library.playlists}
+                            description="Любимые треки, ваши плейлисты и музыка, сохранённая на этом устройстве"
                         />
                         <Link
                             href="/playlist/my-liked"
@@ -156,10 +142,7 @@ export default function LibraryPage() {
                                 />
                             </span>
                             <span className="min-w-0 flex-1">
-                                <span
-                                    id="liked-library-title"
-                                    className="block text-base font-bold text-content"
-                                >
+                                <span className="block text-base font-bold text-content">
                                     Любимые треки
                                 </span>
                                 <span className="mt-1 block text-sm text-content-muted">
@@ -177,21 +160,26 @@ export default function LibraryPage() {
                                 aria-hidden="true"
                             />
                         </Link>
-                    </section>
-                )}
 
-                {activeTab === "playlists" && (
-                    <section>
-                        <SectionHeading
-                            title={ru.library.playlists}
-                            description="Ваши миксы и импортированные плейлисты"
-                        />
-                        <PersonalPlaylistGrid
-                            playlists={playlists}
-                            isLoading={playlistsQuery.isLoading}
-                            isError={playlistsQuery.isError}
-                            onRetry={() => void playlistsQuery.refetch()}
-                        />
+                        <div className="mt-8">
+                            <h3 className="mb-4 text-base font-bold text-content sm:text-lg">
+                                Ваши плейлисты
+                            </h3>
+                            <PersonalPlaylistGrid
+                                playlists={playlists}
+                                isLoading={playlistsQuery.isLoading}
+                                isError={playlistsQuery.isError}
+                                onRetry={() => void playlistsQuery.refetch()}
+                            />
+                        </div>
+
+                        <div className="mt-10 border-t border-white/[0.08] pt-8">
+                            <SectionHeading
+                                title={ru.library.deviceDownloads}
+                                description="Офлайн-музыка хранится обычными файлами на телефоне или компьютере. Доступ к папке относится к этому профилю браузера; очистка данных сайта не удаляет файлы и не затрагивает другие устройства."
+                            />
+                            <DownloadsList />
+                        </div>
                     </section>
                 )}
 
@@ -234,16 +222,6 @@ export default function LibraryPage() {
                             }
                             onRetry={() => void artistCollection.refetch()}
                         />
-                    </section>
-                )}
-
-                {activeTab === "downloads" && (
-                    <section>
-                        <SectionHeading
-                            title={ru.library.deviceDownloads}
-                            description="Офлайн-музыка хранится обычными файлами на телефоне или компьютере. Доступ к папке относится к этому профилю браузера; очистка данных сайта не удаляет файлы и не затрагивает другие устройства."
-                        />
-                        <DownloadsList />
                     </section>
                 )}
             </main>

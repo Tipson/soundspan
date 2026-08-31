@@ -19,12 +19,14 @@ const state = {
     personalizedEnabled: false,
     personalizedMode: "for-you",
     personalizedMood: null as string | null,
+    listenTogetherActive: false,
     playedTrackIds: [] as string[],
     playedAsVibeQueue: false,
     isShuffle: true,
     shuffleIndices: [2, 1, 0] as number[],
     vibeModeEnabled: false,
     waveMode: "for-you",
+    waveMood: null as string | null,
     vibeQueueIds: [] as string[],
     upcomingTrackIds: [] as string[],
     upcomingQueueCalls: [] as string[][],
@@ -42,6 +44,8 @@ const state = {
               mood: string | null,
           ) => ReturnType<typeof createPersonalizedFeed>),
     personalizedFeedError: false,
+    refetchCalls: 0,
+    refetchRecoversError: false,
 };
 
 function createPersonalizedFeed() {
@@ -107,6 +111,7 @@ mock.module("lucide-react", {
     namedExports: {
         Loader2: Icon,
         RefreshCw: Icon,
+        RotateCcw: Icon,
         AlertCircle: Icon,
         Disc3: Icon,
         Play: Icon,
@@ -208,6 +213,12 @@ mock.module("@/lib/audio/providerRadioContinuation", {
     },
 });
 
+mock.module("@/lib/listen-together-session", {
+    namedExports: {
+        isListenTogetherActiveOrPending: () => state.listenTogetherActive,
+    },
+});
+
 mock.module("@/lib/audio-state-context", {
     namedExports: {
         useAudioState: () => ({
@@ -224,7 +235,7 @@ mock.module("@/lib/audio-state-context", {
                 state.waveMode = mode;
             },
             setWaveMood: (mood: string | null) => {
-                state.personalizedMood = mood;
+                state.waveMood = mood;
             },
             setVibeSourceFeatures: () => undefined,
             setVibeQueueIds: (ids: string[]) => {
@@ -232,6 +243,8 @@ mock.module("@/lib/audio-state-context", {
             },
             currentTrack: state.currentTrack,
             vibeMode: state.vibeModeEnabled,
+            waveMode: state.waveMode,
+            waveMood: state.waveMood,
         }),
     },
 });
@@ -296,6 +309,12 @@ mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
                     : state.personalizedFeed,
                 isLoading: false,
                 isError: state.personalizedFeedError,
+                refetch: async () => {
+                    state.refetchCalls += 1;
+                    if (state.refetchRecoversError) {
+                        state.personalizedFeedError = false;
+                    }
+                },
             };
         },
     },
@@ -339,12 +358,14 @@ beforeEach(() => {
     state.personalizedEnabled = false;
     state.personalizedMode = "for-you";
     state.personalizedMood = null;
+    state.listenTogetherActive = false;
     state.playedTrackIds = [];
     state.playedAsVibeQueue = false;
     state.isShuffle = true;
     state.shuffleIndices = [2, 1, 0];
     state.vibeModeEnabled = false;
     state.waveMode = "for-you";
+    state.waveMood = null;
     state.vibeQueueIds = [];
     state.upcomingTrackIds = [];
     state.upcomingQueueCalls = [];
@@ -357,6 +378,8 @@ beforeEach(() => {
     state.personalizedFeed = createPersonalizedFeed();
     state.personalizedFeedResolver = null;
     state.personalizedFeedError = false;
+    state.refetchCalls = 0;
+    state.refetchRecoversError = false;
     window.localStorage.clear();
     window.history.replaceState({}, "", "https://soundspan.test/vibe");
 });
@@ -520,6 +543,11 @@ test("My Wave stays bounded to the app viewport while its tune sheet owns overfl
             `Wave surface must include ${className}`,
         );
     }
+    assert.match(
+        page.className,
+        /pb-\[calc\(var\(--app-bottom-nav-height\)\+var\(--safe-area-bottom\)\)\]/,
+        "Mobile Wave must end above the fixed bottom navigation",
+    );
     assert.equal(
         [...surfaceClasses].some((className) =>
             className.startsWith("min-h-[calc("),
@@ -542,6 +570,39 @@ test("My Wave stays bounded to the app viewport while its tune sheet owns overfl
         /min-width:\s*1025px[\s\S]*max-height:\s*850px/,
         "Short desktop Vibe must compact without unlocking page overflow",
     );
+    assert.match(
+        responsiveStyles,
+        /max-width:\s*767px[\s\S]*max-height:\s*900px/,
+        "Short mobile Vibe must compact inside its fixed app viewport",
+    );
+    assert.match(
+        responsiveStyles,
+        /\.wave-density-continuity,\s*\.wave-density-subtitle\s*\{[\s\S]*?display:\s*none\s*!important;/,
+        "Short mobile Vibe must yield optional copy to playback controls and preview",
+    );
+    assert.match(
+        responsiveStyles,
+        /\.wave-density-next-row:nth-child\(n\s*\+\s*2\)\s*\{[\s\S]*?display:\s*none\s*!important;/,
+        "Short mobile Vibe must keep one usable next-track preview above navigation",
+    );
+    assert.match(
+        responsiveStyles,
+        /\.wave-density-orbit\s*\{[\s\S]*?width:\s*7\.75rem\s*!important;[\s\S]*?height:\s*7\.75rem\s*!important;/,
+        "Short desktop Vibe must retain enough orbit space for a legible primary control",
+    );
+    assert.match(
+        responsiveStyles,
+        /\.wave-density-toggle\s*\{[\s\S]*?width:\s*6\.5rem\s*!important;[\s\S]*?height:\s*6\.5rem\s*!important;[\s\S]*?padding-inline:\s*0\.5rem\s*!important;/,
+        "Short desktop Vibe must not squeeze the Russian primary label into a tiny circle",
+    );
+
+    const mainToggle = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="wave-main-toggle"]',
+    );
+    const mainToggleLabel = mainToggle?.querySelector("span");
+    assert.ok(mainToggleLabel);
+    assert.match(mainToggleLabel.className, /\[text-wrap:balance\]/);
+    assert.match(mainToggleLabel.className, /leading-\[1\.05\]/);
 
     const tune = findButton(mounted.container, "Настроить");
     assert.ok(tune);
@@ -567,6 +628,9 @@ test("the Wave stage previews what comes next without presenting a finite queue"
     state.vibeModeEnabled = true;
     const mounted = await mountPage();
 
+    const page = mounted.container.querySelector<HTMLElement>(
+        "main[data-wave-mode]",
+    );
     const preview = mounted.container.querySelector<HTMLElement>(
         '[data-testid="wave-next-preview"]',
     );
@@ -575,6 +639,12 @@ test("the Wave stage previews what comes next without presenting a finite queue"
     );
     const skipButton = mounted.container.querySelector<HTMLButtonElement>(
         '[data-testid="wave-skip"]',
+    );
+    assert.ok(page);
+    assert.match(
+        page.className,
+        /pb-\[calc\(var\(--app-mini-player-height\)\+var\(--app-bottom-nav-height\)\+var\(--safe-area-bottom\)\+4px\)\]/,
+        "Active mobile Wave must end above both the mini player and bottom navigation",
     );
     assert.ok(preview);
     assert.ok(nowPlayingPanel);
@@ -651,6 +721,25 @@ test("the single primary Wave control pauses active Wave playback", async () => 
 
     assert.equal(state.pauseCount, 1);
     assert.deepEqual(state.playedTrackIds, []);
+
+    await unmountPage(mounted);
+});
+
+test("starting Wave during Listen Together does not mutate the shared queue", async () => {
+    state.listenTogetherActive = true;
+    const mounted = await mountPage();
+
+    const playWave = findButton(mounted.container, "Включить мою волну");
+    assert.ok(playWave);
+    await React.act(async () => playWave.click());
+
+    assert.deepEqual(state.playedTrackIds, []);
+    assert.equal(state.vibeModeEnabled, false);
+    assert.deepEqual(state.vibeQueueIds, []);
+    assert.match(
+        mounted.container.querySelector('[role="status"]')?.textContent ?? "",
+        /Настройка сохранена/i,
+    );
 
     await unmountPage(mounted);
 });
@@ -873,7 +962,7 @@ test("applied Wave settings persist per account, URL settings override them, and
     await unmountPage(mounted);
 });
 
-test("Tune after Play replaces the upcoming Wave queue with the new direction", async () => {
+test("Tune after Play replaces the Wave queue and immediately starts the new direction", async () => {
     const mounted = await mountPage();
     const playWave = findButton(mounted.container, "Включить мою волну");
     assert.ok(playWave);
@@ -902,22 +991,22 @@ test("Tune after Play replaces the upcoming Wave queue with the new direction", 
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
+    assert.equal(state.personalizedMode, "new");
     assert.equal(state.waveMode, "new");
-    assert.deepEqual(state.upcomingTrackIds, ["yt:shared-1"]);
-    assert.deepEqual(state.upcomingQueueCalls, [["yt:shared-1"]]);
-    assert.equal(state.upcomingPreservesOrder, true);
-    assert.deepEqual(state.vibeQueueIds, ["yt:discovery-1", "yt:shared-1"]);
+    assert.deepEqual(state.playedTrackIds, ["yt:shared-1"]);
+    assert.equal(state.playedAsVibeQueue, true);
+    assert.deepEqual(state.upcomingQueueCalls, []);
+    assert.deepEqual(state.vibeQueueIds, ["yt:shared-1"]);
 
     await unmountPage(mounted);
 });
 
-test("retuning an active Wave keeps the current track, replaces the next picks, and confirms success", async () => {
+test("retuning an active Wave skips the current track, starts the newly ranked queue, and confirms success", async () => {
     const mounted = await mountPage();
     const playWave = findButton(mounted.container, "Включить мою волну");
     assert.ok(playWave);
 
     await React.act(async () => playWave.click());
-    const originalPlayedIds = [...state.playedTrackIds];
     state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
     state.personalizedFeedResolver = (_mode, mood) =>
         mood === "calm"
@@ -949,10 +1038,10 @@ test("retuning an active Wave keeps the current track, replaces the next picks, 
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    assert.equal(state.currentTrack.id, "yt:radio-1");
-    assert.deepEqual(state.playedTrackIds, originalPlayedIds);
-    assert.deepEqual(state.upcomingTrackIds, ["yt:calm-1"]);
-    assert.equal(state.upcomingPreservesOrder, true);
+    assert.deepEqual(state.playedTrackIds, ["yt:calm-1"]);
+    assert.equal(state.playedAsVibeQueue, true);
+    assert.deepEqual(state.upcomingQueueCalls, []);
+    assert.deepEqual(state.vibeQueueIds, ["yt:calm-1"]);
     assert.match(
         mounted.container.querySelector('[role="status"]')?.textContent ?? "",
         /Волна обновлена/i,
@@ -961,7 +1050,93 @@ test("retuning an active Wave keeps the current track, replaces the next picks, 
     await unmountPage(mounted);
 });
 
-test("a failed active-Wave retune keeps the existing upcoming queue", async () => {
+test("applying unchanged settings to an active Wave does not skip or rebuild playback", async () => {
+    const mounted = await mountPage();
+    const playWave = findButton(mounted.container, "Включить мою волну");
+    assert.ok(playWave);
+
+    await React.act(async () => playWave.click());
+    state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
+    const originalPlayedIds = [...state.playedTrackIds];
+    const originalVibeQueueIds = [...state.vibeQueueIds];
+
+    const tune = findButton(mounted.container, "Настроить");
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    assert.match(dialog.textContent ?? "", /Настройки не изменены/i);
+    const apply = findButton(dialog, "Обновить волну");
+    assert.ok(apply);
+    await React.act(async () => {
+        apply.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(state.playedTrackIds, originalPlayedIds);
+    assert.deepEqual(state.vibeQueueIds, originalVibeQueueIds);
+    assert.deepEqual(state.upcomingQueueCalls, []);
+
+    await unmountPage(mounted);
+});
+
+test("retuning Wave during Listen Together saves the choice without mutating the group queue", async () => {
+    const mounted = await mountPage();
+    const playWave = findButton(mounted.container, "Включить мою волну");
+    assert.ok(playWave);
+
+    await React.act(async () => playWave.click());
+    state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
+    state.listenTogetherActive = true;
+    const originalPlayedIds = [...state.playedTrackIds];
+    const originalVibeQueueIds = [...state.vibeQueueIds];
+
+    const tune = findButton(mounted.container, "Настроить");
+    assert.ok(tune);
+    await React.act(async () => tune.click());
+
+    const dialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(dialog);
+    const newDirection = findButtonByLabel(dialog, "Больше нового");
+    assert.ok(newDirection);
+    await React.act(async () => newDirection.click());
+    assert.match(dialog.textContent ?? "", /Текущий трек сменится/i);
+
+    const apply = findButton(dialog, "Обновить волну");
+    assert.ok(apply);
+    await React.act(async () => {
+        apply.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(state.personalizedMode, "new");
+    assert.equal(state.waveMode, "for-you");
+    assert.deepEqual(state.playedTrackIds, originalPlayedIds);
+    assert.deepEqual(state.vibeQueueIds, originalVibeQueueIds);
+    assert.match(
+        mounted.container.querySelector('[role="status"]')?.textContent ?? "",
+        /Настройка сохранена/i,
+    );
+
+    await unmountPage(mounted);
+});
+
+test("a failed active-Wave retune keeps the existing upcoming queue", async (t) => {
+    const originalWindowSetTimeout = window.setTimeout;
+    let scheduledRetuneDismissal = false;
+    window.setTimeout = ((handler: TimerHandler, timeout?: number) => {
+        if (timeout === 3_200) {
+            scheduledRetuneDismissal = true;
+            return 32_000;
+        }
+        return originalWindowSetTimeout(handler, timeout);
+    }) as typeof window.setTimeout;
+    t.after(() => {
+        window.setTimeout = originalWindowSetTimeout;
+    });
     const mounted = await mountPage();
     const playWave = findButton(mounted.container, "Включить мою волну");
     assert.ok(playWave);
@@ -994,6 +1169,35 @@ test("a failed active-Wave retune keeps the existing upcoming queue", async () =
     assert.match(
         mounted.container.querySelector('[role="status"]')?.textContent ?? "",
         /Предыдущая волна продолжает играть/i,
+    );
+    assert.equal(state.waveMode, "for-you");
+    assert.equal(state.waveMood, null);
+    assert.equal(scheduledRetuneDismissal, false);
+    assert.ok(findButton(mounted.container, "Повторить"));
+
+    state.refetchRecoversError = true;
+    const retryTune = findButton(mounted.container, "Настроить");
+    assert.ok(retryTune);
+    await React.act(async () => retryTune.click());
+    const retryDialog =
+        mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+    assert.ok(retryDialog);
+    assert.match(retryDialog.textContent ?? "", /Текущий трек сменится/i);
+    const retryApply = findButton(retryDialog, "Обновить волну");
+    assert.ok(retryApply);
+    await React.act(async () => {
+        retryApply.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.equal(state.refetchCalls, 1);
+    assert.equal(state.waveMood, "calm");
+    assert.equal(state.playedAsVibeQueue, true);
+    assert.ok(state.playedTrackIds.length > 0);
+    assert.doesNotMatch(state.playedTrackIds[0], /^yt:radio-1$/);
+    assert.match(
+        mounted.container.querySelector('[role="status"]')?.textContent ?? "",
+        /Волна обновлена/i,
     );
 
     await unmountPage(mounted);

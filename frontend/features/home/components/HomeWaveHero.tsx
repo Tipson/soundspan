@@ -119,7 +119,7 @@ export function HomeWaveHero({
                         src={focusCoverUrl}
                         alt=""
                         fill
-                        priority
+                        loading="eager"
                         sizes="(min-width: 1024px) 1100px, 100vw"
                         className="scale-125 object-cover opacity-65 blur-[48px] saturate-150 transition duration-700 group-hover:scale-[1.28] motion-reduce:transition-none"
                     />
@@ -139,7 +139,7 @@ export function HomeWaveHero({
                             src={focusCoverUrl}
                             alt={focusTrack?.album.title ?? ""}
                             fill
-                            priority
+                            loading="eager"
                             sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 144px"
                             className="object-cover"
                         />

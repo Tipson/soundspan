@@ -128,13 +128,13 @@ export function useBrowseCollectionActions(
             toast.success(
                 `Добавлено в плейлист: ${collection.tracks.length} ${pluralRu(collection.tracks.length, ["трек", "трека", "треков"])}`,
             );
-            setShowPlaylistSelector(false);
         } catch (addError) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
                 addError,
             );
             toast.error("Не удалось добавить часть треков в плейлист");
+            throw addError;
         } finally {
             setIsAddingToPlaylist(false);
         }

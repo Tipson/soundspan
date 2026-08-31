@@ -86,6 +86,7 @@ interface WaveDirectionSheetProps {
     activeMode: WaveFeedMode;
     activeMood: WaveMood | null;
     isWaveActive?: boolean;
+    isRetunePending?: boolean;
     onApply: (mode: WaveFeedMode, mood: WaveMood | null) => void;
     onClose: () => void;
 }
@@ -119,6 +120,7 @@ export function WaveDirectionSheet({
     activeMode,
     activeMood,
     isWaveActive = false,
+    isRetunePending = false,
     onApply,
     onClose,
 }: WaveDirectionSheetProps) {
@@ -170,6 +172,8 @@ export function WaveDirectionSheet({
         () => WAVE_MOODS.find((mood) => mood.id === draftMood) ?? WAVE_MOODS[0],
         [draftMood],
     );
+    const hasDraftChanges =
+        draftMode !== activeMode || draftMood !== activeMood || isRetunePending;
     const applyLabel = isWaveActive ? "Обновить волну" : "Сохранить настройку";
     const handleRadioKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
         const currentIndex = WAVE_MODES.findIndex(
@@ -391,8 +395,10 @@ export function WaveDirectionSheet({
                             · {selectedMoodDefinition.label}
                         </span>
                         <span className="mt-1 block">
-                            {isWaveActive
-                                ? "Текущий трек продолжит играть, дальше — новая настройка."
+                            {isWaveActive && hasDraftChanges
+                                ? "Текущий трек сменится, и волна сразу пойдёт по новой настройке."
+                                : isWaveActive
+                                  ? "Настройки не изменены — текущий трек продолжит играть."
                                 : "Настройка сохранится для следующего запуска волны."}
                         </span>
                     </p>

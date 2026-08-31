@@ -61,6 +61,13 @@ export const TrackList = memo(function TrackList({
             displayTitle: track.displayTitle,
             artistName: track.artist?.name ?? album.artist?.name ?? "",
             duration: track.duration,
+            streamSource:
+                track.streamSource === "tidal" ||
+                track.streamSource === "youtube"
+                    ? track.streamSource
+                    : undefined,
+            tidalTrackId: track.tidalTrackId,
+            youtubeVideoId: track.youtubeVideoId,
             coverArtUrl: null, // Album page doesn't show per-row cover art
             isPlayable: isAlbumTrackPlayable(track, source),
             unplayableReason:

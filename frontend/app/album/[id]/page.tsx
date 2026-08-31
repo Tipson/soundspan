@@ -275,12 +275,12 @@ export default function AlbumPage({ params }: AlbumPageProps) {
             }
             setPendingTrackRefs([]);
             setIsBulkAdd(false);
-            setShowPlaylistSelector(false);
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add track(s) to playlist:",
                 error,
             );
+            throw error;
         } finally {
             setIsAddingToPlaylist(false);
         }

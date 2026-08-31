@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
-import { X, Plus, Music2, Check } from "lucide-react";
+import { Plus, Music2, Check } from "lucide-react";
 import { GradientSpinner } from "./GradientSpinner";
+import { Modal } from "./Modal";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { pluralRu, ru } from "@/lib/i18n/ru";
+import { pluralRu, ru, userFacingError } from "@/lib/i18n/ru";
 
 interface PlaylistSelectorProps {
     isOpen: boolean;
@@ -15,6 +17,13 @@ interface PlaylistSelectorProps {
     loadingMessage?: string;
     /** When true, allow selecting multiple playlists before confirming. */
     multiSelect?: boolean;
+}
+
+interface PlaylistOption {
+    id: string;
+    name: string;
+    trackCount?: number;
+    isOwner?: boolean;
 }
 
 /**
@@ -28,9 +37,7 @@ export function PlaylistSelector({
     loadingMessage,
     multiSelect = false,
 }: PlaylistSelectorProps) {
-    const [playlists, setPlaylists] = useState<
-        Array<{ id: string; name: string; trackCount?: number }>
-    >([]);
+    const [playlists, setPlaylists] = useState<PlaylistOption[]>([]);
     const [newPlaylistName, setNewPlaylistName] = useState("");
     const [isPublic, setIsPublic] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -38,53 +45,133 @@ export function PlaylistSelector({
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isConfirming, setIsConfirming] = useState(false);
     const [confirmError, setConfirmError] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const [createdPlaylistAwaitingAdd, setCreatedPlaylistAwaitingAdd] =
+        useState<PlaylistOption | null>(null);
+    const actionInFlightRef = useRef(false);
+    const isProcessing = isSaving || isConfirming || isCreating;
 
-    useEffect(() => {
-        if (isOpen) {
-            loadPlaylists();
-            setSelectedIds(new Set());
-            setConfirmError(null);
-        }
-    }, [isOpen]);
-
-    const loadPlaylists = async () => {
+    const loadPlaylists = useCallback(async () => {
         try {
             setIsLoading(true);
+            setActionError(null);
             const data = await api.getPlaylists();
-            setPlaylists(Array.isArray(data) ? data : []);
+            setPlaylists(
+                Array.isArray(data)
+                    ? data.filter(
+                          (playlist) => playlist && playlist.isOwner !== false,
+                      )
+                    : [],
+            );
         } catch (error) {
             sharedFrontendLogger.error("Failed to load playlists:", error);
+            setActionError(userFacingError(error, ru.selector.loadFailed));
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        let active = true;
+        queueMicrotask(() => {
+            if (!active) return;
+            void loadPlaylists();
+            setSelectedIds(new Set());
+            setConfirmError(null);
+            setActionError(null);
+        });
+        return () => {
+            active = false;
+        };
+    }, [isOpen, loadPlaylists]);
 
     const handleCreatePlaylist = async () => {
-        if (!newPlaylistName.trim()) return;
+        const playlistName = newPlaylistName.trim();
+        if (
+            (!createdPlaylistAwaitingAdd && !playlistName) ||
+            actionInFlightRef.current ||
+            isCreating ||
+            isProcessing
+        ) {
+            return;
+        }
 
+        actionInFlightRef.current = true;
+        setIsCreating(true);
+        setActionError(null);
         try {
-            setIsCreating(true);
-            const playlist = await api.createPlaylist(
-                newPlaylistName.trim(),
-                isPublic,
-            );
-            await onSelectPlaylist(playlist.id);
+            let playlist = createdPlaylistAwaitingAdd;
+            if (!playlist) {
+                try {
+                    const createdPlaylist = await api.createPlaylist(
+                        playlistName,
+                        isPublic,
+                    );
+                    const createdOption: PlaylistOption = {
+                        ...createdPlaylist,
+                        id: createdPlaylist.id,
+                        name: createdPlaylist.name || playlistName,
+                        isOwner: true,
+                    };
+                    playlist = createdOption;
+                    setCreatedPlaylistAwaitingAdd(createdOption);
+                    setPlaylists((current) => [
+                        createdOption,
+                        ...current.filter(
+                            (item) => item.id !== createdOption.id,
+                        ),
+                    ]);
+                    window.dispatchEvent(
+                        new CustomEvent("playlist-created", {
+                            detail: createdOption,
+                        }),
+                    );
+                } catch (error) {
+                    sharedFrontendLogger.error(
+                        "Failed to create playlist:",
+                        error,
+                    );
+                    setActionError(
+                        userFacingError(error, ru.selector.createFailed),
+                    );
+                    return;
+                }
+            }
+
+            if (!playlist) return;
+
+            try {
+                await onSelectPlaylist(playlist.id);
+            } catch (error) {
+                sharedFrontendLogger.error(
+                    "Failed to add to newly created playlist:",
+                    error,
+                );
+                setActionError(
+                    userFacingError(error, ru.selector.createdAddFailed),
+                );
+                return;
+            }
+
+            setCreatedPlaylistAwaitingAdd(null);
             setNewPlaylistName("");
             setIsPublic(false);
-
             window.dispatchEvent(
-                new CustomEvent("playlist-created", { detail: playlist }),
+                new CustomEvent("playlist-updated", {
+                    detail: { playlistId: playlist.id },
+                }),
             );
-
             onClose();
-        } catch (error) {
-            sharedFrontendLogger.error("Failed to create playlist:", error);
         } finally {
+            actionInFlightRef.current = false;
             setIsCreating(false);
         }
     };
 
     const handleSelectPlaylist = async (playlistId: string) => {
+        if (actionInFlightRef.current || isProcessing) return;
+
         if (multiSelect) {
             setSelectedIds((prev) => {
                 const next = new Set(prev);
@@ -98,21 +185,34 @@ export function PlaylistSelector({
             return;
         }
 
+        actionInFlightRef.current = true;
         try {
+            setActionError(null);
             await onSelectPlaylist(playlistId);
             window.dispatchEvent(
                 new CustomEvent("playlist-updated", { detail: { playlistId } }),
             );
+            setCreatedPlaylistAwaitingAdd(null);
             await loadPlaylists();
             onClose();
         } catch (error) {
             sharedFrontendLogger.error("Failed to add to playlist:", error);
+            setActionError(userFacingError(error, ru.selector.addFailed));
+        } finally {
+            actionInFlightRef.current = false;
         }
     };
 
     const handleConfirmMulti = async () => {
-        if (selectedIds.size === 0) return;
+        if (
+            selectedIds.size === 0 ||
+            actionInFlightRef.current ||
+            isProcessing
+        ) {
+            return;
+        }
 
+        actionInFlightRef.current = true;
         setIsConfirming(true);
         setConfirmError(null);
         let failures = 0;
@@ -134,135 +234,52 @@ export function PlaylistSelector({
             }
         }
 
-        setIsConfirming(false);
-
-        if (failures > 0) {
-            setConfirmError(
-                `Не удалось добавить в ${failures} ${pluralRu(failures, ["плейлист", "плейлиста", "плейлистов"])}`,
-            );
-        } else {
-            await loadPlaylists();
-            onClose();
+        try {
+            if (failures > 0) {
+                setConfirmError(
+                    `Не удалось добавить в ${failures} ${pluralRu(failures, ["плейлист", "плейлиста", "плейлистов"])}`,
+                );
+            } else {
+                setCreatedPlaylistAwaitingAdd(null);
+                await loadPlaylists();
+                onClose();
+            }
+        } finally {
+            actionInFlightRef.current = false;
+            setIsConfirming(false);
         }
     };
 
-    if (!isOpen) return null;
+    if (!isOpen || typeof document === "undefined") return null;
 
-    const isProcessing = isSaving || isConfirming;
-
-    return (
-        <div
-            className="fixed inset-0 bg-black/80  flex items-center justify-center z-50 p-4"
-            onClick={onClose}
-        >
-            <div
-                className="bg-linear-to-b from-surface-sunken to-surface-sunken rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col border border-white/10 shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-center justify-between p-6 border-b border-white/10">
-                    <h2 className="text-2xl font-bold text-white">
-                        {ru.selector.title}
-                    </h2>
-                    <button
-                        onClick={onClose}
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                        aria-label={ru.selector.close}
-                        title={ru.selector.close}
-                    >
-                        <X className="w-5 h-5 text-gray-400" />
-                    </button>
-                </div>
-
-                {isProcessing && (
-                    <div className="px-6 py-3 flex items-center gap-3 bg-black/30 border-b border-white/10 text-sm text-gray-300">
-                        <GradientSpinner size="sm" />
-                        <span>{loadingMessage || ru.selector.adding}</span>
-                    </div>
-                )}
-
-                {confirmError && (
-                    <div className="px-6 py-3 bg-red-500/10 border-b border-red-500/20 text-sm text-red-300">
-                        {confirmError}
-                    </div>
-                )}
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <GradientSpinner size="md" />
+    return createPortal(
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={ru.selector.title}
+            className="flex max-h-[min(92dvh,760px)] max-w-lg flex-col overflow-hidden p-0"
+            headerClassName="mb-0 shrink-0 px-5 pt-5 sm:px-6 sm:pt-6"
+            contentClassName="mb-0 min-h-0 flex-1 overflow-y-auto"
+            footerClassName="block shrink-0 border-t border-line bg-surface-elevated/70 p-4 sm:p-6"
+            footer={
+                <div
+                    data-playlist-selector="create"
+                    className="w-full space-y-4"
+                >
+                    {actionError && (
+                        <div
+                            role="alert"
+                            className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error"
+                        >
+                            {actionError}
                         </div>
-                    ) : playlists.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-center">
-                            <Music2 className="w-12 h-12 text-gray-400 mb-3" />
-                            <p className="text-gray-400">
-                                {ru.selector.noPlaylists}
-                            </p>
-                            <p className="text-gray-400 text-sm mt-1">
-                                {ru.selector.createHint}
-                            </p>
-                        </div>
-                    ) : (
-                        playlists.map((playlist) => {
-                            const isSelected = selectedIds.has(playlist.id);
-                            return (
-                                <button
-                                    key={playlist.id}
-                                    onClick={() =>
-                                        handleSelectPlaylist(playlist.id)
-                                    }
-                                    className={`w-full text-left px-4 py-4 rounded-lg transition-all border group ${
-                                        isSelected
-                                            ? "bg-brand/10 border-brand/30"
-                                            : "bg-white/5 hover:bg-white/10 border-white/5 hover:border-white/10"
-                                    }`}
-                                    disabled={isProcessing}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex-1 min-w-0">
-                                            <p
-                                                className={`font-semibold truncate transition-colors ${
-                                                    isSelected
-                                                        ? "text-brand"
-                                                        : "text-white group-hover:text-brand"
-                                                }`}
-                                            >
-                                                {playlist.name}
-                                            </p>
-                                            <p className="text-xs text-gray-400 mt-1">
-                                                {playlist.trackCount || 0}{" "}
-                                                {playlist.trackCount === 1
-                                                    ? "трек"
-                                                    : pluralRu(
-                                                          playlist.trackCount ||
-                                                              0,
-                                                          [
-                                                              "трек",
-                                                              "трека",
-                                                              "треков",
-                                                          ],
-                                                      )}
-                                            </p>
-                                        </div>
-                                        {multiSelect && isSelected ? (
-                                            <div className="w-5 h-5 rounded-full bg-brand flex items-center justify-center ml-2 shrink-0">
-                                                <Check className="w-3 h-3 text-white" />
-                                            </div>
-                                        ) : (
-                                            <Plus className="w-5 h-5 text-gray-400 group-hover:text-brand transition-colors ml-2 shrink-0" />
-                                        )}
-                                    </div>
-                                </button>
-                            );
-                        })
                     )}
-                </div>
 
-                {multiSelect && selectedIds.size > 0 && (
-                    <div className="px-6 py-3 border-t border-white/10">
+                    {multiSelect && selectedIds.size > 0 && (
                         <button
                             onClick={() => void handleConfirmMulti()}
                             disabled={isProcessing}
-                            className="w-full py-3 rounded-full font-medium bg-brand text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-brand px-5 py-3 font-semibold text-black transition-[filter,transform] hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                         >
                             {isConfirming ? (
                                 <>
@@ -273,56 +290,162 @@ export function PlaylistSelector({
                                 `Добавить в ${selectedIds.size} ${pluralRu(selectedIds.size, ["плейлист", "плейлиста", "плейлистов"])}`
                             )}
                         </button>
-                    </div>
-                )}
+                    )}
 
-                <div className="p-6 border-t border-white/10 bg-surface/50">
-                    <p className="text-sm text-gray-400 mb-3 font-medium">
-                        {ru.selector.createNew}
-                    </p>
-                    <div className="flex gap-2 mb-3">
+                    <div>
+                        <label
+                            htmlFor="playlist-selector-name"
+                            className="mb-2 block text-sm font-semibold text-content"
+                        >
+                            {ru.selector.createNew}
+                        </label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                                id="playlist-selector-name"
+                                name="playlist-name"
+                                type="text"
+                                placeholder={ru.selector.playlistName}
+                                value={newPlaylistName}
+                                maxLength={200}
+                                disabled={
+                                    Boolean(createdPlaylistAwaitingAdd) ||
+                                    isCreating ||
+                                    isProcessing
+                                }
+                                onChange={(e) =>
+                                    setNewPlaylistName(e.target.value)
+                                }
+                                onKeyDown={(e) =>
+                                    e.key === "Enter" &&
+                                    void handleCreatePlaylist()
+                                }
+                                className="min-h-12 min-w-0 flex-1 rounded-xl border border-line bg-surface-hover px-4 py-3 text-content outline-none transition-[border-color,box-shadow] placeholder:text-content-muted focus:border-brand focus:ring-2 focus:ring-brand/25"
+                            />
+                            <button
+                                onClick={() => void handleCreatePlaylist()}
+                                disabled={
+                                    (!createdPlaylistAwaitingAdd &&
+                                        !newPlaylistName.trim()) ||
+                                    isCreating ||
+                                    isProcessing
+                                }
+                                className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3 font-bold text-black transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                                {isCreating ? (
+                                    <GradientSpinner size="sm" />
+                                ) : (
+                                    <Plus
+                                        className="h-5 w-5"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                {createdPlaylistAwaitingAdd
+                                    ? ru.selector.retryCreatedAdd
+                                    : ru.selector.create}
+                            </button>
+                        </div>
+                    </div>
+
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-content-muted transition-colors hover:text-content">
                         <input
-                            type="text"
-                            placeholder={ru.selector.playlistName}
-                            value={newPlaylistName}
-                            onChange={(e) => setNewPlaylistName(e.target.value)}
-                            onKeyDown={(e) =>
-                                e.key === "Enter" && handleCreatePlaylist()
-                            }
-                            className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-brand focus:bg-white/10 transition-all"
-                        />
-                        <button
-                            onClick={handleCreatePlaylist}
+                            type="checkbox"
+                            checked={isPublic}
                             disabled={
-                                !newPlaylistName.trim() ||
+                                Boolean(createdPlaylistAwaitingAdd) ||
                                 isCreating ||
                                 isProcessing
                             }
-                            className="px-5 py-3 bg-brand-hover hover:bg-brand disabled:bg-gray-700 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all flex items-center gap-2 disabled:text-gray-400"
-                        >
-                            <Plus className="w-5 h-5" />
-                            <span className="hidden sm:inline">
-                                {ru.selector.create}
-                            </span>
-                        </button>
-                    </div>
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                        <div className="relative">
-                            <input
-                                type="checkbox"
-                                checked={isPublic}
-                                onChange={(e) => setIsPublic(e.target.checked)}
-                                className="sr-only peer"
-                            />
-                            <div className="w-10 h-5 bg-white/10 rounded-full peer-checked:bg-brand transition-colors" />
-                            <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5" />
-                        </div>
-                        <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors">
-                            {ru.selector.shareWithUsers}
-                        </span>
+                            onChange={(e) => setIsPublic(e.target.checked)}
+                            className="h-5 w-5 accent-brand"
+                        />
+                        {ru.selector.shareWithUsers}
                     </label>
                 </div>
+            }
+        >
+            <div
+                data-playlist-selector="options"
+                className="space-y-2 overscroll-contain px-4 py-4 sm:px-6"
+            >
+                {isProcessing && (
+                    <div className="mb-3 flex items-center gap-3 rounded-xl border border-line bg-surface-hover px-4 py-3 text-sm text-content-secondary">
+                        <GradientSpinner size="sm" />
+                        <span>{loadingMessage || ru.selector.adding}</span>
+                    </div>
+                )}
+
+                {confirmError && (
+                    <div
+                        role="alert"
+                        className="mb-3 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error"
+                    >
+                        {confirmError}
+                    </div>
+                )}
+
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <GradientSpinner size="md" />
+                    </div>
+                ) : playlists.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <Music2 className="mb-3 h-12 w-12 text-content-muted" />
+                        <p className="text-content-secondary">
+                            {ru.selector.noPlaylists}
+                        </p>
+                        <p className="mt-1 text-sm text-content-muted">
+                            {ru.selector.createHint}
+                        </p>
+                    </div>
+                ) : (
+                    playlists.map((playlist) => {
+                        const isSelected = selectedIds.has(playlist.id);
+                        return (
+                            <button
+                                key={playlist.id}
+                                onClick={() =>
+                                    void handleSelectPlaylist(playlist.id)
+                                }
+                                className={`group w-full rounded-xl border px-4 py-4 text-left transition-colors ${
+                                    isSelected
+                                        ? "border-brand/30 bg-brand/10"
+                                        : "border-line bg-surface-elevated hover:border-line-muted hover:bg-surface-hover"
+                                }`}
+                                disabled={isProcessing}
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p
+                                            className={`break-words font-semibold transition-colors ${
+                                                isSelected
+                                                    ? "text-brand"
+                                                    : "text-content group-hover:text-brand-light"
+                                            }`}
+                                        >
+                                            {playlist.name}
+                                        </p>
+                                        <p className="mt-1 text-xs text-content-muted">
+                                            {playlist.trackCount || 0}{" "}
+                                            {pluralRu(
+                                                playlist.trackCount || 0,
+                                                ["трек", "трека", "треков"],
+                                            )}
+                                        </p>
+                                    </div>
+                                    {multiSelect && isSelected ? (
+                                        <span className="ml-2 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand">
+                                            <Check className="h-3.5 w-3.5 text-black" />
+                                        </span>
+                                    ) : (
+                                        <Plus className="ml-2 h-5 w-5 shrink-0 text-content-muted transition-colors group-hover:text-brand-light" />
+                                    )}
+                                </div>
+                            </button>
+                        );
+                    })
+                )}
             </div>
-        </div>
+        </Modal>,
+        document.body,
     );
 }

@@ -1,10 +1,10 @@
 # Soundspan product design system
 
-Status: canonical redesign implemented; design QA and production verification passed
+Status: release candidate implemented and design-QA verified; publication pending
 
-Implementation baseline: `5411c7232620b7a185abcad5413b238d8d585f85`
-
-Production image: `local/soundspan:2.6.1-redesign-5411c72`
+Pre-release base commit: `5411c7232620b7a185abcad5413b238d8d585f85`.
+The current release-candidate changes do not yet have a published image or
+production-verification claim.
 
 Authoritative visual targets:
 
@@ -24,7 +24,8 @@ responsive extrapolation is accepted.
 Acceptance evidence and the full comparison history are recorded in
 [`../../design-qa.md`](../../design-qa.md). Responsive browser captures live in
 [`qa/evidence`](qa/evidence), with native-size source/implementation pairs in
-[`qa/comparison`](qa/comparison).
+[`qa/comparison`](qa/comparison). These files are prepublication evidence; their
+existence and filenames do not by themselves prove a production deployment.
 
 ## Product thesis
 
@@ -133,7 +134,14 @@ surfaces.
 - 160–240 ms for hover, pressed, and selection feedback.
 - 280–420 ms for sheets and route-level continuity.
 - Use opacity and transform only for routine motion.
-- Vibe may use one slow ambient field; dense lists must not stagger or bounce.
+- Vibe may use one slow ambient field. When analyzed BPM and energy already exist
+  for the active track, they control cadence and amplitude. Online-first tracks
+  without those fields use a deterministic visual fallback derived from track,
+  direction, and mood; the fallback is never presented as measured audio data.
+- The Vibe canvas animates only while playback is active on a visible desktop
+  page. It does not attach an analyzer or `AudioContext` to the media element,
+  and low-power/mobile environments retain a static field.
+- Dense lists must not stagger or bounce.
 - Respect `prefers-reduced-motion` and provide a static ambient field.
 
 ## Layout contract
@@ -144,10 +152,16 @@ surfaces.
   and a fixed 112–132 px player. At the 1487×1058 reference viewport the target
   proportions are approximately 247 px sidebar and 131 px player.
 - Sidebar primary navigation contains only `Главная`, `Волна`, and
-  `Моя музыка`. Its compact library section contains only `Любимые треки` and
-  `Плейлисты`, with an optional compact add action next to Playlists.
-- Do not add `Недавние`, Podcasts, a long playlist list, separate Artist/Album/
-  Track destinations, or an `All playlists` sort toolbar to the sidebar.
+  `Моя музыка`. Its library section shows `Любимые треки`, then the current
+  account's owned, non-hidden playlists directly; it is not a generic
+  `Плейлисты` pseudo-entry.
+- A short desktop viewport (850 px high or less) shows one direct playlist and a
+  compact `Все плейлисты +N` escape before `Создать плейлист`, so the sidebar
+  does not expose a nested scrollbar at 720p. Taller desktops may show a bounded
+  list, with the same overflow escape when more shortcuts exist.
+- Do not add `Недавние`, Podcasts, separate Artist/Album/Track destinations, or
+  an `All playlists` sort toolbar to the sidebar. Playlist creation remains a
+  clear action below the owned shortcuts.
 - Search is globally available in the top bar; the Search route is a result
   canvas, not a sidebar destination. The top bar must not duplicate the three
   primary sidebar destinations.
@@ -201,8 +215,11 @@ Mobile carousels show a partial next card as an overflow cue.
   most: daily mixes, discovery, listen again, relevant stations, and new
   releases. Provider shelves are deduplicated, taste-ranked, and hidden when
   irrelevant.
-- Desktop shelves expose `Показать все` or restrained previous/next controls;
-  they do not show native horizontal scrollbars.
+- `Миксы для вас` is one visually continuous surface. `Показать все` expands the
+  available personal and generated mixes inline and changes to `Свернуть`; it
+  must not navigate to the general playlists collection.
+- Other desktop shelves expose `Показать все` or restrained previous/next
+  controls; they do not show native horizontal scrollbars.
 
 ### Vibe
 
@@ -218,7 +235,13 @@ Mobile carousels show a partial next card as an overflow cue.
   On mobile only, minimal internal scrolling is acceptable when safe-area and
   44 px touch targets cannot otherwise fit.
 - Every tuning option changes candidate ranking; no decorative inactive filters
-  are allowed. The chosen direction and mood persist across navigation.
+  are allowed. The chosen direction and mood persist per account across
+  navigation and are reflected in the Vibe URL.
+- Applying a different direction or mood while Wave is active immediately
+  requests the new candidates, replaces the Wave queue, and advances away from
+  the old current track. Reapplying the unchanged pair does not skip. A failed
+  replacement keeps playback recoverable and exposes a retry without discarding
+  the requested selection.
 - Like, dislike, and skip stay next to the current track and affect this account.
 
 ### Search
@@ -244,11 +267,19 @@ Mobile carousels show a partial next card as an overflow cue.
   one canonical track surface.
 - Playback always continues in the visible list order before similar music begins.
 - Save/download actions state exactly where the content will be stored.
+- The playlists collection has an explicit create action and focused create
+  dialog. Add-to-playlist uses a responsive selector containing only playlists
+  owned by the current account; the same selector can create a playlist and
+  safely retry adding to that already-created playlist after a transient error.
 
 ### Library
 
-- User collection, not server storage: Playlists, Albums, Artists, Liked, and
-  Downloads on this device.
+- User collection, not server storage. Its top-level tabs are `Плейлисты`,
+  `Альбомы`, and `Исполнители`; the Playlists view combines `Любимые треки`,
+  owned personal playlists, and `Загрузки на этом устройстве` in one hierarchy
+  instead of duplicating them as separate destinations.
+- A canonical track row shows a download icon only for a verified ready copy on
+  the current device. Absence of a local copy has no placeholder icon.
 - Supports grid/list density without changing the information hierarchy.
 
 ### Settings

@@ -123,6 +123,14 @@ function historyToRowItem(entry: PlayHistoryEntry): TrackRowItem {
             track.album?.artist?.name ||
             ru.common.unknownArtist,
         duration: track.duration,
+        streamSource:
+            streamSource === "tidal" || streamSource === "youtube"
+                ? streamSource
+                : undefined,
+        tidalTrackId:
+            track.tidalTrackId ?? track.provider?.tidalTrackId ?? undefined,
+        youtubeVideoId:
+            track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
         coverArtUrl: coverArt
             ? isRemote
                 ? api.getBrowseImageUrl(coverArt)

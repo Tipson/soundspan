@@ -56,6 +56,8 @@ export function browseToRowItem(track: TidalBrowseTrack): TrackRowItem {
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
+        streamSource: "tidal",
+        tidalTrackId: track.trackId,
         coverArtUrl: track.thumbnailUrl
             ? api.getTidalBrowseImageUrl(track.thumbnailUrl)
             : null,

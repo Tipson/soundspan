@@ -240,6 +240,8 @@ function browseToRowItem(track: YtMusicBrowseTrack): TrackRowItem {
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
+        streamSource: "youtube",
+        youtubeVideoId: track.videoId,
         coverArtUrl: track.thumbnailUrl
             ? api.getBrowseImageUrl(track.thumbnailUrl)
             : null,
@@ -762,13 +764,13 @@ function YtMusicPlaylistDetailPageContent() {
             toast.success(
                 formatYouTubeTracksAddedToPlaylist(playlist.tracks.length),
             );
-            setShowPlaylistSelector(false);
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
                 error,
             );
             toast.error(searchExtrasRu.youtubePlaylist.addSomeToPlaylistFailed);
+            throw error;
         } finally {
             setIsAddingToPlaylist(false);
         }

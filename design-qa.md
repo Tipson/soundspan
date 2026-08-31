@@ -4,24 +4,36 @@
 
 - Source visual truth: `design-system/soundspan/references/canonical-home-target.png`
 - Sidebar source crop: `design-system/soundspan/references/canonical-sidebar-target.png`
-- Browser implementation: `design-system/soundspan/qa/evidence/home-desktop-1487x1058.png`
-- Full side-by-side evidence: `design-system/soundspan/qa/comparison/home-full-comparison.png`
-- Focused shell, hero, and player evidence: `design-system/soundspan/qa/comparison/home-shell-player-comparison.png`
-- Responsive evidence:
-  - `design-system/soundspan/qa/evidence/home-mobile-390x844.png`
-  - `design-system/soundspan/qa/evidence/vibe-desktop-1487x1058.png`
-  - `design-system/soundspan/qa/evidence/vibe-short-desktop-1366x768.png`
-  - `design-system/soundspan/qa/evidence/vibe-mobile-390x844.png`
+- Current Home release-candidate capture:
+  `design-system/soundspan/qa/evidence/home-polish-production-1487x1058.png`
+- Current native-size side-by-side comparison:
+  `design-system/soundspan/qa/comparison/home-polish-reference-vs-production.png`
+- Current Library capture:
+  `design-system/soundspan/qa/evidence/library-polish-production-1487x1058.png`
+- Current Vibe captures:
+  - `design-system/soundspan/qa/evidence/vibe-polish-production-1487x1058.png`
+  - `design-system/soundspan/qa/evidence/vibe-polish-production-1280x720.png`
+  - `design-system/soundspan/qa/evidence/vibe-polish-production-mobile-390x844.png`
+- Current mobile Home capture:
+  `design-system/soundspan/qa/evidence/home-polish-production-mobile-390x844.png`
+- Earlier comparison history remains in
+  `design-system/soundspan/qa/comparison/home-full-comparison.png` and
+  `design-system/soundspan/qa/comparison/home-shell-player-comparison.png`.
 
-The source and desktop implementation are both 1487 x 1058 physical pixels,
-captured at a 1487 x 1058 CSS viewport with `deviceScaleFactor: 1`. No density
-normalization or browser-frame crop was required. The comparison image places
-the source on the left and implementation on the right at native size.
+The source and current desktop implementation are both 1487 x 1058 physical
+pixels, captured at a 1487 x 1058 CSS viewport with `deviceScaleFactor: 1`. No
+density normalization or browser-frame crop was required. The current comparison
+is 2974 x 1058 and places the source on the left and implementation on the right
+at native size.
 
 State: authenticated Russian account, dark theme, populated personalized feed,
-active current track, desktop player visible. The QA feed used real remote music
-artwork URLs and a deterministic silent audio response so transient provider
-availability could not distort the visual state.
+idle desktop player visible. The QA feed used provider-derived artwork and a
+deterministic audio response so transient playback availability could not distort
+the visual state.
+
+The `*-production-*` strings are immutable artifact filenames used by the capture
+run. This QA document records a release candidate only; it does not claim that
+the candidate has been published or verified in production.
 
 ## Required fidelity surfaces
 
@@ -34,8 +46,9 @@ availability could not distort the visual state.
 - **Spacing and layout rhythm:** the 248 px sidebar, 88 px top bar, 128 px player,
   220 px hero artwork, four continuation cards, right recency column, and five
   mix slots match the source's major-region proportions. The Vibe stage remains
-  inside the app boundary at both 1487 x 1058 and 1366 x 768; its tuning sheet owns
-  internal overflow.
+  inside the app boundary at 1487 x 1058 and 1280 x 720; its tuning sheet owns
+  required internal overflow. At 720p the sidebar uses its short-height escape
+  instead of exposing a nested playlist scrollbar.
 - **Colors and tokens:** near-black chrome, neutral content surfaces, violet/amber
   actions, semantic states, and artwork-derived atmosphere use synchronized
   runtime/design-system tokens. Text contrast tests retain their AA floors.
@@ -49,8 +62,9 @@ availability could not distort the visual state.
   names and dynamic catalog metadata remain unchanged.
 - **Icons and affordances:** one Lucide family is used consistently. Primary play,
   Wave tuning, navigation, like/dislike, shuffle/repeat, progress, volume, install,
-  and playlist-create controls have visible focus/pressed/disabled states and
-  practical pointer targets.
+  playlist-create, add-to-playlist, and verified-download controls have visible
+  focus/pressed/disabled states and practical pointer targets. Download status is
+  a positive-only icon: no icon is rendered when the track is not stored locally.
 
 ## Comparison history
 
@@ -85,18 +99,46 @@ are intentional product constraints:
 - artwork, crops, titles, and ambient colors are live account data rather than
   fixed mock content.
 
+### Iteration 3 — passed
+
+- **Sidebar ownership and short-height fit:** replaced the generic Playlists row
+  with direct owned, non-hidden playlist shortcuts. At 850 px height and below,
+  one shortcut plus `Все плейлисты +N` and `Создать плейлист` keeps the sidebar
+  usable without a visible nested scrollbar.
+- **Home mix continuity:** `Показать все` expands and collapses the personal mix
+  collection in place. Every mix card remains on one unified surface instead of
+  crossing a partial grey backing or navigating to the unrelated playlists page.
+- **Vibe motion and retuning:** the ambient canvas uses existing analyzed BPM and
+  energy when available and a deterministic track/direction/mood fallback
+  otherwise. It is static for reduced-motion, low-power, hidden, paused, and
+  compact environments and never touches the playback audio graph. Applying a
+  changed setting to an active Wave replaces its queue and advances immediately;
+  unchanged settings do not skip, while failed replacement remains retryable.
+- **One collection hierarchy:** Library exposes Playlists, Albums, and Artists;
+  the Playlists view contains Liked songs, owned playlists, and this-device
+  downloads. The former duplicated overview/download destinations are absent.
+- **Playlist workflows:** the collection page exposes a clear create dialog, and
+  the responsive add-to-playlist selector supports owned targets plus create-and-
+  add recovery without creating duplicates on retry.
+- **Downloaded state:** verified ready tracks receive the compact downloaded icon;
+  non-downloaded tracks keep the title row visually quiet.
+
 ## Responsive and interaction evidence
 
 - Desktop Home: sidebar/main-column adjacency, top-bar ownership, semantic Home
-  regions, and no unexpected runtime/page errors. Optional disabled Mix/Discover
-  endpoints and a missing optional avatar image are explicitly recognized as
-  fallback responses rather than unhandled application errors.
+  regions, inline mix expansion, one continuous mix surface, and no unexpected
+  runtime/page errors. Optional disabled Mix/Discover endpoints and a missing
+  optional avatar image are explicitly recognized as fallback responses rather
+  than unhandled application errors.
 - Desktop player: three regions, two transport levels, artwork atmosphere,
   progress, shuffle/repeat, like/dislike, volume, overflow, and retry states.
-- Vibe: no document scroll at 1487 x 1058 or 1366 x 768; play, Tune, current
-  selection, current-track feedback, and Skip remain inside the locked stage.
+- Vibe: no document scroll at 1487 x 1058 or 1280 x 720; play, Tune, current
+  selection, queue preview, and feedback remain inside the locked stage. The
+  720p capture also verifies the short-height sidebar escape.
 - Mobile Home/Vibe: 390 x 844 screenshots show mobile top bar, mini player, bottom
   navigation, no desktop chrome, and no horizontal page overflow.
+- Library: the 1487 x 1058 capture verifies the combined Playlists hierarchy and
+  direct owned-playlist sidebar shortcuts.
 - PWA install: explicit install request, unavailable-prompt feedback, accepted
   pending state, `appinstalled` completion, and safe player offsets are covered by
   component tests.
@@ -106,5 +148,11 @@ are intentional product constraints:
 - **P3:** when playback history eventually exposes trustworthy per-track resume
   positions for online provider rows, continuation cards can add the source
   mock's progress line without synthesizing data.
+
+## Release status
+
+Design QA for the current release candidate passed. Publication, production
+image assignment, and post-deploy smoke verification are still pending and are
+not asserted by this document.
 
 final result: passed

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { AudioWaveform, Home, Library, Menu, Search } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { ActivityPanelToggle } from "./ActivityPanel";
 import { UserAvatarMenu } from "./UserAvatarMenu";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
@@ -205,53 +205,8 @@ export function TopBar({
                     )}
                 </>
             ) : (
-                <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(16rem,520px)_auto] items-center gap-2 px-4 xl:gap-4 xl:px-8">
-                    <nav
-                        data-shell-top-navigation="desktop"
-                        aria-label="Быстрая навигация"
-                        className="flex min-w-0 items-center gap-1"
-                    >
-                        {[
-                            { href: "/", label: ru.nav.home, icon: Home },
-                            {
-                                href: "/vibe",
-                                label: ru.nav.vibe,
-                                icon: AudioWaveform,
-                            },
-                            {
-                                href: "/library",
-                                label: ru.nav.library,
-                                icon: Library,
-                            },
-                        ].map((item) => {
-                            const isActive =
-                                item.href === "/"
-                                    ? pathname === "/"
-                                    : pathname.startsWith(item.href);
-                            const Icon = item.icon;
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    aria-current={isActive ? "page" : undefined}
-                                    className={`group relative flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${isActive ? "text-white" : "text-content-muted hover:bg-white/[0.04] hover:text-white"}`}
-                                >
-                                    <Icon
-                                        className="h-[18px] w-[18px]"
-                                        strokeWidth={isActive ? 2.35 : 1.9}
-                                        aria-hidden="true"
-                                    />
-                                    <span>{item.label}</span>
-                                    {isActive && (
-                                        <span
-                                            aria-hidden="true"
-                                            className="absolute inset-x-3 -bottom-[11px] h-0.5 rounded-full bg-gradient-to-r from-warning via-ai to-brand"
-                                        />
-                                    )}
-                                </Link>
-                            );
-                        })}
-                    </nav>
+                <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(16rem,520px)_minmax(0,1fr)] items-center gap-2 px-4 xl:gap-4 xl:px-8">
+                    <div aria-hidden="true" />
 
                     <form
                         onSubmit={handleSearch}
@@ -283,7 +238,7 @@ export function TopBar({
                         </div>
                     </form>
 
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2 justify-self-end">
                         <ActivityPanelToggle
                             pollingEnabled={!isActivityPanelOpen}
                             onToggle={onActivityPanelToggle}

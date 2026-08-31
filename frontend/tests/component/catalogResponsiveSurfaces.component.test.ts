@@ -122,7 +122,7 @@ test("Library tabs announce horizontal overflow and retain touch-sized targets",
     const { LibraryTabs } =
         await import("../../features/library/components/LibraryTabs");
     const html = renderToStaticMarkup(
-        React.createElement(LibraryTabs, { activeTab: "liked" }),
+        React.createElement(LibraryTabs, { activeTab: "playlists" }),
     );
 
     assert.match(html, /data-library-tabs="collection"/);
@@ -133,16 +133,12 @@ test("Library tabs announce horizontal overflow and retain touch-sized targets",
     );
     assert.match(html, /min-h-11/);
     assert.match(html, /snap-x/);
-    assert.equal((html.match(/data-library-tab=/g) ?? []).length, 5);
-    for (const label of [
-        "Лайкнутые",
-        "Плейлисты",
-        "Альбомы",
-        "Исполнители",
-        "Загрузки",
-    ]) {
+    assert.equal((html.match(/data-library-tab=/g) ?? []).length, 3);
+    for (const label of ["Плейлисты", "Альбомы", "Исполнители"]) {
         assert.match(html, new RegExp(`>${label}<`));
     }
+    assert.doesNotMatch(html, /href="\/library\?tab=liked"/);
+    assert.doesNotMatch(html, /href="\/library\?tab=downloads"/);
     assert.doesNotMatch(html, />Обзор</);
 });
 

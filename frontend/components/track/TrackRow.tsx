@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, Music, Play } from "lucide-react";
+import { AudioLines, Download, Music, Play } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { CachedImage } from "@/components/ui/CachedImage";
@@ -8,6 +8,8 @@ import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { InQueueBadge, UnplayableBadge } from "./badges";
+import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
+import type { DeviceOfflineTrack } from "@/features/device-offline/types";
 import type { TrackRowProps } from "./types";
 
 const DEFAULT_ACCENT = "#3b82f6";
@@ -36,6 +38,7 @@ export function TrackRow({
     overflowProps = null,
     slots = {},
 }: TrackRowProps) {
+    const deviceOffline = useOptionalDeviceOffline();
     const {
         leadingColumn,
         titleBadges,
@@ -45,6 +48,24 @@ export function TrackRow({
         trailingActions,
         rowClassName,
     } = slots;
+    const offlineTrack: DeviceOfflineTrack = {
+        ...(overflowProps?.track ?? {
+            id: item.id,
+            title: item.title,
+            artist: { name: item.artistName },
+            album: { title: "" },
+            duration: item.duration,
+        }),
+        streamSource: overflowProps?.track.streamSource ?? item.streamSource,
+        tidalTrackId: overflowProps?.track.tidalTrackId ?? item.tidalTrackId,
+        youtubeVideoId:
+            overflowProps?.track.youtubeVideoId ?? item.youtubeVideoId,
+        youtubeAudioFormat:
+            overflowProps?.track.youtubeAudioFormat ?? item.youtubeAudioFormat,
+    };
+    const isDownloaded = Boolean(
+        deviceOffline?.readyRecordForTrack(offlineTrack),
+    );
 
     return (
         <div
@@ -124,6 +145,19 @@ export function TrackRow({
                         <span className="truncate">
                             {item.displayTitle ?? item.title}
                         </span>
+                        {isDownloaded && (
+                            <span
+                                data-track-downloaded="true"
+                                title="Скачано на это устройство"
+                                aria-label="Скачано на это устройство"
+                                className="shrink-0 text-content-muted"
+                            >
+                                <Download
+                                    className="h-3.5 w-3.5"
+                                    aria-hidden="true"
+                                />
+                            </span>
+                        )}
                         {titleBadges}
                         {item.unplayableReason === "peer_offline" && (
                             <UnplayableBadge

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { RefreshCw, Zap } from "lucide-react";
 import { CoverMosaic } from "@/components/ui/CoverMosaic";
 import { api } from "@/lib/api";
@@ -210,6 +210,7 @@ export function HomeMadeForYou({
     handleRefreshMixes,
 }: HomeMadeForYouProps) {
     const { autoPlaylists } = useFeatures();
+    const [showAllMixes, setShowAllMixes] = useState(false);
     const personalMixes = buildHomePersonalMixes(personalizedFeed);
     const playableDiscoverWeekly =
         discoverWeekly && discoverWeekly.totalCount > 0 ? discoverWeekly : null;
@@ -221,29 +222,47 @@ export function HomeMadeForYou({
 
     if (availableCount === 0) return null;
 
-    const visiblePersonalMixes = personalMixes.slice(0, MAX_HOME_MADE_CARDS);
+    const visiblePersonalMixes = showAllMixes
+        ? personalMixes
+        : personalMixes.slice(0, MAX_HOME_MADE_CARDS);
     const showDiscoverWeekly =
         Boolean(playableDiscoverWeekly) &&
-        visiblePersonalMixes.length < MAX_HOME_MADE_CARDS;
-    const visibleGeneratedMixes = playableMixes.slice(
+        (showAllMixes || visiblePersonalMixes.length < MAX_HOME_MADE_CARDS);
+    const collapsedGeneratedLimit = Math.max(
         0,
         MAX_HOME_MADE_CARDS -
             visiblePersonalMixes.length -
             (showDiscoverWeekly ? 1 : 0),
     );
+    const visibleGeneratedMixes = showAllMixes
+        ? playableMixes
+        : playableMixes.slice(0, collapsedGeneratedLimit);
+    const hasHiddenMixes = availableCount > MAX_HOME_MADE_CARDS;
 
     return (
-        <section data-home-rail="mixes" aria-label={ru.home.madeForYou}>
+        <section
+            data-home-rail="mixes"
+            data-home-mixes-surface="unified"
+            aria-label={ru.home.madeForYou}
+            className="relative isolate rounded-[1.5rem] bg-surface px-4 pb-5 pt-2 sm:px-5"
+        >
             <SectionHeader
                 title={ru.home.madeForYou}
                 rightAction={
                     <div className="flex items-center gap-1.5">
-                        <Link
-                            href="/playlists"
-                            className="inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                        >
-                            Показать все
-                        </Link>
+                        {hasHiddenMixes && (
+                            <button
+                                type="button"
+                                aria-controls="home-all-mixes"
+                                aria-expanded={showAllMixes}
+                                onClick={() =>
+                                    setShowAllMixes((current) => !current)
+                                }
+                                className="inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            >
+                                {showAllMixes ? "Свернуть" : "Показать все"}
+                            </button>
+                        )}
                         {autoPlaylists && (
                             <button
                                 type="button"
@@ -265,7 +284,10 @@ export function HomeMadeForYou({
                     </div>
                 }
             />
-            <div className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible">
+            <div
+                id="home-all-mixes"
+                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible"
+            >
                 {visiblePersonalMixes.map((mix, index) => (
                     <div
                         key={mix.key}

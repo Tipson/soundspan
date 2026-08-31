@@ -46,6 +46,14 @@ plus the independent mood or listening-context choice, is isolated in
 personalized endpoint request. Cover user-visible behavior in
 `frontend/tests/component/vibePage.component.test.ts`.
 
+The ambient Wave visualization is presentational and stays independent from the
+playback audio graph. `VibeAmbientMotion.tsx` uses analyzed BPM and energy only
+when those fields already exist on the current track. Online-first provider
+tracks without analysis use a deterministic visual cadence derived from the
+track identity, Wave direction, and mood until hybrid analysis supplies real
+features. That fallback is not presented as measured BPM or energy, and the
+visualizer must not connect an `AudioContext`, analyzer, or media-element source.
+
 Home is the single online-first landing page. It composes the personal feed with
 live provider discovery in `home/components/HomeOnlineDiscovery.tsx`; the old
 `/explore` root redirects to Home while its nested provider collection routes

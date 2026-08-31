@@ -1,11 +1,25 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { after, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type {
     PersonalizedHomeFeed,
     PersonalizedTrack,
 } from "../../features/home/types";
+
+GlobalRegistrator.register();
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+after(() => {
+    try {
+        GlobalRegistrator.unregister();
+    } catch {
+        // Best-effort teardown.
+    }
+});
 
 const Icon = () => React.createElement("i");
 
@@ -148,6 +162,7 @@ test("Home Made For You renders at most five distinct real collections", async (
 
     assert.match(html, /Миксы для вас/);
     assert.match(html, /data-home-rail="mixes"/);
+    assert.match(html, /data-home-mixes-surface="unified"/);
     assert.equal((html.match(/data-home-made-card=/g) ?? []).length, 5);
     assert.match(html, /Микс дня/);
     assert.match(html, /Новые находки/);
@@ -155,6 +170,72 @@ test("Home Made For You renders at most five distinct real collections", async (
     assert.match(html, /Открытия недели/);
     assert.match(html, /Mix 0/);
     assert.doesNotMatch(html, /Mix 1/);
+    assert.match(html, /aria-controls="home-all-mixes"/);
+    assert.match(html, /aria-expanded="false"/);
+    assert.doesNotMatch(html, /href="\/playlists"/);
+});
+
+test("Home Made For You expands and collapses every collection inline on one surface", async () => {
+    const { HomeMadeForYou } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(HomeMadeForYou, {
+                discoverWeekly: {
+                    weekStart: "2026-08-24",
+                    weekEnd: "2026-08-30",
+                    totalCount: 20,
+                    coverUrl: null,
+                },
+                mixes: Array.from({ length: 8 }, (_, index) => ({
+                    id: `mix-${index}`,
+                    name: `Mix ${index}`,
+                    description: "Generated from listening",
+                    coverUrls: [],
+                    trackCount: 20,
+                })),
+                personalizedFeed: feed,
+                isRefreshingMixes: false,
+                handleRefreshMixes: async () => undefined,
+            }),
+        );
+    });
+
+    const surface = container.querySelector<HTMLElement>(
+        '[data-home-mixes-surface="unified"]',
+    );
+    assert.ok(surface);
+    assert.ok(surface.classList.contains("bg-surface"));
+    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 5);
+    assert.equal(surface.querySelector('a[href="/playlists"]'), null);
+
+    const toggle = surface.querySelector<HTMLButtonElement>(
+        'button[aria-controls="home-all-mixes"]',
+    );
+    assert.ok(toggle);
+    assert.equal(toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(toggle.textContent?.trim(), "Показать все");
+
+    await React.act(async () => toggle.click());
+    assert.equal(toggle.getAttribute("aria-expanded"), "true");
+    assert.equal(toggle.textContent?.trim(), "Свернуть");
+    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 12);
+    assert.match(surface.textContent ?? "", /Mix 7/);
+    assert.equal(surface.querySelector('a[href="/playlists"]'), null);
+
+    await React.act(async () => toggle.click());
+    assert.equal(toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(toggle.textContent?.trim(), "Показать все");
+    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 5);
+    assert.doesNotMatch(surface.textContent ?? "", /Mix 1/);
+
+    await React.act(async () => root.unmount());
+    container.remove();
 });
 
 test("Home Made For You hides the whole shelf when nothing is playable", async () => {

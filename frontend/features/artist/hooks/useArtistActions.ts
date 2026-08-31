@@ -308,16 +308,23 @@ export function useArtistActions() {
             }
 
             const failed = allTracks.length - added;
-            if (failed > 0 && added === 0) {
-                toast.error(artistRu.addPlaylistFailed);
-                throw new Error(
-                    `All ${failed} tracks failed to add to playlist`,
+            if (failed > 0) {
+                const error = new Error(
+                    `Failed to add ${failed} of ${allTracks.length} artist tracks to playlist`,
                 );
-            } else if (failed > 0) {
-                toast.warning(formatArtistPlaylistPartial(added, failed));
-            } else {
-                toast.success(formatArtistPlaylistAdded(allTracks.length));
+                sharedFrontendLogger.error(
+                    "Failed to add all artist tracks to playlist:",
+                    error,
+                );
+                if (added === 0) {
+                    toast.error(artistRu.addPlaylistFailed);
+                } else {
+                    toast.warning(formatArtistPlaylistPartial(added, failed));
+                }
+                throw error;
             }
+
+            toast.success(formatArtistPlaylistAdded(allTracks.length));
         },
         [],
     );

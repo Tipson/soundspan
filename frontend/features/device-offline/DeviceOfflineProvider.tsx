@@ -176,7 +176,12 @@ export interface DeviceOfflineContextValue {
     exportDownload(record: DeviceOfflineDownloadRecord): Promise<string>;
     deleteDownload(key: string): Promise<void>;
     cancelQueuedDownload(item: DeviceOfflineQueueItem): Promise<void>;
+    /** Return the newest download attempt for status and action controls. */
     recordForTrack(
+        track: DeviceOfflineTrack,
+    ): DeviceOfflineDownloadRecord | null;
+    /** Return the newest playable copy, independent of later failed attempts. */
+    readyRecordForTrack(
         track: DeviceOfflineTrack,
     ): DeviceOfflineDownloadRecord | null;
     enqueueCollection(
@@ -1036,18 +1041,51 @@ export function DeviceOfflineProvider({
         [ownerAuthRuntimeLease, ownerId, vault],
     );
 
+    const recordIndex = useMemo(() => {
+        const index = new Map<
+            string,
+            {
+                latest: DeviceOfflineDownloadRecord;
+                latestReady: DeviceOfflineDownloadRecord | null;
+            }
+        >();
+        for (const record of records) {
+            const current = index.get(record.trackIdentity);
+            if (!current) {
+                index.set(record.trackIdentity, {
+                    latest: record,
+                    latestReady: record.status === "ready" ? record : null,
+                });
+                continue;
+            }
+            if (record.updatedAt > current.latest.updatedAt) {
+                current.latest = record;
+            }
+            if (
+                record.status === "ready" &&
+                (!current.latestReady ||
+                    record.updatedAt > current.latestReady.updatedAt)
+            ) {
+                current.latestReady = record;
+            }
+        }
+        return index;
+    }, [records]);
+
     const recordForTrack = useCallback(
         (track: DeviceOfflineTrack) => {
             const identity = resolveDeviceOfflineTrackIdentity(track);
-            return (
-                records
-                    .filter((record) => record.trackIdentity === identity)
-                    .sort(
-                        (left, right) => right.updatedAt - left.updatedAt,
-                    )[0] ?? null
-            );
+            return recordIndex.get(identity)?.latest ?? null;
         },
-        [records],
+        [recordIndex],
+    );
+
+    const readyRecordForTrack = useCallback(
+        (track: DeviceOfflineTrack) => {
+            const identity = resolveDeviceOfflineTrackIdentity(track);
+            return recordIndex.get(identity)?.latestReady ?? null;
+        },
+        [recordIndex],
     );
 
     const enqueueCollection = useCallback(
@@ -1154,6 +1192,7 @@ export function DeviceOfflineProvider({
             deleteDownload,
             cancelQueuedDownload,
             recordForTrack,
+            readyRecordForTrack,
             enqueueCollection,
             collectionStatus,
             updateAutomationSettings,
@@ -1173,6 +1212,7 @@ export function DeviceOfflineProvider({
             isQueueHydrated,
             load,
             preparePlayback,
+            readyRecordForTrack,
             recordForTrack,
             records,
             queueItems,

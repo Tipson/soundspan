@@ -146,32 +146,35 @@ mock.module("@/features/device-offline/components/DownloadsList", {
     },
 });
 
-test("Library overview is a personal collection hub without server catalog controls", async () => {
+test("Library opens one Playlists flow for liked tracks, personal playlists, and device downloads", async () => {
     const { default: LibraryPage } = await import("../../app/library/page");
     tab = null;
     const html = renderToStaticMarkup(React.createElement(LibraryPage));
 
     assert.match(html, /Моя коллекция/);
-    assert.match(html, /Лайкнутые/);
     assert.match(html, /Плейлисты/);
-    assert.match(html, /Сохранённые альбомы/);
-    assert.match(html, /Сохранённые исполнители/);
-    assert.match(html, /Загрузки на этом устройстве/);
-    assert.match(html, /Сохранено в аккаунте/);
-    assert.match(html, /data-library-view="liked"/);
+    assert.match(html, /data-library-view="playlists"/);
+    assert.match(html, /aria-labelledby="playlist-library-title"/);
+    assert.match(html, /<h2 id="playlist-library-title"[^>]*>Плейлисты<\/h2>/);
+    assert.doesNotMatch(
+        html,
+        /<span id="playlist-library-title"[^>]*>Любимые треки<\/span>/,
+    );
     assert.match(html, /href="\/playlist\/my-liked"/);
+    assert.match(html, /Evening mix/);
+    assert.match(html, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
     assert.match(html, /24 трека/);
     assert.match(html, /обычными файлами/i);
     assert.match(html, /профилю браузера/i);
-    assert.match(html, /1 офлайн-трек/);
-    assert.doesNotMatch(html, /4 офлайн-трека/);
+    assert.doesNotMatch(html, /data-library-overview="split"/);
+    assert.doesNotMatch(html, /Сохранено в аккаунте/);
     assert.doesNotMatch(html, /copies stay in this browser/i);
     assert.doesNotMatch(html, /Shuffle Library/);
     assert.doesNotMatch(html, />Owned</);
     assert.doesNotMatch(html, />Discovery</);
 });
 
-test("Library tabs expose account-saved entities and existing device downloads", async () => {
+test("Library tabs keep saved albums and artists while legacy liked/download links open Playlists", async () => {
     const { default: LibraryPage } = await import("../../app/library/page");
 
     tab = "albums";
@@ -185,12 +188,16 @@ test("Library tabs expose account-saved entities and existing device downloads",
     assert.match(albumsHtml, /Показать ещё альбомы/);
 
     tab = "downloads";
-    const downloadsHtml = renderToStaticMarkup(
+    const legacyDownloadsHtml = renderToStaticMarkup(
         React.createElement(LibraryPage),
     );
-    assert.match(downloadsHtml, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
-    assert.match(downloadsHtml, /обычными файлами/i);
-    assert.match(downloadsHtml, /профилю браузера/i);
-    assert.doesNotMatch(downloadsHtml, /stored only in this browser/i);
-    assert.match(downloadsHtml, /очистка данных сайта не удаляет/i);
+    assert.match(legacyDownloadsHtml, /data-library-view="playlists"/);
+    assert.match(legacyDownloadsHtml, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
+
+    tab = "liked";
+    const legacyLikedHtml = renderToStaticMarkup(
+        React.createElement(LibraryPage),
+    );
+    assert.match(legacyLikedHtml, /data-library-view="playlists"/);
+    assert.match(legacyLikedHtml, /Любимые треки/);
 });

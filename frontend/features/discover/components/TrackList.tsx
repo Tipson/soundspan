@@ -94,6 +94,12 @@ function toRowItem(track: DiscoverTrack): TrackRowItem {
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
+        streamSource:
+            track.streamSource === "tidal" || track.streamSource === "youtube"
+                ? track.streamSource
+                : undefined,
+        tidalTrackId: track.tidalTrackId,
+        youtubeVideoId: track.youtubeVideoId,
         coverArtUrl:
             track.coverUrl || track.albumId
                 ? api.getCoverArtUrl(track.coverUrl || track.albumId, 80)
@@ -185,6 +191,8 @@ export function TrackList({
                 },
                 duration: track.duration,
                 streamSource: track.streamSource,
+                tidalTrackId: track.tidalTrackId,
+                youtubeVideoId: track.youtubeVideoId,
             },
             showGoToAlbum: !!track.albumId,
         }),

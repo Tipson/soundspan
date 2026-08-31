@@ -1271,19 +1271,25 @@ test("Downloads UI handles retry and delete failures without unhandled promises"
     view.unmount();
 });
 
-test("Library exposes Downloads as a directly selectable personal-collection tab", async () => {
+test("Library folds device downloads into the primary Playlists collection", async () => {
     const { LibraryTabs } =
         await import("../../features/library/components/LibraryTabs");
     const view = await render(
         React.createElement(LibraryTabs, {
-            activeTab: "liked",
+            activeTab: "playlists",
         }),
     );
-    const downloadsLink = [...view.container.querySelectorAll("a")].find(
-        (candidate) => candidate.textContent === "Загрузки",
+    const playlistsLink = [...view.container.querySelectorAll("a")].find(
+        (candidate) => candidate.textContent === "Плейлисты",
     );
-    assert.ok(downloadsLink);
-    assert.equal(downloadsLink.getAttribute("href"), "/library?tab=downloads");
+    assert.ok(playlistsLink);
+    assert.equal(playlistsLink.getAttribute("aria-current"), "page");
+    assert.equal(
+        [...view.container.querySelectorAll("a")].some(
+            (candidate) => candidate.textContent === "Загрузки",
+        ),
+        false,
+    );
     view.unmount();
 });
 

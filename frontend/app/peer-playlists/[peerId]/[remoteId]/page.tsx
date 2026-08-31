@@ -53,12 +53,44 @@ function peerRowToAudioTrack(row: PeerPlaylistTrack): AudioTrack | null {
     };
 }
 
+function peerRowOfflineIdentity(
+    row: PeerPlaylistTrack,
+): Pick<
+    TrackRowItem,
+    "id" | "streamSource" | "tidalTrackId" | "youtubeVideoId"
+> | null {
+    const resolvedTrack = row.isResolvable ? row.track : null;
+    if (!resolvedTrack) return null;
+    if (resolvedTrack.streamSource === "tidal") {
+        return {
+            id: resolvedTrack.id,
+            streamSource: "tidal",
+            tidalTrackId: resolvedTrack.tidalTrackId,
+        };
+    }
+    if (resolvedTrack.streamSource === "youtube") {
+        return {
+            id: resolvedTrack.id,
+            streamSource: "youtube",
+            youtubeVideoId: resolvedTrack.youtubeVideoId,
+        };
+    }
+    if (row.resolution === "local") {
+        return { id: resolvedTrack.id, streamSource: "local" };
+    }
+    return null;
+}
+
 function peerRowToTrackItem(row: PeerPlaylistTrack): TrackRowItem {
+    const offlineIdentity = peerRowOfflineIdentity(row);
     return {
-        id: row.remoteTrackId,
+        id: offlineIdentity?.id ?? row.remoteTrackId,
         title: row.title,
         artistName: row.artist,
         duration: row.duration,
+        streamSource: offlineIdentity?.streamSource,
+        tidalTrackId: offlineIdentity?.tidalTrackId,
+        youtubeVideoId: offlineIdentity?.youtubeVideoId,
         coverArtUrl: null,
         isPlayable: Boolean(peerRowToAudioTrack(row)),
     };
@@ -284,6 +316,9 @@ export default function PeerPlaylistDetailPage() {
                         <TrackList<PeerPlaylistTrack>
                             items={rows}
                             toRowItem={peerRowToTrackItem}
+                            getKey={(row, index) =>
+                                `${row.remoteTrackId}:${index}`
+                            }
                             onPlay={(row) => {
                                 const track = peerRowToAudioTrack(row);
                                 if (track) playNow(track);

@@ -70,11 +70,26 @@ export function resolveLikedTrackCoverUrl(
 }
 
 function toRowItem(track: LikedPlaylistTrack): TrackRowItem {
+    const rawTidalTrackId = track.tidalTrackId ?? track.provider?.tidalTrackId;
+    const tidalTrackId =
+        typeof rawTidalTrackId === "number"
+            ? rawTidalTrackId
+            : typeof rawTidalTrackId === "string" &&
+                /^\d+$/.test(rawTidalTrackId)
+              ? Number(rawTidalTrackId)
+              : undefined;
     return {
         id: track.id,
         title: track.title,
         artistName: track.artist.name,
         duration: track.duration,
+        streamSource:
+            track.streamSource === "tidal" || track.streamSource === "youtube"
+                ? track.streamSource
+                : undefined,
+        tidalTrackId,
+        youtubeVideoId:
+            track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
         coverArtUrl: resolveLikedTrackCoverUrl(track, 100),
     };
 }
@@ -322,13 +337,13 @@ export default function MyLikedPlaylistPage() {
             toast.success(
                 `Добавлено в плейлист: ${likedTracks.length} ${pluralRu(likedTracks.length, ["трек", "трека", "треков"])}`,
             );
-            setShowPlaylistSelector(false);
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
                 error,
             );
             toast.error(ru.playlist.addSomeFailed);
+            throw error;
         } finally {
             setIsAddingToPlaylist(false);
         }

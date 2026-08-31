@@ -4,7 +4,9 @@
 
 1. Route entrypoints: `frontend/app/playlist/[id]/page.tsx`, `frontend/app/playlist/my-liked/page.tsx`.
 2. `components/PlaylistDetailHero.tsx` owns the shared artwork-led playlist identity surface.
-3. Playlist playback and mutation controllers remain in their route modules.
+3. `components/CreatePlaylistDialog.tsx` owns the focused playlist-creation flow used by the collection page.
+4. `createPlaylistRoute.ts` owns the `/playlists?create=1` deep-link decision used by sidebar shortcuts.
+5. Playlist playback and mutation controllers remain in their route modules.
 
 ## Detail-page Contract
 

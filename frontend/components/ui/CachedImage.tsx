@@ -62,11 +62,12 @@ const CachedImage = memo(function CachedImage({
         );
     }
 
-    // Add lazy loading by default for better performance
-    const imageProps = {
-        ...props,
-        loading: props.loading || "lazy",
-    };
+    // Next/Image treats `priority` and `loading` as mutually exclusive. Keep
+    // thumbnails lazy by default, but let above-the-fold artwork use priority.
+    const { loading, ...propsWithoutLoading } = props;
+    const imageProps = props.priority
+        ? propsWithoutLoading
+        : { ...props, loading: loading ?? "lazy" };
 
     return (
         <Image

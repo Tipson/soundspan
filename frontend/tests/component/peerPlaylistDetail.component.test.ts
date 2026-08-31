@@ -4,6 +4,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+let trackListProps: Record<string, unknown> | null = null;
+
 const detail = {
     peer: { id: "peer-1", name: "Домашний сервер" },
     playlist: {
@@ -58,6 +60,38 @@ const detail = {
                     message: null,
                 },
                 track: null,
+            },
+            {
+                remoteTrackId: "remote-track-3",
+                title: "Провайдерный трек",
+                artist: "Третий исполнитель",
+                album: "Третий альбом",
+                duration: 220,
+                trackId: "provider-track-3",
+                resolution: "local",
+                isResolvable: true,
+                playback: {
+                    isPlayable: true,
+                    reason: null,
+                    message: null,
+                },
+                track: {
+                    id: "provider-track-3",
+                    title: "Провайдерный трек",
+                    duration: 220,
+                    source: "youtube",
+                    streamSource: "youtube",
+                    youtubeVideoId: "youtube-video-3",
+                    album: {
+                        id: "album-3",
+                        title: "Третий альбом",
+                        coverArt: null,
+                        artist: {
+                            id: "artist-3",
+                            name: "Третий исполнитель",
+                        },
+                    },
+                },
             },
         ],
     },
@@ -129,8 +163,12 @@ mock.module("@/features/social/hooks/usePeerPlaylists", {
 
 mock.module("@/components/track", {
     namedExports: {
-        TrackList: () =>
-            React.createElement("div", { "data-peer-track-list": true }),
+        TrackList: (props: Record<string, unknown>) => {
+            trackListProps = props;
+            return React.createElement("div", {
+                "data-peer-track-list": true,
+            });
+        },
     },
 });
 
@@ -159,6 +197,29 @@ test("peer playlist uses the same editorial hierarchy without exposing federatio
     assert.match(hero, /Сохранить копию/);
     assert.match(html, /data-music-detail="tracks"/);
     assert.match(html, /data-peer-track-list="true"/);
+
+    assert.ok(trackListProps);
+    const toRowItem = trackListProps.toRowItem as (
+        row: (typeof detail.playlist.tracks)[number],
+    ) => Record<string, unknown>;
+    const localItem = toRowItem(detail.playlist.tracks[0]);
+    assert.deepEqual(
+        { id: localItem.id, streamSource: localItem.streamSource },
+        { id: "track-1", streamSource: "local" },
+    );
+    const providerItem = toRowItem(detail.playlist.tracks[2]);
+    assert.deepEqual(
+        {
+            id: providerItem.id,
+            streamSource: providerItem.streamSource,
+            youtubeVideoId: providerItem.youtubeVideoId,
+        },
+        {
+            id: "provider-track-3",
+            streamSource: "youtube",
+            youtubeVideoId: "youtube-video-3",
+        },
+    );
 
     for (const match of hero.matchAll(/<button[^>]*>/g)) {
         assert.match(match[0], /min-h-11/);

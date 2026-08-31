@@ -7,6 +7,12 @@ const runtimeState = {
     currentTrackId: null as string | null,
     queuedTrackIds: new Set<string>(),
     overflowCalls: [] as Array<Record<string, unknown>>,
+    downloadedTrackIdentities: new Set<string>(),
+    inspectedOfflineTracks: [] as Array<{
+        id: string;
+        tidalTrackId?: number;
+        youtubeVideoId?: string;
+    }>,
 };
 
 const Icon = (props: Record<string, unknown> = {}) =>
@@ -15,6 +21,7 @@ const Icon = (props: Record<string, unknown> = {}) =>
 mock.module("lucide-react", {
     namedExports: {
         AudioLines: Icon,
+        Download: Icon,
         Music: Icon,
         Play: Icon,
     },
@@ -65,10 +72,35 @@ mock.module("@/hooks/useQueuedTrackIds", {
     },
 });
 
+mock.module("@/features/device-offline/DeviceOfflineProvider", {
+    namedExports: {
+        useOptionalDeviceOffline: () => ({
+            recordForTrack: () => ({ status: "error" }),
+            readyRecordForTrack: (track: {
+                id: string;
+                tidalTrackId?: number;
+                youtubeVideoId?: string;
+            }) => {
+                runtimeState.inspectedOfflineTracks.push(track);
+                const identity = track.tidalTrackId
+                    ? `tidal:${track.tidalTrackId}`
+                    : track.youtubeVideoId
+                      ? `youtube:${track.youtubeVideoId}`
+                      : `track:${track.id}`;
+                return runtimeState.downloadedTrackIdentities.has(identity)
+                    ? { status: "ready" }
+                    : null;
+            },
+        }),
+    },
+});
+
 beforeEach(() => {
     runtimeState.currentTrackId = null;
     runtimeState.queuedTrackIds = new Set();
     runtimeState.overflowCalls = [];
+    runtimeState.downloadedTrackIdentities = new Set();
+    runtimeState.inspectedOfflineTracks = [];
 });
 
 type TrackExports = {
@@ -259,6 +291,102 @@ test("TrackRow renders queue badge, duration, preferences, and overflow actions"
     assert.match(html, /prefs:track-1/);
     assert.match(html, /overflow-menu/);
     assert.match(html, /color:#22c55e/);
+});
+
+test("TrackRow shows a quiet device icon only for tracks that are downloaded", async () => {
+    const { TrackRow } = await loadTrackExports();
+    runtimeState.downloadedTrackIdentities = new Set(["track:track-ready"]);
+
+    const renderRow = (id: string) =>
+        renderToStaticMarkup(
+            React.createElement(TrackRow, {
+                item: {
+                    id,
+                    title: `Track ${id}`,
+                    artistName: "Artist",
+                    duration: 181,
+                    coverArtUrl: null,
+                },
+                index: 0,
+                overflowProps: {
+                    track: {
+                        id,
+                        title: `Track ${id}`,
+                        duration: 181,
+                        streamSource: "library",
+                        artist: { name: "Artist" },
+                        album: { title: "Album" },
+                    },
+                },
+            }),
+        );
+
+    const readyHtml = renderRow("track-ready");
+    const remoteHtml = renderRow("track-online-only");
+
+    assert.match(readyHtml, /title="Скачано на это устройство"/);
+    assert.match(readyHtml, /data-track-downloaded="true"/);
+    assert.doesNotMatch(remoteHtml, /Скачано на это устройство/);
+    assert.doesNotMatch(remoteHtml, /data-track-downloaded/);
+});
+
+test("TrackRow keeps the device icon when a newer download attempt failed", async () => {
+    const { TrackRow } = await loadTrackExports();
+    runtimeState.downloadedTrackIdentities = new Set(["track:track-ready"]);
+
+    const html = renderToStaticMarkup(
+        React.createElement(TrackRow, {
+            item: {
+                id: "track-ready",
+                title: "Ready at another quality",
+                artistName: "Artist",
+                duration: 181,
+                coverArtUrl: null,
+            },
+            index: 0,
+        }),
+    );
+
+    assert.match(html, /data-track-downloaded="true"/);
+});
+
+test("TrackRow resolves downloaded state for a remote row without overflow props", async () => {
+    const { TrackRow } = await loadTrackExports();
+    runtimeState.downloadedTrackIdentities = new Set([
+        "youtube:youtube-video-42",
+    ]);
+
+    const html = renderToStaticMarkup(
+        React.createElement(TrackRow, {
+            item: {
+                id: "search-result-42",
+                title: "Remote Track",
+                artistName: "Remote Artist",
+                duration: 201,
+                coverArtUrl: null,
+                streamSource: "youtube",
+                youtubeVideoId: "youtube-video-42",
+            },
+            index: 0,
+            overflowProps: null,
+            slots: {
+                trailingActions: React.createElement("span", null, "actions"),
+            },
+        }),
+    );
+
+    assert.match(html, /data-track-downloaded="true"/);
+    assert.deepEqual(runtimeState.inspectedOfflineTracks.at(-1), {
+        id: "search-result-42",
+        title: "Remote Track",
+        artist: { name: "Remote Artist" },
+        album: { title: "" },
+        duration: 201,
+        streamSource: "youtube",
+        tidalTrackId: undefined,
+        youtubeVideoId: "youtube-video-42",
+        youtubeAudioFormat: undefined,
+    });
 });
 
 test("TrackRow supports slot overrides for custom row composition", async () => {

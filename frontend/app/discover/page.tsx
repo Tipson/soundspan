@@ -177,13 +177,13 @@ function DiscoverWeeklyPageContent() {
                 );
             }
             toast.success(discoverAddedCount(displayPlaylist.tracks.length));
-            setShowPlaylistSelector(false);
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
                 error,
             );
             toast.error(discoverRu.toast.addFailed);
+            throw error;
         } finally {
             setIsAddingToPlaylist(false);
         }

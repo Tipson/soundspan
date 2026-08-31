@@ -47,10 +47,13 @@ Start-here guide for `frontend/features/home`.
   placeholder recommendations.
 - Continue listening is one resumable track row and disappears when the account
   has no recent provider history.
-- Made For You exposes at most six playable collections. It derives distinct
+- Made For You exposes five playable collections initially and expands all
+  remaining collections in place. It derives distinct
   Daily blend, Fresh finds, Back in rotation, and Quick picks recipes from
   independent account signals, deduplicates identical recipes, then fills any
-  remaining slots with non-empty Discover Weekly and generated mixes.
+  remaining initial slots with non-empty Discover Weekly and generated mixes.
+  The shelf owns one opaque surface so the artwork atmosphere never creates a
+  horizontal color seam through cards or metadata.
 - Home folds online discovery into at most one station row and one discovery
   row, deduplicates items across both, filters regional spillover, and hides
   either row when it has nothing navigable. Direction and mood are configured

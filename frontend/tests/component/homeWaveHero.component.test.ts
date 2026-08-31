@@ -12,6 +12,7 @@ GlobalRegistrator.register();
 
 const calls = {
     playTracks: [] as unknown[][],
+    images: [] as Array<Record<string, unknown>>,
     isShuffle: [] as unknown[],
     shuffleIndices: [] as unknown[][],
     vibeMode: [] as unknown[],
@@ -32,8 +33,10 @@ mock.module("lucide-react", {
 
 mock.module("@/components/ui/CachedImage", {
     namedExports: {
-        CachedImage: ({ alt }: { alt: string }) =>
-            React.createElement("img", { alt }),
+        CachedImage: (props: Record<string, unknown>) => {
+            calls.images.push(props);
+            return React.createElement("img", { alt: String(props.alt ?? "") });
+        },
     },
 });
 
@@ -93,6 +96,7 @@ const track = (id: string, title: string, coverArt: string | null = null) => ({
 
 beforeEach(() => {
     calls.playTracks.length = 0;
+    calls.images.length = 0;
     calls.isShuffle.length = 0;
     calls.shuffleIndices.length = 0;
     calls.vibeMode.length = 0;
@@ -143,6 +147,13 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.equal(
         container.querySelectorAll("[data-wave-focus-cover]").length,
         1,
+    );
+    assert.equal(calls.images.length, 2);
+    assert.ok(
+        calls.images.every(
+            (props) =>
+                props.priority === undefined && props.loading === "eager",
+        ),
     );
 
     await act(async () => {

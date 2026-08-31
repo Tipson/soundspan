@@ -96,7 +96,7 @@ export function HomeListeningDashboard({
                     </div>
                     <div
                         role="list"
-                        className="scrollbar-hide grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(210px,72vw)] gap-4 overflow-x-auto overscroll-x-contain pb-1 md:auto-cols-[minmax(220px,1fr)] xl:grid-flow-row xl:grid-cols-4 xl:overflow-visible"
+                        className="scrollbar-hide grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(210px,72vw)] gap-4 overflow-x-auto overscroll-x-contain pb-1 md:auto-cols-[minmax(220px,1fr)] xl:grid-flow-row xl:grid-cols-[repeat(auto-fit,minmax(180px,1fr))] xl:overflow-visible"
                     >
                         {continuation.map((track, index) => (
                             <article

@@ -17,6 +17,9 @@ export interface ModalProps {
     children: ReactNode;
     footer?: ReactNode;
     className?: string;
+    headerClassName?: string;
+    contentClassName?: string;
+    footerClassName?: string;
 }
 
 function useEscapeAndScrollLock(isOpen: boolean, onClose: () => void) {
@@ -93,6 +96,9 @@ export function Modal({
     children,
     footer,
     className,
+    headerClassName,
+    contentClassName,
+    footerClassName,
 }: ModalProps) {
     const dialogRef = useRef<HTMLDivElement>(null);
     const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -111,13 +117,21 @@ export function Modal({
                 aria-labelledby={titleId}
                 tabIndex={-1}
                 className={cn(
-                    "max-h-[min(90dvh,760px)] w-full max-w-md overflow-y-auto rounded-t-[24px] border border-line bg-surface-overlay p-5 shadow-2xl sm:rounded-[24px] sm:p-6",
+                    "max-h-[min(90dvh,760px)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[24px] border border-line bg-surface-overlay p-5 shadow-2xl after:block after:h-[env(safe-area-inset-bottom)] after:shrink-0 after:content-[''] sm:rounded-[24px] sm:p-6 sm:after:hidden",
                     className,
                 )}
             >
                 {/* Header */}
-                <div className="mb-5 flex items-center justify-between gap-4 border-b border-line pb-4">
-                    <h2 id={titleId} className="text-xl font-semibold text-content">
+                <div
+                    className={cn(
+                        "mb-5 flex items-center justify-between gap-4 border-b border-line pb-4",
+                        headerClassName,
+                    )}
+                >
+                    <h2
+                        id={titleId}
+                        className="text-xl font-semibold text-content"
+                    >
                         {title}
                     </h2>
                     <Button
@@ -131,11 +145,20 @@ export function Modal({
                 </div>
 
                 {/* Content */}
-                <div className={cn(footer && "mb-6")}>{children}</div>
+                <div className={cn(footer && "mb-6", contentClassName)}>
+                    {children}
+                </div>
 
                 {/* Footer */}
                 {footer && (
-                    <div className="flex gap-3 justify-end">{footer}</div>
+                    <div
+                        className={cn(
+                            "flex gap-3 justify-end",
+                            footerClassName,
+                        )}
+                    >
+                        {footer}
+                    </div>
                 )}
             </div>
         </div>

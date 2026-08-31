@@ -253,8 +253,9 @@ test("an active Wave retunes to a mood supplied by the Home shortcut", async () 
     });
 
     assert.ok(feedCalls.some(([, mood]) => mood === "calm"));
-    assert.deepEqual(calls.setUpcoming, [[[{ id: "calm-pick" }], true]]);
-    assert.deepEqual(calls.vibeQueueIds, [["playing", "calm-pick"]]);
+    assert.deepEqual(calls.playTracks, [[[{ id: "calm-pick" }], 0, true]]);
+    assert.deepEqual(calls.setUpcoming, []);
+    assert.deepEqual(calls.vibeQueueIds, [["calm-pick"]]);
 
     await React.act(async () => root.unmount());
     container.remove();

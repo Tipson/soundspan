@@ -839,6 +839,26 @@ export default function PlaylistDetailPage() {
                                     item.track?.album?.artist?.name ||
                                     ru.common.unknownArtist,
                                 duration: item.track?.duration || 0,
+                                streamSource:
+                                    item.track?.streamSource === "tidal" ||
+                                    item.track?.streamSource === "youtube"
+                                        ? item.track.streamSource
+                                        : item.provider?.source === "tidal" ||
+                                            item.provider?.source === "youtube"
+                                          ? item.provider.source
+                                          : undefined,
+                                tidalTrackId:
+                                    item.track?.tidalTrackId ??
+                                    item.provider?.tidalTrackId ??
+                                    (item.trackTidalId &&
+                                    /^\d+$/.test(item.trackTidalId)
+                                        ? Number(item.trackTidalId)
+                                        : undefined),
+                                youtubeVideoId:
+                                    item.track?.youtubeVideoId ??
+                                    item.provider?.youtubeVideoId ??
+                                    item.trackYtMusicId ??
+                                    undefined,
                                 coverArtUrl: item.track?.album?.coverArt
                                     ? api.getCoverArtUrl(
                                           item.track.album.coverArt,

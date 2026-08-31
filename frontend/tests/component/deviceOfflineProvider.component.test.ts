@@ -609,6 +609,93 @@ test("initial hydration does not expose a stale ready record before cache reconc
     container.remove();
 });
 
+test("track lookups keep the latest attempt and latest ready copy indexed separately", async (t) => {
+    let identityReads = 0;
+    const makeRecord = ({
+        key,
+        status,
+        updatedAt,
+    }: {
+        key: string;
+        status: "ready" | "interrupted" | "error";
+        updatedAt: number;
+    }) => {
+        const record: Record<string, unknown> = {
+            key,
+            ownerId: "user-1",
+            quality: key,
+            virtualUrl: `/__offline/audio/${key}`,
+            sourceUrl: "/api/ytmusic/manual-track",
+            track: manualTrack,
+            status,
+            transferMode: "foreground",
+            backgroundFetchId: null,
+            bytesReceived: status === "ready" ? 1024 : 0,
+            totalBytes: 1024,
+            contentType: "audio/webm",
+            persistenceGranted: true,
+            attempt: 1,
+            createdAt: updatedAt,
+            updatedAt,
+            errorCode: status === "ready" ? null : "network",
+            errorMessage: status === "ready" ? null : "Transfer failed",
+        };
+        Object.defineProperty(record, "trackIdentity", {
+            enumerable: true,
+            get: () => {
+                identityReads += 1;
+                return "youtube:manual-track";
+            },
+        });
+        return record;
+    };
+    storedRecords = [
+        makeRecord({ key: "ready-low", status: "ready", updatedAt: 100 }),
+        makeRecord({ key: "ready-high", status: "ready", updatedAt: 200 }),
+        makeRecord({ key: "failed-new", status: "error", updatedAt: 300 }),
+    ];
+    const { DeviceOfflineProvider, useDeviceOffline } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+    let context: ReturnType<typeof useDeviceOffline> | null = null;
+
+    function Probe() {
+        context = useDeviceOffline();
+        return React.createElement("span", null, context.isHydrated.toString());
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                DeviceOfflineProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const offline = context as ReturnType<typeof useDeviceOffline> | null;
+    assert.ok(offline);
+    assert.equal(offline.recordForTrack(manualTrack)?.key, "failed-new");
+    assert.equal(offline.readyRecordForTrack(manualTrack)?.key, "ready-high");
+
+    identityReads = 0;
+    for (let index = 0; index < 10; index += 1) {
+        offline.recordForTrack(manualTrack);
+        offline.readyRecordForTrack(manualTrack);
+    }
+    assert.equal(identityReads, 0, "lookups reuse the memoized identity index");
+});
+
 test("a storage notification during initial hydration cannot expose an unverified ready record", async () => {
     storedRecords = [
         {

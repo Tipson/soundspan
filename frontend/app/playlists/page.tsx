@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { usePlaylistsQuery } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +17,7 @@ import {
     Heart,
     Download,
     ListMusic,
+    Plus,
 } from "lucide-react";
 import { usePeerPlaylists } from "@/features/social/hooks/usePeerPlaylists";
 import type { PeerPlaylistSummary } from "@/lib/api/peerPlaylists";
@@ -37,6 +38,8 @@ import {
 import { useLikedPlaylistQuery } from "@/hooks/useQueries";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { pluralRu, ru } from "@/lib/i18n/ru";
+import { CreatePlaylistDialog } from "@/features/playlist/components/CreatePlaylistDialog";
+import { shouldOpenCreatePlaylist } from "@/features/playlist/createPlaylistRoute";
 
 interface PlaylistItem {
     id: string;
@@ -281,11 +284,14 @@ function PeerPlaylistCard({
 
 export default function PlaylistsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     useAuth();
     const { playTracks } = useAudioControls();
     const queryClient = useQueryClient();
     const [showHiddenTab, setShowHiddenTab] = useState(false);
     const [origin, setOrigin] = useState<PlaylistOrigin>("all");
+    const [isCreateDialogOpenManually, setIsCreateDialogOpenManually] =
+        useState(false);
     const likedQuery = useLikedPlaylistQuery(1);
     const likedTotal = likedQuery.data?.total ?? 0;
     const { federation } = useFeatures();
@@ -293,6 +299,9 @@ export default function PlaylistsPage() {
 
     // Use React Query hook for playlists
     const { data: playlists = [], isLoading } = usePlaylistsQuery();
+    const isCreateDialogOpen =
+        isCreateDialogOpenManually ||
+        shouldOpenCreatePlaylist(searchParams.get("create"));
 
     // Separate visible and hidden playlists
     const { visiblePlaylists, hiddenPlaylists } = useMemo(() => {
@@ -423,6 +432,16 @@ export default function PlaylistsPage() {
                     className="mb-4"
                     actions={
                         <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setIsCreateDialogOpenManually(true)
+                                }
+                                className="flex min-h-11 items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            >
+                                <Plus className="h-4 w-4" aria-hidden="true" />
+                                Создать плейлист
+                            </button>
                             {federation && !showHiddenTab && (
                                 <div
                                     role="group"
@@ -463,7 +482,7 @@ export default function PlaylistsPage() {
                             </Link>
                             <Link
                                 href="/explore"
-                                className="flex min-h-11 items-center rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                className="flex min-h-11 items-center rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm font-semibold text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             >
                                 Найти плейлисты
                             </Link>
@@ -580,9 +599,11 @@ export default function PlaylistsPage() {
                             action={
                                 !showHiddenTab && effectiveOrigin !== "peers"
                                     ? {
-                                          label: "Найти плейлисты",
+                                          label: "Создать плейлист",
                                           onClick: () =>
-                                              router.push("/explore"),
+                                              setIsCreateDialogOpenManually(
+                                                  true,
+                                              ),
                                       }
                                     : undefined
                             }
@@ -590,6 +611,18 @@ export default function PlaylistsPage() {
                     </section>
                 )}
             </div>
+            <CreatePlaylistDialog
+                isOpen={isCreateDialogOpen}
+                onClose={() => {
+                    setIsCreateDialogOpenManually(false);
+                    if (shouldOpenCreatePlaylist(searchParams.get("create"))) {
+                        router.replace("/playlists", { scroll: false });
+                    }
+                }}
+                onCreated={(playlist) =>
+                    router.push(`/playlist/${encodeURIComponent(playlist.id)}`)
+                }
+            />
         </div>
     );
 }

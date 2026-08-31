@@ -5,12 +5,7 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/utils/cn";
 import { ru } from "@/lib/i18n/ru";
 
-export type LibraryTab =
-    | "liked"
-    | "playlists"
-    | "albums"
-    | "artists"
-    | "downloads";
+export type LibraryTab = "playlists" | "albums" | "artists";
 
 interface LibraryTabsProps {
     activeTab: LibraryTab;
@@ -21,7 +16,6 @@ const TABS: ReadonlyArray<{
     label: string;
     href: string;
 }> = [
-    { id: "liked", label: "Лайкнутые", href: "/library?tab=liked" },
     {
         id: "playlists",
         label: ru.library.playlists,
@@ -29,14 +23,9 @@ const TABS: ReadonlyArray<{
     },
     { id: "albums", label: ru.library.albums, href: "/library?tab=albums" },
     { id: "artists", label: ru.library.artists, href: "/library?tab=artists" },
-    {
-        id: "downloads",
-        label: ru.library.downloads,
-        href: "/library?tab=downloads",
-    },
 ];
 
-/** Personal Library navigation; Liked songs keeps its dedicated playable page. */
+/** Personal Library navigation; playlists also contains liked and device music. */
 export function LibraryTabs({ activeTab }: LibraryTabsProps) {
     const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
 
