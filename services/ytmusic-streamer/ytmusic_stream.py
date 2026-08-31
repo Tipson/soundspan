@@ -358,25 +358,35 @@ async def _browse_public_bounded(func: Callable[..., T], *args: Any) -> T:
         raise HTTPException(status_code=504, detail="YouTube Music request timed out") from error
 
 
-# HLS preferred because signed progressive URLs reject continuation ranges (SABR); ba/b is last.
-_YTMUSIC_HLS_FORMATS = {
-    "LOW": (
-        "ba[protocol=m3u8_native][abr<=64]/"
-        "ba[protocol=m3u8][abr<=64]/"
-        "ba[protocol=m3u8_native]/ba[protocol=m3u8]/ba/b"
-    ),
-    "MEDIUM": (
-        "ba[protocol=m3u8_native][abr<=128]/"
-        "ba[protocol=m3u8][abr<=128]/"
-        "ba[protocol=m3u8_native]/ba[protocol=m3u8]/ba/b"
-    ),
-    "HIGH": (
-        "ba[protocol=m3u8_native][abr<=256]/"
-        "ba[protocol=m3u8][abr<=256]/"
-        "ba[protocol=m3u8_native]/ba[protocol=m3u8]/ba/b"
-    ),
-    "LOSSLESS": "ba[protocol=m3u8_native]/ba[protocol=m3u8]/ba/b",
+_YTMUSIC_MAX_ABR = {
+    "LOW": 64,
+    "MEDIUM": 128,
+    "HIGH": 256,
+    "LOSSLESS": None,
 }
+
+
+def _build_ytmusic_spool_format(quality: str, max_bytes: int) -> str:
+    """Prefer the best audio format that can complete inside the spool cap.
+
+    yt-dlp often exposes both a large HLS rendition and smaller progressive
+    audio for long ambient titles. The completed file is served locally, so a
+    bounded progressive rendition is safe here even though its signed URL
+    would not be safe to expose directly to a range-reading browser.
+    """
+    max_abr = _YTMUSIC_MAX_ABR.get(quality, _YTMUSIC_MAX_ABR["HIGH"])
+    abr_filter = f"[abr<={max_abr}]" if max_abr is not None else ""
+    # yt-dlp's numeric filters are strict. Add one byte so a file exactly at
+    # the configured limit remains eligible, matching the progress hook.
+    exclusive_limit = max_bytes + 1
+    candidates = []
+    for protocol_filter in ("[protocol=m3u8_native]", "[protocol=m3u8]", ""):
+        for size_field in ("filesize", "filesize_approx"):
+            candidates.append(f"ba{protocol_filter}{abr_filter}[{size_field}<{exclusive_limit}]")
+    # If upstream omits all size estimates, choose the smallest audio stream;
+    # the progress hook still enforces the hard byte limit while downloading.
+    candidates.append("wa")
+    return "/".join(candidates)
 
 
 def _spool_candidates(video_id: str, quality: str) -> list[Path]:
@@ -520,7 +530,7 @@ def _build_ytmusic_spool_options(
     progress_hook: Callable[[JsonObject], None],
 ) -> JsonObject:
     """Build yt-dlp options for one validated spool request."""
-    fmt = _YTMUSIC_HLS_FORMATS.get(quality, _YTMUSIC_HLS_FORMATS["HIGH"])
+    fmt = _build_ytmusic_spool_format(quality, YTMUSIC_SPOOL_TRACK_MAX_BYTES)
     outtmpl = str(YTMUSIC_SPOOL_DIR / f"{video_id}-{quality}.%(ext)s")
     return {
         "format": fmt,

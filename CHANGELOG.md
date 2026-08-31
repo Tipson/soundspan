@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- YouTube Music spool downloads now prefer the best audio rendition whose reported size fits the per-track byte limit, so long ambient tracks no longer select an oversized HLS rendition, fail at 64 MiB, and require a hard page refresh when a smaller playable rendition is available.
 - Add-to-playlist now lists only playlists the account can modify, prevents duplicate create submissions, retries a failed bulk add against the already-created playlist, and keeps partial bulk failures visible without closing the selector.
 - My Wave remains a non-scrolling desktop stage even at 1366 x 768: its core contracts instead of clipping controls, while the tuning sheet retains its own internal scroll and current/next feedback stays above the expanded player dock.
 - Activity, full-player, and install overlays now derive their desktop and mobile bounds from the shared Top Bar/player CSS variables instead of stale pixel offsets. The explicit PWA install flow reports pending state accessibly and marks the app installed only after the browser emits `appinstalled`.

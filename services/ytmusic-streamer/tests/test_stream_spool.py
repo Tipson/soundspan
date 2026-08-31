@@ -373,10 +373,16 @@ def test_prune_spool_ignores_files_it_does_not_own(
     assert all(path.exists() for path in unowned_paths)
 
 
-def test_hls_formats_keep_progressive_last_resort(stream_module: Any) -> None:
-    for selector in stream_module._YTMUSIC_HLS_FORMATS.values():
-        assert "protocol=m3u8" in selector
-        assert selector.endswith("/ba/b")
+def test_spool_formats_prefer_audio_that_fits_the_per_track_budget(
+    stream_module: Any,
+) -> None:
+    selector = stream_module._build_ytmusic_spool_format("HIGH", 64 * 1024 * 1024)
+
+    assert "protocol=m3u8" in selector
+    assert "abr<=256" in selector
+    assert "filesize_approx<67108865" in selector
+    assert "filesize<67108865" in selector
+    assert selector.endswith("/wa")
 
 
 def test_spool_progress_hook_rejects_oversized_download(
