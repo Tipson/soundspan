@@ -924,19 +924,14 @@ export function VibeProviderFallback() {
                                     aria-labelledby="wave-now-playing-title"
                                     className="wave-density-now min-w-0 rounded-2xl bg-white/[0.045] p-3 sm:p-4"
                                 >
-                                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
-                                        <div className="min-w-0">
-                                            <h2
-                                                id="wave-now-playing-title"
-                                                className="text-xs font-bold uppercase tracking-[0.16em] text-brand-light"
-                                            >
-                                                {ru.vibe.nowPlaying}
-                                            </h2>
-                                            <p className="mt-1 text-xs text-content-muted">
-                                                {ru.vibe.feedbackHint}
-                                            </p>
-                                        </div>
-                                        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+                                    <h2
+                                        id="wave-now-playing-title"
+                                        className="text-xs font-bold uppercase tracking-[0.16em] text-brand-light"
+                                    >
+                                        {ru.vibe.nowPlaying}
+                                    </h2>
+                                    <div className="mt-2 flex min-w-0 items-center gap-3 sm:gap-5">
+                                        <div className="min-w-0 flex-1 overflow-hidden">
                                             <NowPlayingConnected
                                                 track={currentTrack}
                                                 onMapPresent={false}
@@ -945,22 +940,25 @@ export function VibeProviderFallback() {
                                                 appearance="wave"
                                                 showPlaybackToggle={false}
                                             />
-                                            <button
-                                                data-testid="wave-skip"
-                                                type="button"
-                                                onClick={() =>
-                                                    advanceQueue("manual")
-                                                }
-                                                aria-label={ru.vibe.skipAria}
-                                                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-content-body transition-[transform,background-color,border-color] duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
-                                            >
-                                                <SkipForward
-                                                    className="h-4 w-4"
-                                                    aria-hidden="true"
-                                                />
-                                                {ru.vibe.skip}
-                                            </button>
                                         </div>
+                                        <button
+                                            data-testid="wave-skip"
+                                            type="button"
+                                            onClick={() =>
+                                                advanceQueue("manual")
+                                            }
+                                            aria-label={ru.vibe.skipAria}
+                                            title={ru.vibe.skip}
+                                            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-semibold text-content-body transition-[transform,background-color,border-color] duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none sm:px-4"
+                                        >
+                                            <SkipForward
+                                                className="h-4 w-4"
+                                                aria-hidden="true"
+                                            />
+                                            <span className="hidden sm:inline">
+                                                {ru.vibe.skip}
+                                            </span>
+                                        </button>
                                     </div>
                                 </section>
                             ) : (
@@ -980,15 +978,12 @@ export function VibeProviderFallback() {
                                     aria-label={ru.vibe.upNextAria}
                                     className="min-w-0"
                                 >
-                                    <div className="flex items-baseline justify-between gap-3">
+                                    <div className="flex items-baseline gap-3">
                                         <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-content-body">
                                             {hasActiveWave
                                                 ? ru.vibe.upNext
                                                 : ru.vibe.startsHere}
                                         </h2>
-                                        <span className="text-xs text-content-muted">
-                                            {ru.vibe.keepsGoing}
-                                        </span>
                                     </div>
                                     <div className="mt-2 grid gap-1.5">
                                         {nextTracks.map((track) => {

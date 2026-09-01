@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- My Wave separates current-track feedback from queue navigation, removes redundant instructional captions and the stray inline progress rule, and gives like, dislike, and skip controls clear visual spacing on desktop and mobile.
 - Opening the player's Similar tab accepts both the current string artist contract and legacy object-shaped responses instead of crashing the React tree to a black screen. The backend now emits the documented string artist name for new responses.
 - Rapid manual YouTube Music track selections are coalesced before opening a remote stream, so superseded selections and their reactive next-track preloads do not fill the sidecar's bounded spool queue and starve the track the listener actually chose. Initial playback, automatic queue advance, verified offline copies, and the single natural-end preload used to retain the iOS audio session remain immediate; late preload completions cannot replace a newer source.
 - Metadata-only catalog tracks without a local file path are excluded from audio-analysis admission, progress totals, database reconciliation, and stale Redis claims, so they cannot accumulate misleading `Invalid audio path` failures.

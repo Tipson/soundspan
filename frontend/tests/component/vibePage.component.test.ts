@@ -504,7 +504,7 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
     assert.ok(description);
     assert.match(description.className, /line-clamp-2/);
     assert.doesNotMatch(heading?.className ?? "", /6\.6rem/);
-    assert.match(mounted.container.textContent ?? "", /продолжится дальше/i);
+    assert.match(mounted.container.textContent ?? "", /волна начнётся отсюда/i);
     assert.doesNotMatch(
         mounted.container.textContent ?? "",
         /\b\d+\s+(?:tracks?|songs?)\s+(?:ready|queued)\b/i,
@@ -659,6 +659,11 @@ test("the Wave stage previews what comes next without presenting a finite queue"
     assert.ok(preview);
     assert.ok(nowPlayingPanel);
     assert.ok(skipButton);
+    assert.doesNotMatch(
+        nowPlayingPanel.textContent ?? "",
+        /Лайк, дизлайк или пропуск помогут/i,
+        "Current-track actions should not repeat their obvious purpose in helper copy",
+    );
     assert.match(
         nowPlayingPanel.parentElement?.parentElement?.className ?? "",
         /\bshrink-0\b/,
@@ -666,6 +671,11 @@ test("the Wave stage previews what comes next without presenting a finite queue"
     );
     assert.match(preview.textContent ?? "", /Далее/i);
     assert.match(preview.textContent ?? "", /Discovery Track|Shared Pick/i);
+    assert.doesNotMatch(
+        preview.textContent ?? "",
+        /И продолжится дальше/i,
+        "The endless Wave context should not add a redundant caption beside the section label",
+    );
     assert.doesNotMatch(
         preview.textContent ?? "",
         /\b\d+\s+(?:tracks?|songs?)\b/i,

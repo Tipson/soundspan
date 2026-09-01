@@ -553,6 +553,30 @@ test("NowPlayingCard renders a progress strip sized from currentTime/duration", 
     assert.match(html, /#facc15/);
 });
 
+test("NowPlayingCard omits the decorative progress strip in the compact Wave panel", async () => {
+    const NowPlayingCard = await nowPlayingCard();
+    const html = renderToStaticMarkup(
+        React.createElement(NowPlayingCard, {
+            track: {
+                id: "t-wave-progress",
+                title: "Wave Track",
+                artist: { name: "Wave Artist" },
+                album: { coverArt: null },
+            },
+            isPlaying: true,
+            onMapPresent: false,
+            moodColor: null,
+            onFlyTo: noop,
+            onTogglePlay: noop,
+            currentTime: 90,
+            duration: 180,
+            appearance: "wave",
+        }),
+    );
+
+    assert.doesNotMatch(html, /role="progressbar"/);
+});
+
 test("NowPlayingCard hides the progress strip when duration is 0/unknown", async () => {
     const NowPlayingCard = await nowPlayingCard();
     const baseProps = {

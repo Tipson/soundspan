@@ -261,10 +261,10 @@ export function NowPlayingCard(props: NowPlayingCardProps) {
     const showPlaybackToggle = props.showPlaybackToggle ?? true;
     return (
         <div
-            className={`pointer-events-auto relative flex items-center gap-1.5 sm:gap-2 ${
+            className={`pointer-events-auto relative flex items-center ${
                 appearance === "wave"
-                    ? "bg-transparent"
-                    : "rounded-xl border border-white/10 bg-black/60 p-2 shadow-lg backdrop-blur-md"
+                    ? "gap-3 bg-transparent"
+                    : "gap-1.5 rounded-xl border border-white/10 bg-black/60 p-2 shadow-lg backdrop-blur-md sm:gap-2"
             }`}
         >
             <CoverButton
@@ -276,7 +276,15 @@ export function NowPlayingCard(props: NowPlayingCardProps) {
             />
             <TrackLabels track={props.track} wide={appearance === "wave"} />
             {props.likeSlot && (
-                <span className="flex-shrink-0">{props.likeSlot}</span>
+                <span
+                    className={`flex-shrink-0 ${
+                        appearance === "wave"
+                            ? "ml-1 border-l border-white/10 pl-3"
+                            : ""
+                    }`}
+                >
+                    {props.likeSlot}
+                </span>
             )}
             {props.onMapPresent && (
                 <FindButton
@@ -291,11 +299,13 @@ export function NowPlayingCard(props: NowPlayingCardProps) {
                     toggle={props.onTogglePlay}
                 />
             )}
-            <ProgressStrip
-                currentTime={props.currentTime}
-                duration={props.duration}
-                color={color}
-            />
+            {appearance !== "wave" && (
+                <ProgressStrip
+                    currentTime={props.currentTime}
+                    duration={props.duration}
+                    color={color}
+                />
+            )}
             {NOW_PLAYING_STYLES}
         </div>
     );

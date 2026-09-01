@@ -68,6 +68,7 @@ export function NowPlayingConnected({
                     trackId={preferenceTrackId}
                     mode="both"
                     resolveFromQuery
+                    className={appearance === "wave" ? "gap-2" : undefined}
                     buttonSizeClassName="h-11 w-11"
                     iconSizeClassName="w-5 h-5"
                     metadata={buildPreferenceMetadata(track)}
