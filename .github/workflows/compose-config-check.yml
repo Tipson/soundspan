@@ -4,12 +4,16 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - docker-compose.yml
+      - docker-compose.images.yml
       - docker-compose.local.yml
       - docker-compose.dev.yml
       - .github/workflows/compose-config-check.yml
   push:
     branches: [main]
     paths:
+      - docker-compose.yml
+      - docker-compose.images.yml
       - docker-compose.local.yml
       - docker-compose.dev.yml
       - .github/workflows/compose-config-check.yml
@@ -48,3 +52,12 @@ jobs:
 
       - name: Validate dev DCLAP provider profile
         run: docker compose -f docker-compose.dev.yml --profile vibe-provider-dclap config --quiet
+
+      - name: Validate prebuilt split-stack image overlay
+        env:
+          POSTGRES_PASSWORD: compose-check-postgres-password
+          SESSION_SECRET: compose-check-session-secret
+          SETTINGS_ENCRYPTION_KEY: compose-check-settings-key
+          INTERNAL_API_SECRET: compose-check-internal-api-secret
+          SOUNDSPAN_IMAGE_TAG: main-deadbee
+        run: docker compose -f docker-compose.yml -f docker-compose.images.yml --profile worker config --quiet

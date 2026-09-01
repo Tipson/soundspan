@@ -364,6 +364,10 @@ services:
                 fi
                 exec docker-entrypoint.sh "$$@"
             - --
+        # The shell wrapper receives Compose's command as "$@". Without this
+        # explicit argv the official entrypoint exits successfully immediately,
+        # leaving the container in a restart loop instead of starting PostgreSQL.
+        command: ["postgres"]
         container_name: ${SOUNDSPAN_DB_CONTAINER_NAME:-soundspan_db}
         environment:
             POSTGRES_USER: ${POSTGRES_USER:-soundspan}

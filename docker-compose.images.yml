@@ -1,0 +1,43 @@
+# Prebuilt-image overlay for the split Soundspan stack.
+#
+# Build/publish images in CI, then deploy an immutable release or commit tag:
+#   SOUNDSPAN_IMAGE_TAG=main-0123abc docker compose \
+#     -f docker-compose.yml -f docker-compose.images.yml --profile worker \
+#     up -d --no-build
+#
+# A fork only needs to set SOUNDSPAN_IMAGE_REPOSITORY to its lower-case GHCR
+# repository, for example ghcr.io/example/soundspan. PostgreSQL and Redis stay
+# on the digest-pinned upstream images declared in docker-compose.yml.
+services:
+    backend:
+        image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-backend:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
+        pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}
+        # The prebuilt overlay is the split-runtime contract. Background work
+        # belongs exclusively to backend-worker; leaving the base default
+        # (`all`) here would start every scheduler and queue processor twice.
+        environment:
+            BACKEND_PROCESS_ROLE: api
+
+    backend-worker:
+        image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-backend-worker:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
+        pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}
+
+    frontend:
+        image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-frontend:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
+        pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}
+
+    audio-analyzer:
+        image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-audio-analyzer:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
+        pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}
+
+    vibe-provider-dclap:
+        image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-vibe-provider-dclap:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
+        pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}
+
+    tidal-streamer:
+        image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-tidal-streamer:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
+        pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}
+
+    ytmusic-streamer:
+        image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-ytmusic-streamer:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
+        pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}

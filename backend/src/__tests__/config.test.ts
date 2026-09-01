@@ -811,6 +811,11 @@ describe("config module", () => {
         expect(fallback.config.jwtSecret).toBe(requiredEnv().SESSION_SECRET);
     });
 
+    it("treats an empty optional JWT_SECRET as absent", async () => {
+        const fallback = await loadConfigModule({ JWT_SECRET: "" });
+        expect(fallback.config.jwtSecret).toBe(requiredEnv().SESSION_SECRET);
+    });
+
     it("rejects JWT_SECRET values shorter than 32 characters", async () => {
         const exitSpy = jest.spyOn(process, "exit").mockImplementation(((
             code?: number,
