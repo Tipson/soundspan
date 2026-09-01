@@ -7,6 +7,7 @@ const mockGetStreamProxy = jest.fn().mockResolvedValue({ data: {} });
 const mockEmbedAudio = jest.fn();
 const mockFetchProviderSpace = jest.fn();
 const mockResolveProviderEmbeddingSpace = jest.fn();
+const mockLogWarn = jest.fn();
 
 const mockPrisma: any = {
     analysisAssetLease: {
@@ -63,7 +64,7 @@ jest.mock("../../embeddingSpaces", () => ({
     resolveProviderEmbeddingSpace: mockResolveProviderEmbeddingSpace,
 }));
 jest.mock("../../../utils/logger", () => ({
-    logger: { child: () => ({ warn: jest.fn() }) },
+    logger: { child: () => ({ warn: mockLogWarn }) },
 }));
 
 import {
@@ -178,6 +179,86 @@ describe("remote recommendation hot set", () => {
             } as never),
         ).resolves.toEqual({ status: "already-in-flight" });
         expect(mockGetStreamProxy).not.toHaveBeenCalled();
+    });
+
+    it("uses the public YouTube context for account-scoped hot-set audio", async () => {
+        mockPrisma.canonicalRecording.findMany.mockResolvedValue([]);
+        mockPrisma.canonicalRecording.findUniqueOrThrow.mockResolvedValue({
+            analysisStatus: "pending",
+            embeddingStatus: "pending",
+            embeddings: [],
+        });
+        mockFetchProviderSpace.mockResolvedValue({ id: "provider" });
+        mockResolveProviderEmbeddingSpace.mockResolvedValue({
+            space: { id: "space-1" },
+        });
+        mockEmbedAudio.mockResolvedValue(Array(512).fill(0.01));
+
+        await expect(
+            processRemoteAnalysis({
+                data: {
+                    userId: "account-without-youtube-oauth",
+                    canonicalRecordingId: "canonical-public-stream",
+                    provider: "youtube",
+                    providerTrackId: "video-public-stream",
+                },
+            } as never),
+        ).resolves.toEqual({ status: "queued" });
+
+        expect(mockGetStreamProxy).toHaveBeenCalledWith(
+            "__public__",
+            "video-public-stream",
+            "medium",
+            undefined,
+            expect.objectContaining({ signal: expect.any(AbortSignal) }),
+        );
+    });
+
+    it("logs a bounded download failure classification without upstream headers", async () => {
+        mockPrisma.canonicalRecording.findMany.mockResolvedValue([]);
+        mockPrisma.canonicalRecording.findUniqueOrThrow.mockResolvedValue({
+            analysisStatus: "pending",
+            embeddingStatus: "pending",
+            embeddings: [],
+        });
+        const upstreamError = Object.assign(
+            new Error("Request failed with status code 401"),
+            {
+                code: "ERR_BAD_REQUEST",
+                response: { status: 401 },
+                config: {
+                    headers: { "x-internal-secret": "must-not-be-logged" },
+                },
+            },
+        );
+        mockGetStreamProxy.mockRejectedValueOnce(upstreamError);
+
+        await expect(
+            processRemoteAnalysis({
+                data: {
+                    userId: "alice",
+                    canonicalRecordingId: "canonical-download-error",
+                    provider: "youtube",
+                    providerTrackId: "video-download-error",
+                },
+            } as never),
+        ).rejects.toBe(upstreamError);
+
+        expect(mockLogWarn).toHaveBeenCalledWith(
+            "Remote analysis processing failed",
+            {
+                canonicalRecordingId: "canonical-download-error",
+                provider: "youtube",
+                stage: "download",
+                errorName: "Error",
+                errorMessage: "Request failed with status code 401",
+                errorCode: "ERR_BAD_REQUEST",
+                upstreamStatus: 401,
+            },
+        );
+        expect(JSON.stringify(mockLogWarn.mock.calls)).not.toContain(
+            "must-not-be-logged",
+        );
     });
 
     it("keeps DCLAP failure retryable after successful Essentia hand-off", async () => {

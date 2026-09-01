@@ -7,6 +7,8 @@ import { pipeline } from "node:stream/promises";
 import type Bull from "bull";
 import { config } from "../../config";
 import { prisma } from "../../utils/db";
+import { sanitizeEnrichmentErrorSummary } from "../../utils/enrichmentErrorSummary";
+import { toErrorMessage } from "../../utils/errors";
 import { logger } from "../../utils/logger";
 import { redisClient } from "../../utils/redis";
 import type { ScheduleRecommendationHotSetInput } from "./engine";
@@ -31,6 +33,33 @@ const ACTIVE_LEASE_STATUSES = [
 ] as const;
 
 class RemoteAnalysisError extends Error {}
+
+function classifyRemoteAnalysisError(error: unknown): {
+    errorName: string;
+    errorMessage: string;
+    errorCode?: string;
+    upstreamStatus?: number;
+} {
+    const record =
+        typeof error === "object" && error !== null
+            ? (error as Record<string, unknown>)
+            : null;
+    const response =
+        record &&
+        typeof record.response === "object" &&
+        record.response !== null
+            ? (record.response as Record<string, unknown>)
+            : null;
+    const safeMessage = sanitizeEnrichmentErrorSummary(toErrorMessage(error));
+    return {
+        errorName: error instanceof Error ? "Error" : "UnknownError",
+        errorMessage: safeMessage || "Unknown remote analysis failure",
+        ...(typeof record?.code === "string" ? { errorCode: record.code } : {}),
+        ...(typeof response?.status === "number"
+            ? { upstreamStatus: response.status }
+            : {}),
+    };
+}
 const CLAIM_DAILY_BUDGET_SCRIPT = `
 local reservation = redis.call("GET", KEYS[1])
 if reservation == "allowed" then
@@ -199,7 +228,7 @@ async function streamRemoteAsset(
                 ? await (
                       await import("../youtubeMusic")
                   ).ytMusicService.getStreamProxy(
-                      job.userId,
+                      "__public__",
                       job.providerTrackId,
                       "medium",
                       undefined,
@@ -494,6 +523,7 @@ export async function processRemoteAnalysis(
     }
     let handedOff = false;
     let embeddingSettled = !needsEmbedding;
+    let stage = "mark-processing";
     try {
         await prisma.canonicalRecording.update({
             where: { id: job.canonicalRecordingId },
@@ -509,7 +539,9 @@ export async function processRemoteAnalysis(
                     : {}),
             },
         });
+        stage = "download";
         await streamRemoteAsset(job, spoolPath);
+        stage = "mark-downloaded";
         await prisma.analysisAssetLease.update({
             where: { id: lease.id },
             data: { status: "downloaded" },
@@ -517,6 +549,7 @@ export async function processRemoteAnalysis(
 
         let dclapError: string | null = null;
         if (needsEmbedding) {
+            stage = "dclap";
             try {
                 const [
                     { embedAudio, fetchProviderSpace },
@@ -562,6 +595,7 @@ export async function processRemoteAnalysis(
             return { status: "embedding-completed" };
         }
 
+        stage = "essentia-handoff";
         // The lease row itself is the durable hand-off. The analyzer polls and
         // atomically claims queued_essentia rows, so rolling deploys cannot let
         // an older analyzer destructively pop an unknown Redis payload.
@@ -587,6 +621,12 @@ export async function processRemoteAnalysis(
             status: dclapError ? "queued-essentia-dclap-degraded" : "queued",
         };
     } catch (error) {
+        log.warn("Remote analysis processing failed", {
+            canonicalRecordingId: job.canonicalRecordingId,
+            provider: job.provider,
+            stage,
+            ...classifyRemoteAnalysisError(error),
+        });
         const message = "Remote analysis failed";
         const terminalUpdates: Promise<unknown>[] = [
             prisma.analysisAssetLease.update({
