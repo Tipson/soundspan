@@ -24,7 +24,6 @@ import {
 import { sanitizeEnrichmentErrorSummary } from "../utils/enrichmentErrorSummary";
 import {
     musicBrainzService,
-    type MusicBrainzArtistSearchResult,
     type MusicBrainzReleaseGroupSearchResult,
 } from "../services/musicbrainz";
 import { coverArtService } from "../services/coverArt";
@@ -60,6 +59,7 @@ import {
     applyAlbumEnrichmentFields,
     enrichAlbumFields,
 } from "../services/metadata/albumEnrichmentFields";
+import { searchMusicBrainzArtistsHandler } from "./enrichmentMusicBrainzArtistSearch";
 const router = Router();
 router.use(requireAuth);
 router.use("/search/musicbrainz/artists", musicBrainzArtistSearchLimiter);
@@ -958,46 +958,7 @@ router.post(
  * Search MusicBrainz for artists by name.
  * Used by metadata editing workflows to assist MBID correction.
  */
-router.get(
-    "/search/musicbrainz/artists",
-    asyncHandler(async (req, res) => {
-        try {
-            const query = String(req.query.q || "")
-                .trim()
-                .normalize("NFC");
-            if (query.length < 2) {
-                return res
-                    .status(400)
-                    .json({ error: "Query must be at least 2 characters" });
-            }
-            if (query.length > 80) {
-                return res
-                    .status(400)
-                    .json({ error: "Query must be at most 80 characters" });
-            }
-
-            const results = await musicBrainzService.searchArtist(query, 10);
-            const artists = results.map(
-                (artist: MusicBrainzArtistSearchResult) => ({
-                    mbid: artist.id,
-                    name: artist.name,
-                    disambiguation: artist.disambiguation || null,
-                    country: artist.country || null,
-                    type: artist.type || null,
-                    score:
-                        typeof artist.score === "number"
-                            ? artist.score
-                            : Number.parseInt(artist.score || "0", 10),
-                }),
-            );
-
-            res.json({ artists });
-        } catch (error: unknown) {
-            logger.error("MusicBrainz artist search error:", error);
-            sendInternalRouteError(res, "Search failed");
-        }
-    }),
-);
+router.get("/search/musicbrainz/artists", searchMusicBrainzArtistsHandler);
 
 /**
  * @openapi
