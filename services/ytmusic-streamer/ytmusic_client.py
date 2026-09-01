@@ -100,11 +100,12 @@ def _credential_file(prefix: Literal["oauth", "client_creds"], user_id: str) -> 
     safe_user_id = re.sub(r"[^A-Za-z0-9_-]", "", user_id)[:64]
     if safe_user_id != user_id:
         raise HTTPException(status_code=400, detail="Invalid user_id")
-    data_root = DATA_PATH.resolve()
-    candidate = (data_root / f"{prefix}_{safe_user_id}.json").resolve()
-    if candidate.parent != data_root:
+    data_root = os.path.realpath(DATA_PATH)
+    candidate = os.path.realpath(os.path.join(data_root, f"{prefix}_{safe_user_id}.json"))
+    safe_root_prefix = data_root.rstrip(os.sep) + os.sep
+    if not candidate.startswith(safe_root_prefix):
         raise HTTPException(status_code=400, detail="Invalid user_id")
-    return candidate
+    return Path(candidate)
 
 
 def _clear_user_search_fallback(user_id: str) -> None:
