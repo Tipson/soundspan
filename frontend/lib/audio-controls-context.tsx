@@ -74,6 +74,8 @@ import {
     QUEUE_CLEARED_AT_KEY_SUFFIX,
 } from "@/lib/playback-state-cadence";
 import { useVibeModeControls } from "@/lib/audio/useVibeModeControls";
+import { resolveAdaptiveWaveSkip } from "@/lib/audio/adaptiveWaveQueue";
+import { isProviderRadioTrack } from "@/lib/audio/providerRadioContinuation";
 import { applyTrackClick } from "@/lib/audio-engine/playbackOccurrence";
 import { userFacingError } from "@/lib/i18n/ru";
 import {
@@ -313,6 +315,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     const lastQueueInsertAtRef = useRef<number | null>(null);
     const lastCursorTrackIndexRef = useRef<number | null>(null);
     const lastCursorIsShuffleRef = useRef<boolean | null>(null);
+    const adaptiveWaveSkipStreakRef = useRef(0);
+    const adaptiveWaveRefreshTokenRef = useRef<object | null>(null);
 
     const queueRef = useRef(state.queue);
 
@@ -436,6 +440,12 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             snapshot: getListenTogetherSessionSnapshot(),
         });
     }, []);
+
+    const { startVibeMode, stopVibeMode } = useVibeModeControls({
+        state,
+        getActiveListenTogetherSession,
+        showQueueMutationToasts: showListenTogetherQueueMutationToasts,
+    });
 
     const emitListenTogetherHostTrackOperation = useCallback(
         (action: QueueNavigationAction): void => {
@@ -1073,11 +1083,55 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             if (!nextItem) {
                 return;
             }
+            const adaptiveDecision = resolveAdaptiveWaveSkip({
+                previousStreak: adaptiveWaveSkipStreakRef.current,
+                origin,
+                vibeMode: state.vibeMode,
+                isProviderTrack: Boolean(
+                    state.currentTrack &&
+                        isProviderRadioTrack(state.currentTrack),
+                ),
+                listenedSeconds: playbackState.currentTime,
+                durationSeconds: state.currentTrack?.duration ?? 0,
+            });
+            adaptiveWaveSkipStreakRef.current = adaptiveDecision.nextStreak;
             startQueueItemAtIndex(advance.index, nextItem);
+
+            if (
+                adaptiveDecision.shouldRegenerate &&
+                adaptiveWaveRefreshTokenRef.current === null
+            ) {
+                const refreshToken = {};
+                adaptiveWaveRefreshTokenRef.current = refreshToken;
+                void startVibeMode({
+                    queueStrategy: "replace-upcoming",
+                    queueCommitToken: refreshToken,
+                    onLocalQueueCommit: (commit) => {
+                        if (
+                            commit.token !==
+                                adaptiveWaveRefreshTokenRef.current ||
+                            commit.mutation !== "replace-upcoming"
+                        ) {
+                            return;
+                        }
+                        adaptiveWaveSkipStreakRef.current = 0;
+                        const currentPlayback = getPlaybackView();
+                        currentPlayback.setCurrentTime(0);
+                        currentPlayback.setIsPlaying(true);
+                    },
+                }).finally(() => {
+                    if (
+                        adaptiveWaveRefreshTokenRef.current === refreshToken
+                    ) {
+                        adaptiveWaveRefreshTokenRef.current = null;
+                    }
+                });
+            }
         },
         [
             state,
             startQueueItemAtIndex,
+            startVibeMode,
             getActiveListenTogetherSession,
             emitListenTogetherHostTrackOperation,
             applyOptimisticListenTogetherTrackSelection,
@@ -2120,12 +2174,6 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         setVolumeControl,
         toggleMute,
     } = useVolumeModeControls(volumeMode);
-
-    const { startVibeMode, stopVibeMode } = useVibeModeControls({
-        state,
-        getActiveListenTogetherSession,
-        showQueueMutationToasts: showListenTogetherQueueMutationToasts,
-    });
 
     // Memoize the entire context value
     const value = useMemo(

@@ -51,6 +51,11 @@ const controls = {
     skipBackward: mock.fn((_time: number) => undefined),
 };
 
+const engineControls = {
+    play: mock.fn(() => undefined),
+    pause: mock.fn(() => undefined),
+};
+
 mock.module("@/lib/audio-context", {
     namedExports: {
         useAudioState: () => media,
@@ -62,6 +67,12 @@ mock.module("@/lib/audio-context", {
 mock.module("@/lib/audio-playback-context", {
     namedExports: {
         usePlaybackProgress: () => ({ currentTime: playback.currentTime }),
+    },
+});
+
+mock.module("@/lib/audio-engine/audioPlaybackOrchestratorRuntime", {
+    namedExports: {
+        audioEngine: engineControls,
     },
 });
 
@@ -125,6 +136,10 @@ beforeEach(() => {
     positionStates.length = 0;
     mediaSession.metadata = null;
     mediaSession.playbackState = "none";
+    engineControls.play.mock.resetCalls();
+    engineControls.pause.mock.resetCalls();
+    controls.resume.mock.resetCalls();
+    controls.pause.mock.resetCalls();
     Object.defineProperty(navigator, "mediaSession", {
         configurable: true,
         value: mediaSession,
@@ -133,6 +148,36 @@ beforeEach(() => {
         configurable: true,
         value: FakeMediaMetadata,
     });
+});
+
+test("lock-screen play and pause drive the audio engine synchronously", async (t) => {
+    const { useMediaSession } = await import("../../hooks/useMediaSession");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+
+    function Probe() {
+        useMediaSession();
+        return null;
+    }
+
+    playback.isPlaying = true;
+    await React.act(async () => {
+        root.render(React.createElement(Probe));
+    });
+
+    registered.get("pause")?.();
+    assert.equal(engineControls.pause.mock.callCount(), 1);
+    assert.equal(controls.pause.mock.callCount(), 1);
+
+    registered.get("play")?.();
+    assert.equal(engineControls.play.mock.callCount(), 1);
+    assert.equal(controls.resume.mock.callCount(), 1);
 });
 
 after(() => {

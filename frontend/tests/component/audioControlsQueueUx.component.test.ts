@@ -34,8 +34,12 @@ import {
 
 const stateHolder: { current: Record<string, unknown> } = { current: {} };
 const playbackHolder: { current: Record<string, unknown> } = { current: {} };
-const apiCalls: { updatePodcastProgress: unknown[][] } = {
+const apiCalls: {
+    updatePodcastProgress: unknown[][];
+    personalizedRequests: string[];
+} = {
     updatePodcastProgress: [],
+    personalizedRequests: [],
 };
 const getPodcastImpl: { current: (id: string) => Promise<unknown> } = {
     current: async () => ({ episodes: [] }),
@@ -117,7 +121,10 @@ mock.module("@/lib/api", {
             },
             getPodcast: (id: string) => getPodcastImpl.current(id),
             clearPlaybackState: async () => ({}),
-            request: async () => personalizedFeed.current,
+            request: async (path: string) => {
+                apiCalls.personalizedRequests.push(path);
+                return personalizedFeed.current;
+            },
         },
     },
 });
@@ -166,6 +173,8 @@ function createDeferredAudioState(
         repeatMode: "off",
         repeatOneCount: 0,
         vibeMode: false,
+        waveMode: "for-you",
+        waveMood: null,
         vibeSourceFeatures: null,
         vibeQueueIds: [],
         playerMode: "full",
@@ -237,6 +246,7 @@ async function renderControls(options: {
     stateHolder.current = options.state;
     playbackHolder.current = options.playback;
     apiCalls.updatePodcastProgress.length = 0;
+    apiCalls.personalizedRequests.length = 0;
 
     const { AudioControlsProvider, useAudioControls } =
         await import("../../lib/audio-controls-context");
@@ -670,6 +680,84 @@ test("provider radio extends the played shuffle order without replaying old trac
         (state.currentTrack as { youtubeVideoId?: string }).youtubeVideoId,
         "BBBBBBBBBBB",
     );
+});
+
+test("three early Wave skips replace the prepared provider tail", async () => {
+    const currentTrack = {
+        ...makeTrack("yt:AAAAAAAAAAA", "provider-artist"),
+        streamSource: "youtube" as const,
+        youtubeVideoId: "AAAAAAAAAAA",
+        provider: {
+            source: "youtube" as const,
+            youtubeVideoId: "AAAAAAAAAAA",
+        },
+    };
+    const staleTracks = ["BBBBBBBBBBB", "CCCCCCCCCCC"].map((videoId) => ({
+        ...makeTrack(`yt:${videoId}`, `artist-${videoId}`),
+        streamSource: "youtube" as const,
+        youtubeVideoId: videoId,
+        provider: { source: "youtube" as const, youtubeVideoId: videoId },
+    }));
+    const freshVideoId = "DDDDDDDDDDD";
+    personalizedFeed.current = {
+        shelves: {
+            discovery: [
+                {
+                    id: `yt:${freshVideoId}`,
+                    title: "Fresh adaptive track",
+                    duration: 180,
+                    trackNo: null,
+                    artist: { id: null, name: "Fresh Artist" },
+                    album: { id: null, title: "Fresh Album", coverArt: null },
+                    source: "youtube",
+                    provider: {
+                        tidalTrackId: null,
+                        youtubeVideoId: freshVideoId,
+                    },
+                    streamSource: "youtube",
+                    youtubeVideoId: freshVideoId,
+                },
+            ],
+            quickPicks: [],
+            listenAgain: [],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
+    const state = createDeferredAudioState({
+        queue: [currentTrack, ...staleTracks],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        vibeMode: true,
+        vibeQueueIds: [
+            currentTrack.id,
+            ...staleTracks.map((track) => track.id),
+        ],
+    });
+    const playback = createPlaybackStub({ currentTime: 5, duration: 200 });
+    const controls = await renderControls({ state, playback });
+
+    controls.next();
+    controls.next();
+    controls.next();
+    await flushAsync();
+    state.commit();
+
+    assert.equal(apiCalls.personalizedRequests.length, 1);
+    assert.equal(
+        (state.currentTrack as { youtubeVideoId?: string }).youtubeVideoId,
+        freshVideoId,
+    );
+    assert.deepEqual(
+        (state.queue as Array<{ youtubeVideoId?: string }>).map(
+            (track) => track.youtubeVideoId,
+        ),
+        ["AAAAAAAAAAA", freshVideoId],
+    );
+    assert.equal(playback.currentTime, 0);
+    assert.equal(playback.isPlaying, true);
 });
 
 test("provider radio adds rich tracks to a Listen Together queue without local mutation", async () => {

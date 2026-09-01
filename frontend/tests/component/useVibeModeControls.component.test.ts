@@ -459,3 +459,111 @@ test("late provider radio response is ignored after the active track changes", a
     assert.deepEqual(first.mutations, []);
     assert.deepEqual(second.mutations, []);
 });
+
+test("adaptive provider refresh replaces the stale tail after the latest active track", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const harness = new HookLifecycleHarness();
+    const first = makeProviderTrack("AAAAAAAAAAA");
+    const second = makeProviderTrack("BBBBBBBBBBB");
+    const stale = makeProviderTrack("CCCCCCCCCCC");
+    const freshOne = makeProviderTrack("DDDDDDDDDDD");
+    const freshTwo = makeProviderTrack("EEEEEEEEEEE");
+    const queue = [first, second, stale];
+    const committed: {
+        queue: ReturnType<typeof makeProviderTrack>[] | null;
+        currentTrack: ReturnType<typeof makeProviderTrack> | null;
+        currentIndex: number | null;
+        mutation: string | null;
+    } = {
+        queue: null,
+        currentTrack: null,
+        currentIndex: null,
+        mutation: null,
+    };
+    const sharedSetters = {
+        setIsShuffle: () => undefined,
+        setShuffleIndices: () => undefined,
+        setVibeMode: () => undefined,
+        setVibeSourceFeatures: () => undefined,
+        setVibeQueueIds: () => undefined,
+        setQueue: (
+            value:
+                | typeof queue
+                | ((previous: typeof queue) => typeof queue),
+        ) => {
+            committed.queue =
+                typeof value === "function" ? value(queue) : value;
+        },
+        setCurrentIndex: (value: number) => {
+            committed.currentIndex = value;
+        },
+        setCurrentTrack: (value: typeof first) => {
+            committed.currentTrack = value;
+        },
+        setCurrentAudiobook: () => undefined,
+        setCurrentPodcast: () => undefined,
+        setPlaybackType: () => undefined,
+    };
+
+    const initialState = {
+        currentTrack: first,
+        currentIndex: 0,
+        queue,
+        vibeMode: true,
+        waveMode: "for-you" as const,
+        waveMood: null,
+        isShuffle: false,
+        ...sharedSetters,
+    };
+    const advancedState = {
+        ...initialState,
+        currentTrack: second,
+        currentIndex: 1,
+    };
+
+    function HookProbe(audioState: typeof initialState) {
+        harness.beginRender();
+        activeHarness = harness;
+        const controls = useVibeModeControls({
+            state: audioState as never,
+            getActiveListenTogetherSession: () => null,
+            showQueueMutationToasts: () => undefined,
+        });
+        harness.commitRender();
+        return controls;
+    }
+
+    const initialControls = HookProbe(initialState);
+    const queueCommitToken = {};
+    const pendingResult = initialControls.startVibeMode({
+        queueStrategy: "replace-upcoming",
+        queueCommitToken,
+        onLocalQueueCommit: (commit) => {
+            committed.mutation = commit.mutation;
+        },
+    });
+    await Promise.resolve();
+
+    HookProbe(advancedState);
+    feedRequests[0].resolve({
+        shelves: {
+            discovery: [freshOne, freshTwo],
+            quickPicks: [],
+            listenAgain: [],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+        nextCursor: 2,
+    });
+
+    assert.deepEqual(await pendingResult, { success: true, trackCount: 2 });
+    assert.deepEqual(
+        committed.queue?.map((track) => track.id),
+        [first.id, second.id, freshOne.id, freshTwo.id],
+    );
+    assert.equal(committed.currentTrack?.id, freshOne.id);
+    assert.equal(committed.currentIndex, 2);
+    assert.equal(committed.mutation, "replace-upcoming");
+});

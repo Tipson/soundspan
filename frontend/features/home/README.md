@@ -85,6 +85,12 @@ Start-here guide for `frontend/features/home`.
   similarity instead. Home and provider-radio continuation share a 17-second
   outer request budget with no timeout retry, leaving the backend's bounded
   provider call time to complete without multiplying work.
+- Three consecutive manual skips made before 30 seconds or 20% of a provider
+  Wave track trigger one guarded personalized refresh. Playback advances
+  immediately, then the first fresh result replaces the still-unplayed tail;
+  technical playback failures neither count as negative taste feedback nor
+  reset the manual-skip streak, and stale responses cannot overwrite a newer
+  Wave session.
 
 ## Update Rule
 

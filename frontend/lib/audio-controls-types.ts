@@ -9,7 +9,10 @@ import type { EpisodeQueueItem } from "./queue-item";
 import type { Episode } from "@/features/podcast/types";
 
 /** Queue mutation committed by a local Match Vibe request. */
-export type VibeQueueMutationKind = "append" | "replace";
+export type VibeQueueMutationKind =
+    | "append"
+    | "replace"
+    | "replace-upcoming";
 
 /** Opaque proof that one Match Vibe request committed a local queue mutation. */
 export interface VibeQueueCommit {
@@ -19,6 +22,8 @@ export interface VibeQueueCommit {
 
 /** Optional internal handshake used to bind auto-advance to a Vibe-owned commit. */
 export interface VibeModeStartOptions {
+    /** Replace the prepared provider tail and start its first fresh track. */
+    queueStrategy?: "append" | "replace-upcoming";
     queueCommitToken?: object;
     onLocalQueueCommit?: (commit: VibeQueueCommit) => void;
 }

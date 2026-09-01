@@ -63,18 +63,33 @@ export function useVibeModeControls({
     const requestGenerationRef = useRef(0);
     const providerRadioCursorRef = useRef(0);
     const playbackContextRef = useRef({
+        track: state.currentTrack,
         trackId: state.currentTrack?.id ?? null,
         currentIndex: state.currentIndex,
         queue: state.queue,
+        vibeMode: state.vibeMode,
+        waveMode: state.waveMode,
+        waveMood: state.waveMood,
     });
 
     useLayoutEffect(() => {
         playbackContextRef.current = {
+            track: state.currentTrack,
             trackId: state.currentTrack?.id ?? null,
             currentIndex: state.currentIndex,
             queue: state.queue,
+            vibeMode: state.vibeMode,
+            waveMode: state.waveMode,
+            waveMood: state.waveMood,
         };
-    }, [state.currentIndex, state.currentTrack?.id, state.queue]);
+    }, [
+        state.currentIndex,
+        state.currentTrack,
+        state.queue,
+        state.vibeMode,
+        state.waveMode,
+        state.waveMood,
+    ]);
 
     const startVibeMode = useCallback(
         async (
@@ -85,15 +100,32 @@ export function useVibeModeControls({
                 return { success: false, trackCount: 0 };
             }
             const requestGeneration = ++requestGenerationRef.current;
+            const replaceUpcoming =
+                options?.queueStrategy === "replace-upcoming";
             const requestContext = {
                 trackId: currentTrack.id,
                 currentIndex: state.currentIndex,
                 queue: state.queue,
+                waveMode: state.waveMode,
+                waveMood: state.waveMood,
             };
             const requestIsCurrent = () => {
                 const currentContext = playbackContextRef.current;
+                if (requestGenerationRef.current !== requestGeneration) {
+                    return false;
+                }
+                if (replaceUpcoming) {
+                    return (
+                        currentContext.vibeMode &&
+                        currentContext.waveMode === requestContext.waveMode &&
+                        currentContext.waveMood === requestContext.waveMood &&
+                        Boolean(
+                            currentContext.track &&
+                                isProviderRadioTrack(currentContext.track),
+                        )
+                    );
+                }
                 return (
-                    requestGenerationRef.current === requestGeneration &&
                     currentContext.trackId === requestContext.trackId &&
                     currentContext.currentIndex ===
                         requestContext.currentIndex &&
@@ -139,7 +171,9 @@ export function useVibeModeControls({
                         }
                         continuation = collectProviderRadioContinuation(
                             feed,
-                            state.queue,
+                            replaceUpcoming
+                                ? playbackContextRef.current.queue
+                                : state.queue,
                             25,
                         );
                         cursor =
@@ -155,6 +189,9 @@ export function useVibeModeControls({
 
                     const listenTogetherSession =
                         getActiveListenTogetherSession();
+                    if (replaceUpcoming && listenTogetherSession) {
+                        return { success: false, trackCount: 0 };
+                    }
                     if (listenTogetherSession) {
                         if (typeof window !== "undefined") {
                             const confirmed = window.confirm(
@@ -184,6 +221,54 @@ export function useVibeModeControls({
                         return {
                             success: queueResult.acceptedCount > 0,
                             trackCount: queueResult.acceptedCount,
+                        };
+                    }
+
+                    if (replaceUpcoming) {
+                        const latestContext = playbackContextRef.current;
+                        const freshContinuation =
+                            collectProviderRadioContinuation(
+                                feed,
+                                latestContext.queue,
+                                25,
+                            );
+                        if (freshContinuation.length === 0) {
+                            return { success: false, trackCount: 0 };
+                        }
+                        const boundedCurrentIndex = Math.max(
+                            0,
+                            Math.min(
+                                latestContext.currentIndex,
+                                Math.max(0, latestContext.queue.length - 1),
+                            ),
+                        );
+                        const history = latestContext.queue.slice(
+                            0,
+                            boundedCurrentIndex + 1,
+                        );
+                        const replacementQueue = [
+                            ...history,
+                            ...freshContinuation,
+                        ];
+                        const firstFreshTrack = freshContinuation[0];
+
+                        state.setIsShuffle(false);
+                        state.setShuffleIndices([]);
+                        state.setVibeMode(true);
+                        state.setVibeSourceFeatures(null);
+                        state.setVibeQueueIds(
+                            replacementQueue.map((track) => track.id),
+                        );
+                        state.setQueue(replacementQueue);
+                        state.setCurrentAudiobook(null);
+                        state.setCurrentPodcast(null);
+                        state.setPlaybackType("track");
+                        state.setCurrentTrack(firstFreshTrack);
+                        state.setCurrentIndex(history.length);
+                        reportLocalQueueCommit("replace-upcoming");
+                        return {
+                            success: true,
+                            trackCount: freshContinuation.length,
                         };
                     }
 

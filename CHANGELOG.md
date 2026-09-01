@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- My Wave now replaces the still-unplayed prepared tail after three consecutive early manual skips, while technical playback failures do not distort that preference signal; the refreshed queue starts from the first newly ranked track without waiting for the old batch to run out.
+- iPhone lock-screen Play and Pause actions now drive the audio engine synchronously before updating application state, preventing a resumed system timer from running while the PWA remains silent in the background.
 - Taste-profile artist suggestions follow the selected genres in a balanced order, and the artist field provides debounced, cancellable MusicBrainz autocomplete so listeners save a canonical artist instead of an unchecked free-form spelling. Saving a profile invalidates the account's personalized Home data without assuming that two accounts with overlapping listening history must receive different tracks.
 - Native browser controls use the dark color scheme of the Soundspan interface.
 - Hybrid recommendation mode and bounded remote-analysis controls are configurable across split API/worker, AIO, and Helm deployments; Helm leaves them unset by default so application defaults or external env sources remain authoritative, while the Essentia analyzer shares write access needed to finalize owned temporary analysis assets.

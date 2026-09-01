@@ -8,6 +8,7 @@ import { useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { ru } from "@/lib/i18n/ru";
+import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 
 /**
  * Media Session API integration for OS-level media controls
@@ -237,10 +238,18 @@ export function useMediaSession() {
 
         // Register action handlers
         navigator.mediaSession.setActionHandler("play", () => {
+            // iOS may throttle React effects while the PWA is backgrounded.
+            // Drive the native element inside the lock-screen gesture before
+            // synchronizing declarative playback state, otherwise WebKit can
+            // advance the Media Session clock without audible output.
+            audioEngine.play();
             resume();
         });
 
         navigator.mediaSession.setActionHandler("pause", () => {
+            // Keep pause equally immediate so the same background session
+            // cannot leave a short sample playing while React is suspended.
+            audioEngine.pause();
             pause();
         });
 
