@@ -24,7 +24,7 @@ const marker = (label: string) => {
 
 const Icon = () => React.createElement("i");
 
-mock.module("@/components/layout/SectionHeader", {
+mock.module("@/features/home/components/SectionHeader", {
     namedExports: {
         SectionHeader: ({ title }: { title: string }) =>
             React.createElement("h2", null, title),
@@ -101,7 +101,7 @@ test("MoodsGenresSection renders mood categories section", async () => {
         }),
     );
 
-    assert.match(html, /Moods/);
+    assert.match(html, /Настроения/);
 });
 
 test("MoodsGenresSection renders genre categories section", async () => {
@@ -115,7 +115,7 @@ test("MoodsGenresSection renders genre categories section", async () => {
         }),
     );
 
-    assert.match(html, /Genres/);
+    assert.match(html, /Жанры/);
 });
 
 test("MoodsGenresSection hides moods section when no mood categories", async () => {
@@ -130,8 +130,8 @@ test("MoodsGenresSection hides moods section when no mood categories", async () 
         }),
     );
 
-    assert.doesNotMatch(html, /Moods/);
-    assert.match(html, /Genres/);
+    assert.doesNotMatch(html, /Настроения/);
+    assert.match(html, /Жанры/);
 });
 
 test("MoodsGenresSection hides genres section when no genre categories", async () => {
@@ -146,8 +146,8 @@ test("MoodsGenresSection hides genres section when no genre categories", async (
         }),
     );
 
-    assert.match(html, /Moods/);
-    assert.doesNotMatch(html, /Genres/);
+    assert.match(html, /Настроения/);
+    assert.doesNotMatch(html, /Жанры/);
 });
 
 test("MoodsGenresSection renders category pill buttons with params", async () => {

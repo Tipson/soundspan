@@ -6,8 +6,7 @@ import { api } from "@/lib/api";
 import type { Album } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { PeerBadge } from "@/components/ui/PeerBadge";
-import { SectionHeader } from "@/components/layout/SectionHeader";
-import { ControlSelect } from "@/components/ui/ControlSelect";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface DiscographyProps {
     albums: Album[];
@@ -15,6 +14,7 @@ interface DiscographyProps {
     onPlayAlbum: (albumId: string, albumTitle: string) => Promise<void>;
     sortBy: "year" | "dateAdded";
     onSortChange: (sortBy: "year" | "dateAdded") => void;
+    title?: string;
 }
 
 /**
@@ -26,6 +26,7 @@ export function Discography({
     onPlayAlbum,
     sortBy,
     onSortChange,
+    title = ru.catalog.discography,
 }: DiscographyProps) {
     if (!albums || albums.length === 0) {
         return null;
@@ -33,22 +34,25 @@ export function Discography({
 
     return (
         <section>
-            <SectionHeader
-                title="Discography"
-                size="sm"
-                rightAction={
-                    <ControlSelect
-                        value={sortBy}
-                        onChange={(e) =>
-                            onSortChange(e.target.value as "year" | "dateAdded")
-                        }
-                        aria-label="Sort discography"
-                    >
-                        <option value="year">Year (Newest)</option>
-                        <option value="dateAdded">Date Added (Recent)</option>
-                    </ControlSelect>
-                }
-            />
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <h2 className="text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                    {title}
+                </h2>
+                {/* Sort Dropdown */}
+                <select
+                    value={sortBy}
+                    aria-label="Сортировка дискографии"
+                    onChange={(e) =>
+                        onSortChange(e.target.value as "year" | "dateAdded")
+                    }
+                    className="min-h-11 rounded-full border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light [&>option]:bg-surface-hover [&>option]:text-white"
+                >
+                    <option value="year">{ru.catalog.yearNewest}</option>
+                    <option value="dateAdded">
+                        {ru.catalog.dateAddedRecent}
+                    </option>
+                </select>
+            </div>
             <div
                 data-tv-section="discography"
                 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
@@ -56,7 +60,8 @@ export function Discography({
                 {albums.map((album, index) => {
                     const subtitle = [
                         album.year,
-                        album.trackCount && `${album.trackCount} tracks`,
+                        album.trackCount &&
+                            `${album.trackCount} ${pluralRu(album.trackCount, ["трек", "трека", "треков"])}`,
                     ]
                         .filter(Boolean)
                         .join(" • ");

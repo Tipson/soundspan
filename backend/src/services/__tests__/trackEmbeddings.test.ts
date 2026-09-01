@@ -336,6 +336,8 @@ describe("findNearestToEmbedding", () => {
         expect(query.strings.join(" ")).toContain("FROM track_embeddings te");
         expect(query.strings.join(" ")).toContain("te.space_id =");
         expect(query.values).toContain("space-active");
+        expect(query.values).toContain("[0.1,0.2]");
+        expect(query.values).not.toContainEqual([0.1, 0.2]);
         expect(query.strings.join(" ")).not.toContain("!= ALL");
     });
 
@@ -348,6 +350,8 @@ describe("findNearestToEmbedding", () => {
         expect(query.strings.join(" ")).toContain("!= ALL");
         expect(query.values).toContainEqual(["track-2"]);
         expect(query.values).toContain("space-active");
+        expect(query.values).toContain("[0.1,0.2]");
+        expect(query.values).not.toContainEqual([0.1, 0.2]);
     });
 });
 
@@ -370,7 +374,7 @@ describe("findTracksByTextEmbedding", () => {
         // pass: LIMIT binds last, preceded by the ORDER BY vector, preceded
         // by the distance bound.
         expect(values[values.length - 1]).toBe(60);
-        expect(values[values.length - 2]).toEqual([0.25, 0.75]);
+        expect(values[values.length - 2]).toBe("[0.25,0.75]");
         expect(values[values.length - 3]).toBe(0.8);
         expect(mockRunAnnQuery).toHaveBeenCalledWith(query, undefined, {
             statementTimeoutMs: 5_000,

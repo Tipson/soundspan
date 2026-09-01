@@ -80,6 +80,7 @@ class HowlerEngine {
     private pendingCleanupHowls: Set<Howl> = new Set(); // Track Howls being cleaned up
     private audioSessionConfigured: boolean = false;
     private nativeEndedCleanup: (() => void) | null = null; // Cleanup for native <audio> ended listener
+    private loadGeneration: number = 0; // Invalidates callbacks from superseded Howl instances
 
     // Seek state management - prevents stale timeupdate events during seeks
     private isSeeking: boolean = false;
@@ -137,6 +138,8 @@ class HowlerEngine {
             return;
         }
 
+        const loadGeneration = ++this.loadGeneration;
+
         // Check if this source is preloaded - enables instant gapless switching
         if (this.isPreloaded(src)) {
             const preloadedHowl = this.getPreloadedHowl(src);
@@ -148,7 +151,7 @@ class HowlerEngine {
                 this.howl = preloadedHowl;
 
                 // Set up event handlers for the preloaded instance
-                this.setupHowlEventHandlers();
+                this.setupHowlEventHandlers(preloadedHowl, loadGeneration, src);
 
                 // Set correct volume
                 const targetVolume = this.state.isMuted ? 0 : this.state.volume;
@@ -161,6 +164,11 @@ class HowlerEngine {
 
                 // Use a microtask to emit after caller registers listeners
                 queueMicrotask(() => {
+                    if (
+                        !this.isActiveLoad(preloadedHowl, loadGeneration, src)
+                    ) {
+                        return;
+                    }
                     this.emit("load", { duration: this.state.duration });
                     if (autoplay) {
                         this.play();
@@ -233,11 +241,18 @@ class HowlerEngine {
         }
         // If no format provided, let Howler detect from Content-Type header
 
-        this.howl = new Howl({
+        let createdHowl: Howl | null = null;
+        createdHowl = new Howl({
             ...howlConfig,
             onload: () => {
+                if (
+                    !createdHowl ||
+                    !this.isActiveLoad(createdHowl, loadGeneration, src)
+                ) {
+                    return;
+                }
                 this.isLoading = false;
-                this.state.duration = this.howl?.duration() || 0;
+                this.state.duration = createdHowl.duration() || 0;
                 this.emit("load", { duration: this.state.duration });
 
                 if (autoplay) {
@@ -245,6 +260,12 @@ class HowlerEngine {
                 }
             },
             onloaderror: (id, error) => {
+                if (
+                    !createdHowl ||
+                    !this.isActiveLoad(createdHowl, loadGeneration, src)
+                ) {
+                    return;
+                }
                 sharedFrontendLogger.error(
                     "[HowlerEngine] Load error:",
                     error,
@@ -262,7 +283,7 @@ class HowlerEngine {
                     this.retryCount++;
 
                     // Save src before cleanup
-                    const srcToRetry = this.state.currentSrc;
+                    const srcToRetry = src;
                     const autoplayToRetry = this.pendingAutoplay;
                     const formatToRetry = this.lastFormat;
                     const requestOptionsToRetry = this.lastRequestOptions;
@@ -273,6 +294,7 @@ class HowlerEngine {
 
                     // Wait a bit before retrying
                     setTimeout(() => {
+                        if (this.loadGeneration !== loadGeneration) return;
                         this.load(
                             srcToRetry,
                             autoplayToRetry,
@@ -290,9 +312,21 @@ class HowlerEngine {
                 this.emit("loaderror", { error });
             },
             onplayerror: (id, error) => {
+                if (
+                    !createdHowl ||
+                    !this.isActiveLoad(createdHowl, loadGeneration, src)
+                ) {
+                    return;
+                }
                 this.handlePlayError(error);
             },
             onplay: () => {
+                if (
+                    !createdHowl ||
+                    !this.isActiveLoad(createdHowl, loadGeneration, src)
+                ) {
+                    return;
+                }
                 this.state.isPlaying = true;
                 this.userInitiatedPlay = false; // Clear flag after successful play
                 this.playRetryCount = 0;
@@ -301,18 +335,36 @@ class HowlerEngine {
                 this.emit("play");
             },
             onpause: () => {
+                if (
+                    !createdHowl ||
+                    !this.isActiveLoad(createdHowl, loadGeneration, src)
+                ) {
+                    return;
+                }
                 this.state.isPlaying = false;
                 this.userInitiatedPlay = false;
                 this.stopTimeUpdates();
                 this.emit("pause");
             },
             onstop: () => {
+                if (
+                    !createdHowl ||
+                    !this.isActiveLoad(createdHowl, loadGeneration, src)
+                ) {
+                    return;
+                }
                 this.state.isPlaying = false;
                 this.state.currentTime = 0;
                 this.stopTimeUpdates();
                 this.emit("stop");
             },
             onend: () => {
+                if (
+                    !createdHowl ||
+                    !this.isActiveLoad(createdHowl, loadGeneration, src)
+                ) {
+                    return;
+                }
                 // Guard: the native HTML5 'ended' fallback may have
                 // already handled this end event. Skip the duplicate.
                 if (!this.state.isPlaying) return;
@@ -321,19 +373,24 @@ class HowlerEngine {
                 this.emit("end");
             },
             onseek: () => {
-                if (this.howl) {
-                    this.state.currentTime = this.howl.seek() as number;
-                    this.emit("seek", { time: this.state.currentTime });
+                if (
+                    !createdHowl ||
+                    !this.isActiveLoad(createdHowl, loadGeneration, src)
+                ) {
+                    return;
                 }
+                this.state.currentTime = createdHowl.seek() as number;
+                this.emit("seek", { time: this.state.currentTime });
             },
         });
+        this.howl = createdHowl;
 
         // Bind the native HTML5 <audio> 'ended' event as a fallback.
         // Howler's onend relies on a JS timer poll which browsers throttle
         // when the page is hidden (locked screen / background tab), so the
         // Howler callback may never fire. The native event is driven by the
         // media pipeline and fires reliably even when JS timers are frozen.
-        this.bindNativeEndedEvent(this.howl);
+        this.bindNativeEndedEvent(createdHowl);
     }
 
     /**
@@ -767,10 +824,15 @@ class HowlerEngine {
      * Set up event handlers on a Howl instance
      * Used to attach handlers to preloaded instances after ownership transfer
      */
-    private setupHowlEventHandlers(): void {
-        if (!this.howl) return;
+    private setupHowlEventHandlers(
+        howl: Howl,
+        loadGeneration: number,
+        source: string,
+    ): void {
+        const isActive = () => this.isActiveLoad(howl, loadGeneration, source);
 
-        this.howl.on("play", () => {
+        howl.on("play", () => {
+            if (!isActive()) return;
             this.state.isPlaying = true;
             this.userInitiatedPlay = false;
             this.playRetryCount = 0;
@@ -779,39 +841,54 @@ class HowlerEngine {
             this.emit("play");
         });
 
-        this.howl.on("pause", () => {
+        howl.on("pause", () => {
+            if (!isActive()) return;
             this.state.isPlaying = false;
             this.userInitiatedPlay = false;
             this.stopTimeUpdates();
             this.emit("pause");
         });
 
-        this.howl.on("stop", () => {
+        howl.on("stop", () => {
+            if (!isActive()) return;
             this.state.isPlaying = false;
             this.state.currentTime = 0;
             this.stopTimeUpdates();
             this.emit("stop");
         });
 
-        this.howl.on("end", () => {
+        howl.on("end", () => {
+            if (!isActive()) return;
             if (!this.state.isPlaying) return;
             this.state.isPlaying = false;
             this.stopTimeUpdates();
             this.emit("end");
         });
 
-        this.howl.on("seek", () => {
-            if (this.howl) {
-                this.state.currentTime = this.howl.seek() as number;
-                this.emit("seek", { time: this.state.currentTime });
-            }
+        howl.on("seek", () => {
+            if (!isActive()) return;
+            this.state.currentTime = howl.seek() as number;
+            this.emit("seek", { time: this.state.currentTime });
         });
 
-        this.howl.on("playerror", (id, error) => {
+        howl.on("playerror", (id, error) => {
+            if (!isActive()) return;
             this.handlePlayError(error);
         });
 
-        this.bindNativeEndedEvent(this.howl);
+        this.bindNativeEndedEvent(howl);
+    }
+
+    private isActiveLoad(
+        howl: Howl,
+        loadGeneration: number,
+        source: string,
+    ): boolean {
+        return (
+            this.loadGeneration === loadGeneration &&
+            this.howl === howl &&
+            this.state.currentSrc === source
+        );
     }
 
     /**
@@ -1073,6 +1150,7 @@ class HowlerEngine {
      * Destroy the engine completely
      */
     destroy(): void {
+        this.loadGeneration += 1;
         this.cleanup();
         // Note: cancelPreload() is already called by cleanup()
         this.isLoading = false;

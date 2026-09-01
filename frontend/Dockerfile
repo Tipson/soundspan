@@ -3,15 +3,26 @@ FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea05
 
 WORKDIR /app
 
+# Match the production AIO build's network hardening while keeping npm's cache
+# in BuildKit rather than in the final image.
+ENV NODE_OPTIONS=--dns-result-order=ipv4first \
+    NPM_CONFIG_FETCH_RETRIES=10 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=300000 \
+    NPM_CONFIG_MAXSOCKETS=4
+
 # Inject monorepo contract package into /packages so file:../packages/* links resolve.
 COPY --from=media-metadata-contract . /packages/media-metadata-contract
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci && \
-    npm cache clean --force
+# Install dependencies. The existing lockfile requires legacy peer resolution;
+# the persistent cache makes repeated UI builds independent from transient npm
+# registry latency once the exact packages have been fetched once.
+RUN --mount=type=cache,id=soundspan-npm-frontend,target=/root/.npm,sharing=locked \
+    npm ci --legacy-peer-deps --prefer-offline
 
 # Build local contract package expected by frontend imports.
 RUN npx tsc -p /packages/media-metadata-contract/tsconfig.json
@@ -62,6 +73,7 @@ COPY --from=builder --chown=node:node /app/.next ./.next
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/server.js ./server.js
 COPY --from=builder --chown=node:node /app/server-proxy.js ./server-proxy.js
+COPY --from=builder --chown=node:node /app/lib/media-auth.js ./lib/media-auth.js
 COPY --from=builder --chown=node:node /packages/media-metadata-contract /packages/media-metadata-contract
 
 # Copy healthcheck and entrypoint scripts

@@ -458,7 +458,16 @@ describe("playlists route runtime", () => {
                             album: { coverUrl: "/covers/album.jpg" },
                         },
                     },
-                    { id: "i-2", sort: 1, track: null },
+                    {
+                        id: "i-2",
+                        sort: 1,
+                        track: null,
+                        trackTidal: null,
+                        trackYtMusic: {
+                            thumbnailUrl: "https://img.test/yt-cover.jpg",
+                            albumEntity: null,
+                        },
+                    },
                 ],
             },
             {
@@ -493,7 +502,14 @@ describe("playlists route runtime", () => {
                             album: { coverArt: "/covers/album.jpg" },
                         },
                     },
-                    { id: "i-2", track: null },
+                    {
+                        id: "i-2",
+                        track: {
+                            album: {
+                                coverArt: "https://img.test/yt-cover.jpg",
+                            },
+                        },
+                    },
                 ],
             }),
             expect.objectContaining({
@@ -563,6 +579,21 @@ describe("playlists route runtime", () => {
                             track: {
                                 select: {
                                     album: { select: { coverUrl: true } },
+                                },
+                            },
+                            trackTidal: {
+                                select: {
+                                    albumEntity: {
+                                        select: { coverUrl: true },
+                                    },
+                                },
+                            },
+                            trackYtMusic: {
+                                select: {
+                                    thumbnailUrl: true,
+                                    albumEntity: {
+                                        select: { coverUrl: true },
+                                    },
                                 },
                             },
                         },
@@ -988,7 +1019,7 @@ describe("playlists route runtime", () => {
         prisma.trackYtMusic.findMany.mockResolvedValueOnce([
             {
                 id: "yt-1",
-                videoId: "yt-video-7",
+                videoId: "dQw4w9WgXcQ",
                 duration: 199,
             },
         ]);
@@ -1053,12 +1084,12 @@ describe("playlists route runtime", () => {
                     trackTidal: null,
                     trackYtMusic: {
                         id: "yt-1",
-                        videoId: "yt-video-7",
+                        videoId: "dQw4w9WgXcQ",
                         title: "YT Song",
                         artist: "YT Artist",
                         album: "YT Album",
                         duration: 199,
-                        thumbnailUrl: "https://yt/thumb.jpg",
+                        thumbnailUrl: null,
                     },
                 },
                 {
@@ -1116,7 +1147,10 @@ describe("playlists route runtime", () => {
         expect(ytItem).toBeDefined();
         expect(ytItem.playback.isPlayable).toBe(true);
         expect(ytItem.track.streamSource).toBe("youtube");
-        expect(ytItem.track.youtubeVideoId).toBe("yt-video-7");
+        expect(ytItem.track.youtubeVideoId).toBe("dQw4w9WgXcQ");
+        expect(ytItem.track.album.coverArt).toBe(
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+        );
 
         const unknownItem = res.body.items.find(
             (entry: any) => entry.provider?.source === "unknown",
@@ -2134,10 +2168,15 @@ describe("playlists route runtime", () => {
             userId: "u1",
             isPublic: false,
         });
-        prisma.playlistItem.findMany.mockResolvedValueOnce([
-            { trackId: "t-2" },
-            { trackId: "t-1" },
-        ]);
+        prisma.playlistItem.findMany
+            .mockResolvedValueOnce([
+                { id: "pli-2", trackId: "t-2" },
+                { id: "pli-1", trackId: "t-1" },
+            ])
+            .mockResolvedValueOnce([
+                { id: "pli-2", trackId: "t-2" },
+                { id: "pli-1", trackId: "t-1" },
+            ]);
         const reorderReq = {
             user: { id: "u1" },
             params: { id: "pl-1" },
@@ -2146,7 +2185,23 @@ describe("playlists route runtime", () => {
         const reorderRes = createRes();
         await reorderItems(reorderReq, reorderRes);
         expect(reorderRes.statusCode).toBe(200);
-        expect(prisma.playlistItem.update).toHaveBeenCalledTimes(2);
+        expect(prisma.playlistItem.update).toHaveBeenCalledTimes(4);
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(1, {
+            where: { id: "pli-2" },
+            data: { sort: 6 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(2, {
+            where: { id: "pli-1" },
+            data: { sort: 7 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(3, {
+            where: { id: "pli-2" },
+            data: { sort: 0 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(4, {
+            where: { id: "pli-1" },
+            data: { sort: 1 },
+        });
         expect(prisma.$transaction).toHaveBeenCalled();
     });
 
@@ -2329,9 +2384,17 @@ describe("playlists route runtime", () => {
         expect(res.statusCode).toBe(200);
         expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(1, {
             where: { id: "pli-2" },
-            data: { sort: 0 },
+            data: { sort: 6 },
         });
         expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(2, {
+            where: { id: "pli-1" },
+            data: { sort: 7 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(3, {
+            where: { id: "pli-2" },
+            data: { sort: 0 },
+        });
+        expect(prisma.playlistItem.update).toHaveBeenNthCalledWith(4, {
             where: { id: "pli-1" },
             data: { sort: 1 },
         });

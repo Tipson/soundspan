@@ -212,6 +212,36 @@ def test_ydl_opts_include_socket_timeout(monkeypatch: pytest.MonkeyPatch) -> Non
     assert all(opts["socket_timeout"] == app.YTDLP_SOCKET_TIMEOUT for opts in captured)
 
 
+def test_direct_music_stream_uses_the_spool_proven_player_clients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The metadata stream path should avoid android_music-only format failures."""
+    import app
+
+    captured: list[dict[str, Any]] = []
+
+    def fake_extract(
+        cache_key: Any, url: Any, ydl_opts: Any, video_id: Any, error_label: Any
+    ) -> Any:
+        captured.append(ydl_opts)
+        return {"url": "http://cdn/x"}
+
+    monkeypatch.setattr(app, "_extract_stream_info", fake_extract)
+
+    app._get_stream_url_sync("u", VIDEO_ID, "HIGH")
+    spool_options = app._build_ytmusic_spool_options(
+        VIDEO_ID,
+        "HIGH",
+        match_filter=lambda *_args: None,
+        progress_hook=lambda _status: None,
+    )
+
+    direct_clients = captured[0]["extractor_args"]["youtube"]["player_client"]
+    spool_clients = spool_options["extractor_args"]["youtube"]["player_client"]
+    assert direct_clients == spool_clients
+    assert "android_music" not in direct_clients
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     ("path", "info"),

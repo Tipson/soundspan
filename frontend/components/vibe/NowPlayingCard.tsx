@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { Crosshair, Music, Pause, Play } from "lucide-react";
 import { api } from "@/lib/api";
+import { ru } from "@/lib/i18n/ru";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import { VIBE_ACCENTS } from "./types";
 
 export interface NowPlayingCardTrack {
@@ -25,6 +27,8 @@ export interface NowPlayingCardProps {
     currentTime?: number;
     duration?: number;
     likeSlot?: ReactNode;
+    appearance?: "floating" | "wave";
+    showPlaybackToggle?: boolean;
 }
 
 const DEFAULT_COLOR = VIBE_ACCENTS.edge;
@@ -50,11 +54,13 @@ function CoverButton({
     onMap,
     color,
     onFlyTo,
+    decorativeOnly = false,
 }: {
     track: NowPlayingCardTrack;
     onMap: boolean;
     color: string;
     onFlyTo: () => void;
+    decorativeOnly?: boolean;
 }) {
     const rawCover = track.album?.coverArt ?? null;
     const cover =
@@ -64,6 +70,41 @@ function CoverButton({
         !rawCover.startsWith("blob:")
             ? api.getCoverArtUrl(rawCover, 96)
             : rawCover;
+    const artwork = (
+        <span className="relative block flex-shrink-0">
+            {cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={cover}
+                    alt=""
+                    loading="lazy"
+                    className="h-12 w-12 rounded-lg object-cover"
+                />
+            ) : (
+                <span
+                    className="grid h-12 w-12 place-items-center rounded-lg"
+                    style={{ backgroundColor: `${color}33` }}
+                >
+                    <Music className="h-5 w-5" style={{ color }} />
+                </span>
+            )}
+            {onMap && !decorativeOnly && (
+                <span
+                    className="vibe-np-dot"
+                    style={{
+                        backgroundColor: color,
+                        boxShadow: `0 0 6px 1px ${color}`,
+                    }}
+                    aria-hidden="true"
+                />
+            )}
+        </span>
+    );
+
+    if (decorativeOnly) {
+        return <span className="flex-shrink-0">{artwork}</span>;
+    }
+
     return (
         <button
             type="button"
@@ -72,49 +113,28 @@ function CoverButton({
             aria-disabled={!onMap}
             title={
                 onMap
-                    ? "Fly to now playing on the map"
-                    : "Now playing isn't on the map"
+                    ? vibeMapRu.controls.flyToNowPlaying
+                    : vibeMapRu.controls.nowPlayingOffMap
             }
             aria-label={
                 onMap
-                    ? `Fly to ${track.title} on the map`
-                    : `${track.title} — not on the map`
+                    ? `${vibeMapRu.map.findOnMap}: ${track.title}`
+                    : `${track.title} — ${vibeMapRu.map.notOnMap}`
             }
             className="group flex-shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 disabled:cursor-default"
         >
-            <span className="relative flex-shrink-0 block">
-                {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={cover}
-                        alt=""
-                        loading="lazy"
-                        className="w-12 h-12 rounded-lg object-cover"
-                    />
-                ) : (
-                    <span
-                        className="w-12 h-12 rounded-lg grid place-items-center"
-                        style={{ backgroundColor: `${color}33` }}
-                    >
-                        <Music className="w-5 h-5" style={{ color }} />
-                    </span>
-                )}
-                {onMap && (
-                    <span
-                        className="vibe-np-dot"
-                        style={{
-                            backgroundColor: color,
-                            boxShadow: `0 0 6px 1px ${color}`,
-                        }}
-                        aria-hidden="true"
-                    />
-                )}
-            </span>
+            {artwork}
         </button>
     );
 }
 
-function TrackLabels({ track }: { track: NowPlayingCardTrack }) {
+function TrackLabels({
+    track,
+    wide = false,
+}: {
+    track: NowPlayingCardTrack;
+    wide?: boolean;
+}) {
     const artist = track.artist?.name ?? "";
     const artistId = track.artist?.id ?? "";
     const albumId = track.album?.id ?? "";
@@ -141,7 +161,9 @@ function TrackLabels({ track }: { track: NowPlayingCardTrack }) {
         </span>
     );
     return (
-        <span className="min-w-0 max-w-[min(38vw,9rem)] flex flex-col">
+        <span
+            className={`flex min-w-0 flex-col ${wide ? "max-w-[min(28vw,20rem)] sm:max-w-[min(44vw,20rem)]" : "max-w-[min(38vw,9rem)]"}`}
+        >
             {title}
             {artist && artistLabel}
         </span>
@@ -161,14 +183,14 @@ function FindButton({
         <button
             type="button"
             onClick={onFlyTo}
-            title={`Fly to "${track.title}" on the map`}
-            aria-label={`Find ${track.title} on the map`}
+            title={`${vibeMapRu.map.findOnMap}: «${track.title}»`}
+            aria-label={`${vibeMapRu.map.findOnMap}: ${track.title}`}
             className="flex flex-shrink-0 items-center gap-1.5 h-10 px-2.5 sm:px-3 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
             style={{ backgroundColor: `${color}26`, color }}
         >
             <Crosshair className="w-4 h-4" />
             <span className="hidden sm:inline whitespace-nowrap">
-                Find on map
+                {vibeMapRu.map.findOnMap}
             </span>
         </button>
     );
@@ -185,8 +207,8 @@ function PlayButton({
         <button
             type="button"
             onClick={toggle}
-            aria-label={playing ? "Pause" : "Play"}
-            title={playing ? "Pause" : "Play"}
+            aria-label={playing ? ru.common.pause : ru.common.play}
+            title={playing ? ru.common.pause : ru.common.play}
             className="flex flex-shrink-0 items-center justify-center w-10 h-10 rounded-lg text-gray-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 transition-colors"
         >
             {playing ? (
@@ -221,7 +243,7 @@ function ProgressStrip({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(percent)}
-            aria-label="Playback progress"
+            aria-label={vibeMapRu.map.playbackProgress}
             className="absolute inset-x-2 bottom-1 h-[2px] rounded-full bg-white/10 overflow-hidden"
         >
             <div
@@ -235,15 +257,24 @@ function ProgressStrip({
 export function NowPlayingCard(props: NowPlayingCardProps) {
     if (!props.track) return null;
     const color = props.moodColor ?? DEFAULT_COLOR;
+    const appearance = props.appearance ?? "floating";
+    const showPlaybackToggle = props.showPlaybackToggle ?? true;
     return (
-        <div className="pointer-events-auto relative flex items-center gap-1.5 sm:gap-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-xl shadow-lg p-2">
+        <div
+            className={`pointer-events-auto relative flex items-center gap-1.5 sm:gap-2 ${
+                appearance === "wave"
+                    ? "bg-transparent"
+                    : "rounded-xl border border-white/10 bg-black/60 p-2 shadow-lg backdrop-blur-md"
+            }`}
+        >
             <CoverButton
                 track={props.track}
                 onMap={props.onMapPresent}
                 color={color}
                 onFlyTo={props.onFlyTo}
+                decorativeOnly={appearance === "wave"}
             />
-            <TrackLabels track={props.track} />
+            <TrackLabels track={props.track} wide={appearance === "wave"} />
             {props.likeSlot && (
                 <span className="flex-shrink-0">{props.likeSlot}</span>
             )}
@@ -254,7 +285,12 @@ export function NowPlayingCard(props: NowPlayingCardProps) {
                     onFlyTo={props.onFlyTo}
                 />
             )}
-            <PlayButton playing={props.isPlaying} toggle={props.onTogglePlay} />
+            {showPlaybackToggle && (
+                <PlayButton
+                    playing={props.isPlaying}
+                    toggle={props.onTogglePlay}
+                />
+            )}
             <ProgressStrip
                 currentTime={props.currentTime}
                 duration={props.duration}

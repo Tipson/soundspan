@@ -3,6 +3,11 @@ import { useDownloadContext } from "@/lib/download-context";
 import { toast } from "sonner";
 import type { Album } from "../types";
 import { resolveAcquisitionMbid } from "../albumActionVisibility";
+import {
+    albumRu,
+    formatAlbumDownloading,
+    formatAlbumDownloadPreparing,
+} from "@/lib/i18n/musicPagesRu";
 
 interface AlbumAcquisitionRequest {
     artistName: string;
@@ -14,12 +19,12 @@ function getAlbumAcquisitionRequest(
     album: Album | null,
 ): AlbumAcquisitionRequest | null {
     if (!album) {
-        toast.error("Album data not available");
+        toast.error(albumRu.dataUnavailable);
         return null;
     }
     const mbid = resolveAcquisitionMbid(album);
     if (!mbid) {
-        toast.error("Album MBID not available");
+        toast.error(albumRu.mbidUnavailable);
         return null;
     }
     return {
@@ -36,7 +41,7 @@ async function startAlbumDownload(
     >["addPendingDownload"],
 ): Promise<void> {
     addPendingDownload("album", request.albumTitle, request.mbid);
-    toast.loading(`Preparing download: "${request.albumTitle}"...`, {
+    toast.loading(formatAlbumDownloadPreparing(request.albumTitle), {
         id: `download-${request.mbid}`,
     });
     try {
@@ -45,11 +50,11 @@ async function startAlbumDownload(
             request.albumTitle,
             request.mbid,
         );
-        toast.success(`Downloading "${request.albumTitle}"`, {
+        toast.success(formatAlbumDownloading(request.albumTitle), {
             id: `download-${request.mbid}`,
         });
     } catch {
-        toast.error("Failed to start album download", {
+        toast.error(albumRu.downloadStartFailed, {
             id: `download-${request.mbid}`,
         });
     }
@@ -63,7 +68,7 @@ export function useAlbumAcquisition() {
         const request = getAlbumAcquisitionRequest(album);
         if (!request) return;
         if (isPendingByMbid(request.mbid)) {
-            toast.info("Album is already being downloaded");
+            toast.info(albumRu.alreadyDownloading);
             return;
         }
         await startAlbumDownload(request, addPendingDownload);

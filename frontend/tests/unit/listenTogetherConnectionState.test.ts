@@ -42,7 +42,10 @@ test("exhausted reconnects fail fast with an error and a route probe", () => {
     assert.equal(directive.clearGraceTimer, true);
     assert.equal(directive.setIsConnected, false);
     assert.equal(directive.validateRoute, true);
-    assert.match(directive.setError ?? "", /reconnect failed/i);
+    assert.equal(
+        directive.setError,
+        "Не удалось переподключиться к совместному прослушиванию. Проверьте подключение и войдите в группу снова.",
+    );
 });
 
 test("disconnect only arms the grace timer", () => {

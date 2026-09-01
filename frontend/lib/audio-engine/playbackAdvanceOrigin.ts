@@ -1,5 +1,5 @@
 /** Origin of a playback action that may change or retry the active track. */
-export type PlaybackAdvanceOrigin = "error" | "manual" | null;
+export type PlaybackAdvanceOrigin = "error" | "manual" | "feedback" | null;
 
 /** Pending origin consumed by the first breaker-reset decision. */
 export interface PlaybackAdvanceOriginMarker {
@@ -19,6 +19,10 @@ export const playbackAdvanceOriginRef: {
     current: PlaybackAdvanceOriginMarker | null;
 } = { current: null };
 
+const playbackReplacementIntentRef: {
+    current: { originatingTrackId: string | null } | null;
+} = { current: null };
+
 const playbackAutoRestartSuppressedRef: { current: boolean } = {
     current: false,
 };
@@ -28,15 +32,35 @@ export function writePlaybackAdvanceOrigin(
     origin: PlaybackAdvanceOrigin,
     originatingTrackId: string | null,
 ): void {
+    playbackReplacementIntentRef.current = null;
     playbackAdvanceOriginRef.current = origin
         ? { origin, originatingTrackId }
         : null;
+}
+
+/** Marks a manual media replacement separately from queue-only actions. */
+export function writePlaybackReplacementIntent(
+    originatingTrackId: string | null,
+): void {
+    writePlaybackAdvanceOrigin("manual", originatingTrackId);
+    playbackReplacementIntentRef.current = { originatingTrackId };
+}
+
+/** True while a manual selection is waiting to replace this old track. */
+export function isPlaybackFailureSupersededByManualIntent(
+    failedTrackId: string | null,
+): boolean {
+    const marker = playbackReplacementIntentRef.current;
+    return Boolean(
+        failedTrackId && marker?.originatingTrackId === failedTrackId,
+    );
 }
 
 /** Consumes the pending origin and re-enables restarts for a manual action. */
 export function consumePlaybackAdvanceOrigin(): PlaybackAdvanceOriginMarker | null {
     const marker = playbackAdvanceOriginRef.current;
     playbackAdvanceOriginRef.current = null;
+    playbackReplacementIntentRef.current = null;
     if (marker?.origin === "manual") {
         playbackAutoRestartSuppressedRef.current = false;
     }

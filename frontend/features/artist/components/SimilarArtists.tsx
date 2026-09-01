@@ -5,7 +5,7 @@ import { SimilarArtist } from "../types";
 import { Music, Library } from "lucide-react";
 import { api } from "@/lib/api";
 import { getArtistRouteParam } from "@/utils/artistRoute";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface SimilarArtistsProps {
     similarArtists: SimilarArtist[];
@@ -25,10 +25,12 @@ export function SimilarArtists({
 
     return (
         <section>
-            <SectionHeader title="Fans Also Like" size="sm" />
+            <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                {ru.catalog.similarArtists}
+            </h2>
             <div
                 data-tv-section="similar-artists"
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
             >
                 {similarArtists.map((artist, index) => {
                     const rawImage = artist.coverArt || artist.image;
@@ -51,19 +53,14 @@ export function SimilarArtists({
                         ) || artist.id;
 
                     return (
-                        <div
+                        <button
+                            type="button"
                             key={artist.id || artist.name}
                             data-tv-card
                             data-tv-card-index={index}
-                            tabIndex={0}
                             onClick={() => onNavigate(navigationId)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    onNavigate(navigationId);
-                                }
-                            }}
-                            className="bg-transparent hover:bg-white/5 transition-all p-3 rounded-md cursor-pointer group"
+                            aria-label={`Открыть исполнителя ${artist.name}`}
+                            className="group min-h-11 min-w-0 rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
                         >
                             {/* Circular Artist Image */}
                             <div className="w-full aspect-square bg-surface-highlight rounded-full mb-2.5 overflow-hidden relative shadow-lg">
@@ -73,7 +70,7 @@ export function SimilarArtists({
                                         alt={artist.name}
                                         fill
                                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                                        className="object-cover group-hover:scale-105 transition-transform"
+                                        className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
                                         unoptimized
                                     />
                                 ) : (
@@ -85,7 +82,7 @@ export function SimilarArtists({
                                 {artist.inLibrary && (
                                     <div
                                         className="absolute bottom-1 right-1 bg-brand rounded-full p-1"
-                                        title="In your library"
+                                        title={ru.catalog.inLibrary}
                                     >
                                         <Library className="w-3 h-3 text-black" />
                                     </div>
@@ -101,19 +98,17 @@ export function SimilarArtists({
                             <p className="text-xs text-gray-400 truncate">
                                 {artist.ownedAlbumCount &&
                                 artist.ownedAlbumCount > 0
-                                    ? `${artist.ownedAlbumCount} album${
-                                          artist.ownedAlbumCount > 1 ? "s" : ""
-                                      } in library`
-                                    : "Artist"}
+                                    ? `${artist.ownedAlbumCount} ${pluralRu(artist.ownedAlbumCount, ["альбом", "альбома", "альбомов"])} ${ru.catalog.albumsInLibrary}`
+                                    : ru.catalog.artist}
                             </p>
 
                             {/* Match Percentage */}
                             {matchPercentage !== null && (
                                 <p className="text-xs text-brand mt-1">
-                                    {matchPercentage}% match
+                                    {matchPercentage}% {ru.catalog.match}
                                 </p>
                             )}
-                        </div>
+                        </button>
                     );
                 })}
             </div>

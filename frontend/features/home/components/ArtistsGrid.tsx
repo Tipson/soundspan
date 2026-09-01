@@ -10,6 +10,7 @@ import {
     CarouselItem,
 } from "@/components/ui/HorizontalCarousel";
 import { getArtistHref } from "@/utils/artistRoute";
+import { ru } from "@/lib/i18n/ru";
 
 interface Artist {
     id: string;
@@ -73,7 +74,9 @@ const ArtistCard = memo(
                         <h3 className="text-sm font-semibold text-white truncate">
                             {artist.name}
                         </h3>
-                        <p className="text-xs text-gray-400 mt-0.5">Artist</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            {ru.home.artist}
+                        </p>
                     </div>
                 </Link>
             </CarouselItem>

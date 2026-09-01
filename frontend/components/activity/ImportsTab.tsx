@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ImportJob } from "@/lib/api";
 import {
     Loader2,
@@ -11,26 +11,50 @@ import {
     ArrowRight,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import {
+    adminActivityRu,
+    localizeImportJobMessage,
+} from "@/lib/i18n/adminActivityRu";
 
 const STATUS_CONFIG: Record<
     string,
     { icon: React.ElementType; color: string; label: string }
 > = {
-    pending: { icon: Clock, color: "text-gray-400", label: "Pending" },
-    resolving: { icon: Loader2, color: "text-blue-400", label: "Resolving" },
+    pending: {
+        icon: Clock,
+        color: "text-gray-400",
+        label: adminActivityRu.activity.imports.statuses.pending,
+    },
+    resolving: {
+        icon: Loader2,
+        color: "text-blue-400",
+        label: adminActivityRu.activity.imports.statuses.resolving,
+    },
     creating_playlist: {
         icon: Loader2,
         color: "text-blue-400",
-        label: "Creating",
+        label: adminActivityRu.activity.imports.statuses.creating_playlist,
     },
-    cancelling: { icon: Loader2, color: "text-amber-400", label: "Cancelling" },
+    cancelling: {
+        icon: Loader2,
+        color: "text-amber-400",
+        label: adminActivityRu.activity.imports.statuses.cancelling,
+    },
     completed: {
         icon: CheckCircle2,
         color: "text-emerald-400",
-        label: "Completed",
+        label: adminActivityRu.activity.imports.statuses.completed,
     },
-    failed: { icon: XCircle, color: "text-red-400", label: "Failed" },
-    cancelled: { icon: Ban, color: "text-gray-400", label: "Cancelled" },
+    failed: {
+        icon: XCircle,
+        color: "text-red-400",
+        label: adminActivityRu.activity.imports.statuses.failed,
+    },
+    cancelled: {
+        icon: Ban,
+        color: "text-gray-400",
+        label: adminActivityRu.activity.imports.statuses.cancelled,
+    },
 };
 
 function JobStatusBadge({ status }: { status: string }) {
@@ -60,20 +84,79 @@ export function ImportsTab() {
     const router = useRouter();
     const [jobs, setJobs] = useState<ImportJob[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const loadGenerationRef = useRef(0);
+    const loadInFlightRef = useRef(false);
+    const refreshPendingRef = useRef(false);
+    const mountedRef = useRef(false);
 
-    const loadJobs = useCallback(async () => {
-        try {
-            const data = await api.listImportJobs();
-            setJobs(data.jobs);
-        } catch {
-            // Silently fail — tab is informational
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
+    const loadJobs = useCallback(
+        async (mode: "refresh" | "poll" = "refresh") => {
+            if (!mountedRef.current) return;
+            if (loadInFlightRef.current) {
+                if (mode === "refresh") refreshPendingRef.current = true;
+                return;
+            }
+
+            loadInFlightRef.current = true;
+            let latestGeneration = loadGenerationRef.current;
+            try {
+                let runAgain = true;
+                while (runAgain && mountedRef.current) {
+                    refreshPendingRef.current = false;
+                    const generation = ++loadGenerationRef.current;
+                    latestGeneration = generation;
+                    let data: Awaited<
+                        ReturnType<typeof api.listImportJobs>
+                    > | null = null;
+                    try {
+                        data = await api.listImportJobs();
+                    } catch {
+                        // Silently fail — tab is informational
+                    }
+
+                    runAgain = mountedRef.current && refreshPendingRef.current;
+                    if (
+                        !runAgain &&
+                        data &&
+                        mountedRef.current &&
+                        loadGenerationRef.current === generation
+                    ) {
+                        setJobs(data.jobs);
+                    }
+                }
+            } finally {
+                loadInFlightRef.current = false;
+                if (
+                    mountedRef.current &&
+                    loadGenerationRef.current === latestGeneration
+                ) {
+                    setIsLoading(false);
+                }
+            }
+        },
+        [],
+    );
 
     useEffect(() => {
+        mountedRef.current = true;
         void loadJobs();
+        return () => {
+            mountedRef.current = false;
+            refreshPendingRef.current = false;
+            loadGenerationRef.current += 1;
+        };
+    }, [loadJobs]);
+
+    useEffect(() => {
+        const handleJobsChanged = () => {
+            void loadJobs();
+        };
+        window.addEventListener("import-jobs-changed", handleJobsChanged);
+        return () =>
+            window.removeEventListener(
+                "import-jobs-changed",
+                handleJobsChanged,
+            );
     }, [loadJobs]);
 
     // Poll for active jobs
@@ -87,7 +170,7 @@ export function ImportsTab() {
         );
         if (!hasActive) return;
 
-        const interval = setInterval(loadJobs, 3000);
+        const interval = setInterval(() => void loadJobs("poll"), 3000);
         return () => clearInterval(interval);
     }, [jobs, loadJobs]);
 
@@ -102,7 +185,11 @@ export function ImportsTab() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center py-12">
+            <div
+                className="flex items-center justify-center py-12"
+                role="status"
+                aria-label={adminActivityRu.activity.loading}
+            >
                 <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
             </div>
         );
@@ -111,9 +198,11 @@ export function ImportsTab() {
     if (jobs.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                <p className="text-gray-400 text-sm">No import jobs yet</p>
+                <p className="text-gray-400 text-sm">
+                    {adminActivityRu.activity.imports.empty}
+                </p>
                 <p className="text-gray-400 text-xs mt-1">
-                    Submit imports from the Import page
+                    {adminActivityRu.activity.imports.emptyHint}
                 </p>
             </div>
         );
@@ -127,6 +216,14 @@ export function ImportsTab() {
                     job.status === "resolving" ||
                     job.status === "creating_playlist" ||
                     job.status === "cancelling";
+                const createdPlaylistId =
+                    job.status === "completed" || job.status === "cancelled"
+                        ? job.createdPlaylistId
+                        : null;
+                const cancellationWarning =
+                    job.status === "cancelled" && createdPlaylistId
+                        ? job.error
+                        : null;
 
                 return (
                     <div
@@ -141,9 +238,9 @@ export function ImportsTab() {
                                 </p>
                                 <p className="text-xs text-gray-400 truncate mt-0.5">
                                     {job.sourceType} &middot;{" "}
-                                    {new Date(
-                                        job.createdAt,
-                                    ).toLocaleDateString()}
+                                    {new Date(job.createdAt).toLocaleDateString(
+                                        "ru-RU",
+                                    )}
                                 </p>
                             </div>
                             <JobStatusBadge status={job.status} />
@@ -162,9 +259,12 @@ export function ImportsTab() {
 
                         {job.summary && job.summary.total > 0 && (
                             <p className="text-[11px] text-gray-400 mt-1">
-                                {job.summary.local} local &middot;{" "}
-                                {job.summary.unresolved} unresolved &middot;{" "}
-                                {job.summary.total} total
+                                {job.summary.local}{" "}
+                                {adminActivityRu.activity.imports.local}{" "}
+                                &middot; {job.summary.unresolved}{" "}
+                                {adminActivityRu.activity.imports.unresolved}{" "}
+                                &middot; {job.summary.total}{" "}
+                                {adminActivityRu.activity.imports.total}
                             </p>
                         )}
 
@@ -174,29 +274,46 @@ export function ImportsTab() {
                                     onClick={() => void handleCancel(job.id)}
                                     className="text-xs text-red-400/70 hover:text-red-400 transition-colors"
                                 >
-                                    Cancel
+                                    {adminActivityRu.activity.imports.cancel}
                                 </button>
                             )}
-                            {job.status === "completed" &&
-                                job.createdPlaylistId && (
-                                    <button
-                                        onClick={() =>
-                                            router.push(
-                                                `/playlist/${job.createdPlaylistId}`,
-                                            )
-                                        }
-                                        className="flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
-                                    >
-                                        View Playlist
-                                        <ArrowRight className="w-3 h-3" />
-                                    </button>
-                                )}
+                            {createdPlaylistId && (
+                                <button
+                                    onClick={() =>
+                                        router.push(
+                                            `/playlist/${createdPlaylistId}`,
+                                        )
+                                    }
+                                    className="flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
+                                >
+                                    {
+                                        adminActivityRu.activity.imports
+                                            .viewPlaylist
+                                    }
+                                    <ArrowRight className="w-3 h-3" />
+                                </button>
+                            )}
                             {job.status === "failed" && job.error && (
                                 <p className="text-xs text-red-400/60 truncate">
-                                    {job.error}
+                                    {localizeImportJobMessage(
+                                        job.error,
+                                        "error",
+                                    )}
                                 </p>
                             )}
                         </div>
+                        {cancellationWarning && (
+                            <p
+                                role="status"
+                                className="mt-1 text-xs text-amber-300/80"
+                            >
+                                {adminActivityRu.activity.imports.warning}:{" "}
+                                {localizeImportJobMessage(
+                                    cancellationWarning,
+                                    "warning",
+                                )}
+                            </p>
+                        )}
                     </div>
                 );
             })}

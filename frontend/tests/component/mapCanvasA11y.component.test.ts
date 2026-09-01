@@ -99,7 +99,7 @@ test("canvas exposes an application role, accessible name and node count", async
     assert.equal((canvas as HTMLElement).tabIndex, 0);
 
     const name = canvas.getAttribute("aria-label") ?? "";
-    assert.match(name, /vibe map/i, "aria-label should name the map");
+    assert.match(name, /карта звучания/i, "aria-label should name the map");
     assert.match(name, /3/, "aria-label should mention the node count");
 
     // A text alternative (aria-describedby) summarises the map for AT.

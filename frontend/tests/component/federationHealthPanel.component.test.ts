@@ -14,7 +14,7 @@ mock.module("lucide-react", {
     },
 });
 
-test("federation health cards render state, freshness, catalog, leases, and errors", async () => {
+test("карточки федерации показывают здоровье, свежесть, каталог, потоки и ошибки по-русски", async () => {
     const { FederationHealthCards } =
         await import("../../features/settings/components/sections/FederationHealthPanel");
     const html = renderToStaticMarkup(
@@ -51,11 +51,12 @@ test("federation health cards render state, freshness, catalog, leases, and erro
     );
 
     assert.match(html, /Family Library/);
-    assert.match(html, /AMBER/);
-    assert.match(html, /2m ago/);
-    assert.match(html, /300 tracks/);
-    assert.match(html, /2 \/ 4 active streams/);
-    assert.match(html, /Peer timed out/);
+    assert.match(html, /Требует внимания/);
+    assert.match(html, /2 мин назад/);
+    assert.match(html, /300 треков/);
+    assert.match(html, /Активных потоков: 2 из 4/);
+    assert.match(html, /Сервер недоступен/);
+    assert.doesNotMatch(html, /Peer timed out/);
 });
 
 test("federation health cards render an empty state", async () => {
@@ -64,7 +65,7 @@ test("federation health cards render an empty state", async () => {
     const html = renderToStaticMarkup(
         React.createElement(FederationHealthCards, { peers: [] }),
     );
-    assert.match(html, /No federation peer health data/);
+    assert.match(html, /Данных о состоянии связанных серверов пока нет/);
 });
 
 test("federation health cards present revoked peers distinctly", async () => {
@@ -102,7 +103,7 @@ test("federation health cards present revoked peers distinctly", async () => {
         }),
     );
 
-    assert.match(html, /REVOKED/);
+    assert.match(html, /Отозвано/);
     assert.match(html, /bg-gray-500/);
     assert.doesNotMatch(html, /bg-red-500/);
 });
@@ -158,10 +159,10 @@ test("federation health cards render only direction-applicable details", async (
     );
     const consumerCard = html.slice(html.indexOf("Consumer only"));
 
-    assert.match(hostCard, /Synced n\/a/);
-    assert.doesNotMatch(hostCard, /Never synced|300 tracks/);
-    assert.match(hostCard, /2 \/ 4 active streams/);
-    assert.match(consumerCard, /Never synced/);
-    assert.match(consumerCard, /300 tracks/);
-    assert.doesNotMatch(consumerCard, /active streams/);
+    assert.match(hostCard, /Синхронизация: не применяется/);
+    assert.doesNotMatch(hostCard, /Ещё не синхронизировано|300 треков/);
+    assert.match(hostCard, /Активных потоков: 2 из 4/);
+    assert.match(consumerCard, /Ещё не синхронизировано/);
+    assert.match(consumerCard, /300 треков/);
+    assert.doesNotMatch(consumerCard, /Активных потоков/);
 });

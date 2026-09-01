@@ -222,8 +222,21 @@ docker buildx bake --print core
 ### Using bake with Compose
 
 You can continue using `docker compose up -d` after building with bake. The
-split-stack services are build-only in `docker-compose.yml`, so use an override
-with explicit image keys when you want Compose to run the bake-built tags:
+split-stack services are build-only in `docker-compose.yml`. The repository now
+ships `docker-compose.images.yml` for prebuilt immutable images:
+
+```bash
+export SOUNDSPAN_IMAGE_REPOSITORY=ghcr.io/example/soundspan
+export SOUNDSPAN_IMAGE_TAG=main-0123abc
+docker compose -f docker-compose.yml -f docker-compose.images.yml \
+  --profile worker up -d --no-build
+```
+
+The repository value is automatically compatible with a GitHub fork: the image
+workflow publishes `ghcr.io/<owner>/<repository>-<component>`. Use a release tag
+or `main-<short-sha>` in production; do not deploy the mutable `main` or `latest`
+channel tags. A hand-written override remains supported when image repositories
+differ per component:
 
 ```yaml
 # docker-compose.override.yml
@@ -237,6 +250,17 @@ services:
 ```
 
 Then run `docker compose --profile worker up -d`.
+
+The split image workflow deliberately does not build the AIO image. On a normal
+`main` push it selects only affected components (for example, a frontend-only
+change builds only `soundspan-frontend`). Release and manual `all` runs build all
+seven split images in parallel on GitHub-hosted runners. This keeps PostgreSQL,
+Redis, Essentia/TensorFlow and DCLAP out of routine UI/API rebuilds.
+
+For an existing AIO installation, follow
+[`SPLIT_RUNTIME_MIGRATION.md`](SPLIT_RUNTIME_MIGRATION.md). Its database export,
+stable-secret preservation and acceptance gates are required; pointing the
+split stack at the AIO `/data` volume is not a supported migration.
 
 ### Notes
 

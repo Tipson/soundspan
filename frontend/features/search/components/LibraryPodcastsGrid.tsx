@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Music } from "lucide-react";
 import { Podcast } from "../types";
 import { api } from "@/lib/api";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 interface LibraryPodcastsGridProps {
     podcasts: Podcast[];
@@ -58,8 +59,9 @@ export function LibraryPodcastsGrid({
                             <h3 className="text-base font-bold text-white line-clamp-1 mb-1">
                                 {podcast.title}
                             </h3>
-                            <p className="text-sm text-[#b3b3b3] line-clamp-1">
-                                {podcast.author || "Podcast"}
+                            <p className="line-clamp-1 text-sm text-content-muted">
+                                {podcast.author ||
+                                    searchExtrasRu.podcastFallback}
                             </p>
                             {podcast.episodeCount &&
                                 podcast.episodeCount > 0 && (

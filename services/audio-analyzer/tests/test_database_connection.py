@@ -126,6 +126,32 @@ def test_connect_does_not_publish_connection_when_client_setup_fails(
     assert connection.close_calls == 1
 
 
+def test_connect_configures_utc_session_timezone(
+    loaded_analyzer: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep database-generated timestamps aligned with Prisma's UTC-naive values."""
+    connection = FakeConnection()
+    connect_call: dict[str, object] = {}
+
+    def connect(url: str, **kwargs: object) -> FakeConnection:
+        connect_call["url"] = url
+        connect_call.update(kwargs)
+        return connection
+
+    monkeypatch.setattr(loaded_analyzer.psycopg2, "connect", connect)
+    database = loaded_analyzer.DatabaseConnection("postgresql://test")
+
+    database.connect()
+
+    assert connect_call == {
+        "url": "postgresql://test",
+        "options": "-c client_encoding=UTF8 -c timezone=UTC",
+    }
+    assert connection.client_encodings == ["UTF8"]
+    assert connection.autocommit is False
+
+
 def test_get_cursor_reconnects_once_after_interface_error(
     loaded_analyzer: ModuleType,
     monkeypatch: pytest.MonkeyPatch,

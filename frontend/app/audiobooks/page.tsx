@@ -3,10 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { ControlSelect } from "@/components/ui/ControlSelect";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { FilterPills } from "@/components/ui/FilterPills";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { AudiobookCard } from "@/components/ui/AudiobookCard";
 import { api } from "@/lib/api";
 import { useAudioState, useAudioControls } from "@/lib/audio-context";
@@ -18,10 +16,10 @@ import {
     removeMigratingStorageItem,
 } from "@/lib/storage-migration";
 import { Book, ListTree, Shuffle } from "lucide-react";
+import { pluralRu } from "@/lib/i18n/ru";
 import { shuffleArray } from "@/utils/shuffle";
 import { BRAND_NAME } from "@/lib/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { SectionHeader } from "@/components/layout/SectionHeader";
 
 interface Audiobook {
     id: string;
@@ -208,11 +206,6 @@ export default function AudiobooksPage() {
         return filteredBooks.slice(start, start + itemsPerPage);
     }, [filteredBooks, currentPage, itemsPerPage]);
 
-    // Reset to page 1 when filters change.
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [filter, sortBy, selectedGenre, groupBySeries]);
-
     // Get series and standalone books for artist-style view
     const getSeriesAndStandalone = () => {
         const seriesMap = new Map<string, Audiobook[]>();
@@ -258,107 +251,89 @@ export default function AudiobooksPage() {
     // Shuffle all audiobooks
     const handleShuffleAudiobooks = () => {
         if (audiobooks.length === 0) {
-            toast.error("No audiobooks to shuffle");
+            toast.error("Нет аудиокниг для случайного выбора");
             return;
         }
         // Shuffle the array
         const shuffled = shuffleArray(audiobooks);
         // Play the first one (audiobooks don't have a shuffle queue like tracks)
         if (shuffled[0]) {
-            toast.success(`Playing random audiobook: ${shuffled[0].title}`);
+            toast.success(`Случайная аудиокнига: ${shuffled[0].title}`);
             // Navigate to the audiobook
             router.push(`/audiobooks/${shuffled[0].id}`);
         }
     };
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message="Загружаем аудиокниги…" />;
     }
 
     if (!isConfigured) {
         return (
-            <div className="min-h-screen relative overflow-hidden">
-                {/* Background gradient */}
-                <div className="absolute inset-0 pointer-events-none">
-                    <div
-                        className="absolute inset-0 bg-gradient-to-b from-brand/15 via-blue-900/10 to-transparent"
-                        style={{ height: "35vh" }}
+            <div
+                data-routed-surface="audiobooks"
+                className="min-h-screen bg-surface"
+            >
+                <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+                    <PageHeader
+                        title="Аудиокниги"
+                        subtitle="Подключите Audiobookshelf, чтобы открыть свою библиотеку аудиокниг"
+                        icon={Book}
                     />
-                    <div
-                        className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-brand/8 via-transparent to-transparent"
-                        style={{ height: "25vh" }}
-                    />
-                </div>
-
-                <div className="relative px-4 md:px-8 py-16 md:py-24">
-                    {/* Title Section */}
-                    <div className="text-center mb-16">
-                        <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 tracking-tight">
-                            Audiobooks
-                        </h1>
-                        <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto">
-                            Connect Audiobookshelf to unlock your audiobook
-                            library
-                        </p>
-                    </div>
 
                     {/* Setup Steps - Horizontal Cards */}
-                    <div className="grid md:grid-cols-3 gap-6 mb-12">
-                        <div className="bg-gradient-to-br from-surface-sunken to-surface rounded-xl p-6 border border-white/5 hover:border-white/10 transition-all">
-                            <div className="text-4xl font-black text-blue-400/20 mb-4">
+                    <div className="mb-12 grid gap-6 md:grid-cols-3">
+                        <div className="border-t border-line pt-5">
+                            <div className="mb-4 text-4xl font-black text-brand/25">
                                 01
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-3">
-                                Install Audiobookshelf
+                            <h3 className="mb-3 text-xl font-bold text-content">
+                                Установите Audiobookshelf
                             </h3>
-                            <p className="text-gray-400 text-sm leading-relaxed">
-                                Set up your own Audiobookshelf instance via
-                                Docker or use an existing installation
+                            <p className="text-sm leading-relaxed text-content-muted">
+                                Разверните Audiobookshelf через Docker или
+                                используйте существующую установку
                             </p>
                         </div>
 
-                        <div className="bg-gradient-to-br from-surface-sunken to-surface rounded-xl p-6 border border-white/5 hover:border-white/10 transition-all">
-                            <div className="text-4xl font-black text-blue-400/20 mb-4">
+                        <div className="border-t border-line pt-5">
+                            <div className="mb-4 text-4xl font-black text-brand/25">
                                 02
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-3">
-                                Get API Key
+                            <h3 className="mb-3 text-xl font-bold text-content">
+                                Получите ключ API
                             </h3>
-                            <p className="text-gray-400 text-sm leading-relaxed">
-                                Settings → Users → Click your user → API Tokens
-                                → Generate
+                            <p className="text-sm leading-relaxed text-content-muted">
+                                Settings → Users → выберите пользователя → API
+                                Tokens → Generate
                             </p>
                         </div>
 
-                        <div className="bg-gradient-to-br from-surface-sunken to-surface rounded-xl p-6 border border-white/5 hover:border-white/10 transition-all">
-                            <div className="text-4xl font-black text-blue-400/20 mb-4">
+                        <div className="border-t border-line pt-5">
+                            <div className="mb-4 text-4xl font-black text-brand/25">
                                 03
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-3">
-                                Configure
+                            <h3 className="mb-3 text-xl font-bold text-content">
+                                Подключите
                             </h3>
-                            <p className="text-gray-400 text-sm leading-relaxed">
-                                Enter your Audiobookshelf URL and API key in
-                                {BRAND_NAME} settings
+                            <p className="text-sm leading-relaxed text-content-muted">
+                                Укажите адрес Audiobookshelf и ключ API в
+                                настройках {BRAND_NAME}
                             </p>
                         </div>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-2xl mx-auto mb-12">
+                    <div className="mx-auto mb-12 flex max-w-2xl flex-col justify-center gap-4 sm:flex-row">
                         <Button
                             onClick={() =>
                                 router.push(
                                     "/settings?tab=system#audiobookshelf",
                                 )
                             }
-                            className="flex-1 py-6 text-lg font-semibold"
+                            className="min-h-12 flex-1 py-3 text-base font-semibold"
                         >
-                            Configure Audiobookshelf
+                            Настроить Audiobookshelf
                         </Button>
                         <Button
                             variant="secondary"
@@ -368,22 +343,24 @@ export default function AudiobooksPage() {
                                     "_blank",
                                 )
                             }
-                            className="flex-1 py-6 text-lg font-semibold"
+                            className="min-h-12 flex-1 py-3 text-base font-semibold"
                         >
-                            Install via Docker
+                            Установить через Docker
                         </Button>
                     </div>
 
                     {/* Footer Link */}
                     <div className="text-center">
-                        <p className="text-gray-400 text-sm mb-2">Need help?</p>
+                        <p className="mb-2 text-sm text-content-muted">
+                            Нужна помощь?
+                        </p>
                         <a
                             href="https://github.com/advplyr/audiobookshelf"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-gray-400 hover:text-white text-sm transition-colors"
+                            className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         >
-                            View Documentation
+                            Открыть документацию
                         </a>
                     </div>
                 </div>
@@ -392,129 +369,155 @@ export default function AudiobooksPage() {
     }
 
     return (
-        <div className="min-h-screen relative">
-            {/* Background gradient */}
-            <div className="absolute inset-0 pointer-events-none">
-                <div
-                    className="absolute inset-0 bg-gradient-to-b from-brand/15 via-blue-900/10 to-transparent"
-                    style={{ height: "35vh" }}
+        <div
+            data-routed-surface="audiobooks"
+            className="min-h-screen bg-surface"
+        >
+            <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+                <PageHeader
+                    title="Аудиокниги"
+                    subtitle="Ваша библиотека Audiobookshelf"
+                    icon={Book}
+                    className="mb-0"
                 />
-                <div
-                    className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-brand/8 via-transparent to-transparent"
-                    style={{ height: "25vh" }}
-                />
-            </div>
 
-            {/* Hero Section */}
-            <div className="relative">
-                <div className="px-4 md:px-8 py-6">
-                    <PageHeader
-                        title="Audiobooks"
-                        subtitle="Your Audiobookshelf library"
-                        icon={Book}
-                        className="mb-0"
-                    />
-                </div>
-            </div>
-
-            <div className="relative px-4 md:px-8 pb-24">
                 {/* Filter and Sort Controls - Mobile Optimized */}
-                <div className="mb-8 space-y-3">
+                <div className="mb-10 space-y-3 border-y border-line py-5">
                     {/* First Row: Filter Pills and Shuffle */}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <FilterPills<FilterType>
-                            aria-label="Filter audiobooks"
-                            options={[
-                                { value: "all", label: "All Books" },
-                                { value: "finished", label: "Finished" },
-                            ]}
-                            value={filter}
-                            onChange={setFilter}
-                        />
+                    <div
+                        role="group"
+                        aria-label="Фильтр аудиокниг"
+                        className="flex flex-wrap items-center gap-2"
+                    >
+                        <button
+                            onClick={() => {
+                                setFilter("all");
+                                setCurrentPage(1);
+                            }}
+                            aria-pressed={filter === "all"}
+                            className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                                filter === "all"
+                                    ? "bg-brand text-surface"
+                                    : "border border-line bg-surface-elevated text-content-muted hover:bg-surface-hover hover:text-content"
+                            }`}
+                        >
+                            Все книги
+                        </button>
+                        <button
+                            onClick={() => {
+                                setFilter("finished");
+                                setCurrentPage(1);
+                            }}
+                            aria-pressed={filter === "finished"}
+                            className={`min-h-11 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
+                                filter === "finished"
+                                    ? "bg-brand text-surface"
+                                    : "border border-line bg-surface-elevated text-content-muted hover:bg-surface-hover hover:text-content"
+                            }`}
+                        >
+                            Прослушанные
+                        </button>
 
                         {/* Shuffle Button */}
                         <button
                             onClick={handleShuffleAudiobooks}
-                            className="flex items-center gap-2 px-4 py-2 bg-brand-hover hover:bg-brand text-black font-medium rounded-full transition-all hover:scale-105"
+                            className="flex min-h-11 items-center gap-2 rounded-xl bg-brand px-4 py-2 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
                             <Shuffle className="w-4 h-4" />
                             <span className="hidden sm:inline">
-                                Random Book
+                                Случайная книга
                             </span>
                         </button>
 
                         {/* Results Count - Desktop only */}
-                        <span className="hidden md:inline text-sm text-gray-400 ml-auto">
+                        <span className="ml-auto hidden text-sm text-content-muted md:inline">
                             {filteredBooks.length}{" "}
-                            {filteredBooks.length === 1 ? "book" : "books"}
+                            {pluralRu(filteredBooks.length, [
+                                "книга",
+                                "книги",
+                                "книг",
+                            ])}
                         </span>
                     </div>
 
                     {/* Second Row: Sort, Series View, Genre */}
                     <div className="flex flex-wrap items-center gap-2">
-                        <ControlSelect
+                        <select
                             value={sortBy}
-                            onChange={(e) =>
-                                setSortBy(e.target.value as SortType)
-                            }
+                            onChange={(e) => {
+                                setSortBy(e.target.value as SortType);
+                                setCurrentPage(1);
+                            }}
+                            aria-label="Сортировка аудиокниг"
+                            className="min-h-11 rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none transition-colors focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
                         >
-                            <option value="title">Title</option>
-                            <option value="author">Author</option>
-                            <option value="recent">Recently Played</option>
-                            <option value="series">Series</option>
-                        </ControlSelect>
+                            <option value="title">По названию</option>
+                            <option value="author">По автору</option>
+                            <option value="recent">Недавно слушали</option>
+                            <option value="series">По серии</option>
+                        </select>
 
                         <button
-                            onClick={() => setGroupBySeries(!groupBySeries)}
-                            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
+                            onClick={() => {
+                                setGroupBySeries(!groupBySeries);
+                                setCurrentPage(1);
+                            }}
+                            aria-pressed={groupBySeries}
+                            className={`flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none ${
                                 groupBySeries
-                                    ? "bg-white text-black"
-                                    : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10"
+                                    ? "bg-brand text-surface"
+                                    : "border border-line bg-surface-elevated text-content-muted hover:bg-surface-hover hover:text-content"
                             }`}
-                            title="Show series as single cards (like artist view)"
+                            title="Объединять книги одной серии в карточку"
                         >
                             <ListTree className="w-4 h-4" />
-                            <span className="hidden sm:inline">
-                                Series View
-                            </span>
+                            <span className="hidden sm:inline">По сериям</span>
                         </button>
 
                         {allGenres.length > 0 && (
-                            <ControlSelect
+                            <select
                                 value={selectedGenre || ""}
-                                onChange={(e) =>
-                                    setSelectedGenre(e.target.value || null)
-                                }
-                                className="flex-1 min-w-0 md:flex-initial md:min-w-[140px] truncate"
+                                onChange={(e) => {
+                                    setSelectedGenre(e.target.value || null);
+                                    setCurrentPage(1);
+                                }}
+                                aria-label="Жанр аудиокниг"
+                                className="min-h-11 min-w-0 flex-1 truncate rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none transition-colors focus:border-brand/60 focus:ring-2 focus:ring-brand/20 md:min-w-[140px] md:flex-initial [&>option]:bg-surface-elevated [&>option]:text-content"
                             >
-                                <option value="">All Genres</option>
+                                <option value="">Все жанры</option>
                                 {allGenres.map((genre) => (
                                     <option key={genre} value={genre}>
                                         {genre}
                                     </option>
                                 ))}
-                            </ControlSelect>
+                            </select>
                         )}
 
                         {/* Items per page */}
-                        <ControlSelect
+                        <select
                             value={itemsPerPage}
                             onChange={(e) => {
                                 setItemsPerPage(Number(e.target.value));
                                 setCurrentPage(1);
                             }}
+                            aria-label="Аудиокниг на странице"
+                            className="min-h-11 rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm text-content outline-none focus:border-brand/60 focus:ring-2 focus:ring-brand/20 [&>option]:bg-surface-elevated [&>option]:text-content"
                         >
-                            <option value={25}>25 per page</option>
-                            <option value={50}>50 per page</option>
-                            <option value={100}>100 per page</option>
-                            <option value={250}>250 per page</option>
-                        </ControlSelect>
+                            <option value={25}>25 на странице</option>
+                            <option value={50}>50 на странице</option>
+                            <option value={100}>100 на странице</option>
+                            <option value={250}>250 на странице</option>
+                        </select>
                     </div>
 
                     {/* Results Count - Mobile only */}
-                    <div className="md:hidden text-sm text-gray-400">
+                    <div className="text-sm text-content-muted md:hidden">
                         {filteredBooks.length}{" "}
-                        {filteredBooks.length === 1 ? "book" : "books"}
+                        {pluralRu(filteredBooks.length, [
+                            "книга",
+                            "книги",
+                            "книг",
+                        ])}
                     </div>
                 </div>
 
@@ -524,9 +527,11 @@ export default function AudiobooksPage() {
                         filter === "all" &&
                         !groupBySeries && (
                             <section>
-                                <SectionHeader title="Continue Listening" />
+                                <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                                    Продолжить слушать
+                                </h2>
                                 <div
-                                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-6"
+                                    className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8"
                                     data-tv-section="continue-listening"
                                 >
                                     {continueListening.map((book, index) => (
@@ -554,9 +559,11 @@ export default function AudiobooksPage() {
                                 {/* Series Cards */}
                                 {series.length > 0 && (
                                     <section>
-                                        <SectionHeader title="Series" />
+                                        <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                                            Серии
+                                        </h2>
                                         <div
-                                            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-6"
+                                            className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8"
                                             data-tv-section="series"
                                         >
                                             {series.map(
@@ -565,7 +572,7 @@ export default function AudiobooksPage() {
                                                     index,
                                                 ) => {
                                                     const firstBook = books[0];
-                                                    const bookCount = `${books.length} ${books.length === 1 ? "book" : "books"}`;
+                                                    const bookCount = `${books.length} ${pluralRu(books.length, ["книга", "книги", "книг"])}`;
                                                     return (
                                                         <AudiobookCard
                                                             key={seriesName}
@@ -595,9 +602,11 @@ export default function AudiobooksPage() {
                                 {/* Standalone Books */}
                                 {standalone.length > 0 && (
                                     <section>
-                                        <SectionHeader title="Standalone Books" />
+                                        <h2 className="mb-6 text-2xl font-black tracking-[-0.03em] text-content">
+                                            Отдельные книги
+                                        </h2>
                                         <div
-                                            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-6"
+                                            className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8"
                                             data-tv-section="standalone"
                                         >
                                             {standalone.map((book, index) => (
@@ -620,7 +629,7 @@ export default function AudiobooksPage() {
                         ) : (
                             // Ungrouped Grid - Uniform Cards
                             <div
-                                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-6"
+                                className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8"
                                 data-tv-section="audiobooks"
                             >
                                 {paginatedBooks.map((book, index) => (
@@ -639,44 +648,46 @@ export default function AudiobooksPage() {
                             </div>
                         )
                     ) : (
-                        <EmptyState
-                            icon={<Book className="w-12 h-12" />}
-                            title={
-                                filter === "listening"
-                                    ? "No audiobooks in progress"
-                                    : filter === "finished"
-                                      ? "No finished audiobooks"
-                                      : "No audiobooks found"
-                            }
-                            description={
-                                filter === "all"
-                                    ? "Add audiobooks to your Audiobookshelf library to get started"
-                                    : "Start listening to some audiobooks"
-                            }
-                        />
+                        <section className="border-y border-line">
+                            <EmptyState
+                                icon={<Book className="w-12 h-12" />}
+                                title={
+                                    filter === "listening"
+                                        ? "Нет начатых аудиокниг"
+                                        : filter === "finished"
+                                          ? "Нет прослушанных аудиокниг"
+                                          : "Аудиокниги не найдены"
+                                }
+                                description={
+                                    filter === "all"
+                                        ? "Добавьте книги в библиотеку Audiobookshelf, чтобы начать"
+                                        : "Начните слушать любую аудиокнигу"
+                                }
+                            />
+                        </section>
                     )}
 
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
-                        <div className="flex items-center justify-center gap-2 mt-8 pt-8 border-t border-white/10">
+                        <div className="mt-8 flex flex-wrap items-center justify-center gap-2 border-t border-line pt-8">
                             <button
                                 onClick={() => setCurrentPage(1)}
                                 disabled={currentPage === 1}
-                                className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                First
+                                Первая
                             </button>
                             <button
                                 onClick={() =>
                                     setCurrentPage((p) => Math.max(1, p - 1))
                                 }
                                 disabled={currentPage === 1}
-                                className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                Prev
+                                Назад
                             </button>
-                            <span className="px-4 py-2 text-sm text-white">
-                                Page {currentPage} of {totalPages}
+                            <span className="px-2 py-2 text-sm text-content sm:px-4">
+                                Страница {currentPage} из {totalPages}
                             </span>
                             <button
                                 onClick={() =>
@@ -685,16 +696,16 @@ export default function AudiobooksPage() {
                                     )
                                 }
                                 disabled={currentPage === totalPages}
-                                className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                Next
+                                Далее
                             </button>
                             <button
                                 onClick={() => setCurrentPage(totalPages)}
                                 disabled={currentPage === totalPages}
-                                className="px-3 py-2 text-sm text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="min-h-11 rounded-xl px-3 py-2 text-sm text-content-muted transition-colors hover:bg-surface-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                Last
+                                Последняя
                             </button>
                         </div>
                     )}

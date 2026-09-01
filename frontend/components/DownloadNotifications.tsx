@@ -16,6 +16,12 @@ import { useDownloadContext } from "@/lib/download-context";
 import { api } from "@/lib/api";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    adminActivityRu,
+    localizeDownloadStatusText,
+    translateDownloadStatus,
+    translateDownloadType,
+} from "@/lib/i18n/adminActivityRu";
 
 /**
  * Renders the DownloadNotifications component.
@@ -178,18 +184,20 @@ export function DownloadNotifications() {
                         <div className="flex items-center gap-2">
                             <Download className="w-4 h-4 text-white/60" />
                             <span className="text-xs font-semibold text-white">
-                                Downloads
+                                {adminActivityRu.downloads.title}
                             </span>
                             {downloadStatus.hasActiveDownloads && (
                                 <span className="px-1.5 py-0.5 text-[10px] font-medium bg-green-500/20 text-green-400 rounded-full">
-                                    {downloadStatus.activeDownloads.length}{" "}
-                                    active
+                                    {adminActivityRu.downloads.active}:{" "}
+                                    {downloadStatus.activeDownloads.length}
                                 </span>
                             )}
                         </div>
                         <button
                             onClick={handleClose}
                             className="text-white/40 hover:text-white transition-colors p-1"
+                            title={adminActivityRu.downloads.close}
+                            aria-label={adminActivityRu.downloads.close}
                         >
                             <X className="w-4 h-4" />
                         </button>
@@ -199,7 +207,7 @@ export function DownloadNotifications() {
                     <div className="max-h-40 overflow-y-auto border-t border-white/5">
                         {allJobs.length === 0 ? (
                             <div className="px-3 py-4 text-center text-white/40 text-xs">
-                                No downloads
+                                {adminActivityRu.downloads.empty}
                             </div>
                         ) : (
                             <div className="divide-y divide-white/5">
@@ -216,7 +224,8 @@ export function DownloadNotifications() {
                                 ))}
                                 {allJobs.length > 5 && (
                                     <div className="px-3 py-2 text-center text-white/40 text-xs">
-                                        +{allJobs.length - 5} more
+                                        +{allJobs.length - 5}{" "}
+                                        {adminActivityRu.downloads.more}
                                     </div>
                                 )}
                             </div>
@@ -238,7 +247,7 @@ export function DownloadNotifications() {
                                 )}
                             >
                                 <Trash2 className="w-3 h-3" />
-                                Clear completed
+                                {adminActivityRu.downloads.clearCompleted}
                             </button>
                         </div>
                     )}
@@ -271,11 +280,12 @@ export function DownloadNotifications() {
                         <GripVertical className="w-4 h-4 text-white/40" />
                         <Download className="w-4 h-4 text-white/60" />
                         <h3 className="text-sm font-semibold text-white">
-                            Downloads
+                            {adminActivityRu.downloads.title}
                         </h3>
                         {downloadStatus.hasActiveDownloads && (
                             <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
-                                {downloadStatus.activeDownloads.length} active
+                                {adminActivityRu.downloads.active}:{" "}
+                                {downloadStatus.activeDownloads.length}
                             </span>
                         )}
                     </div>
@@ -285,6 +295,8 @@ export function DownloadNotifications() {
                             handleClose();
                         }}
                         className="text-white/40 hover:text-white transition-colors cursor-pointer"
+                        title={adminActivityRu.downloads.close}
+                        aria-label={adminActivityRu.downloads.close}
                     >
                         <X className="w-4 h-4" />
                     </button>
@@ -294,7 +306,7 @@ export function DownloadNotifications() {
                 <div className="max-h-96 overflow-y-auto">
                     {allJobs.length === 0 ? (
                         <div className="px-4 py-8 text-center text-white/40 text-sm">
-                            No recent downloads
+                            {adminActivityRu.downloads.noRecent}
                         </div>
                     ) : (
                         <div className="divide-y divide-white/5">
@@ -328,7 +340,9 @@ export function DownloadNotifications() {
                             )}
                         >
                             <Trash2 className="w-3 h-3" />
-                            {isClearing ? "Clearing..." : "Clear completed"}
+                            {isClearing
+                                ? adminActivityRu.downloads.clearing
+                                : adminActivityRu.downloads.clearCompleted}
                         </button>
                     </div>
                 )}
@@ -397,7 +411,7 @@ function DownloadJobItem({
         }
         // Fallback for backward compatibility
         if (job.status === "processing" || job.status === "pending") {
-            return "Processing";
+            return adminActivityRu.activity.imports.statuses.resolving;
         }
         return null;
     };
@@ -436,7 +450,7 @@ function DownloadJobItem({
                                 getStatusColor(),
                             )}
                         >
-                            {job.status}
+                            {translateDownloadStatus(job.status)}
                         </span>
                         {getStatusText() && (
                             <>
@@ -447,18 +461,20 @@ function DownloadJobItem({
                                         getSourceColor(),
                                     )}
                                 >
-                                    {getStatusText()}
+                                    {localizeDownloadStatusText(
+                                        getStatusText(),
+                                    )}
                                 </span>
                             </>
                         )}
                         <span className="text-xs text-white/40">•</span>
                         <span className="text-xs text-white/40 capitalize">
-                            {job.type}
+                            {translateDownloadType(job.type)}
                         </span>
                     </div>
                     {job.error && (
                         <p className="text-xs text-red-400/80 mt-1 line-clamp-2">
-                            {job.error}
+                            {adminActivityRu.downloads.genericError}
                         </p>
                     )}
                 </div>
@@ -470,7 +486,8 @@ function DownloadJobItem({
                             "opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded",
                             isDeleting && "opacity-50 cursor-not-allowed",
                         )}
-                        title="Delete"
+                        title={adminActivityRu.downloads.delete}
+                        aria-label={adminActivityRu.downloads.delete}
                     >
                         <X className="w-4 h-4 text-white/60 hover:text-white" />
                     </button>
@@ -523,7 +540,7 @@ function DownloadJobItemCompact({
         }
         // Fallback for backward compatibility
         if (job.status === "processing" || job.status === "pending") {
-            return "Processing";
+            return adminActivityRu.activity.imports.statuses.resolving;
         }
         return null;
     };
@@ -542,12 +559,12 @@ function DownloadJobItemCompact({
                             getSourceColor(),
                         )}
                     >
-                        {getStatusText()}
+                        {localizeDownloadStatusText(getStatusText())}
                     </p>
                 )}
             </div>
             <span className="text-[10px] text-white/40 capitalize shrink-0">
-                {job.status}
+                {translateDownloadStatus(job.status)}
             </span>
         </div>
     );

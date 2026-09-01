@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
     useAudioState,
     usePlaybackStatus,
@@ -9,8 +10,9 @@ import {
 } from "@/lib/audio-context";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
-import { api } from "@/lib/api";
+import { api, type SavedMusicEntityInput } from "@/lib/api";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useDownloadContext } from "@/lib/download-context";
 import { useListenTogether } from "@/lib/listen-together-context";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
@@ -34,6 +36,10 @@ import { AlbumHero } from "@/features/album/components/AlbumHero";
 import { AlbumActionBar } from "@/features/album/components/AlbumActionBar";
 import { TrackList } from "@/features/album/components/TrackList";
 import { SimilarAlbums } from "@/features/album/components/SimilarAlbums";
+import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
+import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
+import { toAlbumPlaybackTrack } from "@/features/album/albumPlayback";
+import { albumRu } from "@/lib/i18n/musicPagesRu";
 
 interface AlbumPageProps {
     params: Promise<{
@@ -43,13 +49,13 @@ interface AlbumPageProps {
 
 function AlbumTracksSkeleton() {
     return (
-        <section>
-            <div className="rounded-xl border border-white/10 bg-[#111111]/60 overflow-hidden">
-                <div className="space-y-2 p-4 md:p-5">
+        <section aria-label={albumRu.loading}>
+            <div className="overflow-hidden border-y border-white/10 bg-surface-sunken/60">
+                <div className="divide-y divide-white/[0.06]">
                     {Array.from({ length: 8 }).map((_, index) => (
                         <div
                             key={index}
-                            className="h-12 animate-pulse rounded-lg bg-white/[0.07]"
+                            className="h-14 animate-pulse bg-white/[0.05] motion-reduce:animate-none"
                         />
                     ))}
                 </div>
@@ -77,6 +83,9 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     >([]);
     const [, setIsBulkAdd] = useState(false);
     const [, setIsAddingToPlaylist] = useState(false);
+    const [libraryDeletionAllowed, setLibraryDeletionAllowed] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
 
     // Custom hooks
     const {
@@ -102,7 +111,6 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     const {
         playAlbum,
         shufflePlay,
-        playTrackNow,
         addAllToQueue,
         downloadAlbum,
         setAlbumPreference,
@@ -122,18 +130,73 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         ? { ...rawAlbum, tracks: enrichedTracks || rawAlbum.tracks }
         : rawAlbum;
     const isAlbumLiked = useAlbumLikedState(album);
+    const savedAlbumEntity: SavedMusicEntityInput | null = album
+        ? {
+              type: "album",
+              source:
+                  source === "library"
+                      ? "library"
+                      : source === "remote"
+                        ? "remote"
+                        : "discovery",
+              entityId: album.id,
+              title: album.title,
+              subtitle: album.artist?.name ?? null,
+              imageUrl: album.coverUrl || album.coverArt || null,
+          }
+        : null;
     const isProviderMatching =
         !isTidalStatusResolved ||
         !isYtStatusResolved ||
         isTidalMatching ||
         isYtMatching;
+    const canDeleteFromLibrary = source === "library" && libraryDeletionAllowed;
     const hasTracks = Boolean(album?.tracks && album.tracks.length > 0);
+    const deviceDownloadTracks = (album?.tracks ?? [])
+        .filter((track: AlbumTrack) => {
+            const hasLocalSource = source === "library";
+            const hasTidalSource =
+                track.streamSource === "tidal" &&
+                typeof track.tidalTrackId === "number";
+            const hasYouTubeSource =
+                track.streamSource === "youtube" &&
+                Boolean(track.youtubeVideoId);
+            return hasLocalSource || hasTidalSource || hasYouTubeSource;
+        })
+        .map((track: AlbumTrack) => toAlbumPlaybackTrack(track, album!));
     const showTrackPlaceholder = detailsLoading && !hasTracks;
     const { highlightTrackId } = useTrackDeepLink(
         album,
-        (track) => playTrackNow(track, album!),
+        (_track, index) => playAlbum(album!, index),
         hasTracks,
     );
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (source !== "library") {
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        void api
+            .getLibraryDeletePolicy()
+            .then((policy) => {
+                if (!cancelled) setLibraryDeletionAllowed(policy.canDelete);
+            })
+            .catch((error) => {
+                sharedFrontendLogger.warn(
+                    "Failed to load library deletion policy:",
+                    error,
+                );
+                if (!cancelled) setLibraryDeletionAllowed(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [source]);
 
     // Get cover URL for display and color extraction
     // Proxy through API to handle native: URLs and CORS
@@ -154,7 +217,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
 
     // Loading and error states
     if (loading) {
-        return <LoadingScreen />;
+        return <LoadingScreen message={albumRu.loading} />;
     }
 
     if (!album) {
@@ -162,14 +225,17 @@ export default function AlbumPage({ params }: AlbumPageProps) {
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold mb-4">
-                        Error Loading Album
+                        {albumRu.loadErrorTitle}
                     </h1>
-                    <p className="text-gray-400 mb-4">Album not found</p>
+                    <p className="mb-4 text-content-muted">
+                        {albumRu.notFound}
+                    </p>
                     <button
+                        type="button"
                         onClick={() => router.push("/albums")}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                        className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-semibold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     >
-                        Back to Albums
+                        {albumRu.backToAlbums}
                     </button>
                 </div>
             </div>
@@ -177,8 +243,8 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     }
 
     // Event handlers
-    const handlePlayTrack = (track: AlbumTrack, _index: number) => {
-        playTrackNow(track, album);
+    const handlePlayTrack = (_track: AlbumTrack, index: number) => {
+        playAlbum(album, index);
     };
 
     const openPlaylistSelector = (
@@ -209,19 +275,38 @@ export default function AlbumPage({ params }: AlbumPageProps) {
             }
             setPendingTrackRefs([]);
             setIsBulkAdd(false);
-            setShowPlaylistSelector(false);
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add track(s) to playlist:",
                 error,
             );
+            throw error;
         } finally {
             setIsAddingToPlaylist(false);
         }
     };
 
+    const handleDeleteAlbum = async () => {
+        if (isDeletingAlbum || !canDeleteFromLibrary || source !== "library") {
+            return;
+        }
+
+        setIsDeletingAlbum(true);
+        try {
+            if (currentTrack?.album?.id === album.id) pause();
+            await api.deleteAlbum(album.id);
+            toast.success(`${albumRu.deleted}: «${album.title}»`);
+            router.replace("/library?tab=albums");
+        } catch (error) {
+            sharedFrontendLogger.error("Failed to delete album:", error);
+            toast.error(albumRu.deleteFailed);
+        } finally {
+            setIsDeletingAlbum(false);
+        }
+    };
+
     return (
-        <div className="min-h-screen flex flex-col">
+        <div className="flex min-h-screen flex-col">
             <AlbumHero
                 album={album}
                 source={source || "discovery"}
@@ -268,32 +353,31 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     isSubmittingRequest={isSubmittingRequest}
                     onRequestAlbum={() => void requestAlbum()}
                     isInListenTogetherGroup={isInGroup}
+                    canDeleteFromLibrary={canDeleteFromLibrary}
+                    onDeleteAlbum={() => setShowDeleteConfirm(true)}
+                    librarySaveControl={
+                        <SaveMusicEntityButton entity={savedAlbumEntity} />
+                    }
+                    deviceDownloadControl={
+                        <DeviceCollectionDownloadButton
+                            tracks={deviceDownloadTracks}
+                            collectionId={`album:${album.id}`}
+                            collectionLabel={album.title}
+                        />
+                    }
                 />
             </AlbumHero>
 
-            {/* Main Content - fills remaining viewport height */}
-            <div className="relative min-h-[50vh] flex-1">
-                {/* Dynamic color gradient */}
+            <div className="relative min-h-[50vh] flex-1 bg-surface">
                 <div
-                    className="absolute inset-0 pointer-events-none"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-80 opacity-70"
                     style={{
-                        background: `linear-gradient(180deg,
-              ${(colors || {}).vibrant}15 0%,
-              ${(colors || {}).darkVibrant}08 50%,
-              transparent 100%)`,
+                        background: colors
+                            ? `linear-gradient(180deg, ${colors.vibrant}1f 0%, ${colors.darkVibrant}0d 52%, transparent 100%)`
+                            : "linear-gradient(180deg, color-mix(in srgb, var(--music-action) 8%, transparent), transparent)",
                     }}
                 />
-
-                {/* Texture overlay */}
-                <div
-                    className="absolute inset-0 pointer-events-none opacity-[0.015]"
-                    style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                        backgroundSize: "30px 30px",
-                    }}
-                />
-
-                <div className="relative px-2 md:px-8 py-6 space-y-8">
+                <div className="relative mx-auto w-full max-w-[1800px] space-y-10 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
                     {hasTracks && (
                         <TrackList
                             tracks={album.tracks}
@@ -338,6 +422,17 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     setIsBulkAdd(false);
                 }}
                 onSelectPlaylist={handlePlaylistSelected}
+            />
+            <ConfirmDialog
+                isOpen={showDeleteConfirm}
+                onClose={() => setShowDeleteConfirm(false)}
+                onConfirm={() => void handleDeleteAlbum()}
+                title={albumRu.deleteTitle}
+                message={`«${album.title}». ${albumRu.deleteMessage}`}
+                confirmText={
+                    isDeletingAlbum ? albumRu.deleting : albumRu.deleteAlbum
+                }
+                variant="danger"
             />
         </div>
     );

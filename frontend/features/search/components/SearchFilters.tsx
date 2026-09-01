@@ -1,64 +1,36 @@
-import { Download, Network } from "lucide-react";
-import {
-    FilterPills,
-    type FilterPillOption,
-} from "@/components/ui/FilterPills";
-import { FilterTab } from "../types";
+import { FilterChip } from "@/components/ui/FilterChip";
+import type { SearchResultView } from "../types";
+import { ru } from "@/lib/i18n/ru";
 
 interface SearchFiltersProps {
-    filterTab: FilterTab;
-    onFilterChange: (tab: FilterTab) => void;
-    soulseekEnabled: boolean;
-    federationEnabled: boolean;
+    activeView: SearchResultView;
+    query: string;
     hasSearched: boolean;
 }
 
-/** Builds the filter options for the enabled search sources. */
-function buildFilterOptions(
-    soulseekEnabled: boolean,
-    federationEnabled: boolean,
-): FilterPillOption<FilterTab>[] {
-    const options: FilterPillOption<FilterTab>[] = [
-        { value: "all", label: "All" },
-        { value: "library", label: "My Library" },
-        { value: "discover", label: "Discover" },
-        { value: "podcasts", label: "Podcasts" },
-    ];
-    if (federationEnabled) {
-        options.push({
-            value: "peers",
-            label: (
-                <span className="flex items-center gap-2">
-                    <Network className="h-4 w-4" />
-                    Peers
-                </span>
-            ),
-            activeClassName: "bg-brand text-black",
-        });
-    }
-    if (soulseekEnabled) {
-        options.push({
-            value: "soulseek",
-            label: (
-                <span className="flex items-center gap-2">
-                    <Download className="w-4 h-4" />
-                    Soulseek
-                </span>
-            ),
-            activeClassName: "bg-brand text-black",
-        });
-    }
-    return options;
+const SEARCH_RESULT_VIEWS: ReadonlyArray<{
+    id: SearchResultView;
+    label: string;
+}> = [
+    { id: "all", label: ru.search.all },
+    { id: "tracks", label: ru.search.tracks },
+    { id: "artists", label: ru.search.artists },
+    { id: "albums", label: ru.search.albums },
+];
+
+function searchViewHref(query: string, view: SearchResultView): string {
+    const queryString = `q=${encodeURIComponent(query)}`;
+    return view === "all"
+        ? `/search?${queryString}`
+        : `/search?${queryString}&view=${view}`;
 }
 
 /**
- * Renders the SearchFilters component.
+ * Navigate between entity-scoped views of the same aggregated music search.
  */
 export function SearchFilters({
-    filterTab,
-    onFilterChange,
-    soulseekEnabled,
-    federationEnabled,
+    activeView,
+    query,
     hasSearched,
 }: SearchFiltersProps) {
     if (!hasSearched) {
@@ -66,13 +38,29 @@ export function SearchFilters({
     }
 
     return (
-        <FilterPills
-            options={buildFilterOptions(soulseekEnabled, federationEnabled)}
-            value={filterTab}
-            onChange={onFilterChange}
-            className="mb-8"
-            tvSection="search-filters"
-            aria-label="Search result filter"
-        />
+        <nav
+            aria-label={ru.search.resultTypeAria}
+            data-overflow-cue="horizontal"
+            className="sticky top-2 z-30 -mx-1 mb-8 snap-x snap-mandatory overflow-x-auto border-y border-white/[0.08] bg-surface/85 px-1 py-2 backdrop-blur-xl scrollbar-hide sm:mb-10"
+            data-tv-section="search-filters"
+        >
+            <div className="flex min-w-max gap-2">
+                {SEARCH_RESULT_VIEWS.map((view, index) => {
+                    const isActive = activeView === view.id;
+                    return (
+                        <FilterChip
+                            key={view.id}
+                            href={searchViewHref(query, view.id)}
+                            active={isActive}
+                            data-tv-card
+                            data-tv-card-index={index}
+                            className="min-h-11 snap-start px-4"
+                        >
+                            {view.label}
+                        </FilterChip>
+                    );
+                })}
+            </div>
+        </nav>
     );
 }

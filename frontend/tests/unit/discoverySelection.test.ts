@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
     deriveDiscoverySelection,
+    isExactArtistSearchMatch,
     normalizeArtistName,
 } from "../../features/search/discoverySelection";
 import type { DiscoverResult } from "../../features/search/types";
@@ -18,9 +19,29 @@ const track = (name: string, artistName: string): DiscoverResult => ({
     artist: artistName,
 });
 
+const album = (name: string, artistName: string): DiscoverResult => ({
+    type: "album",
+    id: `album-${name}`,
+    browseId: `MPREb-${name}`,
+    name,
+    artist: artistName,
+});
+
 test("normalizeArtistName strips case, whitespace, and diacritics", () => {
     assert.equal(normalizeArtistName("  Björk "), "bjork");
     assert.equal(normalizeArtistName("DRAKE"), "drake");
+});
+
+test("top-result confidence accepts exact and corrected names, not fuzzy first hits", () => {
+    assert.equal(
+        isExactArtistSearchMatch("Massive Attack", "massive attack", null),
+        true,
+    );
+    assert.equal(
+        isExactArtistSearchMatch("The Beatles", "beatles", "The Beatles"),
+        true,
+    );
+    assert.equal(isExactArtistSearchMatch("Nick Drake", "drake", null), false);
 });
 
 test("exact external match beats a fuzzy library match", () => {
@@ -131,4 +152,25 @@ test("tracks pass through when discovery is visible", () => {
 
     assert.equal(selection.tracks.length, 1);
     assert.equal(selection.topArtist, undefined);
+});
+
+test("provider albums pass through separately from artists and tracks", () => {
+    const selection = deriveDiscoverySelection({
+        discoverResults: [
+            artist("Massive Attack"),
+            track("Teardrop", "Massive Attack"),
+            album("Mezzanine", "Massive Attack"),
+        ],
+        query: "massive attack",
+        aliasCanonical: null,
+        libraryTopName: null,
+        showDiscover: true,
+    });
+
+    assert.deepEqual(
+        selection.albums.map((result) => result.name),
+        ["Mezzanine"],
+    );
+    assert.equal(selection.tracks.length, 1);
+    assert.equal(selection.topArtist?.name, "Massive Attack");
 });

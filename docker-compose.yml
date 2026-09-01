@@ -101,6 +101,10 @@ services:
             LIDARR_API_KEY: "${LIDARR_API_KEY:-}"
 
             # Coarse feature flags for ML/recommendation subsystems (default: true)
+            RECOMMENDATION_ENGINE_MODE: ${RECOMMENDATION_ENGINE_MODE:-shadow}
+            REMOTE_ANALYSIS_ENABLED: ${REMOTE_ANALYSIS_ENABLED:-false}
+            REMOTE_ANALYSIS_DAILY_BUDGET: ${REMOTE_ANALYSIS_DAILY_BUDGET:-100}
+            REMOTE_ANALYSIS_CONCURRENCY: ${REMOTE_ANALYSIS_CONCURRENCY:-1}
             AUDIO_ANALYSIS_ENABLED: ${AUDIO_ANALYSIS_ENABLED:-true}
             DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-true}
             DISCOVERY_MODE: ${DISCOVERY_MODE:-recommendation}
@@ -280,6 +284,10 @@ services:
             LIDARR_URL: "${LIDARR_URL:-}"
             LIDARR_API_KEY: "${LIDARR_API_KEY:-}"
             # Coarse feature flags for ML/recommendation subsystems (default: true)
+            RECOMMENDATION_ENGINE_MODE: ${RECOMMENDATION_ENGINE_MODE:-shadow}
+            REMOTE_ANALYSIS_ENABLED: ${REMOTE_ANALYSIS_ENABLED:-false}
+            REMOTE_ANALYSIS_DAILY_BUDGET: ${REMOTE_ANALYSIS_DAILY_BUDGET:-100}
+            REMOTE_ANALYSIS_CONCURRENCY: ${REMOTE_ANALYSIS_CONCURRENCY:-1}
             AUDIO_ANALYSIS_ENABLED: ${AUDIO_ANALYSIS_ENABLED:-true}
             DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-true}
             DISCOVERY_MODE: ${DISCOVERY_MODE:-recommendation}
@@ -356,6 +364,10 @@ services:
                 fi
                 exec docker-entrypoint.sh "$$@"
             - --
+        # The shell wrapper receives Compose's command as "$@". Without this
+        # explicit argv the official entrypoint exits successfully immediately,
+        # leaving the container in a restart loop instead of starting PostgreSQL.
+        command: ["postgres"]
         container_name: ${SOUNDSPAN_DB_CONTAINER_NAME:-soundspan_db}
         environment:
             POSTGRES_USER: ${POSTGRES_USER:-soundspan}
@@ -488,6 +500,7 @@ services:
             YTMUSIC_SEARCH_MODE: ${YTMUSIC_SEARCH_MODE:-auto}
             # BCP-47 language code for YTMusic shelf titles and content descriptions
             YTMUSIC_LANGUAGE: ${YTMUSIC_LANGUAGE:-en}
+            YTMUSIC_LOCATION: ${YTMUSIC_LOCATION:-}
             # Comma-separated shelf titles to exclude from /home (case-insensitive)
             YTMUSIC_HOME_FILTERED_SHELVES: ${YTMUSIC_HOME_FILTERED_SHELVES:-Quick picks}
             # Destination for YouTube URL downloads — must live inside the
@@ -558,8 +571,9 @@ services:
             THREADS_PER_WORKER: ${AUDIO_ANALYSIS_THREADS_PER_WORKER:-1}
             LOUDNESS_MEASURE_TIMEOUT_SECONDS: ${LOUDNESS_MEASURE_TIMEOUT_SECONDS:-120}
         volumes:
-            # Music library (read-only)
-            - ${MUSIC_PATH:-./music}:/music:ro
+            # Shared read-write music volume: canonical remote analysis owns and
+            # deletes its contained temporary spool files after persistence.
+            - ${MUSIC_PATH:-./music}:/music
             # NOTE: Models are baked into the Docker image at /app/models
             # No volume mount needed - previously this caused models to be hidden by empty volume
         depends_on:

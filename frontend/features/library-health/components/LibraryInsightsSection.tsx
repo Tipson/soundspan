@@ -2,6 +2,7 @@
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { SettingsSection } from "@/features/settings/components/ui";
+import { libraryOperationsRu } from "@/lib/i18n/libraryOperationsRu";
 import { useLibraryInsights } from "../hooks/useLibraryInsights";
 import { AnalysisCoveragePanel } from "./AnalysisCoveragePanel";
 import { DuplicatesPanel } from "./DuplicatesPanel";
@@ -20,16 +21,18 @@ export function LibraryInsightsSection() {
     return (
         <SettingsSection
             id="library-insights"
-            title="Library Insights"
-            description="What the enrichment pipeline knows about your library: metadata gaps, analysis coverage, duplicates, and storage. Counts are cached for 15 minutes."
+            title={libraryOperationsRu.libraryInsights.title}
+            description={libraryOperationsRu.libraryInsights.description}
             titleExtra={
                 <button
                     type="button"
                     onClick={refresh}
                     disabled={isRefreshing || isLoading}
                     className="p-1 text-gray-400 hover:text-white disabled:opacity-50"
-                    title="Recompute now"
-                    aria-label="Recompute library insights"
+                    title={libraryOperationsRu.libraryInsights.recompute}
+                    aria-label={
+                        libraryOperationsRu.libraryInsights.recomputeAria
+                    }
                 >
                     <RefreshCw
                         className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
@@ -40,7 +43,7 @@ export function LibraryInsightsSection() {
             {isLoading && (
                 <div className="flex items-center gap-2 py-2 text-sm text-gray-300">
                     <Loader2 className="w-4 h-4 animate-spin text-brand" />
-                    Loading library insights…
+                    {libraryOperationsRu.libraryInsights.loading}
                 </div>
             )}
             {error && <p className="py-2 text-sm text-red-400">{error}</p>}

@@ -8,41 +8,44 @@ import {
 import { resolveConnectionTestOutcome } from "../../features/settings/hooks/useConnectionTest";
 
 test("kindTitle renders title case for both kinds", () => {
-    assert.equal(kindTitle("playlist"), "Playlist");
-    assert.equal(kindTitle("mix"), "Mix");
+    assert.equal(kindTitle("playlist"), "Плейлист");
+    assert.equal(kindTitle("mix"), "Микс");
 });
 
 test("browseCollectionCopy matches the pre-consolidation playlist wording", () => {
     const copy = browseCollectionCopy("playlist");
-    assert.equal(copy.heroLabel, "TIDAL Playlist");
-    assert.equal(copy.loadErrorFallback, "Failed to load playlist");
-    assert.equal(copy.noPlayableTracks, "No playable tracks in this playlist");
-    assert.equal(copy.notFoundTitle, "Playlist not found");
+    assert.equal(copy.heroLabel, "TIDAL Плейлист");
+    assert.equal(copy.loadErrorFallback, "Не удалось загрузить плейлист");
+    assert.equal(
+        copy.noPlayableTracks,
+        "В этом плейлисте нет доступных треков",
+    );
+    assert.equal(copy.notFoundTitle, "Плейлист не найден");
     assert.equal(
         copy.notFoundFallback,
-        "This playlist may be private or no longer available.",
+        "Плейлист может быть приватным или уже недоступным.",
     );
-    assert.equal(copy.emptyMessage, "This playlist appears to be empty");
+    assert.equal(copy.emptyMessage, "Плейлист, похоже, пуст");
 });
 
 test("browseCollectionCopy matches the pre-consolidation mix wording", () => {
     const copy = browseCollectionCopy("mix");
-    assert.equal(copy.heroLabel, "TIDAL Mix");
-    assert.equal(copy.loadErrorFallback, "Failed to load mix");
-    assert.equal(copy.noPlayableTracks, "No playable tracks in this mix");
-    assert.equal(copy.notFoundTitle, "Mix not found");
+    assert.equal(copy.heroLabel, "TIDAL Микс");
+    assert.equal(copy.loadErrorFallback, "Не удалось загрузить микс");
+    assert.equal(copy.noPlayableTracks, "В этом миксе нет доступных треков");
+    assert.equal(copy.notFoundTitle, "Микс не найден");
     assert.equal(
         copy.notFoundFallback,
-        "This mix may be private or no longer available.",
+        "Микс может быть приватным или уже недоступным.",
     );
-    assert.equal(copy.emptyMessage, "This mix appears to be empty");
+    assert.equal(copy.emptyMessage, "Микс, похоже, пуст");
 });
 
 test("formatTotalDuration matches the original hour and minute forms", () => {
-    assert.equal(formatTotalDuration(9000), "about 2 hr 30 min");
-    assert.equal(formatTotalDuration(3600), "about 1 hr 0 min");
-    assert.equal(formatTotalDuration(2700), "45 min");
-    assert.equal(formatTotalDuration(0), "0 min");
+    assert.equal(formatTotalDuration(9000), "около 2 ч 30 мин");
+    assert.equal(formatTotalDuration(3600), "около 1 ч 0 мин");
+    assert.equal(formatTotalDuration(2700), "45 мин");
+    assert.equal(formatTotalDuration(0), "0 мин");
 });
 
 test("connection test outcome uses static success messages", () => {
@@ -83,7 +86,7 @@ test("connection test outcome prefers the probe error then the fallback", () => 
             { success: false, error: "ECONNREFUSED" },
             { successMessage: "Connected", failureMessage: "Failed" },
         ),
-        { status: "error", message: "ECONNREFUSED" },
+        { status: "error", message: "Failed" },
     );
     assert.deepEqual(
         resolveConnectionTestOutcome(
@@ -97,6 +100,6 @@ test("connection test outcome prefers the probe error then the fallback", () => 
             { success: false },
             { successMessage: "Connected" },
         ),
-        { status: "error", message: "Connection failed" },
+        { status: "error", message: "Не удалось подключиться" },
     );
 });

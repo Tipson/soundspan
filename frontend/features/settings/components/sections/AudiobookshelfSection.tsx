@@ -38,10 +38,10 @@ export function AudiobookshelfSection({
         error?: string;
         version?: string;
     }>({
-        loadingMessage: "Testing...",
+        loadingMessage: "Проверяем…",
         successMessage: (result) =>
-            result.version ? `v${result.version}` : "Connected",
-        failureMessage: "Failed",
+            result.version ? `v${result.version}` : "Подключено",
+        failureMessage: "Не удалось подключиться",
     });
 
     const handleTest = () => runTest(() => onTest("audiobookshelf"));
@@ -49,12 +49,12 @@ export function AudiobookshelfSection({
     return (
         <SettingsSection
             id="audiobookshelf"
-            title="Media Servers"
-            description="Connect to external media servers for audiobooks and podcasts"
+            title="Медиасерверы"
+            description="Подключите внешний сервер аудиокниг и подкастов"
         >
             <SettingsRow
-                label="Enable Audiobookshelf"
-                description="Connect for audiobooks and podcasts"
+                label="Включить Audiobookshelf"
+                description="Подключение аудиокниг и подкастов"
                 htmlFor="abs-enabled"
             >
                 <SettingsToggle
@@ -68,7 +68,7 @@ export function AudiobookshelfSection({
 
             {settings.audiobookshelfEnabled && (
                 <>
-                    <SettingsRow label="Server URL">
+                    <SettingsRow label="Адрес сервера">
                         <SettingsInput
                             value={settings.audiobookshelfUrl}
                             onChange={(v) => onUpdate({ audiobookshelfUrl: v })}
@@ -77,14 +77,14 @@ export function AudiobookshelfSection({
                         />
                     </SettingsRow>
 
-                    <SettingsRow label="API Key">
+                    <SettingsRow label="Ключ API">
                         <SettingsInput
                             type="password"
                             value={settings.audiobookshelfApiKey}
                             onChange={(v) =>
                                 onUpdate({ audiobookshelfApiKey: v })
                             }
-                            placeholder="Enter API key"
+                            placeholder="Введите ключ API"
                             className="w-64"
                         />
                     </SettingsRow>
@@ -102,8 +102,8 @@ export function AudiobookshelfSection({
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
                                 {testStatus === "loading"
-                                    ? "Testing..."
-                                    : "Test Connection"}
+                                    ? "Проверяем…"
+                                    : "Проверить подключение"}
                             </button>
                             <InlineStatus
                                 status={testStatus}

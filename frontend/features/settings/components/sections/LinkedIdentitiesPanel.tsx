@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { ExternalIdentity } from "@/lib/api/auth";
 import { createFrontendLogger } from "@/lib/logger";
 import { formatDate } from "@/utils/formatTime";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 
 const logger = createFrontendLogger("Settings.LinkedIdentitiesPanel");
 
@@ -34,7 +35,7 @@ function IdentityCard({ identity, providerName, onUnlink }: IdentityCardProps) {
                     </p>
                 )}
                 <p className="text-xs text-gray-400">
-                    Subject {identity.subjectHint} · Linked{" "}
+                    Идентификатор {identity.subjectHint} · Подключено{" "}
                     {formatDate(identity.createdAt)}
                 </p>
             </div>
@@ -43,7 +44,7 @@ function IdentityCard({ identity, providerName, onUnlink }: IdentityCardProps) {
                 onClick={() => onUnlink(identity)}
                 className="text-sm text-red-400 transition-colors hover:text-red-300"
             >
-                Unlink
+                Отвязать
             </button>
         </div>
     );
@@ -68,11 +69,11 @@ function UnlinkIdentityModal({
         <Modal
             isOpen={identity !== null}
             onClose={onClose}
-            title="Unlink SSO account"
+            title="Отвязать аккаунт SSO"
         >
             <div className="space-y-4">
                 <p className="text-sm text-gray-300">
-                    Unlink this identity from your soundspan account?
+                    Отвязать эту учётную запись от вашего аккаунта Soundspan?
                 </p>
                 {error && (
                     <p role="alert" className="text-sm text-red-400">
@@ -85,7 +86,7 @@ function UnlinkIdentityModal({
                         onClick={onClose}
                         className="px-4 py-2 text-sm text-gray-400 hover:text-white"
                     >
-                        Cancel
+                        {ru.common.cancel}
                     </button>
                     <button
                         type="button"
@@ -93,7 +94,7 @@ function UnlinkIdentityModal({
                         disabled={unlinking}
                         className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                     >
-                        {unlinking ? "Unlinking..." : "Unlink"}
+                        {unlinking ? "Отключаем…" : "Отвязать"}
                     </button>
                 </div>
             </div>
@@ -118,10 +119,14 @@ function IdentityList({
     onUnlink,
 }: IdentityListProps) {
     if (loading) {
-        return <p className="text-sm text-gray-400">Loading identities...</p>;
+        return <p className="text-sm text-gray-400">Загружаем аккаунты…</p>;
     }
     if (identities.length === 0) {
-        return <p className="text-sm text-gray-400">No SSO identity linked.</p>;
+        return (
+            <p className="text-sm text-gray-400">
+                Подключённых аккаунтов SSO нет.
+            </p>
+        );
     }
     return identities.map((identity) => (
         <IdentityCard
@@ -145,7 +150,8 @@ function useIdentityData() {
                 if (active) setIdentities(result.identities);
             } catch (error) {
                 logger.error("Failed to load linked identities", { error });
-                if (active) setLoadError("Failed to load linked identities");
+                if (active)
+                    setLoadError("Не удалось загрузить связанные аккаунты");
             } finally {
                 if (active) setLoading(false);
             }
@@ -170,9 +176,7 @@ function useIdentityLink() {
         } catch (linkError) {
             logger.error("Failed to start OIDC link", { error: linkError });
             setError(
-                linkError instanceof Error
-                    ? linkError.message
-                    : "Failed to start SSO linking",
+                userFacingError(linkError, "Не удалось начать подключение SSO"),
             );
             setLinking(false);
         }
@@ -198,9 +202,7 @@ function useIdentityUnlink(
             setCredential(null);
         } catch (unlinkError) {
             setError(
-                unlinkError instanceof Error
-                    ? unlinkError.message
-                    : "Failed to unlink identity",
+                userFacingError(unlinkError, "Не удалось отвязать аккаунт"),
             );
         } finally {
             setUnlinking(false);
@@ -227,10 +229,11 @@ export function LinkedIdentitiesPanel({
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <h3 className="text-sm font-medium text-white">
-                        Linked identities
+                        Связанные аккаунты
                     </h3>
                     <p className="mt-0.5 text-xs text-gray-400">
-                        Manage the SSO accounts that can sign in as you.
+                        Аккаунты SSO, с помощью которых можно войти в ваш
+                        профиль.
                     </p>
                 </div>
                 <button
@@ -240,8 +243,8 @@ export function LinkedIdentitiesPanel({
                     className="rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-transform hover:scale-105 disabled:opacity-50"
                 >
                     {link.linking
-                        ? "Opening SSO..."
-                        : `Link ${providerName} account`}
+                        ? "Открываем SSO…"
+                        : `Подключить аккаунт ${providerName}`}
                 </button>
             </div>
             {visibleError && !unlink.credential && (

@@ -15,7 +15,10 @@ import type { useTrackRecovery } from "./useTrackRecovery";
 
 interface UsePlaybackWatchdogsOptions {
     refs: PlaybackOrchestratorRefs;
-    trackRecovery: ReturnType<typeof useTrackRecovery>;
+    trackRecovery: Pick<
+        ReturnType<typeof useTrackRecovery>,
+        "attemptTransientTrackRecovery" | "scheduleStartupPlaybackRecovery"
+    >;
     isPlaying: boolean;
 
     isBuffering: boolean;

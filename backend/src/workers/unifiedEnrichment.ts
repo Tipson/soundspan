@@ -34,6 +34,7 @@ import { withTimeout } from "./enrichmentTimeout";
 import { repointBackgroundPhase } from "./enrichmentCycleState";
 import {
     ENRICHABLE_TRACK_WHERE,
+    LOCAL_AUDIO_ANALYSIS_TRACK_WHERE,
     LOCAL_TRACK_WHERE,
 } from "../utils/librarySorting";
 import { getActiveSpace } from "../services/embeddingSpaces";
@@ -49,6 +50,7 @@ import { withPrismaRetry } from "../utils/prismaRetry";
 import { runWithSchedulerClaim } from "../utils/schedulerClaim";
 
 const log = logger.child("Enrichment");
+const AUDIO_TRACK_WHERE = LOCAL_AUDIO_ANALYSIS_TRACK_WHERE;
 
 // Configuration
 const ARTIST_BATCH_SIZE = 10;
@@ -1134,18 +1136,10 @@ async function enrichTrackTagsBatch(): Promise<number> {
     return processed;
 }
 
-/**
- * Step 3: Queue pending tracks for audio analysis (Essentia)
- */
+/** Step 3: Queue pending local files for audio analysis (Essentia). */
 async function queueAudioAnalysis(): Promise<number> {
-    // Find tracks that need audio analysis
-    // All tracks should have filePath, so no null check needed
     const tracks = await prisma.track.findMany({
-        where: {
-            analysisStatus: "pending",
-            removedAt: null,
-            ...LOCAL_TRACK_WHERE,
-        },
+        where: { analysisStatus: "pending", ...AUDIO_TRACK_WHERE },
         select: {
             id: true,
             filePath: true,
@@ -1165,6 +1159,8 @@ async function queueAudioAnalysis(): Promise<number> {
     let queued = 0;
 
     for (const track of tracks) {
+        if (!track.filePath) continue;
+
         try {
             const admission = await withEnrichmentQueueRedisRetry(
                 `queueAudioAnalysis.admit(${track.id})`,
@@ -1304,7 +1300,7 @@ async function executeAudioPhase(): Promise<number> {
         "executeAudioPhase.audioCompletedBefore.count",
         () =>
             prisma.track.count({
-                where: { analysisStatus: "completed" },
+                where: { analysisStatus: "completed", ...AUDIO_TRACK_WHERE },
             }),
         enrichmentPrismaRetryOptions,
     );
@@ -1321,7 +1317,7 @@ async function executeAudioPhase(): Promise<number> {
         "executeAudioPhase.audioCompletedAfter.count",
         () =>
             prisma.track.count({
-                where: { analysisStatus: "completed" },
+                where: { analysisStatus: "completed", ...AUDIO_TRACK_WHERE },
             }),
         enrichmentPrismaRetryOptions,
     );
@@ -1476,6 +1472,7 @@ async function loadEnrichmentProgress() {
                 SELECT COUNT(*) as count
                 FROM "Track"
                 WHERE "filePath" IS NOT NULL
+                  AND "filePath" <> ''
                   AND origin = ${"LOCAL"}::"TrackOrigin"
                   AND "removedAt" IS NULL
             `,
@@ -1491,26 +1488,20 @@ async function loadEnrichmentProgress() {
                 prisma.track.count({
                     where: {
                         analysisStatus: "completed",
-                        ...ENRICHABLE_TRACK_WHERE,
+                        ...AUDIO_TRACK_WHERE,
                     },
                 }),
                 prisma.track.count({
-                    where: {
-                        analysisStatus: "pending",
-                        ...ENRICHABLE_TRACK_WHERE,
-                    },
+                    where: { analysisStatus: "pending", ...AUDIO_TRACK_WHERE },
                 }),
                 prisma.track.count({
                     where: {
                         analysisStatus: "processing",
-                        ...ENRICHABLE_TRACK_WHERE,
+                        ...AUDIO_TRACK_WHERE,
                     },
                 }),
                 prisma.track.count({
-                    where: {
-                        analysisStatus: "failed",
-                        ...ENRICHABLE_TRACK_WHERE,
-                    },
+                    where: { analysisStatus: "failed", ...AUDIO_TRACK_WHERE },
                 }),
                 prisma.$queryRaw<{ count: bigint }[]>`
                 SELECT COUNT(*) as count
@@ -1574,7 +1565,7 @@ async function loadEnrichmentProgress() {
     const trackTagsProgress =
         trackTotal > 0 ? Math.round((trackTagsEnriched / trackTotal) * 100) : 0;
     const audioProgress =
-        trackTotal > 0 ? Math.round((audioCompleted / trackTotal) * 100) : 0;
+        clapTotal > 0 ? Math.round((audioCompleted / clapTotal) * 100) : 0;
     const clapProgress =
         clapTotal > 0 ? Math.round((clapCompleted / clapTotal) * 100) : 0;
 
@@ -1608,7 +1599,7 @@ async function loadEnrichmentProgress() {
 
         // Background enrichment (non-blocking, runs in audio-analyzer container)
         audioAnalysis: {
-            total: trackTotal,
+            total: clapTotal,
             completed: audioCompleted,
             pending: audioPending,
             processing: audioProcessing,
@@ -1726,7 +1717,7 @@ export async function reRunAudioAnalysisOnly(): Promise<number> {
     await audioAnalysisCleanupService.cleanupStaleProcessing();
 
     const tracks = await prisma.track.findMany({
-        where: { analysisStatus: "pending", ...ENRICHABLE_TRACK_WHERE },
+        where: { analysisStatus: "pending", ...AUDIO_TRACK_WHERE },
         select: { id: true },
     });
 

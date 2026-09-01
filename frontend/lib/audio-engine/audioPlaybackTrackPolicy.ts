@@ -5,6 +5,12 @@ import {
     type CanonicalMediaProviderIdentity,
     type CanonicalMediaSource,
 } from "@soundspan/media-metadata-contract";
+import {
+    AUDIO_LOAD_TIMEOUT_MS,
+    AUDIO_LOAD_TIMEOUT_RETRIES,
+    PROVIDER_AUDIO_LOAD_TIMEOUT_MS,
+    PROVIDER_AUDIO_LOAD_TIMEOUT_RETRIES,
+} from "./audioPlaybackOrchestratorConstants";
 
 /** Provider fields used to resolve the direct playback source. */
 export interface RuntimeProviderTrack {
@@ -116,5 +122,68 @@ export function isLikelyTransientStreamError(error: unknown): boolean {
         message.includes("503") ||
         message.includes("502") ||
         message.includes("504")
+    );
+}
+
+/**
+ * Browsers collapse an HTTP 503 returned by an audio URL into media error 4.
+ * For YouTube-backed tracks this is a temporary provider-startup failure, not
+ * evidence that the next queue entry is permanently unavailable.
+ */
+export function isProviderStartupFailure(input: {
+    track: RuntimeProviderTrack | null;
+    code?: string;
+    error: unknown;
+    priorConsecutiveErrors?: number;
+}): boolean {
+    if (!input.track) return false;
+    const sourceType = resolveDirectTrackSourceType(input.track);
+    if (sourceType !== "ytmusic") {
+        return false;
+    }
+    const message = (
+        input.error instanceof Error
+            ? input.error.message
+            : String(input.error || "")
+    ).toLowerCase();
+    if (
+        message.includes("provider_challenge") ||
+        message.includes("failed to extract stream")
+    ) {
+        return true;
+    }
+    const genericSourceRejection =
+        input.code === "4" || message.includes("media_err_src_not_supported");
+    return genericSourceRejection && (input.priorConsecutiveErrors ?? 0) > 0;
+}
+
+export function resolveAudioLoadTimeoutPolicy(
+    playbackType: "track" | "audiobook" | "podcast" | null,
+    track: RuntimeProviderTrack | null,
+    resolvedStreamUrl?: string | null,
+): { timeoutMs: number; maxRetries: number } {
+    const usesColdProviderSpool =
+        playbackType === "track" &&
+        !resolvedStreamUrl?.startsWith("/__offline/audio/") &&
+        (track?.streamSource === "youtube" ||
+            track?.streamSource === "youtube-direct");
+    return usesColdProviderSpool
+        ? {
+              timeoutMs: PROVIDER_AUDIO_LOAD_TIMEOUT_MS,
+              maxRetries: PROVIDER_AUDIO_LOAD_TIMEOUT_RETRIES,
+          }
+        : {
+              timeoutMs: AUDIO_LOAD_TIMEOUT_MS,
+              maxRetries: AUDIO_LOAD_TIMEOUT_RETRIES,
+          };
+}
+
+/** Honors the engine's terminal retry decision before adding an outer reload. */
+export function shouldAttemptOuterTransientRecovery(input: {
+    error: unknown;
+    recoverable?: boolean;
+}): boolean {
+    return (
+        input.recoverable !== false && isLikelyTransientStreamError(input.error)
     );
 }

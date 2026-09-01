@@ -24,19 +24,19 @@ interface StatusConfig {
 
 const STATUS_LABELS: Record<LibraryHealthRecord["status"], StatusConfig> = {
     MISSING_FROM_DISK: {
-        label: "Missing",
+        label: "Файл не найден",
         icon: FileWarning,
         color: "text-amber-400",
     },
     UNREADABLE_METADATA: {
-        label: "Unreadable",
+        label: "Не читается",
         icon: AlertTriangle,
         color: "text-red-400",
     },
 };
 
 const REMOVED_STATUS: StatusConfig = {
-    label: "Removed, pending purge",
+    label: "Удалён, ожидает очистки",
     icon: FileWarning,
     color: "text-gray-400",
 };
@@ -66,16 +66,15 @@ function PurgeProgressLine({
         return (
             <div className="flex items-center gap-2 py-2 text-sm text-gray-300">
                 <Loader2 className="w-4 h-4 animate-spin text-brand" />
-                Purging — {progress.remaining} track
-                {progress.remaining === 1 ? "" : "s"} remaining
+                Очистка… Осталось треков: {progress.remaining}
             </div>
         );
     }
     if (progress.lastFailure && progress.remaining > 0) {
         return (
             <p className="text-sm text-red-400 py-2">
-                Purge stopped: {progress.lastFailure} — press Delete all now to
-                retry.
+                Очистка остановлена: {progress.lastFailure} Нажмите «Удалить всё
+                сейчас», чтобы повторить.
             </p>
         );
     }
@@ -106,13 +105,12 @@ function RemovedTrackSummary({
             <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-gray-300">
-                        {count} removed, pending purge
+                        Удалено, ожидают очистки: {count}
                     </p>
                     <p className="mt-1 text-[11px] text-gray-400">
-                        A rescan restores these tracks if their files return.
-                        SoundSpan permanently purges them after {retentionDays}{" "}
-                        day
-                        {retentionDays === 1 ? "" : "s"}, as configured by{" "}
+                        Повторное сканирование восстановит записи, если файлы
+                        появятся снова. SoundSpan окончательно удалит их через{" "}
+                        {retentionDays} дн. согласно настройке{" "}
                         <code>TRACK_REMOVAL_RETENTION_DAYS</code>.
                     </p>
                 </div>
@@ -127,7 +125,7 @@ function RemovedTrackSummary({
                     ) : (
                         <Trash2 className="w-3.5 h-3.5" />
                     )}
-                    Delete all now
+                    Удалить всё сейчас
                 </button>
             </div>
         </div>
@@ -152,7 +150,7 @@ function LibraryHealthRecordRow({
                             className={`w-4 h-4 shrink-0 ${statusConfig.color}`}
                         />
                         <p className="text-sm text-white truncate">
-                            {record.track?.title || "Unknown Track"}
+                            {record.track?.title || "Неизвестный трек"}
                         </p>
                         <span
                             className={`shrink-0 text-[10px] font-medium ${statusConfig.color}`}
@@ -178,7 +176,8 @@ function LibraryHealthRecordRow({
                 <button
                     onClick={() => onDismiss(record.id)}
                     className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-white/5 rounded transition-colors shrink-0"
-                    title="Dismiss"
+                    title="Скрыть запись"
+                    aria-label="Скрыть запись"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -228,19 +227,16 @@ function RecordListToggle({
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
         >
             <Chevron className="w-3.5 h-3.5" />
-            {isExpanded
-                ? "Hide records"
-                : `Show ${count} record${count === 1 ? "" : "s"}`}
+            {isExpanded ? "Скрыть записи" : `Показать записи (${count})`}
         </button>
     );
 }
 
 function purgeConfirmMessage(count: number, retentionDays: number): string {
-    const tracks = `${count} removed track${count === 1 ? "" : "s"}`;
     return (
-        `Permanently delete ${tracks} right now instead of after the ` +
-        `${retentionDays}-day retention window. Play history and playlist ` +
-        `entries for these tracks are deleted with them. This cannot be undone.`
+        `Навсегда удалить треки (${count}) сейчас, не дожидаясь окончания ` +
+        `срока хранения (${retentionDays} дн.)? Вместе с ними будут удалены ` +
+        `записи истории и плейлистов. Это действие нельзя отменить.`
     );
 }
 
@@ -266,7 +262,7 @@ export function LibraryHealthDetails({
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-400">
-                    {total} issue{total !== 1 ? "s" : ""} detected
+                    Обнаружено проблем: {total}
                 </p>
                 <button
                     onClick={onRefresh}
@@ -276,7 +272,7 @@ export function LibraryHealthDetails({
                     <RefreshCw
                         className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`}
                     />
-                    Refresh
+                    Обновить
                 </button>
             </div>
             <RemovedTrackSummary
@@ -298,7 +294,7 @@ export function LibraryHealthDetails({
             {!isLoading && records.length === 0 && !error && (
                 <div className="text-center py-6">
                     <p className="text-sm text-gray-400">
-                        No health issues detected
+                        Проблем не обнаружено
                     </p>
                 </div>
             )}
@@ -321,12 +317,12 @@ export function LibraryHealthDetails({
                 isOpen={showPurgeConfirm}
                 onClose={() => setShowPurgeConfirm(false)}
                 onConfirm={onPurgeAll}
-                title="Delete all removed tracks"
+                title="Удалить все удалённые треки"
                 message={purgeConfirmMessage(
                     removedPendingPurgeCount,
                     trackRemovalRetentionDays,
                 )}
-                confirmText="Delete all now"
+                confirmText="Удалить всё сейчас"
                 variant="danger"
             />
         </div>

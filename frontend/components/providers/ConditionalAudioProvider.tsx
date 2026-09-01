@@ -8,6 +8,15 @@ import { ListenTogetherProvider } from "@/lib/listen-together-context";
 import { useAuth } from "@/lib/auth-context";
 import { AudioRuntimeElement } from "@/components/player/AudioRuntimeElement";
 import { AudioErrorBoundary } from "@/components/providers/AudioErrorBoundary";
+import {
+    DeviceOfflineProvider,
+    useDeviceOffline,
+} from "@/features/device-offline/DeviceOfflineProvider";
+
+function HydratedAudioRuntime() {
+    const { isHydrated } = useDeviceOffline();
+    return isHydrated ? <AudioRuntimeElement /> : null;
+}
 
 /**
  * Renders the ConditionalAudioProvider component.
@@ -33,18 +42,20 @@ export function ConditionalAudioProvider({
     // ListenTogether wraps Controls since it needs access to all audio contexts
     // Wrapped in error boundary to prevent audio errors from crashing the app
     return (
-        <AudioErrorBoundary>
-            <AudioStateProvider>
-                <AudioPlaybackProvider>
-                    <AudioControlsProvider>
-                        {/* AudioRuntimeElement bridges engine selection with legacy-safe fallback */}
-                        <AudioRuntimeElement />
-                        <ListenTogetherProvider>
-                            {children}
-                        </ListenTogetherProvider>
-                    </AudioControlsProvider>
-                </AudioPlaybackProvider>
-            </AudioStateProvider>
-        </AudioErrorBoundary>
+        <DeviceOfflineProvider>
+            <AudioErrorBoundary>
+                <AudioStateProvider>
+                    <AudioPlaybackProvider>
+                        <AudioControlsProvider>
+                            {/* Wait for the verified per-user device index before resolving media URLs. */}
+                            <HydratedAudioRuntime />
+                            <ListenTogetherProvider>
+                                {children}
+                            </ListenTogetherProvider>
+                        </AudioControlsProvider>
+                    </AudioPlaybackProvider>
+                </AudioStateProvider>
+            </AudioErrorBoundary>
+        </DeviceOfflineProvider>
     );
 }

@@ -39,6 +39,14 @@ import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { toAudioTrack } from "./likedPlaylistUtils";
 import { TrackList, TrackListHeader } from "@/components/track";
 import type { TrackRowItem, TrackRowSlots } from "@/components/track";
+import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
+import { isLikedPlaylistTrackDownloadable } from "@/features/device-offline/likedAutomation";
+import {
+    MusicDetailActionDock,
+    MusicDetailHero,
+    MusicDetailTrackSurface,
+} from "@/components/music-detail";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 const EMPTY_TRACKS: LikedPlaylistTrack[] = [];
 
@@ -62,11 +70,26 @@ export function resolveLikedTrackCoverUrl(
 }
 
 function toRowItem(track: LikedPlaylistTrack): TrackRowItem {
+    const rawTidalTrackId = track.tidalTrackId ?? track.provider?.tidalTrackId;
+    const tidalTrackId =
+        typeof rawTidalTrackId === "number"
+            ? rawTidalTrackId
+            : typeof rawTidalTrackId === "string" &&
+                /^\d+$/.test(rawTidalTrackId)
+              ? Number(rawTidalTrackId)
+              : undefined;
     return {
         id: track.id,
         title: track.title,
         artistName: track.artist.name,
         duration: track.duration,
+        streamSource:
+            track.streamSource === "tidal" || track.streamSource === "youtube"
+                ? track.streamSource
+                : undefined,
+        tidalTrackId,
+        youtubeVideoId:
+            track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
         coverArtUrl: resolveLikedTrackCoverUrl(track, 100),
     };
 }
@@ -112,10 +135,7 @@ function LikedTrackList({
                     </p>
                 ),
                 trailingActions: (
-                    <div
-                        className="flex items-center justify-end gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="flex items-center justify-end gap-1">
                         <span className="hidden sm:inline text-xs text-gray-400 w-10 text-right tabular-nums">
                             {formatTime(track.duration)}
                         </span>
@@ -130,7 +150,7 @@ function LikedTrackList({
                             }
                             isSaving={removingTrackId === track.id}
                             onToggleThumbsUp={() => onUnlike(track.id)}
-                            buttonSizeClassName="h-8 w-8"
+                            buttonSizeClassName="h-11 w-11"
                             iconSizeClassName="h-4 w-4"
                         />
                         <TrackOverflowMenu
@@ -153,15 +173,15 @@ function LikedTrackList({
                 onPlay={handlePlay}
                 rowSlots={rowSlots}
                 rowClassName="grid-cols-[28px_1fr_auto] md:grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto]"
-                accentColor="#93c5fd"
+                accentColor="var(--music-action)"
                 preferenceMode={null}
                 header={
                     <TrackListHeader
                         className="grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto] gap-4 mb-2"
                         columns={[
                             { label: "#", className: "text-center" },
-                            { label: "Title" },
-                            { label: "Album" },
+                            { label: ru.playlist.titleColumn },
+                            { label: ru.playlist.albumColumn },
                             { label: "" },
                         ]}
                     />
@@ -199,26 +219,18 @@ export default function MyLikedPlaylistPage() {
         () => likedTracks.map((track) => toAudioTrack(track)),
         [likedTracks],
     );
+    const deviceDownloadTracks = useMemo(
+        () =>
+            likedTracks
+                .filter((track) => isLikedPlaylistTrackDownloadable(track))
+                .map((track) => toAudioTrack(track)),
+        [likedTracks],
+    );
     const totalDuration = useMemo(
         () =>
             likedTracks.reduce((sum, track) => sum + (track.duration || 0), 0),
         [likedTracks],
     );
-    const providerCounts = useMemo(
-        () =>
-            likedTracks.reduce(
-                (acc, track) => {
-                    const source = track.streamSource || "local";
-                    if (source === "tidal") acc.tidal += 1;
-                    else if (source === "youtube") acc.youtube += 1;
-                    else acc.local += 1;
-                    return acc;
-                },
-                { local: 0, tidal: 0, youtube: 0 },
-            ),
-        [likedTracks],
-    );
-
     const isThisPlaylistPlaying = useMemo(() => {
         if (!currentTrack || !isPlaying || likedTracks.length === 0) {
             return false;
@@ -268,14 +280,14 @@ export default function MyLikedPlaylistPage() {
                     context.previous,
                 );
             }
-            toast.error("Failed to update liked tracks");
+            toast.error(ru.playlist.likeUpdateFailed);
         },
         onSuccess: (preference) => {
             queryClient.setQueryData(
                 ["track-preference", preference.trackId],
                 preference,
             );
-            toast.success("Removed from My Liked");
+            toast.success(ru.playlist.removedLiked);
         },
         onSettled: () => {
             setRemovingTrackId(null);
@@ -289,15 +301,17 @@ export default function MyLikedPlaylistPage() {
         const hours = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
         if (hours > 0) {
-            return `${hours} hr ${mins} min`;
+            return `${hours} ч ${mins} мин`;
         }
-        return `${mins} min`;
+        return `${mins} мин`;
     };
 
     const handleAddAllToQueue = () => {
         if (audioTracks.length === 0) return;
         addTracksToQueue(audioTracks);
-        toast.success(`Added ${audioTracks.length} tracks to queue`);
+        toast.success(
+            `${ru.playlist.addedToQueue}: ${audioTracks.length} ${pluralRu(audioTracks.length, ["трек", "трека", "треков"])}`,
+        );
     };
 
     const handlePlaylistSelected = async (playlistId: string) => {
@@ -320,14 +334,16 @@ export default function MyLikedPlaylistPage() {
                     }),
                 );
             }
-            toast.success(`Added ${likedTracks.length} tracks to playlist`);
-            setShowPlaylistSelector(false);
+            toast.success(
+                `Добавлено в плейлист: ${likedTracks.length} ${pluralRu(likedTracks.length, ["трек", "трека", "треков"])}`,
+            );
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
                 error,
             );
-            toast.error("Failed to add some tracks to playlist");
+            toast.error(ru.playlist.addSomeFailed);
+            throw error;
         } finally {
             setIsAddingToPlaylist(false);
         }
@@ -359,7 +375,7 @@ export default function MyLikedPlaylistPage() {
     const handleStartRadio = async () => {
         if (!data?.playlist.id) return;
         try {
-            toast.info("Starting playlist radio...");
+            toast.info(ru.playlist.startingRadio);
             const response = await api.getRadioTracks(
                 "playlist",
                 data.playlist.id,
@@ -379,16 +395,18 @@ export default function MyLikedPlaylistPage() {
                     }),
                 );
                 playTracks(tracks, 0);
-                toast.success(`Playing ${tracks.length} radio tracks`);
+                toast.success(
+                    `Радио запущено: ${tracks.length} ${pluralRu(tracks.length, ["трек", "трека", "треков"])}`,
+                );
             } else {
-                toast.error("No radio tracks found for this playlist");
+                toast.error(ru.playlist.noRadioTracks);
             }
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to start playlist radio:",
                 error,
             );
-            toast.error("Failed to start playlist radio");
+            toast.error(ru.playlist.radioFailed);
         }
     };
 
@@ -404,7 +422,7 @@ export default function MyLikedPlaylistPage() {
         return (
             <div className="flex min-h-screen items-center justify-center px-6 text-center">
                 <p className="text-sm text-white/60">
-                    Could not load your liked tracks right now.
+                    Сейчас не удалось загрузить любимые треки.
                 </p>
             </div>
         );
@@ -412,155 +430,161 @@ export default function MyLikedPlaylistPage() {
 
     return (
         <div className="min-h-screen">
-            {/* Hero with brand-blue gradient */}
-            <div className="relative pt-16 pb-10 px-4 md:px-8">
-                <div className="absolute inset-0 pointer-events-none">
-                    <div
-                        className="absolute inset-0 bg-gradient-to-b from-brand/15 via-blue-900/10 to-transparent"
-                        style={{ height: "35vh" }}
-                    />
-                    <div
-                        className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-brand/8 via-transparent to-transparent"
-                        style={{ height: "25vh" }}
-                    />
-                </div>
-                <div className="relative flex items-end gap-6">
-                    {/* Cover Art / Icon */}
-                    <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden relative">
+            <MusicDetailHero
+                eyebrow={ru.playlist.playlist}
+                title={ru.library.likedSongs}
+                artworkShape="square"
+                backgroundImage={coverUrl}
+                metadata={
+                    <>
+                        <span>
+                            {likedTracks.length}{" "}
+                            {pluralRu(likedTracks.length, [
+                                "трек",
+                                "трека",
+                                "треков",
+                            ])}
+                        </span>
+                        {totalDuration > 0 && (
+                            <>
+                                <span aria-hidden="true">•</span>
+                                <span>
+                                    {formatTotalDuration(totalDuration)}
+                                </span>
+                            </>
+                        )}
+                        <span aria-hidden="true">•</span>
+                        <span>{ru.playlist.savedToAccount}</span>
+                    </>
+                }
+                artwork={
+                    <>
                         {coverUrl ? (
                             <CachedImage
                                 src={coverUrl}
-                                alt="My Liked"
+                                alt={ru.nav.liked}
                                 fill
                                 className="object-cover"
-                                sizes="192px"
+                                sizes="(max-width: 640px) 176px, 224px"
                             />
                         ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand/20 to-[#1e3a5f]/30">
+                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand/25 via-ai/10 to-surface-highlight">
                                 <Heart className="h-16 w-16 text-brand-hover" />
                             </div>
                         )}
-                        <div className="absolute bottom-2 right-2 drop-shadow-lg">
+                        <div className="absolute bottom-3 right-3 grid h-11 w-11 place-items-center rounded-full bg-black/55 text-pink-400 shadow-lg backdrop-blur-md">
                             <Heart
-                                className="w-7 h-7 text-pink-500"
+                                className="h-6 w-6 fill-current"
                                 strokeWidth={2.5}
                             />
                         </div>
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0 pb-1">
-                        <p className="text-xs font-medium text-white/90 mb-1">
-                            Playlist
-                        </p>
-                        <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
-                            {data.playlist.name}
-                        </h1>
-                        <div className="flex items-center gap-1 text-sm text-white/70">
-                            <span>{likedTracks.length} songs</span>
-                            <span className="mx-1">&bull;</span>
-                            <span>
-                                {providerCounts.local} local /{" "}
-                                {providerCounts.tidal} TIDAL /{" "}
-                                {providerCounts.youtube} YouTube
-                            </span>
-                            {totalDuration > 0 && (
-                                <span>
-                                    , {formatTotalDuration(totalDuration)}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Action Bar */}
-            <div className="bg-gradient-to-b from-surface-hover/60 to-transparent px-4 md:px-8 py-4">
-                <div className="flex items-center gap-4">
-                    {likedTracks.length > 0 && (
-                        <button
-                            onClick={handlePlayAll}
-                            className="flex items-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-all hover:bg-brand hover:scale-105"
+                    </>
+                }
+                actions={
+                    likedTracks.length > 0 ? (
+                        <MusicDetailActionDock
+                            label={ru.playlist.likedControls}
                         >
-                            {showPlaySpinner ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : isThisPlaylistPlaying && isPlaying ? (
-                                <Pause className="h-5 w-5 fill-current" />
-                            ) : (
-                                <Play className="h-5 w-5 fill-current ml-0.5" />
-                            )}
-                            <span>
-                                {isThisPlaylistPlaying && isPlaying
-                                    ? "Pause"
-                                    : "Play All"}
-                            </span>
-                        </button>
-                    )}
-                    {likedTracks.length > 1 && (
-                        <button
-                            onClick={handleShuffle}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                            title="Shuffle play"
-                            aria-label="Shuffle play"
-                        >
-                            <Shuffle className="h-5 w-5" />
-                        </button>
-                    )}
-                    {likedTracks.length > 0 && (
-                        <button
-                            onClick={handleAddAllToQueue}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                            title="Add all to queue"
-                            aria-label="Add all to queue"
-                        >
-                            <ListMusic className="h-5 w-5" />
-                        </button>
-                    )}
-                    {likedTracks.length > 0 && (
-                        <button
-                            onClick={() => setShowPlaylistSelector(true)}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                            title="Add all to playlist"
-                            aria-label="Add all to playlist"
-                        >
-                            <Plus className="h-5 w-5" />
-                        </button>
-                    )}
-                    {likedTracks.length > 0 && (
-                        <button
-                            onClick={handleStartRadio}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                            title="Start playlist radio"
-                            aria-label="Start playlist radio"
-                        >
-                            <Radio className="h-5 w-5" />
-                        </button>
-                    )}
-                </div>
-            </div>
+                            <div
+                                data-detail-action-tier="primary"
+                                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                            >
+                                <button
+                                    onClick={handlePlayAll}
+                                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] motion-reduce:transition-none sm:flex-none"
+                                >
+                                    {showPlaySpinner ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                    ) : isThisPlaylistPlaying && isPlaying ? (
+                                        <Pause className="h-5 w-5 fill-current" />
+                                    ) : (
+                                        <Play className="ml-0.5 h-5 w-5 fill-current" />
+                                    )}
+                                    <span>
+                                        {isThisPlaylistPlaying && isPlaying
+                                            ? ru.common.pause
+                                            : ru.common.playAll}
+                                    </span>
+                                </button>
+                                {likedTracks.length > 1 && (
+                                    <button
+                                        onClick={handleShuffle}
+                                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                        title={ru.playlist.shufflePlay}
+                                        aria-label={ru.playlist.shufflePlay}
+                                    >
+                                        <Shuffle className="h-5 w-5" />
+                                    </button>
+                                )}
+                            </div>
+                            <div
+                                data-detail-action-tier="secondary"
+                                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                            >
+                                <DeviceCollectionDownloadButton
+                                    tracks={deviceDownloadTracks}
+                                    collectionId="playlist:my-liked"
+                                    collectionLabel={ru.library.likedSongs}
+                                />
+                                <button
+                                    onClick={handleAddAllToQueue}
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    title={ru.playlist.addAllQueue}
+                                    aria-label={ru.playlist.addAllQueue}
+                                >
+                                    <ListMusic className="h-5 w-5" />
+                                </button>
+                                <button
+                                    onClick={() =>
+                                        setShowPlaylistSelector(true)
+                                    }
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    title={ru.playlist.addAllPlaylist}
+                                    aria-label={ru.playlist.addAllPlaylist}
+                                >
+                                    <Plus className="h-5 w-5" />
+                                </button>
+                                <button
+                                    onClick={handleStartRadio}
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    title={ru.playlist.startRadio}
+                                    aria-label={ru.playlist.startRadio}
+                                >
+                                    <Radio className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </MusicDetailActionDock>
+                    ) : undefined
+                }
+            />
 
             {/* Track List */}
-            <div className="px-2 md:px-8 pb-32">
+            <div className="mx-auto max-w-[1800px] px-4 pt-2 sm:px-6 lg:px-8">
                 {likedTracks.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-24 text-center">
                         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/5">
                             <Music className="h-8 w-8 text-white/40" />
                         </div>
                         <h2 className="mb-1 text-lg font-semibold text-white">
-                            No liked tracks yet
+                            Любимых треков пока нет
                         </h2>
                         <p className="text-sm text-white/50">
-                            Tap the heart on any song to add it here.
+                            Нажмите на сердечко рядом с треком, чтобы добавить
+                            его сюда.
                         </p>
                     </div>
                 ) : (
-                    <LikedTrackList
-                        tracks={likedTracks}
-                        likedTrackIds={likedTrackIds}
-                        removingTrackId={removingTrackId}
-                        onPlay={handlePlayTrack}
-                        onUnlike={(trackId) => unlikeMutation.mutate(trackId)}
-                    />
+                    <MusicDetailTrackSurface label={ru.playlist.likedTracks}>
+                        <LikedTrackList
+                            tracks={likedTracks}
+                            likedTrackIds={likedTrackIds}
+                            removingTrackId={removingTrackId}
+                            onPlay={handlePlayTrack}
+                            onUnlike={(trackId) =>
+                                unlikeMutation.mutate(trackId)
+                            }
+                        />
+                    </MusicDetailTrackSurface>
                 )}
             </div>
 
@@ -569,7 +593,7 @@ export default function MyLikedPlaylistPage() {
                 onClose={() => setShowPlaylistSelector(false)}
                 onSelectPlaylist={handlePlaylistSelected}
                 isLoading={isAddingToPlaylist}
-                loadingMessage="Adding tracks..."
+                loadingMessage={ru.playlist.addingTracks}
             />
         </div>
     );

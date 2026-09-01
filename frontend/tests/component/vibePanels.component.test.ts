@@ -146,16 +146,16 @@ test("TravelPanel renders compass, breadcrumb and on/off-map neighbours", async 
     const html = renderToStaticMarkup(
         React.createElement(TravelPanel, { view }),
     );
-    assert.match(html, /Travel/);
+    assert.match(html, /Переход/);
     assert.match(html, /Origin Song/);
     assert.match(html, /Second Song/); // breadcrumb
     assert.match(html, /Near Artist/);
     assert.match(html, /Far Artist/);
-    assert.match(html, /not on map/); // off-map tag on n2
+    assert.match(html, /нет на карте/); // off-map tag on n2
     assert.match(html, /91%/); // similarity of n1
     // Compass options present, with the active one pressed.
-    assert.match(html, /Happier/);
-    assert.match(html, /Energetic/);
+    assert.match(html, /Радостнее/);
+    assert.match(html, /Энергичнее/);
     assert.match(html, /aria-pressed="true"/);
 });
 
@@ -180,7 +180,7 @@ test("TravelPanel shows the loading state", async () => {
     const html = renderToStaticMarkup(
         React.createElement(TravelPanel, { view }),
     );
-    assert.match(html, /Finding nearby vibes/);
+    assert.match(html, /Ищем близкое звучание/);
 });
 
 test("TravelPanel surfaces an error", async () => {
@@ -193,7 +193,7 @@ test("TravelPanel surfaces an error", async () => {
         onMapNeighbors: [],
         offMapNeighbors: [],
         loading: false,
-        error: "Couldn't load nearby vibes",
+        error: "Не удалось загрузить похожие треки",
         quantiles: null,
         originFeatures: null,
         setDirection: noop,
@@ -205,7 +205,7 @@ test("TravelPanel surfaces an error", async () => {
         React.createElement(TravelPanel, { view }),
     );
     // renderToStaticMarkup HTML-escapes the apostrophe in the copy.
-    assert.match(html, /load nearby vibes/);
+    assert.match(html, /Не удалось загрузить похожие треки/);
 });
 
 // --- Journey --------------------------------------------------------------
@@ -264,19 +264,19 @@ test("JourneyPanel disables thin mood chips and renders the numbered route", asy
     const html = renderToStaticMarkup(
         React.createElement(JourneyPanel, { view }),
     );
-    assert.match(html, /Journey/);
+    assert.match(html, /Маршрут/);
     assert.match(html, /Now Playing Song/);
-    assert.match(html, /Route to Chill/);
+    assert.match(html, /Маршрут к Chill/);
     assert.match(html, /Waypoint One/);
     assert.match(html, /Waypoint Two/);
-    assert.match(html, /not on map/); // w2 tagged
-    assert.match(html, /Play journey/);
-    assert.match(html, /aria-label="Save journey as playlist"/);
+    assert.match(html, /нет на карте/); // w2 tagged
+    assert.match(html, /Включить маршрут/);
+    assert.match(html, /aria-label="Сохранить маршрут как плейлист"/);
     // The thin "party" chip is disabled with the thin-mood tooltip.
     assert.match(html, /disabled=""/);
-    assert.match(html, /Not enough analyzed tracks for this mood/);
+    assert.match(html, /Недостаточно проанализированных треков/);
     // Drift section only offers the non-thin mood.
-    assert.match(html, /Drift toward/);
+    assert.match(html, /Двигаться к/);
 });
 
 test("JourneyPanel shows the pick-on-map prompt and a backend 404 error", async () => {
@@ -293,7 +293,7 @@ test("JourneyPanel shows the pick-on-map prompt and a backend 404 error", async 
         targetLabel: null,
         waypoints: [],
         loading: false,
-        error: "This track has no embedding yet",
+        error: "Этот трек ещё не проанализирован",
         canSubmit: false,
         quantiles: null,
         togglePick: noop,
@@ -309,8 +309,8 @@ test("JourneyPanel shows the pick-on-map prompt and a backend 404 error", async 
     const html = renderToStaticMarkup(
         React.createElement(JourneyPanel, { view }),
     );
-    assert.match(html, /Click a dot to set destination/);
-    assert.match(html, /This track has no embedding yet/);
+    assert.match(html, /Нажмите на точку, чтобы выбрать цель/);
+    assert.match(html, /Этот трек ещё не проанализирован/);
 });
 
 // --- Alchemy --------------------------------------------------------------
@@ -359,14 +359,14 @@ test("AlchemyTray renders ingredients, weights, count and blend results", async 
     const html = renderToStaticMarkup(
         React.createElement(AlchemyTray, { view }),
     );
-    assert.match(html, /Alchemy/);
+    assert.match(html, /Микс/);
     assert.match(html, /2\/10/); // ingredient count
     assert.match(html, /Ingredient One/);
     assert.match(html, /Ingredient Two/);
     assert.match(html, /1\.5/); // i2 weight readout
     assert.match(html, /Blend Result/);
     assert.match(html, /77%/);
-    assert.match(html, /Play blend/);
+    assert.match(html, /Включить микс/);
 });
 
 test("AlchemyTray disables Blend below two ingredients and shows an error", async () => {
@@ -383,7 +383,7 @@ test("AlchemyTray disables Blend below two ingredients and shows an error", asyn
         ],
         results: [],
         loading: false,
-        error: "Couldn't blend those tracks",
+        error: "Не удалось смешать эти треки",
         canBlend: false,
         quantiles: null,
         remove: noop,
@@ -397,7 +397,7 @@ test("AlchemyTray disables Blend below two ingredients and shows an error", asyn
     );
     assert.match(html, /1\/10/);
     assert.match(html, /disabled=""/); // Blend button disabled
-    assert.match(html, /blend those tracks/); // apostrophe is HTML-escaped
+    assert.match(html, /Не удалось смешать эти треки/);
 });
 
 // --- NowPlayingCard -------------------------------------------------------
@@ -428,12 +428,12 @@ test("NowPlayingCard shows the playing track's title, artist and pause control",
     assert.match(html, /Playing Title/);
     assert.match(html, /Playing Artist/);
     // Playing -> the pause affordance is shown, and the card offers fly-to.
-    assert.match(html, /aria-label="Pause"/);
-    assert.match(html, /Fly to Playing Title on the map/);
+    assert.match(html, /aria-label="Пауза"/);
+    assert.match(html, /Найти на карте: Playing Title/);
     // The explicit labeled find-me chip renders for on-map tracks (the
     // cover/title click alone doesn't read as a fly-to affordance).
-    assert.match(html, /Find on map/);
-    assert.match(html, /aria-label="Find Playing Title on the map"/);
+    assert.match(html, /Найти на карте/);
+    assert.match(html, /aria-label="Найти на карте: Playing Title"/);
 });
 
 test("NowPlayingCard proxies external cover art through the same origin", async () => {
@@ -479,11 +479,35 @@ test("NowPlayingCard disables fly-to when the track isn't on the map", async () 
         }),
     );
     assert.match(html, /Off Map Song/);
-    assert.match(html, /not on the map/i);
+    assert.match(html, /нет на карте/i);
     assert.match(html, /disabled=""/); // fly-to disabled off-map
-    assert.match(html, /aria-label="Play"/); // paused -> play affordance
+    assert.match(html, /aria-label="Воспроизвести"/); // paused -> play affordance
     // No find-me chip when the track has no dot to fly to.
-    assert.doesNotMatch(html, /Find on map/);
+    assert.doesNotMatch(html, /Найти на карте/);
+});
+
+test("NowPlayingCard can defer playback to the single primary Wave control", async () => {
+    const NowPlayingCard = await nowPlayingCard();
+    const html = renderToStaticMarkup(
+        React.createElement(NowPlayingCard, {
+            track: {
+                id: "t-wave",
+                title: "Wave Song",
+                artist: { name: "Wave Artist" },
+                album: { coverArt: null },
+            },
+            isPlaying: true,
+            onMapPresent: false,
+            moodColor: null,
+            onFlyTo: noop,
+            onTogglePlay: noop,
+            showPlaybackToggle: false,
+        }),
+    );
+
+    assert.match(html, /Wave Song/);
+    assert.doesNotMatch(html, /aria-label="Пауза"/);
+    assert.doesNotMatch(html, /aria-label="Воспроизвести"/);
 });
 
 test("NowPlayingCard renders nothing when there is no track", async () => {
@@ -523,7 +547,7 @@ test("NowPlayingCard renders a progress strip sized from currentTime/duration", 
     assert.match(html, /aria-valuemin="0"/);
     assert.match(html, /aria-valuemax="100"/);
     assert.match(html, /aria-valuenow="50"/);
-    assert.match(html, /aria-label="Playback progress"/);
+    assert.match(html, /aria-label="Прогресс воспроизведения"/);
     assert.match(html, /width:50%/);
     // Fill uses the card's mood color, not a fixed accent.
     assert.match(html, /#facc15/);
@@ -706,27 +730,27 @@ test("ViewControls exposes labelled zoom/reset/layout/brush/locate/journey/trail
     const html = renderToStaticMarkup(
         React.createElement(ViewControls, viewControlsBaseProps()),
     );
-    assert.match(html, /aria-label="Zoom in"/);
-    assert.match(html, /aria-label="Zoom out"/);
-    assert.match(html, /aria-label="Reset view"/);
-    assert.match(html, /aria-label="Spread layout"/); // natural -> offers spread
-    assert.match(html, /aria-label="Sweep brush"/);
-    assert.match(html, /aria-label="Locate now playing"/);
-    assert.match(html, /aria-label="Start a journey"/);
-    assert.match(html, /aria-label="Session trail settings"/);
-    assert.match(html, /aria-label="About this map"/);
-    assert.match(html, /aria-label="Enter fullscreen"/);
+    assert.match(html, /aria-label="Приблизить"/);
+    assert.match(html, /aria-label="Отдалить"/);
+    assert.match(html, /aria-label="Сбросить вид"/);
+    assert.match(html, /aria-label="Разнести точки"/); // natural -> offers spread
+    assert.match(html, /aria-label="Кисть для сбора треков"/);
+    assert.match(html, /aria-label="Найти текущий трек"/);
+    assert.match(html, /aria-label="Создать маршрут"/);
+    assert.match(html, /aria-label="Настройки истории сеанса"/);
+    assert.match(html, /aria-label="О карте звучания"/);
+    assert.match(html, /aria-label="Перейти в полноэкранный режим"/);
     // Toggle-like controls carry aria-pressed.
     assert.match(html, /aria-pressed="false"/);
     // Trail mode "on" -> the Footprints button itself is pressed.
     assert.match(html, /aria-pressed="true"/);
     // Popover closed by default -> no segmented control markup rendered.
-    assert.doesNotMatch(html, /Clear history/);
+    assert.doesNotMatch(html, /Очистить историю/);
     // About popover closed by default (aboutPopoverOpen: false) -> its
     // content is absent and the button reports aria-expanded="false".
-    assert.doesNotMatch(html, /neighborhoods are/i);
+    assert.doesNotMatch(html, /соседство имеет значение/i);
     const aboutButtonClosed = html.match(
-        /<button[^>]*aria-label="About this map"[^>]*>/,
+        /<button[^>]*aria-label="О карте звучания"[^>]*>/,
     )?.[0];
     assert.ok(aboutButtonClosed, "expected the About this map button markup");
     assert.match(aboutButtonClosed!, /aria-expanded="false"/);
@@ -737,7 +761,7 @@ test("ViewControls about popover follows the lifted aboutPopoverOpen/onToggleAbo
     const closed = renderToStaticMarkup(
         React.createElement(ViewControls, viewControlsBaseProps()),
     );
-    assert.doesNotMatch(closed, /Mood colors/);
+    assert.doesNotMatch(closed, /Цвета настроений/);
 
     const open = renderToStaticMarkup(
         React.createElement(ViewControls, {
@@ -746,10 +770,10 @@ test("ViewControls about popover follows the lifted aboutPopoverOpen/onToggleAbo
         }),
     );
     // The popover's content (AboutMapPopover) renders when the prop is true.
-    assert.match(open, /neighborhoods are/i);
-    assert.match(open, /Mood colors/);
+    assert.match(open, /соседство имеет значение/i);
+    assert.match(open, /Цвета настроений/);
     const aboutButtonOpen = open.match(
-        /<button[^>]*aria-label="About this map"[^>]*>/,
+        /<button[^>]*aria-label="О карте звучания"[^>]*>/,
     )?.[0];
     assert.ok(aboutButtonOpen, "expected the About this map button markup");
     assert.match(aboutButtonOpen!, /aria-expanded="true"/);
@@ -767,11 +791,11 @@ test("ViewControls trail popover renders the segmented mode control and a disabl
     );
     assert.match(html, /role="menu"/);
     assert.match(html, /role="radiogroup"/);
-    assert.match(html, />On</);
-    assert.match(html, />Fade</);
-    assert.match(html, />Off</);
-    assert.match(html, /Clear history/);
-    assert.match(html, /Save history as playlist/);
+    assert.match(html, />Вкл\.</);
+    assert.match(html, />Затухание</);
+    assert.match(html, />Выкл\.</);
+    assert.match(html, /Очистить историю/);
+    assert.match(html, /Сохранить историю как плейлист/);
     // "fade" is selected among the three radio options.
     assert.match(html, /aria-checked="true"/);
     // Empty trail -> both Clear history and Save are disabled.
@@ -788,7 +812,7 @@ test("ViewControls: trail mode 'off' un-presses the Footprints button", async ()
         }),
     );
     const footprintsButton = html.match(
-        /<button[^>]*aria-label="Session trail settings"[^>]*>/,
+        /<button[^>]*aria-label="Настройки истории сеанса"[^>]*>/,
     )?.[0];
     assert.ok(footprintsButton, "expected the Footprints button markup");
     assert.match(footprintsButton!, /aria-pressed="false"/);
@@ -799,9 +823,9 @@ test("ViewControls: queue toggle exposes aria-pressed and a count badge capped a
     const closedNoBadge = renderToStaticMarkup(
         React.createElement(ViewControls, viewControlsBaseProps()),
     );
-    assert.match(closedNoBadge, /aria-label="Show queue"/);
+    assert.match(closedNoBadge, /aria-label="Показать очередь"/);
     const queueButton = closedNoBadge.match(
-        /<button[^>]*aria-label="Show queue"[^>]*>/,
+        /<button[^>]*aria-label="Показать очередь"[^>]*>/,
     )?.[0];
     assert.ok(queueButton, "expected the queue toggle button markup");
     assert.match(queueButton!, /aria-pressed="false"/);
@@ -816,7 +840,7 @@ test("ViewControls: queue toggle exposes aria-pressed and a count badge capped a
         }),
     );
     const openQueueButton = openWithCount.match(
-        /<button[^>]*aria-label="Show queue"[^>]*>/,
+        /<button[^>]*aria-label="Показать очередь"[^>]*>/,
     )?.[0];
     assert.ok(openQueueButton, "expected the queue toggle button markup");
     assert.match(openQueueButton!, /aria-pressed="true"/);
@@ -845,11 +869,11 @@ test("SweepChip renders the count, cap marker and labelled actions", async () =>
             onDismiss: noop,
         }),
     );
-    assert.match(html, /23 tracks swept/);
-    assert.match(html, /aria-label="Play 23 swept tracks"/);
-    assert.match(html, /aria-label="Queue 23 swept tracks"/);
-    assert.match(html, /aria-label="Dismiss sweep"/);
-    assert.doesNotMatch(html, /\(max\)/);
+    assert.match(html, /23 трека выбрано/);
+    assert.match(html, /aria-label="Воспроизвести: 23 трека"/);
+    assert.match(html, /aria-label="В очередь: 23 трека"/);
+    assert.match(html, /aria-label="Закрыть подборку"/);
+    assert.doesNotMatch(html, /\(максимум\)/);
 
     const capped = renderToStaticMarkup(
         React.createElement(SweepChip, {
@@ -861,7 +885,7 @@ test("SweepChip renders the count, cap marker and labelled actions", async () =>
             onDismiss: noop,
         }),
     );
-    assert.match(capped, /100 tracks swept \(max\)/);
+    assert.match(capped, /100 треков выбрано \(максимум\)/);
 });
 
 // --- FiltersPanel ---------------------------------------------------------
@@ -903,7 +927,7 @@ test("FiltersPanel collapsed renders a Filters count pill", async () => {
             onExpandedChange: noop,
         }),
     );
-    assert.match(html, /Filters/);
+    assert.match(html, /Фильтры/);
     assert.match(html, /4\/10/); // {visible}/{total}
     assert.match(html, /aria-expanded="false"/);
 });
@@ -920,20 +944,20 @@ test("FiltersPanel expanded renders mood chips, the solo hint and both sliders",
         }),
     );
     // Mood chips as real toggle buttons (all active in the stub).
-    assert.match(html, />Happy</);
-    assert.match(html, />Sad</);
-    assert.match(html, />Relaxed</);
-    assert.match(html, />Party</);
+    assert.match(html, />Радостное</);
+    assert.match(html, />Грустное</);
+    assert.match(html, />Спокойное</);
+    assert.match(html, />Для вечеринки</);
     assert.match(html, /aria-pressed="true"/);
-    assert.match(html, />All</);
-    assert.match(html, /shift-click to solo/);
+    assert.match(html, />Все</);
+    assert.match(html, /Shift \+ клик/);
     // Both range sliders with end labels + accessible min/max inputs.
-    assert.match(html, /Energy/);
-    assert.match(html, /Mood/);
-    assert.match(html, /calm/);
-    assert.match(html, /intense/);
-    assert.match(html, /aria-label="Energy minimum"/);
-    assert.match(html, /aria-label="Mood maximum"/);
+    assert.match(html, /Энергия/);
+    assert.match(html, /Настроение/);
+    assert.match(html, /спокойно/);
+    assert.match(html, /интенсивно/);
+    assert.match(html, /aria-label="Энергия: минимум"/);
+    assert.match(html, /aria-label="Настроение: максимум"/);
     assert.match(html, /aria-expanded="true"/); // collapse button
 });
 
@@ -951,7 +975,7 @@ test("FiltersPanel default chip list includes a toggleable Neutral chip for the 
             reducedMotion: true,
         }),
     );
-    assert.match(html, />Neutral</);
+    assert.match(html, />Нейтральное</);
     // The neutral chip's dot uses the shared fallback gray, same as any
     // unrecognised mood key (types.ts's getMoodColor fallback).
     assert.match(html, /#6b7280/);
@@ -993,7 +1017,7 @@ test("TravelPanel renders the library-calibrated percent + label when quantiles 
     // (Math.round((1 - 0.2/2) * 100) = 90 too here by coincidence of the
     // fixture — the label is the tell that calibration actually ran).
     assert.match(html, /90%/);
-    assert.match(html, /title="same vibe"/);
+    assert.match(html, /title="одно настроение"/);
 });
 
 test("JourneyPanel waypoint rows use the calibrated percent when quantiles are supplied", async () => {
@@ -1039,7 +1063,7 @@ test("JourneyPanel waypoint rows use the calibrated percent when quantiles are s
         React.createElement(JourneyPanel, { view }),
     );
     assert.match(html, /75%/);
-    assert.match(html, /title="close neighbors"/);
+    assert.match(html, /title="очень близкое звучание"/);
 });
 
 // --- NeighborRow expansion (exported for direct, prop-driven testing) -----
@@ -1079,11 +1103,11 @@ test("NeighborRow expansion renders the calibrated sentence and per-feature matc
     );
     // Uncalibrated sentence form + all four feature bars (every feature has
     // both sides non-null in this fixture, so none are skipped).
-    assert.match(html, /match\./);
-    assert.match(html, /Energy/);
-    assert.match(html, /Mood/);
-    assert.match(html, /Groove/);
-    assert.match(html, /Intensity/);
+    assert.match(html, /совпадение:/);
+    assert.match(html, /Энергия/);
+    assert.match(html, /Настроение/);
+    assert.match(html, /Ритм/);
+    assert.match(html, /Интенсивность/);
     assert.match(html, /aria-expanded="true"/);
 });
 
@@ -1114,7 +1138,7 @@ test("NeighborRow collapsed (expanded=false) does not render the breakdown", asy
             onToggleExpand: noop,
         }),
     );
-    assert.doesNotMatch(html, /Groove/);
+    assert.doesNotMatch(html, /Ритм/);
     assert.match(html, /aria-expanded="false"/);
 });
 
@@ -1183,7 +1207,7 @@ test("JourneyPanel's Save button is wired to view.save, which calls createPlayli
     const html = renderToStaticMarkup(
         React.createElement(JourneyPanel, { view }),
     );
-    assert.match(html, /aria-label="Save journey as playlist"/);
+    assert.match(html, /aria-label="Сохранить маршрут как плейлист"/);
 
     await view.save();
 
@@ -1236,7 +1260,7 @@ test("JourneyPanel's Save button shows a spinner and is disabled while saving", 
         React.createElement(JourneyPanel, { view }),
     );
     const saveButton = html.match(
-        /<button[^>]*aria-label="Save journey as playlist"[^>]*>/,
+        /<button[^>]*aria-label="Сохранить маршрут как плейлист"[^>]*>/,
     )?.[0];
     assert.ok(saveButton, "expected the Save button markup");
     assert.match(saveButton!, /disabled=""/);
@@ -1255,7 +1279,7 @@ test("SweepChip renders a Save action alongside Play/Queue, disabled while savin
             onDismiss: noop,
         }),
     );
-    assert.match(html, /aria-label="Save 12 swept tracks as a playlist"/);
+    assert.match(html, /aria-label="Сохранить как плейлист: 12 треков"/);
 
     const savingHtml = renderToStaticMarkup(
         React.createElement(SweepChip, {
@@ -1269,7 +1293,7 @@ test("SweepChip renders a Save action alongside Play/Queue, disabled while savin
         }),
     );
     const playButton = savingHtml.match(
-        /<button[^>]*aria-label="Play 12 swept tracks"[^>]*>/,
+        /<button[^>]*aria-label="Воспроизвести: 12 треков"[^>]*>/,
     )?.[0];
     assert.ok(playButton, "expected the Play button markup");
     assert.match(playButton!, /disabled=""/);
@@ -1281,18 +1305,18 @@ test("AboutMapPopover explains map distance semantics and renders the mood/glyph
     const { AboutMapPopover } =
         await import("../../components/vibe/ViewControls");
     const html = renderToStaticMarkup(React.createElement(AboutMapPopover));
-    assert.match(html, /neighborhoods are/i);
-    assert.match(html, /calibrated against random pairs/i);
+    assert.match(html, /соседство имеет значение/i);
+    assert.match(html, /случайных пар из вашей коллекции/i);
     // Mood legend: named moods + the neutral fallback chip.
-    assert.match(html, />Happy</);
-    assert.match(html, />Neutral</);
+    assert.match(html, />Радостное</);
+    assert.match(html, />Нейтральное</);
     // Glyph legend.
-    assert.match(html, /Beacon/);
-    assert.match(html, /listening trail/);
-    assert.match(html, /flight plan/);
+    assert.match(html, /Маяк/);
+    assert.match(html, /история прослушивания/);
+    assert.match(html, /будущая очередь/);
     // Gesture cheat-sheet.
-    assert.match(html, /Sweep-to-queue/);
-    assert.match(html, /Add to alchemy/);
+    assert.match(html, /Собрать в очередь/);
+    assert.match(html, /Добавить в микс/);
 });
 
 // --- QueuePanel ---------------------------------------------------------
@@ -1341,9 +1365,9 @@ test("QueuePanel marks the current track, lists upcoming rows (incl. episodes) w
             onRemove: noop,
         }),
     );
-    assert.match(html, />Queue</);
+    assert.match(html, />Очередь</);
     assert.match(html, /Current Song/);
-    assert.match(html, /Now playing/i);
+    assert.match(html, /Сейчас играет/i);
     assert.match(html, /Next Song/);
     // Podcast episode in the queue renders its title + podcast, not a crash.
     assert.match(html, /Episode Title/);
@@ -1353,7 +1377,7 @@ test("QueuePanel marks the current track, lists upcoming rows (incl. episodes) w
     // One drag handle per upcoming row (2 upcoming: Next Song + the episode).
     const dragHandles = html.match(/draggable="true"/g) ?? [];
     assert.equal(dragHandles.length, 2);
-    assert.match(html, /aria-label="Remove Next Song from queue"/);
+    assert.match(html, /aria-label="Удалить из очереди: Next Song"/);
 });
 
 test("QueuePanel hides drag handles during Listen Together and omits remove when no primitive is passed", async () => {
@@ -1373,7 +1397,7 @@ test("QueuePanel hides drag handles during Listen Together and omits remove when
         }),
     );
     assert.doesNotMatch(html, /draggable="true"/);
-    assert.doesNotMatch(html, /aria-label="Remove Next Song from queue"/);
+    assert.doesNotMatch(html, /aria-label="Удалить из очереди: Next Song"/);
 });
 
 test("QueuePanel shows the empty state when nothing is queued", async () => {
@@ -1386,5 +1410,8 @@ test("QueuePanel shows the empty state when nothing is queued", async () => {
             onReorder: noop,
         }),
     );
-    assert.match(html, /Nothing queued — sweep some dots or play a journey\./);
+    assert.match(
+        html,
+        /Очередь пуста — проведите по точкам или создайте маршрут\./,
+    );
 });

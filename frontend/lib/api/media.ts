@@ -1,19 +1,24 @@
 import type { PlaybackClientMetricInput } from "../api";
 import type { ApiClientConstructor } from "./core";
 
+const YOUTUBE_LETTERBOX_THUMBNAIL =
+    /^(https?:\/\/(?:i\.ytimg\.com|img\.youtube\.com)\/vi\/[^/?#]+\/)hqdefault(\.jpg(?:[?#].*)?)$/i;
+
+function preferWideYouTubeThumbnail(coverId: string): string {
+    return coverId.replace(YOUTUBE_LETTERBOX_THUMBNAIL, "$1mqdefault$2");
+}
+
 /** Add media-domain operations to an API client base class. */
 export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class MediaApi extends Base {
         // Streaming
-        getStreamUrl(trackId: string): string {
-            const baseUrl = `${this.getBaseUrl()}/api/library/tracks/${trackId}/stream`;
-            // For audio element requests, cookies may not be sent cross-origin in development
-            // Add token as query param for authentication (supported by requireAuthOrToken)
-            const token = this.getCurrentToken();
-            if (token) {
-                return `${baseUrl}?token=${encodeURIComponent(token)}`;
-            }
-            return baseUrl;
+        getStreamUrl(trackId: string, quality?: string): string {
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            const params = new URLSearchParams();
+            if (quality) params.set("quality", quality);
+            const query = params.toString();
+            return `${baseUrl}/api/library/tracks/${encodeURIComponent(trackId)}/stream${query ? `?${query}` : ""}`;
         }
 
         async reportPlaybackClientMetric(
@@ -29,32 +34,26 @@ export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
          * Get the URL for cover art.
          * @param coverId - The cover ID, URL, or path
          * @param size - Optional size in pixels
-         * @param includeToken - Include auth token in URL (needed for canvas color extraction)
+         * @param _includeToken - Retained for call-site compatibility; image auth is cookie-backed
          */
         getCoverArtUrl(
             coverId: string,
             size?: number,
-            includeToken = true,
+            _includeToken = true,
         ): string {
-            const baseUrl = this.getBaseUrl();
-            const token = includeToken ? this.getCurrentToken() : null;
+            // Image credentials travel via the same-origin /api proxy cookie,
+            // never in a URL that can leak through history or access logs.
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
 
             // Check if this is an audiobook cover path (served by audiobooks endpoint, not proxied)
             if (coverId && coverId.startsWith("/audiobooks/")) {
-                const url = `${baseUrl}/api${coverId}`;
-                if (token) {
-                    return `${url}?token=${encodeURIComponent(token)}`;
-                }
-                return url;
+                return `${baseUrl}/api${coverId}`;
             }
 
             // Check if this is a podcast cover path (served by podcasts endpoint, not proxied)
             if (coverId && coverId.startsWith("/podcasts/")) {
-                const url = `${baseUrl}/api${coverId}`;
-                if (token) {
-                    return `${url}?token=${encodeURIComponent(token)}`;
-                }
-                return url;
+                return `${baseUrl}/api${coverId}`;
             }
 
             // Check if coverId is an external URL (needs to be proxied)
@@ -66,16 +65,16 @@ export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
                     coverId.startsWith("native:"))
             ) {
                 // Pass as query parameter to avoid URL encoding issues
-                const params = new URLSearchParams({ url: coverId });
+                const params = new URLSearchParams({
+                    url: preferWideYouTubeThumbnail(coverId),
+                });
                 if (size) params.append("size", size.toString());
-                if (token) params.append("token", token);
                 return `${baseUrl}/api/library/cover-art?${params.toString()}`;
             }
 
             // Otherwise use as path parameter (cover ID - typically a hash)
             const params = new URLSearchParams();
             if (size) params.append("size", size.toString());
-            if (token) params.append("token", token);
             const queryString = params.toString();
             return `${baseUrl}/api/library/cover-art/${encodeURIComponent(coverId)}${
                 queryString ? "?" + queryString : ""
@@ -87,10 +86,9 @@ export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
          * @param externalUrl - The original external thumbnail URL
          */
         getBrowseImageUrl(externalUrl: string): string {
-            const baseUrl = this.getBaseUrl();
-            const token = this.getCurrentToken();
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
             const params = new URLSearchParams({ url: externalUrl });
-            if (token) params.append("token", token);
             return `${baseUrl}/api/browse/ytmusic/image?${params.toString()}`;
         }
 
@@ -103,12 +101,9 @@ export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
         }
 
         getPreviewStreamUrl(videoId: string): string {
-            const baseUrl = `${this.getBaseUrl()}/api/artists/preview-stream/${encodeURIComponent(videoId)}`;
-            const token = this.getCurrentToken();
-            if (token) {
-                return `${baseUrl}?token=${encodeURIComponent(token)}`;
-            }
-            return baseUrl;
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            return `${baseUrl}/api/artists/preview-stream/${encodeURIComponent(videoId)}`;
         }
 
         async getFreshPreviewUrl(playlistId: string, pendingTrackId: string) {

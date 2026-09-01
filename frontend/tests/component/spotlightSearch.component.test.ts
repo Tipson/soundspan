@@ -155,7 +155,7 @@ test("typing shows up to 8 ranked local track/artist matches in a dropdown", asy
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]',
+        'input[aria-label="Найти на карте"]',
     ) as HTMLInputElement;
     assert.ok(input, "expected the spotlight input");
 
@@ -169,7 +169,7 @@ test("typing shows up to 8 ranked local track/artist matches in a dropdown", asy
     assert.match(listbox!.textContent ?? "", /City Lights/);
     assert.match(listbox!.textContent ?? "", /Midnight City/);
     // The trailing vibe-search row is always present.
-    assert.match(listbox!.textContent ?? "", /Search this as a vibe/);
+    assert.match(listbox!.textContent ?? "", /Искать по звучанию/);
 
     await unmount(mounted);
 });
@@ -189,7 +189,7 @@ test("Enter picks the highlighted local match and calls onLocate, keeping the qu
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]',
+        'input[aria-label="Найти на карте"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -230,7 +230,7 @@ test("clicking a match row calls onLocate for that track", async () => {
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]',
+        'input[aria-label="Найти на карте"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -239,7 +239,7 @@ test("clicking a match row calls onLocate for that track", async () => {
     });
 
     const option = mounted.container.querySelector(
-        '[aria-label="City Lights by Aurora"]',
+        '[aria-label="City Lights — Aurora"]',
     ) as HTMLButtonElement | null;
     assert.ok(option, "expected a match row for City Lights by Aurora");
 
@@ -267,7 +267,7 @@ test("ArrowDown moves the highlight onto the vibe-search row, and Enter there fi
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]',
+        'input[aria-label="Найти на карте"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -317,7 +317,7 @@ test("Enter with zero local matches falls through to the vibe search", async () 
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]',
+        'input[aria-label="Найти на карте"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -362,7 +362,7 @@ test("typing a new query invalidates an in-flight vibe search", async () => {
         }),
     );
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]',
+        'input[aria-label="Найти на карте"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -404,7 +404,7 @@ test("first Esc clears the query and closes the dropdown", async () => {
     );
 
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]',
+        'input[aria-label="Найти на карте"]',
     ) as HTMLInputElement;
 
     await React.act(async () => {
@@ -438,9 +438,9 @@ test("placeholder invites track/artist/vibe search", async () => {
         }),
     );
     const input = mounted.container.querySelector(
-        'input[aria-label="Spotlight a vibe"]',
+        'input[aria-label="Найти на карте"]',
     ) as HTMLInputElement;
-    assert.equal(input.placeholder, "Search tracks, artists, or a vibe…");
+    assert.equal(input.placeholder, "Трек, исполнитель или описание звучания…");
 
     await unmount(mounted);
 });

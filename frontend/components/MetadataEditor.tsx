@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { GradientSpinner } from "./ui/GradientSpinner";
 import { MusicBrainzLookup } from "./ui/MusicBrainzLookup";
 import Image from "next/image";
+import { userFacingError } from "@/lib/i18n/ru";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
@@ -124,14 +125,12 @@ export function MetadataEditor({
                 await api.resetTrackMetadata(id);
             }
 
-            toast.success("Metadata reset to original values");
+            toast.success("Исходные метаданные восстановлены");
             onSave?.(null);
             setIsOpen(false);
         } catch (error: unknown) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to reset metadata",
+                userFacingError(error, "Не удалось восстановить метаданные"),
             );
         } finally {
             setIsResetting(false);
@@ -156,11 +155,11 @@ export function MetadataEditor({
             toast.success(
                 `${
                     type === "artist"
-                        ? "Artist"
+                        ? "Исполнитель"
                         : type === "album"
-                          ? "Album"
-                          : "Track"
-                } metadata updated`,
+                          ? "Альбом"
+                          : "Трек"
+                }: метаданные обновлены`,
             );
             onSave?.(response);
             setIsOpen(false);
@@ -178,7 +177,7 @@ export function MetadataEditor({
                         ? apiError.data.error
                         : apiError instanceof Error && apiError.message
                           ? apiError.message
-                          : "Failed to update metadata";
+                          : "Не удалось обновить метаданные";
                 const hint =
                     typeof apiError.data.hint === "string"
                         ? apiError.data.hint
@@ -187,10 +186,14 @@ export function MetadataEditor({
                     typeof apiError.data.expectedFormat === "string"
                         ? apiError.data.expectedFormat
                         : null;
-                const fieldMessage =
-                    expectedFormat && message.includes("format")
-                        ? `${message}. Expected: ${expectedFormat}`
-                        : message;
+                const fallbackMessage = "Не удалось обновить метаданные";
+                const localizedMessage = userFacingError(
+                    message,
+                    fallbackMessage,
+                );
+                const fieldMessage = expectedFormat
+                    ? `Неверный формат. Ожидается: ${expectedFormat}`
+                    : localizedMessage;
 
                 if (
                     apiField === "mbid" ||
@@ -210,17 +213,21 @@ export function MetadataEditor({
                 }
 
                 if (apiError.status === 409 && hint) {
-                    setFormError(`${message}. ${hint}`);
-                    toast.error(`${message}. ${hint}`);
+                    const localizedHint = userFacingError(
+                        hint,
+                        "Проверьте значения и повторите попытку",
+                    );
+                    setFormError(`${localizedMessage}. ${localizedHint}`);
+                    toast.error(`${localizedMessage}. ${localizedHint}`);
                 } else {
-                    setFormError(message);
-                    toast.error(message);
+                    setFormError(localizedMessage);
+                    toast.error(localizedMessage);
                 }
             } else {
-                const fallbackMessage =
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to update metadata";
+                const fallbackMessage = userFacingError(
+                    error,
+                    "Не удалось обновить метаданные",
+                );
                 setFormError(fallbackMessage);
                 toast.error(fallbackMessage);
             }
@@ -266,7 +273,7 @@ export function MetadataEditor({
             <button
                 onClick={handleOpen}
                 className="p-2 rounded-full bg-black/40 hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
-                title={`Edit ${type} metadata`}
+                title="Редактировать метаданные"
             >
                 <Edit className="w-4 h-4 text-white" />
             </button>
@@ -278,13 +285,12 @@ export function MetadataEditor({
                         {/* Header */}
                         <div className="flex items-center justify-between p-6 border-b border-white/10">
                             <h2 className="text-2xl font-bold text-white">
-                                Edit{" "}
+                                Редактирование:{" "}
                                 {type === "artist"
-                                    ? "Artist"
+                                    ? "исполнитель"
                                     : type === "album"
-                                      ? "Album"
-                                      : "Track"}{" "}
-                                Metadata
+                                      ? "альбом"
+                                      : "трек"}
                             </h2>
                             <button
                                 onClick={handleClose}
@@ -306,10 +312,10 @@ export function MetadataEditor({
                             <div>
                                 <label className="block text-sm font-bold text-white mb-2">
                                     {type === "artist"
-                                        ? "Artist Name"
+                                        ? "Имя исполнителя"
                                         : type === "album"
-                                          ? "Album Title"
-                                          : "Track Title"}
+                                          ? "Название альбома"
+                                          : "Название трека"}
                                 </label>
                                 <input
                                     type="text"
@@ -331,7 +337,7 @@ export function MetadataEditor({
                                     currentData._originalName !==
                                         (formData.name || "") && (
                                         <p className="mt-1 text-xs text-gray-400">
-                                            Original:{" "}
+                                            Исходное значение:{" "}
                                             {currentData._originalName}
                                         </p>
                                     )}
@@ -340,7 +346,7 @@ export function MetadataEditor({
                                     currentData._originalTitle !==
                                         (formData.title || "") && (
                                         <p className="mt-1 text-xs text-gray-400">
-                                            Original:{" "}
+                                            Исходное значение:{" "}
                                             {currentData._originalTitle}
                                         </p>
                                     )}
@@ -350,7 +356,7 @@ export function MetadataEditor({
                             {type === "artist" && (
                                 <div>
                                     <label className="block text-sm font-bold text-white mb-2">
-                                        Biography
+                                        Биография
                                     </label>
                                     <textarea
                                         value={formData.bio || ""}
@@ -364,7 +370,7 @@ export function MetadataEditor({
                                         currentData._originalBio !==
                                             (formData.bio || "") && (
                                             <p className="mt-1 text-xs text-gray-400">
-                                                Original:{" "}
+                                                Исходное значение:{" "}
                                                 {currentData._originalBio.substring(
                                                     0,
                                                     100,
@@ -379,7 +385,7 @@ export function MetadataEditor({
                             {type === "album" && (
                                 <div>
                                     <label className="block text-sm font-bold text-white mb-2">
-                                        Release Year
+                                        Год выпуска
                                     </label>
                                     <input
                                         type="number"
@@ -396,7 +402,7 @@ export function MetadataEditor({
                                         currentData._originalYear !==
                                             (formData.year || null) && (
                                             <p className="mt-1 text-xs text-gray-400">
-                                                Original:{" "}
+                                                Исходное значение:{" "}
                                                 {currentData._originalYear}
                                             </p>
                                         )}
@@ -406,9 +412,9 @@ export function MetadataEditor({
                             {/* Genres */}
                             <div>
                                 <label className="block text-sm font-bold text-white mb-2">
-                                    Genres
+                                    Жанры
                                     <span className="text-xs text-gray-400 ml-2">
-                                        (comma-separated)
+                                        (через запятую)
                                     </span>
                                 </label>
                                 <input
@@ -423,7 +429,7 @@ export function MetadataEditor({
                                                 .filter(Boolean),
                                         )
                                     }
-                                    placeholder="Rock, Alternative, Indie"
+                                    placeholder="Рок, альтернатива, инди"
                                     className="w-full px-4 py-2 bg-surface-elevated border border-white/10 rounded text-white focus:border-white/30 focus:outline-none"
                                 />
                                 {currentData._originalGenres &&
@@ -435,7 +441,7 @@ export function MetadataEditor({
                                             (formData.genres || []).sort(),
                                         ) && (
                                         <p className="mt-1 text-xs text-gray-400">
-                                            Original:{" "}
+                                            Исходное значение:{" "}
                                             {currentData._originalGenres.join(
                                                 ", ",
                                             )}
@@ -447,10 +453,10 @@ export function MetadataEditor({
                             <div>
                                 <label className="block text-sm font-bold text-white mb-2">
                                     {type === "album"
-                                        ? "Release Group MBID"
+                                        ? "MBID группы релизов"
                                         : "MusicBrainz ID"}
                                     <span className="text-xs text-gray-400 ml-2">
-                                        (leave empty to auto-fetch)
+                                        (оставьте пустым для автопоиска)
                                     </span>
                                 </label>
                                 {type === "track" ? (
@@ -512,10 +518,10 @@ export function MetadataEditor({
                             <div>
                                 <label className="block text-sm font-bold text-white mb-2">
                                     {type === "artist"
-                                        ? "Artist Image URL"
-                                        : "Cover Art URL"}
+                                        ? "Ссылка на изображение исполнителя"
+                                        : "Ссылка на обложку"}
                                     <span className="text-xs text-gray-400 ml-2">
-                                        (leave empty to auto-fetch)
+                                        (оставьте пустым для автопоиска)
                                     </span>
                                 </label>
                                 <input
@@ -541,7 +547,7 @@ export function MetadataEditor({
                                     currentData._originalHeroUrl !==
                                         (formData.heroUrl || "") && (
                                         <p className="mt-1 text-xs text-gray-400 truncate">
-                                            Original:{" "}
+                                            Исходное значение:{" "}
                                             {currentData._originalHeroUrl}
                                         </p>
                                     )}
@@ -550,7 +556,7 @@ export function MetadataEditor({
                                     currentData._originalCoverUrl !==
                                         (formData.coverUrl || "") && (
                                         <p className="mt-1 text-xs text-gray-400 truncate">
-                                            Original:{" "}
+                                            Исходное значение:{" "}
                                             {currentData._originalCoverUrl}
                                         </p>
                                     )}
@@ -559,7 +565,7 @@ export function MetadataEditor({
                                     <div className="mt-2">
                                         <Image
                                             src={previewImageUrl}
-                                            alt="Preview"
+                                            alt="Предпросмотр изображения"
                                             width={128}
                                             height={128}
                                             sizes="128px"
@@ -573,9 +579,9 @@ export function MetadataEditor({
                             {/* Manual Override Warning */}
                             <div className="bg-yellow-600/10 border border-yellow-600/20 rounded p-4">
                                 <p className="text-sm text-yellow-400">
-                                    <strong>Note:</strong> Manually edited
-                                    metadata will not be overwritten by
-                                    automatic enrichment.
+                                    <strong>Важно:</strong> Изменённые вручную
+                                    метаданные не будут перезаписаны при
+                                    автоматическом дополнении.
                                 </p>
                             </div>
                         </div>
@@ -589,8 +595,8 @@ export function MetadataEditor({
                                     className="px-6 py-2 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold transition-all border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isResetting
-                                        ? "Resetting..."
-                                        : "Reset to Original"}
+                                        ? "Восстанавливаем…"
+                                        : "Вернуть исходные"}
                                 </button>
                             )}
                             <button
@@ -598,7 +604,7 @@ export function MetadataEditor({
                                 className="px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all"
                                 disabled={isSaving}
                             >
-                                Cancel
+                                Отмена
                             </button>
                             <button
                                 onClick={handleSave}
@@ -608,12 +614,12 @@ export function MetadataEditor({
                                 {isSaving ? (
                                     <>
                                         <GradientSpinner size="sm" />
-                                        Saving...
+                                        Сохраняем…
                                     </>
                                 ) : (
                                     <>
                                         <Save className="w-4 h-4" />
-                                        Save Changes
+                                        Сохранить изменения
                                     </>
                                 )}
                             </button>
@@ -622,10 +628,10 @@ export function MetadataEditor({
                             isOpen={showResetConfirm}
                             onClose={() => setShowResetConfirm(false)}
                             onConfirm={confirmReset}
-                            title="Reset metadata?"
-                            message="Reset all metadata to original values? This cannot be undone."
-                            confirmText="Reset"
-                            cancelText="Cancel"
+                            title="Восстановить метаданные?"
+                            message="Вернуть все исходные значения? Это действие нельзя отменить."
+                            confirmText="Восстановить"
+                            cancelText="Отмена"
                             variant="danger"
                         />
                     </div>

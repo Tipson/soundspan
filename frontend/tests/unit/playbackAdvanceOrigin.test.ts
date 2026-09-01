@@ -3,16 +3,17 @@ import { afterEach, describe, it } from "node:test";
 
 import {
     consumePlaybackAdvanceOrigin,
+    isPlaybackFailureSupersededByManualIntent,
     isPlaybackAutoRestartSuppressed,
     markRemoteTrackChange,
-    playbackAdvanceOriginRef,
     setPlaybackAutoRestartSuppressed,
     writePlaybackAdvanceOrigin,
+    writePlaybackReplacementIntent,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
 
 describe("playback advance origin", () => {
     afterEach(() => {
-        playbackAdvanceOriginRef.current = null;
+        writePlaybackAdvanceOrigin(null, null);
         setPlaybackAutoRestartSuppressed(false);
     });
 
@@ -24,6 +25,40 @@ describe("playback advance origin", () => {
             origin: "manual",
             originatingTrackId: "track-b",
         });
+    });
+
+    it("identifies only a matching old occurrence as superseded by manual intent", () => {
+        writePlaybackReplacementIntent("track-a");
+
+        assert.equal(
+            isPlaybackFailureSupersededByManualIntent("track-a"),
+            true,
+        );
+        assert.equal(
+            isPlaybackFailureSupersededByManualIntent("track-b"),
+            false,
+        );
+        assert.equal(isPlaybackFailureSupersededByManualIntent(null), false);
+    });
+
+    it("does not suppress current playback failures for queue-only manual actions", () => {
+        writePlaybackAdvanceOrigin("manual", "track-a");
+
+        assert.equal(
+            isPlaybackFailureSupersededByManualIntent("track-a"),
+            false,
+        );
+    });
+
+    it("clears replacement intent when the matching load consumes its origin", () => {
+        writePlaybackReplacementIntent("track-a");
+
+        consumePlaybackAdvanceOrigin();
+
+        assert.equal(
+            isPlaybackFailureSupersededByManualIntent("track-a"),
+            false,
+        );
     });
 
     it("keeps suppression until a manual marker reaches a playback consumer", () => {

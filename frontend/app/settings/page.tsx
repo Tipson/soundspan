@@ -1,32 +1,86 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { createFrontendLogger } from "@/lib/logger";
 import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
 import { SettingsLayout, SidebarItem } from "@/features/settings/components/ui";
+import { ru } from "@/lib/i18n/ru";
 
 // Section components
 import { AccountSection } from "@/features/settings/components/sections/AccountSection";
 import { SignInSecuritySection } from "@/features/settings/components/sections/SignInSecuritySection";
 import { SocialSection } from "@/features/settings/components/sections/SocialSection";
 import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
+import { DeviceOfflineSettingsSection } from "@/features/settings/components/sections/DeviceOfflineSettingsSection";
 import { IntegrationsSection } from "@/features/settings/components/sections/IntegrationsSection";
+import { TasteProfileSettingsSection } from "@/features/taste-profile";
 
 // Define sidebar items
 const sidebarItems: SidebarItem[] = [
-    { id: "account", label: "Account" },
-    { id: "sign-in-security", label: "Sign-in & Security" },
-    { id: "social", label: "Social" },
-    { id: "history", label: "History & Personalization" },
-    { id: "playback", label: "Playback" },
-    { id: "scrobbling", label: "Scrobbling" },
-    { id: "integrations", label: "Integrations" },
-    { id: "api-keys", label: "API Keys" },
+    {
+        id: "account",
+        label: ru.settings.account,
+        groupId: "profile",
+        groupLabel: "Профиль",
+    },
+    {
+        id: "taste-profile",
+        label: "Музыкальные вкусы",
+        groupId: "profile",
+        groupLabel: "Профиль",
+    },
+    {
+        id: "social",
+        label: ru.settings.social,
+        groupId: "profile",
+        groupLabel: "Профиль",
+    },
+    {
+        id: "sign-in-security",
+        label: ru.settings.security,
+        groupId: "security",
+        groupLabel: "Безопасность",
+    },
+    {
+        id: "api-keys",
+        label: ru.settings.apiKeys,
+        groupId: "security",
+        groupLabel: "Безопасность",
+    },
+    {
+        id: "playback",
+        label: ru.settings.playback,
+        groupId: "listening",
+        groupLabel: "Прослушивание",
+    },
+    {
+        id: "history",
+        label: ru.settings.history,
+        groupId: "listening",
+        groupLabel: "Прослушивание",
+    },
+    {
+        id: "scrobbling",
+        label: ru.settings.scrobbling,
+        groupId: "listening",
+        groupLabel: "Прослушивание",
+    },
+    {
+        id: "device-offline",
+        label: ru.settings.offlineDevice,
+        groupId: "offline",
+        groupLabel: "Офлайн",
+    },
+    {
+        id: "integrations",
+        label: ru.settings.integrations,
+        groupId: "services",
+        groupLabel: "Сервисы",
+    },
 ];
 
 function renderSectionFallback() {
@@ -67,8 +121,7 @@ const logger = createFrontendLogger("Settings.Page");
  * Renders the SettingsPage component.
  */
 export default function SettingsPage() {
-    const { isAuthenticated, isLoading: authLoading } = useAuth();
-    useSearchParams();
+    const { user, isAuthenticated, isLoading: authLoading } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
     const saveStatus = useInlineStatus();
 
@@ -81,24 +134,6 @@ export default function SettingsPage() {
         loadSettings: reloadUserSettings,
     } = useSettingsData();
 
-    // Handle initial hash for section scrolling
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            const hash = window.location.hash.substring(1);
-            if (hash) {
-                setTimeout(() => {
-                    const element = document.getElementById(hash);
-                    if (element) {
-                        element.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start",
-                        });
-                    }
-                }, 100);
-            }
-        }
-    }, []);
-
     const handleSaveAll = useCallback(async () => {
         setIsSaving(true);
         saveStatus.setLoading();
@@ -106,13 +141,13 @@ export default function SettingsPage() {
         try {
             await saveUserSettings(userSettings);
             setIsSaving(false);
-            saveStatus.setSuccess("Saved");
+            saveStatus.setSuccess(ru.settings.saved);
         } catch (error) {
             logger.error("Failed to save user settings from settings page", {
                 error,
             });
             setIsSaving(false);
-            saveStatus.setError("Failed to save");
+            saveStatus.setError(ru.settings.saveFailed);
         }
     }, [userSettings, saveUserSettings, saveStatus]);
 
@@ -144,7 +179,7 @@ export default function SettingsPage() {
                 onUpdate={updateUserSettings}
             />
 
-            <SignInSecuritySection />
+            {user?.id && <TasteProfileSettingsSection accountId={user.id} />}
 
             {/* Social */}
             <SocialSection
@@ -155,11 +190,10 @@ export default function SettingsPage() {
                 }
             />
 
-            {/* History & Personalization */}
-            <PlaybackHistorySection />
+            <SignInSecuritySection />
 
-            {/* Scrobbling */}
-            <ScrobblingSection />
+            {/* API Keys */}
+            <APIKeysSection />
 
             {/* Playback */}
             <PlaybackSection
@@ -173,31 +207,34 @@ export default function SettingsPage() {
                 }
             />
 
+            {/* History & Personalization */}
+            <PlaybackHistorySection />
+
+            {/* Scrobbling */}
+            <ScrobblingSection />
+
+            <DeviceOfflineSettingsSection />
+
             {/* Integrations (YouTube Music + TIDAL — visible to all users) */}
             <IntegrationsSection
                 settings={userSettings}
                 onUpdate={updateUserSettings}
             />
 
-            {/* API Keys */}
-            <APIKeysSection />
-
-            {/* Save Button - Fixed at bottom */}
-            <div className="sticky bottom-0 pt-8 pb-8">
-                <div className="relative">
+            <div className="sticky bottom-3 z-20 pt-4 md:bottom-4 md:pt-6">
+                <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.1] bg-surface-overlay/90 p-2.5 shadow-2xl shadow-black/30 backdrop-blur-xl md:justify-end">
+                    <div className="min-w-0 flex-1 px-2 md:flex-none">
+                        <InlineStatus {...saveStatus.props} />
+                    </div>
                     <button
                         onClick={handleSaveAll}
                         disabled={isSaving}
-                        className="w-full bg-white text-black font-semibold py-3 px-4 rounded-full
-                            hover:scale-[1.02] active:scale-[0.98] transition-transform
-                            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        className="min-h-11 flex-shrink-0 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-brand/15 transition hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand"
                     >
-                        {isSaving ? "Saving..." : "Save"}
+                        {isSaving
+                            ? ru.settings.saving
+                            : ru.settings.saveChanges}
                     </button>
-                    {/* Status appears below button, absolutely positioned */}
-                    <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-surface/90 backdrop-blur-sm px-3 py-0.5 rounded-full">
-                        <InlineStatus {...saveStatus.props} />
-                    </div>
                 </div>
             </div>
         </SettingsLayout>

@@ -19,6 +19,8 @@ export interface DiscoverySelection {
     secondaryArtists: DiscoverResult[];
     /** External track matches. */
     tracks: DiscoverResult[];
+    /** Browsable external album matches. */
+    albums: DiscoverResult[];
 }
 
 /**
@@ -27,6 +29,30 @@ export interface DiscoverySelection {
  */
 export function normalizeArtistName(value: string): string {
     return value.trim().toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "");
+}
+
+/** Check whether an artist is exact for the typed or provider-corrected query. */
+export function isExactArtistSearchMatch(
+    artistName: string,
+    query: string,
+    aliasCanonical?: string | null,
+): boolean {
+    const normalizedArtist = normalizeArtistName(artistName);
+    return [query, aliasCanonical ?? ""]
+        .map((value) => normalizeArtistName(value))
+        .filter(Boolean)
+        .includes(normalizedArtist);
+}
+
+/** Whether discovery can reopen the provider's full artist catalog directly. */
+export function hasCanonicalProviderArtistIdentity(
+    artist: DiscoverResult | null | undefined,
+): boolean {
+    return Boolean(
+        artist?.type === "music" &&
+        typeof artist.youtubeChannelId === "string" &&
+        artist.youtubeChannelId.trim(),
+    );
 }
 
 /**
@@ -49,18 +75,16 @@ export function deriveDiscoverySelection({
             discoveryShownAsTop: false,
             secondaryArtists: [],
             tracks: [],
+            albums: [],
         };
     }
 
     const artists = discoverResults.filter((r) => r.type === "music");
     const tracks = discoverResults.filter((r) => r.type === "track");
-
-    const exactTargets = [query, aliasCanonical ?? ""]
-        .map((value) => normalizeArtistName(value))
-        .filter(Boolean);
+    const albums = discoverResults.filter((r) => r.type === "album");
 
     const matchesExactly = (name: string) =>
-        exactTargets.includes(normalizeArtistName(name));
+        isExactArtistSearchMatch(name, query, aliasCanonical);
 
     const exactArtist = artists.find((artist) => matchesExactly(artist.name));
     const libraryTopIsExact =
@@ -81,5 +105,6 @@ export function deriveDiscoverySelection({
         discoveryShownAsTop,
         secondaryArtists,
         tracks,
+        albums,
     };
 }

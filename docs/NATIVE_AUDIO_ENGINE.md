@@ -15,7 +15,7 @@ Howler's abstractions carry a workaround tax for this app's direct-stream playba
 
 Owning one element makes double-play structurally impossible within the engine: assigning `audio.src` synchronously stops the old stream before the new one exists. The browser natively handles buffering, seeking, format detection, and autoplay policy.
 
-**Hi-res audio is a design constraint.** The bare media-element pipeline is the best hi-res path a browser can offer for 24-bit/192 kHz FLAC. The engine never routes through an `AudioContext` except the one narrowly gated iOS bridge below.
+**Hi-res audio is a design constraint.** The bare media-element pipeline is the best hi-res path a browser can offer for 24-bit/192 kHz FLAC. The production engine never routes through an `AudioContext`.
 
 ## Selecting an Engine
 
@@ -47,7 +47,7 @@ Selection is explicit and unit-tested (`frontend/lib/audio-engine/engineSelectio
 | -------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Policy state machine | `frontend/lib/audio-engine/nativeAudioElementPolicy.ts` | Pure transition function owning every playback decision: lifecycle states, single load path with autoplay captured at load time, queued seeks before readiness, seek-mark suppression of stale `timeupdate` positions, bounded retry exhaustion, autoplay gesture retry, media-error classification. |
 | Controller           | `frontend/lib/audio-engine/nativeAudioElementEngine.ts` | Applies transitions and executes effects against the single engine-owned element. No decision logic of its own.                                                                                                                                                                                      |
-| iOS bridge           | `frontend/lib/audio-engine/iosStandalonePwaBridge.ts`   | The one sanctioned `AudioContext` path (below).                                                                                                                                                                                                                                                      |
+| iOS bridge guard     | `frontend/lib/audio-engine/iosStandalonePwaBridge.ts`   | Keeps the isolated `AudioContext` compatibility implementation closed in production (below).                                                                                                                                                                                                        |
 | Selection policy     | `frontend/lib/audio-engine/engineSelectionPolicy.ts`    | Direct-slot selection precedence and Android WebView detection.                                                                                                                                                                                                                                      |
 
 Key behaviors:
@@ -62,11 +62,11 @@ Key behaviors:
 - **BFCache**: `pageshow` with `persisted=true` revalidates engine state against the element so a restored page cannot desync from React state.
 - **No silent-audio keepalive loops and no Web Locks** — a persistent silent element steals audio focus from Bluetooth/CarPlay, and `navigator.locks` is insufficient on iOS.
 
-## The iOS Standalone PWA AudioContext Bridge
+## iOS Standalone PWA Background Playback
 
-In standalone (installed) PWAs, iOS suspends background audio behavior of a bare `HTMLAudioElement` — the next track fails to auto-play at track end and MediaSession controls go dead while the UI still claims "playing" ([WebKit bug 261858](https://bugs.webkit.org/show_bug.cgi?id=261858); Safari-tab playback is unaffected). Routing the element through an `AudioContext` (`createMediaElementSource` → `destination`) holds the audio session durably.
+Installed iOS PWAs use the same bare `HTMLAudioElement` pipeline as Safari tabs. The element must not be routed through `AudioContext.createMediaElementSource`: WebKit may suspend the context when the PWA leaves the foreground while the media-element timeline continues, producing a moving lock-screen timer with silent output ([WebKit bug 261554](https://bugs.webkit.org/show_bug.cgi?id=261554), [WebKit bug 291892](https://bugs.webkit.org/show_bug.cgi?id=291892)).
 
-The bridge is gated to **iOS user agent AND `display-mode: standalone`** only, set up lazily on the first user-gesture play. Desktop, Android, and iOS Safari tabs keep the bare-element hi-res path. iOS hardware output is 48 kHz regardless, so the bridge costs nothing there.
+`iosStandalonePwaBridge.ts` retains the bridge implementation as an isolated, injectable compatibility seam, but its production policy gate is deliberately closed on every platform. Track-end handling remains the native `ended` event plus the orchestrator's bounded foreground recovery; no Web Audio keepalive is used.
 
 ## Telemetry & Soak
 

@@ -246,7 +246,7 @@ test("queue action queues each swept track silently with one summary toast", asy
 
     await h.act(() => h.latest().queue());
     assert.deepEqual(controlsCalls.addToQueue, ["t-left", "t-right"]);
-    assert.deepEqual(toasts.success, ["Queued 2 swept tracks"]);
+    assert.deepEqual(toasts.success, ["Добавлено в очередь: 2 трека"]);
     assert.equal(h.latest().result, null);
     await h.unmount();
 });
@@ -266,8 +266,8 @@ test("save: a partial save surfaces as a warning toast, never unconditional succ
     });
     assert.equal(toasts.success.length, 0);
     assert.equal(toasts.warning.length, 1);
-    assert.match(toasts.warning[0], /Saved 1 of 2 tracks/);
-    assert.match(toasts.warning[0], /1 track couldn't be added/);
+    assert.match(toasts.warning[0], /сохранено 1 из 2 треков/);
+    assert.match(toasts.warning[0], /Не удалось добавить: 1/);
     await h.unmount();
 });
 
@@ -282,7 +282,10 @@ test("save: a full save is a success toast", async () => {
     });
     assert.equal(toasts.warning.length, 0);
     assert.equal(toasts.success.length, 1);
-    assert.match(toasts.success[0], /Saved 2 tracks to Vibe sweep/);
+    assert.match(
+        toasts.success[0],
+        /2 трека сохранено в плейлист «Подборка на карте/,
+    );
     await h.unmount();
 });
 

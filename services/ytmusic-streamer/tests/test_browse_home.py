@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 from httpx import AsyncClient
 
 # ---------------------------------------------------------------------------
@@ -124,6 +127,75 @@ class TestHomeShelfFiltering:
         assert "Quick picks" in titles
         assert "Listen again" in titles
         assert "Trending" in titles
+
+    @pytest.mark.anyio
+    async def test_transient_json_failure_retries_with_a_fresh_public_client(
+        self, client: AsyncClient
+    ) -> None:
+        """An empty provider response should not leave the home feed broken."""
+        stale_client = MagicMock()
+        stale_client.get_home.side_effect = json.JSONDecodeError(
+            "empty upstream response",
+            "",
+            0,
+        )
+        fresh_client = MagicMock()
+        fresh_client.get_home.return_value = _SAMPLE_SHELVES
+
+        with (
+            patch(
+                "app._get_public_ytmusic",
+                side_effect=[stale_client, fresh_client],
+            ) as get_public,
+            patch("app._invalidate_public_ytmusic") as invalidate_public,
+        ):
+            response = await client.get("/home")
+
+        assert response.status_code == 200
+        assert [shelf["title"] for shelf in response.json()] == [
+            "Listen again",
+            "Trending",
+        ]
+        assert get_public.call_count == 2
+        invalidate_public.assert_called_once_with("native", expected=stale_client)
+
+    @pytest.mark.anyio
+    async def test_transport_timeout_is_not_retried(self, client: AsyncClient) -> None:
+        """One provider timeout must not multiply the home endpoint's wait."""
+        stalled_client = MagicMock()
+        stalled_client.get_home.side_effect = requests.Timeout("provider stalled")
+
+        with (
+            patch("app._get_public_ytmusic", return_value=stalled_client) as get_public,
+            patch("app._invalidate_public_ytmusic") as invalidate_public,
+        ):
+            response = await client.get("/home")
+
+        assert response.status_code == 500
+        assert response.json() == {"error": "Failed to load home"}
+        assert get_public.call_count == 1
+        invalidate_public.assert_not_called()
+
+    @pytest.mark.anyio
+    async def test_slow_provider_call_obeys_the_browse_deadline(self, client: AsyncClient) -> None:
+        """Home must return 504 instead of waiting indefinitely on provider work."""
+        slow_client = MagicMock()
+
+        def slow_home(*, limit: int) -> list[dict[str, object]]:
+            _ = limit
+            time.sleep(0.5)
+            return []
+
+        slow_client.get_home.side_effect = slow_home
+
+        with (
+            patch("app.BROWSE_TIMEOUT", 0.05),
+            patch("app._get_public_ytmusic", return_value=slow_client),
+        ):
+            response = await client.get("/home")
+
+        assert response.status_code == 504
+        assert response.json() == {"error": "YouTube Music request timed out"}
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +370,23 @@ class TestBrowseAlbumEndpoint:
         mock_yt.get_album.assert_called_once_with("MPREb_test123")
 
     @pytest.mark.anyio
+    async def test_browse_album_resolves_tv_album_playlist_identity(
+        self, client: AsyncClient
+    ) -> None:
+        """A TV OLAK album row should resolve to its canonical MPRE identity."""
+        mock_yt = MagicMock()
+        mock_yt.get_album_browse_id.return_value = "MPREb_resolved123"
+        mock_yt.get_album.return_value = _SAMPLE_ALBUM_RESPONSE
+
+        with patch("app._get_public_ytmusic", return_value=mock_yt):
+            resp = await client.get("/browse-album/VLOLAK5uy_album123")
+
+        assert resp.status_code == 200
+        assert resp.json()["browseId"] == "MPREb_resolved123"
+        mock_yt.get_album_browse_id.assert_called_once_with("OLAK5uy_album123")
+        mock_yt.get_album.assert_called_once_with("MPREb_resolved123")
+
+    @pytest.mark.anyio
     async def test_browse_album_not_found_returns_404(self, client: AsyncClient) -> None:
         """Should return 404 when get_album raises a 'not found' exception."""
         mock_yt = MagicMock()
@@ -321,10 +410,37 @@ class TestBrowseAlbumEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# Language parameter tests
+# Language and location parameter tests
 # ---------------------------------------------------------------------------
-class TestYTMusicLanguageParam:
-    """Verify that YTMUSIC_LANGUAGE is forwarded to YTMusic constructors."""
+class TestYTMusicLocaleParams:
+    """Verify that the configured catalog locale reaches every YTMusic client."""
+
+    def test_public_client_accepts_operation_language_override(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Search can use a provider-safe locale without changing browse locale."""
+        import app
+
+        owned_session = MagicMock()
+        owned_client = MagicMock()
+        monkeypatch.setattr(app, "YTMUSIC_LANGUAGE", "ru")
+
+        with (
+            patch("app._build_ytmusic_requests_session", return_value=owned_session),
+            patch("app.YTMusic", return_value=owned_client) as mock_ytmusic,
+        ):
+            client = app._create_public_ytmusic(
+                "native",
+                5.0,
+                language="en",
+            )
+
+        assert client is owned_client
+        assert mock_ytmusic.call_args.kwargs["language"] == "en"
+        assert mock_ytmusic.call_args.kwargs["location"] == ""
+        app._close_owned_ytmusic_session(client)
+        owned_session.close.assert_called_once_with()
 
     def test_language_passed_to_public_ytmusic(self) -> None:
         """Public (unauthenticated) YTMusic should receive language kwarg."""
@@ -343,6 +459,8 @@ class TestYTMusicLanguageParam:
             _, kwargs = MockYTMusic.call_args
             assert "language" in kwargs
             assert kwargs["language"] == "en"
+            assert "location" in kwargs
+            assert kwargs["location"] == ""
 
         # Clean up
         _public_ytmusic_instances.clear()
@@ -358,16 +476,14 @@ class TestYTMusicLanguageParam:
 
         fake_oauth = json.dumps({"access_token": "fake", "token_type": "Bearer"})
 
-        # Simulate no client_creds file — scope __truediv__ to DATA_PATH only
+        # Simulate no client_creds file without replacing the validated path root.
         creds_path = MagicMock()
         creds_path.exists.return_value = False
-        mock_data_path = MagicMock()
-        mock_data_path.__truediv__ = MagicMock(return_value=creds_path)
 
         with (
             patch("app.YTMusic") as MockYTMusic,
             patch("app._oauth_file") as mock_oauth_file,
-            patch("app.DATA_PATH", mock_data_path),
+            patch("app._client_creds_file", return_value=creds_path),
         ):
             MockYTMusic.return_value = MagicMock()
 
@@ -384,6 +500,8 @@ class TestYTMusicLanguageParam:
             call_args = MockYTMusic.call_args
             assert "language" in call_args.kwargs
             assert call_args.kwargs["language"] == "en"
+            assert "location" in call_args.kwargs
+            assert call_args.kwargs["location"] == ""
 
         # Clean up
         _ytmusic_instances.pop(user_id, None)

@@ -30,7 +30,7 @@ export function LibraryHealthSection() {
                 setTrackRemovalRetentionDays(data.trackRemovalRetentionDays);
             })
             .catch(() => {
-                setError("Failed to load library health records");
+                setError("Не удалось загрузить результаты проверки библиотеки");
             })
             .finally(() => {
                 setIsLoading(false);
@@ -45,9 +45,8 @@ export function LibraryHealthSection() {
         (finalStatus) => {
             setPurgeNotice(
                 finalStatus.remaining === 0
-                    ? "Purge complete."
-                    : `Purge stopped with ${finalStatus.remaining} track` +
-                          `${finalStatus.remaining === 1 ? "" : "s"} remaining.`,
+                    ? "Очистка завершена."
+                    : `Очистка остановлена. Осталось треков: ${finalStatus.remaining}.`,
             );
             loadRecords();
         },
@@ -69,11 +68,11 @@ export function LibraryHealthSection() {
             if (result.enqueued) {
                 startTracking();
             } else {
-                setPurgeNotice("No removed tracks to purge.");
+                setPurgeNotice("Нет удалённых треков для очистки.");
             }
             loadRecords();
         } catch {
-            setError("Failed to start the purge");
+            setError("Не удалось запустить очистку");
         } finally {
             setIsPurging(false);
         }
@@ -102,8 +101,8 @@ export function LibraryHealthSection() {
     return (
         <SettingsSection
             id="library-health"
-            title="Library Health"
-            description="Tracks flagged during library scans as missing from disk or having unreadable metadata."
+            title="Состояние библиотеки"
+            description="Треки, которые не найдены на диске или имеют нечитаемые метаданные."
         >
             <LibraryHealthDetails
                 records={records}

@@ -5,6 +5,7 @@ import { EllipsisVertical, ListEnd, ListPlus } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Episode } from "../types";
+import { podcastRu } from "@/lib/i18n/podcastRu";
 
 interface EpisodeOverflowMenuProps {
     episode: Episode;
@@ -92,44 +93,45 @@ export function EpisodeOverflowMenu({
                 className={cn(
                     "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-full p-2 transition-colors",
                     isOpen
-                        ? "bg-[#2a2a2a] text-white"
-                        : "text-gray-400 hover:bg-[#2a2a2a] hover:text-white",
+                        ? "bg-surface-active text-content"
+                        : "text-content-muted hover:bg-surface-hover hover:text-content",
                     triggerClassName,
                 )}
-                aria-label="Episode actions"
+                aria-label={podcastRu.detail.episodeActions}
                 aria-expanded={isOpen}
                 aria-haspopup="menu"
-                title="Episode actions"
+                title={podcastRu.detail.episodeActions}
             >
                 <EllipsisVertical className="h-4 w-4" />
             </button>
 
             {isOpen && (
                 <div
-                    className="absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-md border border-white/10 bg-[#111111] p-1 shadow-xl"
+                    className="absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-xl border border-line-strong bg-surface-raised p-1 shadow-xl"
                     role="menu"
+                    tabIndex={-1}
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                 >
                     <button
                         type="button"
                         onClick={handlePlayNext}
-                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10 hover:text-white"
+                        className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
                         role="menuitem"
-                        title="Play next"
+                        title={podcastRu.detail.playNext}
                     >
                         <ListEnd className="h-4 w-4" />
-                        Play next
+                        {podcastRu.detail.playNext}
                     </button>
                     <button
                         type="button"
                         onClick={handleAddToQueue}
-                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-gray-200 transition-colors hover:bg-white/10 hover:text-white"
+                        className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-hover hover:text-content"
                         role="menuitem"
-                        title="Add to queue"
+                        title={podcastRu.detail.addToQueue}
                     >
                         <ListPlus className="h-4 w-4" />
-                        Add to queue
+                        {podcastRu.detail.addToQueue}
                     </button>
                 </div>
             )}

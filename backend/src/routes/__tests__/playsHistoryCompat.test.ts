@@ -55,6 +55,12 @@ jest.mock("../../services/scrobbleForwarder", () => ({
     forwardScrobbleIsolated: jest.fn(),
 }));
 
+jest.mock("../../services/recommendations/exposureStore", () => ({
+    recommendationExposureStore: {
+        attributePlayback: jest.fn().mockResolvedValue(undefined),
+    },
+}));
+
 import router from "../plays";
 import { prisma } from "../../utils/db";
 import { resolveRemoteTrackMetadataForRequest } from "../../services/remoteTrackMetadataResolver";
@@ -539,6 +545,41 @@ describe("plays history compatibility", () => {
             message:
                 "Playback is unavailable because this track was removed from the library.",
         });
+    });
+
+    it("returns deterministic artwork for youtube history without a stored thumbnail", async () => {
+        mockPlayFindMany.mockResolvedValueOnce([
+            {
+                id: "play-youtube",
+                playedAt: new Date("2026-03-01T10:00:00.000Z"),
+                source: "YOUTUBE_MUSIC",
+                track: null,
+                trackTidal: null,
+                trackYtMusic: {
+                    id: "yt-row-1",
+                    videoId: "dQw4w9WgXcQ",
+                    title: "YouTube Song",
+                    artist: "YouTube Artist",
+                    album: "Single",
+                    duration: 212,
+                    thumbnailUrl: null,
+                },
+            },
+        ]);
+        const res = createRes();
+
+        await listPlaysHandler(
+            {
+                user: { id: "user-1" },
+                query: {},
+            } as any,
+            res,
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body[0].track.album.coverArt).toBe(
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+        );
     });
 
     it.each([

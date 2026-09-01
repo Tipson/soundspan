@@ -238,14 +238,20 @@ test("artist preferences preserve local identity and persist remote provider ide
     );
     assert.equal(mounted.localPreferenceId, "local-track-id");
     assert.equal(mounted.remotePreferenceId, "yt:video-202");
-    assert.equal(localButton.getAttribute("aria-label"), "Unlike");
-    assert.equal(remoteButton.getAttribute("aria-label"), "Like");
+    assert.equal(
+        localButton.getAttribute("aria-label"),
+        "Убрать отметку «Нравится»",
+    );
+    assert.equal(remoteButton.getAttribute("aria-label"), "Нравится");
     assert.deepEqual(getCalls.sort(), ["local-track-id", "yt:video-202"]);
 
     await React.act(async () => remoteButton.click());
     await flushQueries();
 
-    assert.equal(remoteButton.getAttribute("aria-label"), "Unlike");
+    assert.equal(
+        remoteButton.getAttribute("aria-label"),
+        "Убрать отметку «Нравится»",
+    );
     assert.deepEqual(setCalls, [
         {
             trackId: "yt:video-202",

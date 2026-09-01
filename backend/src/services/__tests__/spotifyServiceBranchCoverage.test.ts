@@ -501,7 +501,7 @@ describe("spotifyService branch coverage", () => {
                     owner: {},
                     images: [],
                     tracks: {
-                        total: 3,
+                        total: 2,
                         items: [
                             { track: null },
                             {
@@ -542,7 +542,7 @@ describe("spotifyService branch coverage", () => {
         }
         expect(playlist.owner).toBe("Unknown");
         expect(playlist.imageUrl).toBeNull();
-        expect(playlist.trackCount).toBe(3);
+        expect(playlist.trackCount).toBe(2);
         expect(playlist.tracks).toHaveLength(1);
         expect(playlist.tracks[0]).toEqual(
             expect.objectContaining({

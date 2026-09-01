@@ -164,7 +164,7 @@ test("Shuffle All refuses to play below the station minimum", async () => {
 
     assert.equal(state.playCalls.length, 0);
     assert.equal(state.errorToasts.length, 1);
-    assert.match(state.errorToasts[0] ?? "", /Not enough tracks/);
+    assert.match(state.errorToasts[0] ?? "", /Недостаточно треков/);
 });
 
 test("decade guard accepts only API-valid decades", async () => {
@@ -193,5 +193,5 @@ test("generation failures surface a toast and resolve", async () => {
 
     assert.equal(state.pushCalls.length, 0);
     assert.equal(state.playCalls.length, 0);
-    assert.deepEqual(state.errorToasts, ["Failed to open radio station"]);
+    assert.deepEqual(state.errorToasts, ["Не удалось открыть радиостанцию"]);
 });

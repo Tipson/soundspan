@@ -20,17 +20,27 @@ export function SettingsSection({
     children,
     showSeparator = true,
 }: SettingsSectionProps) {
+    const titleId = `${id}-title`;
+
     return (
-        <section id={id} className="scroll-mt-24">
-            <div className="mb-4">
-                <div className="flex items-center gap-1.5">
-                    <h2 className="text-base font-semibold text-white">
+        <section
+            id={id}
+            data-settings-section="true"
+            aria-labelledby={titleId}
+            className="settings-section-card scroll-mt-40 border border-line bg-surface-raised/45 shadow-xl shadow-black/10"
+        >
+            <div className="mb-5 md:mb-6">
+                <div className="flex items-center gap-2">
+                    <h2
+                        id={titleId}
+                        className="text-lg font-semibold tracking-[-0.02em] text-content md:text-xl"
+                    >
                         {title}
                     </h2>
                     {titleExtra}
                 </div>
                 {description && (
-                    <p className="text-sm text-gray-400 mt-0.5">
+                    <p className="mt-1.5 max-w-2xl text-sm leading-6 text-content-secondary">
                         {description}
                     </p>
                 )}
@@ -39,7 +49,7 @@ export function SettingsSection({
             <div className="space-y-1">{children}</div>
 
             {showSeparator && (
-                <div className="border-t border-white/5 mt-6 mb-6" />
+                <div className="mt-6 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent md:hidden" />
             )}
         </section>
     );

@@ -2,6 +2,7 @@ import {
     resolveApiBaseUrl,
     type BrowserLocationLike,
 } from "@/lib/api-base-url";
+import { ru } from "@/lib/i18n/ru";
 
 const RETURN_TO_VALIDATION_ORIGIN = "https://soundspan.invalid";
 
@@ -44,10 +45,10 @@ export function buildOidcLoginUrl(
 /** Maps an OIDC callback error code to safe user-facing text. */
 export function getSsoErrorMessage(code: string): string {
     if (code === "invalid_state") {
-        return "Your SSO sign-in session expired or was invalid. Please try again.";
+        return ru.auth.ssoSessionInvalid;
     }
     if (code === "account_already_linked") {
-        return "This soundspan account is already linked to a different SSO identity.";
+        return ru.auth.ssoAccountAlreadyLinked;
     }
-    return "SSO sign-in failed. Please try again.";
+    return ru.auth.ssoSignInFailed;
 }

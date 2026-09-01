@@ -182,6 +182,7 @@ def stream_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[A
 
     ytmusic_stream._spool_tasks.clear()
     ytmusic_stream._spool_pending_jobs = 0
+    ytmusic_stream._provider_challenge_cooldown_until = 0.0
     monkeypatch.setattr(ytmusic_stream, "YTMUSIC_SPOOL_DIR", tmp_path)
     executor = CapturingExecutor()
     try:
@@ -190,6 +191,7 @@ def stream_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[A
     finally:
         ytmusic_stream._spool_tasks.clear()
         ytmusic_stream._spool_pending_jobs = 0
+        ytmusic_stream._provider_challenge_cooldown_until = 0.0
         executor.shutdown()
 
 
@@ -373,10 +375,58 @@ def test_prune_spool_ignores_files_it_does_not_own(
     assert all(path.exists() for path in unowned_paths)
 
 
-def test_hls_formats_keep_progressive_last_resort(stream_module: Any) -> None:
-    for selector in stream_module._YTMUSIC_HLS_FORMATS.values():
-        assert "protocol=m3u8" in selector
-        assert selector.endswith("/ba/b")
+def test_spool_formats_prefer_audio_that_fits_the_per_track_budget(
+    stream_module: Any,
+) -> None:
+    selector = stream_module._build_ytmusic_spool_format("HIGH", 64 * 1024 * 1024)
+
+    assert "protocol=m3u8" in selector
+    assert "abr<=256" in selector
+    assert "filesize_approx<67108865" in selector
+    assert "filesize<67108865" in selector
+    assert selector.endswith("/wa")
+
+
+def test_provider_challenge_maps_to_retryable_503_and_arms_cooldown(
+    stream_module: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    error = stream_module._stream_extraction_http_error(
+        VIDEO_ID,
+        "yt-dlp test extraction",
+        RuntimeError("Sign in to confirm you're not a bot"),
+    )
+
+    assert error.status_code == 503
+    assert error.detail == {
+        "error": "provider_challenge",
+        "message": "YouTube Music temporarily requires verification. Retry later.",
+        "video_id": VIDEO_ID,
+    }
+    assert int(error.headers["Retry-After"]) > 0
+    with pytest.raises(HTTPException) as raised:
+        stream_module._raise_if_provider_challenge_cooldown(VIDEO_ID)
+    assert raised.value.status_code == 503
+
+
+def test_cached_spool_remains_available_during_provider_challenge_cooldown(
+    stream_module: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cached = tmp_path / f"{VIDEO_ID}-{QUALITY}.webm"
+    cached.write_bytes(b"cached-audio")
+    stream_module._provider_challenge_cooldown_until = time.monotonic() + 90
+
+    class UnexpectedYoutubeDL:
+        def __init__(self, _options: dict[str, Any]) -> None:
+            raise AssertionError("cached spool must bypass provider extraction")
+
+    import yt_dlp
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", UnexpectedYoutubeDL)
+
+    assert stream_module._download_ytmusic_spool_sync(VIDEO_ID, QUALITY) == (
+        str(cached),
+        "audio/webm",
+    )
 
 
 def test_spool_progress_hook_rejects_oversized_download(
@@ -441,6 +491,8 @@ def test_sync_spool_options_reject_live_streams(
     assert live_rejection
     assert match_filter({"is_live": False, "title": "Recorded track"}) is None
     assert len(captured_options["progress_hooks"]) == 1
+    assert captured_options["noprogress"] is True
+    assert captured_options["concurrent_fragment_downloads"] == 4
 
 
 def test_sync_spool_deletes_completed_file_over_total_budget(

@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { AppPasswordMetadata, CreatedAppPassword } from "@/lib/api/auth";
 import { createFrontendLogger } from "@/lib/logger";
 import { formatDate } from "@/utils/formatTime";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 
 const logger = createFrontendLogger("Settings.AppPasswordsPanel");
 
@@ -26,11 +27,11 @@ function SecretDisplay({
     return (
         <div className="space-y-3 rounded-lg border border-yellow-700/50 bg-yellow-900/20 p-4">
             <h4 className="text-sm font-medium text-yellow-200">
-                Your new app password
+                Новый пароль приложения
             </h4>
             <div className="flex items-center gap-2">
                 <input
-                    aria-label="New app password"
+                    aria-label="Новый пароль приложения"
                     readOnly
                     value={credential.secret}
                     className="min-w-0 flex-1 rounded border border-yellow-700/50 bg-black/50 px-3 py-2 font-mono text-sm text-white"
@@ -41,11 +42,11 @@ function SecretDisplay({
                     className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black"
                 >
                     <Copy className="h-4 w-4" />
-                    {copied ? "Copied!" : "Copy"}
+                    {copied ? "Скопировано" : "Копировать"}
                 </button>
             </div>
             <p className="text-xs text-yellow-200">
-                Save it now. You won&apos;t see this again.
+                Сохраните его сейчас: повторно он не отображается.
             </p>
             <div className="flex justify-end">
                 <button
@@ -53,7 +54,7 @@ function SecretDisplay({
                     onClick={onDismiss}
                     className="text-sm text-gray-400 hover:text-white"
                 >
-                    Dismiss
+                    Скрыть
                 </button>
             </div>
         </div>
@@ -73,10 +74,10 @@ function AppPasswordRow({ credential, onRevoke }: AppPasswordRowProps) {
                     {credential.displayName}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-400">
-                    Created {formatDate(credential.createdAt)} · Last used{" "}
+                    Создан {formatDate(credential.createdAt)} · Использован{" "}
                     {credential.lastUsedAt
                         ? formatDate(credential.lastUsedAt)
-                        : "Never"}
+                        : "никогда"}
                 </p>
             </div>
             <button
@@ -84,7 +85,7 @@ function AppPasswordRow({ credential, onRevoke }: AppPasswordRowProps) {
                 onClick={() => onRevoke(credential)}
                 className="text-sm text-red-400 hover:text-red-300"
             >
-                Revoke
+                Отозвать
             </button>
         </div>
     );
@@ -110,7 +111,7 @@ function AppPasswordForm({
                     htmlFor="app-password-display-name"
                     className="mb-1.5 block text-sm text-gray-300"
                 >
-                    Name
+                    Название
                 </label>
                 <input
                     id="app-password-display-name"
@@ -119,7 +120,7 @@ function AppPasswordForm({
                         onDisplayNameChange(event.target.value)
                     }
                     maxLength={64}
-                    placeholder="e.g. Phone or living room player"
+                    placeholder="Например, телефон или плеер в гостиной"
                     className="w-full rounded-md border-0 bg-line-strong px-3 py-2 text-sm text-white outline-none placeholder:text-gray-400 focus:bg-line-muted"
                 />
             </div>
@@ -128,7 +129,7 @@ function AppPasswordForm({
                 disabled={!displayName.trim() || creating}
                 className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black hover:scale-105 disabled:opacity-50"
             >
-                {creating ? "Creating..." : "Create app password"}
+                {creating ? "Создаём…" : "Создать пароль приложения"}
             </button>
         </form>
     );
@@ -147,12 +148,16 @@ function AppPasswordList({
 }: AppPasswordListProps) {
     if (loading) {
         return (
-            <p className="text-sm text-gray-400">Loading app passwords...</p>
+            <p className="text-sm text-gray-400">
+                Загружаем пароли приложений…
+            </p>
         );
     }
     if (credentials.length === 0) {
         return (
-            <p className="text-sm text-gray-400">No app passwords created.</p>
+            <p className="text-sm text-gray-400">
+                Пароли приложений ещё не созданы.
+            </p>
         );
     }
     return credentials.map((credential) => (
@@ -183,12 +188,12 @@ function RevokeModal({
         <Modal
             isOpen={credential !== null}
             onClose={onClose}
-            title="Revoke app password"
+            title="Отозвать пароль приложения"
         >
             <div className="space-y-4">
                 <p className="text-sm text-gray-300">
-                    Revoke {credential?.displayName}? Apps using it will stop
-                    connecting.
+                    Отозвать пароль «{credential?.displayName}»? Приложения с
+                    этим паролем больше не смогут подключаться.
                 </p>
                 {error && (
                     <p role="alert" className="text-sm text-red-400">
@@ -201,7 +206,7 @@ function RevokeModal({
                         onClick={onClose}
                         className="px-4 py-2 text-sm text-gray-400 hover:text-white"
                     >
-                        Cancel
+                        {ru.common.cancel}
                     </button>
                     <button
                         type="button"
@@ -209,7 +214,7 @@ function RevokeModal({
                         disabled={revoking}
                         className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                     >
-                        {revoking ? "Revoking..." : "Revoke"}
+                        {revoking ? "Отзываем…" : "Отозвать"}
                     </button>
                 </div>
             </div>
@@ -230,7 +235,8 @@ function useAppPasswordData() {
             })
             .catch((error: unknown) => {
                 logger.error("Failed to load app passwords", { error });
-                if (active) setLoadError("Failed to load app passwords");
+                if (active)
+                    setLoadError("Не удалось загрузить пароли приложений");
             })
             .finally(() => {
                 if (active) setLoading(false);
@@ -254,7 +260,7 @@ function appPasswordMetadata(
 }
 
 function errorMessage(error: unknown, fallback: string): string {
-    return error instanceof Error ? error.message : fallback;
+    return userFacingError(error, fallback);
 }
 
 function useAppPasswordCreation(
@@ -279,7 +285,10 @@ function useAppPasswordCreation(
             setCopied(false);
         } catch (createError) {
             setError(
-                errorMessage(createError, "Failed to create app password"),
+                errorMessage(
+                    createError,
+                    "Не удалось создать пароль приложения",
+                ),
             );
         } finally {
             setCreating(false);
@@ -292,7 +301,7 @@ function useAppPasswordCreation(
             setCopied(true);
         } catch (copyError) {
             logger.error("Failed to copy app password", { error: copyError });
-            setError("Failed to copy app password");
+            setError("Не удалось скопировать пароль приложения");
         }
     };
     const dismiss = () => {
@@ -328,9 +337,10 @@ function useAppPasswordRevocation(removeCredential: (id: string) => void) {
             setCredential(null);
         } catch (revokeError) {
             setError(
-                revokeError instanceof Error
-                    ? revokeError.message
-                    : "Failed to revoke app password",
+                userFacingError(
+                    revokeError,
+                    "Не удалось отозвать пароль приложения",
+                ),
             );
         } finally {
             setRevoking(false);
@@ -360,11 +370,11 @@ export function AppPasswordsPanel() {
         <div className="space-y-3 border-t border-white/5 pt-5">
             <div>
                 <h3 className="text-sm font-medium text-white">
-                    App passwords
+                    Пароли приложений
                 </h3>
                 <p className="mt-0.5 text-xs text-gray-400">
-                    Use app passwords in OpenSubsonic apps instead of your
-                    account password.
+                    Используйте отдельные пароли в приложениях OpenSubsonic, не
+                    раскрывая основной пароль аккаунта.
                 </p>
             </div>
             {creation.created && (

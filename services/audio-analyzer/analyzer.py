@@ -18,8 +18,15 @@ for _root in _POTENTIAL_PROJECT_ROOTS:
             sys.path.insert(0, _root)
         break
 
+import remote_audio_decode
 from acoustid_worker import AcoustIDLookupWorker
+from analysis_worker_runtime import abort_process_pool, process_mixed_analysis_batch
 from audio_paths import resolve_music_path
+from canonical_analysis import (
+    load_queued_canonical_analysis_jobs,
+    partition_canonical_analysis_jobs,
+    process_canonical_analysis_jobs,
+)
 from fingerprint_persistence import persist_fingerprint
 from fingerprinting import compute_fingerprint
 from loudness import (
@@ -549,7 +556,7 @@ class AudioAnalyzer:
             logger.warning(f"Audio validation error for {file_path}: {e}")
             return (True, None)
 
-    def analyze(self, file_path: str) -> dict[str, Any]:
+    def analyze(self, file_path: str, *, decoded_audio: np.ndarray | None = None) -> dict[str, Any]:
         """
         Analyze audio file and extract all features.
 
@@ -597,15 +604,17 @@ class AudioAnalyzer:
             result["_error"] = "Essentia library not installed"
             return result
 
-        MAX_ANALYZE_SECONDS = env_int("MAX_ANALYZE_SECONDS", 90)
-        audio_44k = None
-        try:
-            audio_44k = self.load_audio(file_path, max_duration=MAX_ANALYZE_SECONDS)
-        except MemoryError:
-            logger.error(f"MemoryError: Could not load audio for {file_path}")
-            result["_error"] = "MemoryError: audio file too large"
-            return result
+        audio_44k = decoded_audio
         if audio_44k is None:
+            max_analyze_seconds = env_int("MAX_ANALYZE_SECONDS", 90)
+            try:
+                audio_44k = self.load_audio(file_path, max_duration=max_analyze_seconds)
+            except MemoryError:
+                logger.error(f"MemoryError: Could not load audio for {file_path}")
+                result["_error"] = "MemoryError: audio file too large"
+                return result
+        if audio_44k is None:
+            result["_error"] = "Audio decoder returned no samples"
             return result
 
         # Validate audio before analysis
@@ -1193,8 +1202,15 @@ def _analyze_track_in_process(args: tuple[str, str]) -> tuple[str, str, dict[str
                     },
                 )
 
-        # Run analysis
-        features = _process_analyzer.analyze(full_path)
+        if _process_analyzer is None:
+            raise RuntimeError("Analyzer process is not initialized")
+        features = remote_audio_decode.analyze_audio_reference(
+            _process_analyzer,
+            file_path,
+            full_path,
+            max_duration=env_int("MAX_ANALYZE_SECONDS", 90),
+            batch_timeout_seconds=BATCH_ANALYSIS_TIMEOUT_SECONDS,
+        )
         return (track_id, file_path, features)
 
     except UnicodeDecodeError as e:
@@ -1411,6 +1427,9 @@ class AnalysisWorker:
         except Exception:  # noqa: S110 -- releasing libc pages is optional best-effort cleanup
             pass
         logger.info("Worker pool shut down (will restart when work arrives)")
+
+    def _abort_process_pool(self) -> None:
+        abort_process_pool(self)
 
     def _recreate_pool(self):
         """
@@ -1841,49 +1860,29 @@ class AnalysisWorker:
             logger.info("Worker stopped")
 
     def process_batch_parallel(self) -> bool:
-        """Process a batch of pending tracks in parallel.
-
-        Uses BRPOP to wait for the first job (blocking, zero CPU),
-        then drains remaining queued jobs up to BATCH_SIZE.
-
-        Returns:
-            True if there was work to process, False if BRPOP timed out
-        """
-        result = self.redis.brpop(ANALYSIS_QUEUE, timeout=BRPOP_TIMEOUT)
-
-        if result is None:
-            return False
-
-        _, first_job_data = result
-        first_job = json.loads(first_job_data)
-        queued_jobs = [first_job]
-
-        while len(queued_jobs) < BATCH_SIZE:
-            job_data = self.redis.lpop(ANALYSIS_QUEUE)
-            if not job_data:
-                break
-            job = json.loads(job_data)
-            queued_jobs.append(job)
-
-        normal_jobs, loudness_jobs = partition_analysis_jobs(queued_jobs)
-        if normal_jobs:
-            self._process_tracks_parallel(normal_jobs)
-        process_loudness_backfill_jobs(
-            loudness_jobs,
-            database=self.db,
-            release_reservations=self._release_queue_reservations,
+        return process_mixed_analysis_batch(
+            self,
+            batch_size=BATCH_SIZE,
+            analysis_queue=ANALYSIS_QUEUE,
+            brpop_timeout=BRPOP_TIMEOUT,
+            analyze=_analyze_track_in_process,
             resolve_path=_resolve_music_path,
+            analysis_version=ESSENTIA_VERSION,
+            batch_timeout_seconds=BATCH_ANALYSIS_TIMEOUT_SECONDS,
+            loudness_timeout_seconds=LOUDNESS_MEASURE_TIMEOUT_SECONDS,
             max_file_size_mb=MAX_FILE_SIZE_MB,
-            timeout_seconds=LOUDNESS_MEASURE_TIMEOUT_SECONDS,
-            bookkeeping=self.loudness_backfill_bookkeeping,
+            load_queued_canonical_jobs=load_queued_canonical_analysis_jobs,
+            partition_canonical_jobs=partition_canonical_analysis_jobs,
+            process_canonical_jobs=process_canonical_analysis_jobs,
+            partition_legacy_jobs=partition_analysis_jobs,
+            process_loudness_jobs=process_loudness_backfill_jobs,
         )
-        return True
 
     def _claim_tracks_for_processing(
         self,
         tracks: list[tuple[str, str]],
     ) -> list[tuple[str, str]]:
-        """Mark eligible tracks as processing and discard stale queue entries."""
+        tracks = [track for track in tracks if isinstance(track[1], str) and bool(track[1])]
         cursor = self.db.get_cursor()
         try:
             track_ids = [t[0] for t in tracks]
@@ -1895,13 +1894,14 @@ class AnalysisWorker:
                     "updatedAt" = NOW()
                 WHERE id = ANY(%s)
                 AND "analysisStatus" = 'pending'
+                AND "filePath" IS NOT NULL
+                AND "filePath" <> ''
                 RETURNING id
             """,
                 (track_ids,),
             )
             valid_ids = {row["id"] for row in cursor.fetchall()}
             self.db.commit()
-
             if len(valid_ids) < len(tracks):
                 skipped_non_pending = len(tracks) - len(valid_ids)
                 logger.info(

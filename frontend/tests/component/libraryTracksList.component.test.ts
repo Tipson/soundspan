@@ -114,7 +114,7 @@ test("returns null when tracks is empty or undefined", async () => {
     assert.equal(trackListRenderState.props, null);
 });
 
-test("applies limit to rendered rows but play action still queues all tracks", async () => {
+test("play action snapshots only visible playable rows", async () => {
     const { LibraryTracksList } =
         await import("../../features/search/components/LibraryTracksList");
     const tracks = [buildTrack("1"), buildTrack("2"), buildTrack("3")];
@@ -144,7 +144,7 @@ test("applies limit to rendered rows but play action still queues all tracks", a
     }>;
     assert.deepEqual(
         queued.map((track) => track.id),
-        ["1", "2", "3"],
+        ["1"],
     );
     assert.deepEqual(queued[0], {
         id: "1",
@@ -166,6 +166,35 @@ test("applies limit to rendered rows but play action still queues all tracks", a
     });
     assert.equal(controlCalls.pause, 0);
     assert.equal(controlCalls.resume, 0);
+});
+
+test("selected index is recomputed after hidden and offline rows are excluded", async () => {
+    const { LibraryTracksList } =
+        await import("../../features/search/components/LibraryTracksList");
+    const tracks = [buildTrack("1"), buildTrack("2"), buildTrack("3")];
+    tracks[1].source = "federated";
+    tracks[1].peer = { id: "peer-1", name: "Offline peer", online: false };
+
+    renderToStaticMarkup(
+        React.createElement(LibraryTracksList, {
+            tracks,
+            limit: 3,
+        }),
+    );
+    const onPlay = trackListRenderState.props?.onPlay as
+        | ((track: LibraryTrack, index: number) => void)
+        | undefined;
+    assert.ok(onPlay);
+    onPlay(tracks[2], 2);
+
+    assert.equal(controlCalls.playTracks.length, 1);
+    assert.deepEqual(
+        (controlCalls.playTracks[0].tracks as Array<{ id: string }>).map(
+            (track) => track.id,
+        ),
+        ["1", "3"],
+    );
+    assert.equal(controlCalls.playTracks[0].index, 1);
 });
 
 test("toggles pause/resume instead of requeueing when current track is selected", async () => {

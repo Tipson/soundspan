@@ -144,19 +144,26 @@ async function renderCacheSection(options?: {
     );
 }
 
-test("renders live vibe embedding progress without the retired worker control", async () => {
+test("renders live vibe embedding progress in Russian without the retired worker control", async () => {
     migration = activeMigration;
     const html = await renderCacheSection();
 
-    assert.match(html, /Vibe Embeddings/);
-    assert.match(html, /Provider\s+reachable/);
-    assert.match(html, /Embedding migration/);
-    assert.match(html, /Target space family:\s*student/);
+    assert.match(html, /Vibe-эмбеддинги/);
+    assert.match(html, /Кэш и автоматизация/);
+    assert.match(html, /Обогащение медиатеки/);
+    assert.match(html, /Размер пользовательского кэша/);
+    assert.match(html, /Провайдер\s+доступен/);
+    assert.match(html, /Миграция эмбеддингов/);
+    assert.match(html, /Целевое семейство пространства:\s*student/);
     assert.match(html, /80%/);
-    assert.match(html, /3 failed/);
-    assert.match(html, /Cutover threshold:\s*95%/);
-    assert.match(html, /Re-run/);
+    assert.match(html, /ошибок:\s*3/);
+    assert.match(html, /Порог переключения:\s*95%/);
+    assert.match(html, /Запустить заново/);
     assert.doesNotMatch(html, /Vibe Embedding Workers/);
+    assert.doesNotMatch(
+        html,
+        /Cache &amp; Automation|Library Enrichment|User cache size|Clear All Caches/,
+    );
 });
 
 test("hides migration progress when no migration is active", async () => {
@@ -164,8 +171,8 @@ test("hides migration progress when no migration is active", async () => {
 
     const html = await renderCacheSection();
 
-    assert.doesNotMatch(html, /Embedding migration/);
-    assert.doesNotMatch(html, /Target space family:/);
+    assert.doesNotMatch(html, /Миграция эмбеддингов/);
+    assert.doesNotMatch(html, /Целевое семейство пространства:/);
 });
 
 test("displays 99 percent when rounded progress is 100 but work remains", async () => {
@@ -178,5 +185,8 @@ test("displays 99 percent when rounded progress is 100 but work remains", async 
         },
     });
 
-    assert.match(html, /Artist Metadata[\s\S]*?style="width:99%"[\s\S]*?99%/);
+    assert.match(
+        html,
+        /Метаданные исполнителей[\s\S]*?style="width:99%"[\s\S]*?99%/,
+    );
 });

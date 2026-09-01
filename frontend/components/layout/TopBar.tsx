@@ -1,31 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Home, Search, Menu, Bell, ChevronLeft } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { ActivityPanelToggle } from "./ActivityPanel";
 import { UserAvatarMenu } from "./UserAvatarMenu";
-import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import Image from "next/image";
 
 import { BRAND_NAME } from "@/lib/brand";
+import { ru } from "@/lib/i18n/ru";
 
 interface TopBarProps {
     isActivityPanelOpen?: boolean;
+    onActivityPanelToggle?: () => void;
 }
 
 /**
  * Renders the TopBar component.
  */
-export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
+export function TopBar({
+    isActivityPanelOpen = false,
+    onActivityPanelToggle,
+}: TopBarProps = {}) {
     const pathname = usePathname();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
-    const [searchQuery, setSearchQuery] = useState("");
+    const isMobileSearchCanvas = isMobileOrTablet && pathname === "/search";
+    const routeSearchQuery =
+        pathname === "/search" ? (searchParams.get("q") ?? "") : "";
+    const routeSearchKey = `${pathname}\u0000${routeSearchQuery}`;
+    const [searchDraft, setSearchDraft] = useState(() => ({
+        routeKey: routeSearchKey,
+        value: routeSearchQuery,
+    }));
+    const searchQuery =
+        searchDraft.routeKey === routeSearchKey
+            ? searchDraft.value
+            : routeSearchQuery;
+    const updateSearchQuery = (value: string) => {
+        setSearchDraft({ routeKey: routeSearchKey, value });
+    };
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -68,23 +87,6 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
         };
     }, [searchQuery, router, pathname]);
 
-    // Sync search query with URL on page change
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const q = params.get("q");
-
-        if (pathname === "/search" && q) {
-            // Only update if different to avoid loops
-            if (q !== searchQuery) {
-                setSearchQuery(q);
-            }
-        } else if (pathname !== "/search" && searchQuery) {
-            // Clear search when leaving search page
-            setSearchQuery("");
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname]); // Only re-run when pathname changes
-
     // Global "/" keyboard shortcut to focus search
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -98,27 +100,39 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                     return;
                 }
                 e.preventDefault();
-                searchInputRef.current?.focus();
+                if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                } else if (isMobileOrTablet) {
+                    router.push("/search");
+                }
             }
         };
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
-    }, []);
+    }, [isMobileOrTablet, router]);
 
     return (
         <header
-            className="fixed top-0 left-0 right-0 bg-black flex items-center px-3 z-50"
+            data-shell-topbar={isMobileOrTablet ? "mobile" : "desktop"}
+            className={`shell-topbar pwa-titlebar-drag z-50 flex items-center ${isMobileOrTablet ? "fixed inset-x-0 top-0" : "relative shrink-0"}`}
             style={{
-                height: isMobileOrTablet ? "58px" : "64px",
+                height: isMobileOrTablet
+                    ? "calc(var(--app-topbar-height) + var(--safe-area-top))"
+                    : "var(--app-topbar-height-desktop)",
                 paddingTop: isMobileOrTablet
-                    ? "env(safe-area-inset-top)"
+                    ? "var(--safe-area-top)"
+                    : undefined,
+                paddingLeft: isMobileOrTablet
+                    ? "calc(0.75rem + var(--safe-area-left))"
+                    : undefined,
+                paddingRight: isMobileOrTablet
+                    ? "calc(0.75rem + var(--safe-area-right))"
                     : undefined,
             }}
         >
-            {/* Mobile/Tablet Layout: Hamburger + Home + Search + Bell */}
+            {/* Mobile keeps navigation lightweight until Search owns the canvas. */}
             {isMobileOrTablet ? (
                 <>
-                    {/* Hamburger menu button */}
                     <button
                         onClick={() => {
                             // Dispatch custom event to toggle mobile menu
@@ -126,166 +140,118 @@ export function TopBar({ isActivityPanelOpen = false }: TopBarProps = {}) {
                                 new CustomEvent("toggle-mobile-menu"),
                             );
                         }}
-                        className="w-10 h-10 flex items-center justify-center bg-surface-raised border border-line rounded-md text-white hover:bg-surface-overlay transition-colors mr-2 flex-shrink-0"
-                        aria-label="Open menu"
+                        className="shell-control mr-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        aria-label="Открыть меню"
                     >
                         <Menu className="w-5 h-5" />
                     </button>
 
-                    {/* Back slot (reserved to keep search position stable across routes) */}
-                    <div className="w-10 h-10 mr-1 flex items-center justify-center flex-shrink-0">
-                        {pathname !== "/" ? (
-                            <button
-                                onClick={() => router.back()}
-                                className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-surface text-gray-400 hover:bg-surface-hover hover:text-white"
-                                aria-label="Go back"
-                                title="Go back"
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-                        ) : (
-                            <span className="w-10 h-10" aria-hidden="true" />
-                        )}
-                    </div>
-
-                    {/* Home */}
-                    <Link
-                        href="/"
-                        className={cn(
-                            "w-10 h-10 rounded-full flex items-center justify-center transition-all flex-shrink-0 mr-1",
-                            pathname === "/"
-                                ? "bg-white text-black"
-                                : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white",
-                        )}
-                        aria-label="Home"
-                        title="Home"
-                    >
-                        <Home className="w-5 h-5" />
-                    </Link>
-
-                    {/* Search */}
-                    <form onSubmit={handleSearch} className="flex-1 min-w-0">
-                        <div
-                            className="relative"
-                            data-tv-section="search-input"
+                    {isMobileSearchCanvas ? (
+                        <form
+                            onSubmit={handleSearch}
+                            className="min-w-0 flex-1"
                         >
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <div
+                                className="group relative"
+                                data-tv-section="search-input"
+                                data-shell-search="canvas"
+                            >
+                                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
+                                <input
+                                    ref={searchInputRef}
+                                    autoFocus
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) =>
+                                        updateSearchQuery(e.target.value)
+                                    }
+                                    placeholder={ru.search.mobilePlaceholder}
+                                    aria-label={ru.search.aria}
+                                    autoCapitalize="none"
+                                    autoCorrect="off"
+                                    tabIndex={0}
+                                    className="shell-search-field h-11 w-full min-w-0 rounded-xl pl-10 pr-3 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/15"
+                                />
+                            </div>
+                        </form>
+                    ) : (
+                        <>
+                            <Link
+                                href="/"
+                                className="group flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                            >
+                                <Image
+                                    src="/assets/images/soundspan.webp"
+                                    alt={BRAND_NAME}
+                                    width={30}
+                                    height={30}
+                                    sizes="30px"
+                                    className="flex-shrink-0 transition-transform duration-200 group-active:scale-95 motion-reduce:transform-none motion-reduce:transition-none"
+                                />
+                                <span className="brand-wordmark hidden truncate text-xl font-bold text-white min-[360px]:inline">
+                                    {BRAND_NAME}
+                                </span>
+                            </Link>
+                            <Link
+                                href="/search"
+                                data-shell-search="action"
+                                className="shell-control ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none"
+                                aria-label={ru.search.aria}
+                                title={ru.search.aria}
+                            >
+                                <Search className="h-5 w-5" />
+                            </Link>
+                        </>
+                    )}
+                </>
+            ) : (
+                <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(16rem,520px)_minmax(0,1fr)] items-center gap-2 px-4 xl:gap-4 xl:px-8">
+                    <div aria-hidden="true" />
+
+                    <form
+                        onSubmit={handleSearch}
+                        className="mx-auto w-full max-w-[520px]"
+                    >
+                        <div
+                            className="group relative"
+                            data-tv-section="search-input"
+                            data-shell-search="persistent"
+                        >
+                            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-content-muted transition-colors group-focus-within:text-white" />
                             <input
+                                ref={searchInputRef}
                                 type="text"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search..."
-                                aria-label="Search"
+                                onChange={(e) =>
+                                    updateSearchQuery(e.target.value)
+                                }
+                                placeholder={ru.search.placeholder}
+                                aria-label={ru.search.aria}
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
-                                className="w-full h-10 pl-10 pr-3 bg-surface-hover hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all outline-none"
+                                className="shell-search-field h-11 w-full rounded-2xl pl-12 pr-14 text-sm text-white outline-none placeholder:text-content-muted focus:ring-2 focus:ring-brand/20"
                             />
+                            <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-semibold text-content-muted">
+                                /
+                            </kbd>
                         </div>
                     </form>
 
-                    {/* Notification Bell */}
-                    <button
-                        onClick={() => {
-                            window.dispatchEvent(
-                                new CustomEvent("toggle-activity-panel"),
-                            );
-                        }}
-                        className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white transition-colors ml-2 flex-shrink-0 relative"
-                        aria-label="Notifications"
-                        title="Notifications"
-                    >
-                        <Bell className="w-5 h-5" />
-                    </button>
-                </>
-            ) : (
-                <>
-                    {/* Desktop Layout */}
-                    {/* Logo - Far Left */}
-                    <div className="w-64 flex items-center px-2">
-                        <Link
-                            href="/"
-                            className="flex items-center gap-2 group"
-                        >
-                            <Image
-                                src="/assets/images/soundspan.webp"
-                                alt={BRAND_NAME}
-                                width={46}
-                                height={46}
-                                sizes="46px"
-                                className="group-hover:scale-105 transition-transform"
-                            />
-                            <span className="brand-wordmark text-[2.15rem] font-bold bg-gradient-to-r from-white via-white to-gray-300 bg-clip-text text-transparent">
-                                {BRAND_NAME}
-                            </span>
-                        </Link>
-                    </div>
-
-                    {/* Center - Search stays centered; Back/Home hug search edge */}
-                    <div className="flex-1 min-w-0 flex items-center justify-center">
-                        <div className="relative w-full max-w-md">
-                            <div className="absolute right-full top-1/2 -translate-y-1/2 pr-2 flex items-center gap-2">
-                                {/* Back */}
-                                {pathname !== "/" && (
-                                    <button
-                                        onClick={() => router.back()}
-                                        className="w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0 bg-surface text-gray-400 hover:bg-surface-hover hover:text-white hover:scale-105"
-                                        aria-label="Go back"
-                                        title="Go back"
-                                    >
-                                        <ChevronLeft className="w-6 h-6" />
-                                    </button>
-                                )}
-
-                                <Link
-                                    href="/"
-                                    className={cn(
-                                        "w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0",
-                                        pathname === "/"
-                                            ? "bg-white text-black"
-                                            : "bg-surface text-gray-400 hover:bg-surface-hover hover:text-white hover:scale-105",
-                                    )}
-                                    aria-label="Home"
-                                    title="Home"
-                                >
-                                    <Home className="w-6 h-6" />
-                                </Link>
-                            </div>
-
-                            <form onSubmit={handleSearch} className="w-full">
-                                <div
-                                    className="relative"
-                                    data-tv-section="search-input"
-                                >
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                    <input
-                                        ref={searchInputRef}
-                                        type="text"
-                                        value={searchQuery}
-                                        onChange={(e) =>
-                                            setSearchQuery(e.target.value)
-                                        }
-                                        placeholder="What do you want to play?"
-                                        aria-label="Search"
-                                        autoCapitalize="none"
-                                        autoCorrect="off"
-                                        tabIndex={0}
-                                        className="w-full h-12 pl-12 pr-4 bg-surface-hover hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all outline-none"
-                                    />
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-
-                    {/* Right - Activity & User */}
-                    <div className="w-64 flex items-center justify-end gap-2 px-2">
+                    <div className="flex items-center justify-end gap-2 justify-self-end">
                         <ActivityPanelToggle
                             pollingEnabled={!isActivityPanelOpen}
+                            onToggle={onActivityPanelToggle}
                         />
                         <UserAvatarMenu />
                     </div>
-                </>
+                </div>
             )}
+            <span
+                data-shell-spectral-seam="true"
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-brand/40 to-transparent"
+            />
         </header>
     );
 }

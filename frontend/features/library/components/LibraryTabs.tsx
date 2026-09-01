@@ -1,59 +1,79 @@
-import { Tab } from "../types";
+"use client";
+
+import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { cn } from "@/utils/cn";
+import { ru } from "@/lib/i18n/ru";
+
+export type LibraryTab = "playlists" | "albums" | "artists";
 
 interface LibraryTabsProps {
-    activeTab: Tab;
-    onTabChange: (tab: Tab) => void;
+    activeTab: LibraryTab;
 }
 
-/**
- * Renders the LibraryTabs component.
- */
-export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
+const TABS: ReadonlyArray<{
+    id: LibraryTab;
+    label: string;
+    href: string;
+}> = [
+    {
+        id: "playlists",
+        label: ru.library.playlists,
+        href: "/library?tab=playlists",
+    },
+    { id: "albums", label: ru.library.albums, href: "/library?tab=albums" },
+    { id: "artists", label: ru.library.artists, href: "/library?tab=artists" },
+];
+
+/** Personal Library navigation; playlists also contains liked and device music. */
+export function LibraryTabs({ activeTab }: LibraryTabsProps) {
+    const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
+
+    useEffect(() => {
+        activeLinkRef.current?.scrollIntoView({
+            block: "nearest",
+            inline: "center",
+        });
+    }, [activeTab]);
+
     return (
-        <div data-tv-section="library-tabs" className="flex gap-2 mb-4">
-            <button
-                data-tv-card
-                data-tv-card-index={0}
-                tabIndex={0}
-                onClick={() => onTabChange("artists")}
-                className={cn(
-                    "px-3 py-1.5 text-sm font-medium rounded-full transition-all",
-                    activeTab === "artists"
-                        ? "bg-white text-black"
-                        : "bg-white/10 text-white hover:bg-white/15",
-                )}
-            >
-                Artists
-            </button>
-            <button
-                data-tv-card
-                data-tv-card-index={1}
-                tabIndex={0}
-                onClick={() => onTabChange("albums")}
-                className={cn(
-                    "px-3 py-1.5 text-sm font-medium rounded-full transition-all",
-                    activeTab === "albums"
-                        ? "bg-white text-black"
-                        : "bg-white/10 text-white hover:bg-white/15",
-                )}
-            >
-                Albums
-            </button>
-            <button
-                data-tv-card
-                data-tv-card-index={2}
-                tabIndex={0}
-                onClick={() => onTabChange("tracks")}
-                className={cn(
-                    "px-3 py-1.5 text-sm font-medium rounded-full transition-all",
-                    activeTab === "tracks"
-                        ? "bg-white text-black"
-                        : "bg-white/10 text-white hover:bg-white/15",
-                )}
-            >
-                Songs
-            </button>
-        </div>
+        <nav
+            aria-label={ru.library.sectionsAria}
+            data-tv-section="library-tabs"
+            data-library-tabs="collection"
+            data-overflow-cue="horizontal"
+            className="relative border-y border-white/[0.08]"
+        >
+            <span className="sr-only">{ru.library.sectionsHint}</span>
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-px right-0 z-10 w-10 bg-gradient-to-l from-surface to-transparent sm:hidden"
+            />
+            <div className="flex snap-x snap-mandatory gap-1 overflow-x-auto pr-12 scroll-px-1 [scrollbar-width:none] sm:pr-0 [&::-webkit-scrollbar]:hidden">
+                {TABS.map((tab, index) => {
+                    const active = tab.id === activeTab;
+                    return (
+                        <Link
+                            key={tab.id}
+                            ref={active ? activeLinkRef : undefined}
+                            href={tab.href}
+                            data-tv-card
+                            data-tv-card-index={index}
+                            data-library-tab={tab.id}
+                            aria-current={active ? "page" : undefined}
+                            className={cn(
+                                "relative inline-flex min-h-11 shrink-0 snap-start items-center px-4 py-2 text-sm font-semibold transition-colors active:scale-[0.98]",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
+                                active
+                                    ? "text-content after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-brand-light"
+                                    : "text-content-secondary hover:bg-white/[0.05] hover:text-content",
+                            )}
+                        >
+                            {tab.label}
+                        </Link>
+                    );
+                })}
+            </div>
+        </nav>
     );
 }

@@ -4,6 +4,7 @@ from ytmusic_browse import YTMUSIC_HOME_FILTERED_SHELVES
 from ytmusic_client import (
     SEARCH_MODE,
     YTMUSIC_LANGUAGE,
+    YTMUSIC_LOCATION,
     _ytmusic_auto_tv_fallback_users,
     _ytmusic_instances,
     _ytmusic_instances_lock,
@@ -16,6 +17,7 @@ from ytmusic_search import (
     BATCH_DELAY_MIN,
     SEARCH_CACHE_TTL,
     _clean_search_cache,
+    shutdown_search_provider,
 )
 from ytmusic_stream import EXTRACT_DELAY_MAX, EXTRACT_DELAY_MIN, _clean_stream_cache
 
@@ -45,6 +47,7 @@ async def startup() -> None:
     )
     log.info(
         f"Browse config: language={YTMUSIC_LANGUAGE}, "
+        f"location={YTMUSIC_LOCATION or '(provider default)'}, "
         f"home_filtered_shelves={YTMUSIC_HOME_FILTERED_SHELVES or '(none)'}"
     )
 
@@ -71,6 +74,7 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    await shutdown_search_provider()
     await shutdown_library_playlist_provider()
     _clean_stream_cache()
     _clean_search_cache()

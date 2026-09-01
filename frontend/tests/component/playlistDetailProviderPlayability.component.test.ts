@@ -11,6 +11,17 @@ const state = {
     isPlaying: false,
     playlist: null as Record<string, unknown> | null,
     routerPushPath: null as string | null,
+    preferenceProps: [] as Array<{
+        trackId?: string;
+        mode?: string;
+        buttonSizeClassName?: string;
+        metadata?: {
+            title?: string;
+            artist?: string;
+            album?: string;
+            duration?: number;
+        };
+    }>,
 };
 
 const Icon = (props: Record<string, unknown> = {}) =>
@@ -78,10 +89,50 @@ mock.module("@/components/ui/ShareLinkModal", {
     },
 });
 
+mock.module(
+    "@/features/device-offline/components/DeviceCollectionDownloadButton",
+    {
+        namedExports: {
+            DeviceCollectionDownloadButton: ({
+                tracks,
+                collectionId,
+                collectionLabel,
+            }: {
+                tracks: Array<{ id: string }>;
+                collectionId: string;
+                collectionLabel: string;
+            }) =>
+                React.createElement("button", {
+                    type: "button",
+                    "data-testid": "device-collection-download",
+                    "data-collection-id": collectionId,
+                    "data-collection-label": collectionLabel,
+                    "data-track-ids": tracks.map((track) => track.id).join(","),
+                }),
+        },
+    },
+);
+
 mock.module("@/components/player/TrackPreferenceButtons", {
     namedExports: {
-        TrackPreferenceButtons: () =>
-            React.createElement("button", { type: "button" }, "prefs"),
+        TrackPreferenceButtons: (props: {
+            trackId?: string;
+            mode?: string;
+            buttonSizeClassName?: string;
+            metadata?: {
+                title?: string;
+                artist?: string;
+                album?: string;
+                duration?: number;
+            };
+        }) => {
+            state.preferenceProps.push(props);
+            return React.createElement(
+                "button",
+                { type: "button", "data-preference-mode": props.mode },
+                "prefs",
+            );
+        },
     },
 });
 
@@ -254,6 +305,7 @@ beforeEach(() => {
     state.isPlaying = false;
     state.queuedTrackIds = new Set();
     state.routerPushPath = null;
+    state.preferenceProps = [];
     state.playlist = {
         id: "playlist-1",
         name: "Mixed Playlist",
@@ -436,11 +488,39 @@ test("playlist detail renders consolidated action bar buttons", async () => {
     );
 
     // Canonical order: Play, Shuffle, Add to Queue, Like All, Radio
-    assert.match(html, /<span>Play All<\/span>/);
-    assert.match(html, /title="Shuffle play"/);
-    assert.match(html, /title="Add all to queue"/);
-    assert.match(html, /title="Like all tracks"/);
-    assert.match(html, /title="Start playlist radio"/);
+    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /title="Воспроизвести вперемешку"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
+    assert.match(html, /title="Добавить все треки в любимые"/);
+    assert.match(html, /title="Запустить радио по плейлисту"/);
+    const hero = html.match(
+        /<header[^>]*data-music-detail="hero"[^>]*>[\s\S]*?<\/header>/,
+    )?.[0];
+    assert.ok(hero);
+    assert.match(hero, /data-music-detail="actions"/);
+    assert.match(hero, /data-detail-action-tier="primary"/);
+    assert.match(hero, /data-detail-action-tier="secondary"/);
+});
+
+test("playlist detail offers a device download for playable tracks only", async () => {
+    const mod = await import("../../app/playlist/[id]/page");
+    const PlaylistDetailPage = mod.default;
+    const queryClient = new QueryClient();
+    const html = renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            React.createElement(PlaylistDetailPage),
+        ),
+    );
+
+    assert.match(html, /data-testid="device-collection-download"/);
+    assert.match(html, /data-collection-id="playlist:playlist-1"/);
+    assert.match(html, /data-collection-label="Mixed Playlist"/);
+    assert.match(
+        html,
+        /data-track-ids="track-local-1,tidal:991,yt:yt-video-7"/,
+    );
 });
 
 test("generated radio playlist detail adds append and regenerate actions", async () => {
@@ -461,8 +541,8 @@ test("generated radio playlist detail adds append and regenerate actions", async
         ),
     );
 
-    assert.match(html, /Add more tracks/);
-    assert.match(html, /Regenerate/);
+    assert.match(html, /Добавить ещё треки/);
+    assert.match(html, /Собрать заново/);
 });
 
 test("playlist detail renders overflow menu for remote tracks (tidal + youtube)", async () => {
@@ -490,6 +570,102 @@ test("playlist detail renders overflow menu for remote tracks (tidal + youtube)"
     );
 });
 
+test("playlist rows keep the compact like-only preference control", async () => {
+    const mod = await import("../../app/playlist/[id]/page");
+    const PlaylistDetailPage = mod.default;
+
+    const queryClient = new QueryClient();
+    const html = renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            React.createElement(PlaylistDetailPage),
+        ),
+    );
+
+    const compactPreferenceCount = (
+        html.match(/data-preference-mode="up-only"/g) ?? []
+    ).length;
+    assert.equal(compactPreferenceCount, 3);
+    assert.doesNotMatch(html, /data-preference-mode="both"/);
+    assert.deepEqual(
+        state.preferenceProps.map(
+            ({ buttonSizeClassName }) => buttonSizeClassName,
+        ),
+        ["h-11 w-11", "h-11 w-11", "h-11 w-11"],
+    );
+    assert.deepEqual(
+        state.preferenceProps.map(({ trackId, metadata }) => ({
+            trackId,
+            metadata,
+        })),
+        [
+            { trackId: "track-local-1", metadata: undefined },
+            {
+                trackId: "tidal:991",
+                metadata: {
+                    title: "Tidal Song",
+                    artist: "Tidal Artist",
+                    album: "Tidal Album",
+                    duration: 245,
+                    thumbnailUrl: undefined,
+                },
+            },
+            {
+                trackId: "yt:yt-video-7",
+                metadata: {
+                    title: "YouTube Song",
+                    artist: "YT Artist",
+                    album: "YT Album",
+                    duration: 210,
+                    thumbnailUrl: undefined,
+                },
+            },
+        ],
+    );
+});
+
+test("pending playlist rows expose named 44px recovery controls", async () => {
+    const playlist = state.playlist;
+    assert.ok(playlist);
+    state.playlist = {
+        ...playlist,
+        pendingCount: 1,
+        pendingTracks: [
+            {
+                pending: {
+                    id: "pending-1",
+                    title: "Missing Song",
+                    artist: "Missing Artist",
+                    album: "Missing Album",
+                },
+            },
+        ],
+    };
+
+    const mod = await import("../../app/playlist/[id]/page");
+    const queryClient = new QueryClient();
+    const html = renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            React.createElement(mod.default),
+        ),
+    );
+
+    for (const label of [
+        "Воспроизвести фрагмент «Missing Song»",
+        "Повторить загрузку «Missing Song»",
+        "Удалить недоступный трек «Missing Song»",
+    ]) {
+        const button = html.match(
+            new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`),
+        )?.[0];
+        assert.ok(button, `missing ${label}`);
+        assert.match(button, /h-11 w-11/);
+    }
+});
+
 test("playlist detail renders provider badges and unplayable fallback messaging", async () => {
     const mod = await import("../../app/playlist/[id]/page");
     const PlaylistDetailPage = mod.default;
@@ -503,15 +679,15 @@ test("playlist detail renders provider badges and unplayable fallback messaging"
         ),
     );
 
-    assert.match(html, /1 local \/ 1 TIDAL \/ 1 YouTube/);
+    assert.doesNotMatch(html, /1 local \/ 1 TIDAL \/ 1 YouTube/);
     assert.match(html, /Local Song/);
     assert.match(html, /TIDAL/);
     assert.match(html, /YOUTUBE/);
-    assert.match(html, /UNPLAYABLE/);
-    assert.match(html, /Track mapping missing for this import\./);
-    assert.match(html, /currently not playable/);
-    assert.match(html, /Cannot play/);
-    assert.match(html, /title="Remove from playlist"/);
+    assert.match(html, /НЕДОСТУПНО/);
+    assert.match(html, /Сейчас этот трек недоступен для воспроизведения\./);
+    assert.match(html, /Сейчас недоступно/);
+    assert.match(html, /Недоступно для воспроизведения/);
+    assert.match(html, /title="Удалить из плейлиста"/);
 });
 
 test("playlist detail distinguishes removed tracks without changing missing-provider treatment", async () => {
@@ -565,12 +741,12 @@ test("playlist detail distinguishes removed tracks without changing missing-prov
     );
 
     assert.match(html, /Removed Song/);
-    assert.match(html, /REMOVED/);
+    assert.match(html, /УДАЛЁН/);
     assert.match(
         html,
-        /title="File removed from library — restore the file to bring it back"/,
+        /title="Файл удалён из медиатеки — восстановите его, чтобы вернуть трек"/,
     );
     assert.match(html, /opacity-60/);
-    assert.match(html, /UNPLAYABLE/);
-    assert.match(html, /Track mapping missing for this import\./);
+    assert.match(html, /НЕДОСТУПНО/);
+    assert.match(html, /Сейчас этот трек недоступен для воспроизведения\./);
 });

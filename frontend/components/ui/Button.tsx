@@ -21,18 +21,17 @@ const Button = memo(
             ref,
         ) => {
             const baseStyles =
-                "inline-flex items-center justify-center rounded-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ai focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed";
+                "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl font-semibold transition-[color,background-color,border-color,box-shadow,transform] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-45 enabled:active:scale-[0.98]";
 
-            // soundspan brand color: #3b82f6
             const variantStyles = {
                 primary:
-                    "bg-brand hover:bg-brand-hover text-black px-4 py-2 shadow-lg shadow-brand/10",
+                    "bg-brand px-5 py-2.5 text-surface shadow-lg shadow-brand/10 hover:bg-brand-hover",
                 secondary:
-                    "bg-surface-hover hover:bg-[#222] text-white px-4 py-2 border border-line",
-                ghost: "text-gray-400 hover:text-white hover:bg-surface-hover px-4 py-2",
-                danger: "text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-4 py-2",
-                ai: "bg-surface-hover hover:bg-brand/10 text-brand border border-surface-active hover:border-brand/30 px-4 py-2",
-                icon: "w-8 h-8 text-gray-400 hover:text-white hover:bg-surface-hover",
+                    "border border-line bg-surface-elevated px-5 py-2.5 text-content hover:border-line-muted hover:bg-surface-hover",
+                ghost: "px-4 py-2.5 text-content-muted hover:bg-surface-hover hover:text-content",
+                danger: "border border-error/25 px-5 py-2.5 text-error hover:border-error/45 hover:bg-error/10",
+                ai: "border border-ai/25 bg-ai/10 px-5 py-2.5 text-ai-hover hover:border-ai/45 hover:bg-ai/15",
+                icon: "size-11 shrink-0 p-0 text-content-muted hover:bg-surface-hover hover:text-content",
             };
 
             return (

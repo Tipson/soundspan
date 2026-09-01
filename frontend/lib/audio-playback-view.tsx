@@ -20,6 +20,9 @@ export function buildPlaybackView(
     currentTimeRef: MutableRefObject<number>,
 ) {
     return {
+        get isPlaying(): boolean {
+            return statusRef.current.isPlaying;
+        },
         get currentTime(): number {
             const legacyCurrentTime = (
                 statusRef.current as { currentTime?: number }

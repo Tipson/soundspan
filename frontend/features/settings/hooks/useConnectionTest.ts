@@ -1,6 +1,7 @@
 "use client";
 
 import { useInlineStatus } from "@/components/ui/InlineStatus";
+import { userFacingError } from "@/lib/i18n/ru";
 
 /** Result shape returned by settings connection tests. */
 export interface ConnectionTestResult {
@@ -23,7 +24,7 @@ export function resolveConnectionTestOutcome<T extends ConnectionTestResult>(
     result: T,
     {
         successMessage,
-        failureMessage = "Connection failed",
+        failureMessage = "Не удалось подключиться",
     }: ConnectionTestMessages<T>,
 ): { status: "success" | "error"; message: string } {
     if (result.success) {
@@ -35,7 +36,10 @@ export function resolveConnectionTestOutcome<T extends ConnectionTestResult>(
                     : successMessage,
         };
     }
-    return { status: "error", message: result.error || failureMessage };
+    return {
+        status: "error",
+        message: userFacingError(result.error, failureMessage),
+    };
 }
 
 /**
@@ -50,7 +54,7 @@ export function useConnectionTest<T extends ConnectionTestResult>(
         useInlineStatus();
 
     const runTest = async (test: () => Promise<T>): Promise<T> => {
-        setLoading(messages.loadingMessage ?? "Connecting...");
+        setLoading(messages.loadingMessage ?? "Подключение…");
         const result = await test();
         const outcome = resolveConnectionTestOutcome(result, messages);
         if (outcome.status === "success") {

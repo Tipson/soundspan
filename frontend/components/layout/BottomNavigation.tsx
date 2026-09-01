@@ -2,34 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Library, BookOpen, Mic, ListMusic } from "lucide-react";
+import { AudioWaveform, Home, Library } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
+import { ru } from "@/lib/i18n/ru";
 
 const navigationItems = [
     {
-        name: "Library",
+        name: ru.nav.home,
+        href: "/",
+        icon: Home,
+        matchPattern: "/",
+        exact: true,
+    },
+    {
+        name: ru.nav.vibe,
+        href: "/vibe",
+        icon: AudioWaveform,
+        matchPattern: "/vibe",
+    },
+    {
+        name: ru.nav.library,
         href: "/library",
         icon: Library,
         matchPattern: "/library",
-    },
-    {
-        name: "Audiobooks",
-        href: "/audiobooks",
-        icon: BookOpen,
-        matchPattern: "/audiobooks",
-    },
-    {
-        name: "Podcasts",
-        href: "/podcasts",
-        icon: Mic,
-        matchPattern: "/podcasts",
-    },
-    {
-        name: "Playlists",
-        href: "/playlists",
-        icon: ListMusic,
-        matchPattern: "/playlist", // Matches both /playlists and /playlist/[id]
     },
 ];
 
@@ -47,41 +44,77 @@ export function BottomNavigation() {
 
     return (
         <nav
-            className="fixed bottom-0 left-0 right-0 z-40 bg-black border-t border-white/10"
+            data-shell-bottom-navigation="true"
+            className="mobile-bottom-navigation fixed inset-x-0 bottom-0 z-40"
             role="navigation"
-            aria-label="Main navigation"
+            aria-label={ru.nav.mainAria}
             style={{
-                paddingBottom: "env(safe-area-inset-bottom, 0px)",
+                paddingBottom: "var(--safe-area-bottom)",
             }}
         >
-            <div className="flex items-center justify-around h-14">
+            <div
+                className="flex h-[var(--app-bottom-nav-height)] items-center justify-around px-1"
+                style={{
+                    paddingLeft: "var(--safe-area-left)",
+                    paddingRight: "var(--safe-area-right)",
+                }}
+            >
                 {navigationItems.map((item) => {
-                    const isActive = pathname.startsWith(item.matchPattern);
+                    const isActive = item.exact
+                        ? pathname === item.matchPattern
+                        : pathname.startsWith(item.matchPattern);
                     const Icon = item.icon;
 
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
+                            data-shell-primary-destination={item.href}
+                            onClick={
+                                item.href === "/library"
+                                    ? (event) => {
+                                          handleOfflineLibraryNavigation({
+                                              isOnline: navigator.onLine,
+                                              preventDefault: () =>
+                                                  event.preventDefault(),
+                                              hardNavigate: (path) =>
+                                                  window.location.assign(path),
+                                          });
+                                      }
+                                    : undefined
+                            }
                             className={cn(
-                                "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                                "shell-nav-item group relative flex min-h-11 h-full flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light",
                                 isActive
                                     ? "text-white"
-                                    : "text-gray-400 active:text-gray-300",
+                                    : "text-content-muted active:text-content-secondary",
                             )}
                             aria-label={item.name}
                             aria-current={isActive ? "page" : undefined}
                         >
-                            <Icon
+                            <span
+                                aria-hidden="true"
                                 className={cn(
-                                    "w-5 h-5 mb-1",
-                                    isActive && "text-white",
+                                    "absolute top-1 h-0.5 w-5 rounded-full bg-gradient-to-r from-brand via-ai to-brand-hover transition-opacity",
+                                    isActive ? "opacity-100" : "opacity-0",
                                 )}
-                                strokeWidth={isActive ? 2.5 : 2}
                             />
                             <span
                                 className={cn(
-                                    "text-[10px] tracking-wide",
+                                    "flex h-7 min-w-10 items-center justify-center rounded-full px-2 transition-colors",
+                                    isActive
+                                        ? "bg-white/[0.1] text-white"
+                                        : "group-active:bg-white/[0.05]",
+                                )}
+                            >
+                                <Icon
+                                    className="h-5 w-5"
+                                    strokeWidth={isActive ? 2.5 : 2}
+                                />
+                            </span>
+                            <span
+                                className={cn(
+                                    "text-[10px] leading-none tracking-wide",
                                     isActive ? "font-semibold" : "font-medium",
                                 )}
                             >

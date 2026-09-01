@@ -18,7 +18,7 @@ export function PeerBadge({ peerName, online, className }: PeerBadgeProps) {
                 !online && "opacity-50",
                 className,
             )}
-            title={`From ${peerName}`}
+            title={`С сервера ${peerName}`}
         >
             <Network className="h-3 w-3" aria-hidden="true" />
             <span className="max-w-24 truncate">{peerName}</span>

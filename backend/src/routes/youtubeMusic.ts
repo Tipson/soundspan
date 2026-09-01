@@ -9,7 +9,6 @@
  * The /stream/:videoId endpoint proxies audio bytes from the sidecar
  * so that IP-locked YouTube URLs work correctly.
  */
-
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { requireAuth, requireAuthOrToken } from "../middleware/auth";
@@ -22,6 +21,7 @@ import { getSystemSettings } from "../utils/systemSettings";
 import { logger } from "../utils/logger";
 import { prisma } from "../utils/db";
 import { trackMappingService } from "../services/trackMappingService";
+import unavailableRecoveryRouter from "./youtubeMusicUnavailableRecovery";
 import { encrypt, decrypt } from "../utils/encryption";
 import {
     ytMusicSearchLimiter,
@@ -33,7 +33,6 @@ import { sendInternalRouteError } from "../utils/routeErrorResponse";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { parsePagination } from "../middleware/parsePagination";
 import { validate } from "../middleware/validate";
-
 const router = Router();
 const OAUTH_CACHE_TTL_MS = config.nodeEnv === "test" ? 0 : 60_000;
 const OAUTH_NEGATIVE_CACHE_TTL_MS = config.nodeEnv === "test" ? 0 : 15_000;
@@ -48,7 +47,6 @@ const MATCH_SCHEMA = z.object({
 const MATCH_BATCH_SCHEMA = z.object({
     tracks: z.array(MATCH_SCHEMA).min(1).max(50),
 });
-
 function getHttpErrorStatus(error: unknown): number | undefined {
     if (typeof error !== "object" || error === null || !("response" in error)) {
         return undefined;
@@ -1440,6 +1438,8 @@ router.post(
         }
     }),
 );
+
+router.use(unavailableRecoveryRouter);
 
 // ── Public Stream Routes (no user OAuth required) ─────────────────
 // These endpoints use the "__public__" user_id sentinel to bypass

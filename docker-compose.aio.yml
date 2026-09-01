@@ -69,6 +69,10 @@ services:
       # Preserve Redis streams/groups across restarts unless explicitly overridden
       - REDIS_FLUSH_ON_STARTUP=${REDIS_FLUSH_ON_STARTUP:-false}
       # Coarse feature flags for ML/recommendation subsystems (default: true)
+      - RECOMMENDATION_ENGINE_MODE=${RECOMMENDATION_ENGINE_MODE:-shadow}
+      - REMOTE_ANALYSIS_ENABLED=${REMOTE_ANALYSIS_ENABLED:-false}
+      - REMOTE_ANALYSIS_DAILY_BUDGET=${REMOTE_ANALYSIS_DAILY_BUDGET:-100}
+      - REMOTE_ANALYSIS_CONCURRENCY=${REMOTE_ANALYSIS_CONCURRENCY:-1}
       - AUDIO_ANALYSIS_ENABLED=${AUDIO_ANALYSIS_ENABLED:-true}
       - ACOUSTID_API_KEY=${ACOUSTID_API_KEY:-}
       - LOUDNESS_TARGET_LUFS=${LOUDNESS_TARGET_LUFS:--18}

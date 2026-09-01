@@ -2,56 +2,42 @@
 
 import { Sparkles, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { discoverRu } from "@/lib/i18n/discoverRu";
 
 /**
  * Renders the HowItWorks component.
  */
 export function HowItWorks() {
     return (
-        <Card className="p-6 bg-[#111]/50  border-white/5">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-white">
-                <Sparkles className="w-5 h-5 text-ai-hover" />
-                How It Works
+        <Card className="rounded-2xl border-line bg-surface-elevated p-5 sm:p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-content">
+                <Sparkles className="size-5 text-ai-hover" aria-hidden="true" />
+                {discoverRu.howItWorks.title}
             </h3>
-            <div className="space-y-3 text-sm text-gray-400">
+            <div className="grid gap-3 text-sm leading-6 text-content-muted md:grid-cols-2">
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
-                    <p>
-                        Builds recommendations from your listening history and
-                        local library first.
-                    </p>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
+                    <p>{discoverRu.howItWorks.history}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
-                    <p>
-                        Similarity tiers keep a mix of safe picks and
-                        exploration tracks.
-                    </p>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
+                    <p>{discoverRu.howItWorks.variety}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
-                    <p>
-                        When TIDAL or YouTube Music is connected, a portion of
-                        tracks can stream via gap-fill.
-                    </p>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
+                    <p>{discoverRu.howItWorks.providers}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
-                    <p>
-                        Source badges show whether each track is Local, TIDAL,
-                        or YouTube Music.
-                    </p>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
+                    <p>{discoverRu.howItWorks.badges}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
-                    <p>Albums won&apos;t repeat for 6 months</p>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
+                    <p>{discoverRu.howItWorks.repeats}</p>
                 </div>
                 <div className="flex items-start gap-3">
-                    <ChevronRight className="w-4 h-4 mt-0.5 text-ai-hover/60 shrink-0" />
-                    <p>
-                        No automatic downloads or library writes are performed
-                        by this flow.
-                    </p>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-ai-hover/70" />
+                    <p>{discoverRu.howItWorks.noWrites}</p>
                 </div>
             </div>
         </Card>

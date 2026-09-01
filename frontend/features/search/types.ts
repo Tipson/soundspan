@@ -3,13 +3,7 @@ import type {
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
 
-export type FilterTab =
-    | "all"
-    | "library"
-    | "discover"
-    | "podcasts"
-    | "peers"
-    | "soulseek";
+export type SearchResultView = "all" | "tracks" | "artists" | "albums";
 
 export interface Artist {
     id: string;
@@ -23,6 +17,7 @@ export interface Artist {
 
 export interface Album {
     id: string;
+    rgMbid?: string;
     title: string;
     coverUrl?: string;
     albumId?: string;
@@ -99,7 +94,7 @@ export interface SearchResult {
 }
 
 export interface DiscoverResult {
-    type: "music" | "podcast" | "track";
+    type: "music" | "album" | "podcast" | "track";
     id?: string;
     name: string;
     mbid?: string;
@@ -112,6 +107,18 @@ export interface DiscoverResult {
     genres?: string[];
     trackCount?: number;
     listeners?: number;
+    /** Exact remote-provider identity when the catalog result is playable. */
+    providerTrackId?: string;
+    streamSource?: "tidal" | "youtube";
+    tidalTrackId?: number;
+    youtubeVideoId?: string;
+    duration?: number | null;
+    browseId?: string;
+    year?: string | null;
+    provider?: "ytmusic";
+    releaseType?: string | null;
+    /** YouTube Music artist route identity; accepted by discovery fallback. */
+    youtubeChannelId?: string;
 }
 
 export interface AliasInfo {
@@ -123,6 +130,10 @@ export interface AliasInfo {
 export interface DiscoverResponse {
     results: DiscoverResult[];
     aliasInfo: AliasInfo | null;
+    pageInfo?: {
+        requestedLimit: number;
+        canRequestMoreTracks: boolean;
+    };
 }
 
 export interface SimilarArtistsResponse {

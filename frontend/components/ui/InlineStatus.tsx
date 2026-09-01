@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { ru } from "@/lib/i18n/ru";
 
 export type StatusType = "idle" | "loading" | "success" | "error";
 
@@ -135,18 +136,20 @@ export function ConnectionTestButton({
         useInlineStatus();
 
     const handleTest = async () => {
-        setLoading("Testing...");
+        setLoading("Проверяем…");
         try {
             const result = await onTest();
             if (result === false || result === null) {
-                setError("Failed");
+                setError("Не удалось подключиться");
             } else if (typeof result === "string") {
                 setSuccess(result);
             } else {
-                setSuccess("Connected");
+                setSuccess("Подключено");
             }
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : "Failed");
+            setError(
+                err instanceof Error ? err.message : "Не удалось подключиться",
+            );
         }
     };
 
@@ -162,7 +165,7 @@ export function ConnectionTestButton({
                     className,
                 )}
             >
-                {status === "loading" ? "Testing..." : label}
+                {status === "loading" ? "Проверяем…" : label}
             </button>
             <InlineStatus {...props} showIcon={true} />
         </div>
@@ -184,7 +187,7 @@ interface SaveButtonProps {
  */
 export function SaveButton({
     onSave,
-    label = "Save",
+    label = ru.common.save,
     className,
     disabled,
 }: SaveButtonProps) {
@@ -195,9 +198,11 @@ export function SaveButton({
         setLoading();
         try {
             await onSave();
-            setSuccess("Saved");
+            setSuccess(ru.settings.saved);
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : "Failed");
+            setError(
+                err instanceof Error ? err.message : ru.settings.saveFailed,
+            );
         }
     };
 
@@ -213,7 +218,7 @@ export function SaveButton({
                     className,
                 )}
             >
-                {status === "loading" ? "Saving..." : label}
+                {status === "loading" ? ru.settings.saving : label}
             </button>
             <InlineStatus {...props} showIcon={true} autoClear={true} />
         </div>

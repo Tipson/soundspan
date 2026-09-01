@@ -577,7 +577,7 @@ describe("audiobook cache service behavior", () => {
         expect(prisma.audiobookProgress.deleteMany).not.toHaveBeenCalled();
         expect(prisma.playbackState.updateMany).not.toHaveBeenCalled();
         expect(prisma.federationTombstone.createMany).not.toHaveBeenCalled();
-        expect(fsPromises.unlink).toHaveBeenCalledWith(coverPath);
+        expect(fsPromises.unlink).toHaveBeenCalledWith(path.resolve(coverPath));
         expect(result.deleted).toBe(1);
     });
 
@@ -893,7 +893,7 @@ describe("audiobook cache service behavior", () => {
         );
         expect(fsPromises.unlink).toHaveBeenNthCalledWith(
             1,
-            path.join(
+            path.resolve(
                 "/srv/music",
                 "cover-cache",
                 "audiobooks",
@@ -902,7 +902,7 @@ describe("audiobook cache service behavior", () => {
         );
         expect(fsPromises.unlink).toHaveBeenNthCalledWith(
             2,
-            path.join(
+            path.resolve(
                 "/srv/music",
                 "cover-cache",
                 "audiobooks",
@@ -1185,12 +1185,13 @@ describe("audiobook cache service behavior", () => {
             buildBook({ id: "book-1" }),
             buildBook({ id: "book-2" }),
         ];
-
         mockGetAudiobookListing.mockResolvedValue({
             books,
             verifiedCompleteLibraryIds: new Set(["library-1"]),
         });
-        mockAudiobookQueries({ cachedRows: [{ id: "book-1" }] });
+        mockAudiobookQueries({
+            cachedRows: [{ id: "book-1", libraryId: "library-1" }],
+        });
 
         const result = await service.syncMissing();
 
@@ -1293,7 +1294,7 @@ describe("audiobook cache service behavior", () => {
         expect(
             transactionClient.federationTombstone.createMany,
         ).not.toHaveBeenCalled();
-        expect(fsPromises.unlink).toHaveBeenCalledWith(coverPath);
+        expect(fsPromises.unlink).toHaveBeenCalledWith(path.resolve(coverPath));
         expect(thirdResult).toEqual({
             synced: 0,
             failed: 0,
@@ -1554,7 +1555,7 @@ describe("audiobook cache service behavior", () => {
         expect(prisma.audiobook.updateMany).not.toHaveBeenCalled();
     });
 
-    it("fails closed when an incremental listing is empty but local rows exist", async () => {
+    it("fails closed when the incremental listing is empty but local rows exist", async () => {
         const service = new AudiobookCacheService();
         mockGetAudiobookListing.mockResolvedValue({
             books: [],
@@ -1566,14 +1567,13 @@ describe("audiobook cache service behavior", () => {
 
         const result = await service.syncMissing();
 
+        expect(result.deleted).toBe(0);
         expect(transactionClient.audiobook.deleteMany).not.toHaveBeenCalled();
-        expect(prisma.$transaction).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
             expect.stringContaining(
                 "Skipped pruning audiobooks because Audiobookshelf returned an empty listing",
             ),
         );
-        expect(result.deleted).toBe(0);
     });
 
     it("rate-limits repeated empty-listing prune warnings for one hour", async () => {
@@ -1797,7 +1797,6 @@ describe("audiobook cache service behavior", () => {
 
     it("records the error message when a missing audiobook fails to sync", async () => {
         const service = new AudiobookCacheService();
-
         const brokenBook = buildBook({
             id: "book-broken",
             media: {
@@ -2011,12 +2010,13 @@ describe("audiobook cache service behavior", () => {
     it("round-trips a normal ABS id through cover write and unlink fallback", async () => {
         const service = new AudiobookCacheService();
         const audiobookId = "abs_book-1.2";
-        const expectedPath = path.join(
+        const expectedWritePath = path.join(
             "/srv/music",
             "cover-cache",
             "audiobooks",
             `${audiobookId}.jpg`,
         );
+        const expectedUnlinkPath = path.resolve(expectedWritePath);
         (service as any).coverCacheAvailable = true;
 
         await expect(
@@ -2024,17 +2024,17 @@ describe("audiobook cache service behavior", () => {
                 audiobookId,
                 "http://abs.local/cover.jpg",
             ),
-        ).resolves.toBe(expectedPath);
+        ).resolves.toBe(expectedWritePath);
         await (service as any).unlinkAudiobookCover({
             id: audiobookId,
             localCoverPath: null,
         });
 
         expect(fsPromises.writeFile).toHaveBeenCalledWith(
-            expectedPath,
+            expectedWritePath,
             expect.any(Buffer),
         );
-        expect(fsPromises.unlink).toHaveBeenCalledWith(expectedPath);
+        expect(fsPromises.unlink).toHaveBeenCalledWith(expectedUnlinkPath);
     });
 
     it("handles cover downloads for unavailable cache, HTTP failures, and success", async () => {

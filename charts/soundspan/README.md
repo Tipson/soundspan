@@ -310,10 +310,16 @@ tidalSidecar:
 
 ytmusicStreamer:
   enabled: true
+  env:
+    # Pin these when the Kubernetes region differs from the listeners.
+    YTMUSIC_LANGUAGE: "ru"
+    YTMUSIC_LOCATION: "RU"
 ```
 
 These **sidecars** work in both AIO and Individual modes.
 In AIO mode, they run as separate pods alongside the all-in-one container.
+`YTMUSIC_LANGUAGE` controls response language, while `YTMUSIC_LOCATION` pins
+the public catalog region independently of the cluster's geo-IP.
 
 #### YouTube downloads and the music volume
 
@@ -325,9 +331,11 @@ written to `YT_DOWNLOAD_DIR` (default `/music/YouTube Downloads`) and
 imported by the backend's library scan.
 
 Notes:
+
 - In multi-node clusters the music volume must be **RWX**
-  (`ReadWriteMany`), because the backend and ytmusic-streamer pods mount
-  it read-write concurrently and may be scheduled on different nodes.
+  (`ReadWriteMany`), because the backend, backend-worker, audio analyzer, and
+  ytmusic-streamer pods can mount it read-write concurrently and may be
+  scheduled on different nodes.
 - All `music.persistence` variants are supported (`existingClaim`,
   chart-managed PVC, `hostPath`).
 - Setting `ytmusicStreamer.musicMount.enabled: false` disables the mount;
@@ -412,6 +420,11 @@ config:
     autoPlaylists: true   # Made For You mixes, /api/mixes
     requests: true        # music request API and request-fulfillment reconciliation
     federation: false     # scoped peer credentials and /api/federation host API
+  recommendations:
+    engineMode: null                  # baseline | shadow | active; null uses the app default
+    remoteAnalysisEnabled: null       # null uses the app default (false)
+    remoteAnalysisDailyBudget: null   # 1..10000; null uses the app default (100)
+    remoteAnalysisConcurrency: null   # 1 or 2; null uses the app default (1)
   federationTombstoneRetentionDays: 90
   federationSyncIntervalMinutes: 15
   providerTrackRetentionDays: 30
@@ -423,6 +436,13 @@ config:
 When a flag is `false`, the backend does not mount the corresponding API
 routes (they return `404` with `code: FEATURE_DISABLED`) and skips the
 matching background workers.
+
+Recommendation controls render on the backend, backend-worker, and AIO
+workloads only when the corresponding `config.recommendations` value is
+non-null. A workload-specific `env` entry takes precedence. Remote analysis
+also requires audio analysis to be enabled and uses the shared `/music` volume
+for a contained temporary spool; the backend worker and Essentia analyzer must
+mount that volume read-write so the analyzer can remove completed assets.
 
 > `config.features.audioAnalysis` only controls the backend side (queueing and
 > consumption of analysis work). The Essentia analyzer Deployment is controlled
@@ -649,6 +669,10 @@ When `deploymentMode=individual` and `backendWorker.enabled=true`, the chart inj
 | Env Var | Helm Value | Required | Default |
 | --- | --- | --- | --- |
 | `AUDIO_ANALYSIS_ENABLED` | `config.features.audioAnalysis` | No | `true` |
+| `RECOMMENDATION_ENGINE_MODE` | `config.recommendations.engineMode` | No | App default: `shadow` (chart leaves unset unless configured) |
+| `REMOTE_ANALYSIS_ENABLED` | `config.recommendations.remoteAnalysisEnabled` | No | App default: `false` (chart leaves unset unless configured) |
+| `REMOTE_ANALYSIS_DAILY_BUDGET` | `config.recommendations.remoteAnalysisDailyBudget` | No | App default: `100` (chart leaves unset unless configured) |
+| `REMOTE_ANALYSIS_CONCURRENCY` | `config.recommendations.remoteAnalysisConcurrency` | No | App default: `1` (chart leaves unset unless configured) |
 | `DISCOVERY_ENABLED` | `config.features.discovery` | No | `true` |
 | `AUTO_PLAYLISTS_ENABLED` | `config.features.autoPlaylists` | No | `true` |
 | `FEATURE_REQUESTS` | `config.features.requests` | No | `true` |

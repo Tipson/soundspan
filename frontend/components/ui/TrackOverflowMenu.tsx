@@ -13,6 +13,9 @@ import {
     Disc3,
     AudioWaveform,
     Radio,
+    Check,
+    Download,
+    Loader2,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useAudioControls } from "@/lib/audio-controls-context";
@@ -25,6 +28,9 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { isRemoteTrack, toAddToPlaylistRef } from "@/lib/trackRef";
 import { canShareTrack } from "@/lib/shareLinks";
+import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
+import { getDeviceDownloadSourceUrl } from "@/features/device-offline/sourceUrl";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface TrackOverflowMenuProps {
     track: Track;
@@ -88,7 +94,49 @@ export function TrackOverflowMenu({
     const menuRef = useRef<HTMLDivElement | null>(null);
     const router = useRouter();
     const controls = useAudioControls();
+    const deviceOffline = useOptionalDeviceOffline();
     const isRemote = isRemoteTrack(track);
+    const deviceRecord = deviceOffline?.recordForTrack(track) ?? null;
+    const deviceStorageStatus = deviceOffline?.storage.status ?? null;
+    const deviceStorageBlocked =
+        deviceStorageStatus === "unsupported" ||
+        deviceStorageStatus === "checking" ||
+        deviceStorageStatus === "requesting";
+    const isAutoManagedReady =
+        deviceRecord?.status === "ready" &&
+        deviceRecord.management === "auto-liked";
+    const deviceDownloadDisabled =
+        deviceRecord?.status === "downloading" ||
+        (deviceRecord?.status === "ready" && !isAutoManagedReady) ||
+        deviceStorageBlocked;
+    const deviceDownloadLabel = (() => {
+        if (deviceRecord?.status === "ready" && !isAutoManagedReady) {
+            return ru.trackMenu.availableOffline;
+        }
+        if (deviceRecord?.status === "downloading")
+            return ru.downloads.downloading;
+        if (deviceStorageStatus === "unsupported") {
+            return ru.trackMenu.unavailable;
+        }
+        if (deviceStorageStatus === "checking") {
+            return ru.trackMenu.checkingStorage;
+        }
+        if (deviceStorageStatus === "requesting") {
+            return ru.trackMenu.waitingFolder;
+        }
+        if (deviceStorageStatus === "needs-setup") {
+            return ru.trackMenu.chooseFolder;
+        }
+        if (deviceStorageStatus === "error") {
+            return deviceOffline?.storage.directoryName
+                ? ru.trackMenu.reconnectFolder
+                : ru.trackMenu.chooseFolder;
+        }
+        if (isAutoManagedReady) return ru.trackMenu.keepOffline;
+        return deviceRecord
+            ? ru.trackMenu.retryDownload
+            : ru.trackMenu.download;
+    })();
 
     const effectiveShowMatchVibe = showMatchVibe && !isRemote;
     const effectiveShowVibeMap = showVibeMap && !isRemote;
@@ -188,7 +236,7 @@ export function TrackOverflowMenu({
     const handleSelectPlaylist = useCallback(
         async (playlistId: string) => {
             await api.addTrackToPlaylist(playlistId, toAddToPlaylistRef(track));
-            toast.success(`Added "${track.title}" to playlist`);
+            toast.success(`«${track.title}» добавлен в плейлист`);
         },
         [track],
     );
@@ -200,8 +248,8 @@ export function TrackOverflowMenu({
             if (!trackLinkPath) return;
             const url = `${window.location.origin}${trackLinkPath}`;
             void navigator.clipboard.writeText(url).then(
-                () => toast.success("Song link copied"),
-                () => toast.error("Could not copy the song link"),
+                () => toast.success(ru.trackMenu.copySuccess),
+                () => toast.error(ru.trackMenu.copyFailed),
             );
         },
         [trackLinkPath, closeMenu],
@@ -240,7 +288,7 @@ export function TrackOverflowMenu({
                 const result = await controls.startVibeMode();
                 if (result.success) {
                     toast.success(
-                        `Match Vibe: found ${result.trackCount} similar tracks`,
+                        `Найдено ${result.trackCount} ${pluralRu(result.trackCount, ["похожий трек", "похожих трека", "похожих треков"])}`,
                     );
                 }
             }, 500);
@@ -277,9 +325,7 @@ export function TrackOverflowMenu({
                 }
 
                 if (!response) {
-                    toast.error(
-                        "Artist information is required to start radio",
-                    );
+                    toast.error(ru.trackMenu.artistRequired);
                     return;
                 }
 
@@ -290,18 +336,45 @@ export function TrackOverflowMenu({
                     );
                     controls.playTracks([track, ...filtered], 0);
                     toast.success(
-                        `Playing ${track.artist.name} Radio (${filtered.length} tracks)`,
+                        `Радио «${track.artist.name}»: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,
                     );
                 } else {
-                    toast.error(
-                        "Not enough similar music in your library for artist radio",
-                    );
+                    toast.error(ru.trackMenu.radioNotEnough);
                 }
             } catch {
-                toast.error("Failed to start artist radio");
+                toast.error(ru.trackMenu.radioFailed);
             }
         },
         [track, controls, closeMenu, isRemote],
+    );
+
+    const handleDeviceDownload = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            closeMenu();
+            if (!deviceOffline || deviceDownloadDisabled) return;
+            void deviceOffline
+                .download({
+                    track,
+                    sourceUrl: getDeviceDownloadSourceUrl(track),
+                    quality: "auto",
+                })
+                .then((record) =>
+                    toast.success(
+                        record.status === "ready"
+                            ? `«${track.title}» доступен без интернета`
+                            : `Загрузка «${track.title}» началась`,
+                    ),
+                )
+                .catch((error: unknown) =>
+                    toast.error(
+                        error instanceof Error
+                            ? error.message
+                            : ru.trackMenu.downloadFailed,
+                    ),
+                );
+        },
+        [closeMenu, deviceDownloadDisabled, deviceOffline, track],
     );
 
     return (
@@ -317,16 +390,16 @@ export function TrackOverflowMenu({
                     type="button"
                     onClick={handleToggle}
                     className={cn(
-                        "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-full p-2 transition-colors",
+                        "flex size-11 items-center justify-center rounded-xl p-0 opacity-100 transition-colors focus-visible:ring-2 focus-visible:ring-brand sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100",
                         isOpen
-                            ? "bg-[#2a2a2a] text-white"
-                            : "text-gray-400 hover:bg-[#2a2a2a] hover:text-white",
+                            ? "bg-surface-active text-content"
+                            : "text-content-muted hover:bg-surface-hover hover:text-content",
                         triggerClassName,
                     )}
-                    aria-label="Track actions"
+                    aria-label={ru.trackMenu.actions}
                     aria-expanded={isOpen}
                     aria-haspopup="menu"
-                    title="Track actions"
+                    title={ru.trackMenu.actions}
                 >
                     <EllipsisVertical className="h-4 w-4" />
                 </button>
@@ -334,7 +407,7 @@ export function TrackOverflowMenu({
                 {isOpen && (
                     <div
                         className={cn(
-                            "absolute right-0 top-full z-30 mt-1 min-w-[180px] rounded-md border border-white/10 bg-[#111111] p-1 shadow-xl",
+                            "absolute right-0 top-full z-30 mt-1 min-w-[220px] rounded-2xl border border-line bg-surface-overlay p-1.5 shadow-2xl",
                             menuClassName,
                         )}
                         role="menu"
@@ -347,7 +420,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handlePlayNext}
                                 icon={<ListEnd className="h-4 w-4" />}
-                                label="Play next"
+                                label={ru.trackMenu.playNext}
                             />
                         )}
 
@@ -355,7 +428,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleAddToQueue}
                                 icon={<ListPlus className="h-4 w-4" />}
-                                label="Add to queue"
+                                label={ru.trackMenu.addQueue}
                             />
                         )}
 
@@ -363,7 +436,26 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleAddToPlaylist}
                                 icon={<Plus className="h-4 w-4" />}
-                                label="Add to playlist"
+                                label={ru.trackMenu.addPlaylist}
+                            />
+                        )}
+
+                        {deviceOffline && (
+                            <MenuButton
+                                onClick={handleDeviceDownload}
+                                disabled={deviceDownloadDisabled}
+                                icon={
+                                    deviceRecord?.status === "ready" &&
+                                    !isAutoManagedReady ? (
+                                        <Check className="h-4 w-4" />
+                                    ) : deviceRecord?.status ===
+                                      "downloading" ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Download className="h-4 w-4" />
+                                    )
+                                }
+                                label={deviceDownloadLabel}
                             />
                         )}
 
@@ -371,7 +463,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleShare}
                                 icon={<Share2 className="h-4 w-4" />}
-                                label="Share"
+                                label={ru.common.share}
                             />
                         )}
 
@@ -379,7 +471,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleCopyTrackLink}
                                 icon={<LinkIcon className="h-4 w-4" />}
-                                label="Copy link to song"
+                                label={ru.trackMenu.copyLink}
                             />
                         )}
 
@@ -387,7 +479,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleGoToArtist}
                                 icon={<User className="h-4 w-4" />}
-                                label="Go to artist"
+                                label={ru.trackMenu.goArtist}
                             />
                         )}
 
@@ -395,7 +487,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleGoToAlbum}
                                 icon={<Disc3 className="h-4 w-4" />}
-                                label="Go to album"
+                                label={ru.trackMenu.goAlbum}
                             />
                         )}
 
@@ -403,7 +495,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleMatchVibe}
                                 icon={<AudioWaveform className="h-4 w-4" />}
-                                label="Match Vibe"
+                                label={ru.trackMenu.matchVibe}
                             />
                         )}
 
@@ -411,7 +503,7 @@ export function TrackOverflowMenu({
                             <MenuButton
                                 onClick={handleShowVibeMap}
                                 icon={<MapIcon className="h-4 w-4" />}
-                                label="Show on Vibe Map"
+                                label={ru.trackMenu.showVibeMap}
                             />
                         )}
 
@@ -421,7 +513,7 @@ export function TrackOverflowMenu({
                                 <MenuButton
                                     onClick={handleStartRadio}
                                     icon={<Radio className="h-4 w-4" />}
-                                    label="Start Radio"
+                                    label={ru.trackMenu.startRadio}
                                 />
                             )}
 
@@ -468,10 +560,10 @@ function MenuButton({
             onClick={onClick}
             disabled={disabled}
             className={cn(
-                "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors",
+                "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors",
                 disabled
-                    ? "cursor-not-allowed text-red-300/80"
-                    : "text-gray-200 hover:bg-white/10 hover:text-white",
+                    ? "cursor-not-allowed text-error/75"
+                    : "text-content-body hover:bg-surface-hover hover:text-content",
                 customClassName,
             )}
             role="menuitem"

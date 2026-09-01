@@ -31,8 +31,8 @@ export function IntegrationCard({
     statusText,
     statusColor,
     connected,
-    connectLabel = "Connect",
-    disconnectLabel = "Disconnect",
+    connectLabel = "Подключить",
+    disconnectLabel = "Отключить",
     onConnect,
     onDisconnect,
     isLoading = false,
@@ -44,37 +44,37 @@ export function IntegrationCard({
     children,
 }: IntegrationCardProps) {
     const statusIcon = isLoading ? (
-        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+        <Loader2 className="h-4 w-4 animate-spin text-content-muted motion-reduce:animate-none" />
     ) : statusColor === "green" ? (
-        <CheckCircle className="w-4 h-4 text-green-400" />
+        <CheckCircle className="h-4 w-4 text-green-400" />
     ) : statusColor === "red" ? (
-        <XCircle className="w-4 h-4 text-red-400" />
+        <XCircle className="h-4 w-4 text-red-400" />
     ) : (
-        <XCircle className="w-4 h-4 text-gray-400" />
+        <XCircle className="h-4 w-4 text-content-muted" />
     );
 
     return (
         <div
-            className={`rounded-lg border border-white/[0.06] bg-surface-hover overflow-hidden transition-opacity ${
+            className={`overflow-hidden rounded-2xl border border-line bg-surface-elevated/65 transition-opacity ${
                 disabled ? "opacity-50" : ""
             }`}
         >
             {/* Header row */}
-            <div className="flex items-center justify-between px-4 py-3.5">
-                <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
                     {/* Icon */}
-                    <div className="w-9 h-9 rounded-full bg-surface-highlight flex items-center justify-center shrink-0">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-highlight">
                         {icon}
                     </div>
 
                     {/* Title + status */}
-                    <div>
-                        <div className="text-sm font-medium text-white">
+                    <div className="min-w-0">
+                        <div className="text-sm font-semibold text-content">
                             {title}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
                             {statusIcon}
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-content-muted">
                                 {disabled && disabledReason
                                     ? disabledReason
                                     : statusText}
@@ -92,12 +92,12 @@ export function IntegrationCard({
                               onClick={connected ? onDisconnect : onConnect}
                               disabled={isLoading}
                               className={`
-                                px-4 py-1.5 text-sm font-medium rounded-full transition-all shrink-0
+                                inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors
                                 ${isLoading ? "opacity-50 cursor-not-allowed" : ""}
                                 ${
                                     connected
-                                        ? "bg-transparent border border-gray-600 text-white hover:border-white"
-                                        : "bg-white text-black hover:scale-105"
+                                        ? "border border-line-muted bg-transparent text-content hover:border-white/30 hover:bg-white/[0.05]"
+                                        : "bg-brand text-black hover:bg-brand-hover"
                                 }
                             `}
                           >
@@ -115,7 +115,7 @@ export function IntegrationCard({
 
             {/* Collapsible body */}
             <div
-                className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                className="grid transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none"
                 style={{
                     gridTemplateRows: expanded && !disabled ? "1fr" : "0fr",
                 }}

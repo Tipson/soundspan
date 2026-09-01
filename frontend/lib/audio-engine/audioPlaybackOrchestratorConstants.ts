@@ -6,6 +6,11 @@ export const CURRENT_TIME_TRACK_ID_KEY = createMigratingStorageKey(
 );
 export const AUDIO_LOAD_TIMEOUT_MS = 20_000;
 export const AUDIO_LOAD_TIMEOUT_RETRIES = 1;
+// Provider playback can spend up to 120 seconds preparing audio before the
+// frontend proxy receives its first byte. Keep the player watchdog above the
+// upstream and proxy budgets so those layers own their timeout responses.
+export const PROVIDER_AUDIO_LOAD_TIMEOUT_MS = 135_000;
+export const PROVIDER_AUDIO_LOAD_TIMEOUT_RETRIES = 0;
 // First audible progress at or past this position counts as a completed
 // load even when the engine's synthetic "load" event has not fired yet.
 export const STARTUP_AUDIBLE_THRESHOLD_SEC = 0.2;
@@ -13,6 +18,11 @@ export const UNEXPECTED_PAUSE_RECOVERY_DEBOUNCE_MS = 600;
 export const UNEXPECTED_PAUSE_RECOVERY_MIN_SILENCE_MS = 1200;
 export const UNEXPECTED_PAUSE_RECOVERY_MAX_BUFFERED_AHEAD_SEC = 1.0;
 export const AUDIO_LOAD_RETRY_DELAY_MS = 350;
+// Coalesce rapid manual YouTube selections before the browser opens a remote
+// request. The sidecar intentionally finishes an accepted spool even after a
+// client disconnects, so starting every intermediate selection can saturate
+// its bounded queue and starve the track the listener actually chose.
+export const MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS = 1_250;
 export const TRACK_ERROR_SKIP_DELAY_MS = 1200;
 export const TRANSIENT_TRACK_ERROR_RECOVERY_DELAY_MS = 450;
 export const TRANSIENT_TRACK_ERROR_RECOVERY_WINDOW_MS = 15_000;

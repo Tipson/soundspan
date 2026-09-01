@@ -75,6 +75,9 @@ test("RadioStationCard renders station metadata and mosaic", async () => {
     assert.match(html, /Instrumental focus picks/);
     assert.match(html, /radio-station-mosaic/);
     assert.match(html, /genre/);
+    assert.match(html, /min-h-11/);
+    assert.match(html, /focus-visible:ring-2/);
+    assert.match(html, /motion-reduce:transition-none/);
 });
 
 test("RadioStationCard renders no play overlay or spinner at rest", async () => {

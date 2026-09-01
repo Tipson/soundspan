@@ -6,6 +6,7 @@ import {
     installTrackOverflowHarness,
     trackOverflowIcon,
 } from "../trackOverflowHarness";
+import type { Track } from "../../features/artist/types";
 
 GlobalRegistrator.register();
 (
@@ -154,6 +155,12 @@ const artist = { id: "artist-1", name: "Test Artist" };
 
 async function renderPopular(
     tracks: unknown[],
+    onPlayTrack: (
+        track: Track,
+        index: number,
+        visibleTracks: Track[],
+    ) => void = () => undefined,
+    showAll = false,
 ): Promise<{ container: HTMLElement; unmount: () => void }> {
     const { PopularTracks } =
         await import("../../features/artist/components/PopularTracks");
@@ -169,7 +176,8 @@ async function renderPopular(
                 artist: artist as never,
                 currentTrackId: undefined,
                 colors: null,
-                onPlayTrack: () => undefined,
+                onPlayTrack,
+                showAll,
             }),
         );
     });
@@ -243,5 +251,91 @@ test("unowned rows without a resolution render no album link", async () => {
     ]);
 
     assert.equal(container.querySelector('a[href^="/album/"]'), null);
+    unmount();
+});
+
+test("collapsed popular-track click forwards the exact visible queue snapshot", async () => {
+    const calls: Array<{
+        trackId: string;
+        index: number;
+        visibleIds: string[];
+    }> = [];
+    const tracks = Array.from({ length: 6 }, (_, index) => ({
+        id: `visible-${index + 1}`,
+        title: `Visible ${index + 1}`,
+        duration: 180 + index,
+        artist,
+        album: { id: `album-${index + 1}`, title: "Album" },
+        filePath: `/music/${index + 1}.flac`,
+    }));
+    const { container, unmount } = await renderPopular(
+        tracks,
+        (track, index, visibleTracks) => {
+            calls.push({
+                trackId: track.id as string,
+                index,
+                visibleIds: visibleTracks.map((item) => item.id as string),
+            });
+        },
+    );
+
+    const secondRow = container.querySelector<HTMLElement>(
+        '[data-track-id="visible-2"]',
+    );
+    assert.ok(secondRow);
+    await React.act(async () => secondRow.click());
+
+    assert.deepEqual(calls, [
+        {
+            trackId: "visible-2",
+            index: 1,
+            visibleIds: [
+                "visible-1",
+                "visible-2",
+                "visible-3",
+                "visible-4",
+                "visible-5",
+            ],
+        },
+    ]);
+    unmount();
+});
+
+test("tracks view exposes every returned track as the ordered playback context", async () => {
+    const calls: Array<{ trackId: string; visibleIds: string[] }> = [];
+    const tracks = Array.from({ length: 7 }, (_, index) => ({
+        id: `all-${index + 1}`,
+        title: `All ${index + 1}`,
+        duration: 180 + index,
+        artist,
+        album: { id: `album-${index + 1}`, title: "Album" },
+        filePath: `/music/all-${index + 1}.flac`,
+    }));
+    const { container, unmount } = await renderPopular(
+        tracks,
+        (track, _index, visibleTracks) => {
+            calls.push({
+                trackId: track.id,
+                visibleIds: visibleTracks.map((item) => item.id),
+            });
+        },
+        true,
+    );
+
+    const seventhRow = container.querySelector<HTMLElement>(
+        '[data-track-id="all-7"]',
+    );
+    assert.ok(seventhRow, "expected the full returned track list");
+    assert.match(container.innerHTML, /data-artist-tracks-canvas="open"/);
+    assert.match(container.innerHTML, />Популярные треки<\/h2>/);
+    assert.equal(container.textContent?.includes("See more"), false);
+    await React.act(async () => seventhRow.click());
+
+    assert.deepEqual(calls, [
+        {
+            trackId: "all-7",
+            visibleIds: tracks.map((track) => track.id),
+        },
+    ]);
     unmount();
 });

@@ -153,7 +153,6 @@ spec:
           volumeMounts:
             - name: music
               mountPath: /music
-              readOnly: true
           {{- with .Values.audioAnalyzer.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}

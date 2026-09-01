@@ -18,6 +18,7 @@
 
 import { ChevronDown, ChevronRight, Loader2, X } from "lucide-react";
 import { useState } from "react";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import { COMPASS_DIRECTIONS, type CompassDirection } from "./travelCompass";
 import type { CompassCandidate } from "./travelCompass";
 import type { TravelView, VibeFeatures } from "./useVibeMode";
@@ -25,11 +26,11 @@ import { VibeTrackRow } from "./VibeTrackRow";
 import { calibratedMatch, featureMatchPercent } from "./vibeMatch";
 
 const DIRECTION_LABEL: Record<CompassDirection, string> = {
-    any: "Any",
-    happier: "Happier",
-    sadder: "Sadder",
-    calmer: "Calmer",
-    "more-energetic": "Energetic",
+    any: vibeMapRu.travel.any,
+    happier: vibeMapRu.travel.happier,
+    sadder: vibeMapRu.travel.sadder,
+    calmer: vibeMapRu.travel.calmer,
+    "more-energetic": vibeMapRu.travel.energetic,
 };
 
 /** Shared glass surface for the F2 mode panels: floats over the viz, sits to
@@ -58,10 +59,10 @@ const FEATURE_LABELS: ReadonlyArray<{
     key: keyof VibeFeatures;
     label: string;
 }> = [
-    { key: "energy", label: "Energy" },
-    { key: "valence", label: "Mood" },
-    { key: "danceability", label: "Groove" },
-    { key: "arousal", label: "Intensity" },
+    { key: "energy", label: vibeMapRu.travel.energy },
+    { key: "valence", label: vibeMapRu.travel.mood },
+    { key: "danceability", label: vibeMapRu.travel.groove },
+    { key: "arousal", label: vibeMapRu.travel.intensity },
 ];
 
 /** One origin-vs-candidate feature bar, skipped entirely when either side is null. */
@@ -82,7 +83,9 @@ function FeatureBar({
         <div className="mb-1.5 last:mb-0">
             <div className="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
                 <span>{label}</span>
-                <span className="tabular-nums">{matchPct}% match</span>
+                <span className="tabular-nums">
+                    {matchPct}% {vibeMapRu.travel.match}
+                </span>
             </div>
             <div className="relative h-1 rounded-full bg-white/10 overflow-hidden">
                 <span
@@ -115,8 +118,8 @@ function MatchBreakdown({
         <div className="mx-2 mb-1.5 px-2.5 py-2 rounded-lg bg-white/5 border border-white/5">
             <p className="text-xs text-gray-300 mb-2">
                 {label
-                    ? `Closer than ${percent}% of your library — ${label}.`
-                    : `${percent}% match.`}
+                    ? `${vibeMapRu.travel.closerThan} ${percent}% ${vibeMapRu.travel.ofLibrary} — ${label}.`
+                    : `${vibeMapRu.travel.match}: ${percent}%.`}
             </p>
             {FEATURE_LABELS.map(({ key, label: featureLabel }) => (
                 <FeatureBar
@@ -146,10 +149,10 @@ function MatchToggle({
             aria-expanded={expanded}
             aria-label={
                 expanded
-                    ? `Hide why ${title} matches`
-                    : `Show why ${title} matches`
+                    ? `${vibeMapRu.travel.hideWhy}: ${title}`
+                    : `${vibeMapRu.travel.showWhy}: ${title}`
             }
-            title={expanded ? "Hide match breakdown" : "Why this match?"}
+            title={expanded ? vibeMapRu.travel.hideWhy : vibeMapRu.travel.why}
             className="shrink-0 inline-flex items-center justify-center w-8 h-8 -ml-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
         >
             {expanded ? (
@@ -198,8 +201,8 @@ export function NeighborRow({
                     }
                     hint={
                         offMap
-                            ? "Not on the map — click to play, shift-click to queue"
-                            : "Click to travel here, shift-click to queue"
+                            ? vibeMapRu.travel.offMapHint
+                            : vibeMapRu.travel.onMapHint
                     }
                     className="flex-1"
                 />
@@ -224,19 +227,22 @@ function TravelHeader({ view }: { view: TravelView }) {
     return (
         <>
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-semibold text-white">Travel</span>
+                <span className="text-sm font-semibold text-white">
+                    {vibeMapRu.travel.title}
+                </span>
                 <button
                     type="button"
                     onClick={view.close}
-                    aria-label="Exit travel (Esc)"
-                    title="Exit travel (Esc)"
+                    aria-label={vibeMapRu.travel.exit}
+                    title={vibeMapRu.travel.exit}
                     className={PANEL_CLOSE_CLASS}
                 >
                     <X className="w-4 h-4" />
                 </button>
             </div>
             <p className="text-xs text-gray-400 mb-1">
-                From <span className="text-white">{view.currentTitle}</span>
+                {vibeMapRu.travel.from}{" "}
+                <span className="text-white">{view.currentTitle}</span>
             </p>
         </>
     );
@@ -272,7 +278,7 @@ function CompassSelector({ view }: { view: TravelView }) {
     return (
         <div
             role="group"
-            aria-label="Compass direction"
+            aria-label={vibeMapRu.travel.directionAria}
             className="flex flex-wrap gap-1.5 mb-2"
         >
             {COMPASS_DIRECTIONS.map((direction) => (
@@ -300,8 +306,8 @@ function TravelStatus({ view }: { view: TravelView }) {
         <>
             {view.loading && (
                 <p className="flex items-center gap-2 text-xs text-gray-400 py-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Finding
-                    nearby vibes…
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />{" "}
+                    {vibeMapRu.travel.loading}
                 </p>
             )}
             {view.error && (
@@ -309,7 +315,7 @@ function TravelStatus({ view }: { view: TravelView }) {
             )}
             {empty && (
                 <p className="text-xs text-gray-400 py-2">
-                    No neighbours in this direction — try “Any”.
+                    {vibeMapRu.travel.empty}
                 </p>
             )}
         </>

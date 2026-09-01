@@ -7,24 +7,21 @@ import {
 } from "@/lib/audio-context";
 import { usePlaybackProgress } from "@/lib/audio-playback-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
-import { useStreamBitrate } from "@/hooks/useStreamBitrate";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
-import Image from "next/image";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { motion } from "framer-motion";
 import {
     Play,
     Pause,
-    SkipForward,
     Music as MusicIcon,
     Loader2,
     RefreshCw,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { clampTime } from "@/utils/formatTime";
-import { SyncBadge } from "@/components/player/SyncBadge";
-import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
+import { CurrentTrackPreferenceButtons } from "@/components/player/CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
-import { PlaybackQualityBadgeWithStats } from "@/components/player/PlaybackQualityBadgeWithStats";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Renders the MiniPlayer component.
@@ -41,13 +38,12 @@ export function MiniPlayer() {
     } = usePlaybackStatus();
     // The mini player renders the progress bar: legitimate clock consumer.
     const { currentTime } = usePlaybackProgress();
-    const { pause, resume, next, setPlayerMode } = useAudioControls();
+    const { pause, resume, setPlayerMode } = useAudioControls();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
 
     const { title, subtitle, coverUrl, hasMedia } = useMediaInfo(100);
-    const { qualityBadge } = useStreamBitrate();
     const currentMediaId =
         currentTrack?.id ||
         currentAudiobook?.id ||
@@ -86,21 +82,26 @@ export function MiniPlayer() {
 
     return (
         <div
-            className="fixed inset-x-0 z-50"
-            style={{
-                bottom: "calc(56px + env(safe-area-inset-bottom, 0px))",
-            }}
+            data-mobile-player="dock"
+            className="mobile-player-dock pointer-events-none fixed z-50"
         >
-            <div className="overflow-hidden border-t border-white/10 bg-black/95 backdrop-blur-sm">
-                <div className="relative h-[2px] w-full bg-white/10">
+            <div
+                className="mobile-player-surface pointer-events-auto overflow-hidden rounded-[14px]"
+                data-player-layout="identity-like-play"
+            >
+                <div className="relative h-[2px] w-full bg-white/[0.08]">
                     <div
-                        className="h-full bg-brand-hover transition-all duration-150"
+                        className="shell-signal-progress h-full transition-[width] duration-150"
                         style={{ width: `${progress}%` }}
                     />
                 </div>
 
                 <div
-                    className="flex items-center gap-3 px-3 py-2.5"
+                    className="flex min-h-[64px] items-center gap-2 px-3 py-2"
+                    style={{
+                        paddingLeft: "calc(0.75rem + var(--safe-area-left))",
+                        paddingRight: "calc(0.75rem + var(--safe-area-right))",
+                    }}
                     onClick={() => setPlayerMode("overlay")}
                     onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
@@ -110,7 +111,7 @@ export function MiniPlayer() {
                     }}
                     role="button"
                     tabIndex={0}
-                    aria-label="Open full player"
+                    aria-label={ru.player.open}
                 >
                     <motion.div
                         layoutId={artworkLayoutId}
@@ -119,14 +120,14 @@ export function MiniPlayer() {
                             stiffness: 320,
                             damping: 34,
                         }}
-                        className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-black/30"
+                        className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-black/30 ring-1 ring-white/10"
                     >
                         {coverUrl ? (
-                            <Image
+                            <CachedImage
                                 src={coverUrl}
                                 alt={title}
                                 fill
-                                sizes="48px"
+                                sizes="44px"
                                 className="object-cover"
                                 unoptimized
                             />
@@ -140,43 +141,37 @@ export function MiniPlayer() {
                     <div className="min-w-0 flex-1">
                         {audioError ? (
                             <>
-                                <p className="truncate text-sm font-medium text-red-300">
-                                    Playback Error
+                                <p className="truncate text-sm font-semibold text-error">
+                                    Ошибка воспроизведения
                                 </p>
-                                <p className="truncate text-xs text-red-200/70">
-                                    Tap retry to reconnect
+                                <p className="truncate text-xs text-error/75">
+                                    Нажмите «Повторить», чтобы переподключиться
                                 </p>
                             </>
                         ) : (
                             <>
-                                <p className="truncate text-sm font-medium text-white">
+                                <p className="truncate text-[13px] font-semibold text-content min-[360px]:text-sm">
                                     {title}
                                 </p>
-                                <div className="mt-0.5 flex items-center gap-1.5">
-                                    <p className="truncate text-xs text-gray-300/80">
-                                        {subtitle}
-                                    </p>
-                                    {qualityBadge ? (
-                                        <PlaybackQualityBadgeWithStats
-                                            badge={qualityBadge}
-                                            size="mini"
-                                        />
-                                    ) : null}
-                                    <SyncBadge compact />
-                                </div>
+                                <p className="mt-0.5 truncate text-xs text-content-muted">
+                                    {subtitle}
+                                </p>
                             </>
                         )}
                     </div>
 
                     {playbackType === "track" && currentTrack?.id && (
                         <div
-                            className="flex flex-shrink-0 items-center"
+                            className="hidden flex-shrink-0 items-center min-[360px]:flex"
                             onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            role="group"
+                            aria-label={ru.player.preference}
                         >
-                            <TrackPreferenceButtons
+                            <CurrentTrackPreferenceButtons
                                 trackId={currentTrack.id}
                                 mode="up-only"
-                                buttonSizeClassName="h-8 w-8"
+                                buttonSizeClassName="h-11 w-11"
                                 iconSizeClassName="h-4 w-4"
                                 metadata={buildPreferenceMetadata(currentTrack)}
                             />
@@ -184,10 +179,11 @@ export function MiniPlayer() {
                     )}
 
                     <div
-                        className="flex flex-shrink-0 items-center gap-1"
+                        className="flex flex-shrink-0 items-center"
                         onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                         role="group"
-                        aria-label="Playback controls"
+                        aria-label={ru.player.controls}
                     >
                         <button
                             onClick={() => {
@@ -203,30 +199,30 @@ export function MiniPlayer() {
                                 }
                             }}
                             className={cn(
-                                "h-10 w-10 rounded-full transition shadow-md flex items-center justify-center",
+                                "h-11 w-11 rounded-full transition shadow-md flex items-center justify-center",
                                 audioError
-                                    ? "bg-red-500 text-white hover:bg-red-400"
+                                    ? "bg-error text-content hover:brightness-110"
                                     : isBuffering
-                                      ? "bg-white/80 text-black"
-                                      : "bg-white text-black hover:scale-105",
+                                      ? "bg-content/80 text-surface"
+                                      : "bg-content text-surface hover:scale-105",
                             )}
                             aria-label={
                                 audioError
-                                    ? "Retry playback"
+                                    ? ru.player.retry
                                     : isBuffering
-                                      ? "Buffering..."
+                                      ? ru.player.buffering
                                       : isPlaying
-                                        ? "Pause"
-                                        : "Play"
+                                        ? ru.common.pause
+                                        : ru.common.play
                             }
                             title={
                                 audioError
-                                    ? "Retry playback"
+                                    ? ru.player.retry
                                     : isBuffering
-                                      ? "Buffering..."
+                                      ? ru.player.buffering
                                       : isPlaying
-                                        ? "Pause"
-                                        : "Play"
+                                        ? ru.common.pause
+                                        : ru.common.play
                             }
                         >
                             {audioError ? (
@@ -238,14 +234,6 @@ export function MiniPlayer() {
                             ) : (
                                 <Play className="ml-0.5 h-5 w-5" />
                             )}
-                        </button>
-                        <button
-                            onClick={() => next()}
-                            className="h-8 w-8 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-colors"
-                            aria-label="Next track"
-                            title="Next track"
-                        >
-                            <SkipForward className="h-4 w-4" />
                         </button>
                     </div>
                 </div>

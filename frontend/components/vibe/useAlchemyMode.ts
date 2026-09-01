@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import type { MapTrack } from "./types";
 import { annotateOnMap, waypointToTrack } from "./journeyTracks";
 import type { VibeListItem, VibeResultRow } from "./vibeListItem";
@@ -82,7 +83,7 @@ function useBlendRequest(state: ModeState) {
             })
             .catch(() => {
                 if (request === generation.current)
-                    setError("Couldn't blend those tracks");
+                    setError(vibeMapRu.alchemy.blendFailed);
             })
             .finally(() => {
                 if (request === generation.current) setLoading(false);

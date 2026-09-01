@@ -2,7 +2,7 @@ import type { PlaylistDetailTrackItem } from "@/lib/api";
 import type { Track as AudioTrack } from "@/lib/audio-context";
 
 export const TRACK_REMOVED_TOOLTIP =
-    "File removed from library — restore the file to bring it back";
+    "Файл удалён из медиатеки — восстановите его, чтобы вернуть трек";
 
 /** Playlist row whose track is present and currently playable. */
 export interface PlayablePlaylistItem extends PlaylistDetailTrackItem {
@@ -33,12 +33,13 @@ export function getUnplayableMessage(item: PlaylistDetailTrackItem): string {
         return TRACK_REMOVED_TOOLTIP;
     }
     if (item.playback?.reason === "peer_offline") {
-        return "This peer is offline.";
+        return "Удалённый сервер сейчас не в сети.";
     }
-    return (
-        item.playback?.message ||
-        "Playback is unavailable for this track right now."
-    );
+    const backendMessage = item.playback?.message?.trim();
+    if (backendMessage && /[А-Яа-яЁё]/.test(backendMessage)) {
+        return backendMessage;
+    }
+    return "Сейчас этот трек недоступен для воспроизведения.";
 }
 
 /** Maps a playable playlist row onto the audio-context track shape. */
@@ -57,6 +58,8 @@ export function toAudioTrack(item: PlayablePlaylistItem): AudioTrack {
             id: track.album.id,
         },
         duration: track.duration,
+        playlistItemId: item.id,
+        ...(item.trackYtMusicId ? { trackYtMusicId: item.trackYtMusicId } : {}),
         source: track.source,
         peer: track.peer,
         ...(track.streamSource === "tidal"
@@ -74,5 +77,24 @@ export function toAudioTrack(item: PlayablePlaylistItem): AudioTrack {
         ...(track.streamSource === "peer"
             ? { streamSource: "peer" as const }
             : {}),
+    };
+}
+
+/**
+ * Builds the ordered playable queue represented by a playlist detail view and
+ * resolves the selected playlist item to its index in that filtered queue.
+ */
+export function selectPlaylistPlaybackQueue(
+    items: readonly PlaylistDetailTrackItem[],
+    selectedItemId: string,
+): { tracks: AudioTrack[]; startIndex: number } {
+    const playableItems = items.filter(isPlayableTrackItem);
+    const startIndex = playableItems.findIndex(
+        (item) => item.id === selectedItemId,
+    );
+    if (startIndex < 0) return { tracks: [], startIndex: -1 };
+    return {
+        tracks: playableItems.map(toAudioTrack),
+        startIndex,
     };
 }

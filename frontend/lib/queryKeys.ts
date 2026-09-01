@@ -14,8 +14,12 @@ export const queryKeys = {
     artist: (id: string) => ["artist", id] as const,
     artistDetails: (id: string, source?: "library" | "discovery" | null) =>
         ["artist", "details", id, source || "unknown"] as const,
+    artistTracks: (id: string) => ["artist", "tracks", id] as const,
     artistLibrary: (id: string) => ["artist", "library", id] as const,
     artistDiscovery: (id: string) => ["artist", "discovery", id] as const,
+    ytMusicArtist: (channelId: string) =>
+        ["artist", "ytmusic", channelId] as const,
+    ytMusicAlbum: (browseId: string) => ["album", "ytmusic", browseId] as const,
 
     // Album queries
     album: (id: string) => ["album", id] as const,
@@ -48,6 +52,14 @@ export const queryKeys = {
     }) => ["library", "tracks", params] as const,
     likedPlaylist: (limit: number = 10_000) =>
         ["library", "liked-playlist", limit] as const,
+    savedMusicAll: () => ["library", "saved"] as const,
+    savedMusic: (
+        type: "album" | "artist" | undefined,
+        limit: number,
+        offset: number,
+    ) => ["library", "saved", "list", type ?? "all", limit, offset] as const,
+    savedMusicStatus: (type: string, source: string, entityId: string) =>
+        ["library", "saved", "status", type, source, entityId] as const,
     recentlyListened: (limit?: number) =>
         ["library", "recently-listened", limit] as const,
     recentlyAdded: (limit?: number) =>
@@ -63,10 +75,14 @@ export const queryKeys = {
     // Search
     search: (query: string, type?: string, limit?: number, source?: string) =>
         ["search", query, type, limit, source] as const,
+    searchTracks: (query: string, source?: string) =>
+        ["search", "tracks", query, source] as const,
     discoverSearch: (query: string, type?: string, limit?: number) =>
         ["search", "discover", query, type, limit] as const,
     discoverSimilar: (artist: string, mbid: string, limit: number) =>
         ["search", "discover", "similar", artist, mbid, limit] as const,
+    musicBrainzArtistSearch: (query: string) =>
+        ["search", "musicbrainz", "artists", query.trim()] as const,
 
     // Playlists
     playlists: () => ["playlists"] as const,
@@ -96,6 +112,25 @@ export const queryKeys = {
     // Home browse feed
     homeFeaturedPlaylists: (limit?: number) =>
         ["home", "featured-playlists", limit] as const,
+    personalizedHomeAll: () => ["home", "personalized"] as const,
+    personalizedHome: (
+        limit: number,
+        mode: "for-you" | "new" | "familiar" = "for-you",
+        mood:
+            | "calm"
+            | "energetic"
+            | "focus"
+            | "workout"
+            | "favorites"
+            | "forgotten"
+            | null = null,
+        surface: "home" | "wave" | "made-for-you" = "home",
+    ) =>
+        mood
+            ? (["home", "personalized", surface, limit, mode, mood] as const)
+            : (["home", "personalized", surface, limit, mode] as const),
+    tasteProfile: (accountId: string) =>
+        ["taste-profile", accountId.trim()] as const,
 
     // Browse (YT Music) — used by Explore page
     browseHomeShelves: () => ["browse", "ytmusic", "home"] as const,
@@ -176,6 +211,8 @@ export const queryKeys = {
     podcastPeers: () => ["podcasts", "peers"] as const,
 
     // Player overlay related-content
+    playerRelated: (trackId: string | undefined) =>
+        ["player-related", trackId] as const,
     playerRelatedTracks: (trackId: string | undefined) =>
         ["player-related-tracks", trackId] as const,
     playerRelatedArtists: (

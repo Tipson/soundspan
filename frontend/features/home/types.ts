@@ -71,3 +71,59 @@ export interface PopularArtist {
     listeners?: number;
     mbid?: string;
 }
+
+/** Direction policy for one account's personalized Wave. */
+export type PersonalizedHomeMode = "for-you" | "new" | "familiar";
+
+export type PersonalizedRecommendationSurface =
+    | "home"
+    | "wave"
+    | "made-for-you";
+
+/** Mood or listening context applied independently from Wave direction. */
+export type PersonalizedHomeMood =
+    | "calm"
+    | "energetic"
+    | "focus"
+    | "workout"
+    | "favorites"
+    | "forgotten";
+
+/** Provider-neutral track returned by the personalized home feed. */
+export interface PersonalizedTrack {
+    id: string;
+    title: string;
+    duration: number;
+    trackNo: number | null;
+    artist: { id: string | null; name: string };
+    album: {
+        id: string | null;
+        title: string;
+        coverArt: string | null;
+    };
+    source: "youtube";
+    provider: {
+        tidalTrackId: null;
+        youtubeVideoId: string;
+    };
+    streamSource: "youtube";
+    youtubeVideoId: string;
+}
+
+export interface PersonalizedHomeFeed {
+    shelves: {
+        listenAgain: PersonalizedTrack[];
+        quickPicks: PersonalizedTrack[];
+        discovery: PersonalizedTrack[];
+    };
+    degraded: boolean;
+    reason:
+        | "insufficient_signals"
+        | "provider_partial_failure"
+        | "provider_unavailable"
+        | null;
+    seedCount: number;
+    nextCursor?: number;
+    generationId?: string;
+    degradedSources?: string[];
+}

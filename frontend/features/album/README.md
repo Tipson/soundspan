@@ -36,3 +36,16 @@ Start-here guide for `frontend/features/album`.
 ## Update Rule
 
 - When adding/removing significant files or changing behavior in this domain, update or verify this README and keep the targeted commands below accurate in the same change set.
+
+## Device Offline Surface
+
+The user-facing album action bar is online-first: Save to Library stores an
+account-scoped bookmark, while Download to this device queues only playable
+album tracks in the current browser/PWA. Server acquisition and request actions
+are not mounted in this bar. Removing or saving an album never mutates another
+device's offline queue.
+
+The responsive album page uses the shared artwork-led music-detail hero,
+touch-sized action dock, and canonical track surface. It keeps complete long
+titles visible, stacks artwork above metadata on narrow screens, and plays a
+selected row within the album's ordered playable context.

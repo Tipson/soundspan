@@ -23,6 +23,7 @@ import {
     ChevronDown,
     ChevronRight,
 } from "lucide-react";
+import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
 
 const logger = createFrontendLogger("Settings.YouTubeMusicSection");
 
@@ -48,21 +49,19 @@ export function YouTubeMusicAdminSection({
         <SettingsSection
             id="youtube-music-admin"
             title="YouTube Music"
-            description="Enable or disable YouTube Music integration for all users"
+            description={adminActivityRu.admin.youtubeMusic.adminDescription}
         >
             <div className="mx-4 mt-3 mb-1 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-200/80">
-                    This integration uses unofficial libraries and is not
-                    affiliated with or endorsed by Google or YouTube. A YouTube
-                    Music Premium subscription is required. Users are
-                    responsible for ensuring their use complies with
-                    YouTube&apos;s Terms of Service.
+                    {adminActivityRu.admin.youtubeMusic.legal}
                 </p>
             </div>
             <SettingsRow
-                label="Enable YouTube Music"
-                description="Enable YouTube Music search, browse, and streaming for all users"
+                label={adminActivityRu.admin.youtubeMusic.enable}
+                description={
+                    adminActivityRu.admin.youtubeMusic.enableDescription
+                }
             >
                 <SettingsToggle
                     checked={settings.ytMusicEnabled}
@@ -81,30 +80,39 @@ export function YouTubeMusicAdminSection({
                         ) : (
                             <ChevronRight className="w-4 h-4" />
                         )}
-                        <span>Account Linking (Optional)</span>
+                        <span>
+                            {adminActivityRu.admin.youtubeMusic.accountLinking}
+                        </span>
                     </button>
                     <p className="text-xs text-gray-400 ml-6 mb-2">
-                        Configure Google OAuth credentials to allow users to
-                        link their personal YouTube Music accounts for library
-                        access. Not required for search, browse, or streaming.
+                        {
+                            adminActivityRu.admin.youtubeMusic
+                                .accountLinkingDescription
+                        }
                     </p>
                     {oauthExpanded && (
                         <>
                             <SettingsRow
-                                label="Client ID"
+                                label="Идентификатор клиента"
                                 description={
                                     <>
-                                        Google OAuth client ID (
+                                        {
+                                            adminActivityRu.admin.youtubeMusic
+                                                .clientIdDescription
+                                        }{" "}
+                                        (
                                         <a
                                             href="https://console.cloud.google.com/apis/credentials"
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="text-blue-400 hover:underline"
                                         >
-                                            create one here
-                                        </a>{" "}
-                                        — select &quot;TVs and Limited Input
-                                        devices&quot;)
+                                            {
+                                                adminActivityRu.admin
+                                                    .youtubeMusic.createHere
+                                            }
+                                        </a>
+                                        )
                                     </>
                                 }
                             >
@@ -113,14 +121,20 @@ export function YouTubeMusicAdminSection({
                                     onChange={(v) =>
                                         onUpdate({ ytMusicClientId: v })
                                     }
-                                    placeholder="Enter Client ID"
+                                    placeholder={
+                                        adminActivityRu.admin.youtubeMusic
+                                            .clientIdPlaceholder
+                                    }
                                     className="w-64"
                                 />
                             </SettingsRow>
 
                             <SettingsRow
-                                label="Client Secret"
-                                description="Corresponding client secret for the OAuth app"
+                                label="Секрет клиента"
+                                description={
+                                    adminActivityRu.admin.youtubeMusic
+                                        .clientSecretDescription
+                                }
                             >
                                 <SettingsInput
                                     type="password"
@@ -128,7 +142,10 @@ export function YouTubeMusicAdminSection({
                                     onChange={(v) =>
                                         onUpdate({ ytMusicClientSecret: v })
                                     }
-                                    placeholder="Enter Client Secret"
+                                    placeholder={
+                                        adminActivityRu.admin.youtubeMusic
+                                            .clientSecretPlaceholder
+                                    }
                                     className="w-64"
                                 />
                             </SettingsRow>
@@ -204,9 +221,12 @@ export function YouTubeMusicCard({
         const r = await api.pollYtMusicAuth(deviceCode);
         if (r.status === "success") return { status: "success" } as const;
         if (r.status === "error") {
+            logger.warn("YouTube Music authorization was rejected", {
+                error: r.error,
+            });
             return {
                 status: "error",
-                message: r.error || "Authorization failed. Please try again.",
+                message: adminActivityRu.admin.youtubeMusic.authorizationFailed,
             } as const;
         }
         return { status: "pending" } as const;
@@ -231,7 +251,7 @@ export function YouTubeMusicCard({
     );
 
     const handleAuthSuccess = useCallback(() => {
-        setSuccess("YouTube Music account connected successfully!");
+        setSuccess(adminActivityRu.admin.youtubeMusic.connectedSuccess);
         setError(null);
         void checkStatus();
         window.dispatchEvent(new Event("ytmusic-auth-changed"));
@@ -249,9 +269,8 @@ export function YouTubeMusicCard({
         poll: pollAuth,
         onSessionStarted: handleSessionStarted,
         onSuccess: handleAuthSuccess,
-        expiredMessage: "The sign-in code has expired. Please try again.",
-        startErrorMessage:
-            "Failed to start authentication. Check admin credentials.",
+        expiredMessage: adminActivityRu.admin.youtubeMusic.codeExpired,
+        startErrorMessage: adminActivityRu.admin.youtubeMusic.authStartFailed,
     });
     const userCode = authSession?.userCode || "";
     const verificationUrl = authSession?.verificationUri || "";
@@ -302,10 +321,19 @@ export function YouTubeMusicCard({
     };
 
     const qualityOptions = [
-        { value: "LOW", label: "Low (64 kbps)" },
-        { value: "MEDIUM", label: "Medium (128 kbps)" },
-        { value: "HIGH", label: "High (256 kbps)" },
-        { value: "LOSSLESS", label: "Lossless (best available)" },
+        { value: "LOW", label: adminActivityRu.admin.youtubeMusic.quality.low },
+        {
+            value: "MEDIUM",
+            label: adminActivityRu.admin.youtubeMusic.quality.medium,
+        },
+        {
+            value: "HIGH",
+            label: adminActivityRu.admin.youtubeMusic.quality.high,
+        },
+        {
+            value: "LOSSLESS",
+            label: adminActivityRu.admin.youtubeMusic.quality.lossless,
+        },
     ];
 
     // Derived card state
@@ -317,20 +345,20 @@ export function YouTubeMusicCard({
     const isDisabled = !!status && (!status.enabled || !status.available);
     const disabledReason =
         status && !status.enabled
-            ? "Not enabled. Ask your administrator to enable it."
+            ? adminActivityRu.admin.youtubeMusic.disabled
             : status && !status.available
-              ? "YouTube Music service is not running"
+              ? adminActivityRu.admin.youtubeMusic.unavailable
               : undefined;
     // Always expanded so the Explore toggle remains accessible after disconnect
     const isExpanded = true;
 
     const statusText = statusLoading
-        ? "Checking..."
+        ? adminActivityRu.admin.youtubeMusic.checking
         : isConnected
-          ? "Connected"
+          ? adminActivityRu.admin.youtubeMusic.connected
           : isActive
-            ? "Active"
-            : "Not connected";
+            ? adminActivityRu.admin.youtubeMusic.active
+            : adminActivityRu.admin.youtubeMusic.notConnected;
 
     const statusColor: "green" | "red" | "gray" = statusLoading
         ? "gray"
@@ -344,9 +372,7 @@ export function YouTubeMusicCard({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-200/80">
-                Not affiliated with or endorsed by Google. Requires a YouTube
-                Music Premium subscription. You are responsible for complying
-                with YouTube&apos;s Terms of Service.
+                {adminActivityRu.admin.youtubeMusic.userLegal}
             </p>
         </div>
     );
@@ -375,8 +401,7 @@ export function YouTubeMusicCard({
                 !error &&
                 !success && (
                     <p className="text-sm text-gray-400">
-                        Link your Google account for personal library access
-                        (optional).
+                        {adminActivityRu.admin.youtubeMusic.linkHint}
                     </p>
                 )}
 
@@ -392,17 +417,29 @@ export function YouTubeMusicCard({
                             copied={copied}
                             onCopyCode={handleCopyCode}
                             onCancel={handleCancelLink}
-                            introText="A Google sign-in page should have opened. If it didn't, click the link below."
-                            pasteInstruction="Paste this code on the Google page"
+                            introText={
+                                adminActivityRu.admin.youtubeMusic.signInOpened
+                            }
+                            pasteInstruction={
+                                adminActivityRu.admin.youtubeMusic.pasteCode
+                            }
                             signInInstruction={
                                 <>
-                                    Sign in with your Google account and click{" "}
+                                    {
+                                        adminActivityRu.admin.youtubeMusic
+                                            .signInInstruction
+                                    }{" "}
                                     <strong className="text-white">
-                                        Allow
+                                        {
+                                            adminActivityRu.admin.youtubeMusic
+                                                .allow
+                                        }
                                     </strong>
                                 </>
                             }
-                            openLinkLabel="Open Google Sign-In Page"
+                            openLinkLabel={
+                                adminActivityRu.admin.youtubeMusic.openSignIn
+                            }
                         />
                     )}
 
@@ -432,8 +469,10 @@ export function YouTubeMusicCard({
 
             {/* Explore Page Toggle */}
             <SettingsRow
-                label="Show on Explore Page"
-                description="Display YouTube Music shelves, charts, and moods on the Explore page"
+                label={adminActivityRu.admin.youtubeMusic.showExplore}
+                description={
+                    adminActivityRu.admin.youtubeMusic.showExploreDescription
+                }
             >
                 <SettingsToggle
                     checked={settings.showYtMusicExplore}
@@ -444,8 +483,11 @@ export function YouTubeMusicCard({
             {/* Quality Selection */}
             {isConnected && (
                 <SettingsRow
-                    label="Streaming Quality"
-                    description="Audio quality for YouTube Music streams"
+                    label={adminActivityRu.admin.youtubeMusic.streamingQuality}
+                    description={
+                        adminActivityRu.admin.youtubeMusic
+                            .streamingQualityDescription
+                    }
                 >
                     <SettingsSelect
                         value={settings.ytMusicQuality}

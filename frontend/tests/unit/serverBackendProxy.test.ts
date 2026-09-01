@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import type { ClientRequest, ServerResponse } from "node:http";
+import {
+    createServer,
+    type ClientRequest,
+    type Server,
+    type ServerResponse,
+} from "node:http";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
 import {
     buildBackendProxyOptions,
     createBackendProxy,
     createFirstByteTimeoutProxyReqHandler,
     createProxyErrorHandler,
+    prepareProxyAuthentication,
     resolveProxyTimeoutMs,
 } from "../../server-proxy";
 
@@ -69,6 +76,23 @@ function createFakeProxyReq(): ClientRequest & {
         destroyed: boolean;
         destroy: () => void;
     };
+}
+
+async function listenOnLoopback(server: Server): Promise<number> {
+    await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => {
+            server.off("error", reject);
+            resolve();
+        });
+    });
+    return (server.address() as AddressInfo).port;
+}
+
+async function closeServer(server: Server): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+    });
 }
 
 test("buildBackendProxyOptions registers the error handler via the v3+ on.error API", () => {
@@ -139,6 +163,93 @@ test("proxy error handler responds with the structured 503 JSON contract", () =>
     );
 });
 
+test("proxy error handler redacts query credentials from request and upstream error URLs", () => {
+    const logger = createFakeLogger();
+    const handler = createProxyErrorHandler({
+        name: "api-proxy",
+        logger,
+        errorMessage: "API backend unavailable",
+        errorCode: "API_PROXY_UNAVAILABLE",
+    });
+    const res = createFakeResponse();
+    const accessToken = "header.payload.signature";
+
+    handler(
+        new Error(
+            `fetch http://backend:3006/api/library/cover-art/album?size=320&token=${accessToken} failed`,
+        ),
+        {
+            method: "GET",
+            url: `/api/library/cover-art/album?size=320&token=${accessToken}`,
+        },
+        res,
+    );
+
+    const serializedLog = JSON.stringify(logger.errors);
+    assert.doesNotMatch(serializedLog, new RegExp(accessToken));
+    assert.match(serializedLog, /size=320/);
+});
+
+test("proxy authentication promotes the media cookie and removes it before forwarding", () => {
+    const req: {
+        url: string;
+        method: string;
+        headers: Record<string, string | string[] | undefined>;
+    } = {
+        url: "/api/library/cover-art/album?size=320",
+        method: "GET",
+        headers: {
+            cookie: "theme=dark; soundspan_media_auth=header.payload.signature",
+        },
+    };
+
+    prepareProxyAuthentication(req);
+
+    assert.equal(req.headers.authorization, "Bearer header.payload.signature");
+    assert.equal(req.headers.cookie, "theme=dark");
+    assert.equal(req.url, "/api/library/cover-art/album?size=320");
+});
+
+test("proxy authentication keeps legacy query-token media URLs working without forwarding the secret URL", () => {
+    const req: {
+        url: string;
+        method: string;
+        headers: Record<string, string | string[] | undefined>;
+    } = {
+        url: "/api/browse/ytmusic/image?url=https%3A%2F%2Flh3.googleusercontent.com%2Fcover.jpg&token=query.jwt.signature",
+        method: "GET",
+        headers: {},
+    };
+
+    prepareProxyAuthentication(req);
+
+    assert.equal(req.headers.authorization, "Bearer query.jwt.signature");
+    assert.equal(
+        req.url,
+        "/api/browse/ytmusic/image?url=https%3A%2F%2Flh3.googleusercontent.com%2Fcover.jpg",
+    );
+});
+
+test("media cookie and legacy query token cannot authenticate a non-media mutation", () => {
+    const req: {
+        url: string;
+        method: string;
+        headers: Record<string, string | string[] | undefined>;
+    } = {
+        url: "/api/settings?token=query.jwt.signature",
+        method: "POST",
+        headers: {
+            cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+        },
+    };
+
+    prepareProxyAuthentication(req);
+
+    assert.equal(req.headers.authorization, undefined);
+    assert.equal(req.headers.cookie, "theme=dark");
+    assert.equal(req.url, "/api/settings");
+});
+
 test("proxy error handler does not write once headers were already sent", () => {
     const handler = createProxyErrorHandler({
         name: "api-proxy",
@@ -198,19 +309,55 @@ test("createBackendProxy returns a middleware exposing websocket upgrade", () =>
     assert.equal(typeof proxy.upgrade, "function");
 });
 
-test("resolveProxyTimeoutMs applies the 20s default and 90s import-preview default", () => {
+test("resolveProxyTimeoutMs applies route-specific first-byte defaults", () => {
     assert.equal(resolveProxyTimeoutMs("/api/library", {}), 20_000);
-    assert.equal(resolveProxyTimeoutMs("/api/import/preview", {}), 90_000);
-    assert.equal(resolveProxyTimeoutMs("/api/import/preview/", {}), 90_000);
-    assert.equal(resolveProxyTimeoutMs("/api/import/preview/step", {}), 90_000);
-    assert.equal(resolveProxyTimeoutMs("/API/Import/Preview", {}), 90_000);
+    assert.equal(resolveProxyTimeoutMs("/api/import/preview", {}), 150_000);
+    assert.equal(resolveProxyTimeoutMs("/api/import/preview/", {}), 150_000);
+    assert.equal(
+        resolveProxyTimeoutMs("/api/import/preview/step", {}),
+        150_000,
+    );
+    assert.equal(resolveProxyTimeoutMs("/API/Import/Preview", {}), 150_000);
     // Mount-stripped form (e.g. if the proxy is ever Express-mounted under
     // /api, req.url loses the prefix) keeps the import-preview budget.
-    assert.equal(resolveProxyTimeoutMs("/import/preview", {}), 90_000);
-    assert.equal(resolveProxyTimeoutMs("/import/preview/step", {}), 90_000);
+    assert.equal(resolveProxyTimeoutMs("/import/preview", {}), 150_000);
+    assert.equal(resolveProxyTimeoutMs("/import/preview/step", {}), 150_000);
     // Non-preview paths that merely share the prefix text are not special.
     assert.equal(resolveProxyTimeoutMs("/api/import/previews", {}), 20_000);
     assert.equal(resolveProxyTimeoutMs("/import/previews", {}), 20_000);
+
+    for (const mediaPath of [
+        "/api/ytmusic/stream-public/kXYiU_JCYtU",
+        "/api/ytmusic/stream/kXYiU_JCYtU",
+        "/api/youtube/stream/kXYiU_JCYtU",
+        "/ytmusic/stream-public/kXYiU_JCYtU",
+        "/youtube/stream/kXYiU_JCYtU",
+    ]) {
+        assert.equal(resolveProxyTimeoutMs(mediaPath, {}), 125_000);
+    }
+    assert.equal(
+        resolveProxyTimeoutMs("/api/ytmusic/stream-info/kXYiU_JCYtU", {}),
+        20_000,
+    );
+    assert.equal(
+        resolveProxyTimeoutMs(
+            "/api/ytmusic/stream-publications/kXYiU_JCYtU",
+            {},
+        ),
+        20_000,
+    );
+    assert.equal(
+        resolveProxyTimeoutMs("/api/ytmusic/recover-unavailable", {}),
+        90_000,
+    );
+    assert.equal(
+        resolveProxyTimeoutMs("/ytmusic/recover-unavailable", {}),
+        90_000,
+    );
+    assert.equal(
+        resolveProxyTimeoutMs("/api/ytmusic/recover-unavailable-extra", {}),
+        20_000,
+    );
 });
 
 test("resolveProxyTimeoutMs honors PROXY_REQUEST_TIMEOUT_MS and PROXY_IMPORT_PREVIEW_TIMEOUT_MS", () => {
@@ -231,14 +378,14 @@ test("resolveProxyTimeoutMs honors PROXY_REQUEST_TIMEOUT_MS and PROXY_IMPORT_PRE
         resolveProxyTimeoutMs("/api/import/preview", {
             PROXY_REQUEST_TIMEOUT_MS: "5000",
         }),
-        90_000,
+        150_000,
     );
     // …but a higher global raises it when no explicit preview override exists.
     assert.equal(
         resolveProxyTimeoutMs("/api/import/preview", {
-            PROXY_REQUEST_TIMEOUT_MS: "100000",
+            PROXY_REQUEST_TIMEOUT_MS: "200000",
         }),
-        100_000,
+        200_000,
     );
     // Invalid values fall back to the defaults.
     assert.equal(
@@ -268,7 +415,7 @@ test("buildBackendProxyOptions registers the first-byte timeout handler when ena
 
     assert.equal(typeof options.on?.proxyReq, "function");
     assert.equal("timeout" in options, false);
-    assert.equal(options.proxyTimeout, 120000);
+    assert.equal(options.proxyTimeout, 150000);
 });
 
 test("buildBackendProxyOptions widens only the upstream timeout for configured first-byte budgets", () => {
@@ -284,6 +431,20 @@ test("buildBackendProxyOptions widens only the upstream timeout for configured f
 
     assert.equal("timeout" in options, false);
     assert.equal(options.proxyTimeout, 300000);
+});
+
+test("buildBackendProxyOptions never lets a lower preview override cut off media", () => {
+    const options = buildBackendProxyOptions({
+        name: "api-proxy",
+        target: "http://127.0.0.1:3006",
+        logger: createFakeLogger(),
+        errorMessage: "API backend unavailable",
+        errorCode: "API_PROXY_UNAVAILABLE",
+        firstByteTimeout: true,
+        env: { PROXY_IMPORT_PREVIEW_TIMEOUT_MS: "120000" },
+    });
+
+    assert.equal(options.proxyTimeout, 125000);
 });
 
 test("first-byte timeout answers 504 UPSTREAM_TIMEOUT and aborts the upstream request", (t) => {
@@ -323,6 +484,183 @@ test("first-byte timeout answers 504 UPSTREAM_TIMEOUT and aborts the upstream re
     );
 });
 
+test("authenticated API proxy streams image bytes while forwarding only header auth", async () => {
+    let upstreamRequest:
+        | {
+              url: string;
+              authorization: string | undefined;
+              cookie: string | undefined;
+          }
+        | undefined;
+    const backend = createServer((req, res) => {
+        upstreamRequest = {
+            url: req.url ?? "",
+            authorization: req.headers.authorization,
+            cookie: req.headers.cookie,
+        };
+        res.writeHead(200, { "Content-Type": "image/jpeg" });
+        res.end(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    });
+    const backendPort = await listenOnLoopback(backend);
+    const proxy = createBackendProxy({
+        name: "api-proxy",
+        target: `http://127.0.0.1:${backendPort}`,
+        logger: createFakeLogger(),
+        errorMessage: "API backend unavailable",
+        errorCode: "API_PROXY_UNAVAILABLE",
+        promoteAuthToken: true,
+    });
+    const frontend = createServer((req, res) => proxy(req, res));
+    const frontendPort = await listenOnLoopback(frontend);
+
+    try {
+        const response = await fetch(
+            `http://127.0.0.1:${frontendPort}/api/library/cover-art/album?size=320`,
+            {
+                headers: {
+                    cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+                },
+            },
+        );
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "image/jpeg");
+        assert.deepEqual(
+            Buffer.from(await response.arrayBuffer()),
+            Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        );
+        assert.deepEqual(upstreamRequest, {
+            url: "/api/library/cover-art/album?size=320",
+            authorization: "Bearer cookie.jwt.signature",
+            cookie: "theme=dark",
+        });
+    } finally {
+        await closeServer(frontend);
+        await closeServer(backend);
+    }
+});
+
+test("authenticated API proxy preserves Range and 206 audio semantics", async () => {
+    const completeAudio = Buffer.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    let upstreamRequest:
+        | {
+              url: string;
+              authorization: string | undefined;
+              cookie: string | undefined;
+              range: string | undefined;
+          }
+        | undefined;
+    const backend = createServer((req, res) => {
+        upstreamRequest = {
+            url: req.url ?? "",
+            authorization: req.headers.authorization,
+            cookie: req.headers.cookie,
+            range: req.headers.range,
+        };
+        const body = completeAudio.subarray(2, 6);
+        res.writeHead(206, {
+            "Content-Type": "audio/mpeg",
+            "Accept-Ranges": "bytes",
+            "Content-Range": "bytes 2-5/10",
+            "Content-Length": String(body.length),
+        });
+        res.end(body);
+    });
+    const backendPort = await listenOnLoopback(backend);
+    const proxy = createBackendProxy({
+        name: "api-proxy",
+        target: `http://127.0.0.1:${backendPort}`,
+        logger: createFakeLogger(),
+        errorMessage: "API backend unavailable",
+        errorCode: "API_PROXY_UNAVAILABLE",
+        promoteAuthToken: true,
+    });
+    const frontend = createServer((req, res) => proxy(req, res));
+    const frontendPort = await listenOnLoopback(frontend);
+
+    try {
+        const response = await fetch(
+            `http://127.0.0.1:${frontendPort}/api/library/tracks/track-1/stream?quality=original`,
+            {
+                headers: {
+                    cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+                    range: "bytes=2-5",
+                },
+            },
+        );
+
+        assert.equal(response.status, 206);
+        assert.equal(response.headers.get("content-range"), "bytes 2-5/10");
+        assert.equal(response.headers.get("content-length"), "4");
+        assert.deepEqual(
+            Buffer.from(await response.arrayBuffer()),
+            completeAudio.subarray(2, 6),
+        );
+        assert.deepEqual(upstreamRequest, {
+            url: "/api/library/tracks/track-1/stream?quality=original",
+            authorization: "Bearer cookie.jwt.signature",
+            cookie: "theme=dark",
+            range: "bytes=2-5",
+        });
+    } finally {
+        await closeServer(frontend);
+        await closeServer(backend);
+    }
+});
+
+test("custom proxy media cookie stays read-only and exact-path scoped", () => {
+    const cases = [
+        { method: "POST", url: "/api/library/tracks/t1/stream" },
+        { method: "GET", url: "/api/library/tracks/t1/stream/delete" },
+        { method: "GET", url: "/api/ytmusic/stream" },
+    ];
+
+    for (const item of cases) {
+        const req: {
+            url: string;
+            method: string;
+            headers: Record<string, string | string[] | undefined>;
+        } = {
+            ...item,
+            headers: {
+                cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+            },
+        };
+
+        prepareProxyAuthentication(req);
+
+        assert.equal(req.headers.authorization, undefined);
+        assert.equal(req.headers.cookie, "theme=dark");
+    }
+});
+
+test("first-byte timeout never logs a query credential", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const logger = createFakeLogger();
+    const handler = createFirstByteTimeoutProxyReqHandler({
+        name: "api-proxy",
+        logger,
+        env: {},
+    });
+    const proxyReq = createFakeProxyReq();
+    const res = createFakeResponse();
+    const accessToken = "timeout.jwt.signature";
+
+    handler(
+        proxyReq,
+        {
+            method: "GET",
+            url: `/api/library/cover-art/album?size=320&token=${accessToken}`,
+        },
+        res,
+    );
+    t.mock.timers.tick(20_000);
+
+    const serializedLog = JSON.stringify(logger.errors);
+    assert.doesNotMatch(serializedLog, new RegExp(accessToken));
+    assert.match(serializedLog, /size=320/);
+});
+
 test("first-byte timeout uses the import-preview budget for import preview paths", (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const handler = createFirstByteTimeoutProxyReqHandler({
@@ -343,7 +681,36 @@ test("first-byte timeout uses the import-preview budget for import preview paths
     assert.equal(res.writeHeadCalls.length, 0);
     assert.equal(proxyReq.destroyed, false);
 
-    t.mock.timers.tick(70_000);
+    t.mock.timers.tick(130_000);
+    assert.equal(res.writeHeadCalls.length, 1);
+    assert.equal(res.writeHeadCalls[0]?.statusCode, 504);
+    assert.equal(proxyReq.destroyed, true);
+});
+
+test("first-byte timeout lets a YouTube media spool exceed the regular API budget", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const handler = createFirstByteTimeoutProxyReqHandler({
+        name: "api-proxy",
+        logger: createFakeLogger(),
+        env: {},
+    });
+    const proxyReq = createFakeProxyReq();
+    const res = createFakeResponse();
+
+    handler(
+        proxyReq,
+        {
+            method: "GET",
+            url: "/api/ytmusic/stream-public/kXYiU_JCYtU?quality=high",
+        },
+        res,
+    );
+
+    t.mock.timers.tick(20_000);
+    assert.equal(res.writeHeadCalls.length, 0);
+    assert.equal(proxyReq.destroyed, false);
+
+    t.mock.timers.tick(105_000);
     assert.equal(res.writeHeadCalls.length, 1);
     assert.equal(res.writeHeadCalls[0]?.statusCode, 504);
     assert.equal(proxyReq.destroyed, true);

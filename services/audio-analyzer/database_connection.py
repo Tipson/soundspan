@@ -53,7 +53,10 @@ class DatabaseConnection:
         """Establish a database connection with explicit UTF-8 encoding."""
         if not self.url:
             raise ValueError("DATABASE_URL not set")
-        connection = psycopg2.connect(self.url, options="-c client_encoding=UTF8")
+        connection = psycopg2.connect(
+            self.url,
+            options="-c client_encoding=UTF8 -c timezone=UTC",
+        )
         try:
             connection.set_client_encoding("UTF8")
             connection.autocommit = False

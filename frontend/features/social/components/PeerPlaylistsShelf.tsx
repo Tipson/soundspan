@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ListMusic, Network } from "lucide-react";
 import { usePeerPlaylists } from "@/features/social/hooks/usePeerPlaylists";
+import { pluralRu } from "@/lib/i18n/ru";
 
 /**
  * Home shelf listing public playlists shared by federated peers, badged
@@ -15,7 +16,7 @@ export function PeerPlaylistsShelf() {
         <section>
             <div className="mb-3 flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-white">
-                    From your peers
+                    С других серверов
                 </h2>
                 <Network className="h-4 w-4 text-white/40" />
             </div>
@@ -34,10 +35,14 @@ export function PeerPlaylistsShelf() {
                         </p>
                         <p className="truncate text-xs text-white/40">
                             {playlist.owner.displayName} · {playlist.trackCount}{" "}
-                            tracks
+                            {pluralRu(playlist.trackCount, [
+                                "трек",
+                                "трека",
+                                "треков",
+                            ])}
                         </p>
                         <p className="mt-1 truncate text-[11px] text-white/30">
-                            From {playlist.peer.name}
+                            С сервера {playlist.peer.name}
                         </p>
                     </Link>
                 ))}

@@ -40,15 +40,19 @@ mock.module("next/image", {
 mock.module("lucide-react", {
     namedExports: {
         Settings: Icon,
-        RefreshCw: Icon,
         LogOut: Icon,
-        Compass: Icon,
+        Search: Icon,
+        Home: Icon,
+        Library: Icon,
+        AudioWaveform: Icon,
+        ListMusic: Icon,
+        Upload: Icon,
+        Download: Icon,
         Heart: Icon,
         X: Icon,
-        Radio: Icon,
-        Users: Icon,
         Inbox: Icon,
         Shield: Icon,
+        Bell: Icon,
     },
 });
 
@@ -114,7 +118,7 @@ test("returns null when closed", async () => {
     assert.equal(html, "");
 });
 
-test("renders quick links and omits my history", async () => {
+test("keeps primary navigation outside the account drawer", async () => {
     const { MobileSidebar } =
         await import("../../components/layout/MobileSidebar");
 
@@ -126,16 +130,31 @@ test("renders quick links and omits my history", async () => {
         }),
     );
 
-    assert.match(html, /Quick Links/);
-    assert.match(html, />Home</);
-    assert.match(html, />Explore</);
-    assert.match(html, />Listen Together</);
-    assert.doesNotMatch(html, /My History/);
+    assert.match(html, /data-shell-drawer="account"/);
+    assert.doesNotMatch(html, />Слушать</);
+    assert.doesNotMatch(html, />Главная</);
+    assert.doesNotMatch(html, />Поиск</);
+    assert.doesNotMatch(html, /href="\/search"/);
+    assert.doesNotMatch(html, />Коллекция</);
+    assert.doesNotMatch(html, />Моя волна</);
+    assert.match(html, />Любимые треки</);
+    assert.match(html, />Загрузки</);
+    assert.match(html, />Импорт плейлиста</);
+    assert.match(html, />Ваша музыка</);
+    assert.match(html, />Аккаунт</);
+    assert.doesNotMatch(html, />Listen|Your music</);
+    const notifications = html.match(
+        /<button[^>]*aria-label="Открыть уведомления"[^>]*>/,
+    )?.[0];
+    assert.ok(notifications);
+    assert.match(notifications, /min-h-12/);
+    assert.doesNotMatch(html, />Обзор</);
+    assert.doesNotMatch(html, />Совместное прослушивание</);
+    assert.doesNotMatch(html, /Моя история/);
 });
 
-test("shows listen-together marker when sessions are active", async () => {
-    state.hasActiveSessions = true;
-    state.pathname = "/listen-together";
+test("does not duplicate Vibe inside the account drawer", async () => {
+    state.pathname = "/vibe";
 
     const { MobileSidebar } =
         await import("../../components/layout/MobileSidebar");
@@ -148,7 +167,9 @@ test("shows listen-together marker when sessions are active", async () => {
         }),
     );
 
-    assert.match(html, /eq-bars/);
+    assert.doesNotMatch(html, /href="\/vibe"/);
+    assert.doesNotMatch(html, />Моя волна</);
+    assert.doesNotMatch(html, /eq-bars|Совместное прослушивание/);
 });
 
 test("admins see Requests and Admin links; users see neither", async () => {
@@ -175,7 +196,7 @@ test("admins see Requests and Admin links; users see neither", async () => {
         }),
     );
     assert.match(adminHtml, /href="\/requests"/);
-    assert.match(adminHtml, />Requests</);
+    assert.match(adminHtml, />Запросы</);
     assert.match(adminHtml, /href="\/admin"/);
 });
 

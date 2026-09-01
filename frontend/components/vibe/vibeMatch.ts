@@ -17,6 +17,8 @@
  * is showing the uncalibrated number.
  */
 
+import { calibratedMatchLabel } from "@/lib/i18n/vibeMapRu";
+
 /** p0..p100 inclusive. */
 const EXPECTED_QUANTILE_COUNT = 101;
 
@@ -55,15 +57,6 @@ function percentileRank(
     return last;
 }
 
-function labelForPercent(percent: number): string {
-    if (percent >= 97) return "nearly identical vibe";
-    if (percent >= 90) return "same vibe";
-    if (percent >= 75) return "close neighbors";
-    if (percent >= 50) return "same neighborhood";
-    if (percent >= 25) return "distant relatives";
-    return "different worlds";
-}
-
 /**
  * Library-calibrated match percent + label for a pairwise CLAP cosine
  * `distance`, given the library's `quantiles` sample (`api.getVibeCalibration`,
@@ -82,7 +75,7 @@ export function calibratedMatch(
     }
     const rank = percentileRank(distance, quantiles);
     const percent = clampPercent(Math.round(100 - rank));
-    return { percent, label: labelForPercent(percent) };
+    return { percent, label: calibratedMatchLabel(percent) };
 }
 
 /**

@@ -38,7 +38,7 @@ export function getActivityPanelBadgeState({
     const notificationBadge = unreadCount > 0 ? unreadCount : null;
     const activeBadge =
         isAdmin && activeDownloadCount > 0 ? activeDownloadCount : null;
-    const socialBadge = socialUserCount > 0 ? socialUserCount : null;
+    const socialBadge = isAdmin && socialUserCount > 0 ? socialUserCount : null;
 
     return {
         notificationBadge,
@@ -84,7 +84,25 @@ export function isActivityTabVisible(
         return true;
     }
 
-    return tab !== "active" && tab !== "history" && tab !== "imports";
+    return tab === "notifications" || tab === "imports";
+}
+
+const TECHNICAL_NOTIFICATION_TITLES = [
+    "enrichment complete",
+    "enrichment completed with errors",
+    "library scan complete",
+] as const;
+
+/** Keep library-maintenance noise in Admin while preserving user actions. */
+export function isUserFacingActivityNotification(
+    notification: { type: string; title: string },
+    isAdmin: boolean,
+): boolean {
+    if (isAdmin) return true;
+    const title = notification.title.trim().toLowerCase();
+    return !TECHNICAL_NOTIFICATION_TITLES.includes(
+        title as (typeof TECHNICAL_NOTIFICATION_TITLES)[number],
+    );
 }
 
 /**

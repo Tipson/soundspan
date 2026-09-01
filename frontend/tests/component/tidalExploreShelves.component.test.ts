@@ -9,7 +9,7 @@ const marker = (label: string) => {
     return Component;
 };
 
-mock.module("@/components/layout/SectionHeader", {
+mock.module("@/features/home/components/SectionHeader", {
     namedExports: {
         SectionHeader: ({ title }: { title: string }) =>
             React.createElement("h2", null, title),

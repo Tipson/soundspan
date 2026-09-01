@@ -2,7 +2,7 @@
 
 Entity relationships, classification, and resolution chains for soundspan's Prisma schema.
 
-Schema source: `backend/prisma/schema.prisma` (68 models, 1553 lines)
+Schema source: `backend/prisma/schema.prisma` (68 models, 1735 lines)
 
 ## Entity Relationship Overview
 
@@ -235,15 +235,30 @@ password and no other linked identity.
 
 ### Discovery & Recommendations
 
-| Entity                               | Purpose                                  |
-| ------------------------------------ | ---------------------------------------- |
-| `DiscoveryAlbum` / `DiscoveryTrack`  | Weekly discovery albums and their tracks |
-| `DiscoveryBatch` / `DownloadJob`     | Download orchestration                   |
-| `DiscoverExclusion`                  | Don't-suggest-again tracking             |
-| `UserDiscoverConfig` / `UserMoodMix` | Per-user discovery preferences           |
-| `UnavailableAlbum`                   | Albums that couldn't be acquired         |
-| `SimilarArtist`                      | Weighted artist similarity graph         |
-| `OwnedAlbum`                         | Album ownership tracking                 |
+| Entity                                        | Purpose                                                                                       |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `DiscoveryAlbum` / `DiscoveryTrack`           | Weekly discovery albums and their tracks                                                      |
+| `DiscoveryBatch` / `DownloadJob`              | Download orchestration                                                                         |
+| `DiscoverExclusion`                           | Don't-suggest-again tracking                                                                   |
+| `UserDiscoverConfig` / `UserMoodMix`          | Per-user discovery preferences                                                                 |
+| `UnavailableAlbum`                            | Albums that couldn't be acquired                                                               |
+| `SimilarArtist`                               | Weighted artist similarity graph                                                               |
+| `OwnedAlbum`                                  | Album ownership tracking                                                                       |
+| `CanonicalRecording`                          | Account-neutral MBID/ISRC/fingerprint identity and shared Essentia/MusiCNN scalar features    |
+| `CanonicalRecordingEmbedding`                 | One canonical DCLAP vector per registered embedding space                                      |
+| `RecommendationGeneration`                    | Account/session/surface algorithm generation, served-shadow marker, degradation, and latency   |
+| `RecommendationExposure`                      | Ordered account-scoped canonical impression with provider attribution and later play outcome   |
+| `AnalysisAssetLease`                          | Durable Essentia hand-off and recoverable lifecycle of an owned temporary remote-analysis asset |
+
+`TrackMapping.canonicalRecordingId` links a provider identity to the shared
+canonical record. Canonical audio features are global; generation, exposure,
+history, preference, and taste data remain account-scoped and cascade with the
+owning user. `CanonicalRecording.analysisStatus` and `embeddingStatus` are
+independent terminal/retry state machines; their version, timestamp, and error
+fields prevent successful Essentia work from hiding a retryable DCLAP failure.
+`AnalysisAssetLease` has a migration-owned partial unique index that allows at
+most one active spool owner per canonical recording. See
+[`HYBRID_RECOMMENDATIONS.md`](HYBRID_RECOMMENDATIONS.md).
 
 ### Content & Media
 

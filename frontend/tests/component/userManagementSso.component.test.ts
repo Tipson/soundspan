@@ -183,7 +183,7 @@ test("shows SSO badges and labels password setup for SSO-only users", async (t) 
         (element) => element.textContent?.trim(),
     );
     assert.ok(badges.includes("SSO"));
-    assert.ok(badges.includes("SSO-only"));
+    assert.ok(badges.includes("только SSO"));
 
     const ssoUserLabel = Array.from(
         harness.container.querySelectorAll("div"),
@@ -197,14 +197,14 @@ test("shows SSO badges and labels password setup for SSO-only users", async (t) 
 
     assert.match(
         document.querySelector('[role="dialog"]')?.textContent ?? "",
-        /Set password \(enables local login\)/,
+        /Задать пароль \(включит локальный вход\)/,
     );
     const passwordInput = document.querySelector(
         '[role="dialog"] input[type="password"]',
     );
     assert.ok(passwordInput instanceof HTMLInputElement);
     await typeInto(passwordInput, "new-local-password");
-    await click(findButton("Save Changes"));
+    await click(findButton("Сохранить изменения"));
 
     assert.deepEqual(patch.mock.calls[0]?.arguments, [
         "/auth/users/sso-only",
@@ -228,7 +228,7 @@ test("sends an edited role for any user", async (t) => {
     );
     assert.ok(roleSelect instanceof HTMLSelectElement);
     await selectValue(roleSelect, "admin");
-    await click(findButton("Save Changes"));
+    await click(findButton("Сохранить изменения"));
 
     assert.deepEqual(patch.mock.calls[0]?.arguments, [
         "/auth/users/local-linked",
@@ -250,13 +250,13 @@ test("shows the OIDC role overwrite warning only for linked users", async (t) =>
     await click(linkedUserRow);
 
     const warning =
-        "OIDC role management (if enabled) will overwrite manual role changes at this user's next SSO login.";
+        "Управление ролями OIDC (если оно включено) заменит ручное изменение роли при следующем входе этого пользователя через SSO.";
     assert.match(
         document.querySelector('[role="dialog"]')?.textContent ?? "",
         new RegExp(warning.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
     );
 
-    await click(findButton("Cancel"));
+    await click(findButton("Отмена"));
     const localUserRow = Array.from(
         harness.container.querySelectorAll("div"),
     ).find(
@@ -269,7 +269,7 @@ test("shows the OIDC role overwrite warning only for linked users", async (t) =>
 
     assert.doesNotMatch(
         document.querySelector('[role="dialog"]')?.textContent ?? "",
-        /OIDC role management/,
+        /Управление ролями OIDC/,
     );
 });
 
@@ -292,10 +292,10 @@ test("renders the backend last-admin rejection", async (t) => {
     );
     assert.ok(roleSelect instanceof HTMLSelectElement);
     await selectValue(roleSelect, "user");
-    await click(findButton("Save Changes"));
+    await click(findButton("Сохранить изменения"));
 
     assert.match(
         document.querySelector('[role="dialog"]')?.textContent ?? "",
-        /Cannot demote the last admin/,
+        /Нельзя понизить роль последнего администратора/,
     );
 });

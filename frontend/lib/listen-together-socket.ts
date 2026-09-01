@@ -7,6 +7,7 @@
 
 import { io, type Socket } from "socket.io-client";
 import { api } from "./api";
+import { listenTogetherFeedbackRu } from "./i18n/listenDeviceRu";
 import { frontendLogger } from "./logger";
 import type {
     CanonicalMediaProviderIdentity,
@@ -193,17 +194,17 @@ export function formatListenTogetherSocketRouteError(
 ): string {
     switch (result.reason) {
         case "frontend-route":
-            return "Listen Together is blocked: /socket.io/listen-together is not reaching the backend Socket.IO service. Verify frontend socket proxy routing or direct backend path routing.";
+            return "Совместное прослушивание недоступно: /socket.io/listen-together не достигает сервиса Socket.IO. Проверьте маршрут через прокси или прямой путь к серверу.";
         case "http-error":
-            return `Listen Together socket probe failed with HTTP ${result.status ?? "error"}. Ensure /socket.io/listen-together reaches backend Socket.IO and websocket upgrades are enabled.`;
+            return `Сервис совместного прослушивания ответил с ошибкой HTTP ${result.status ?? "неизвестно"}. Проверьте маршрутизацию /socket.io/listen-together и поддержку WebSocket.`;
         case "timeout":
-            return "Listen Together socket probe timed out. Verify your proxy/tunnel forwards /socket.io/listen-together correctly.";
+            return "Проверка подключения для совместного прослушивания заняла слишком много времени. Проверьте маршрутизацию /socket.io/listen-together через прокси или туннель.";
         case "network-error":
-            return "Listen Together socket probe could not reach the server. Check public URL, proxy/tunnel routing, and backend reachability.";
+            return "Не удалось подключиться к сервису совместного прослушивания. Проверьте адрес сайта, маршрут через прокси или туннель и доступность сервера.";
         case "unexpected-response":
-            return "Listen Together socket probe received an unexpected response. /socket.io/listen-together must terminate on the backend Socket.IO service.";
+            return "Сервис совместного прослушивания вернул неожиданный ответ. Проверьте, что /socket.io/listen-together направлен к Socket.IO на сервере.";
         default:
-            return "Listen Together websocket routing is not configured correctly. Ensure /socket.io/listen-together reaches backend Socket.IO.";
+            return "Маршрут WebSocket для совместного прослушивания настроен неверно. Проверьте, что /socket.io/listen-together достигает Socket.IO на сервере.";
     }
 }
 
@@ -1016,7 +1017,7 @@ export class ListenTogetherSocket {
 
     private createAckError(response: ListenTogetherAckResponse): Error {
         const err = new Error(
-            response.error || "Listen Together request failed",
+            response.error || listenTogetherFeedbackRu.requestFailed,
         );
         const ackError = err as Error & {
             code?: string;

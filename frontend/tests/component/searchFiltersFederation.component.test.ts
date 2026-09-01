@@ -1,75 +1,48 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-mock.module("lucide-react", {
-    namedExports: {
-        Download: (props: Record<string, unknown> = {}) =>
-            React.createElement("svg", props),
-        Network: (props: Record<string, unknown> = {}) =>
-            React.createElement("svg", props),
-    },
-});
-
-test("SearchFilters hides the Peers pill when federation is disabled", async () => {
+test("SearchFilters renders the supported result views as query-preserving links", async () => {
     const { SearchFilters } =
         await import("../../features/search/components/SearchFilters");
     const html = renderToStaticMarkup(
         React.createElement(SearchFilters, {
-            filterTab: "all",
-            onFilterChange: () => undefined,
-            soulseekEnabled: false,
-            federationEnabled: false,
+            activeView: "tracks",
+            query: "massive attack",
             hasSearched: true,
         }),
     );
-    assert.doesNotMatch(html, />Peers</);
-});
 
-test("SearchFilters shows the Peers pill when federation is enabled", async () => {
-    const { SearchFilters } =
-        await import("../../features/search/components/SearchFilters");
-    const html = renderToStaticMarkup(
-        React.createElement(SearchFilters, {
-            filterTab: "peers",
-            onFilterChange: () => undefined,
-            soulseekEnabled: false,
-            federationEnabled: true,
-            hasSearched: true,
-        }),
+    assert.match(html, /aria-label="Тип результатов поиска"/);
+    assert.match(html, /data-overflow-cue="horizontal"/);
+    assert.match(html, /min-h-11/);
+    assert.match(html, /href="\/search\?q=massive%20attack">Всё<\/a>/);
+    assert.match(
+        html,
+        /aria-current="page"[^>]*href="\/search\?q=massive%20attack&amp;view=tracks"[^>]*>Треки<\/a>/,
     );
-    assert.match(html, />Peers</);
-    assert.match(html, /bg-brand/);
-});
-
-test("SearchFilters keeps TV navigation attributes on every pill", async () => {
-    const { SearchFilters } =
-        await import("../../features/search/components/SearchFilters");
-    const html = renderToStaticMarkup(
-        React.createElement(SearchFilters, {
-            filterTab: "all",
-            onFilterChange: () => undefined,
-            soulseekEnabled: true,
-            federationEnabled: false,
-            hasSearched: true,
-        }),
+    assert.match(
+        html,
+        /href="\/search\?q=massive%20attack&amp;view=artists"[^>]*>Исполнители<\/a>/,
     );
-    assert.match(html, /data-tv-section="search-filters"/);
-    // Soulseek takes index 4 when federation is disabled
-    assert.match(html, /data-tv-card-index="4"[^>]*>[\s\S]*?Soulseek/);
-    assert.equal(html.match(/data-tv-card=""/g)?.length, 5);
+    assert.match(
+        html,
+        /href="\/search\?q=massive%20attack&amp;view=albums"[^>]*>Альбомы<\/a>/,
+    );
+    assert.doesNotMatch(
+        html,
+        />Моя коллекция<|>Открытия<|>Узлы<|>Soulseek<|>Плейлисты<|>Жанры</,
+    );
 });
 
-test("SearchFilters renders nothing before a search has run", async () => {
+test("SearchFilters stays hidden until a search query is active", async () => {
     const { SearchFilters } =
         await import("../../features/search/components/SearchFilters");
     const html = renderToStaticMarkup(
         React.createElement(SearchFilters, {
-            filterTab: "all",
-            onFilterChange: () => undefined,
-            soulseekEnabled: true,
-            federationEnabled: true,
+            activeView: "all",
+            query: "",
             hasSearched: false,
         }),
     );

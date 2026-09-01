@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { createRuntimeAudioEngine } from "@/lib/audio-engine";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 const playbackEngine = createRuntimeAudioEngine();
 
@@ -46,7 +47,7 @@ export function useTrackPreview<T extends PreviewableTrack>() {
     const showNoPreviewToast = (trackId: string) => {
         if (toastShownForNoPreviewRef.current.has(trackId)) return;
         toastShownForNoPreviewRef.current.add(trackId);
-        toast("No YouTube preview available", { duration: 1500 });
+        toast(searchExtrasRu.youtubeDownload.noPreview, { duration: 1500 });
     };
 
     const handlePreview = async (
@@ -120,7 +121,7 @@ export function useTrackPreview<T extends PreviewableTrack>() {
             };
 
             audio.onerror = () => {
-                toast.error("Failed to play preview");
+                toast.error(searchExtrasRu.youtubeDownload.previewFailed);
                 setPreviewPlaying(false);
                 setPreviewTrack(null);
                 resumeMainPlayerIfPaused(mainPlayerWasPausedRef);
@@ -152,7 +153,7 @@ export function useTrackPreview<T extends PreviewableTrack>() {
                 return;
             }
             sharedFrontendLogger.error("Failed to play preview:", error);
-            toast.error("Failed to play preview");
+            toast.error(searchExtrasRu.youtubeDownload.previewFailed);
             setPreviewPlaying(false);
             setPreviewTrack(null);
             resumeMainPlayerIfPaused(mainPlayerWasPausedRef);

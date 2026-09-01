@@ -1,3 +1,5 @@
+import { ru } from "@/lib/i18n/ru";
+
 /**
  * Hook for computing display values from override/canonical fields
  * Pattern: displayValue = userOverride ?? canonicalValue
@@ -60,7 +62,7 @@ export function useArtistDisplayData(
 ): ArtistDisplayData {
     if (!artist) {
         return {
-            name: "Unknown Artist",
+            name: ru.common.unknownArtist,
             summary: null,
             heroUrl: null,
             genres: [],
@@ -69,7 +71,7 @@ export function useArtistDisplayData(
     }
 
     return {
-        name: artist.displayName ?? artist.name ?? "Unknown Artist",
+        name: artist.displayName ?? artist.name ?? ru.common.unknownArtist,
         summary: artist.userSummary ?? artist.summary ?? artist.bio ?? null,
         heroUrl: artist.userHeroUrl ?? artist.heroUrl ?? artist.image ?? null,
         genres: mergeGenres(artist.userGenres, artist.genres ?? artist.tags),
@@ -89,7 +91,7 @@ export function useAlbumDisplayData(
 ): AlbumDisplayData {
     if (!album) {
         return {
-            title: "Unknown Album",
+            title: ru.common.unknownAlbum,
             year: null,
             coverUrl: null,
             genres: [],
@@ -98,7 +100,7 @@ export function useAlbumDisplayData(
     }
 
     return {
-        title: album.displayTitle ?? album.title ?? "Unknown Album",
+        title: album.displayTitle ?? album.title ?? ru.common.unknownAlbum,
         year: album.displayYear ?? album.year ?? null,
         coverUrl: album.userCoverUrl ?? album.coverUrl ?? null,
         genres: mergeGenres(album.userGenres, album.genres),

@@ -1,6 +1,7 @@
 import cors from "cors";
 import express, { type Request, type Response } from "express";
 import { Prisma } from "@prisma/client";
+import path from "node:path";
 import request from "supertest";
 import { isOriginAllowed } from "../../utils/cors";
 
@@ -612,17 +613,23 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("serves local cover paths and fallback disk covers", async () => {
+        const coverDir = path.resolve(
+            mockConfig.music.musicPath,
+            "cover-cache",
+            "audiobooks",
+        );
+        const firstCoverPath = path.join(coverDir, "book-1.jpg");
+        const secondCoverPath = path.join(coverDir, "book-2.jpg");
         prisma.audiobook.findUnique
             .mockResolvedValueOnce({
-                localCoverPath: "/music/cover-cache/audiobooks/book-1.jpg",
+                localCoverPath: firstCoverPath,
                 coverUrl: null,
             })
             .mockResolvedValueOnce({ localCoverPath: null, coverUrl: null });
 
         fsExistsSync.mockImplementation(
             (targetPath: string) =>
-                targetPath === "/music/cover-cache/audiobooks/book-1.jpg" ||
-                targetPath === "/music/cover-cache/audiobooks/book-2.jpg",
+                targetPath === firstCoverPath || targetPath === secondCoverPath,
         );
 
         const localRes = createRes();
@@ -637,7 +644,7 @@ describe("audiobooks advanced runtime", () => {
         expect(localRes.sentFilePath).toBe("book-1.jpg");
         expect(localRes.sentFileOptions).toEqual({
             dotfiles: "ignore",
-            root: "/music/cover-cache/audiobooks",
+            root: coverDir,
         });
         expect(localRes.headers["Cache-Control"]).toBe(
             "public, max-age=31536000, immutable",
@@ -652,7 +659,7 @@ describe("audiobooks advanced runtime", () => {
         expect(prisma.audiobook.update).toHaveBeenCalledWith({
             where: { id: "book-2" },
             data: {
-                localCoverPath: "/music/cover-cache/audiobooks/book-2.jpg",
+                localCoverPath: secondCoverPath,
             },
         });
         expect(fallbackRes.sentFilePath).toBe("book-2.jpg");

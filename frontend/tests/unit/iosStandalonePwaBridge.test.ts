@@ -16,7 +16,7 @@ const ANDROID_UA =
 const DESKTOP_CHROME_UA =
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
-test("bridge gate requires BOTH an iOS device AND standalone display mode", () => {
+test("iOS standalone playback keeps the direct media-element path", () => {
     assert.equal(
         shouldUseIosStandaloneAudioBridge({
             userAgent: IPHONE_UA,
@@ -24,7 +24,7 @@ test("bridge gate requires BOTH an iOS device AND standalone display mode", () =
             isStandaloneDisplayMode: true,
             isLegacyNavigatorStandalone: false,
         }),
-        true,
+        false,
     );
     // iOS Safari tab (not standalone) keeps the bare-element hi-res path.
     assert.equal(
@@ -57,7 +57,7 @@ test("bridge gate requires BOTH an iOS device AND standalone display mode", () =
     );
 });
 
-test("bridge gate recognizes iPadOS desktop-mode UA via touch points", () => {
+test("iPadOS standalone playback also keeps the direct media-element path", () => {
     assert.equal(
         shouldUseIosStandaloneAudioBridge({
             userAgent: IPADOS_DESKTOP_UA,
@@ -65,7 +65,7 @@ test("bridge gate recognizes iPadOS desktop-mode UA via touch points", () => {
             isStandaloneDisplayMode: true,
             isLegacyNavigatorStandalone: false,
         }),
-        true,
+        false,
     );
     // A real Mac has no touch points.
     assert.equal(
@@ -79,7 +79,7 @@ test("bridge gate recognizes iPadOS desktop-mode UA via touch points", () => {
     );
 });
 
-test("bridge gate honors the legacy navigator.standalone flag", () => {
+test("legacy navigator.standalone does not enable the Web Audio bridge", () => {
     assert.equal(
         shouldUseIosStandaloneAudioBridge({
             userAgent: IPHONE_UA,
@@ -87,7 +87,7 @@ test("bridge gate honors the legacy navigator.standalone flag", () => {
             isStandaloneDisplayMode: false,
             isLegacyNavigatorStandalone: true,
         }),
-        true,
+        false,
     );
 });
 

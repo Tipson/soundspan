@@ -8,7 +8,7 @@ import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Music2 } from "lucide-react";
 import { api } from "@/lib/api";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { frontendLogger } from "@/lib/logger";
@@ -111,7 +111,7 @@ export function MoodsGenresSection({
                 frontendLogger.warn("Failed to load YT mood playlists", error);
                 setMoodPlaylists([]);
                 setLoadError(
-                    "Failed to load playlists. Try another mood or genre.",
+                    "Не удалось загрузить плейлисты. Выберите другое настроение или жанр.",
                 );
             } finally {
                 if (thisRequest === requestIdRef.current) {
@@ -147,7 +147,7 @@ export function MoodsGenresSection({
                             onClick={handleBack}
                             className="px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-medium hover:bg-white/20 transition-colors"
                         >
-                            &larr; Back
+                            &larr; Назад
                         </button>
                         <h2 className="text-xl font-bold text-white">
                             {activeMoodTitle}
@@ -200,7 +200,7 @@ export function MoodsGenresSection({
                         <div className="flex flex-col items-center justify-center py-20 text-center">
                             <Music2 className="w-12 h-12 text-gray-400 mb-4" />
                             <h3 className="text-lg font-medium text-white mb-2">
-                                Unable to load playlists
+                                Не удалось загрузить плейлисты
                             </h3>
                             <p className="text-sm text-gray-400">{loadError}</p>
                         </div>
@@ -212,10 +212,10 @@ export function MoodsGenresSection({
                             <div className="flex flex-col items-center justify-center py-20 text-center">
                                 <Music2 className="w-12 h-12 text-gray-400 mb-4" />
                                 <h3 className="text-lg font-medium text-white mb-2">
-                                    No playlists found
+                                    Плейлисты не найдены
                                 </h3>
                                 <p className="text-sm text-gray-400">
-                                    Try another mood or genre.
+                                    Выберите другое настроение или жанр.
                                 </p>
                             </div>
                         )}
@@ -229,7 +229,10 @@ export function MoodsGenresSection({
             {/* Mood Categories */}
             {moodCategories.length > 0 && (
                 <section>
-                    <SectionHeader title="Moods" badge={<YouTubeBadge />} />
+                    <SectionHeader
+                        title="Настроения"
+                        badge={<YouTubeBadge />}
+                    />
                     {moodCategories.map((cat, i) => (
                         <CategoryRow
                             key={cat.title ?? i}
@@ -243,7 +246,7 @@ export function MoodsGenresSection({
             {/* Genre Categories */}
             {genreCategories.length > 0 && (
                 <section>
-                    <SectionHeader title="Genres" badge={<YouTubeBadge />} />
+                    <SectionHeader title="Жанры" badge={<YouTubeBadge />} />
                     {genreCategories.map((cat, i) => (
                         <CategoryRow
                             key={cat.title ?? i}

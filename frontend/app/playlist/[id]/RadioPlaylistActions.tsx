@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { useToast } from "@/lib/toast-context";
 import { queryKeys } from "@/lib/queryKeys";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface RadioPlaylistActionsProps {
     enabled: boolean;
@@ -35,13 +36,15 @@ function useRadioPlaylistActions(playlistId: string) {
             const result = await api.appendRadioPlaylist(playlistId);
             await refresh();
             if (result.entries.length === 0) {
-                toast.info("No additional tracks were available");
+                toast.info(ru.playlist.noMore);
             } else {
-                toast.success(`Added ${result.entries.length} tracks`);
+                toast.success(
+                    `Добавлено: ${result.entries.length} ${pluralRu(result.entries.length, ["трек", "трека", "треков"])}`,
+                );
             }
         } catch (error) {
             sharedFrontendLogger.error("Failed to add radio tracks:", error);
-            toast.error("Failed to add more tracks");
+            toast.error(ru.playlist.addMoreFailed);
         } finally {
             setActiveAction(null);
         }
@@ -52,10 +55,12 @@ function useRadioPlaylistActions(playlistId: string) {
         try {
             const result = await api.regenerateRadioPlaylist(playlistId);
             await refresh();
-            toast.success(`Regenerated ${result.entries.length} tracks`);
+            toast.success(
+                `Плейлист собран заново: ${result.entries.length} ${pluralRu(result.entries.length, ["трек", "трека", "треков"])}`,
+            );
         } catch (error) {
             sharedFrontendLogger.error("Failed to regenerate playlist:", error);
-            toast.error("Failed to regenerate playlist");
+            toast.error(ru.playlist.regenerateFailed);
         } finally {
             setActiveAction(null);
         }
@@ -86,7 +91,7 @@ export function RadioPlaylistActions({
                 ) : (
                     <ListPlus className="w-4 h-4" />
                 )}
-                Add more tracks
+                {ru.playlist.addMore}
             </button>
             <button
                 type="button"
@@ -99,7 +104,7 @@ export function RadioPlaylistActions({
                 ) : (
                     <RefreshCw className="w-4 h-4" />
                 )}
-                Regenerate
+                {ru.playlist.regenerate}
             </button>
         </>
     );

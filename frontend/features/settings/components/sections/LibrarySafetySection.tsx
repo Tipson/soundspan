@@ -1,5 +1,6 @@
 import { SettingsSection, SettingsRow, SettingsToggle } from "../ui";
 import { SystemSettings } from "../../types";
+import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
 
 interface LibrarySafetySectionProps {
     settings: SystemSettings;
@@ -16,12 +17,14 @@ export function LibrarySafetySection({
     return (
         <SettingsSection
             id="library-safety"
-            title="Library Safety"
-            description="Guardrails for destructive library actions."
+            title={adminActivityRu.admin.librarySafety.title}
+            description={adminActivityRu.admin.librarySafety.description}
         >
             <SettingsRow
-                label="Allow library deletion"
-                description="When disabled, deleting tracks/albums/artists is blocked server-side and delete buttons are hidden in Library."
+                label={adminActivityRu.admin.librarySafety.allowDeletion}
+                description={
+                    adminActivityRu.admin.librarySafety.allowDeletionDescription
+                }
                 htmlFor="library-deletion-enabled"
             >
                 <SettingsToggle
@@ -30,17 +33,6 @@ export function LibrarySafetySection({
                     onChange={(checked) =>
                         onUpdate({ libraryDeletionEnabled: checked })
                     }
-                />
-            </SettingsRow>
-            <SettingsRow
-                label="Show version"
-                description="Display the app version in the bottom-right corner of the player bar."
-                htmlFor="show-version"
-            >
-                <SettingsToggle
-                    id="show-version"
-                    checked={settings.showVersion}
-                    onChange={(checked) => onUpdate({ showVersion: checked })}
                 />
             </SettingsRow>
         </SettingsSection>

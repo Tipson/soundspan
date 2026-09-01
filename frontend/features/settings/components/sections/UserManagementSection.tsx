@@ -10,6 +10,13 @@ import { createFrontendLogger } from "@/lib/logger";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 import { Badge } from "@/components/ui/Badge";
 import { useAdminConnectedUsers } from "@/hooks/useSocialPresence";
+import {
+    adminManagementRu,
+    formatInviteExpiry,
+    inviteStatusLabel,
+    localizeUserManagementError,
+} from "@/lib/i18n/adminManagementRu";
+import { pluralRu } from "@/lib/i18n/ru";
 import type { User } from "../../types";
 
 const logger = createFrontendLogger("Settings.UserManagementSection");
@@ -27,7 +34,7 @@ interface InviteCode {
 
 function UserSsoBadge({ user }: { user: User }) {
     const label = !user.hasPassword
-        ? "SSO-only"
+        ? adminManagementRu.users.ssoOnly
         : user.linkedProviders.length > 0
           ? "SSO"
           : null;
@@ -38,7 +45,7 @@ function UserSsoBadge({ user }: { user: User }) {
             title={
                 user.linkedProviders.length > 0
                     ? user.linkedProviders.join(", ")
-                    : "No local password"
+                    : adminManagementRu.users.noLocalPassword
             }
             className="ml-2"
         >
@@ -111,7 +118,7 @@ export function UserManagementSection() {
     const handleCreate = async () => {
         if (!newUsername.trim() || newPassword.length < 6) {
             setCreateStatus("error");
-            setCreateMessage("Username required, password 6+ chars");
+            setCreateMessage(adminManagementRu.users.invalidCredentials);
             return;
         }
 
@@ -124,14 +131,14 @@ export function UserManagementSection() {
                 role: newRole,
             });
             setCreateStatus("success");
-            setCreateMessage("Created");
+            setCreateMessage(adminManagementRu.users.created);
             setNewUsername("");
             setNewPassword("");
             setNewRole("user");
             loadUsers();
         } catch (error: unknown) {
             setCreateStatus("error");
-            setCreateMessage(error instanceof Error ? error.message : "Failed");
+            setCreateMessage(localizeUserManagementError(error));
         } finally {
             setCreating(false);
         }
@@ -142,12 +149,12 @@ export function UserManagementSection() {
         try {
             await api.delete(`/auth/users/${userId}`);
             setDeleteStatus("success");
-            setDeleteMessage("Deleted");
+            setDeleteMessage(adminManagementRu.users.deleted);
             setConfirmDelete(null);
             loadUsers();
         } catch (error: unknown) {
             setDeleteStatus("error");
-            setDeleteMessage(error instanceof Error ? error.message : "Failed");
+            setDeleteMessage(localizeUserManagementError(error));
         }
     };
 
@@ -158,11 +165,11 @@ export function UserManagementSection() {
             const maxUses = parseInt(inviteMaxUses, 10) || 1;
             await api.createInviteCode(inviteTtl, maxUses);
             setInviteStatus("success");
-            setInviteMessage("Code generated");
+            setInviteMessage(adminManagementRu.users.inviteGenerated);
             loadInviteCodes();
         } catch (error: unknown) {
             setInviteStatus("error");
-            setInviteMessage(error instanceof Error ? error.message : "Failed");
+            setInviteMessage(localizeUserManagementError(error));
         } finally {
             setGeneratingInvite(false);
         }
@@ -182,19 +189,6 @@ export function UserManagementSection() {
         navigator.clipboard.writeText(url);
         setCopiedCodeId(id);
         setTimeout(() => setCopiedCodeId(null), 2000);
-    };
-
-    const formatExpiry = (expiresAt: string | null) => {
-        if (!expiresAt) return "Never";
-        const date = new Date(expiresAt);
-        const now = new Date();
-        if (date < now) return "Expired";
-        const diffMs = date.getTime() - now.getTime();
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-        const diffDays = Math.floor(diffHours / 24);
-        if (diffDays > 0) return `${diffDays}d left`;
-        if (diffHours > 0) return `${diffHours}h left`;
-        return `${Math.floor(diffMs / (1000 * 60))}m left`;
     };
 
     const statusColor = (status: string) => {
@@ -241,7 +235,7 @@ export function UserManagementSection() {
         if (editPassword) {
             if (editPassword.length < 6) {
                 setEditStatus("error");
-                setEditMessage("Password must be 6+ chars");
+                setEditMessage(adminManagementRu.users.passwordTooShort);
                 return;
             }
             payload.password = editPassword;
@@ -252,7 +246,7 @@ export function UserManagementSection() {
 
         if (Object.keys(payload).length === 0) {
             setEditStatus("error");
-            setEditMessage("No changes");
+            setEditMessage(adminManagementRu.users.noChanges);
             return;
         }
 
@@ -261,12 +255,12 @@ export function UserManagementSection() {
         try {
             await api.patch(`/auth/users/${editingUser.id}`, payload);
             setEditStatus("success");
-            setEditMessage("Saved");
+            setEditMessage(adminManagementRu.users.saved);
             loadUsers();
             setTimeout(closeEditModal, 1000);
         } catch (error: unknown) {
             setEditStatus("error");
-            setEditMessage(error instanceof Error ? error.message : "Failed");
+            setEditMessage(localizeUserManagementError(error));
         } finally {
             setSavingEdit(false);
         }
@@ -280,28 +274,28 @@ export function UserManagementSection() {
         <>
             <SettingsSection
                 id="users"
-                title="User Management"
-                description="Manage users who can access this instance"
+                title={adminManagementRu.users.title}
+                description={adminManagementRu.users.description}
                 showSeparator={false}
             >
                 {/* Create User Form */}
                 <div className="py-4 px-4 bg-surface-hover rounded-lg mb-4">
                     <h3 className="text-sm font-medium text-white mb-3">
-                        Create New User
+                        {adminManagementRu.users.createTitle}
                     </h3>
                     <div className="space-y-3">
                         <div className="flex gap-3">
                             <SettingsInput
                                 value={newUsername}
                                 onChange={setNewUsername}
-                                placeholder="Username"
+                                placeholder={adminManagementRu.users.username}
                                 className="flex-1"
                             />
                             <SettingsInput
                                 type="password"
                                 value={newPassword}
                                 onChange={setNewPassword}
-                                placeholder="Password (6+ chars)"
+                                placeholder={adminManagementRu.users.password}
                                 className="flex-1"
                             />
                         </div>
@@ -312,8 +306,14 @@ export function UserManagementSection() {
                                     setNewRole(v as "user" | "admin")
                                 }
                                 options={[
-                                    { value: "user", label: "User" },
-                                    { value: "admin", label: "Admin" },
+                                    {
+                                        value: "user",
+                                        label: adminManagementRu.users.user,
+                                    },
+                                    {
+                                        value: "admin",
+                                        label: adminManagementRu.users.admin,
+                                    },
                                 ]}
                             />
                             <button
@@ -326,7 +326,9 @@ export function UserManagementSection() {
                                 className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
-                                {creating ? "Creating..." : "Create"}
+                                {creating
+                                    ? adminManagementRu.users.creating
+                                    : adminManagementRu.users.create}
                             </button>
                             <InlineStatus
                                 status={createStatus}
@@ -340,7 +342,7 @@ export function UserManagementSection() {
                 {/* Invite Codes */}
                 <div className="py-4 px-4 bg-surface-hover rounded-lg mb-4">
                     <h3 className="text-sm font-medium text-white mb-3">
-                        Invite Codes
+                        {adminManagementRu.users.invites}
                     </h3>
                     <div className="space-y-3">
                         <div className="flex gap-3 items-center flex-wrap">
@@ -348,19 +350,40 @@ export function UserManagementSection() {
                                 value={inviteTtl}
                                 onChange={setInviteTtl}
                                 options={[
-                                    { value: "1h", label: "1 hour" },
-                                    { value: "6h", label: "6 hours" },
-                                    { value: "24h", label: "24 hours" },
-                                    { value: "7d", label: "7 days" },
-                                    { value: "30d", label: "30 days" },
-                                    { value: "never", label: "Never expires" },
+                                    {
+                                        value: "1h",
+                                        label: adminManagementRu.users.oneHour,
+                                    },
+                                    {
+                                        value: "6h",
+                                        label: adminManagementRu.users.sixHours,
+                                    },
+                                    {
+                                        value: "24h",
+                                        label: adminManagementRu.users.oneDay,
+                                    },
+                                    {
+                                        value: "7d",
+                                        label: adminManagementRu.users
+                                            .sevenDays,
+                                    },
+                                    {
+                                        value: "30d",
+                                        label: adminManagementRu.users
+                                            .thirtyDays,
+                                    },
+                                    {
+                                        value: "never",
+                                        label: adminManagementRu.users
+                                            .neverExpires,
+                                    },
                                 ]}
                             />
                             <SettingsInput
                                 type="number"
                                 value={inviteMaxUses}
                                 onChange={setInviteMaxUses}
-                                placeholder="Max uses"
+                                placeholder={adminManagementRu.users.maxUses}
                                 className="w-24"
                             />
                             <button
@@ -370,8 +393,8 @@ export function UserManagementSection() {
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
                                 {generatingInvite
-                                    ? "Generating..."
-                                    : "Generate Invite"}
+                                    ? adminManagementRu.users.generating
+                                    : adminManagementRu.users.generateInvite}
                             </button>
                             <InlineStatus
                                 status={inviteStatus}
@@ -394,14 +417,16 @@ export function UserManagementSection() {
                                             <span
                                                 className={`text-[11px] px-2 py-0.5 rounded-full border capitalize ${statusColor(code.status)}`}
                                             >
-                                                {code.status}
+                                                {inviteStatusLabel(code.status)}
                                             </span>
                                             <span className="text-xs text-white/40">
                                                 {code.useCount}/{code.maxUses}{" "}
-                                                uses
+                                                {adminManagementRu.users.uses}
                                             </span>
                                             <span className="text-xs text-white/40">
-                                                {formatExpiry(code.expiresAt)}
+                                                {formatInviteExpiry(
+                                                    code.expiresAt,
+                                                )}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-1">
@@ -415,7 +440,11 @@ export function UserManagementSection() {
                                                             )
                                                         }
                                                         className="p-1.5 text-gray-400 hover:text-white transition-colors"
-                                                        title="Copy invite link"
+                                                        title={
+                                                            adminManagementRu
+                                                                .users
+                                                                .copyInvite
+                                                        }
                                                     >
                                                         {copiedCodeId ===
                                                         code.id ? (
@@ -431,7 +460,11 @@ export function UserManagementSection() {
                                                             )
                                                         }
                                                         className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
-                                                        title="Revoke invite code"
+                                                        title={
+                                                            adminManagementRu
+                                                                .users
+                                                                .revokeInvite
+                                                        }
                                                     >
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
@@ -446,24 +479,30 @@ export function UserManagementSection() {
                 </div>
 
                 {/* Connected Users */}
-                <div className="py-4 px-4 bg-[#151515] rounded-lg mb-4 border border-white/5">
+                <div className="mb-4 rounded-xl border border-line bg-surface-elevated px-4 py-4">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-medium text-white">
-                            Connected Now
+                            {adminManagementRu.users.connectedNow}
                         </h3>
                         <span className="text-xs text-green-400 flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                            {connectedUsers.length} online
+                            {connectedUsers.length}{" "}
+                            {pluralRu(connectedUsers.length, [
+                                "пользователь",
+                                "пользователя",
+                                "пользователей",
+                            ])}{" "}
+                            {adminManagementRu.users.online}
                         </span>
                     </div>
 
                     {connectedLoading ? (
                         <div className="py-2 text-sm text-gray-400">
-                            Checking connected users...
+                            {adminManagementRu.users.checkingConnected}
                         </div>
                     ) : connectedUsers.length === 0 ? (
                         <div className="py-2 text-sm text-gray-400">
-                            No active users connected
+                            {adminManagementRu.users.noConnected}
                         </div>
                     ) : (
                         <div className="space-y-2">
@@ -478,7 +517,7 @@ export function UserManagementSection() {
                                             {currentUser?.id ===
                                                 connectedUser.id && (
                                                 <span className="text-xs text-gray-400 ml-2">
-                                                    (you)
+                                                    {`(${adminManagementRu.users.you})`}
                                                 </span>
                                             )}
                                         </p>
@@ -487,7 +526,9 @@ export function UserManagementSection() {
                                         </p>
                                     </div>
                                     <span className="text-[11px] text-white/40 capitalize">
-                                        {connectedUser.role}
+                                        {connectedUser.role === "admin"
+                                            ? adminManagementRu.users.admin
+                                            : adminManagementRu.users.user}
                                     </span>
                                 </div>
                             ))}
@@ -499,11 +540,11 @@ export function UserManagementSection() {
                 <div className="space-y-1">
                     {loading ? (
                         <div className="py-4 text-sm text-gray-400">
-                            Loading users...
+                            {adminManagementRu.users.loading}
                         </div>
                     ) : users.length === 0 ? (
                         <div className="py-4 text-sm text-gray-400">
-                            No users found
+                            {adminManagementRu.users.empty}
                         </div>
                     ) : (
                         users.map((user) => (
@@ -522,14 +563,14 @@ export function UserManagementSection() {
                                             <UserSsoBadge user={user} />
                                             {currentUser?.id === user.id && (
                                                 <span className="text-xs text-gray-400 ml-2">
-                                                    (you)
+                                                    {`(${adminManagementRu.users.you})`}
                                                 </span>
                                             )}
                                         </div>
                                         <div className="text-xs text-gray-400">
                                             {user.role === "admin"
-                                                ? "Admin"
-                                                : "User"}
+                                                ? adminManagementRu.users.admin
+                                                : adminManagementRu.users.user}
                                             {user.email && (
                                                 <span className="ml-2">
                                                     {user.email}
@@ -546,6 +587,10 @@ export function UserManagementSection() {
                                             setConfirmDelete(user.id);
                                         }}
                                         className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                                        title={adminManagementRu.users.delete}
+                                        aria-label={
+                                            adminManagementRu.users.delete
+                                        }
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
@@ -560,7 +605,7 @@ export function UserManagementSection() {
             <Modal
                 isOpen={!!editingUser}
                 onClose={closeEditModal}
-                title={`Edit User — ${editingUser?.username}`}
+                title={`${adminManagementRu.users.editTitle} — ${editingUser?.username}`}
             >
                 <div className="space-y-4">
                     <div>
@@ -568,7 +613,7 @@ export function UserManagementSection() {
                             htmlFor="edit-user-role"
                             className="block text-sm font-medium text-white/90 mb-1.5"
                         >
-                            Role
+                            {adminManagementRu.users.role}
                         </label>
                         <SettingsSelect
                             id="edit-user-role"
@@ -577,31 +622,35 @@ export function UserManagementSection() {
                                 setEditRole(value as "user" | "admin")
                             }
                             options={[
-                                { value: "user", label: "User" },
-                                { value: "admin", label: "Admin" },
+                                {
+                                    value: "user",
+                                    label: adminManagementRu.users.user,
+                                },
+                                {
+                                    value: "admin",
+                                    label: adminManagementRu.users.admin,
+                                },
                             ]}
                         />
                         {editingUser?.linkedProviders.length ? (
                             <p className="mt-1.5 text-xs text-gray-400">
-                                OIDC role management (if enabled) will overwrite
-                                manual role changes at this user&apos;s next SSO
-                                login.
+                                {adminManagementRu.users.oidcRoleWarning}
                             </p>
                         ) : null}
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-white/90 mb-1.5">
-                            Username
+                            {adminManagementRu.users.username}
                         </label>
                         <SettingsInput
                             value={editUsername}
                             onChange={setEditUsername}
-                            placeholder="Username"
+                            placeholder={adminManagementRu.users.username}
                         />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-white/90 mb-1.5">
-                            Email
+                            {adminManagementRu.users.email}
                         </label>
                         <SettingsInput
                             type="email"
@@ -613,8 +662,8 @@ export function UserManagementSection() {
                     <div>
                         <label className="block text-sm font-medium text-white/90 mb-1.5">
                             {editingUser?.hasPassword
-                                ? "New Password"
-                                : "Set password (enables local login)"}
+                                ? adminManagementRu.users.newPassword
+                                : adminManagementRu.users.setPassword}
                         </label>
                         <SettingsInput
                             type="password"
@@ -622,8 +671,8 @@ export function UserManagementSection() {
                             onChange={setEditPassword}
                             placeholder={
                                 editingUser?.hasPassword
-                                    ? "Leave blank to keep current"
-                                    : "Leave blank to remain SSO-only"
+                                    ? adminManagementRu.users.keepPassword
+                                    : adminManagementRu.users.remainSsoOnly
                             }
                         />
                     </div>
@@ -637,7 +686,7 @@ export function UserManagementSection() {
                             onClick={closeEditModal}
                             className="px-4 py-2 text-sm text-gray-400 hover:text-white"
                         >
-                            Cancel
+                            {adminManagementRu.users.cancel}
                         </button>
                         <button
                             onClick={handleEditUser}
@@ -645,7 +694,9 @@ export function UserManagementSection() {
                             className="px-4 py-2 text-sm bg-white text-black font-medium rounded-full
                                 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
-                            {savingEdit ? "Saving..." : "Save Changes"}
+                            {savingEdit
+                                ? adminManagementRu.users.saving
+                                : adminManagementRu.users.saveChanges}
                         </button>
                     </div>
                 </div>
@@ -655,12 +706,11 @@ export function UserManagementSection() {
             <Modal
                 isOpen={!!confirmDelete}
                 onClose={() => setConfirmDelete(null)}
-                title="Delete User"
+                title={adminManagementRu.users.deleteTitle}
             >
                 <div className="space-y-4">
                     <p className="text-sm text-gray-300">
-                        Are you sure you want to delete this user? This action
-                        cannot be undone.
+                        {adminManagementRu.users.deleteQuestion}
                     </p>
                     <div className="flex gap-2 justify-end items-center">
                         <InlineStatus
@@ -672,7 +722,7 @@ export function UserManagementSection() {
                             onClick={() => setConfirmDelete(null)}
                             className="px-4 py-2 text-sm text-gray-400 hover:text-white"
                         >
-                            Cancel
+                            {adminManagementRu.users.cancel}
                         </button>
                         <button
                             onClick={() =>
@@ -680,7 +730,7 @@ export function UserManagementSection() {
                             }
                             className="px-4 py-2 text-sm bg-red-500 text-white rounded-full hover:bg-red-600"
                         >
-                            Delete
+                            {adminManagementRu.users.delete}
                         </button>
                     </div>
                 </div>

@@ -31,6 +31,12 @@ const ENV_CATEGORIES = {
     OpenAI: ["OPENAI_API_KEY"],
     Audiobookshelf: ["AUDIOBOOKSHELF_URL", "AUDIOBOOKSHELF_API_KEY"],
     "Docker Paths": ["MUSIC_PATH", "DOWNLOAD_PATH"],
+    "Recommendations & Remote Analysis": [
+        "RECOMMENDATION_ENGINE_MODE",
+        "REMOTE_ANALYSIS_ENABLED",
+        "REMOTE_ANALYSIS_DAILY_BUDGET",
+        "REMOTE_ANALYSIS_CONCURRENCY",
+    ],
     Security: ["SETTINGS_ENCRYPTION_KEY"],
 } as const;
 

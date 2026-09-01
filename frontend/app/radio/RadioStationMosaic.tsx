@@ -88,8 +88,8 @@ export function RadioStationMosaic({
                 hoverScale
                 imageSizes="(max-width: 768px) 120px, 180px"
                 emptyState={
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f2937] to-[#111827]">
-                        <Music className="w-10 h-10 text-white/35" />
+                    <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-surface-highlight to-surface">
+                        <Music className="h-10 w-10 text-content-muted" />
                     </div>
                 }
             />

@@ -11,6 +11,7 @@ import {
 } from "@/lib/shareLinks";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
+import { ru } from "@/lib/i18n/ru";
 
 interface ShareLinkModalProps {
     isOpen: boolean;
@@ -50,7 +51,7 @@ export function ShareLinkModal({
             );
         } catch (error) {
             sharedFrontendLogger.error("Failed to load share links", error);
-            toast.error("Failed to load existing share links");
+            toast.error(ru.shareLink.loadFailed);
         } finally {
             setIsLoadingLinks(false);
         }
@@ -73,10 +74,10 @@ export function ShareLinkModal({
     const resourceLabel = useMemo(
         () =>
             resourceType === "album"
-                ? "album"
+                ? ru.shareLink.album
                 : resourceType === "playlist"
-                  ? "playlist"
-                  : "track",
+                  ? ru.shareLink.playlist
+                  : ru.shareLink.track,
         [resourceType],
     );
 
@@ -98,10 +99,10 @@ export function ShareLinkModal({
                 ),
             );
             await loadExistingLinks();
-            toast.success(`Share link created for ${resourceLabel}`);
+            toast.success(ru.shareLink.created);
         } catch (error) {
             sharedFrontendLogger.error("Failed to create share link", error);
-            toast.error(`Failed to create ${resourceLabel} share link`);
+            toast.error(ru.shareLink.createFailed);
         } finally {
             setIsSubmitting(false);
         }
@@ -115,10 +116,10 @@ export function ShareLinkModal({
     const copyLinkToClipboard = async (url: string) => {
         try {
             await navigator.clipboard.writeText(url);
-            toast.success("Share link copied");
+            toast.success(ru.shareLink.copied);
         } catch (error) {
             sharedFrontendLogger.error("Failed to copy share link", error);
-            toast.error("Failed to copy share link");
+            toast.error(ru.shareLink.copyFailed);
         }
     };
 
@@ -129,10 +130,10 @@ export function ShareLinkModal({
             setExistingLinks((current) =>
                 current.filter((link) => link.id !== id),
             );
-            toast.success("Share link revoked");
+            toast.success(ru.shareLink.revoked);
         } catch (error) {
             sharedFrontendLogger.error("Failed to revoke share link", error);
-            toast.error("Failed to revoke share link");
+            toast.error(ru.shareLink.revokeFailed);
         } finally {
             setRevokingId(null);
         }
@@ -141,15 +142,19 @@ export function ShareLinkModal({
     const formatLinkMeta = (link: ShareLinkRecord) => {
         const meta: string[] = [];
         if (link.expiresAt) {
-            meta.push(`Expires ${new Date(link.expiresAt).toLocaleString()}`);
+            meta.push(
+                `${ru.shareLink.expires} ${new Date(link.expiresAt).toLocaleString("ru-RU")}`,
+            );
         } else {
-            meta.push("No expiry");
+            meta.push(ru.shareLink.noExpiry);
         }
 
         if (link.maxPlays !== null) {
-            meta.push(`${link.playCount}/${link.maxPlays} plays`);
+            meta.push(
+                `${link.playCount}/${link.maxPlays} ${ru.shareLink.plays}`,
+            );
         } else {
-            meta.push(`${link.playCount} plays`);
+            meta.push(`${link.playCount} ${ru.shareLink.plays}`);
         }
 
         return meta.join(" • ");
@@ -164,7 +169,7 @@ export function ShareLinkModal({
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={`Share ${resourceType === "album" ? "Album" : resourceType === "playlist" ? "Playlist" : "Track"}`}
+            title={`${ru.shareLink.title}: ${resourceLabel}`}
             className="max-w-lg"
         >
             <div className="space-y-4">
@@ -178,9 +183,7 @@ export function ShareLinkModal({
                                 {resourceName}
                             </p>
                             <p className="mt-1 text-sm text-gray-400">
-                                Create a shareable link for this {resourceLabel}
-                                . You can optionally limit how long it works and
-                                how many times it can be used.
+                                {ru.shareLink.description}
                             </p>
                         </div>
                     </div>
@@ -193,7 +196,7 @@ export function ShareLinkModal({
                                 htmlFor="share-link-expires-at"
                                 className="mb-2 block text-sm font-medium text-gray-300"
                             >
-                                Expires at
+                                {ru.shareLink.expiresAt}
                             </label>
                             <input
                                 id="share-link-expires-at"
@@ -206,8 +209,7 @@ export function ShareLinkModal({
                                 style={{ colorScheme: "dark" }}
                             />
                             <p className="mt-2 text-xs text-gray-400">
-                                Leave empty to keep the link active until you
-                                revoke it.
+                                {ru.shareLink.expiresHint}
                             </p>
                         </div>
 
@@ -216,7 +218,7 @@ export function ShareLinkModal({
                                 htmlFor="share-link-max-plays"
                                 className="mb-2 block text-sm font-medium text-gray-300"
                             >
-                                Max plays
+                                {ru.shareLink.maxPlays}
                             </label>
                             <input
                                 id="share-link-max-plays"
@@ -228,17 +230,17 @@ export function ShareLinkModal({
                                 onChange={(event) =>
                                     setMaxPlays(event.target.value)
                                 }
-                                placeholder="Unlimited"
+                                placeholder={ru.shareLink.unlimited}
                                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/50"
                             />
                             <p className="mt-2 text-xs text-gray-400">
-                                Leave empty to allow unlimited opens.
+                                {ru.shareLink.maxHint}
                             </p>
                         </div>
 
                         <div className="flex justify-end gap-3">
                             <Button variant="ghost" onClick={onClose}>
-                                Cancel
+                                {ru.common.cancel}
                             </Button>
                             <Button
                                 variant="primary"
@@ -246,21 +248,21 @@ export function ShareLinkModal({
                                 isLoading={isSubmitting}
                                 disabled={createDisabled}
                             >
-                                Create link
+                                {ru.shareLink.create}
                             </Button>
                         </div>
                     </div>
                 ) : (
                     <div className="space-y-4">
                         <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-                            Your share link is ready.
+                            {ru.shareLink.ready}
                         </div>
                         <div>
                             <label
                                 htmlFor="share-link-output"
                                 className="mb-2 block text-sm font-medium text-gray-300"
                             >
-                                Share link
+                                {ru.shareLink.link}
                             </label>
                             <div className="flex gap-2">
                                 <input
@@ -274,13 +276,13 @@ export function ShareLinkModal({
                                     onClick={() => void handleCopy()}
                                 >
                                     <Copy className="mr-2 h-4 w-4" />
-                                    Copy
+                                    {ru.shareLink.copy}
                                 </Button>
                             </div>
                         </div>
                         <div className="flex justify-end gap-3">
                             <Button variant="ghost" onClick={onClose}>
-                                Close
+                                {ru.common.close}
                             </Button>
                         </div>
                     </div>
@@ -290,10 +292,10 @@ export function ShareLinkModal({
                     <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
                             <h3 className="text-sm font-medium text-white">
-                                Existing share links
+                                {ru.shareLink.existing}
                             </h3>
                             <p className="mt-1 text-xs text-gray-400">
-                                Revoke links you no longer want to keep active.
+                                {ru.shareLink.existingHint}
                             </p>
                         </div>
                         <Button
@@ -301,18 +303,18 @@ export function ShareLinkModal({
                             onClick={() => void loadExistingLinks()}
                             disabled={isLoadingLinks}
                         >
-                            Refresh
+                            {ru.shareLink.refresh}
                         </Button>
                     </div>
 
                     {isLoadingLinks ? (
                         <div className="flex items-center gap-2 text-sm text-gray-400">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            Loading share links...
+                            {ru.shareLink.loading}
                         </div>
                     ) : existingLinks.length === 0 ? (
                         <p className="text-sm text-gray-400">
-                            No active share links for this {resourceLabel} yet.
+                            {ru.shareLink.none}
                         </p>
                     ) : (
                         <div className="space-y-3">
@@ -345,7 +347,7 @@ export function ShareLinkModal({
                                                     }
                                                 >
                                                     <Copy className="mr-2 h-4 w-4" />
-                                                    Copy
+                                                    {ru.shareLink.copy}
                                                 </Button>
                                                 <Button
                                                     variant="danger"
@@ -363,7 +365,7 @@ export function ShareLinkModal({
                                                     ) : (
                                                         <Trash2 className="mr-2 h-4 w-4" />
                                                     )}
-                                                    Revoke
+                                                    {ru.shareLink.revoke}
                                                 </Button>
                                             </div>
                                         </div>

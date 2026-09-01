@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
-import { beforeEach, mock, test } from "node:test";
+import { afterEach, beforeEach, mock, test } from "node:test";
 import React from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+
+GlobalRegistrator.register();
+(
+    globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const Icon = (props: Record<string, unknown>) =>
     React.createElement("i", props);
@@ -10,6 +18,7 @@ const state = {
     hasMedia: true,
     mediaTitle: "Test Track",
     mediaSubtitle: "Test Artist",
+    mediaCoverUrl: null as string | null,
     currentTrack: {
         id: "track-1",
         duration: 200,
@@ -45,6 +54,15 @@ const state = {
     canSeek: true,
     downloadProgress: null as number | null,
     audioError: null as string | null,
+    qualityBadge: null as null | {
+        variant: "tidal" | "youtube" | "local";
+        label: string;
+    },
+};
+
+const controlCalls = {
+    toggleShuffle: 0,
+    toggleRepeat: 0,
 };
 
 mock.module("@/lib/audio-volume-mode-context", {
@@ -185,10 +203,15 @@ mock.module("@/lib/audio-controls-context", {
             seek: () => undefined,
             setVolume: () => undefined,
             toggleMute: () => undefined,
-            toggleShuffle: () => undefined,
-            toggleRepeat: () => undefined,
+            toggleShuffle: () => {
+                controlCalls.toggleShuffle += 1;
+            },
+            toggleRepeat: () => {
+                controlCalls.toggleRepeat += 1;
+            },
             skipForward: () => undefined,
             skipBackward: () => undefined,
+            returnToPreviousMode: () => undefined,
         }),
     },
 });
@@ -198,7 +221,7 @@ mock.module("@/hooks/useMediaInfo", {
         useMediaInfo: () => ({
             title: state.mediaTitle,
             subtitle: state.mediaSubtitle,
-            coverUrl: null,
+            coverUrl: state.mediaCoverUrl,
             artistLink: null,
             mediaLink: null,
             hasMedia: state.hasMedia,
@@ -209,8 +232,33 @@ mock.module("@/hooks/useMediaInfo", {
 mock.module("@/hooks/useStreamBitrate", {
     namedExports: {
         useStreamBitrate: () => ({
-            qualityBadge: null,
+            qualityBadge: state.qualityBadge,
         }),
+    },
+});
+
+mock.module("@/components/player/PlaybackQualityBadgeWithStats", {
+    namedExports: {
+        PlaybackQualityBadgeWithStats: ({
+            badge,
+        }: {
+            badge: { label: string };
+        }) => React.createElement("span", null, badge.label),
+    },
+});
+
+mock.module("@/components/ui/TrackOverflowMenu", {
+    namedExports: {
+        TrackOverflowMenu: ({
+            extraItemsAfter,
+        }: {
+            extraItemsAfter?: React.ReactNode;
+        }) =>
+            React.createElement(
+                "div",
+                { "data-testid": "track-overflow" },
+                extraItemsAfter,
+            ),
     },
 });
 
@@ -245,6 +293,7 @@ beforeEach(() => {
     state.hasMedia = true;
     state.mediaTitle = "Test Track";
     state.mediaSubtitle = "Test Artist";
+    state.mediaCoverUrl = null;
     state.currentTrack = {
         id: "track-1",
         duration: 200,
@@ -268,6 +317,103 @@ beforeEach(() => {
     state.canSeek = true;
     state.downloadProgress = null;
     state.audioError = null;
+    state.qualityBadge = null;
+    controlCalls.toggleShuffle = 0;
+    controlCalls.toggleRepeat = 0;
+});
+
+afterEach(() => {
+    document.body.innerHTML = "";
+});
+
+test("FullPlayer exposes a three-zone, two-level desktop player", async () => {
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /data-player-surface="desktop"/);
+    assert.match(html, /data-player-layout="identity-transport-actions"/);
+    assert.match(html, /data-player-region="identity"/);
+    assert.match(html, /data-player-region="transport"/);
+    assert.match(html, /data-player-region="actions"/);
+    assert.match(html, /data-player-level="controls"/);
+    assert.match(html, /data-player-level="timeline"/);
+    assert.match(html, /data-player-control="shuffle"/);
+    assert.match(html, /data-player-control="repeat"/);
+    assert.match(html, /data-player-control-budget="music-5-utilities-4"/);
+    assert.match(html, /aria-label="Перемешать"[^>]*aria-pressed="false"/);
+    assert.match(html, /aria-label="Повтор выключен"[^>]*aria-pressed="false"/);
+    assert.match(html, /data-player-time="current"[^>]*>0:12</);
+    assert.match(html, /data-player-time="duration"[^>]*>3:20</);
+});
+
+test("FullPlayer shuffle and repeat controls call the audio actions", async () => {
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+        root.render(React.createElement(FullPlayer));
+    });
+
+    const shuffle = container.querySelector<HTMLButtonElement>(
+        '[data-player-control="shuffle"]',
+    );
+    const repeat = container.querySelector<HTMLButtonElement>(
+        '[data-player-control="repeat"]',
+    );
+    assert.ok(shuffle);
+    assert.ok(repeat);
+
+    await act(async () => {
+        shuffle.click();
+        repeat.click();
+    });
+
+    assert.equal(controlCalls.toggleShuffle, 1);
+    assert.equal(controlCalls.toggleRepeat, 1);
+    await act(async () => root.unmount());
+});
+
+test("FullPlayer exposes the active shuffle and repeat-one states", async () => {
+    state.isShuffle = true;
+    state.repeatMode = "one";
+
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /aria-label="Перемешать"[^>]*aria-pressed="true"/);
+    assert.match(
+        html,
+        /aria-label="Повторять текущий трек"[^>]*aria-pressed="true"/,
+    );
+    assert.match(html, /data-repeat-mode="one"/);
+});
+
+test("FullPlayer derives its atmosphere from the current cover artwork", async () => {
+    state.mediaCoverUrl = "/cover/current-track.jpg";
+
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /data-player-artwork-atmosphere/);
+    assert.match(html, /data-player-spectral-glow/);
+    assert.equal(
+        (html.match(/src="\/cover\/current-track\.jpg"/g) ?? []).length,
+        2,
+    );
+});
+
+test("FullPlayer keeps stream diagnostics inside track overflow", async () => {
+    state.qualityBadge = { variant: "youtube", label: "OPUS · 150 kbps" };
+
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /data-player-diagnostics="overflow"/);
+    assert.match(html, /data-testid="track-overflow"/);
+    assert.match(html, /OPUS · 150 kbps/);
+    assert.doesNotMatch(html, /data-player-diagnostics="surface"/);
 });
 
 test("FullPlayer shows retry affordance when audioError is present", async () => {
@@ -276,8 +422,16 @@ test("FullPlayer shows retry affordance when audioError is present", async () =>
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const html = renderToStaticMarkup(React.createElement(FullPlayer));
 
-    assert.match(html, /aria-label="Retry playback"/);
-    assert.match(html, /title="Retry playback"/);
+    assert.match(html, /aria-label="Повторить воспроизведение"/);
+    assert.match(html, /title="Повторить воспроизведение"/);
+});
+
+test("FullPlayer exposes both like and dislike controls for music", async () => {
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /aria-label="Нравится"/);
+    assert.match(html, /aria-label="Не нравится"/);
 });
 
 test("FullPlayer uses podcast saved progress when live currentTime is zero", async () => {
@@ -297,5 +451,6 @@ test("FullPlayer uses podcast saved progress when live currentTime is zero", asy
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const html = renderToStaticMarkup(React.createElement(FullPlayer));
 
-    assert.match(html, /2:00\s*\/\s*5:00/);
+    assert.match(html, /data-player-time="current"[^>]*>2:00</);
+    assert.match(html, /data-player-time="duration"[^>]*>5:00</);
 });

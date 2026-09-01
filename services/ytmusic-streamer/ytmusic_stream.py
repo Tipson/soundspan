@@ -77,6 +77,7 @@ YTMUSIC_SPOOL_TRACK_MAX_BYTES = max(
 # Stay below the backend's 120-second timeout so callers receive this sidecar's 504.
 YTMUSIC_SPOOL_TIMEOUT = env_float("YTMUSIC_SPOOL_TIMEOUT", "110")
 YTMUSIC_SPOOL_CONCURRENCY = max(1, min(4, env_int("YTMUSIC_SPOOL_CONCURRENCY", "2")))
+_PROVIDER_CHALLENGE_COOLDOWN_SECONDS = 90.0
 _SPOOL_PARTIAL_STALE_SECONDS = 900
 _SPOOL_EVICT_MIN_AGE_SECONDS = 60
 _SPOOL_MAX_PENDING_JOBS = 8
@@ -88,10 +89,37 @@ _yt_dlp_spool_executor = ThreadPoolExecutor(
 _spool_tasks: dict[str, asyncio.Task[tuple[str, str]]] = {}
 _spool_pending_jobs = 0
 _spool_prune_lock = threading.Lock()
+_provider_challenge_lock = threading.Lock()
+_provider_challenge_cooldown_until = 0.0
 
 
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _ALLOWED_STREAM_QUALITIES = {"LOW", "MEDIUM", "HIGH", "LOSSLESS"}
+_PERMANENT_UNAVAILABLE_PATTERNS = (
+    re.compile(r"\b(?:this\s+)?video\s+(?:is\s+)?unavailable\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:this\s+)?video\s+is\s+(?:no\s+longer|not)\s+available\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b(?:this\s+video\s+is\s+private|private\s+video)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:this\s+)?(?:video|content)\s+(?:has\s+been|was|is)\s+(?:removed|deleted)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:youtube\s+)?(?:account|channel|uploader)\b[^\r\n]{0,160}\bterminated\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bterminated\b[^\r\n]{0,160}\b(?:youtube\s+)?(?:account|channel|uploader)\b",
+        re.IGNORECASE,
+    ),
+)
+# Both direct metadata extraction and the HLS spool use the client set that
+# exposes public audio formats without an android_music-only failure.
+_YTMUSIC_PLAYER_CLIENTS = ["default", "web_safari"]
+# Keep per-track HLS fan-out modest while shortening complete-file spool time.
+_SPOOL_FRAGMENT_CONCURRENCY = 4
 _SPOOL_QUALITY_ALTERNATION = "|".join(
     re.escape(quality) for quality in sorted(_ALLOWED_STREAM_QUALITIES)
 )
@@ -119,6 +147,54 @@ def _validate_stream_quality(quality: str) -> str:
     return normalized
 
 
+def _is_permanently_unavailable_error(error_message: str) -> bool:
+    """Return whether yt-dlp identified a permanently unusable video identity.
+
+    Patterns require video/content/account context so format-selection and
+    extractor availability errors remain transient 5xx failures.
+    """
+    return any(pattern.search(error_message) for pattern in _PERMANENT_UNAVAILABLE_PATTERNS)
+
+
+def _is_provider_challenge_error(error_message: str) -> bool:
+    """Detect YouTube's temporary anonymous-client verification challenge."""
+    normalized = error_message.lower()
+    return "sign in to confirm you" in normalized and "not a bot" in normalized
+
+
+def _provider_challenge_http_error(video_id: str, retry_after: int) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            "error": "provider_challenge",
+            "message": "YouTube Music temporarily requires verification. Retry later.",
+            "video_id": video_id,
+        },
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def _arm_provider_challenge_cooldown() -> int:
+    """Arm one process-wide cooldown and return its rounded retry delay."""
+    global _provider_challenge_cooldown_until
+    now = time.monotonic()
+    with _provider_challenge_lock:
+        _provider_challenge_cooldown_until = max(
+            _provider_challenge_cooldown_until,
+            now + _PROVIDER_CHALLENGE_COOLDOWN_SECONDS,
+        )
+        return max(1, int(_provider_challenge_cooldown_until - now + 0.999))
+
+
+def _raise_if_provider_challenge_cooldown(video_id: str) -> None:
+    """Avoid hammering YouTube while its verification challenge is active."""
+    now = time.monotonic()
+    with _provider_challenge_lock:
+        remaining = _provider_challenge_cooldown_until - now
+    if remaining > 0:
+        raise _provider_challenge_http_error(video_id, max(1, int(remaining + 0.999)))
+
+
 def _stream_extraction_http_error(
     video_id: str, error_label: str, error: Exception
 ) -> HTTPException:
@@ -139,6 +215,29 @@ def _stream_extraction_http_error(
             detail={
                 "error": "age_restricted",
                 "message": "This content requires age verification and cannot be streamed.",
+                "video_id": video_id,
+            },
+        )
+    if _is_provider_challenge_error(error_str):
+        retry_after = _arm_provider_challenge_cooldown()
+        log.warning(
+            "%s hit YouTube provider challenge; extraction paused for %ss",
+            error_label,
+            retry_after,
+        )
+        return _provider_challenge_http_error(video_id, retry_after)
+    if _is_permanently_unavailable_error(error_str):
+        log.error(
+            "%s failed: %s",
+            error_label,
+            error,
+            exc_info=True,  # noqa: LOG014 -- called while handling the extraction exception
+        )
+        return HTTPException(
+            status_code=404,
+            detail={
+                "error": "content_unavailable",
+                "message": "This content is unavailable and cannot be streamed.",
                 "video_id": video_id,
             },
         )
@@ -178,6 +277,7 @@ def _extract_stream_info(
     if cached and cached.get("expires_at", 0) > time.time():
         log.debug(f"Stream URL cache hit for {cache_key}")
         return cached
+    _raise_if_provider_challenge_cooldown(video_id)
     _extract_pacer.wait()
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -260,7 +360,7 @@ def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> 
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://music.youtube.com/",
         },
-        "extractor_args": {"youtube": {"player_client": ["android_music"]}},
+        "extractor_args": {"youtube": {"player_client": _YTMUSIC_PLAYER_CLIENTS}},
     }
     return _extract_stream_info(
         f"{user_id}:{video_id}",
@@ -309,25 +409,35 @@ async def _browse_public_bounded(func: Callable[..., T], *args: Any) -> T:
         raise HTTPException(status_code=504, detail="YouTube Music request timed out") from error
 
 
-# HLS preferred because signed progressive URLs reject continuation ranges (SABR); ba/b is last.
-_YTMUSIC_HLS_FORMATS = {
-    "LOW": (
-        "ba[protocol=m3u8_native][abr<=64]/"
-        "ba[protocol=m3u8][abr<=64]/"
-        "ba[protocol=m3u8_native]/ba[protocol=m3u8]/ba/b"
-    ),
-    "MEDIUM": (
-        "ba[protocol=m3u8_native][abr<=128]/"
-        "ba[protocol=m3u8][abr<=128]/"
-        "ba[protocol=m3u8_native]/ba[protocol=m3u8]/ba/b"
-    ),
-    "HIGH": (
-        "ba[protocol=m3u8_native][abr<=256]/"
-        "ba[protocol=m3u8][abr<=256]/"
-        "ba[protocol=m3u8_native]/ba[protocol=m3u8]/ba/b"
-    ),
-    "LOSSLESS": "ba[protocol=m3u8_native]/ba[protocol=m3u8]/ba/b",
+_YTMUSIC_MAX_ABR = {
+    "LOW": 64,
+    "MEDIUM": 128,
+    "HIGH": 256,
+    "LOSSLESS": None,
 }
+
+
+def _build_ytmusic_spool_format(quality: str, max_bytes: int) -> str:
+    """Prefer the best audio format that can complete inside the spool cap.
+
+    yt-dlp often exposes both a large HLS rendition and smaller progressive
+    audio for long ambient titles. The completed file is served locally, so a
+    bounded progressive rendition is safe here even though its signed URL
+    would not be safe to expose directly to a range-reading browser.
+    """
+    max_abr = _YTMUSIC_MAX_ABR.get(quality, _YTMUSIC_MAX_ABR["HIGH"])
+    abr_filter = f"[abr<={max_abr}]" if max_abr is not None else ""
+    # yt-dlp's numeric filters are strict. Add one byte so a file exactly at
+    # the configured limit remains eligible, matching the progress hook.
+    exclusive_limit = max_bytes + 1
+    candidates = []
+    for protocol_filter in ("[protocol=m3u8_native]", "[protocol=m3u8]", ""):
+        for size_field in ("filesize", "filesize_approx"):
+            candidates.append(f"ba{protocol_filter}{abr_filter}[{size_field}<{exclusive_limit}]")
+    # If upstream omits all size estimates, choose the smallest audio stream;
+    # the progress hook still enforces the hard byte limit while downloading.
+    candidates.append("wa")
+    return "/".join(candidates)
 
 
 def _spool_candidates(video_id: str, quality: str) -> list[Path]:
@@ -471,14 +581,16 @@ def _build_ytmusic_spool_options(
     progress_hook: Callable[[JsonObject], None],
 ) -> JsonObject:
     """Build yt-dlp options for one validated spool request."""
-    fmt = _YTMUSIC_HLS_FORMATS.get(quality, _YTMUSIC_HLS_FORMATS["HIGH"])
+    fmt = _build_ytmusic_spool_format(quality, YTMUSIC_SPOOL_TRACK_MAX_BYTES)
     outtmpl = str(YTMUSIC_SPOOL_DIR / f"{video_id}-{quality}.%(ext)s")
     return {
         "format": fmt,
         "outtmpl": outtmpl,
         "quiet": True,
+        "noprogress": True,
         "no_warnings": True,
         "noplaylist": True,
+        "concurrent_fragment_downloads": _SPOOL_FRAGMENT_CONCURRENCY,
         "match_filter": match_filter,
         "progress_hooks": [progress_hook],
         "socket_timeout": YTDLP_SOCKET_TIMEOUT,
@@ -489,7 +601,7 @@ def _build_ytmusic_spool_options(
         },
         "extractor_args": {
             "youtube": {
-                "player_client": ["default", "web_safari"],
+                "player_client": _YTMUSIC_PLAYER_CLIENTS,
             },
         },
         "js_runtimes": {"deno": {}},
@@ -518,6 +630,8 @@ def _download_ytmusic_spool_sync(video_id: str, quality: str) -> tuple[str, str]
     existing = _find_spooled_file(video_id, quality)
     if existing is not None:
         return str(existing), _spool_content_type(existing)
+
+    _raise_if_provider_challenge_cooldown(video_id)
 
     started_at = time.monotonic()
     ydl_opts = _build_ytmusic_spool_options(

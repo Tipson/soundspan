@@ -1,7 +1,83 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useSyncExternalStore } from "react";
+import {
+    MutationCache,
+    QueryClient,
+    QueryClientProvider,
+    type Mutation,
+    type MutationOptions,
+    type MutationState,
+} from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import {
+    assertCurrentAuthRuntime,
+    getAuthRuntimeGeneration,
+    isCurrentAuthRuntime,
+} from "@/lib/auth-runtime-generation";
+
+function guardMutationOptions<TData, TError, TVariables, TOnMutateResult>(
+    options: MutationOptions<TData, TError, TVariables, TOnMutateResult>,
+    authRuntimeGeneration: number,
+): MutationOptions<TData, TError, TVariables, TOnMutateResult> {
+    const mutationFn = options.mutationFn;
+    const onMutate = options.onMutate;
+    const onSuccess = options.onSuccess;
+    const onError = options.onError;
+    const onSettled = options.onSettled;
+
+    return {
+        ...options,
+        mutationFn: mutationFn
+            ? async (variables, context) => {
+                  assertCurrentAuthRuntime(authRuntimeGeneration);
+                  const data = await mutationFn(variables, context);
+                  assertCurrentAuthRuntime(authRuntimeGeneration);
+                  return data;
+              }
+            : undefined,
+        onMutate: onMutate
+            ? async (variables, context) => {
+                  assertCurrentAuthRuntime(authRuntimeGeneration);
+                  const result = await onMutate(variables, context);
+                  assertCurrentAuthRuntime(authRuntimeGeneration);
+                  return result;
+              }
+            : undefined,
+        onSuccess: onSuccess
+            ? (...args) => {
+                  if (!isCurrentAuthRuntime(authRuntimeGeneration)) return;
+                  return onSuccess(...args);
+              }
+            : undefined,
+        onError: onError
+            ? (...args) => {
+                  if (!isCurrentAuthRuntime(authRuntimeGeneration)) return;
+                  return onError(...args);
+              }
+            : undefined,
+        onSettled: onSettled
+            ? (...args) => {
+                  if (!isCurrentAuthRuntime(authRuntimeGeneration)) return;
+                  return onSettled(...args);
+              }
+            : undefined,
+    };
+}
+
+class AuthScopedMutationCache extends MutationCache {
+    override build<TData, TError, TVariables, TOnMutateResult>(
+        client: QueryClient,
+        options: MutationOptions<TData, TError, TVariables, TOnMutateResult>,
+        state?: MutationState<TData, TError, TVariables, TOnMutateResult>,
+    ): Mutation<TData, TError, TVariables, TOnMutateResult> {
+        return super.build(
+            client,
+            guardMutationOptions(options, getAuthRuntimeGeneration()),
+            state,
+        );
+    }
+}
 
 /**
  * Creates a new QueryClient instance with sensible defaults for the music streaming app
@@ -14,6 +90,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
  */
 function makeQueryClient() {
     return new QueryClient({
+        mutationCache: new AuthScopedMutationCache(),
         defaultOptions: {
             queries: {
                 // Data freshness configuration
@@ -61,6 +138,21 @@ function makeQueryClient() {
 }
 
 let browserQueryClient: QueryClient | undefined = undefined;
+let browserQueryClientRevision = 0;
+const browserQueryClientListeners = new Set<() => void>();
+
+function subscribeToBrowserQueryClient(listener: () => void): () => void {
+    browserQueryClientListeners.add(listener);
+    return () => browserQueryClientListeners.delete(listener);
+}
+
+function getBrowserQueryClientRevision(): number {
+    return browserQueryClientRevision;
+}
+
+function getServerQueryClientRevision(): number {
+    return 0;
+}
 
 /**
  * Gets the QueryClient instance
@@ -79,6 +171,22 @@ function getQueryClient() {
 }
 
 /**
+ * Orphan the account-bound browser client after clearing it. Async closures
+ * from the retired account may still reference it, but a replacement session
+ * receives a distinct cache instance.
+ */
+export function retireQueryClientForAuthRuntime(
+    queryClient: QueryClient,
+): void {
+    queryClient.clear();
+    if (typeof window !== "undefined" && browserQueryClient === queryClient) {
+        browserQueryClient = makeQueryClient();
+        browserQueryClientRevision += 1;
+        for (const listener of browserQueryClientListeners) listener();
+    }
+}
+
+/**
  * QueryProvider component to wrap the app with React Query
  * Includes devtools in development mode
  */
@@ -87,6 +195,11 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     // have a suspense boundary between this and the code that may suspend
     // because React will throw away the client on the initial render if it
     // suspends and there is no boundary
+    useSyncExternalStore(
+        subscribeToBrowserQueryClient,
+        getBrowserQueryClientRevision,
+        getServerQueryClientRevision,
+    );
     const queryClient = getQueryClient();
 
     return (

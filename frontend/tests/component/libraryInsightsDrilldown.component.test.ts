@@ -242,7 +242,7 @@ test("metadata gaps drill-down renders backend album and track shapes", async ()
     assert.match(document.body.textContent ?? "", /Bare Album/);
     assert.match(document.body.textContent ?? "", /Cover Artist/);
 
-    await click(tabButton("Genres"));
+    await click(tabButton("Жанры"));
     assert.equal(getLibraryHealthGaps.mock.callCount(), 2);
     assert.equal(
         getLibraryHealthGaps.mock.calls[1]?.arguments[0],
@@ -270,15 +270,15 @@ test("a failed panel load shows an error with a working Retry control", async ()
     await click(panelHeader());
     assert.match(
         document.body.textContent ?? "",
-        /Failed to load metadata gaps/,
+        /Не удалось загрузить пробелы в метаданных/,
     );
     assert.doesNotMatch(document.body.textContent ?? "", /Bare Album/);
 
-    await click(tabButton("Retry"));
+    await click(tabButton("Повторить"));
     assert.equal(getLibraryHealthGaps.mock.callCount(), 2);
     assert.doesNotMatch(
         document.body.textContent ?? "",
-        /Failed to load metadata gaps/,
+        /Не удалось загрузить пробелы в метаданных/,
     );
     assert.match(document.body.textContent ?? "", /Bare Album/);
 
@@ -301,7 +301,8 @@ test("analysis coverage drill-down renders backend failed-track shape", async ()
     assert.equal(getLibraryHealthAnalysis.mock.callCount(), 1);
     assert.match(document.body.textContent ?? "", /Broken Track/);
     assert.match(document.body.textContent ?? "", /Failing Artist/);
-    assert.match(document.body.textContent ?? "", /decode failed/);
+    assert.match(document.body.textContent ?? "", /Ошибка анализа/);
+    assert.doesNotMatch(document.body.textContent ?? "", /decode failed/);
 
     await mounted.unmount();
 });
@@ -386,7 +387,7 @@ test("analysis retry action reports remediation to the section", async () => {
     }));
 
     await click(panelHeader());
-    await click(tabButton("Retry failed audio analysis"));
+    await click(tabButton("Повторить неудачный анализ аудио"));
     assert.equal(retryFailedAnalysis.mock.callCount(), 1);
     assert.equal(onRemediated.mock.callCount(), 1);
 
@@ -518,14 +519,14 @@ test("Recompute now reloads expanded panels and updates headlines through the re
     });
 
     assert.equal(getLibraryHealthSummary.mock.callCount(), 1);
-    assert.match(document.body.textContent ?? "", /1 albums without art/);
+    assert.match(document.body.textContent ?? "", /1 альбом без обложки/);
 
-    await click(headerByTitle("Metadata gaps"));
+    await click(headerByTitle("Пробелы в метаданных"));
     assert.equal(getLibraryHealthGaps.mock.callCount(), 1);
 
-    await click(sectionButton("Recompute library insights"));
+    await click(sectionButton("Пересчитать аналитику коллекции"));
     assert.equal(refreshLibraryHealthDashboard.mock.callCount(), 1);
-    assert.match(document.body.textContent ?? "", /7 albums without art/);
+    assert.match(document.body.textContent ?? "", /7 альбомов без обложки/);
     assert.equal(getLibraryHealthGaps.mock.callCount(), 2);
 
     await mounted.unmount();
@@ -538,15 +539,15 @@ test("analysis retry refreshes the section headline through the real wiring", as
         return { element: React.createElement(LibraryInsightsSection) };
     });
 
-    assert.match(document.body.textContent ?? "", /1 failed/);
+    assert.match(document.body.textContent ?? "", /1 ошибка/);
 
-    await click(headerByTitle("Analysis coverage"));
+    await click(headerByTitle("Покрытие анализа"));
     assert.equal(getLibraryHealthAnalysis.mock.callCount(), 1);
 
-    await click(sectionButton("Retry failed audio analysis"));
+    await click(sectionButton("Повторить неудачный анализ аудио"));
     assert.equal(retryFailedAnalysis.mock.callCount(), 1);
     assert.equal(refreshLibraryHealthDashboard.mock.callCount(), 1);
-    assert.match(document.body.textContent ?? "", /0 failed/);
+    assert.match(document.body.textContent ?? "", /0 ошибок/);
     assert.equal(getLibraryHealthAnalysis.mock.callCount(), 2);
 
     await mounted.unmount();
@@ -568,9 +569,9 @@ test("duplicate clusters disclose capped member previews", async () => {
 
     await click(panelHeader());
     assert.equal(getLibraryHealthDuplicates.mock.callCount(), 1);
-    assert.match(document.body.textContent ?? "", /11 tracks/);
+    assert.match(document.body.textContent ?? "", /11 треков/);
     assert.match(document.body.textContent ?? "", /Copy 0/);
-    assert.match(document.body.textContent ?? "", /Showing 8 of 11 tracks\./);
+    assert.match(document.body.textContent ?? "", /Показано 8 из 11 треков\./);
 
     await mounted.unmount();
 });

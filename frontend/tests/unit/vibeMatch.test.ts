@@ -60,7 +60,7 @@ test("calibratedMatch labels: nearly identical vibe >= 97", () => {
     // rank 2 -> percent 98
     assert.equal(
         calibratedMatch(EVEN_QUANTILES[2], EVEN_QUANTILES).label,
-        "nearly identical vibe",
+        "почти одинаковое звучание",
     );
 });
 
@@ -68,7 +68,7 @@ test("calibratedMatch labels: same vibe >= 90", () => {
     // rank 10 -> percent 90
     assert.equal(
         calibratedMatch(EVEN_QUANTILES[10], EVEN_QUANTILES).label,
-        "same vibe",
+        "одно настроение",
     );
 });
 
@@ -76,7 +76,7 @@ test("calibratedMatch labels: close neighbors >= 75", () => {
     // rank 25 -> percent 75
     assert.equal(
         calibratedMatch(EVEN_QUANTILES[25], EVEN_QUANTILES).label,
-        "close neighbors",
+        "очень близкое звучание",
     );
 });
 
@@ -84,7 +84,7 @@ test("calibratedMatch labels: same neighborhood >= 50", () => {
     // rank 50 -> percent 50
     assert.equal(
         calibratedMatch(EVEN_QUANTILES[50], EVEN_QUANTILES).label,
-        "same neighborhood",
+        "похожее звучание",
     );
 });
 
@@ -92,7 +92,7 @@ test("calibratedMatch labels: distant relatives >= 25", () => {
     // rank 75 -> percent 25
     assert.equal(
         calibratedMatch(EVEN_QUANTILES[75], EVEN_QUANTILES).label,
-        "distant relatives",
+        "есть общие черты",
     );
 });
 
@@ -100,7 +100,7 @@ test("calibratedMatch labels: different worlds below 25", () => {
     // rank 76 -> percent 24
     assert.equal(
         calibratedMatch(EVEN_QUANTILES[76], EVEN_QUANTILES).label,
-        "different worlds",
+        "совсем разное звучание",
     );
 });
 

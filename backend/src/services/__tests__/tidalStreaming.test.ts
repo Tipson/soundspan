@@ -555,6 +555,29 @@ describe("tidal streaming service", () => {
                     timeout: 300000,
                 },
             );
+
+            const controller = new AbortController();
+            mockClient.get.mockResolvedValueOnce({
+                data: { stream: true },
+                headers: {},
+                status: 200,
+            });
+            await tidalStreamingService.getStreamProxy(
+                "user-1",
+                88,
+                "HIGH",
+                undefined,
+                { signal: controller.signal, timeoutMs: 12_000 },
+            );
+            expect(mockClient.get).toHaveBeenLastCalledWith(
+                "/user/stream/88?user_id=user-1&quality=HIGH",
+                {
+                    responseType: "stream",
+                    headers: {},
+                    timeout: 12_000,
+                    signal: controller.signal,
+                },
+            );
         });
 
         it("returns track metadata and logs null on track lookup failure", async () => {

@@ -103,18 +103,18 @@ test("getSourceOptions lists configured sources in stable order", () => {
         options.map((o) => o.value),
         ["soulseek", "tidal", "youtube"],
     );
-    assert.equal(options[2].label, "YouTube Music (Albums)");
+    assert.equal(options[2].label, "YouTube Music (альбомы)");
 });
 
 test("getSourceOptions falls back to soulseek when nothing is configured", () => {
     assert.deepEqual(getSourceOptions(none), [
-        { value: "soulseek", label: "Soulseek (Per-track)" },
+        { value: "soulseek", label: "Soulseek (отдельные треки)" },
     ]);
 });
 
 test("getFallbackOptions always starts with Skip", () => {
     assert.deepEqual(getFallbackOptions(none, "soulseek"), [
-        { value: "none", label: "Skip" },
+        { value: "none", label: "Пропустить" },
     ]);
 });
 
@@ -139,6 +139,6 @@ test("getFallbackOptions labels youtube as Try YouTube Music", () => {
     const options = getFallbackOptions({ ...none, youtube: true }, "soulseek");
     assert.deepEqual(options[1], {
         value: "youtube",
-        label: "Try YouTube Music",
+        label: "Попробовать YouTube Music",
     });
 });

@@ -22,6 +22,12 @@ export interface ConsecutiveErrorBreakerState {
 export interface ConsecutiveErrorBreaker {
     /** Record a playback error. Returns true if the breaker just tripped. */
     recordError(): boolean;
+    /**
+     * Record one provider item that the backend confirmed unavailable.
+     * Distinct items may be skipped without looking like a system outage, while
+     * revisiting the same item trips the breaker to stop a queue cycle.
+     */
+    recordConfirmedUnavailable(failureKey: string): boolean;
     /** Record a successful play — resets the error counter. */
     recordSuccess(): void;
     /** Check whether the breaker is currently tripped. */
@@ -48,6 +54,7 @@ export function createConsecutiveErrorBreaker(
     let tripped = false;
     let trippedAtMs: number | null = null;
     let halfOpenProbeInFlight = false;
+    const confirmedUnavailableFailureKeys = new Set<string>();
 
     const trip = (): void => {
         tripped = true;
@@ -60,6 +67,7 @@ export function createConsecutiveErrorBreaker(
         tripped = false;
         trippedAtMs = null;
         halfOpenProbeInFlight = false;
+        confirmedUnavailableFailureKeys.clear();
     };
 
     return {
@@ -72,6 +80,20 @@ export function createConsecutiveErrorBreaker(
                 trip();
                 return true;
             }
+            return false;
+        },
+
+        recordConfirmedUnavailable(failureKey: string): boolean {
+            if (halfOpenProbeInFlight) {
+                trip();
+                return true;
+            }
+            if (tripped) return false;
+            if (confirmedUnavailableFailureKeys.has(failureKey)) {
+                trip();
+                return true;
+            }
+            confirmedUnavailableFailureKeys.add(failureKey);
             return false;
         },
 

@@ -492,6 +492,10 @@ ytmusicStreamer:
     # - tv: legacy TV parser only
     # - native: ytmusicapi yt.search() only
     YTMUSIC_SEARCH_MODE: "auto"
+    # BCP-47 response language and ISO 3166-1 alpha-2 catalog location.
+    # Set YTMUSIC_LOCATION when the cluster region differs from the listeners.
+    YTMUSIC_LANGUAGE: "en"
+    YTMUSIC_LOCATION: ""
     # Destination for YouTube URL downloads inside the music volume.
     # Uncomment to override the chart default ("/music/YouTube Downloads").
     # YT_DOWNLOAD_DIR: "/music/YouTube Downloads"
@@ -800,6 +804,18 @@ config:
     requests: true
     # -- Scoped peer credentials and read-only host federation API.
     federation: false
+  # -- Hybrid recommendation and bounded remote-analysis controls. Null leaves
+  #    the variable absent so the application default applies and global.env or
+  #    workload envFrom can supply it without being shadowed by the chart.
+  recommendations:
+    # -- Recommendation ranker: baseline, shadow, or active.
+    engineMode: null
+    # -- Admit remote provider tracks to the asynchronous analysis hot set.
+    remoteAnalysisEnabled: null
+    # -- Maximum new canonical recordings admitted per UTC day (1..10000).
+    remoteAnalysisDailyBudget: null
+    # -- Concurrent remote-analysis queue processors (1 or 2).
+    remoteAnalysisConcurrency: null
   # -- Enables Socket.IO Redis adapter for Listen Together cross-pod fanout.
   #    Keep true for multi-replica backend API deployments.
   listenTogetherRedisAdapterEnabled: true

@@ -13,6 +13,7 @@ import {
     type HistoryRange,
     type PlayHistorySummary,
 } from "./playbackHistoryConfig";
+import { userFacingError } from "@/lib/i18n/ru";
 
 /**
  * Renders the PlaybackHistorySection component.
@@ -57,22 +58,23 @@ export function PlaybackHistorySection() {
 
         setClearing(true);
         setStatus("loading");
-        setStatusMessage("Clearing play history...");
+        setStatusMessage("Очищаем историю прослушиваний…");
 
         try {
             const result = await api.clearPlayHistory(selectedRange);
             setStatus("success");
             setStatusMessage(
-                `Cleared ${result.deletedCount.toLocaleString()} play events`,
+                `Удалено событий: ${result.deletedCount.toLocaleString("ru-RU")}`,
             );
             setConfirmClear(false);
             await loadSummary();
         } catch (error: unknown) {
             setStatus("error");
             setStatusMessage(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to clear play history",
+                userFacingError(
+                    error,
+                    "Не удалось очистить историю прослушиваний",
+                ),
             );
         } finally {
             setClearing(false);
@@ -82,40 +84,40 @@ export function PlaybackHistorySection() {
     return (
         <SettingsSection
             id="history"
-            title="History & Personalization"
-            description="Manage track play history used to personalize recommendations and mixes."
+            title="История и персонализация"
+            description="История прослушиваний используется для рекомендаций и миксов."
         >
             <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3 mb-2">
                 <div className="flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
                     <div className="text-xs text-yellow-100/90 space-y-1">
                         <p>
-                            Clearing play history will reduce personalization
-                            accuracy until new listening data builds up.
+                            После очистки рекомендации временно станут менее
+                            точными, пока не накопится новая история.
                         </p>
                         <p>
-                            Affected areas: Recommended artists, discovery
-                            seeding, top tracks, and programmatic mixes.
+                            Это повлияет на рекомендуемых исполнителей, новые
+                            находки, лучшие треки и автоматические миксы.
                         </p>
                     </div>
                 </div>
             </div>
 
             <SettingsRow
-                label="View listening history"
-                description="Open your full history page with play, queue, and playlist actions."
+                label="История прослушиваний"
+                description="Откройте полную историю с действиями воспроизведения, очереди и плейлистов."
             >
                 <Link
                     href={MY_HISTORY_ROUTE}
-                    className="inline-flex items-center px-4 py-2 bg-[#1f1f1f] text-sm text-white rounded-full border border-white/10 hover:bg-[#2a2a2a] transition-colors"
+                    className="inline-flex min-h-11 items-center rounded-full border border-line-strong bg-surface-active px-4 py-2 text-sm text-content transition-colors hover:bg-surface-hover"
                 >
-                    Open My History
+                    Открыть мою историю
                 </Link>
             </SettingsRow>
 
             <SettingsRow
-                label="Clear track play history"
-                description="Only removes track play events for your account. It does not delete tracks, playlists, or library files."
+                label="Очистить историю прослушиваний"
+                description="Удаляются только события прослушивания этого аккаунта. Треки, плейлисты и файлы останутся на месте."
                 align="start"
             >
                 <div className="flex flex-col items-end gap-2">
@@ -133,7 +135,7 @@ export function PlaybackHistorySection() {
                         className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-full
                             hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                        {clearing ? "Clearing..." : "Clear History"}
+                        {clearing ? "Очищаем…" : "Очистить историю"}
                     </button>
                 </div>
             </SettingsRow>
@@ -148,12 +150,12 @@ export function PlaybackHistorySection() {
                         className="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-surface-highlight text-red-500 focus:ring-red-500/40"
                     />
                     <span>
-                        I understand this will affect personalization based on
-                        my listening history.
+                        Я понимаю, что это повлияет на персональные
+                        рекомендации.
                         {selectedRange === "all" && (
                             <span className="text-red-300">
                                 {" "}
-                                This clears all-time play history.
+                                Будет удалена вся история за всё время.
                             </span>
                         )}
                     </span>
@@ -162,8 +164,8 @@ export function PlaybackHistorySection() {
                 <div className="flex items-center gap-3">
                     <p className="text-xs text-gray-400">
                         {summaryLoading
-                            ? "Loading history totals..."
-                            : `Estimated events to remove: ${(impactedCount ?? 0).toLocaleString()}`}
+                            ? "Считаем события…"
+                            : `Будет удалено примерно: ${(impactedCount ?? 0).toLocaleString("ru-RU")}`}
                     </p>
                     <InlineStatus
                         status={status}

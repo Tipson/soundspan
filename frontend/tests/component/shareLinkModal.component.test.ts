@@ -70,13 +70,13 @@ test("ShareLinkModal renders track share fields when open", async () => {
         }),
     );
 
-    assert.match(html, /Share Track/);
+    assert.match(html, /Поделиться: трек/);
     assert.match(html, /Track One/);
-    assert.match(html, /Expires at/);
-    assert.match(html, /Max plays/);
-    assert.match(html, /Create link/);
-    assert.match(html, /Existing share links/);
-    assert.match(html, /Refresh/);
+    assert.match(html, /Действует до/);
+    assert.match(html, /Максимум открытий/);
+    assert.match(html, /Создать ссылку/);
+    assert.match(html, /Активные ссылки/);
+    assert.match(html, /Обновить/);
 });
 
 test("ShareLinkModal renders album share title when sharing albums", async () => {
@@ -93,6 +93,6 @@ test("ShareLinkModal renders album share title when sharing albums", async () =>
         }),
     );
 
-    assert.match(html, /Share Album/);
+    assert.match(html, /Поделиться: альбом/);
     assert.match(html, /Album One/);
 });

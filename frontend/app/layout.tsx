@@ -18,17 +18,8 @@ import {
     BRAND_METADATA_TITLE,
     BRAND_NAME,
 } from "@/lib/brand";
-
-// Self-hosted latin variable instance (weights 300-800) of the same font the
-// build previously fetched from Google at build time - CI must not depend on
-// fonts.gstatic.com availability. License: assets/fonts/OFL-Montserrat.txt.
-const montserrat = localFont({
-    src: "../assets/fonts/montserrat-latin-wght-normal.woff2",
-    weight: "300 800",
-    style: "normal",
-    display: "swap",
-    variable: "--font-montserrat",
-});
+import { APP_VIEWPORT } from "@/lib/viewportConfig";
+import { ImportCompletionMonitor } from "@/components/activity/ImportCompletionMonitor";
 
 const polea = localFont({
     src: "../assets/fonts/Polea Extra Bold DEMO.otf",
@@ -37,14 +28,7 @@ const polea = localFont({
 });
 
 // Viewport configuration - separate export for Next.js 14+
-export const viewport: Viewport = {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: "cover",
-    themeColor: "#000000",
-};
+export const viewport: Viewport = APP_VIEWPORT;
 
 export const metadata: Metadata = {
     title: BRAND_METADATA_TITLE,
@@ -77,10 +61,10 @@ export default async function RootLayout({
     await connection();
 
     return (
-        <html lang="en">
+        <html lang="ru">
             <body
-                className={`${montserrat.variable} ${polea.variable} antialiased`}
-                style={{ fontFamily: "var(--font-montserrat)" }}
+                className={`${polea.variable} antialiased`}
+                style={{ fontFamily: "var(--font-interface)" }}
             >
                 <Script src="/runtime-config" strategy="beforeInteractive" />
                 <GlobalErrorBoundary>
@@ -88,6 +72,7 @@ export default async function RootLayout({
                     <AuthProvider>
                         <FeaturesProvider>
                             <QueryProvider>
+                                <ImportCompletionMonitor />
                                 <DownloadProvider>
                                     <ConditionalAudioProvider>
                                         <ToastProvider>

@@ -282,7 +282,7 @@ describe("browse ytmusic routes integration", () => {
         expect(res.body).toEqual({ error: "Playlist not found" });
     });
 
-    it("returns album normalized to playlist shape", async () => {
+    it("returns album normalized to playlist shape with its canonical identity", async () => {
         mockGetBrowseAlbum.mockResolvedValueOnce({
             browseId: "MPREb_abc123",
             title: "Test Album",
@@ -311,7 +311,7 @@ describe("browse ytmusic routes integration", () => {
         });
 
         const res = await request(app)
-            .get("/api/browse/ytmusic/album/MPREb_abc123")
+            .get("/api/browse/ytmusic/album/VLOLAK5uy_abc123")
             .set(AUTH_HEADER, AUTH_VALUE);
 
         expect(res.status).toBe(200);
@@ -336,7 +336,7 @@ describe("browse ytmusic routes integration", () => {
                 duration: 225,
             }),
         );
-        expect(mockGetBrowseAlbum).toHaveBeenCalledWith("MPREb_abc123");
+        expect(mockGetBrowseAlbum).toHaveBeenCalledWith("VLOLAK5uy_abc123");
     });
 
     it("maps sidecar 404 album responses to route 404", async () => {

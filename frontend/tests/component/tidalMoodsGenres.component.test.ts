@@ -9,7 +9,7 @@ const marker = (label: string) => {
     return Component;
 };
 
-mock.module("@/components/layout/SectionHeader", {
+mock.module("@/features/home/components/SectionHeader", {
     namedExports: {
         SectionHeader: ({
             title,
@@ -126,6 +126,6 @@ test("TidalMoodsGenresSection renders moods section header with TidalBadge", asy
             genres: [],
         }),
     );
-    assert.match(html, /Moods/);
+    assert.match(html, /Настроения/);
     assert.match(html, /tidal-badge/);
 });

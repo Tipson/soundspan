@@ -402,6 +402,7 @@ class TidalStreamingService {
         trackId: number,
         quality?: string,
         rangeHeader?: string,
+        options: { signal?: AbortSignal; timeoutMs?: number } = {},
     ): Promise<{
         data: any;
         headers: Record<string, string>;
@@ -420,7 +421,8 @@ class TidalStreamingService {
             {
                 responseType: "stream",
                 headers,
-                timeout: 300000, // 5 min for long streams
+                timeout: options.timeoutMs ?? 300000,
+                ...(options.signal ? { signal: options.signal } : {}),
             },
         );
 

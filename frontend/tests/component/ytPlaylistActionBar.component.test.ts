@@ -133,6 +133,27 @@ mock.module("@/components/ui/PlaylistSelector", {
     },
 });
 
+mock.module("@/features/library/components/SaveMusicEntityButton", {
+    namedExports: {
+        SaveMusicEntityButton: () =>
+            React.createElement("button", { className: "min-h-11" }, "save"),
+    },
+});
+
+mock.module(
+    "@/features/device-offline/components/DeviceCollectionDownloadButton",
+    {
+        namedExports: {
+            DeviceCollectionDownloadButton: () =>
+                React.createElement(
+                    "button",
+                    { className: "min-h-11" },
+                    "download",
+                ),
+        },
+    },
+);
+
 mock.module("@/lib/trackRef", {
     namedExports: {
         toAddToPlaylistRef: (track: Record<string, unknown>) => track,
@@ -247,11 +268,75 @@ beforeEach(() => {
     state.isApplyingLikeAll = false;
 });
 
-test("yt-playlist page renders loading state initially (useEffect does not fire in SSR)", async () => {
+test("yt-playlist page explains the initial loading state in Russian", async () => {
     // Since the page uses useEffect for data fetching and renderToStaticMarkup
     // doesn't execute effects, the component will render in its initial isLoading=true state.
     const html = await renderPage();
 
-    // The Suspense wrapper or the internal loading check should show a spinner
-    assert.match(html, /loading/i);
+    assert.match(html, /Загружаем плейлист/);
+});
+
+test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonical track surface", async () => {
+    const mod = await import("../../app/explore/yt-playlist/[id]/page");
+    const ActionDock = (
+        mod as unknown as {
+            YtPlaylistActionDock: React.ComponentType<Record<string, unknown>>;
+        }
+    ).YtPlaylistActionDock;
+    const EditorialSurface = (
+        mod as unknown as {
+            YtPlaylistEditorialSurface: React.ComponentType<
+                Record<string, unknown>
+            >;
+        }
+    ).YtPlaylistEditorialSurface;
+    assert.equal(typeof ActionDock, "function");
+    assert.equal(typeof EditorialSurface, "function");
+
+    const playlist = makePlaylist() as Record<string, unknown>;
+    playlist.title =
+        "Очень длинное название плейлиста YouTube Music для узкого экрана";
+    const actions = React.createElement(ActionDock, {
+        tracks: playlist.tracks,
+        collectionId: playlist.id,
+        collectionLabel: playlist.title,
+        isAlbumType: false,
+        providerAlbumEntity: null,
+        isThisPlaylistPlaying: false,
+        isPlaying: false,
+        showPlaySpinner: false,
+        likeableTrackCount: 3,
+        isAllLiked: false,
+        isApplyingLikeAll: false,
+        onTogglePlay: () => undefined,
+        onShuffle: () => undefined,
+        onAddToQueue: () => undefined,
+        onAddToPlaylist: () => undefined,
+        onToggleLikeAll: () => undefined,
+        onBack: () => undefined,
+    });
+    const html = renderToStaticMarkup(
+        React.createElement(EditorialSurface, {
+            playlist,
+            isAlbumType: false,
+            totalDuration: 630,
+            actions,
+            onPlayTrack: () => undefined,
+        }),
+    );
+    const hero = html.match(
+        /<header[^>]*data-music-detail="hero"[\s\S]*?<\/header>/,
+    )?.[0];
+
+    assert.ok(hero);
+    assert.match(hero, /data-music-detail="actions"/);
+    assert.match(hero, /data-detail-action-tier="primary"/);
+    assert.match(hero, /data-detail-action-tier="secondary"/);
+    assert.match(hero, /Очень длинное название плейлиста YouTube Music/);
+    assert.match(html, /data-music-detail="tracks"/);
+    assert.match(html, /track-list/);
+
+    for (const match of hero.matchAll(/<button[^>]*>/g)) {
+        assert.match(match[0], /(h-11 w-11|min-h-11)/);
+    }
 });

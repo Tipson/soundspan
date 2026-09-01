@@ -10,10 +10,12 @@ import { setPlaybackAutoRestartSuppressed } from "@/lib/audio-engine/playbackAdv
 
 interface UseAudioEngineBindingsOptions {
     refs: PlaybackOrchestratorRefs;
+    onPlaybackProgressConfirmed?: () => void;
 }
 
 const createPlaybackConfirmationTimeUpdateHandler = (
     refs: PlaybackOrchestratorRefs,
+    onPlaybackProgressConfirmed?: () => void,
 ): AudioEngineEventHandler<"timeupdate"> => {
     return (payload) => {
         const mediaId =
@@ -33,6 +35,7 @@ const createPlaybackConfirmationTimeUpdateHandler = (
         if (result.confirmed) {
             refs.consecutiveErrorBreakerRef.current.recordSuccess();
             setPlaybackAutoRestartSuppressed(false);
+            onPlaybackProgressConfirmed?.();
         }
     };
 };
@@ -61,6 +64,7 @@ const createPlaybackConfirmationSeekHandler = (
 /** Binds the stable runtime-engine facade to the latest delegated handlers. */
 export function useAudioEngineBindings({
     refs,
+    onPlaybackProgressConfirmed,
 }: UseAudioEngineBindingsOptions): void {
     const { engineEventHandlersRef, trackEndWatchdogRef } = refs;
 
@@ -68,7 +72,10 @@ export function useAudioEngineBindings({
     // Bind once per facade identity and dispatch into the latest closures.
     useEffect(() => {
         const confirmPlaybackProgress =
-            createPlaybackConfirmationTimeUpdateHandler(refs);
+            createPlaybackConfirmationTimeUpdateHandler(
+                refs,
+                onPlaybackProgressConfirmed,
+            );
         const stableHandleTimeUpdate: AudioEngineEventHandler<"timeupdate"> = (
             payload,
         ) => {

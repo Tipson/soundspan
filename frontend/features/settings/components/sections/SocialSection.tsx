@@ -19,10 +19,10 @@ export function SocialSection({
     onReloadSettings,
 }: SocialSectionProps) {
     return (
-        <SettingsSection id="social" title="Social">
+        <SettingsSection id="social" title="Общение">
             <SettingsRow
-                label="Profile picture"
-                description="Upload a profile picture (max 512x512, JPEG/PNG/WebP)"
+                label="Фото профиля"
+                description="JPEG, PNG или WebP размером не более 512×512"
                 align="start"
             >
                 <ProfilePictureUpload
@@ -32,8 +32,8 @@ export function SocialSection({
             </SettingsRow>
 
             <SettingsRow
-                label="Share online presence"
-                description="Allow your account to appear in the Activity Social tab while you are online. This includes servers federated with this one — remote viewers see you under a heading naming your server."
+                label="Показывать, что я в сети"
+                description="Ваш профиль будет виден друзьям, пока вы онлайн, в том числе на связанных серверах."
             >
                 <SettingsToggle
                     id="share-online-presence"
@@ -45,8 +45,8 @@ export function SocialSection({
             </SettingsRow>
 
             <SettingsRow
-                label="Share listening status"
-                description="Allow your current track to be shown in the Activity Social tab while online."
+                label="Показывать, что я слушаю"
+                description="Друзья смогут видеть текущий трек, пока вы онлайн."
             >
                 <SettingsToggle
                     id="share-listening-status"

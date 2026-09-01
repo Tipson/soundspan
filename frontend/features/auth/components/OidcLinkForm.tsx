@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 import { TwoFactorInput } from "./TwoFactorInput";
 
 /** Props for the OIDC existing-account confirmation form. */
@@ -34,11 +35,7 @@ function useOidcLinkForm({ linkToken, onAuthenticated }: OidcLinkFormProps) {
             }
             onAuthenticated();
         } catch (caught) {
-            setError(
-                caught instanceof Error
-                    ? caught.message
-                    : "Unable to link the SSO account",
-            );
+            setError(userFacingError(caught, ru.auth.linkSsoFailed));
             setTwoFactorToken("");
         } finally {
             setIsLoading(false);
@@ -65,9 +62,8 @@ export function OidcLinkForm(props: OidcLinkFormProps) {
     const form = useOidcLinkForm(props);
     return (
         <form onSubmit={form.handleSubmit} className="space-y-4">
-            <p className="text-sm text-white/70">
-                An account with this email already exists — sign in with your
-                soundspan password to link it.
+            <p className="text-sm leading-6 text-content-secondary">
+                {ru.auth.oidcLinkDescription}
             </p>
             <LinkError message={form.error} />
             <OidcLinkCredentials form={form} />
@@ -81,7 +77,7 @@ function LinkError({ message }: { message: string }) {
     return (
         <div
             role="alert"
-            className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-400"
+            className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm leading-5 text-red-200"
         >
             {message}
         </div>
@@ -104,9 +100,9 @@ function OidcLinkCredentials({ form }: { form: OidcLinkFormState }) {
         <div>
             <label
                 htmlFor="oidcLinkPassword"
-                className="block text-sm font-medium text-white/90 mb-1.5"
+                className="mb-1.5 block text-sm font-medium text-content"
             >
-                Password
+                {ru.auth.password}
             </label>
             <input
                 id="oidcLinkPassword"
@@ -117,7 +113,8 @@ function OidcLinkCredentials({ form }: { form: OidcLinkFormState }) {
                 autoFocus
                 autoCapitalize="none"
                 autoCorrect="off"
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-brand/30"
+                autoComplete="current-password"
+                className="min-h-12 w-full rounded-2xl border border-line bg-surface-elevated px-4 py-3 text-base text-content outline-none transition-colors hover:border-line-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20 sm:text-sm"
             />
         </div>
     );
@@ -128,14 +125,14 @@ function OidcLinkSubmitButton({ form }: { form: OidcLinkFormState }) {
         <button
             type="submit"
             disabled={form.isLoading}
-            className="w-full py-3 bg-brand text-black font-bold rounded-lg hover:bg-brand-dark disabled:opacity-50"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand px-5 py-3 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
         >
             {form.isLoading && (
                 <Loader2 className="inline w-5 h-5 mr-2 animate-spin" />
             )}
             {form.requires2FA
-                ? "Verify and sign in"
-                : "Link account and sign in"}
+                ? ru.auth.verifyAndSignIn
+                : ru.auth.linkAccountAndSignIn}
         </button>
     );
 }

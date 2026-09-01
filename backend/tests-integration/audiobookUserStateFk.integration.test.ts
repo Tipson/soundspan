@@ -22,7 +22,7 @@ const replayDanglingAudiobookId = "audiobook-user-state-replay-dangling";
 const replayDeviceId = "audiobook-user-state-replay-device";
 const migrationPath = resolve(
     __dirname,
-    "../prisma/migrations/20260826210000_link_audiobook_user_state/migration.sql",
+    "../prisma/migrations/20260901130000_link_audiobook_user_state/migration.sql",
 );
 
 async function createAudiobook(id: string, peerId?: string): Promise<void> {

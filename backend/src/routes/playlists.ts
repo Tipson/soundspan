@@ -2,6 +2,10 @@ import type { Prisma } from "@prisma/client";
 import { Request, Router } from "express";
 import { logger } from "../utils/logger";
 import { z } from "zod";
+import {
+    playlistPreviewItemSelect,
+    resolvePlaylistPreviewCover,
+} from "../services/playlistPreviewCover";
 import { requireAdmin, requireAuthOrToken } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { sessionLog } from "../utils/playlistLogger";
@@ -784,19 +788,7 @@ router.get("/", async (req, res) => {
                     where: {
                         OR: [{ trackId: null }, { track: TRACK_VISIBLE_WHERE }],
                     },
-                    select: {
-                        id: true,
-                        sort: true,
-                        track: {
-                            select: {
-                                album: {
-                                    select: {
-                                        coverUrl: true,
-                                    },
-                                },
-                            },
-                        },
-                    },
+                    select: playlistPreviewItemSelect,
                     orderBy: { sort: "asc" },
                     take: PLAYLIST_PREVIEW_ITEMS,
                 },
@@ -815,16 +807,13 @@ router.get("/", async (req, res) => {
                 ...(unplayableCount > 0 ? { unplayableCount } : {}),
                 isOwner: playlist.userId === userId,
                 isHidden: hiddenPlaylistIds.has(playlist.id),
-                items: playlist.items.map((item) => ({
-                    id: item.id,
-                    track: item.track
-                        ? {
-                              album: {
-                                  coverArt: item.track.album.coverUrl,
-                              },
-                          }
-                        : null,
-                })),
+                items: playlist.items.map((item) => {
+                    const coverArt = resolvePlaylistPreviewCover(item);
+                    return {
+                        id: item.id,
+                        track: coverArt ? { album: { coverArt } } : null,
+                    };
+                }),
             };
         });
 

@@ -8,3 +8,12 @@ export function getNextTrackPreferenceSignal(
 ): TrackPreferenceSignal {
     return currentSignal === "thumbs_up" ? "clear" : "thumbs_up";
 }
+
+/**
+ * Returns the next signal when the dislike control is toggled.
+ */
+export function getNextTrackDislikeSignal(
+    currentSignal: TrackPreferenceSignal,
+): TrackPreferenceSignal {
+    return currentSignal === "thumbs_down" ? "clear" : "thumbs_down";
+}

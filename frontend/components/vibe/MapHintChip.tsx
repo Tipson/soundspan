@@ -12,6 +12,7 @@
  */
 
 import { X } from "lucide-react";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 
 export interface MapHintChipProps {
     text: string;
@@ -32,8 +33,8 @@ export function MapHintChip({ text, onDismiss }: MapHintChipProps) {
                 <button
                     type="button"
                     onClick={onDismiss}
-                    aria-label="Hide hints"
-                    title="Hide hints for this session"
+                    aria-label={vibeMapRu.hints.hide}
+                    title={vibeMapRu.hints.hideSession}
                     className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
                 >
                     <X className="w-3.5 h-3.5" />

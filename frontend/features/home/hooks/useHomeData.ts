@@ -1,90 +1,57 @@
-/**
- * useHomeData Hook
- *
- * Manages data loading for the Home page, fetching library-focused sections
- * plus Made For You cards and trending community playlists.
- */
+/** Home feed data: account signals plus live online-catalog discovery. */
 
-import { frontendLogger as log } from "@/lib/logger";
 import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useFeatures } from "@/lib/features-context";
-import { api } from "@/lib/api";
-import { toast } from "sonner";
-import { subscribeQueryEvent } from "@/lib/query-events";
-import type {
-    Artist,
-    ListenedItem,
-    Mix,
-    PopularArtist,
-    Podcast,
-    Audiobook,
-} from "../types";
-import type {
-    LikedPlaylistSummary,
-    DiscoverWeeklySummary,
-} from "@/features/explore/hooks/useExploreData";
-import type { PlaylistPreview } from "@/features/home/components/FeaturedPlaylistsGrid";
+import { frontendLogger as log } from "@/lib/logger";
+import { useUserSettingsExplorePrefs } from "@/features/explore/hooks/useUserSettingsExplorePrefs";
+import { useAudioState } from "@/lib/audio-state-context";
+import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
+import type { Mix, PersonalizedHomeFeed } from "../types";
+import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
 import {
-    useRecentlyListenedQuery,
-    useRecentlyAddedQuery,
-    useRecommendationsQuery,
-    useLikedPlaylistQuery,
+    mapYtMusicChartsToFeaturedPlaylists,
+    queryKeys,
     useDiscoverWeeklySummaryQuery,
     useMixesQuery,
-    usePopularArtistsQuery,
-    useTopPodcastsQuery,
-    useAudiobooksQuery,
     useRefreshMixesMutation,
+    useYtMusicChartsQuery,
     useYtMusicHomeShelvesQuery,
-    queryKeys,
+    type PlaylistPreview,
+    type YtMusicHomeShelf,
 } from "@/hooks/useQueries";
 
 export interface UseHomeDataReturn {
-    /** Continue Listening items. */
-    recentlyListened: ListenedItem[];
-    /** Recently added artists. */
-    recentlyAdded: Artist[];
-    /** Recommended artists from Last.fm. */
-    recommended: Artist[];
-    /** Generated mixes. */
     mixes: Mix[];
-    /** My Liked playlist summary. */
-    likedSummary: LikedPlaylistSummary | null;
-    /** Discover Weekly summary. */
     discoverWeekly: DiscoverWeeklySummary | null;
-    /** Popular artists from Last.fm. */
-    popularArtists: PopularArtist[];
-    /** Trending community playlists from YT Music home shelves. */
-    communityPlaylists: PlaylistPreview[];
-    /** Popular podcasts. */
-    recentPodcasts: Podcast[];
-    /** Audiobooks. */
-    recentAudiobooks: Audiobook[];
-
-    /** True while initial critical data is loading. */
+    personalizedFeed: PersonalizedHomeFeed | null;
+    showYtMusicExplore: boolean;
+    homeShelves: YtMusicHomeShelf[];
+    chartPlaylists: PlaylistPreview[];
     isLoading: boolean;
-    /** True while mixes are being refreshed. */
     isRefreshingMixes: boolean;
-    /** True while community playlists are loading. */
-    isCommunityPlaylistsLoading: boolean;
-
-    /** Trigger a mixes refresh. */
+    isPersonalizedLoading: boolean;
+    isPersonalizedUnavailable: boolean;
     handleRefreshMixes: () => Promise<void>;
 }
 
-/**
- * Custom hook to load all Home page data sections using React Query.
- *
- * @returns All home page data and loading states.
- */
+/** Loads one coherent Home feed without legacy local-media browse queries. */
 export function useHomeData(): UseHomeDataReturn {
     const { isAuthenticated } = useAuth();
     const { discovery, autoPlaylists } = useFeatures();
+    const { waveMode, waveMood } = useAudioState();
+    const { showYtMusicExplore } = useUserSettingsExplorePrefs();
     const queryClient = useQueryClient();
+    const personalizedQuery = usePersonalizedHomeFeed(
+        12,
+        isAuthenticated,
+        waveMode,
+        waveMood,
+    );
 
-    // Listen for mixes-updated event (fired when user saves mood preferences)
     useEffect(() => {
         const handleMixesUpdated = () => {
             queryClient.refetchQueries({ queryKey: queryKeys.mixes() });
@@ -94,67 +61,30 @@ export function useHomeData(): UseHomeDataReturn {
             window.removeEventListener("mixes-updated", handleMixesUpdated);
     }, [queryClient]);
 
-    // Listen for library-updated event (fired when library scan completes)
-    useEffect(() => {
-        const unsubscribe = subscribeQueryEvent("library-updated", () => {
-            queryClient.refetchQueries({
-                queryKey: queryKeys.recentlyAdded(10),
-            });
-        });
-        return unsubscribe;
-    }, [queryClient]);
+    const mixesQuery = useMixesQuery(autoPlaylists);
+    const discoverQuery = useDiscoverWeeklySummaryQuery(discovery);
 
-    // ── Library queries ─────────────────────────────────────────────────
-    const { data: recentlyListenedData, isLoading: isLoadingListened } =
-        useRecentlyListenedQuery(10);
-    const { data: recentlyAddedData, isLoading: isLoadingAdded } =
-        useRecentlyAddedQuery(10);
-    const { data: recommendedData, isLoading: isLoadingRecommended } =
-        useRecommendationsQuery(10, discovery);
-    const { data: mixesData, isLoading: isLoadingMixes } =
-        useMixesQuery(autoPlaylists);
-
-    // ── Made For You queries ────────────────────────────────────────────
-    const { data: likedData } = useLikedPlaylistQuery(4);
-    const { data: discoverData } = useDiscoverWeeklySummaryQuery(discovery);
-
-    // ── Popular Artists / Podcasts / Audiobooks ──────────────────────────
-    const { data: popularData, isLoading: isLoadingPopular } =
-        usePopularArtistsQuery(20);
-    const { data: podcastsData, isLoading: isLoadingPodcasts } =
-        useTopPodcastsQuery(10);
-    const { data: audiobooksData, isLoading: isLoadingAudiobooks } =
-        useAudiobooksQuery({ limit: 10 });
-
-    // ── Trending Community Playlists ────────────────────────────────────
-    const { data: shelvesData, isLoading: isCommunityPlaylistsLoading } =
-        useYtMusicHomeShelvesQuery();
-
-    // Mutation for refreshing mixes
+    const shelvesQuery = useYtMusicHomeShelvesQuery({
+        enabled: showYtMusicExplore,
+    });
+    const chartsQuery = useYtMusicChartsQuery({
+        enabled: showYtMusicExplore,
+    });
     const { mutateAsync: refreshMixes, isPending: isRefreshingMixes } =
         useRefreshMixesMutation();
 
     const handleRefreshMixes = async () => {
         try {
             await refreshMixes();
-            toast.success("Mixes refreshed! Check out your new daily picks");
+            toast.success("Миксы обновлены — новые подборки уже готовы");
         } catch (error) {
             log.error("Failed to refresh mixes:", error);
-            toast.error("Failed to refresh mixes");
+            toast.error("Не удалось обновить миксы");
         }
     };
 
-    // ── Derived summaries ───────────────────────────────────────────────
-    const likedSummary = useMemo<LikedPlaylistSummary | null>(() => {
-        if (!likedData) return null;
-        const firstCover = likedData.tracks?.[0]?.album?.coverArt ?? null;
-        return {
-            total: likedData.total,
-            coverUrl: firstCover ? api.getCoverArtUrl(firstCover, 200) : null,
-        };
-    }, [likedData]);
-
     const discoverWeekly = useMemo<DiscoverWeeklySummary | null>(() => {
+        const discoverData = discoverQuery.data;
         if (!discovery || !discoverData) return null;
         const firstCover = discoverData.tracks?.[0]?.coverUrl ?? null;
         return {
@@ -163,74 +93,36 @@ export function useHomeData(): UseHomeDataReturn {
             totalCount: discoverData.totalCount,
             coverUrl: firstCover ? api.getCoverArtUrl(firstCover, 200) : null,
         };
-    }, [discovery, discoverData]);
+    }, [discovery, discoverQuery.data]);
 
-    const communityPlaylists = useMemo<PlaylistPreview[]>(() => {
-        if (!shelvesData) return [];
-        const items: PlaylistPreview[] = [];
-        const seen = new Set<string>();
-        for (const shelf of shelvesData) {
-            for (const item of shelf.contents ?? []) {
-                if (!item.playlistId || seen.has(item.playlistId)) continue;
-                seen.add(item.playlistId);
-                const thumb = item.thumbnailUrl ?? null;
-                items.push({
-                    id: item.playlistId,
-                    source: "ytmusic",
-                    type: "playlist",
-                    title: item.title ?? "Untitled",
-                    description: item.subtitle ?? null,
-                    creator: "",
-                    imageUrl: thumb ? api.getBrowseImageUrl(thumb) : null,
-                    url: "",
-                });
-                if (items.length >= 12) break;
-            }
-            if (items.length >= 12) break;
-        }
-        return items;
-    }, [shelvesData]);
-
-    // ── Loading state ───────────────────────────────────────────────────
-    const items = recentlyListenedData?.items ?? [];
-
+    const personalizedTrackCount = personalizedQuery.data
+        ? personalizedQuery.data.shelves.listenAgain.length +
+          personalizedQuery.data.shelves.quickPicks.length +
+          personalizedQuery.data.shelves.discovery.length
+        : 0;
+    const mixes =
+        autoPlaylists && Array.isArray(mixesQuery.data) ? mixesQuery.data : [];
     const hasPrimaryData =
-        items.length > 0 ||
-        (recentlyAddedData?.artists?.length ?? 0) > 0 ||
-        (recommendedData?.artists?.length ?? 0) > 0 ||
-        (Array.isArray(mixesData) ? mixesData.length : 0) > 0 ||
-        (popularData?.artists?.length ?? 0) > 0 ||
-        (Array.isArray(podcastsData) ? podcastsData.length : 0) > 0 ||
-        (Array.isArray(audiobooksData) ? audiobooksData.length : 0) > 0;
-
+        personalizedTrackCount > 0 ||
+        mixes.length > 0 ||
+        discoverWeekly !== null;
     const allPrimaryLoading =
-        isLoadingListened &&
-        isLoadingAdded &&
-        isLoadingRecommended &&
-        isLoadingMixes &&
-        isLoadingPopular &&
-        isLoadingPodcasts &&
-        isLoadingAudiobooks;
-
-    const isLoading =
-        !isAuthenticated || (!hasPrimaryData && allPrimaryLoading);
+        personalizedQuery.isLoading && mixesQuery.isLoading;
 
     return {
-        recentlyListened: items,
-        recentlyAdded: recentlyAddedData?.artists ?? [],
-        recommended: discovery ? (recommendedData?.artists ?? []) : [],
-        mixes: autoPlaylists && Array.isArray(mixesData) ? mixesData : [],
-        likedSummary,
+        mixes,
         discoverWeekly,
-        popularArtists: popularData?.artists ?? [],
-        communityPlaylists,
-        recentPodcasts: Array.isArray(podcastsData)
-            ? podcastsData.slice(0, 10)
-            : [],
-        recentAudiobooks: Array.isArray(audiobooksData) ? audiobooksData : [],
-        isLoading,
+        personalizedFeed: personalizedQuery.data ?? null,
+        showYtMusicExplore,
+        homeShelves: shelvesQuery.data ?? [],
+        chartPlaylists: mapYtMusicChartsToFeaturedPlaylists(
+            chartsQuery.data,
+            12,
+        ),
+        isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),
         isRefreshingMixes,
-        isCommunityPlaylistsLoading,
+        isPersonalizedLoading: personalizedQuery.isLoading,
+        isPersonalizedUnavailable: personalizedQuery.isError,
         handleRefreshMixes,
     };
 }

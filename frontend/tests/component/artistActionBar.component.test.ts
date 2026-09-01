@@ -76,7 +76,67 @@ const baseProps = {
     downloadsEnabled: true,
 };
 
-test("ArtistActionBar renders canonical button set for library artist", async () => {
+test("ArtistActionBar renders personal controls without server acquisition", async () => {
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
+    const html = renderToStaticMarkup(
+        React.createElement(ArtistActionBar, {
+            ...baseProps,
+            onAddAllToQueue: noop,
+            onAddToPlaylist: noop,
+            onLikeAll: noop,
+            onStartRadio: noop,
+            deviceDownloadControl: React.createElement(
+                "button",
+                null,
+                "Download to this device",
+            ),
+        }),
+    );
+
+    // Online-first order: playback, personal organization, device copy, radio.
+    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /title="Перемешать"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
+    assert.match(html, /title="Добавить в плейлист"/);
+    assert.match(html, /title="Поставить лайк всем трекам"/);
+    assert.match(html, /Download to this device/);
+    assert.doesNotMatch(html, /Download all missing albums/);
+    assert.match(html, /title="Включить радио исполнителя"/);
+});
+
+test("ArtistActionBar renders the explicit personal-library control", async () => {
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
+    const html = renderToStaticMarkup(
+        React.createElement(ArtistActionBar, {
+            ...baseProps,
+            librarySaveControl: React.createElement(
+                "button",
+                null,
+                "Save to Library",
+            ),
+        }),
+    );
+
+    assert.match(html, /Save to Library/);
+});
+
+test("ArtistActionBar never exposes server queueing state", async () => {
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
+    const html = renderToStaticMarkup(
+        React.createElement(ArtistActionBar, {
+            ...baseProps,
+            isPendingDownload: true,
+        }),
+    );
+
+    assert.doesNotMatch(html, /title="Queueing missing albums"/);
+    assert.doesNotMatch(html, /title="Download all missing albums"/);
+});
+
+test("ArtistActionBar icon controls are touch-sized and have accessible names", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
     const html = renderToStaticMarkup(
@@ -89,28 +149,23 @@ test("ArtistActionBar renders canonical button set for library artist", async ()
         }),
     );
 
-    // Canonical order: Play, Shuffle, Add to Queue, Add to Playlist, Like All, Download, Radio
-    assert.match(html, /<span>Play All<\/span>/);
-    assert.match(html, /title="Shuffle play"/);
-    assert.match(html, /title="Add all to queue"/);
-    assert.match(html, /title="Add all to playlist"/);
-    assert.match(html, /title="Like all tracks"/);
-    assert.match(html, /title="Download all missing albums"/);
-    assert.match(html, /title="Start artist radio"/);
-});
-
-test("ArtistActionBar shows queueing state on the download button while pending", async () => {
-    const { ArtistActionBar } =
-        await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
-        React.createElement(ArtistActionBar, {
-            ...baseProps,
-            isPendingDownload: true,
-        }),
-    );
-
-    assert.match(html, /title="Queueing missing albums"/);
-    assert.doesNotMatch(html, /title="Download all missing albums"/);
+    for (const label of [
+        "Перемешать",
+        "Добавить всё в очередь",
+        "Добавить в плейлист",
+        "Поставить лайк всем трекам",
+        "Включить радио исполнителя",
+    ]) {
+        const button = html.match(
+            new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`),
+        )?.[0];
+        assert.ok(button, `missing accessible button: ${label}`);
+        assert.match(button, /h-11 w-11/);
+    }
+    assert.match(html, /w-full/);
+    assert.match(html, /sm:w-fit/);
+    assert.match(html, /data-artist-action-dock="editorial"/);
+    assert.match(html, /border-x-0/);
 });
 
 test("ArtistActionBar hides Add to Queue when callback is not provided", async () => {
@@ -125,8 +180,8 @@ test("ArtistActionBar hides Add to Queue when callback is not provided", async (
         }),
     );
 
-    assert.doesNotMatch(html, /title="Add all to queue"/);
-    assert.match(html, /title="Add all to playlist"/);
+    assert.doesNotMatch(html, /title="Добавить всё в очередь"/);
+    assert.match(html, /title="Добавить в плейлист"/);
 });
 
 test("ArtistActionBar hides Add to Playlist and Like All for non-library artist", async () => {
@@ -140,11 +195,11 @@ test("ArtistActionBar hides Add to Playlist and Like All for non-library artist"
         }),
     );
 
-    assert.doesNotMatch(html, /title="Add all to playlist"/);
-    assert.doesNotMatch(html, /title="Like all tracks"/);
+    assert.doesNotMatch(html, /title="Добавить в плейлист"/);
+    assert.doesNotMatch(html, /title="Поставить лайк всем трекам"/);
     // Play and Shuffle should still be there
-    assert.match(html, /<span>Play All<\/span>/);
-    assert.match(html, /title="Shuffle play"/);
+    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /title="Перемешать"/);
 });
 
 test("ArtistActionBar shows Pause when artist is currently playing", async () => {
@@ -158,9 +213,9 @@ test("ArtistActionBar shows Pause when artist is currently playing", async () =>
         }),
     );
 
-    assert.match(html, /<span>Pause<\/span>/);
+    assert.match(html, /<span>Пауза<\/span>/);
     assert.match(html, /data-icon="pause"/);
-    assert.doesNotMatch(html, /<span>Play All<\/span>/);
+    assert.doesNotMatch(html, /<span>Воспроизвести всё<\/span>/);
 });
 
 test("ArtistActionBar shows spinner on Like All button when isLikingAll is true", async () => {
@@ -174,7 +229,7 @@ test("ArtistActionBar shows spinner on Like All button when isLikingAll is true"
         }),
     );
 
-    assert.match(html, /title="Like all tracks"/);
+    assert.match(html, /title="Поставить лайк всем трекам"/);
     assert.match(html, /data-icon="loader2"/);
     assert.doesNotMatch(html, /data-icon="heart"/);
 });
@@ -220,7 +275,7 @@ test("ArtistActionBar shows Listen Together locked state", async () => {
     );
 
     // Play and Shuffle should be locked (different styling, no standard buttons)
-    assert.match(html, /Listen Together is active/);
+    assert.match(html, /Идёт совместное прослушивание/);
     // Add to Queue should still appear (not locked)
-    assert.match(html, /title="Add all to queue"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
 });

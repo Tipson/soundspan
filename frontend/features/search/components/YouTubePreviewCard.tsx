@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Play, Download, Loader2, ChevronDown } from "lucide-react";
 import type { YtVideoInfo } from "../hooks/useYouTubeUrl";
 import { formatTime } from "@/utils/formatTime";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 interface YouTubePreviewCardProps {
     videoInfo: YtVideoInfo;
@@ -103,7 +104,7 @@ export function YouTubePreviewCard({
                                 className="flex items-center gap-2 px-5 py-2.5 bg-green-500 hover:bg-green-400 text-black font-semibold rounded-full transition-colors"
                             >
                                 <Play className="w-4 h-4 fill-current" />
-                                Play
+                                {searchExtrasRu.youtubeDownload.play}
                             </button>
 
                             {/* Download button with dropdown (admin only) */}
@@ -120,13 +121,19 @@ export function YouTubePreviewCard({
                                             <>
                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                                 {downloadProgress !== null
-                                                    ? `Downloading… ${Math.round(downloadProgress)}%`
-                                                    : "Downloading…"}
+                                                    ? `${searchExtrasRu.youtubeDownload.downloading} ${Math.round(downloadProgress)}%`
+                                                    : searchExtrasRu
+                                                          .youtubeDownload
+                                                          .downloading}
                                             </>
                                         ) : (
                                             <>
                                                 <Download className="w-4 h-4" />
-                                                Download
+                                                {
+                                                    searchExtrasRu
+                                                        .youtubeDownload
+                                                        .download
+                                                }
                                                 <ChevronDown className="w-3 h-3" />
                                             </>
                                         )}

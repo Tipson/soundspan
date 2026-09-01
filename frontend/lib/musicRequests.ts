@@ -23,12 +23,12 @@ export interface MusicRequestRowInput {
 }
 
 export const REQUEST_STATUS_LABELS: Record<MusicRequestStatus, string> = {
-    pending: "Pending",
-    approved: "Approved",
-    denied: "Declined",
-    fulfilled: "In library",
-    failed: "Failed",
-    cancelled: "Cancelled",
+    pending: "Ожидает",
+    approved: "Одобрен",
+    denied: "Отклонён",
+    fulfilled: "В коллекции",
+    failed: "Ошибка",
+    cancelled: "Отменён",
 };
 
 export type RequestBadgeVariant =
@@ -71,12 +71,12 @@ export const REQUEST_FILTER_OPTIONS: ReadonlyArray<{
     value: MusicRequestFilter;
     label: string;
 }> = [
-    { value: "all", label: "All" },
-    { value: "pending", label: "Pending" },
-    { value: "approved", label: "Approved" },
-    { value: "denied", label: "Declined" },
-    { value: "fulfilled", label: "Fulfilled" },
-    { value: "failed", label: "Failed" },
+    { value: "all", label: "Все" },
+    { value: "pending", label: "Ожидает" },
+    { value: "approved", label: "Одобрен" },
+    { value: "denied", label: "Отклонён" },
+    { value: "fulfilled", label: "В коллекции" },
+    { value: "failed", label: "Ошибка" },
 ];
 
 /** Applies the status filter to a request list. */

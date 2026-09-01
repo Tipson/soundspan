@@ -8,6 +8,29 @@ import type { PlaybackAdvanceOrigin } from "./audio-engine/playbackAdvanceOrigin
 import type { EpisodeQueueItem } from "./queue-item";
 import type { Episode } from "@/features/podcast/types";
 
+/** Queue mutation committed by a local Match Vibe request. */
+export type VibeQueueMutationKind = "append" | "replace" | "replace-upcoming";
+
+/** Opaque proof that one Match Vibe request committed a local queue mutation. */
+export interface VibeQueueCommit {
+    token: object;
+    mutation: VibeQueueMutationKind;
+}
+
+/** Optional internal handshake used to bind auto-advance to a Vibe-owned commit. */
+export interface VibeModeStartOptions {
+    /** Replace the prepared provider tail and start its first fresh track. */
+    queueStrategy?: "append" | "replace-upcoming";
+    queueCommitToken?: object;
+    onLocalQueueCommit?: (commit: VibeQueueCommit) => void;
+}
+
+/** Outcome returned after attempting to start Match Vibe. */
+export interface VibeModeStartResult {
+    success: boolean;
+    trackCount: number;
+}
+
 /** Public playback and queue actions provided by AudioControlsProvider. */
 export interface AudioControlsContextType {
     playTrack: (track: Track) => void;
@@ -72,6 +95,8 @@ export interface AudioControlsContextType {
     returnToPreviousMode: () => void;
     setVolume: (volume: number) => void;
     toggleMute: () => void;
-    startVibeMode: () => Promise<{ success: boolean; trackCount: number }>;
+    startVibeMode: (
+        options?: VibeModeStartOptions,
+    ) => Promise<VibeModeStartResult>;
     stopVibeMode: () => void;
 }

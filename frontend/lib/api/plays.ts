@@ -1,15 +1,71 @@
 import type { AddToPlaylistRef } from "../trackRef";
 import { type ApiClientConstructor, type ApiData } from "./core";
 
+/** Product surface that started a tracked play. */
+export type PlayContext =
+    | "wave"
+    | "home"
+    | "search"
+    | "playlist"
+    | "album"
+    | "artist"
+    | "library";
+
+/** Direction selected for the personal Wave feed. */
+export type PlayWaveMode = "for-you" | "new" | "familiar";
+
+/** Optional recommendation metadata attached when a play is created. */
+export interface PlayRecommendationContext {
+    playContext?: PlayContext;
+    waveMode?: PlayWaveMode;
+}
+
+/** Typed payload accepted by the play-history endpoint. */
+export type PlayLogInput = AddToPlaylistRef & PlayRecommendationContext;
+
+/** Minimum play record returned to the playback tracker. */
+export interface PlayLogResponse {
+    id: string;
+}
+
+/** Final client-observed result used by the recommendation ranker. */
+export interface PlayEngagementInput {
+    listenedSeconds: number;
+    completionRatio: number;
+    outcome: "meaningful" | "completed" | "skipped" | "failed";
+}
+
+/** Idempotent engagement update response. */
+export interface PlayEngagementResponse {
+    success: true;
+    stale?: boolean;
+}
+
 /** Add play-history operations to an API client base class. */
 export function WithPlays<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class PlaysApi extends Base {
         // Play tracking
-        async logPlay(trackRef: AddToPlaylistRef) {
-            return this.request<ApiData>("/plays", {
+        async logPlay(
+            trackRef: AddToPlaylistRef,
+            context: PlayRecommendationContext = {},
+        ): Promise<PlayLogResponse> {
+            return this.request<PlayLogResponse>("/plays", {
                 method: "POST",
-                body: JSON.stringify(trackRef),
+                body: JSON.stringify({ ...trackRef, ...context }),
             });
+        }
+
+        async updatePlayEngagement(
+            playId: string,
+            input: PlayEngagementInput,
+        ): Promise<PlayEngagementResponse> {
+            return this.request<PlayEngagementResponse>(
+                `/plays/${encodeURIComponent(playId)}/engagement`,
+                {
+                    method: "PATCH",
+                    body: JSON.stringify(input),
+                },
+            );
         }
 
         async getRecentPlays(limit = 50) {

@@ -11,6 +11,7 @@ import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackPreferenceButtons } from "../TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import {
+    getRelatedTrackArtistName,
     getRelatedTrackKey,
     type RelatedStreamMatch,
 } from "@/lib/overlay-related-matching";
@@ -19,6 +20,7 @@ import type {
     RelatedArtist,
     RelatedTrack,
 } from "./overlayRelatedTypes";
+import { ru } from "@/lib/i18n/ru";
 
 interface RelatedSectionShellProps {
     title: string;
@@ -50,7 +52,7 @@ export function RelatedSectionShell({
             {isLoading ? (
                 <div className="flex items-center gap-2 text-gray-400">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Loading...</span>
+                    <span className="text-sm">{ru.player.loading}</span>
                 </div>
             ) : isError ? (
                 <div className="flex items-center gap-3">
@@ -60,7 +62,7 @@ export function RelatedSectionShell({
                         className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition-colors"
                     >
                         <RefreshCw className="h-3 w-3" />
-                        Retry
+                        Повторить
                     </button>
                 </div>
             ) : isEmpty ? (
@@ -84,7 +86,7 @@ function SimilarSongBadge({
     if (track.inLibrary) {
         return (
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
-                In Library
+                В коллекции
             </span>
         );
     }
@@ -92,7 +94,7 @@ function SimilarSongBadge({
         return (
             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-300">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Matching
+                Подбираем
             </span>
         );
     }
@@ -101,13 +103,13 @@ function SimilarSongBadge({
     if (track.lastFmUrl) {
         return (
             <span className="rounded-full border border-white/20 bg-white/[0.04] px-2 py-0.5 text-[10px] text-gray-300">
-                Info
+                Информация
             </span>
         );
     }
     return (
         <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-400">
-            Search
+            Найти
         </span>
     );
 }
@@ -159,11 +161,8 @@ export function SimilarSongsList({
                                 {track.title}
                             </p>
                             <p className="truncate text-xs text-gray-400">
-                                {track.inLibrary
-                                    ? track.album?.artist?.name ||
-                                      track.artist ||
-                                      "Unknown artist"
-                                    : track.artist || "Unknown artist"}
+                                {getRelatedTrackArtistName(track) ||
+                                    ru.common.unknownArtist}
                             </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
@@ -259,7 +258,11 @@ export function MoreFromArtistGrid({
             {albums.slice(0, 6).map((album) => (
                 <Link
                     key={album.id}
-                    href={`/album/${album.id}`}
+                    href={
+                        album.provider === "youtube"
+                            ? `/explore/yt-playlist/${encodeURIComponent(album.id)}?type=album`
+                            : `/album/${album.id}`
+                    }
                     onClick={onNavigate}
                     className="group p-1.5 transition-colors hover:bg-white/[0.06]"
                 >

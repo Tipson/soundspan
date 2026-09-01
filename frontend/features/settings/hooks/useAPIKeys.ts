@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { createFrontendLogger } from "@/lib/logger";
 import { ApiKey } from "../types";
+import { userFacingError } from "@/lib/i18n/ru";
 
 const logger = createFrontendLogger("Settings.useAPIKeys");
 
@@ -44,7 +45,7 @@ export function useAPIKeys() {
     ): Promise<{ success: boolean; error?: string }> => {
         const trimmedName = name.trim();
         if (!trimmedName) {
-            return { success: false, error: "Device name required" };
+            return { success: false, error: "Укажите название устройства" };
         }
 
         try {
@@ -59,8 +60,7 @@ export function useAPIKeys() {
             logger.error("Failed to create API key", { error });
             return {
                 success: false,
-                error:
-                    error instanceof Error ? error.message : "Failed to create",
+                error: userFacingError(error, "Не удалось создать ключ"),
             };
         } finally {
             setCreatingApiKey(false);
@@ -82,8 +82,7 @@ export function useAPIKeys() {
             logger.error("Failed to revoke API key", { id, error });
             return {
                 success: false,
-                error:
-                    error instanceof Error ? error.message : "Failed to revoke",
+                error: userFacingError(error, "Не удалось отозвать ключ"),
             };
         }
     };

@@ -79,6 +79,12 @@ class LastFmService {
         logger.debug("Last.fm API key refreshed from settings");
     }
 
+    /** Report availability without triggering a guaranteed-failing API call. */
+    async isConfigured(): Promise<boolean> {
+        await this.ensureInitialized();
+        return Boolean(this.apiKey);
+    }
+
     private async request<T = any>(params: Record<string, any>) {
         await this.ensureInitialized();
         if (!this.apiKey) {

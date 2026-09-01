@@ -9,7 +9,7 @@ const marker = (label: string) => {
     return Component;
 };
 
-mock.module("@/components/layout/SectionHeader", {
+mock.module("@/features/home/components/SectionHeader", {
     namedExports: {
         SectionHeader: ({ title }: { title: string }) =>
             React.createElement("h2", null, title),
@@ -74,7 +74,7 @@ test("TidalMixesSection renders mixes with links to /explore/tidal-mix", async (
         }),
     );
 
-    assert.match(html, /TIDAL Mixes/);
+    assert.match(html, /Миксы TIDAL/);
     assert.match(html, /My Daily Discovery/);
     assert.match(html, /My Mix #1/);
     assert.match(html, /\/explore\/tidal-mix\/mix1/);

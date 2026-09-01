@@ -149,6 +149,10 @@ spec:
             "ALLOWED_ORIGINS" true
             "LOG_LEVEL" true
             "DOCS_PUBLIC" true
+            "RECOMMENDATION_ENGINE_MODE" true
+            "REMOTE_ANALYSIS_ENABLED" true
+            "REMOTE_ANALYSIS_DAILY_BUDGET" true
+            "REMOTE_ANALYSIS_CONCURRENCY" true
             "AUDIO_ANALYSIS_ENABLED" true
             "DISCOVERY_ENABLED" true
             "AUTO_PLAYLISTS_ENABLED" true
@@ -515,6 +519,34 @@ spec:
             {{- else }}
             - name: AUDIO_ANALYSIS_ENABLED
               value: {{ .Values.config.features.audioAnalysis | quote }}
+            {{- end }}
+            {{- if hasKey $backendEnv "RECOMMENDATION_ENGINE_MODE" }}
+            - name: RECOMMENDATION_ENGINE_MODE
+              value: {{ index $backendEnv "RECOMMENDATION_ENGINE_MODE" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.recommendations.engineMode) }}
+            - name: RECOMMENDATION_ENGINE_MODE
+              value: {{ .Values.config.recommendations.engineMode | quote }}
+            {{- end }}
+            {{- if hasKey $backendEnv "REMOTE_ANALYSIS_ENABLED" }}
+            - name: REMOTE_ANALYSIS_ENABLED
+              value: {{ index $backendEnv "REMOTE_ANALYSIS_ENABLED" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.recommendations.remoteAnalysisEnabled) }}
+            - name: REMOTE_ANALYSIS_ENABLED
+              value: {{ .Values.config.recommendations.remoteAnalysisEnabled | quote }}
+            {{- end }}
+            {{- if hasKey $backendEnv "REMOTE_ANALYSIS_DAILY_BUDGET" }}
+            - name: REMOTE_ANALYSIS_DAILY_BUDGET
+              value: {{ index $backendEnv "REMOTE_ANALYSIS_DAILY_BUDGET" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.recommendations.remoteAnalysisDailyBudget) }}
+            - name: REMOTE_ANALYSIS_DAILY_BUDGET
+              value: {{ .Values.config.recommendations.remoteAnalysisDailyBudget | quote }}
+            {{- end }}
+            {{- if hasKey $backendEnv "REMOTE_ANALYSIS_CONCURRENCY" }}
+            - name: REMOTE_ANALYSIS_CONCURRENCY
+              value: {{ index $backendEnv "REMOTE_ANALYSIS_CONCURRENCY" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.recommendations.remoteAnalysisConcurrency) }}
+            - name: REMOTE_ANALYSIS_CONCURRENCY
+              value: {{ .Values.config.recommendations.remoteAnalysisConcurrency | quote }}
             {{- end }}
             {{- if hasKey $backendEnv "DISCOVERY_ENABLED" }}
             - name: DISCOVERY_ENABLED

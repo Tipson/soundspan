@@ -102,15 +102,15 @@ test("clears the discovery playlist only after dialog confirmation", async (t) =
     t.after(harness.unmount);
 
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 0);
-    await click(findButton(harness.container, "Remove Playlist"));
+    await click(findButton(harness.container, "Удалить плейлист"));
 
     assert.match(
         harness.container.textContent ?? "",
-        /Clear Discovery Playlist\?|cannot be undone/,
+        /Очистить «Открытия недели»\?|Отменить действие нельзя/,
     );
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 0);
 
-    await click(findButton(harness.container, "Clear Playlist"));
+    await click(findButton(harness.container, "Очистить"));
 
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 1);
     assert.equal(onPlaylistCleared.mock.callCount(), 1);
@@ -121,9 +121,33 @@ test("cancelling the clear-playlist dialog leaves the playlist unchanged", async
     const harness = await mountDiscoverSettings(onPlaylistCleared);
     t.after(harness.unmount);
 
-    await click(findButton(harness.container, "Remove Playlist"));
-    await click(findButton(harness.container, "Cancel"));
+    await click(findButton(harness.container, "Удалить плейлист"));
+    await click(findButton(harness.container, "Отмена"));
 
     assert.equal(clearDiscoverPlaylist.mock.callCount(), 0);
     assert.equal(onPlaylistCleared.mock.callCount(), 0);
+});
+
+test("settings controls have visible names and mobile-sized targets", async (t) => {
+    const harness = await mountDiscoverSettings(() => undefined);
+    t.after(harness.unmount);
+
+    const sliders = Array.from(
+        harness.container.querySelectorAll<HTMLInputElement>(
+            'input[type="range"]',
+        ),
+    );
+    assert.equal(sliders.length, 2);
+    assert.match(
+        sliders[0]?.labels?.[0]?.textContent ?? "",
+        /Размер плейлиста/,
+    );
+    assert.match(
+        sliders[1]?.labels?.[0]?.textContent ?? "",
+        /Не повторять альбомы/,
+    );
+    assert.match(
+        findButton(harness.container, "Удалить плейлист").className,
+        /min-h-11/,
+    );
 });

@@ -14,7 +14,11 @@ import { api } from "@/lib/api";
 import { useDownloadContext } from "@/lib/download-context";
 import { createFrontendLogger } from "@/lib/logger";
 import { cn } from "@/utils/cn";
-import { formatRelativeTime } from "@/utils/formatTime";
+import {
+    adminActivityRu,
+    formatActivityRelativeTime,
+    translateDownloadType,
+} from "@/lib/i18n/adminActivityRu";
 
 const logger = createFrontendLogger("Activity.HistoryTab");
 
@@ -108,7 +112,11 @@ export function HistoryTab() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-8">
+            <div
+                className="flex items-center justify-center py-8"
+                role="status"
+                aria-label={adminActivityRu.activity.loading}
+            >
                 <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
             </div>
         );
@@ -118,9 +126,11 @@ export function HistoryTab() {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center">
                 <History className="w-8 h-8 text-white/20 mb-3" />
-                <p className="text-sm text-white/40">No download history</p>
+                <p className="text-sm text-white/40">
+                    {adminActivityRu.activity.history.empty}
+                </p>
                 <p className="text-xs text-white/30 mt-1">
-                    Completed downloads will appear here
+                    {adminActivityRu.activity.history.emptyHint}
                 </p>
             </div>
         );
@@ -148,7 +158,7 @@ export function HistoryTab() {
                     onClick={handleClearAll}
                     className="text-xs text-white/40 hover:text-white transition-colors"
                 >
-                    Clear all
+                    {adminActivityRu.activity.history.clearAll}
                 </button>
             </div>
 
@@ -159,7 +169,8 @@ export function HistoryTab() {
                     <div>
                         <div className="px-3 py-1.5 bg-red-500/10 border-b border-red-500/20">
                             <span className="text-xs font-medium text-red-400">
-                                Failed ({failed.length})
+                                {adminActivityRu.activity.history.failed} (
+                                {failed.length})
                             </span>
                         </div>
                         {failed.map((item) => (
@@ -181,7 +192,8 @@ export function HistoryTab() {
                     <div>
                         <div className="px-3 py-1.5 bg-green-500/10 border-b border-green-500/20">
                             <span className="text-xs font-medium text-green-400">
-                                Completed ({completed.length})
+                                {adminActivityRu.activity.history.completed} (
+                                {completed.length})
                             </span>
                         </div>
                         {completed.map((item) => (
@@ -233,18 +245,18 @@ function HistoryItem({
                             ) : (
                                 <Music className="w-3 h-3" />
                             )}
-                            {item.type}
+                            {translateDownloadType(item.type)}
                         </span>
                         <span className="text-xs text-white/30">•</span>
                         <span className="text-xs text-white/30">
-                            {formatRelativeTime(
+                            {formatActivityRelativeTime(
                                 item.completedAt || item.createdAt,
                             )}
                         </span>
                     </div>
                     {item.error && (
                         <p className="text-xs text-red-400/70 mt-1 line-clamp-2">
-                            {item.error}
+                            {adminActivityRu.activity.history.genericError}
                         </p>
                     )}
                 </div>
@@ -257,7 +269,8 @@ function HistoryItem({
                                 "p-1 hover:bg-white/10 rounded transition-colors",
                                 isRetrying && "opacity-50 cursor-not-allowed",
                             )}
-                            title="Retry download"
+                            title={adminActivityRu.activity.history.retry}
+                            aria-label={adminActivityRu.activity.history.retry}
                         >
                             <RotateCcw
                                 className={cn(
@@ -270,7 +283,8 @@ function HistoryItem({
                     <button
                         onClick={() => onClear(item.id)}
                         className="p-1 hover:bg-white/10 rounded transition-colors"
-                        title="Remove from history"
+                        title={adminActivityRu.activity.history.remove}
+                        aria-label={adminActivityRu.activity.history.remove}
                     >
                         <Trash2 className="w-3.5 h-3.5 text-white/40 hover:text-red-400" />
                     </button>

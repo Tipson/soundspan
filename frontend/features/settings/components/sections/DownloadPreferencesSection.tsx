@@ -38,15 +38,15 @@ export function DownloadPreferencesSection({
     return (
         <SettingsSection
             id="download-preferences"
-            title="Download Preferences"
-            description="Configure how music is downloaded for playlists and discovery"
+            title="Загрузки на сервер"
+            description="Необязательное сохранение постоянных копий музыки на сервере"
         >
             <SettingsRow
-                label="Primary Download Source"
+                label="Основной источник загрузок"
                 description={
                     isDisabled
-                        ? "Requires at least one download service to be configured"
-                        : "Choose how to download music for imported playlists"
+                        ? "Сначала настройте хотя бы один сервис загрузок"
+                        : "Источник используется только по явному запросу постоянной копии на сервере"
                 }
             >
                 <SettingsSelect
@@ -63,11 +63,11 @@ export function DownloadPreferencesSection({
             </SettingsRow>
 
             <SettingsRow
-                label="When Primary Source Fails"
+                label="Если основной источник недоступен"
                 description={
                     isDisabled
-                        ? "Requires at least one download service to be configured"
-                        : "What to do if a download fails with the primary source"
+                        ? "Сначала настройте хотя бы один сервис загрузок"
+                        : "Действие при ошибке загрузки из основного источника"
                 }
             >
                 <SettingsSelect
@@ -86,8 +86,8 @@ export function DownloadPreferencesSection({
             </SettingsRow>
 
             <SettingsRow
-                label="Soulseek Concurrent Downloads"
-                description="Number of simultaneous downloads when using Soulseek (1-10)"
+                label="Одновременные загрузки Soulseek"
+                description="Количество параллельных загрузок через Soulseek (от 1 до 10)"
             >
                 <SettingsSelect
                     value={
@@ -102,7 +102,7 @@ export function DownloadPreferencesSection({
                         { value: "1", label: "1" },
                         { value: "2", label: "2" },
                         { value: "3", label: "3" },
-                        { value: "4", label: "4 (Default)" },
+                        { value: "4", label: "4 (по умолчанию)" },
                         { value: "5", label: "5" },
                         { value: "6", label: "6" },
                         { value: "7", label: "7" },

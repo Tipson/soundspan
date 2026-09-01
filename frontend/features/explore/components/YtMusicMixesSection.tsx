@@ -10,7 +10,7 @@
  * render. Revisit when ytmusicapi resolves #813.
  */
 
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import {
     HorizontalCarousel,
@@ -32,7 +32,7 @@ export function YtMusicMixesSection({ mixes }: YtMusicMixesSectionProps) {
 
     return (
         <section>
-            <SectionHeader title="Your Mixes" badge={<YouTubeBadge />} />
+            <SectionHeader title="Ваши миксы" badge={<YouTubeBadge />} />
             <HorizontalCarousel gap="lg">
                 {mixes.map((mix) => {
                     const thumbnail =

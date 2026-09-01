@@ -49,10 +49,10 @@ export function RadioStationCard({
         <button
             onClick={handlePlayClick}
             disabled={isLoading}
-            className="p-3 rounded-md group cursor-pointer hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left w-full"
+            className="group min-h-11 w-full cursor-pointer rounded-xl p-1.5 text-left transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-wait disabled:opacity-50 motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
         >
             {/* Square cover art */}
-            <div className="relative aspect-square bg-surface-highlight rounded-lg mb-3 overflow-hidden shadow-lg">
+            <div className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-surface-highlight shadow-lg shadow-black/20">
                 <RadioStationMosaic
                     filter={station.filter}
                     className="absolute inset-0"
@@ -64,17 +64,17 @@ export function RadioStationCard({
                 {/* Loading spinner — bottom-right, only while the station opens */}
                 {isLoading && (
                     <div className="absolute bottom-2 right-2">
-                        <div className="w-10 h-10 rounded-full bg-brand-hover flex items-center justify-center shadow-xl">
-                            <Loader2 className="w-4 h-4 text-black animate-spin" />
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-hover shadow-xl">
+                            <Loader2 className="h-4 w-4 animate-spin text-surface motion-reduce:animate-none" />
                         </div>
                     </div>
                 )}
             </div>
             {/* Title + description below art */}
-            <h3 className="text-sm font-semibold text-white truncate">
+            <h3 className="truncate text-sm font-semibold text-content">
                 {station.name}
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5 truncate">
+            <p className="mt-0.5 truncate text-xs text-content-muted">
                 {station.description}
             </p>
         </button>

@@ -13,10 +13,10 @@ export const HISTORY_RANGE_OPTIONS: Array<{
     value: HistoryRange;
     label: string;
 }> = [
-    { value: "7d", label: "Past week" },
-    { value: "30d", label: "Past month" },
-    { value: "365d", label: "Past year" },
-    { value: "all", label: "All time" },
+    { value: "7d", label: "За неделю" },
+    { value: "30d", label: "За месяц" },
+    { value: "365d", label: "За год" },
+    { value: "all", label: "За всё время" },
 ];
 const HISTORY_RANGE_SUMMARY_KEYS = {
     "7d": "last7Days",

@@ -3,7 +3,25 @@ import type {
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
 
-export type Tab = "artists" | "albums" | "tracks";
+export type Tab = "overview" | "playlists" | "albums" | "artists" | "downloads";
+
+export interface PersonalPlaylistItem {
+    id: string;
+    track?: {
+        album?: {
+            coverArt?: string | null;
+        };
+    } | null;
+}
+
+export interface PersonalPlaylist {
+    id: string;
+    name: string;
+    trackCount?: number;
+    items?: PersonalPlaylistItem[];
+    isOwner?: boolean;
+    isHidden?: boolean;
+}
 
 export interface Artist {
     id: string;

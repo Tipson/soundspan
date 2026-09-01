@@ -5,6 +5,16 @@ const AUTH_HEADER = "x-test-auth";
 const AUTH_VALUE = "ok";
 const TEST_USER_ID = "user-1";
 
+function createDeferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+}
+
 // ── Auth mock ────────────────────────────────────────────────────
 
 jest.mock("../../middleware/auth", () => ({
@@ -91,6 +101,12 @@ const mockPrisma = {
         findMany: jest.fn(),
         upsert: jest.fn(),
         createMany: jest.fn(),
+        deleteMany: jest.fn(),
+    },
+    remotePreferenceIntent: {
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
+        updateMany: jest.fn(),
         deleteMany: jest.fn(),
     },
     play: {
@@ -304,6 +320,16 @@ const mockResolveRemoteTrackMetadataForRequest =
 describe("library remote track preference endpoints", () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockPrisma.$transaction.mockImplementation(
+            async (operation: (tx: typeof mockPrisma) => Promise<unknown>) =>
+                operation(mockPrisma),
+        );
+        mockPrisma.remotePreferenceIntent.updateMany.mockResolvedValue({
+            count: 1,
+        });
+        mockPrisma.remotePreferenceIntent.deleteMany.mockResolvedValue({
+            count: 1,
+        });
         mockEnsureRemoteTrack.mockImplementation(async (input: any) => ({
             provider: input.provider,
             id: input.provider === "tidal" ? "tt-default" : "yt-default",
@@ -374,6 +400,16 @@ describe("library remote track preference endpoints", () => {
             expect(
                 mockPrisma.remoteLikedTrack.findUnique,
             ).not.toHaveBeenCalled();
+            expect(mockPrisma.dislikedEntity.findUnique).toHaveBeenCalledWith({
+                where: {
+                    userId_entityType_entityId: {
+                        userId: TEST_USER_ID,
+                        entityType: "track",
+                        entityId: "yt:dQw4w9WgXcQ",
+                    },
+                },
+                select: { dislikedAt: true },
+            });
         });
 
         it("returns preference for tidal: prefixed track", async () => {
@@ -403,6 +439,42 @@ describe("library remote track preference endpoints", () => {
                     select: { likedAt: true },
                 },
             );
+            expect(mockPrisma.dislikedEntity.findUnique).toHaveBeenCalledWith({
+                where: {
+                    userId_entityType_entityId: {
+                        userId: TEST_USER_ID,
+                        entityType: "track",
+                        entityId: "tidal:123456789",
+                    },
+                },
+                select: { dislikedAt: true },
+            });
+        });
+
+        it("returns a persisted canonical YouTube dislike without requiring a materialized track", async () => {
+            const dislikedAt = new Date("2026-01-16T10:00:00Z");
+            mockPrisma.trackYtMusic.findUnique.mockResolvedValueOnce(null);
+            mockPrisma.dislikedEntity.findUnique.mockResolvedValueOnce({
+                dislikedAt,
+            });
+
+            const res = await request(app)
+                .get("/api/library/remote-tracks/yt:disliked-video/preference")
+                .set(AUTH_HEADER, AUTH_VALUE);
+
+            expect(res.status).toBe(200);
+            expect(res.body).toEqual(
+                expect.objectContaining({
+                    trackId: "yt:disliked-video",
+                    signal: "thumbs_down",
+                    state: "disliked",
+                    likedAt: null,
+                    dislikedAt: dislikedAt.toISOString(),
+                }),
+            );
+            expect(
+                mockPrisma.likedRemoteTrack.findUnique,
+            ).not.toHaveBeenCalled();
         });
 
         it("requires authentication", async () => {
@@ -440,6 +512,24 @@ describe("library remote track preference endpoints", () => {
 
             expect(res.status).toBe(400);
             expect(res.body.error).toMatch(/invalid remote track id/i);
+        });
+
+        it.each([
+            ["an overlong YouTube id", "a".repeat(65)],
+            ["characters outside the YouTube id alphabet", "dQw4w9WgXc!"],
+        ])("rejects %s before persistence", async (_scenario, videoId) => {
+            const res = await request(app)
+                .post(`/api/library/remote-tracks/yt:${videoId}/preference`)
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ signal: "thumbs_down" });
+
+            expect(res.status).toBe(400);
+            expect(res.body.error).toMatch(/invalid remote track id/i);
+            expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+            expect(
+                mockResolveRemoteTrackMetadataForRequest,
+            ).not.toHaveBeenCalled();
+            expect(mockEnsureRemoteTrack).not.toHaveBeenCalled();
         });
 
         it("returns 400 for missing signal", async () => {
@@ -511,6 +601,13 @@ describe("library remote track preference endpoints", () => {
                     },
                 }),
             );
+            expect(mockPrisma.dislikedEntity.deleteMany).toHaveBeenCalledWith({
+                where: {
+                    userId: TEST_USER_ID,
+                    entityType: "track",
+                    entityId: "yt:dQw4w9WgXcQ",
+                },
+            });
         });
 
         it("repairs placeholder metadata inline before liking a tidal track", async () => {
@@ -566,6 +663,142 @@ describe("library remote track preference endpoints", () => {
             );
         });
 
+        it("keeps a later dislike when an equal-time older like finishes materializing last", async () => {
+            const fixedTimestamp = Date.parse("2026-01-17T12:00:00.000Z");
+            const NativeDate = Date;
+            class FixedDate extends NativeDate {
+                constructor(value?: string | number | Date) {
+                    super(
+                        arguments.length === 0
+                            ? fixedTimestamp
+                            : (value as string | number),
+                    );
+                }
+
+                static override now() {
+                    return fixedTimestamp;
+                }
+            }
+
+            const materializationStarted = createDeferred<void>();
+            const releaseMaterialization = createDeferred<void>();
+            let likedAt: Date | null = null;
+            let dislikedAt: Date | null = null;
+            let latestIntentToken: string | null = null;
+
+            mockResolveRemoteTrackMetadataForRequest.mockImplementationOnce(
+                async ({ metadata }: any) => {
+                    materializationStarted.resolve();
+                    await releaseMaterialization.promise;
+                    return {
+                        title: metadata.title,
+                        artist: metadata.artist,
+                        album: metadata.album,
+                        duration: metadata.duration,
+                    };
+                },
+            );
+            mockEnsureRemoteTrack.mockResolvedValueOnce({
+                provider: "youtube",
+                id: "yt-race-row",
+                created: true,
+            });
+            mockPrisma.trackYtMusic.findUnique.mockImplementation(async () => ({
+                id: "yt-race-row",
+            }));
+            mockPrisma.likedRemoteTrack.findUnique.mockImplementation(
+                async () => (likedAt ? { likedAt } : null),
+            );
+            mockPrisma.likedRemoteTrack.deleteMany.mockImplementation(
+                async () => {
+                    likedAt = null;
+                    return { count: 1 };
+                },
+            );
+            mockPrisma.likedRemoteTrack.upsert.mockImplementation(
+                async ({ create, update }: any) => {
+                    likedAt = update.likedAt ?? create.likedAt;
+                    return {};
+                },
+            );
+            mockPrisma.dislikedEntity.findUnique.mockImplementation(async () =>
+                dislikedAt ? { dislikedAt } : null,
+            );
+            mockPrisma.dislikedEntity.deleteMany.mockImplementation(
+                async () => {
+                    dislikedAt = null;
+                    return { count: 1 };
+                },
+            );
+            mockPrisma.dislikedEntity.upsert.mockImplementation(
+                async ({ create, update }: any) => {
+                    dislikedAt = update.dislikedAt ?? create.dislikedAt;
+                    return {};
+                },
+            );
+            mockPrisma.remotePreferenceIntent.upsert.mockImplementation(
+                async ({ create, update }: any) => {
+                    latestIntentToken = update.token ?? create.token;
+                    return { token: latestIntentToken };
+                },
+            );
+            mockPrisma.remotePreferenceIntent.findUnique.mockImplementation(
+                async () =>
+                    latestIntentToken ? { token: latestIntentToken } : null,
+            );
+            mockPrisma.remotePreferenceIntent.updateMany.mockImplementation(
+                async ({ where }: any) => ({
+                    count: where.token === latestIntentToken ? 1 : 0,
+                }),
+            );
+
+            global.Date = FixedDate as DateConstructor;
+            try {
+                const olderLikeRequest = request(app)
+                    .post("/api/library/remote-tracks/yt:race/preference")
+                    .set(AUTH_HEADER, AUTH_VALUE)
+                    .send({
+                        signal: "thumbs_up",
+                        metadata: {
+                            title: "Older Like",
+                            artist: "Artist",
+                            album: "Album",
+                            duration: 180,
+                        },
+                    })
+                    .then((response) => response);
+
+                await materializationStarted.promise;
+
+                const newerDislikeResponse = await request(app)
+                    .post("/api/library/remote-tracks/yt:race/preference")
+                    .set(AUTH_HEADER, AUTH_VALUE)
+                    .send({ signal: "thumbs_down" });
+
+                releaseMaterialization.resolve();
+                const olderLikeResponse = await olderLikeRequest;
+
+                expect(newerDislikeResponse.status).toBe(200);
+                expect(newerDislikeResponse.body.signal).toBe("thumbs_down");
+                expect(olderLikeResponse.status).toBe(200);
+                expect(olderLikeResponse.body.signal).toBe("thumbs_down");
+                expect(likedAt).toBeNull();
+                expect(dislikedAt).toEqual(new Date(fixedTimestamp));
+            } finally {
+                global.Date = NativeDate;
+                mockPrisma.trackYtMusic.findUnique.mockReset();
+                mockPrisma.likedRemoteTrack.findUnique.mockReset();
+                mockPrisma.likedRemoteTrack.deleteMany.mockReset();
+                mockPrisma.likedRemoteTrack.upsert.mockReset();
+                mockPrisma.dislikedEntity.findUnique.mockReset();
+                mockPrisma.dislikedEntity.deleteMany.mockReset();
+                mockPrisma.dislikedEntity.upsert.mockReset();
+                mockPrisma.remotePreferenceIntent.findUnique.mockReset();
+                mockPrisma.remotePreferenceIntent.upsert.mockReset();
+                mockPrisma.remotePreferenceIntent.updateMany.mockReset();
+            }
+        });
+
         it("upserts tidal: track on thumbs_up", async () => {
             mockEnsureRemoteTrack.mockResolvedValueOnce({
                 provider: "tidal",
@@ -601,7 +834,7 @@ describe("library remote track preference endpoints", () => {
             );
         });
 
-        it("deletes FK likes on thumbs_down", async () => {
+        it("atomically replaces a YouTube like with a canonical per-user dislike", async () => {
             mockPrisma.trackYtMusic.findUnique.mockResolvedValueOnce({
                 id: "yt-row-delete",
             });
@@ -615,9 +848,9 @@ describe("library remote track preference endpoints", () => {
                 .send({ signal: "thumbs_down" });
 
             expect(res.status).toBe(200);
-            // thumbs_down removes the like; resolveTrackPreference returns "clear" since both dates are null
-            expect(res.body.signal).toBe("clear");
-            expect(res.body.state).toBe("neutral");
+            expect(res.body.signal).toBe("thumbs_down");
+            expect(res.body.state).toBe("disliked");
+            expect(res.body.dislikedAt).toBeTruthy();
             expect(mockPrisma.likedRemoteTrack.deleteMany).toHaveBeenCalledWith(
                 {
                     where: {
@@ -626,6 +859,113 @@ describe("library remote track preference endpoints", () => {
                     },
                 },
             );
+            expect(mockPrisma.dislikedEntity.upsert).toHaveBeenCalledWith({
+                where: {
+                    userId_entityType_entityId: {
+                        userId: TEST_USER_ID,
+                        entityType: "track",
+                        entityId: "yt:vid456",
+                    },
+                },
+                create: expect.objectContaining({
+                    userId: TEST_USER_ID,
+                    entityType: "track",
+                    entityId: "yt:vid456",
+                    dislikedAt: expect.any(Date),
+                }),
+                update: { dislikedAt: expect.any(Date) },
+            });
+            expect(mockPrisma.$transaction).toHaveBeenCalledWith(
+                expect.any(Function),
+                expect.objectContaining({ isolationLevel: "Serializable" }),
+            );
+        });
+
+        it("normalizes a TIDAL dislike to its numeric canonical id", async () => {
+            mockPrisma.trackTidal.findUnique.mockResolvedValueOnce({
+                id: "tidal-row-disliked",
+            });
+
+            const res = await request(app)
+                .post("/api/library/remote-tracks/tidal:000987654/preference")
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ signal: "thumbs_down" });
+
+            expect(res.status).toBe(200);
+            expect(res.body.signal).toBe("thumbs_down");
+            expect(mockPrisma.likedRemoteTrack.deleteMany).toHaveBeenCalledWith(
+                {
+                    where: {
+                        userId: TEST_USER_ID,
+                        trackTidalId: "tidal-row-disliked",
+                    },
+                },
+            );
+            expect(mockPrisma.dislikedEntity.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        userId_entityType_entityId: {
+                            userId: TEST_USER_ID,
+                            entityType: "track",
+                            entityId: "tidal:987654",
+                        },
+                    },
+                }),
+            );
+        });
+
+        it("keeps repeated thumbs_down requests idempotent on the same canonical row", async () => {
+            mockPrisma.trackYtMusic.findUnique.mockResolvedValue(null);
+
+            const first = await request(app)
+                .post("/api/library/remote-tracks/yt:repeatable/preference")
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ signal: "thumbs_down" });
+            const second = await request(app)
+                .post("/api/library/remote-tracks/yt:repeatable/preference")
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ signal: "thumbs_down" });
+
+            expect(first.status).toBe(200);
+            expect(second.status).toBe(200);
+            expect(mockPrisma.dislikedEntity.upsert).toHaveBeenCalledTimes(2);
+            for (const [mutation] of mockPrisma.dislikedEntity.upsert.mock
+                .calls) {
+                expect(mutation.where).toEqual({
+                    userId_entityType_entityId: {
+                        userId: TEST_USER_ID,
+                        entityType: "track",
+                        entityId: "yt:repeatable",
+                    },
+                });
+            }
+        });
+
+        it("retries a serialization abort without duplicating remote preference state", async () => {
+            const serializationError = Object.assign(
+                new Error("could not serialize access"),
+                { code: "P2034" },
+            );
+            mockPrisma.$transaction
+                .mockRejectedValueOnce(serializationError)
+                .mockImplementationOnce(
+                    async (
+                        operation: (tx: typeof mockPrisma) => Promise<unknown>,
+                    ) => operation(mockPrisma),
+                );
+            mockPrisma.trackYtMusic.findUnique.mockResolvedValueOnce(null);
+
+            const res = await request(app)
+                .post("/api/library/remote-tracks/yt:retryable/preference")
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ signal: "thumbs_down" });
+
+            expect(res.status).toBe(200);
+            expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+            expect(
+                mockPrisma.remotePreferenceIntent.upsert,
+            ).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.dislikedEntity.upsert).toHaveBeenCalledTimes(1);
         });
 
         it("deletes FK likes on clear signal", async () => {
@@ -642,6 +982,13 @@ describe("library remote track preference endpoints", () => {
             expect(
                 mockPrisma.likedRemoteTrack.deleteMany,
             ).not.toHaveBeenCalled();
+            expect(mockPrisma.dislikedEntity.deleteMany).toHaveBeenCalledWith({
+                where: {
+                    userId: TEST_USER_ID,
+                    entityType: "track",
+                    entityId: "yt:vid789",
+                },
+            });
         });
 
         it("accepts numeric score as alias (positive → thumbs_up)", async () => {
@@ -671,7 +1018,7 @@ describe("library remote track preference endpoints", () => {
                 .send({ score: -1 });
 
             expect(res.status).toBe(200);
-            expect(res.body.signal).toBe("clear");
+            expect(res.body.signal).toBe("thumbs_down");
             expect(mockPrisma.likedRemoteTrack.deleteMany).toHaveBeenCalledWith(
                 {
                     where: {
@@ -680,6 +1027,30 @@ describe("library remote track preference endpoints", () => {
                     },
                 },
             );
+            expect(mockPrisma.dislikedEntity.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        userId_entityType_entityId: {
+                            userId: TEST_USER_ID,
+                            entityType: "track",
+                            entityId: "yt:vid-neg",
+                        },
+                    },
+                }),
+            );
+        });
+
+        it("rejects a non-numeric TIDAL dislike without persisting state", async () => {
+            const res = await request(app)
+                .post(
+                    "/api/library/remote-tracks/tidal:not-a-number/preference",
+                )
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ signal: "thumbs_down" });
+
+            expect(res.status).toBe(400);
+            expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+            expect(mockPrisma.dislikedEntity.upsert).not.toHaveBeenCalled();
         });
 
         it("requires authentication", async () => {
@@ -688,6 +1059,32 @@ describe("library remote track preference endpoints", () => {
                 .send({ signal: "thumbs_up" });
 
             expect(res.status).toBe(401);
+        });
+
+        it("cleans the latest intent when provider materialization fails", async () => {
+            mockResolveRemoteTrackMetadataForRequest.mockRejectedValueOnce(
+                new Error("provider unavailable"),
+            );
+
+            const res = await request(app)
+                .post("/api/library/remote-tracks/yt:provider-error/preference")
+                .set(AUTH_HEADER, AUTH_VALUE)
+                .send({ signal: "thumbs_up" });
+
+            expect(res.status).toBe(500);
+            expect(
+                mockPrisma.remotePreferenceIntent.deleteMany,
+            ).toHaveBeenCalledWith({
+                where: {
+                    userId: TEST_USER_ID,
+                    remoteTrackId: "yt:provider-error",
+                    token: expect.any(String),
+                },
+            });
+            expect(
+                mockPrisma.remotePreferenceIntent.updateMany,
+            ).not.toHaveBeenCalled();
+            expect(mockPrisma.likedRemoteTrack.upsert).not.toHaveBeenCalled();
         });
 
         it("returns 500 when prisma throws on upsert", async () => {
@@ -704,6 +1101,15 @@ describe("library remote track preference endpoints", () => {
                 });
 
             expect(res.status).toBe(500);
+            expect(
+                mockPrisma.remotePreferenceIntent.deleteMany,
+            ).toHaveBeenCalledWith({
+                where: {
+                    userId: TEST_USER_ID,
+                    remoteTrackId: "yt:vid-err",
+                    token: expect.any(String),
+                },
+            });
         });
 
         it("defaults metadata fields to 'Unknown' when not provided", async () => {

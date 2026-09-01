@@ -1,6 +1,14 @@
 import type { Request, Response } from "express";
 import fs from "node:fs";
 
+const mockYtMusicGetRadio = jest.fn();
+
+jest.mock("../../services/youtubeMusic", () => ({
+    ytMusicService: {
+        getRadio: mockYtMusicGetRadio,
+    },
+}));
+
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (_req: Request, _res: Response, next: () => void) => next(),
     requireAdmin: (_req: Request, _res: Response, next: () => void) => next(),
@@ -59,6 +67,11 @@ jest.mock("../../utils/db", () => ({
             deleteMany: jest.fn(),
             findMany: jest.fn(),
             count: jest.fn(),
+        },
+        remotePreferenceIntent: {
+            upsert: jest.fn(),
+            updateMany: jest.fn(),
+            deleteMany: jest.fn(),
         },
         trackTidal: {
             findUnique: jest.fn(),
@@ -311,7 +324,29 @@ jest.mock("../../services/unifiedTrackResponse", () => ({
         },
     })),
     normalizeTidalTrack: jest.fn(),
-    normalizeYtMusicTrack: jest.fn(),
+    normalizeYtMusicTrack: jest.fn((track: any) => ({
+        id: `yt:${track.videoId}`,
+        title: track.title,
+        duration: track.duration,
+        trackNo: null,
+        artist: { id: track.artistId ?? null, name: track.artist },
+        album: {
+            id: track.albumId ?? null,
+            title: track.album,
+            coverArt: track.thumbnailUrl ?? null,
+        },
+        source: "youtube",
+        provider: {
+            tidalTrackId: null,
+            youtubeVideoId: track.videoId,
+        },
+    })),
+    formatPlaylistDetailTrack: jest.fn((track: any) => ({
+        ...track,
+        streamSource: "youtube",
+        youtubeVideoId: track.provider.youtubeVideoId,
+        album: { ...track.album, artist: track.artist },
+    })),
 }));
 
 jest.mock("../../services/radioVibeEngine", () => ({
@@ -490,11 +525,22 @@ describe("library branch coverage focus", () => {
         mockArtistFindMany.mockResolvedValue([]);
         mockPlaylistFindUnique.mockResolvedValue(null);
         mockPlaylistItemFindMany.mockResolvedValue([]);
+        mockYtMusicGetRadio.mockResolvedValue({
+            playlistId: null,
+            seedVideoId: "",
+            tracks: [],
+        });
         mockQueryRaw.mockResolvedValue([]);
         mockTrackFindUnique.mockResolvedValue(null);
         mockUserSettingsFindUnique.mockResolvedValue(null);
         mockTrackTidalFindUnique.mockResolvedValue(null);
         mockLikedRemoteDeleteMany.mockResolvedValue({ count: 0 });
+        (
+            prisma.remotePreferenceIntent.updateMany as jest.Mock
+        ).mockResolvedValue({ count: 1 });
+        (
+            prisma.remotePreferenceIntent.deleteMany as jest.Mock
+        ).mockResolvedValue({ count: 1 });
         mockGetArtistImagesBatch.mockResolvedValue(new Map());
         mockArtistCount.mockResolvedValue(1);
         mockPrismaTransaction.mockImplementation(async (callback: any) => {
@@ -503,6 +549,11 @@ describe("library branch coverage focus", () => {
                     findMany: jest.fn().mockResolvedValue([]),
                     count: jest.fn().mockResolvedValue(0),
                 },
+                dislikedEntity: prisma.dislikedEntity,
+                likedRemoteTrack: prisma.likedRemoteTrack,
+                remotePreferenceIntent: prisma.remotePreferenceIntent,
+                trackTidal: prisma.trackTidal,
+                trackYtMusic: prisma.trackYtMusic,
             };
             return callback(tx);
         });
@@ -613,6 +664,80 @@ describe("library branch coverage focus", () => {
         expect(deniedRes.body).toEqual({
             error: "Access denied to private playlist",
         });
+    });
+
+    it("keeps an empty My Liked radio on the pseudo-playlist path", async () => {
+        mockLikedTrackFindMany.mockResolvedValueOnce([]);
+        const req = {
+            query: { type: "playlist", value: "my-liked", limit: "5" },
+            user: { id: "u1" },
+        } as any;
+        const res = createRes();
+
+        await radioHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toEqual({ tracks: [] });
+        expect(mockPlaylistItemFindMany).not.toHaveBeenCalled();
+        expect(mockYtMusicGetRadio).not.toHaveBeenCalled();
+    });
+
+    it("builds playlist radio from YouTube Music items and falls back to playlist tracks", async () => {
+        mockPlaylistFindUnique.mockResolvedValue({
+            userId: "u1",
+            isPublic: false,
+        });
+        mockPlaylistItemFindMany
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([
+                {
+                    trackYtMusic: {
+                        id: "yt-row-1",
+                        videoId: "seed-video-1",
+                        title: "Playlist Seed",
+                        artist: "Seed Artist",
+                        album: "Seed Album",
+                        duration: 201,
+                        thumbnailUrl: "https://img.test/seed.jpg",
+                        artistId: null,
+                        albumId: null,
+                    },
+                },
+            ]);
+        mockYtMusicGetRadio.mockResolvedValueOnce({
+            playlistId: "RDAMVMseed-video-1",
+            seedVideoId: "seed-video-1",
+            tracks: [
+                {
+                    videoId: "radio-video-2",
+                    title: "Radio Result",
+                    artist: "Radio Artist",
+                    artists: ["Radio Artist"],
+                    album: "Radio Album",
+                    duration: 187,
+                    thumbnailUrl: "https://img.test/radio.jpg",
+                },
+            ],
+        });
+
+        const req = {
+            query: { type: "playlist", value: "playlist-remote", limit: "5" },
+            user: { id: "u1" },
+        } as any;
+        const res = createRes();
+
+        await radioHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(mockYtMusicGetRadio).toHaveBeenCalledWith("seed-video-1", 5);
+        expect(res.body.tracks).toEqual([
+            expect.objectContaining({
+                id: "yt:radio-video-2",
+                title: "Radio Result",
+                streamSource: "youtube",
+                youtubeVideoId: "radio-video-2",
+            }),
+        ]);
     });
 
     it("returns empty tracks for tracks radio with blank list", async () => {

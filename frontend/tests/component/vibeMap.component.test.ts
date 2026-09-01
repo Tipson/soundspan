@@ -126,16 +126,16 @@ test("renders the floating spotlight, view controls and filters pill shell", asy
     const html = renderToStaticMarkup(React.createElement(VibeMap));
 
     // Spotlight search pill (input still carries the accessible label).
-    assert.match(html, /Spotlight a vibe/);
+    assert.match(html, /Найти на карте/);
     // View controls extracted to the top-right stack expose aria-labels.
-    assert.match(html, /aria-label="Zoom in"/);
-    assert.match(html, /aria-label="Reset view"/);
-    assert.match(html, /aria-label="Enter fullscreen"/);
+    assert.match(html, /aria-label="Приблизить"/);
+    assert.match(html, /aria-label="Сбросить вид"/);
+    assert.match(html, /aria-label="Перейти в полноэкранный режим"/);
     // Filters collapse to a pill with the visible/total count (0/0 pre-load).
-    assert.match(html, /Filters/);
+    assert.match(html, /Фильтры/);
     assert.match(html, /0\/0/);
     // Nothing is playing -> the now-playing card is absent.
-    assert.doesNotMatch(html, /aria-label="Pause"/);
+    assert.doesNotMatch(html, /aria-label="Пауза"/);
 });
 
 test("renders its shell without throwing when the map API rejects", async () => {
@@ -147,9 +147,9 @@ test("renders its shell without throwing when the map API rejects", async () => 
         html = renderToStaticMarkup(React.createElement(VibeMap));
     });
     // The floating controls shell still renders even though the load will fail.
-    assert.match(html, /Spotlight a vibe/);
-    assert.match(html, /aria-label="Zoom in"/);
-    assert.match(html, /Filters/);
+    assert.match(html, /Найти на карте/);
+    assert.match(html, /aria-label="Приблизить"/);
+    assert.match(html, /Фильтры/);
 });
 
 test("map tab renders full-bleed and clears the mobile player", async () => {
@@ -162,6 +162,6 @@ test("map tab renders full-bleed and clears the mobile player", async () => {
     );
 
     assert.match(html, /absolute inset-0 overflow-hidden/);
-    assert.match(html, /aria-label="Map view \(current\)"/);
+    assert.match(html, /aria-label="Текущий режим: карта"/);
     assert.match(html, /--vibe-binset:64px/);
 });

@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { Button } from "./Button";
 import { nextFocusIndex } from "./focusTrapMath";
+import { ru } from "@/lib/i18n/ru";
 
 const FOCUSABLE_SELECTOR =
     "a:not([tabindex='-1']), button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex='-1'])";
@@ -16,6 +17,9 @@ export interface ModalProps {
     children: ReactNode;
     footer?: ReactNode;
     className?: string;
+    headerClassName?: string;
+    contentClassName?: string;
+    footerClassName?: string;
 }
 
 function useEscapeAndScrollLock(isOpen: boolean, onClose: () => void) {
@@ -92,6 +96,9 @@ export function Modal({
     children,
     footer,
     className,
+    headerClassName,
+    contentClassName,
+    footerClassName,
 }: ModalProps) {
     const dialogRef = useRef<HTMLDivElement>(null);
     const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -102,7 +109,7 @@ export function Modal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-black/60 ">
+        <div className="fixed inset-0 z-[10010] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-5">
             <div
                 ref={dialogRef}
                 role="dialog"
@@ -110,31 +117,48 @@ export function Modal({
                 aria-labelledby={titleId}
                 tabIndex={-1}
                 className={cn(
-                    "bg-gradient-to-br from-surface-overlay to-surface-raised border border-line rounded-sm shadow-2xl max-w-md w-full p-6",
+                    "max-h-[min(90dvh,760px)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[24px] border border-line bg-surface-overlay p-5 shadow-2xl after:block after:h-[env(safe-area-inset-bottom)] after:shrink-0 after:content-[''] sm:rounded-[24px] sm:p-6 sm:after:hidden",
                     className,
                 )}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-surface-active">
-                    <h2 id={titleId} className="text-lg font-medium text-white">
+                <div
+                    className={cn(
+                        "mb-5 flex items-center justify-between gap-4 border-b border-line pb-4",
+                        headerClassName,
+                    )}
+                >
+                    <h2
+                        id={titleId}
+                        className="text-xl font-semibold text-content"
+                    >
                         {title}
                     </h2>
                     <Button
                         variant="icon"
                         onClick={onClose}
-                        aria-label="Close"
-                        className="hover:text-gray-300"
+                        aria-label={ru.common.close}
+                        className="-mr-2"
                     >
                         <X className="w-5 h-5" />
                     </Button>
                 </div>
 
                 {/* Content */}
-                <div className="mb-6">{children}</div>
+                <div className={cn(footer && "mb-6", contentClassName)}>
+                    {children}
+                </div>
 
                 {/* Footer */}
                 {footer && (
-                    <div className="flex gap-3 justify-end">{footer}</div>
+                    <div
+                        className={cn(
+                            "flex gap-3 justify-end",
+                            footerClassName,
+                        )}
+                    >
+                        {footer}
+                    </div>
                 )}
             </div>
         </div>

@@ -39,6 +39,12 @@ export const ENRICHABLE_TRACK_WHERE = {
     removedAt: null,
 } satisfies Prisma.TrackWhereInput;
 
+export const LOCAL_AUDIO_ANALYSIS_TRACK_WHERE = {
+    ...ENRICHABLE_TRACK_WHERE,
+    filePath: { not: null },
+    NOT: { filePath: "" },
+} satisfies Prisma.TrackWhereInput;
+
 export const LOCAL_TRACK_WHERE = {
     origin: "LOCAL",
 } satisfies Prisma.TrackWhereInput;

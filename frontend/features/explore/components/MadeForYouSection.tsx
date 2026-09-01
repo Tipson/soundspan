@@ -1,10 +1,10 @@
 /**
  * Made For You section for the Explore page.
  *
- * Shows a unified carousel with My Liked, Discover Weekly, and generated mixes.
+ * Shows only recommendation playlists that already exist and contain tracks.
  */
 
-import { RefreshCw, Heart, Zap } from "lucide-react";
+import { RefreshCw, Zap } from "lucide-react";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import {
     HorizontalCarousel,
@@ -12,18 +12,17 @@ import {
 } from "@/components/ui/HorizontalCarousel";
 import { MixCard } from "@/components/MixCard";
 import { useFeatures } from "@/lib/features-context";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { StaticPlaylistCard } from "@/features/home/components/StaticPlaylistCard";
-import type { Mix } from "@/features/home/types";
-import type {
-    LikedPlaylistSummary,
-    DiscoverWeeklySummary,
-} from "@/features/explore/hooks/useExploreData";
+import { PersonalizedMixCard } from "@/features/home/components/PersonalizedMixCard";
+import type { Mix, PersonalizedHomeFeed } from "@/features/home/types";
+import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
+import { pluralRu } from "@/lib/i18n/ru";
 
 interface MadeForYouSectionProps {
-    likedSummary: LikedPlaylistSummary | null;
     discoverWeekly: DiscoverWeeklySummary | null;
     mixes: Mix[];
+    personalizedFeed?: PersonalizedHomeFeed | null;
     isRefreshingMixes: boolean;
     handleRefreshMixes: () => Promise<void>;
 }
@@ -32,30 +31,61 @@ interface MadeForYouSectionProps {
  * Renders the Made For You section content.
  */
 export function MadeForYouSection({
-    likedSummary,
     discoverWeekly,
     mixes,
+    personalizedFeed = null,
     isRefreshingMixes,
     handleRefreshMixes,
 }: MadeForYouSectionProps) {
     // Mix refresh hits /api/mixes/refresh, which is gated behind the
     // autoPlaylists feature flag — hide the action when the flag is off.
     const { autoPlaylists } = useFeatures();
+    const playableDiscoverWeekly =
+        discoverWeekly && discoverWeekly.totalCount > 0 ? discoverWeekly : null;
+    const playableMixes = mixes.filter((mix) => mix.trackCount > 0);
+    const personalizedShelves = personalizedFeed
+        ? [
+              {
+                  key: "quick-picks",
+                  title: "Быстрый выбор",
+                  description: "Музыка, которая подходит прямо сейчас",
+                  tracks: personalizedFeed.shelves.quickPicks,
+                  tone: "violet" as const,
+              },
+              {
+                  key: "fresh-finds",
+                  title: "Новые находки",
+                  description: "Новая музыка с учётом ваших прослушиваний",
+                  tracks: personalizedFeed.shelves.discovery,
+                  tone: "blue" as const,
+              },
+              {
+                  key: "listen-again",
+                  title: "Послушать снова",
+                  description:
+                      "Недавние любимые треки, к которым стоит вернуться",
+                  tracks: personalizedFeed.shelves.listenAgain,
+                  tone: "amber" as const,
+              },
+          ].filter((shelf) => shelf.tracks.length > 0)
+        : [];
     const hasMadeForYou =
-        likedSummary !== null || discoverWeekly !== null || mixes.length > 0;
+        personalizedShelves.length > 0 ||
+        playableDiscoverWeekly !== null ||
+        playableMixes.length > 0;
 
     if (!hasMadeForYou) return null;
 
     return (
-        <section>
+        <section aria-label="Для вас">
             <SectionHeader
-                title="Made For You"
+                title="Для вас"
                 rightAction={
                     autoPlaylists ? (
                         <button
                             onClick={handleRefreshMixes}
                             disabled={isRefreshingMixes}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors font-semibold group bg-white/5 hover:bg-white/10 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="group flex min-h-11 items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                         >
                             {isRefreshingMixes ? (
                                 <GradientSpinner size="sm" />
@@ -63,58 +93,58 @@ export function MadeForYouSection({
                                 <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
                             )}
                             <span className="hidden sm:inline">
-                                {isRefreshingMixes
-                                    ? "Refreshing..."
-                                    : "Refresh"}
+                                {isRefreshingMixes ? "Обновляем…" : "Обновить"}
                             </span>
                         </button>
                     ) : undefined
                 }
             />
-            <HorizontalCarousel>
-                {likedSummary && (
-                    <CarouselItem key="my-liked">
-                        <StaticPlaylistCard
-                            href="/playlist/my-liked"
-                            coverUrl={likedSummary.coverUrl}
-                            title="My Liked"
-                            subtitle={`${likedSummary.total} tracks`}
-                            placeholderIcon={
-                                <Heart className="w-12 h-12 text-pink-500 fill-pink-500" />
-                            }
-                            overlayIcon={
-                                <Heart
-                                    className="w-6 h-6 text-pink-500"
-                                    strokeWidth={2.5}
-                                />
-                            }
-                            index={0}
+            <p className="-mt-2 mb-4 max-w-2xl text-sm leading-6 text-content-muted">
+                Разные способы начать слушать — только готовые подборки, которые
+                можно включить сразу.
+            </p>
+            <HorizontalCarousel aria-label="Для вас">
+                {personalizedShelves.map((shelf, index) => (
+                    <CarouselItem key={shelf.key}>
+                        <PersonalizedMixCard
+                            title={shelf.title}
+                            description={shelf.description}
+                            tracks={shelf.tracks}
+                            tone={shelf.tone}
+                            index={index}
                         />
                     </CarouselItem>
-                )}
-                {discoverWeekly && (
+                ))}
+                {playableDiscoverWeekly && (
                     <CarouselItem key="discover-weekly">
                         <StaticPlaylistCard
                             href="/discover"
-                            coverUrl={discoverWeekly.coverUrl}
-                            title="Discover Weekly"
-                            subtitle={`${discoverWeekly.totalCount} tracks`}
+                            coverUrl={playableDiscoverWeekly.coverUrl}
+                            title="Открытия недели"
+                            subtitle={`${playableDiscoverWeekly.totalCount} ${pluralRu(playableDiscoverWeekly.totalCount, ["трек", "трека", "треков"])}`}
                             placeholderIcon={
-                                <Zap className="w-12 h-12 text-blue-400" />
+                                <Zap className="h-12 w-12 text-info" />
                             }
                             overlayIcon={
                                 <Zap
-                                    className="w-6 h-6 text-pink-500"
+                                    className="h-6 w-6 text-brand-light"
                                     strokeWidth={2.5}
                                 />
                             }
-                            index={1}
+                            index={personalizedShelves.length}
                         />
                     </CarouselItem>
                 )}
-                {mixes.map((mix, index) => (
+                {playableMixes.slice(0, 8).map((mix, index) => (
                     <CarouselItem key={mix.id}>
-                        <MixCard mix={mix} index={index + 2} />
+                        <MixCard
+                            mix={mix}
+                            index={
+                                personalizedShelves.length +
+                                (playableDiscoverWeekly ? 1 : 0) +
+                                index
+                            }
+                        />
                     </CarouselItem>
                 ))}
             </HorizontalCarousel>

@@ -15,6 +15,13 @@ import {
     type YouTubePlaylistInfo,
 } from "@/lib/youtube-bulk-download";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    formatYouTubeBulkStopped,
+    formatYouTubeBulkSuccess,
+    formatYouTubeBulkUnfinished,
+    searchExtrasRu,
+} from "@/lib/i18n/searchExtrasRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 interface UseYouTubePlaylistProps {
     query: string;
@@ -158,9 +165,10 @@ export function useYouTubePlaylist({
                         message?: string;
                     };
                     setError(
-                        e?.data?.error ||
-                            e?.message ||
-                            "Couldn't load this playlist or channel",
+                        userFacingError(
+                            e?.data?.error || e?.message,
+                            searchExtrasRu.youtubeDownload.playlistLoadFailed,
+                        ),
                     );
                 }
             } finally {
@@ -232,20 +240,24 @@ export function useYouTubePlaylist({
             const final = summarizeBulkProgress(statuses);
             if (cancelRef.current) {
                 toast.info(
-                    `Stopped — ${final.completed} of ${final.total} downloaded`,
+                    formatYouTubeBulkStopped(final.completed, final.total),
                     { description: info.title },
                 );
             } else if (final.failed === 0) {
                 toast.success(
-                    `Downloaded ${final.completed} of ${final.total} — scanning library`,
+                    formatYouTubeBulkSuccess(final.completed, final.total),
                     { description: info.title },
                 );
             } else {
                 toast.warning(
-                    `${final.completed}/${final.total} downloaded, ${final.failed} unfinished`,
+                    formatYouTubeBulkUnfinished(
+                        final.completed,
+                        final.total,
+                        final.failed,
+                    ),
                     {
                         description:
-                            "Unfinished items may still complete in the background.",
+                            searchExtrasRu.youtubeDownload.unfinishedBackground,
                     },
                 );
             }

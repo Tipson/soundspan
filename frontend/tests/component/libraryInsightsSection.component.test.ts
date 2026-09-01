@@ -100,36 +100,36 @@ async function renderPanels() {
 test("library insights panels summarize every panel family while collapsed", async () => {
     const html = await renderPanels();
 
-    assert.match(html, /Metadata gaps/);
-    assert.match(html, /12 albums without art/);
-    assert.match(html, /7 albums without MBIDs/);
-    assert.match(html, /44 tracks without genres/);
-    assert.match(html, /310 tracks without lyrics/);
+    assert.match(html, /Пробелы в метаданных/);
+    assert.match(html, /12 альбомов без обложки/);
+    assert.match(html, /7 альбомов без MBID/);
+    assert.match(html, /44 трека без жанров/);
+    assert.match(html, /310 треков без текста/);
 
-    assert.match(html, /Analysis coverage/);
-    assert.match(html, /Audio 93%/);
+    assert.match(html, /Покрытие анализа/);
+    assert.match(html, /Аудио 93%/);
     assert.match(html, /Vibe 90%/);
-    assert.match(html, /Loudness 75%/);
-    assert.match(html, /4 failed/);
+    assert.match(html, /Громкость 75%/);
+    assert.match(html, /4 ошибки/);
 
-    assert.match(html, /Duplicates and versions/);
-    assert.match(html, /9 clusters/);
-    assert.match(html, /5 exact/);
-    assert.match(html, /large library: counts are sampled/);
+    assert.match(html, /Дубликаты и версии/);
+    assert.match(html, /9 групп/);
+    assert.match(html, /5 точных совпадений/);
+    assert.match(html, /для большой коллекции показана выборка/);
 
-    assert.match(html, /Storage/);
-    assert.match(html, /200 tracks/);
+    assert.match(html, /Хранилище/);
+    assert.match(html, /200 треков/);
     assert.match(html, /5\.0 GB/);
 
-    assert.match(html, /Quality outliers/);
-    assert.match(html, /6 lossy albums below 192 kbps/);
+    assert.match(html, /Отклонения качества/);
+    assert.match(html, /6 альбомов с потерями ниже 192 kbps/);
 });
 
 test("library insights panels start collapsed with no drill-down content mounted", async () => {
     const html = await renderPanels();
 
     assert.match(html, /aria-expanded="false"/);
-    assert.doesNotMatch(html, /Retry failed audio analysis/);
-    assert.doesNotMatch(html, /Bitrate floor/);
-    assert.doesNotMatch(html, /report-only/);
+    assert.doesNotMatch(html, /Повторить неудачный анализ аудио/);
+    assert.doesNotMatch(html, /Порог битрейта/);
+    assert.doesNotMatch(html, /только отчёт/);
 });

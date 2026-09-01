@@ -91,6 +91,7 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
         return topTracks.filter(
             (t) =>
                 t.streamSource !== "tidal" &&
+                !(t.streamSource === "youtube" && !!t.youtubeVideoId) &&
                 (!t.album?.id ||
                     !t.album?.title ||
                     t.album.title === "Unknown Album"),

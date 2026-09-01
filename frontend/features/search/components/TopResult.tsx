@@ -1,11 +1,12 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Music } from "lucide-react";
+import { ArrowUpRight, Music } from "lucide-react";
 import { api } from "@/lib/api";
 import { Artist, DiscoverResult } from "../types";
-import { getArtistRouteParam } from "@/utils/artistRoute";
+import { getArtistHref, getDiscoveryArtistHref } from "@/utils/artistRoute";
 import { PeerBadge } from "@/components/ui/PeerBadge";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { ru } from "@/lib/i18n/ru";
+import { normalizeArtistName } from "../discoverySelection";
 interface TopResultProps {
     libraryArtist?: Artist;
     discoveryArtist?: DiscoverResult;
@@ -34,20 +35,35 @@ export function TopResult({
         ? libraryArtist?.name || ""
         : discoveryArtist?.name || "";
 
-    // Get the artist ID for linking - prefer MBID for consistent URLs
-    const artistId = isLibrary
-        ? getArtistRouteParam({
-              id: libraryArtist?.id,
-              mbid: libraryArtist?.mbid,
-              name: libraryArtist?.name,
-          }) || encodeURIComponent(name)
-        : getArtistRouteParam(
-              {
-                  mbid: discoveryArtist?.mbid,
-                  name: discoveryArtist?.name,
-              },
-              { preferLibraryId: false },
-          ) || encodeURIComponent(name);
+    const matchingProviderArtist =
+        isLibrary &&
+        discoveryArtist?.youtubeChannelId &&
+        normalizeArtistName(discoveryArtist.name) ===
+            normalizeArtistName(libraryArtist?.name ?? "")
+            ? discoveryArtist
+            : null;
+    // When search merged an exact library row with a provider result, keep
+    // the library artwork but open the provider-aware page. The generic local
+    // route can only enumerate files/federated rows, not the online catalog.
+    const artistHref = matchingProviderArtist
+        ? getDiscoveryArtistHref({
+              id: matchingProviderArtist.id,
+              mbid: matchingProviderArtist.mbid,
+              name: matchingProviderArtist.name,
+              youtubeChannelId: matchingProviderArtist.youtubeChannelId,
+          }) || `/artist/${encodeURIComponent(name)}`
+        : isLibrary
+          ? getArtistHref({
+                id: libraryArtist?.id,
+                mbid: libraryArtist?.mbid,
+                name: libraryArtist?.name,
+            }) || `/artist/${encodeURIComponent(name)}`
+          : getDiscoveryArtistHref({
+                id: discoveryArtist?.id,
+                mbid: discoveryArtist?.mbid,
+                name: discoveryArtist?.name,
+                youtubeChannelId: discoveryArtist?.youtubeChannelId,
+            }) || `/artist/${encodeURIComponent(name)}`;
 
     // Get the image URL
     const imageUrl = isLibrary
@@ -55,35 +71,57 @@ export function TopResult({
         : discoveryArtist?.image;
 
     return (
-        <section data-tv-section="search-top-result">
-            <SectionHeader title="Top result" />
+        <section
+            data-tv-section="search-top-result"
+            data-search-artist-feature="editorial"
+            aria-labelledby="search-top-result-title"
+            className="min-w-0"
+        >
+            <h2
+                id="search-top-result-title"
+                className="mb-4 text-xl font-black tracking-[-0.025em] text-content sm:text-2xl"
+            >
+                {ru.search.topResult}
+            </h2>
             <Link
-                href={`/artist/${artistId}`}
-                className="bg-surface-sunken hover:bg-surface-elevated p-6 rounded-lg transition-all flex items-center gap-6 w-full sm:w-96"
+                href={artistHref}
+                className="group relative isolate flex min-h-[13.5rem] w-full items-end overflow-hidden border-y border-white/[0.09] px-1 py-5 transition duration-200 hover:border-white/[0.17] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:min-h-[15rem] sm:py-6"
                 data-tv-card
                 data-tv-card-index={0}
                 tabIndex={0}
             >
-                <div className="relative w-24 h-24 bg-surface-elevated rounded-full flex items-center justify-center overflow-hidden shrink-0">
+                <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-brand/20 via-brand/[0.035] to-transparent opacity-80 transition-opacity duration-200 group-hover:opacity-100 motion-reduce:transition-none"
+                />
+                <div className="relative z-10 h-24 w-24 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface-elevated shadow-2xl shadow-black/40 sm:h-28 sm:w-28">
                     {imageUrl ? (
                         <Image
                             src={api.getCoverArtUrl(imageUrl, 200)}
                             alt={name}
                             fill
-                            sizes="96px"
+                            sizes="(min-width: 640px) 112px, 96px"
                             className="object-cover"
-                            loading="lazy"
+                            loading="eager"
+                            fetchPriority="high"
                             unoptimized
                         />
                     ) : (
-                        <Music className="w-12 h-12 text-gray-400" />
+                        <span className="grid h-full w-full place-items-center">
+                            <Music
+                                className="h-11 w-11 text-content-muted"
+                                aria-hidden="true"
+                            />
+                        </span>
                     )}
                 </div>
-                <div className="flex-1">
-                    <h3 className="text-3xl font-bold text-white mb-2">
+                <div className="relative z-10 min-w-0 flex-1 px-4 sm:px-6">
+                    <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.18em] text-content-muted">
+                        {ru.catalog.artist}
+                    </p>
+                    <h3 className="truncate text-3xl font-black tracking-[-0.045em] text-content sm:text-4xl">
                         {name}
                     </h3>
-                    <p className="text-sm text-white font-bold">Artist</p>
                     {isLibrary &&
                         libraryArtist?.source === "federated" &&
                         libraryArtist.peer && (
@@ -94,6 +132,10 @@ export function TopResult({
                             />
                         )}
                 </div>
+                <span className="relative z-10 grid h-11 w-11 shrink-0 place-items-center rounded-full bg-content text-surface shadow-lg transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none">
+                    <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
+                    <span className="sr-only">{ru.search.viewArtist}</span>
+                </span>
             </Link>
         </section>
     );

@@ -94,9 +94,9 @@ beforeEach(() => {
 test("MoodPills renders mood pills and the Vibe Map link when flags are on", async () => {
     const html = await renderMoodPills();
 
-    assert.match(html, /Chill/);
-    assert.match(html, /Energetic/);
-    assert.match(html, /Vibe Map/);
+    assert.match(html, /Спокойствие/);
+    assert.match(html, /Энергия/);
+    assert.match(html, /Моя волна/);
     assert.match(html, /href="\/vibe"/);
 });
 
@@ -104,17 +104,17 @@ test("MoodPills hides mood pills when autoPlaylists is off but keeps the Vibe Ma
     featuresState.autoPlaylists = false;
     const html = await renderMoodPills();
 
-    assert.doesNotMatch(html, /Chill/);
+    assert.doesNotMatch(html, /Спокойствие/);
     assert.doesNotMatch(html, /<button/);
-    assert.match(html, /Vibe Map/);
+    assert.match(html, /Моя волна/);
 });
 
 test("MoodPills hides the Vibe Map link when audioAnalysis is off but keeps the pills", async () => {
     featuresState.audioAnalysis = false;
     const html = await renderMoodPills();
 
-    assert.match(html, /Chill/);
-    assert.doesNotMatch(html, /Vibe Map/);
+    assert.match(html, /Спокойствие/);
+    assert.doesNotMatch(html, /Моя волна/);
     assert.doesNotMatch(html, /href="\/vibe"/);
 });
 

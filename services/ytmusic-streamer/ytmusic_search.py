@@ -5,16 +5,19 @@ import random
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Literal, cast
 
+import requests
 from fastapi import HTTPException, Query
 from ytmusic_client import (
     SEARCH_MODE,
-    _get_public_ytmusic,
-    _invalidate_public_ytmusic,
     _invalidate_ytmusic,
+    _is_issue_813_invalid_argument_error,
     _is_oauth_auth_error,
     _resolve_user_search_strategy,
+    _run_public_ytmusic,
+    _run_public_ytmusic_with_retry,
     _run_ytmusic_with_auth_retry,
     _ytmusic_auto_tv_fallback_users,
 )
@@ -31,11 +34,42 @@ _batch_semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
 BATCH_DELAY_MIN = env_float("YTMUSIC_BATCH_DELAY_MIN", "0.3")
 BATCH_DELAY_MAX = env_float("YTMUSIC_BATCH_DELAY_MAX", "1.0")
 
+# Public catalog search is latency-sensitive: the backend gives each sidecar
+# request eight seconds before using partial results. Keep both the provider
+# transport and this endpoint inside that budget, and never queue work behind
+# blocked provider threads.
+SEARCH_PROVIDER_CONCURRENCY = 3
+SEARCH_PROVIDER_REQUEST_TIMEOUT_SECONDS = 5.0
+SEARCH_ENDPOINT_TIMEOUT_SECONDS = 6.0
+_SEARCH_PROVIDER_DRAIN_SECONDS = 6.0
+_SEARCH_PROVIDER_CAPACITY_DETAIL = "YouTube Music search capacity is temporarily exhausted"
+_SEARCH_PROVIDER_TIMEOUT_DETAIL = "YouTube Music search timed out"
+# Public ytmusicapi search currently returns an empty catalog for some
+# non-English interface locales (including ``ru``), even when the same query
+# and regional catalog return results in English. Search text remains Unicode,
+# so an English provider context still resolves Cyrillic artists and titles.
+_PUBLIC_SEARCH_LANGUAGE = "en"
+_SearchProviderResult = tuple[JsonList, Literal["tv", "native"]]
+_SearchProviderJob = asyncio.Future[_SearchProviderResult]
+
+
+class _SearchProviderDeadlineError(TimeoutError):
+    """Identify expiry of the sidecar-owned search endpoint deadline."""
+
+
+_search_provider_executor = ThreadPoolExecutor(
+    max_workers=SEARCH_PROVIDER_CONCURRENCY,
+    thread_name_prefix="ytmusic-search-provider",
+)
+_search_provider_jobs: set[_SearchProviderJob] = set()
+_search_provider_admitting = True
+
 # Search result cache (in-memory, short TTL to reduce duplicate requests).
 _search_cache: dict[str, JsonObject] = {}
 _search_cache_lock = threading.Lock()
 SEARCH_CACHE_TTL = env_int("YTMUSIC_SEARCH_CACHE_TTL", "300")  # 5 minutes
 SEARCH_CACHE_MAX = env_int("YTMUSIC_SEARCH_CACHE_MAX", "1024")
+_PLAYABLE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def _parse_duration_text_value(value: Any) -> int:
@@ -70,11 +104,6 @@ def _normalize_native_search_item(item: object) -> JsonObject | None:
 
     result_type = str(item.get("resultType") or item.get("type") or "").strip()
     normalized_type = result_type.lower() if result_type else "unknown"
-    video_id = item.get("videoId")
-
-    if not video_id:
-        # Keep only directly playable entries for matching.
-        return None
 
     artists_value = item.get("artists")
     artist_names: list[str] = []
@@ -97,6 +126,47 @@ def _normalize_native_search_item(item: object) -> JsonObject | None:
     if not primary_artist:
         primary_artist = "Unknown"
 
+    thumbnails = item.get("thumbnails")
+    if not isinstance(thumbnails, list):
+        thumbnails = []
+
+    browse_id = str(item.get("browseId") or "").strip()
+    if normalized_type == "album":
+        title = str(item.get("title") or "").strip()
+        if not browse_id or not title:
+            return None
+        year = str(item.get("year") or "").strip()
+        is_explicit = item.get("isExplicit")
+        return {
+            "type": "album",
+            "browseId": browse_id,
+            "title": title,
+            "artist": primary_artist,
+            "artists": artist_names or ([primary_artist] if primary_artist != "Unknown" else []),
+            "year": year or None,
+            "thumbnails": thumbnails,
+            "isExplicit": bool(is_explicit) if is_explicit is not None else False,
+        }
+
+    if normalized_type == "artist":
+        channel_id = str(item.get("channelId") or browse_id).strip()
+        artist_name = str(item.get("artist") or item.get("name") or item.get("title") or "").strip()
+        if not channel_id or not artist_name:
+            return None
+        return {
+            "type": "artist",
+            "browseId": browse_id or channel_id,
+            "channelId": channel_id,
+            "title": artist_name,
+            "artist": artist_name,
+            "thumbnails": thumbnails,
+        }
+
+    video_id = item.get("videoId")
+    if not video_id:
+        # Songs/videos must stay directly playable for matching.
+        return None
+
     album = item.get("album")
     album_name: str | None = None
     if isinstance(album, dict):
@@ -113,10 +183,6 @@ def _normalize_native_search_item(item: object) -> JsonObject | None:
     duration_seconds = _parse_duration_text_value(
         duration_seconds_raw if duration_seconds_raw is not None else duration
     )
-
-    thumbnails = item.get("thumbnails")
-    if not isinstance(thumbnails, list):
-        thumbnails = []
 
     title = str(item.get("title") or "").strip() or "Unknown"
     is_explicit = item.get("isExplicit")
@@ -189,17 +255,44 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
         raise  # let caller handle
 
     items: JsonList = []
+    seen_result_ids: set[str] = set()
+
+    def _as_object(value: Any) -> JsonObject:
+        """Return one provider value as an object or an empty object."""
+        return value if isinstance(value, dict) else {}
+
+    def _as_list(value: Any) -> list[Any]:
+        """Return one provider value as a list or an empty list."""
+        return value if isinstance(value, list) else []
+
+    def _nested_object(value: Any, *keys: str) -> JsonObject:
+        """Safely descend through provider-owned object fields."""
+        current = value
+        for key in keys:
+            current = _as_object(current).get(key)
+        return _as_object(current)
 
     def _extract_text(obj: Any) -> str:
-        """Pull text from simpleText, runs, or accessibilityData."""
+        """Pull text from classic renderer text or view-model content."""
         if not obj:
             return ""
         if isinstance(obj, str):
             return obj
-        if "simpleText" in obj:
-            return str(obj["simpleText"])
-        if "runs" in obj:
-            return "".join(r.get("text", "") for r in obj["runs"])
+        if not isinstance(obj, dict):
+            return ""
+        content = obj.get("content")
+        if isinstance(content, str):
+            return content
+        simple_text = obj.get("simpleText")
+        if isinstance(simple_text, str):
+            return simple_text
+        runs = obj.get("runs")
+        if isinstance(runs, list):
+            return "".join(
+                text
+                for run in runs
+                if isinstance(run, dict) and isinstance((text := run.get("text")), str)
+            )
         return ""
 
     def _parse_duration_text(text: str) -> int:
@@ -247,11 +340,235 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
             )
         )
 
+    def _append_item(item: JsonObject) -> None:
+        """Append one normalized result while preserving first-seen order."""
+        video_id = str(item.get("videoId") or "")
+        result_type = str(item.get("type") or "").lower()
+        if filter == "albums" and result_type != "album":
+            return
+        if filter == "artists" and result_type != "artist":
+            return
+        if video_id:
+            if _PLAYABLE_VIDEO_ID_PATTERN.fullmatch(video_id) is None:
+                return
+            identity = f"video:{video_id}"
+        elif result_type == "album":
+            browse_id = str(item.get("browseId") or "").strip()
+            if not browse_id:
+                return
+            identity = f"album:{browse_id}"
+        elif result_type == "artist":
+            channel_id = str(item.get("channelId") or item.get("browseId") or "").strip()
+            if not channel_id:
+                return
+            identity = f"artist:{channel_id}"
+        else:
+            return
+        if identity in seen_result_ids:
+            return
+        seen_result_ids.add(identity)
+        items.append(item)
+
     def _walk_renderers(node: Any, depth: int = 0) -> None:
         """Recursively walk the TV response tree and extract results."""
         if depth > 15 or len(items) >= limit:
             return
         if isinstance(node, dict):
+            # ── lockupViewModel (current TVHTML5 search) ──
+            if "lockupViewModel" in node:
+                r = node["lockupViewModel"]
+                if not isinstance(r, dict):
+                    return
+
+                content_type = str(r.get("contentType") or "")
+                is_track_content = content_type in {
+                    "LOCKUP_CONTENT_TYPE_MUSIC",
+                    "LOCKUP_CONTENT_TYPE_VIDEO",
+                }
+                is_explicit_album = "ALBUM" in content_type
+                is_explicit_artist = "ARTIST" in content_type
+                is_album_content = is_explicit_album or (
+                    not is_explicit_artist and filter == "albums"
+                )
+                is_artist_content = is_explicit_artist or (
+                    not is_explicit_album and filter == "artists"
+                )
+                if not (is_track_content or is_album_content or is_artist_content):
+                    return
+
+                watch_endpoint = _nested_object(
+                    r,
+                    "rendererContext",
+                    "commandContext",
+                    "onTap",
+                    "innertubeCommand",
+                    "watchEndpoint",
+                )
+                watch_video_id = str(watch_endpoint.get("videoId") or "")
+                content_id = str(r.get("contentId") or "")
+                if _PLAYABLE_VIDEO_ID_PATTERN.fullmatch(watch_video_id):
+                    video_id = watch_video_id
+                elif _PLAYABLE_VIDEO_ID_PATTERN.fullmatch(content_id):
+                    video_id = content_id
+                else:
+                    video_id = ""
+
+                browse_endpoint = _nested_object(
+                    r,
+                    "rendererContext",
+                    "commandContext",
+                    "onTap",
+                    "innertubeCommand",
+                    "browseEndpoint",
+                )
+                browse_id = str(browse_endpoint.get("browseId") or "")
+                if not browse_id and not video_id:
+                    browse_id = content_id
+
+                # TVHTML5 can return channels and ordinary playlists inside an
+                # album-filtered response. Only native album identities and TV
+                # OLAK album-playlist identities have a supported browse path.
+                if filter == "albums" and not browse_id.startswith(("MPRE", "VLOLAK5uy_")):
+                    return
+
+                if not video_id and browse_id and (is_album_content or is_artist_content):
+                    metadata = _nested_object(r, "metadata", "lockupMetadataViewModel")
+                    title_text = _extract_text(metadata.get("title")) or "Unknown"
+                    rows = _as_list(
+                        _nested_object(
+                            metadata,
+                            "metadata",
+                            "contentMetadataViewModel",
+                        ).get("metadataRows")
+                    )
+                    primary_values: list[str] = []
+                    if rows:
+                        first_row_parts = _as_list(_as_object(rows[0]).get("metadataParts"))
+                        primary_values = [
+                            value
+                            for part_value in first_row_parts
+                            if (value := _extract_text(_as_object(part_value).get("text")))
+                            and not _is_metadata_noise(value)
+                        ]
+                    thumbnail_view = _nested_object(r, "contentImage", "thumbnailViewModel")
+                    thumbnails = _as_list(_nested_object(thumbnail_view, "image").get("sources"))
+
+                    if is_album_content:
+                        artist_name = primary_values[0] if primary_values else "Unknown"
+                        year = next(
+                            (
+                                value
+                                for value in primary_values[1:]
+                                if re.fullmatch(r"\d{4}", value)
+                            ),
+                            None,
+                        )
+                        _append_item(
+                            {
+                                "type": "album",
+                                "browseId": browse_id,
+                                "title": title_text,
+                                "artist": artist_name,
+                                "artists": [artist_name] if artist_name != "Unknown" else [],
+                                "year": year,
+                                "thumbnails": thumbnails,
+                                "isExplicit": False,
+                            }
+                        )
+                    else:
+                        _append_item(
+                            {
+                                "type": "artist",
+                                "browseId": browse_id,
+                                "channelId": browse_id,
+                                "title": title_text,
+                                "artist": title_text,
+                                "thumbnails": thumbnails,
+                            }
+                        )
+                    return
+
+                if video_id:
+                    metadata = _nested_object(r, "metadata", "lockupMetadataViewModel")
+                    title_text = _extract_text(metadata.get("title")) or "Unknown"
+                    rows = _as_list(
+                        _nested_object(
+                            metadata,
+                            "metadata",
+                            "contentMetadataViewModel",
+                        ).get("metadataRows")
+                    )
+                    artist_name = ""
+                    album_name = None
+                    if rows:
+                        first_row_parts = _as_list(_as_object(rows[0]).get("metadataParts"))
+                        primary_values = [
+                            value
+                            for part_value in first_row_parts
+                            if (value := _extract_text(_as_object(part_value).get("text")))
+                            and not _is_metadata_noise(value)
+                        ]
+                        if primary_values:
+                            artist_name = primary_values[0]
+                            if len(primary_values) > 1:
+                                album_name = primary_values[1]
+
+                    if not artist_name and " - " in title_text:
+                        artist_name = title_text.split(" - ", 1)[0].strip()
+                    if not artist_name:
+                        artist_name = "Unknown"
+
+                    thumbnail_view = _nested_object(r, "contentImage", "thumbnailViewModel")
+                    thumbnails = _as_list(_nested_object(thumbnail_view, "image").get("sources"))
+                    duration_text = ""
+                    duration_seconds = 0
+                    for overlay_value in _as_list(thumbnail_view.get("overlays")):
+                        badges = _as_list(
+                            _nested_object(
+                                overlay_value,
+                                "thumbnailBottomOverlayViewModel",
+                            ).get("badges")
+                        )
+                        for badge_value in badges:
+                            badge_view = _nested_object(badge_value, "thumbnailBadgeViewModel")
+                            candidate_text = _extract_text(badge_view.get("text"))
+                            candidate_seconds = _parse_duration_text(candidate_text)
+                            accessibility_label = _nested_object(
+                                badge_view,
+                                "rendererContext",
+                                "accessibilityContext",
+                            ).get("label", "")
+                            if not isinstance(accessibility_label, str):
+                                accessibility_label = ""
+                            candidate_seconds = max(
+                                candidate_seconds,
+                                _parse_duration_label(accessibility_label),
+                            )
+                            if candidate_seconds > 0:
+                                duration_text = candidate_text
+                                duration_seconds = candidate_seconds
+                                break
+                        if duration_seconds > 0:
+                            break
+
+                    _append_item(
+                        {
+                            "type": "video"
+                            if content_type == "LOCKUP_CONTENT_TYPE_VIDEO"
+                            else "song",
+                            "videoId": video_id,
+                            "title": title_text,
+                            "artist": artist_name,
+                            "artists": [artist_name] if artist_name != "Unknown" else [],
+                            "album": album_name,
+                            "duration": duration_text,
+                            "duration_seconds": duration_seconds,
+                            "thumbnails": thumbnails,
+                            "isExplicit": False,
+                        }
+                    )
+                return
+
             # ── compactVideoRenderer (common in TVHTML5 search) ──
             if "compactVideoRenderer" in node:
                 r = node["compactVideoRenderer"]
@@ -262,7 +579,7 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
                     byline = _extract_text(r.get("shortBylineText") or r.get("longBylineText"))
                     duration_text = _extract_text(r.get("lengthText"))
                     thumbs = r.get("thumbnail", {}).get("thumbnails", [])
-                    items.append(
+                    _append_item(
                         {
                             "type": "song",
                             "videoId": vid,
@@ -354,7 +671,7 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
                     if not artist_name:
                         artist_name = "Unknown"
 
-                    items.append(
+                    _append_item(
                         {
                             "type": "song",
                             "videoId": vid,
@@ -388,7 +705,7 @@ def _tv_search(yt: YTMusic, query: str, filter: str | None = None, limit: int = 
                 if vid:
                     title_text = _extract_text(r.get("title"))
                     subtitle = _extract_text(r.get("subtitle"))
-                    items.append(
+                    _append_item(
                         {
                             "type": "song",
                             "videoId": vid,
@@ -506,26 +823,23 @@ def _search_once(
         return cached
 
     if use_unauth_client:
-        yt = _get_public_ytmusic(strategy)
-        try:
+
+        def search_public(yt: YTMusic) -> JsonList:
             if strategy == "native":
-                items = _native_search(yt, query, filter=filter_, limit=limit)
-            else:
-                items = _tv_search(yt, query, filter=filter_, limit=limit)
-        except Exception as first_err:
-            log.warning(
-                "Public %s search client failed for user=%s query=%r; rebuilding and retrying once: %s",
+                return _native_search(yt, query, filter=filter_, limit=limit)
+            return _tv_search(yt, query, filter=filter_, limit=limit)
+
+        items = cast(
+            JsonList,
+            _run_public_ytmusic_with_retry(
                 strategy,
-                user_id,
-                query,
-                first_err,
-            )
-            _invalidate_public_ytmusic(strategy)
-            retry_client = _get_public_ytmusic(strategy)
-            if strategy == "native":
-                items = _native_search(retry_client, query, filter=filter_, limit=limit)
-            else:
-                items = _tv_search(retry_client, query, filter=filter_, limit=limit)
+                f"search-{strategy} user={user_id} query={query!r}",
+                search_public,
+                request_timeout_seconds=SEARCH_PROVIDER_REQUEST_TIMEOUT_SECONDS,
+                retry_timeouts=False,
+                language=_PUBLIC_SEARCH_LANGUAGE,
+            ),
+        )
     else:
         if strategy == "native":
             items = _run_ytmusic_with_auth_retry(
@@ -553,7 +867,8 @@ def _search_with_mode_fallback(
 ) -> tuple[JsonList, Literal["tv", "native"]]:
     """
     Execute search according to configured mode.
-    In auto mode, try native first and fall back to tv per-user on failure.
+    In auto mode, try native first and fall back to TV for the current public
+    request. Only the authenticated #813 signature pins a user's later calls.
     `use_unauth_client=True` routes search through public clients so queries do
     not use user OAuth sessions.
     """
@@ -584,6 +899,11 @@ def _search_with_mode_fallback(
             "native",
         )
     except Exception as native_err:
+        # A provider timeout already consumed the search transport budget.
+        # Retrying through the fallback strategy would outlive the backend's
+        # eight-second deadline and leave another blocked provider call behind.
+        if isinstance(native_err, (requests.Timeout, TimeoutError)):
+            raise
         # Preserve explicit native behavior unless auto fallback is enabled.
         if SEARCH_MODE != "auto" or (not use_unauth_client and _is_oauth_auth_error(native_err)):
             raise
@@ -596,7 +916,13 @@ def _search_with_mode_fallback(
             filter_,
             native_err,
         )
-        _ytmusic_auto_tv_fallback_users.add(user_id)
+        # Public catalog calls deliberately use disposable unauthenticated
+        # clients. Never let one transient provider failure pin the shared
+        # public identity to TV mode for every user and every future request.
+        # Authenticated clients retain the existing #813 workaround, but only
+        # for the specific invalid-argument signature it was designed for.
+        if not use_unauth_client and _is_issue_813_invalid_argument_error(native_err):
+            _ytmusic_auto_tv_fallback_users.add(user_id)
         if not use_unauth_client:
             _invalidate_ytmusic(user_id)
         return (
@@ -629,6 +955,99 @@ def _clean_search_cache() -> None:
         log.debug(f"Cleaned {expired_count} expired search cache entries")
 
 
+def _consume_search_provider_job(job: _SearchProviderJob) -> None:
+    """Retire provider work only after its dedicated worker has settled."""
+    _search_provider_jobs.discard(job)
+    if not job.cancelled():
+        _ = job.exception()
+
+
+def _submit_search_provider_job(
+    user_id: str,
+    query: str,
+    filter_: Literal["songs", "albums", "artists", "videos"] | None,
+    limit: int,
+) -> _SearchProviderJob:
+    """Admit one public search without queueing behind occupied workers."""
+    if not _search_provider_admitting or len(_search_provider_jobs) >= SEARCH_PROVIDER_CONCURRENCY:
+        raise HTTPException(status_code=503, detail=_SEARCH_PROVIDER_CAPACITY_DETAIL)
+
+    loop = asyncio.get_running_loop()
+    job = cast(
+        _SearchProviderJob,
+        loop.run_in_executor(
+            _search_provider_executor,
+            _search_with_mode_fallback,
+            user_id,
+            query,
+            filter_,
+            limit,
+            True,
+        ),
+    )
+    _search_provider_jobs.add(job)
+    job.add_done_callback(_consume_search_provider_job)
+    return job
+
+
+async def _run_search_provider(
+    user_id: str,
+    query: str,
+    filter_: Literal["songs", "albums", "artists", "videos"] | None,
+    limit: int,
+) -> _SearchProviderResult:
+    """Await admitted search work while retaining timed-out worker slots."""
+    job = _submit_search_provider_job(user_id, query, filter_, limit)
+    deadline = asyncio.timeout(SEARCH_ENDPOINT_TIMEOUT_SECONDS)
+    try:
+        async with deadline:
+            return await asyncio.shield(job)
+    except TimeoutError as error:
+        if deadline.expired():
+            raise _SearchProviderDeadlineError from error
+        raise
+
+
+def _drain_search_provider_executor(
+    drained: asyncio.Event,
+    loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Drain the dedicated search executor and notify the event loop."""
+    try:
+        _search_provider_executor.shutdown(wait=True, cancel_futures=True)
+    except Exception:
+        log.exception("YouTube Music search provider executor drain failed")
+    finally:
+        try:
+            loop.call_soon_threadsafe(drained.set)
+        except RuntimeError:
+            return
+
+
+async def shutdown_search_provider() -> None:
+    """Stop search admission and bound shutdown waiting for provider workers."""
+    global _search_provider_admitting
+
+    _search_provider_admitting = False
+    loop = asyncio.get_running_loop()
+    drained = asyncio.Event()
+    drain_thread = threading.Thread(
+        target=_drain_search_provider_executor,
+        args=(drained, loop),
+        name="ytmusic-search-provider-shutdown",
+        daemon=True,
+    )
+    drain_thread.start()
+    try:
+        async with asyncio.timeout(_SEARCH_PROVIDER_DRAIN_SECONDS):
+            await drained.wait()
+    except TimeoutError:
+        log.warning(
+            "YouTube Music search provider drain exceeded %.1f seconds",
+            _SEARCH_PROVIDER_DRAIN_SECONDS,
+        )
+
+
 @app.post("/search")
 async def search(req: SearchRequest, user_id: str = Query(...)) -> JsonObject:
     """Search YouTube Music for songs, albums, or artists.
@@ -637,18 +1056,17 @@ async def search(req: SearchRequest, user_id: str = Query(...)) -> JsonObject:
     is not touched. user_id is still used for cache segmentation and pacing.
 
     Mode behavior is controlled by YTMUSIC_SEARCH_MODE:
-      - auto (default): try native and pin user to tv fallback on failure
+      - auto (default): native first; public fallback is request-scoped and an
+        authenticated #813 failure pins only that user to TV
       - tv: force TVHTML parser path
       - native: force ytmusicapi yt.search()
     """
     try:
-        items, strategy = await asyncio.to_thread(
-            _search_with_mode_fallback,
+        items, strategy = await _run_search_provider(
             user_id,
             req.query,
             req.filter,
             req.limit,
-            use_unauth_client=True,
         )
         log.debug(
             "Search: query=%r, filter=%r, limit=%s, strategy=%s, configured_mode=%s",
@@ -661,6 +1079,15 @@ async def search(req: SearchRequest, user_id: str = Query(...)) -> JsonObject:
         return {"results": items, "total": len(items)}
     except HTTPException:
         raise
+    except (requests.Timeout, TimeoutError) as e:
+        log.warning(
+            "Search timed out for user %s query=%r filter=%r: %s",
+            user_id,
+            req.query,
+            req.filter,
+            type(e).__name__,
+        )
+        raise HTTPException(status_code=504, detail=_SEARCH_PROVIDER_TIMEOUT_DETAIL) from e
     except Exception as e:
         raise _sanitized_http_error(
             f"Search for user {user_id} query={req.query!r} filter={req.filter!r}",
@@ -694,14 +1121,17 @@ async def search_batch(req: BatchSearchRequest, user_id: str = Query(...)) -> Js
         if cached is not None:
             return {"results": cached, "total": len(cached), "error": None}
 
-        async with _batch_semaphore:
+        semaphore = _batch_semaphore
+        await semaphore.acquire()
+        provider_job: asyncio.Task[_SearchProviderResult] | None = None
+        try:
             # Random delay between requests within the batch
             delay = random.uniform(  # noqa: S311 -- request pacing jitter is not security-sensitive
                 BATCH_DELAY_MIN, BATCH_DELAY_MAX
             )
             await asyncio.sleep(delay)
-            try:
-                items, _used_strategy = await asyncio.to_thread(
+            provider_job = asyncio.create_task(
+                asyncio.to_thread(
                     _search_with_mode_fallback,
                     user_id,
                     q.query,
@@ -709,12 +1139,29 @@ async def search_batch(req: BatchSearchRequest, user_id: str = Query(...)) -> Js
                     q.limit,
                     True,  # use_unauth_client
                 )
+            )
+
+            def _release_provider_slot(job: asyncio.Future[_SearchProviderResult]) -> None:
+                """Release capacity only after the uncancellable worker has settled."""
+                semaphore.release()
+                if not job.cancelled():
+                    _ = job.exception()
+
+            provider_job.add_done_callback(_release_provider_slot)
+            try:
+                items, _used_strategy = await asyncio.shield(provider_job)
                 return {"results": items, "total": len(items), "error": None}
             except HTTPException:
                 raise
             except Exception as e:
                 log.warning(f"Batch search failed for query={q.query!r}: {e}")
                 return {"results": [], "total": 0, "error": "search failed"}
+        finally:
+            # Cancellation before the worker task is created still owns a slot.
+            # Once created, the task's callback owns release even if this request
+            # disconnects while its blocking provider call is still running.
+            if provider_job is None:
+                semaphore.release()
 
     log.debug(
         f"Batch search: {len(req.queries)} queries for user {user_id} "
@@ -736,12 +1183,15 @@ async def search_debug(req: SearchRequest, user_id: str = Query(...)) -> JsonObj
     """
     # Keep user_id in the route signature for request-shape compatibility, but
     # debug search uses the public TV client like normal search paths.
-    yt = _get_public_ytmusic("tv")
     body: JsonObject = {"query": req.query}
     if req.filter == "songs":
         body["params"] = "EgWKAQIIAWoMEA4QChADEAQQCRAF"
     try:
-        raw = await asyncio.to_thread(yt._send_request, "search", body)
+        raw = await asyncio.to_thread(
+            _run_public_ytmusic,
+            "tv",
+            lambda yt: yt._send_request("search", body),
+        )
         return {"raw": raw}
     except Exception as e:
         raise _sanitized_http_error("Debug search", e, 500, "Debug search failed") from e

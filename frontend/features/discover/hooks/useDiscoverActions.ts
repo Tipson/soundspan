@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { shuffleArray } from "@/utils/shuffle";
 import { DiscoverPlaylist } from "../types";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { discoverQueuedCount, discoverRu } from "@/lib/i18n/discoverRu";
 
 interface PlaybackQueueTrack {
     loudnessLufs?: number | null;
@@ -76,7 +77,7 @@ export function useDiscoverActions(
             sharedFrontendLogger.warn(
                 "Generation already in progress, ignoring request",
             );
-            toast.warning("Generation already in progress...");
+            toast.warning(discoverRu.toast.generationInProgress);
             return;
         }
 
@@ -84,7 +85,7 @@ export function useDiscoverActions(
         setPendingGeneration?.(true);
 
         try {
-            toast.info("Generating your Discover Weekly playlist...");
+            toast.info(discoverRu.toast.generating);
             await api.generateDiscoverWeekly();
 
             // Immediately refresh batch status to start polling
@@ -92,20 +93,20 @@ export function useDiscoverActions(
                 await refreshBatchStatus();
             }
 
-            toast.success("Generation started! Refreshing recommendations...");
+            toast.success(discoverRu.toast.generationStarted);
         } catch (error: unknown) {
             sharedFrontendLogger.error("Generation failed:", error);
             // Clear pending state on error
             setPendingGeneration?.(false);
             const err = error as Error & { status?: number };
             if (err.status === 409) {
-                toast.warning("A playlist is already being generated...");
+                toast.warning(discoverRu.toast.generationInProgress);
                 // Refresh status in case UI is out of sync
                 if (refreshBatchStatus) {
                     await refreshBatchStatus();
                 }
             } else {
-                toast.error(err.message || "Failed to generate playlist");
+                toast.error(discoverRu.toast.generationFailed);
             }
         }
     }, [isGenerating, refreshBatchStatus, setPendingGeneration]);
@@ -150,7 +151,7 @@ export function useDiscoverActions(
             mapDiscoverTrackToPlaybackTrack,
         );
         addTracksToQueue(formattedTracks);
-        toast.success(`Added ${formattedTracks.length} tracks to queue`);
+        toast.success(discoverQueuedCount(formattedTracks.length));
     }, [playlist, addTracksToQueue]);
 
     const handleTogglePlay = useCallback(() => {

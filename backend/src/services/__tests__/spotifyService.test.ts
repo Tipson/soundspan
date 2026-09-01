@@ -295,6 +295,317 @@ describe("spotifyService", () => {
         expect(playlist!.tracks[0].albumId).toBe("album-1");
     });
 
+    it("paginates every playlist item instead of reporting a partial import", async () => {
+        const makeTrack = (id: string, title: string) => ({
+            track: {
+                id,
+                type: "track",
+                name: title,
+                artists: [{ id: `artist-${id}`, name: `Artist ${id}` }],
+                album: {
+                    id: `album-${id}`,
+                    name: `Album ${id}`,
+                    images: [{ url: `https://images.example/${id}.jpg` }],
+                },
+                duration_ms: 180000,
+                track_number: 1,
+                preview_url: null,
+                external_ids: { isrc: `ISRC-${id}` },
+            },
+        });
+        const nextUrl =
+            "https://api.spotify.com/v1/playlists/playlistpaged/tracks?offset=1&limit=1";
+
+        mockAxiosGet
+            .mockResolvedValueOnce(makeTokenResponse("token-paged"))
+            .mockResolvedValueOnce({
+                data: {
+                    id: "playlistpaged",
+                    name: "Paged Playlist",
+                    description: null,
+                    owner: { display_name: "Owner" },
+                    images: [],
+                    public: true,
+                    tracks: {
+                        total: 2,
+                        next: nextUrl,
+                        items: [makeTrack("track-1", "Track One")],
+                    },
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    next: null,
+                    items: [
+                        {
+                            item: makeTrack("track-2", "Track Two").track,
+                        },
+                    ],
+                },
+            });
+
+        const playlist = await spotifyService.getPlaylist(
+            "https://open.spotify.com/playlist/playlistpaged",
+        );
+
+        expect(playlist?.tracks.map((track) => track.spotifyId)).toEqual([
+            "track-1",
+            "track-2",
+        ]);
+        expect(playlist?.trackCount).toBe(2);
+        expect(mockAxiosGet).toHaveBeenNthCalledWith(
+            3,
+            nextUrl,
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    Authorization: "Bearer token-paged",
+                }),
+            }),
+        );
+        expect(mockAxiosGet.mock.calls[1][1].params.fields).toContain(
+            "tracks.next",
+        );
+    });
+
+    it("uses the embed session token to fetch every item for a credential-free import", async () => {
+        const makeTrack = (id: string, title: string) => ({
+            track: {
+                id,
+                type: "track",
+                name: title,
+                artists: [{ id: `artist-${id}`, name: `Artist ${id}` }],
+                album: {
+                    id: `album-${id}`,
+                    name: `Album ${id}`,
+                    images: [],
+                },
+                duration_ms: 180000,
+                track_number: 1,
+                preview_url: null,
+                external_ids: {},
+            },
+        });
+        const nextUrl =
+            "https://api.spotify.com/v1/playlists/playliststrict/tracks?offset=1&limit=1";
+        const embedHtml = `<html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
+            {
+                props: {
+                    pageProps: {
+                        state: {
+                            settings: {
+                                session: {
+                                    accessToken: "embed-session-token",
+                                    accessTokenExpirationTimestampMs:
+                                        Date.now() + 30 * 60 * 1000,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        )}</script></html>`;
+
+        mockAxiosGet
+            .mockRejectedValueOnce(new Error("transport token blocked"))
+            .mockRejectedValueOnce(new Error("embed token endpoint blocked"))
+            .mockResolvedValueOnce({ data: embedHtml })
+            .mockResolvedValueOnce({
+                data: {
+                    id: "playliststrict",
+                    name: "Strict Playlist",
+                    description: null,
+                    owner: { display_name: "Owner" },
+                    images: [],
+                    public: true,
+                    tracks: {
+                        total: 2,
+                        next: nextUrl,
+                        items: [makeTrack("track-1", "Track One")],
+                    },
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    next: null,
+                    items: [makeTrack("track-2", "Track Two")],
+                },
+            });
+
+        const playlist = await spotifyService.getPlaylistForImport(
+            "https://open.spotify.com/playlist/playliststrict",
+        );
+
+        expect(playlist?.tracks.map((track) => track.spotifyId)).toEqual([
+            "track-1",
+            "track-2",
+        ]);
+        expect(playlist?.trackCount).toBe(2);
+        expect(mockAxiosGet).toHaveBeenNthCalledWith(
+            4,
+            expect.stringContaining("/v1/playlists/playliststrict"),
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    Authorization: "Bearer embed-session-token",
+                }),
+            }),
+        );
+    });
+
+    it("fails a strict import instead of accepting an unverifiable embed subset", async () => {
+        const embedHtml = `<html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
+            {
+                props: {
+                    pageProps: {
+                        state: {
+                            data: {
+                                entity: {
+                                    name: "Possibly Truncated Playlist",
+                                    trackList: Array.from(
+                                        { length: 100 },
+                                        (_, index) => ({
+                                            title: `Track ${index}`,
+                                            subtitle: "Artist",
+                                            uri: `spotify:track:track-${index}`,
+                                        }),
+                                    ),
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        )}</script></html>`;
+
+        mockAxiosGet
+            .mockRejectedValueOnce(new Error("transport token blocked"))
+            .mockRejectedValueOnce(new Error("embed token endpoint blocked"))
+            .mockResolvedValueOnce({ data: embedHtml });
+
+        await expect(
+            spotifyService.getPlaylistForImport("playliststrict"),
+        ).rejects.toThrow("complete playlist");
+        expect(mockAxiosGet).toHaveBeenCalledTimes(3);
+    });
+
+    it("rejects a playlist page that ends before Spotify's declared total", async () => {
+        mockAxiosGet
+            .mockResolvedValueOnce(makeTokenResponse("token-short-page"))
+            .mockResolvedValueOnce({
+                data: {
+                    id: "playlistshort",
+                    name: "Truncated Playlist",
+                    owner: { display_name: "Owner" },
+                    tracks: {
+                        total: 2,
+                        next: null,
+                        items: [
+                            {
+                                track: {
+                                    id: "track-1",
+                                    type: "track",
+                                    name: "Track One",
+                                    artists: [
+                                        {
+                                            id: "artist-1",
+                                            name: "Artist One",
+                                        },
+                                    ],
+                                    album: {
+                                        id: "album-1",
+                                        name: "Album One",
+                                        images: [],
+                                    },
+                                    duration_ms: 180000,
+                                    track_number: 1,
+                                    preview_url: null,
+                                    external_ids: {},
+                                },
+                            },
+                        ],
+                    },
+                },
+            });
+
+        await expect(
+            spotifyService.getPlaylist(
+                "https://open.spotify.com/playlist/playlistshort",
+            ),
+        ).rejects.toThrow("declared 2 items but returned 1");
+        expect(mockAxiosGet).toHaveBeenCalledTimes(2);
+    });
+
+    it("falls back to embed HTML when the initial Spotify paging shape is malformed", async () => {
+        const embedData = JSON.stringify({
+            props: {
+                pageProps: {
+                    state: {
+                        data: {
+                            entity: {
+                                name: "Recovered Embed Playlist",
+                                trackList: [
+                                    {
+                                        title: "Recovered Track",
+                                        subtitle: "Recovered Artist",
+                                        uri: "spotify:track:recovered-track",
+                                        albumName: "Recovered Album",
+                                        duration: 120000,
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        const embedHtml = `<html><script id="__NEXT_DATA__" type="application/json">${embedData}</script></html>`;
+
+        mockAxiosGet
+            .mockResolvedValueOnce(makeTokenResponse("token-malformed-initial"))
+            .mockResolvedValueOnce({
+                data: {
+                    id: "playlistmalformed",
+                    name: "Malformed API Playlist",
+                    owner: { display_name: "Owner" },
+                    tracks: { total: 1, next: null },
+                },
+            })
+            .mockResolvedValueOnce({ data: embedHtml });
+
+        const playlist = await spotifyService.getPlaylist(
+            "https://open.spotify.com/playlist/playlistmalformed",
+        );
+
+        expect(playlist?.name).toBe("Recovered Embed Playlist");
+        expect(playlist?.tracks.map((track) => track.spotifyId)).toEqual([
+            "recovered-track",
+        ]);
+        expect(mockAxiosGet).toHaveBeenCalledTimes(3);
+    });
+
+    it("rejects an unsafe Spotify pagination URL without creating a partial import", async () => {
+        mockAxiosGet
+            .mockResolvedValueOnce(makeTokenResponse("token-unsafe-page"))
+            .mockResolvedValueOnce({
+                data: {
+                    id: "playlistunsafe",
+                    name: "Unsafe Playlist",
+                    owner: { display_name: "Owner" },
+                    tracks: {
+                        total: 2,
+                        next: "https://example.com/collect?offset=1",
+                        items: [],
+                    },
+                },
+            });
+
+        await expect(
+            spotifyService.getPlaylist(
+                "https://open.spotify.com/playlist/playlistunsafe",
+            ),
+        ).rejects.toThrow("unsafe playlist pagination link");
+        expect(mockAxiosGet).toHaveBeenCalledTimes(2);
+    });
+
     it("falls back to embed HTML when playlist API fails", async () => {
         const embedData = JSON.stringify({
             props: {

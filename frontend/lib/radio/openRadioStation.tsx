@@ -4,6 +4,13 @@ import { api, type RadioPlaylistFilter } from "@/lib/api";
 import type { Track } from "@/lib/audio-state-context";
 import { shuffleArray } from "@/utils/shuffle";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    formatRadioMinimumDescription,
+    formatRadioNoTracks,
+    formatRadioNotEnoughTracks,
+    formatRadioStationStarted,
+    radioRu,
+} from "@/lib/i18n/utilityPagesRu";
 
 const SHUFFLE_ALL_TRACK_LIMIT = 100;
 const DEFAULT_MIN_TRACKS = 10;
@@ -40,11 +47,13 @@ export interface RadioStationNotifier {
 
 const defaultNotifier: RadioStationNotifier = {
     error: (message, options) => toast.error(message, options),
-    stationStarted: (name, trackCount) =>
-        toast.success(`${name} Radio`, {
-            description: `Shuffling ${trackCount} tracks`,
+    stationStarted: (name, trackCount) => {
+        const copy = formatRadioStationStarted(name, trackCount);
+        toast.success(copy.title, {
+            description: copy.description,
             icon: <Shuffle className="w-4 h-4" />,
-        }),
+        });
+    },
 };
 
 /** Callbacks the calling component provides from its own hooks. */
@@ -68,14 +77,17 @@ async function startShuffleAll(
     );
 
     if (!response.tracks || response.tracks.length === 0) {
-        notifier.error(`No tracks found for ${station.name}`);
+        notifier.error(formatRadioNoTracks(station.name));
         return;
     }
 
     const minTracks = station.minTracks || DEFAULT_MIN_TRACKS;
     if (response.tracks.length < minTracks) {
-        notifier.error(`Not enough tracks for ${station.name} radio`, {
-            description: `Found ${response.tracks.length}, need at least ${minTracks}`,
+        notifier.error(formatRadioNotEnoughTracks(station.name), {
+            description: formatRadioMinimumDescription(
+                response.tracks.length,
+                minTracks,
+            ),
         });
         return;
     }
@@ -105,6 +117,6 @@ export async function openRadioStation(
         push(`/playlist/${response.playlistId}`);
     } catch (error) {
         sharedFrontendLogger.error("Failed to open radio station:", error);
-        notifier.error("Failed to open radio station");
+        notifier.error(radioRu.openFailed);
     }
 }

@@ -4,7 +4,7 @@ import DOMPurify from "dompurify";
 import { useMemo, useState } from "react";
 import { useIsMobile } from "@/hooks/useMediaQuery";
 import { cn } from "@/utils/cn";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { ru } from "@/lib/i18n/ru";
 
 interface ArtistBioProps {
     bio: string;
@@ -33,29 +33,30 @@ export function ArtistBio({ bio }: ArtistBioProps) {
     if (!safeBio) return null;
 
     return (
-        <section>
-            <SectionHeader title="About" size="sm" />
-            <div className="bg-white/5 rounded-md p-4">
+        <section className="max-w-4xl border-t border-white/[0.08] pt-7">
+            <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                {ru.catalog.about}
+            </h2>
+            <div>
                 <div
                     className={cn(
-                        "prose prose-sm md:prose-base prose-invert max-w-none leading-relaxed [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline",
+                        "prose prose-sm md:prose-base prose-invert max-w-none leading-relaxed text-content-secondary [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline",
                         shouldCollapse && "max-h-28 overflow-hidden",
                     )}
-                    style={{ color: "#b3b3b3" }}
                     dangerouslySetInnerHTML={{
                         __html: DOMPurify.sanitize(safeBio),
                     }}
                 />
                 {shouldCollapse && (
-                    <div className="-mt-12 h-12 bg-gradient-to-t from-surface-elevated to-transparent" />
+                    <div className="-mt-12 h-12 bg-gradient-to-t from-surface to-transparent" />
                 )}
                 {needsCollapse && !isExpanded && (
                     <button
                         type="button"
                         onClick={() => setExpandedBio(safeBio)}
-                        className="mt-2 text-sm text-brand hover:underline"
+                        className="mt-2 min-h-11 rounded-lg px-2 text-sm font-semibold text-brand transition-colors hover:bg-white/5 hover:text-brand-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                     >
-                        ...more
+                        {ru.catalog.more}
                     </button>
                 )}
             </div>

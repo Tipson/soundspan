@@ -8,6 +8,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { createRuntimeAudioEngine } from "@/lib/audio-engine";
+import { discoverRu } from "@/lib/i18n/discoverRu";
 
 const playbackEngine = createRuntimeAudioEngine();
 
@@ -30,7 +31,7 @@ function createPreviewAudio(
         resumeMainPlayerIfPaused(mainPlayerWasPausedRef);
     };
     audio.onerror = () => {
-        toast.error("Failed to load preview");
+        toast.error(discoverRu.toast.previewLoadFailed);
         setCurrentPreview(null);
         if (previewAudios.get(albumId) === audio) {
             previewAudios.delete(albumId);
@@ -73,8 +74,8 @@ function startPreview(
         .then(() => {
             setCurrentPreview(albumId);
         })
-        .catch((error) => {
-            toast.error("Failed to play preview: " + error.message);
+        .catch(() => {
+            toast.error(discoverRu.toast.previewPlayFailed);
             setCurrentPreview(null);
             resumeMainPlayerIfPaused(mainPlayerWasPausedRef);
         });
@@ -102,7 +103,7 @@ export function usePreviewPlayer() {
     const handleTogglePreview = useCallback(
         (albumId: string, previewUrl: string) => {
             if (!previewUrl) {
-                toast.error("No preview available for this album");
+                toast.error(discoverRu.toast.previewUnavailable);
                 return;
             }
 

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { SystemState } from "@/app/_components/SystemState";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Renders the GlobalError component.
@@ -18,24 +20,14 @@ export default function GlobalError({
     }, [error]);
 
     return (
-        <html>
+        <html lang="ru">
             <body>
-                <div className="flex h-screen items-center justify-center bg-black">
-                    <div className="text-center">
-                        <h2 className="text-2xl font-bold text-white mb-4">
-                            Application Error
-                        </h2>
-                        <p className="text-gray-400 mb-6">
-                            {error.message || "A critical error occurred"}
-                        </p>
-                        <button
-                            onClick={reset}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                            Reload Application
-                        </button>
-                    </div>
-                </div>
+                <SystemState
+                    kind="error"
+                    title={ru.errors.applicationTitle}
+                    description="Soundspan не смог продолжить работу. Перезапустите интерфейс — ваша медиатека и настройки не изменятся."
+                    action={{ label: ru.errors.reload, onClick: reset }}
+                />
             </body>
         </html>
     );

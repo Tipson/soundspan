@@ -1,6 +1,7 @@
 import { Audiobook } from "../types";
 import { AudiobookCard } from "@/components/ui/AudiobookCard";
 import { api } from "@/lib/api";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 interface LibraryAudiobooksGridProps {
     audiobooks: Audiobook[];
@@ -27,7 +28,7 @@ export function LibraryAudiobooksGrid({
                     key={audiobook.id}
                     id={audiobook.id}
                     title={audiobook.title}
-                    author={audiobook.author || "Unknown Author"}
+                    author={audiobook.author || searchExtrasRu.unknownAuthor}
                     coverUrl={audiobook.coverUrl}
                     index={index}
                     getCoverUrl={getCoverUrl}

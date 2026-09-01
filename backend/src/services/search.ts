@@ -12,6 +12,7 @@ import { escapeLikePattern } from "../utils/likePattern";
 import { getSearchCacheVersion } from "./searchCacheVersion";
 
 const MAX_TRACK_SEARCH_TERMS = 6;
+const SEARCH_CACHE_PAYLOAD_VERSION = 2;
 
 /**
  * Executes normalizeCacheQuery.
@@ -46,6 +47,7 @@ export interface ArtistSearchResult {
 
 export interface AlbumSearchResult {
     id: string;
+    rgMbid: string;
     title: string;
     artistId: string;
     artistName: string;
@@ -296,7 +298,7 @@ export class SearchService {
                 }
             >
         >`
-            SELECT a.id, a.title, a."artistId", ar.name AS "artistName",
+            SELECT a.id, a."rgMbid", a.title, a."artistId", ar.name AS "artistName",
                    a.year, a."coverUrl",
                    CASE WHEN a."peerId" IS NOT NULL THEN 'federated' END AS source,
                    ${peerSql} AS peer,
@@ -347,10 +349,11 @@ export class SearchService {
             const includeEmpty = source !== "peers";
             const results = await prisma.$queryRaw<AlbumSearchResult[]>`
         SELECT * FROM (
-          SELECT DISTINCT ON (id) id, title, "artistId", "artistName", year, "coverUrl", source, peer, rank
+          SELECT DISTINCT ON (id) id, "rgMbid", title, "artistId", "artistName", year, "coverUrl", source, peer, rank
           FROM (
             SELECT
               a.id,
+              a."rgMbid",
               a.title,
               a."artistId",
               ar.name as "artistName",
@@ -373,6 +376,7 @@ export class SearchService {
 
             SELECT
               a.id,
+              a."rgMbid",
               a.title,
               a."artistId",
               ar.name as "artistName",
@@ -894,7 +898,7 @@ export class SearchService {
 
         // Check Redis cache first
         const cacheVersion = await getSearchCacheVersion();
-        const cacheKey = `search:all:v${cacheVersion}:${normalizeCacheQuery(query)}:${limit}:${genre || ""}:${source}`;
+        const cacheKey = `search:all:p${SEARCH_CACHE_PAYLOAD_VERSION}:v${cacheVersion}:${normalizeCacheQuery(query)}:${limit}:${genre || ""}:${source}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
@@ -1010,7 +1014,7 @@ export class SearchService {
 
         // Check cache
         const cacheVersion = await getSearchCacheVersion();
-        const cacheKey = `search:${type}:v${cacheVersion}:${normalizeCacheQuery(query)}:${limit}:${offset}:${genre || ""}:${source}`;
+        const cacheKey = `search:${type}:p${SEARCH_CACHE_PAYLOAD_VERSION}:v${cacheVersion}:${normalizeCacheQuery(query)}:${limit}:${offset}:${genre || ""}:${source}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {

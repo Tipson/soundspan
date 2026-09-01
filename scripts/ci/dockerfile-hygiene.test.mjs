@@ -66,6 +66,28 @@ const probeNames = ["livenessProbe", "readinessProbe"];
 const npmToolchainRemovalPattern =
     /rm -rf\s+\/usr\/local\/lib\/node_modules\s+\/usr\/local\/bin\/npm\s+\/usr\/local\/bin\/npx\s+\/usr\/local\/bin\/corepack\b/;
 
+test("AIO skips local audio-analysis processes when the feature is disabled", () => {
+    const dockerfile = readRepoFile("Dockerfile");
+    assert.match(
+        dockerfile,
+        /export AUDIO_ANALYSIS_ENABLED="\$\{AUDIO_ANALYSIS_ENABLED:-true\}"/,
+    );
+    const gatedPrograms = ["audio-analyzer", "vibe-provider-dclap"];
+    for (const program of gatedPrograms) {
+        const programBlock = dockerfile.match(
+            new RegExp(
+                `\\[program:${program}\\]([\\s\\S]*?)(?=\\n\\[program:|\\nEOF)`,
+            ),
+        )?.[1];
+        assert.ok(programBlock, `missing AIO supervisor program ${program}`);
+        assert.match(
+            programBlock,
+            /autostart=%\(ENV_AUDIO_ANALYSIS_ENABLED\)s/,
+            `${program} must follow AUDIO_ANALYSIS_ENABLED`,
+        );
+    }
+});
+
 function readRepoFile(relativePath) {
     return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
@@ -477,6 +499,18 @@ test("3. frontend runtime uses the base node image UID 1000 user", () => {
     );
 });
 
+test("3a. frontend runtime copies the custom proxy's local authentication dependency", () => {
+    const relativePath = "frontend/Dockerfile";
+    const runtimeStage = dockerfileStages(readRepoFile(relativePath)).at(-1);
+
+    assert.ok(runtimeStage, `${relativePath}: runtime stage must exist`);
+    assert.match(
+        runtimeStage.text,
+        /COPY\s+--from=builder\s+--chown=node:node\s+\/app\/lib\/media-auth\.js\s+\.\/lib\/media-auth\.js/i,
+        `${relativePath}: server-proxy.js requires ./lib/media-auth.js at runtime`,
+    );
+});
+
 test("4. ytmusic-streamer has no world-writable token directory", () => {
     const relativePath = "services/ytmusic-streamer/Dockerfile";
     const dockerfile = readRepoFile(relativePath);
@@ -756,6 +790,64 @@ test("12. Prisma CLI stages copy relative prisma.config.ts imports", () => {
             }
         }
     }
+});
+
+test("12a. AIO preserves its generated Prisma client when replacing backend dependencies", () => {
+    const instructions = readRepoFile("Dockerfile")
+        .replace(/\\\r?\n\s*/g, " ")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const officialDependenciesIndex = instructions.findIndex((instruction) =>
+        /^COPY\s+--from=official_artifacts\s+\/app\/backend\/node_modules\/?\s+\/app\/backend\/node_modules\/?$/i.test(
+            instruction,
+        ),
+    );
+
+    assert.notEqual(
+        officialDependenciesIndex,
+        -1,
+        "Dockerfile: expected the pinned official backend dependency replacement",
+    );
+
+    const generatedClientStash = instructions
+        .slice(0, officialDependenciesIndex)
+        .map((instruction) =>
+            instruction.match(
+                /\bmv\s+\/app\/backend\/node_modules\/\.prisma\s+(\S+)/i,
+            ),
+        )
+        .find(Boolean)?.[1];
+
+    assert.ok(
+        generatedClientStash,
+        "Dockerfile: stash the schema-specific .prisma client before replacing backend node_modules",
+    );
+
+    const runtimeInstructions = instructions.slice(
+        officialDependenciesIndex + 1,
+    );
+    assert.ok(
+        runtimeInstructions.some((instruction) =>
+            new RegExp(
+                `\\bmv\\s+${generatedClientStash.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s+\\/app\\/backend\\/node_modules\\/\\.prisma\\b`,
+                "i",
+            ).test(instruction),
+        ),
+        "Dockerfile: restore the generated .prisma client after the official dependency replacement",
+    );
+    assert.ok(
+        runtimeInstructions.some(
+            (instruction) =>
+                /^RUN\s+/i.test(instruction) &&
+                instruction.includes("@prisma/client") &&
+                instruction.includes("RemotePreferenceIntent") &&
+                instruction.includes("SavedMusicEntity") &&
+                instruction.includes("completionRatio") &&
+                instruction.includes("waveMode"),
+        ),
+        "Dockerfile: fail the image build unless the runtime Prisma client exposes the release schema",
+    );
 });
 
 test("13. Helm exec probe binaries exist in component runtime images", () => {

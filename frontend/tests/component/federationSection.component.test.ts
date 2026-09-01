@@ -44,7 +44,7 @@ test("federation peer list renders its empty state", async () => {
             onDelete: noop,
         }),
     );
-    assert.match(html, /No federation peers linked/);
+    assert.match(html, /Нет связанных серверов/);
 });
 
 test("federation peer list renders active, offline, and revoked status chips", async () => {
@@ -106,12 +106,12 @@ test("federation peer list renders active, offline, and revoked status chips", a
         }),
     );
     assert.match(html, /Alpha/);
-    assert.match(html, /ACTIVE/);
-    assert.match(html, /OFFLINE/);
-    assert.match(html, /REVOKED/);
+    assert.match(html, /Активно/);
+    assert.match(html, /Не в сети/);
+    assert.match(html, /Отозвано/);
     assert.match(html, /library:read/);
-    assert.match(html, /Sharing to them/);
-    assert.match(html, /Consuming from them/);
+    assert.match(html, /Делимся с ними/);
+    assert.match(html, /Слушаем с их сервера/);
 });
 
 test("peer cards render only their own direction lines", async () => {
@@ -153,8 +153,8 @@ test("peer cards render only their own direction lines", async () => {
             onDelete: noop,
         }),
     );
-    assert.match(hostHtml, /Sharing to them/);
-    assert.doesNotMatch(hostHtml, /Consuming from them/);
+    assert.match(hostHtml, /Делимся с ними/);
+    assert.doesNotMatch(hostHtml, /Слушаем с их сервера/);
 
     const consumerHtml = renderToStaticMarkup(
         React.createElement(FederationPeersList, {
@@ -174,8 +174,8 @@ test("peer cards render only their own direction lines", async () => {
             onDelete: noop,
         }),
     );
-    assert.match(consumerHtml, /Consuming from them/);
-    assert.doesNotMatch(consumerHtml, /Sharing to them/);
+    assert.match(consumerHtml, /Слушаем с их сервера/);
+    assert.doesNotMatch(consumerHtml, /Делимся с ними/);
 
     const hostNoUrlHtml = renderToStaticMarkup(
         React.createElement(FederationPeersList, {
@@ -196,8 +196,10 @@ test("peer cards render only their own direction lines", async () => {
             onDelete: noop,
         }),
     );
-    assert.match(hostNoUrlHtml, /No remote URL — they connect to this server/);
-    assert.doesNotMatch(hostNoUrlHtml, /This instance hosts the library/);
+    assert.match(
+        hostNoUrlHtml,
+        /Нет удалённого URL — они подключаются к этому серверу/,
+    );
 });
 
 test("one-time credential dialog shows the token and irreversible warning", async () => {
@@ -211,8 +213,8 @@ test("one-time credential dialog shows the token and irreversible warning", asyn
         }),
     );
     assert.match(html, /secret-once-token/);
-    assert.match(html, /you won&#x27;t see this again/i);
-    assert.match(html, /Copy token/);
+    assert.match(html, /больше не покажем/i);
+    assert.match(html, /Скопировать токен/);
 });
 
 test("connect builder maps the explicit client-role payload", async () => {
@@ -255,8 +257,8 @@ test("host credential form keeps presence implicit with an explanatory note", as
             busy: false,
         }),
     );
-    assert.match(html, /Also share embeddings/);
-    assert.match(html, /Share\s+online presence/);
+    assert.match(html, /Также делиться эмбеддингами/);
+    assert.match(html, /Делиться\s+статусом онлайн/);
     assert.doesNotMatch(html, /checkbox[^>]*>[^<]*online user status/);
 });
 
@@ -267,25 +269,31 @@ test("federation error mapper prefers actionable code messages", async () => {
     const unreachable = Object.assign(new Error("Request failed"), {
         data: { code: "FEDERATION_PEER_UNREACHABLE" },
     });
-    assert.match(federationErrorMessage(unreachable), /Could not reach/);
+    assert.match(federationErrorMessage(unreachable), /Не удалось связаться/);
 
     const unauthorized = Object.assign(new Error("Request failed"), {
         data: { code: "FEDERATION_PEER_UNAUTHORIZED" },
     });
-    assert.match(federationErrorMessage(unauthorized), /revoked or rotated/);
+    assert.match(federationErrorMessage(unauthorized), /отозван или заменён/);
 
     // Pairing codes were removed: their error codes fall through to the
     // raw message instead of a dedicated mapping.
     const retiredCode = Object.assign(new Error("Request failed"), {
         data: { code: "FEDERATION_CODE_EXPIRED" },
     });
-    assert.equal(federationErrorMessage(retiredCode), "Request failed");
+    assert.equal(
+        federationErrorMessage(retiredCode),
+        "Не удалось выполнить запрос федерации",
+    );
 
     assert.equal(
         federationErrorMessage(new Error("plain message")),
-        "plain message",
+        "Не удалось выполнить запрос федерации",
     );
-    assert.equal(federationErrorMessage(null), "Federation request failed");
+    assert.equal(
+        federationErrorMessage(null),
+        "Не удалось выполнить запрос федерации",
+    );
 });
 
 test("explicit pairing panel presents share and connect roles", async () => {
@@ -298,11 +306,11 @@ test("explicit pairing panel presents share and connect roles", async () => {
             onLink: async () => undefined,
         }),
     );
-    assert.match(html, /Share my library/);
-    assert.match(html, /Connect to a library/);
-    assert.match(html, /Issue credential/);
-    assert.match(html, /Connect with token/);
-    assert.match(html, /Two-way sharing is two deliberate steps/);
+    assert.match(html, /Поделиться моей медиатекой/);
+    assert.match(html, /Подключиться к медиатеке/);
+    assert.match(html, /Выдать данные доступа/);
+    assert.match(html, /Подключить по токену/);
+    assert.match(html, /Двусторонний обмен состоит из двух отдельных шагов/);
     assert.doesNotMatch(html, /pairing code/i);
     assert.doesNotMatch(html, /also share this library back/i);
 });

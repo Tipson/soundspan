@@ -14,9 +14,9 @@ function getExpiryBadge(
 ): { label: string; variant: BadgeProps["variant"] } | null {
     const remainingMs = Date.parse(expiresAt) - Date.now();
     if (!Number.isFinite(remainingMs)) return null;
-    if (remainingMs <= 0) return { label: "Expired", variant: "error" };
+    if (remainingMs <= 0) return { label: "Истёк", variant: "error" };
     if (remainingMs <= EXPIRING_SOON_WINDOW_MS) {
-        return { label: "Expires soon", variant: "warning" };
+        return { label: "Скоро истечёт", variant: "warning" };
     }
     return null;
 }
@@ -61,7 +61,7 @@ export const APIKeysSection: React.FC = () => {
     const handleCreateApiKey = async () => {
         if (!newApiKeyName.trim()) {
             setCreateStatus("error");
-            setCreateMessage("Name required");
+            setCreateMessage("Укажите название");
             return;
         }
 
@@ -70,12 +70,12 @@ export const APIKeysSection: React.FC = () => {
         const result = await createApiKey(newApiKeyName);
         if (result.success) {
             setCreateStatus("success");
-            setCreateMessage("Created");
+            setCreateMessage("Создано");
             setNewApiKeyName("");
             setShowCreateApiKeyDialog(false);
         } else {
             setCreateStatus("error");
-            setCreateMessage(result.error || "Failed");
+            setCreateMessage(result.error || "Не удалось создать ключ");
         }
         setCreating(false);
     };
@@ -87,11 +87,11 @@ export const APIKeysSection: React.FC = () => {
         const result = await revokeApiKey(confirmRevoke);
         if (result.success) {
             setRevokeStatus("success");
-            setRevokeMessage("Revoked");
+            setRevokeMessage("Отозван");
             setConfirmRevoke(null);
         } else {
             setRevokeStatus("error");
-            setRevokeMessage(result.error || "Failed");
+            setRevokeMessage(result.error || "Не удалось отозвать ключ");
         }
     };
 
@@ -111,8 +111,8 @@ export const APIKeysSection: React.FC = () => {
     return (
         <SettingsSection
             id="api-keys"
-            title="API Keys"
-            description="Manage API keys for programmatic access to your account"
+            title="Ключи API"
+            description="Ключи для программного доступа к вашему аккаунту"
         >
             {/* Generated Key Display */}
             {generatedApiKey && (
@@ -120,7 +120,7 @@ export const APIKeysSection: React.FC = () => {
                     <div className="flex items-start justify-between">
                         <div className="flex-1">
                             <h3 className="text-sm font-medium text-yellow-200 mb-2">
-                                Your new API key
+                                Новый ключ API
                             </h3>
                             <div className="flex items-center gap-2">
                                 <input
@@ -135,12 +135,12 @@ export const APIKeysSection: React.FC = () => {
                     hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <Copy className="w-4 h-4" />
-                                    {copied ? "Copied!" : "Copy"}
+                                    {copied ? "Скопировано" : "Копировать"}
                                 </button>
                             </div>
                             <p className="text-xs text-yellow-200 mt-2">
-                                Save this key now, you won&apos;t be able to see
-                                it again
+                                Сохраните ключ сейчас: повторно он не
+                                отображается
                             </p>
                         </div>
                     </div>
@@ -149,7 +149,7 @@ export const APIKeysSection: React.FC = () => {
                             onClick={handleDismissKey}
                             className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
                         >
-                            Dismiss
+                            Скрыть
                         </button>
                     </div>
                 </div>
@@ -162,7 +162,7 @@ export const APIKeysSection: React.FC = () => {
                     className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
             hover:scale-105 transition-transform"
                 >
-                    Generate New API Key
+                    Создать ключ API
                 </button>
             </div>
 
@@ -172,22 +172,22 @@ export const APIKeysSection: React.FC = () => {
                     <thead>
                         <tr className="border-b border-surface-active">
                             <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">
-                                Device Name
+                                Название устройства
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">
-                                Key Preview
+                                Фрагмент ключа
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">
-                                Created
+                                Создан
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">
-                                Last Used
+                                Использован
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">
-                                Expires
+                                Истекает
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">
-                                Actions
+                                Действия
                             </th>
                         </tr>
                     </thead>
@@ -198,7 +198,7 @@ export const APIKeysSection: React.FC = () => {
                                     colSpan={6}
                                     className="py-8 text-center text-sm text-gray-400"
                                 >
-                                    Loading API keys...
+                                    Загружаем ключи API…
                                 </td>
                             </tr>
                         ) : apiKeys.length === 0 ? (
@@ -207,7 +207,7 @@ export const APIKeysSection: React.FC = () => {
                                     colSpan={6}
                                     className="py-8 text-center text-sm text-gray-400"
                                 >
-                                    No API keys yet
+                                    Ключей API пока нет
                                 </td>
                             </tr>
                         ) : (
@@ -228,7 +228,7 @@ export const APIKeysSection: React.FC = () => {
                                     <td className="py-3 px-4 text-sm text-gray-400">
                                         {key.lastUsedAt
                                             ? formatDate(key.lastUsedAt)
-                                            : "Never"}
+                                            : "Никогда"}
                                     </td>
                                     <td className="py-3 px-4 text-sm text-gray-400">
                                         <ApiKeyExpiry
@@ -243,7 +243,7 @@ export const APIKeysSection: React.FC = () => {
                                             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full transition-colors"
                                         >
                                             <Trash2 className="w-4 h-4" />
-                                            Revoke
+                                            Отозвать
                                         </button>
                                     </td>
                                 </tr>
@@ -262,12 +262,12 @@ export const APIKeysSection: React.FC = () => {
                         setNewApiKeyName("");
                         setCreateStatus("idle");
                     }}
-                    title="Generate New API Key"
+                    title="Создать ключ API"
                 >
                     <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Device Name
+                                Название устройства
                             </label>
                             <input
                                 type="text"
@@ -275,7 +275,7 @@ export const APIKeysSection: React.FC = () => {
                                 onChange={(e) =>
                                     setNewApiKeyName(e.target.value)
                                 }
-                                placeholder="e.g., My Laptop, Production Server"
+                                placeholder="Например, ноутбук или домашний сервер"
                                 className="w-full bg-surface border border-surface-active rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 autoFocus
                             />
@@ -295,7 +295,7 @@ export const APIKeysSection: React.FC = () => {
                                 disabled={creating}
                                 className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
                             >
-                                Cancel
+                                Отмена
                             </button>
                             <button
                                 onClick={handleCreateApiKey}
@@ -303,7 +303,7 @@ export const APIKeysSection: React.FC = () => {
                                 className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full
                   hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {creating ? "Creating..." : "Create"}
+                                {creating ? "Создаём…" : "Создать"}
                             </button>
                         </div>
                     </div>
@@ -318,12 +318,12 @@ export const APIKeysSection: React.FC = () => {
                         setConfirmRevoke(null);
                         setRevokeStatus("idle");
                     }}
-                    title="Revoke API Key"
+                    title="Отозвать ключ API"
                 >
                     <div className="space-y-4">
                         <p className="text-sm text-gray-300">
-                            Are you sure you want to revoke this API key? This
-                            cannot be undone.
+                            Отозвать этот ключ API? Это действие нельзя
+                            отменить.
                         </p>
                         <div className="flex justify-end items-center gap-3">
                             <InlineStatus
@@ -338,14 +338,14 @@ export const APIKeysSection: React.FC = () => {
                                 }}
                                 className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
                             >
-                                Cancel
+                                Отмена
                             </button>
                             <button
                                 onClick={handleRevokeApiKey}
                                 className="px-4 py-1.5 text-sm bg-red-600 text-white font-medium rounded-full
                   hover:bg-red-700 transition-colors"
                             >
-                                Revoke
+                                Отозвать
                             </button>
                         </div>
                     </div>

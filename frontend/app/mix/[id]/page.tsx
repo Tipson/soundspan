@@ -1,34 +1,44 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Image from "next/image";
-import { api } from "@/lib/api";
 import {
-    useAudioState,
-    usePlaybackStatus,
-    useAudioControls,
-} from "@/lib/audio-context";
-import { CoverMosaic } from "@/components/ui/CoverMosaic";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import {
-    Play,
-    Pause,
-    Music,
-    Shuffle,
-    Save,
     ListPlus,
     Loader2,
+    Music,
+    Pause,
+    Play,
+    Save,
+    Shuffle,
 } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { formatTime } from "@/utils/formatTime";
-import { shuffleArray } from "@/utils/shuffle";
 import { toast } from "sonner";
-import { useMixQuery } from "@/hooks/useQueries";
-import { useQueuedTrackIds } from "@/hooks/useQueuedTrackIds";
-import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
+import { api } from "@/lib/api";
+import type { Track } from "@/lib/audio-state-context";
+import {
+    useAudioControls,
+    useAudioState,
+    usePlaybackStatus,
+} from "@/lib/audio-context";
+import {
+    MusicDetailActionDock,
+    MusicDetailHero,
+    MusicDetailTrackSurface,
+} from "@/components/music-detail";
+import { TrackList, TrackListHeader } from "@/components/track";
+import type { RowState, TrackRowItem, TrackRowSlots } from "@/components/track";
+import { CoverMosaic } from "@/components/ui/CoverMosaic";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useFeatures } from "@/lib/features-context";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    formatMixDuration,
+    formatMixTrackCount,
+    mixRu,
+} from "@/lib/i18n/musicPagesRu";
+import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
+import { useMixQuery } from "@/hooks/useQueries";
+import { shuffleArray } from "@/utils/shuffle";
 
 interface MixTrack {
     id: string;
@@ -37,7 +47,7 @@ interface MixTrack {
     albumId: string;
     album: {
         title: string;
-        coverUrl?: string;
+        coverUrl?: string | null;
         artist: {
             id: string;
             name: string;
@@ -45,36 +55,52 @@ interface MixTrack {
     };
 }
 
-/**
- * Renders the MixPage component.
- *
- * Hidden behind the autoPlaylists feature flag: when disabled, an empty state
- * is shown instead of fetching mix data.
- */
+function mixTrackToPlaybackTrack(track: MixTrack): Track {
+    return {
+        id: track.id,
+        title: track.title,
+        artist: {
+            name: track.album.artist.name,
+            id: track.album.artist.id,
+        },
+        album: {
+            title: track.album.title,
+            coverArt: track.album.coverUrl ?? undefined,
+            id: track.albumId,
+        },
+        duration: track.duration,
+    };
+}
+
+function mixTrackToRowItem(track: MixTrack): TrackRowItem {
+    return {
+        id: track.id,
+        title: track.title,
+        artistName: track.album.artist.name,
+        duration: track.duration,
+        coverArtUrl: track.album.coverUrl
+            ? api.getCoverArtUrl(track.album.coverUrl, 100)
+            : null,
+    };
+}
+
+/** Generated mix detail guarded by the automatic-playlists feature flag. */
 export default function MixPage() {
     const { autoPlaylists, loading: featuresLoading } = useFeatures();
 
     if (featuresLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message="Проверяем доступность миксов…" />;
     }
 
     if (!autoPlaylists) {
         return (
-            <div className="p-6">
-                <h1 className="text-xl font-semibold text-white mb-4">Mix</h1>
-                <div className="bg-surface-raised border border-surface-active rounded-lg p-6">
-                    <p className="text-content-secondary mb-2">
-                        Feature not available
-                    </p>
-                    <p className="text-sm text-content-muted">
-                        Auto-generated mixes are disabled on this server.
-                    </p>
-                </div>
-            </div>
+            <main className="flex min-h-screen items-center justify-center bg-surface px-4">
+                <EmptyState
+                    icon={<Music className="h-7 w-7" aria-hidden="true" />}
+                    title={mixRu.unavailable}
+                    description={mixRu.disabled}
+                />
+            </main>
         );
     }
 
@@ -85,109 +111,51 @@ function MixPageContent() {
     const params = useParams();
     const router = useRouter();
     const mixId = params.id as string;
-    // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = usePlaybackStatus();
     const { playTracks, addToQueue, pause, resume } = useAudioControls();
-    const queuedTrackIds = useQueuedTrackIds();
-
     const { data: mix, isLoading } = useMixQuery(mixId);
     const [isSaving, setIsSaving] = useState(false);
     const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
         usePlayButtonFeedback();
+    const tracks = useMemo(
+        () => (mix?.tracks ?? []) as MixTrack[],
+        [mix?.tracks],
+    );
 
-    // Calculate total duration
-    const totalDuration = useMemo(() => {
-        if (!mix?.tracks) return 0;
-        return mix.tracks.reduce(
-            (sum: number, track: MixTrack) => sum + (track.duration || 0),
-            0,
-        );
-    }, [mix?.tracks]);
-
-    const formatTotalDuration = (seconds: number) => {
-        const hours = Math.floor(seconds / 3600);
-        const mins = Math.floor((seconds % 3600) / 60);
-        if (hours > 0) {
-            return `about ${hours} hr ${mins} min`;
-        }
-        return `${mins} min`;
-    };
-
-    // Check if this mix is currently playing
-    const mixTrackIds = useMemo(() => {
-        return new Set(mix?.tracks?.map((track: MixTrack) => track.id) || []);
-    }, [mix?.tracks]);
-
-    const isThisMixPlaying = useMemo(() => {
-        if (!isPlaying || !currentTrack || !mix?.tracks?.length) return false;
-        return mixTrackIds.has(currentTrack.id);
-    }, [isPlaying, currentTrack, mixTrackIds, mix?.tracks?.length]);
-
-    const formatTracksForPlayback = (tracks: MixTrack[]) => {
-        return tracks.map((track) => ({
-            id: track.id,
-            title: track.title,
-            artist: {
-                name: track.album.artist.name,
-                id: track.album.artist.id,
-            },
-            album: {
-                title: track.album.title,
-                coverArt: track.album.coverUrl,
-                id: track.albumId,
-            },
-            duration: track.duration,
-        }));
-    };
+    const totalDuration = useMemo(
+        () => tracks.reduce((sum, track) => sum + (track.duration || 0), 0),
+        [tracks],
+    );
+    const mixTrackIds = useMemo(
+        () => new Set(tracks.map((track) => track.id)),
+        [tracks],
+    );
+    const isThisMixPlaying = Boolean(
+        isPlaying && currentTrack && mixTrackIds.has(currentTrack.id),
+    );
 
     const handlePlayMix = () => {
-        if (!mix?.tracks || mix.tracks.length === 0) return;
+        if (tracks.length === 0) return;
         triggerPlayFeedback();
 
-        // If this mix is playing, toggle pause/resume
         if (isThisMixPlaying) {
-            if (isPlaying) {
-                pause();
-            } else {
-                resume();
-            }
+            if (isPlaying) pause();
+            else resume();
             return;
         }
 
-        const tracks = formatTracksForPlayback(mix.tracks);
-        playTracks(tracks, 0);
+        playTracks(tracks.map(mixTrackToPlaybackTrack), 0);
     };
 
     const handlePlayTrack = (index: number) => {
-        if (!mix?.tracks || mix.tracks.length === 0) return;
-        const tracks = formatTracksForPlayback(mix.tracks);
-        playTracks(tracks, index);
+        if (tracks.length === 0) return;
+        playTracks(tracks.map(mixTrackToPlaybackTrack), index);
     };
 
     const handleShuffle = () => {
-        if (!mix?.tracks) return;
-        const tracks = formatTracksForPlayback(mix.tracks);
-        const shuffled = shuffleArray(tracks);
-        playTracks(shuffled, 0);
-    };
-
-    const handleAddToQueue = (track: MixTrack) => {
-        const formattedTrack = {
-            id: track.id,
-            title: track.title,
-            artist: {
-                name: track.album.artist.name,
-                id: track.album.artist.id,
-            },
-            album: {
-                title: track.album.title,
-                coverArt: track.album.coverUrl,
-                id: track.albumId,
-            },
-            duration: track.duration,
-        };
-        addToQueue(formattedTrack);
+        if (tracks.length === 0) return;
+        playTracks(shuffleArray(tracks.map(mixTrackToPlaybackTrack)), 0);
     };
 
     const handleSaveAsPlaylist = async () => {
@@ -196,11 +164,9 @@ function MixPageContent() {
         setIsSaving(true);
         try {
             const result = await api.saveMixAsPlaylist(mixId);
-            toast.success(`Saved as "${result.name}" playlist!`);
+            toast.success(`${mixRu.saveSuccess}: «${result.name}»`);
             window.dispatchEvent(new Event("playlist-created"));
-            setTimeout(() => {
-                router.push(`/playlist/${result.id}`);
-            }, 1000);
+            setTimeout(() => router.push(`/playlist/${result.id}`), 1000);
         } catch (error: unknown) {
             sharedFrontendLogger.error(
                 "Failed to save mix as playlist:",
@@ -211,16 +177,15 @@ function MixPageContent() {
                 data?: { playlistId?: string };
             };
             if (err?.status === 409) {
-                toast.info("You've already saved this mix as a playlist.");
-                if (err?.data?.playlistId) {
-                    setTimeout(() => {
-                        router.push(`/playlist/${err.data!.playlistId}`);
-                    }, 1000);
+                toast.info(mixRu.alreadySaved);
+                if (err.data?.playlistId) {
+                    setTimeout(
+                        () => router.push(`/playlist/${err.data!.playlistId}`),
+                        1000,
+                    );
                 }
-            } else if (error instanceof Error) {
-                toast.error(error.message);
             } else {
-                toast.error("Failed to save mix as playlist");
+                toast.error(mixRu.saveFailed);
             }
         } finally {
             setIsSaving(false);
@@ -228,266 +193,205 @@ function MixPageContent() {
     };
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message="Собираем микс…" />;
     }
 
     if (!mix) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">Mix not found</p>
-            </div>
+            <main
+                role="alert"
+                className="flex min-h-screen items-center justify-center bg-surface px-4"
+            >
+                <EmptyState
+                    icon={<Music className="h-7 w-7" aria-hidden="true" />}
+                    title={mixRu.notFound}
+                    description="Попробуйте вернуться назад и выбрать другой микс."
+                    action={{
+                        label: "Назад",
+                        onClick: () => router.back(),
+                        variant: "secondary",
+                    }}
+                />
+            </main>
         );
     }
 
+    const coverUrls = (mix.coverUrls ?? [])
+        .slice(0, 4)
+        .map((url: string) => api.getCoverArtUrl(url, 400));
+
     return (
-        <div className="min-h-screen">
-            {/* Compact Hero - Spotify Style */}
-            <div
-                className="relative pt-16 pb-10 px-4 md:px-8"
-                style={{
-                    background: mix.color
-                        ? `${mix.color}, linear-gradient(to bottom, transparent, #1a1a1a)`
-                        : "linear-gradient(to bottom, rgba(88, 28, 135, 0.4), #1a1a1a, transparent)",
-                }}
-            >
-                <div className="flex items-end gap-6">
-                    {/* Cover Art Mosaic */}
-                    <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-surface-highlight rounded shadow-2xl shrink-0 overflow-hidden">
-                        <CoverMosaic
-                            coverUrls={(mix.coverUrls || [])
-                                .slice(0, 4)
-                                .map((url: string) =>
-                                    api.getCoverArtUrl(url, 200),
+        <div className="min-h-screen bg-surface">
+            <MusicDetailHero
+                eyebrow={mixRu.title}
+                title={mix.name}
+                artworkShape="square"
+                description={mix.description ? <p>{mix.description}</p> : null}
+                metadata={
+                    <>
+                        <span>
+                            {formatMixTrackCount(
+                                mix.trackCount || tracks.length,
+                            )}
+                        </span>
+                        {totalDuration > 0 && (
+                            <>
+                                <span aria-hidden="true">•</span>
+                                <span>{formatMixDuration(totalDuration)}</span>
+                            </>
+                        )}
+                    </>
+                }
+                artwork={
+                    <CoverMosaic
+                        coverUrls={coverUrls}
+                        imageSizes="(max-width: 640px) 88px, 112px"
+                        emptyState={
+                            <Music className="h-16 w-16 text-content-muted" />
+                        }
+                    />
+                }
+                backgroundImage={coverUrls[0] ?? null}
+                actions={
+                    <MusicDetailActionDock label={`${mix.name}: действия`}>
+                        <div
+                            data-detail-action-tier="primary"
+                            className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                        >
+                            {tracks.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={handlePlayMix}
+                                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none"
+                                >
+                                    {showPlaySpinner ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                    ) : isThisMixPlaying && isPlaying ? (
+                                        <Pause className="h-5 w-5 fill-current" />
+                                    ) : (
+                                        <Play className="ml-0.5 h-5 w-5 fill-current" />
+                                    )}
+                                    <span>
+                                        {isThisMixPlaying && isPlaying
+                                            ? "Пауза"
+                                            : "Слушать"}
+                                    </span>
+                                </button>
+                            )}
+                            {tracks.length > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={handleShuffle}
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    title={mixRu.shuffle}
+                                    aria-label={mixRu.shuffle}
+                                >
+                                    <Shuffle className="h-5 w-5" />
+                                </button>
+                            )}
+                        </div>
+
+                        <div
+                            data-detail-action-tier="secondary"
+                            className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                        >
+                            <button
+                                type="button"
+                                onClick={handleSaveAsPlaylist}
+                                disabled={isSaving}
+                                className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+                            >
+                                {isSaving ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Save className="h-4 w-4" />
                                 )}
-                            imageSizes="96px"
-                            emptyState={
-                                <Music className="w-16 h-16 text-gray-400" />
+                                <span>
+                                    {isSaving
+                                        ? mixRu.saving
+                                        : mixRu.saveAsPlaylist}
+                                </span>
+                            </button>
+                        </div>
+                    </MusicDetailActionDock>
+                }
+            />
+
+            <main className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+                {tracks.length > 0 ? (
+                    <MusicDetailTrackSurface label={`${mix.name}: треки`}>
+                        <TrackList<MixTrack>
+                            items={tracks}
+                            toRowItem={mixTrackToRowItem}
+                            onPlay={(_track, index) => handlePlayTrack(index)}
+                            rowSlots={(track, _index, state: RowState) =>
+                                mixTrackSlots(track, state, () =>
+                                    addToQueue(mixTrackToPlaybackTrack(track)),
+                                )
+                            }
+                            showCoverArt
+                            preferenceMode={null}
+                            accentColor="var(--music-action)"
+                            rowClassName="grid-cols-[28px_minmax(0,1fr)_auto] md:grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto]"
+                            header={
+                                <TrackListHeader
+                                    className="grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto] gap-4"
+                                    columns={[
+                                        {
+                                            label: "#",
+                                            className: "text-center",
+                                        },
+                                        { label: mixRu.tableTitle },
+                                        { label: mixRu.tableAlbum },
+                                        { label: mixRu.tableDuration },
+                                    ]}
+                                />
                             }
                         />
-                    </div>
-
-                    {/* Mix Info - Bottom Aligned */}
-                    <div className="flex-1 min-w-0 pb-1">
-                        <p className="text-xs font-medium text-white/90 mb-1">
-                            Mix
-                        </p>
-                        <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
-                            {mix.name}
-                        </h1>
-                        {mix.description && (
-                            <p className="text-sm text-white/60 mb-2 line-clamp-2">
-                                {mix.description}
-                            </p>
-                        )}
-                        <div className="flex items-center gap-1 text-sm text-white/70">
-                            <span>
-                                {mix.trackCount || mix.tracks?.length || 0}{" "}
-                                songs
-                            </span>
-                            {totalDuration > 0 && (
-                                <span>
-                                    , {formatTotalDuration(totalDuration)}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Action Bar */}
-            <div className="bg-gradient-to-b from-surface-hover/60 to-transparent px-4 md:px-8 py-4">
-                <div className="flex items-center gap-4">
-                    {/* Play Button */}
-                    {mix.tracks && mix.tracks.length > 0 && (
-                        <button
-                            onClick={handlePlayMix}
-                            className="h-12 w-12 rounded-full bg-brand-hover hover:bg-brand hover:scale-105 flex items-center justify-center shadow-lg transition-all"
-                        >
-                            {showPlaySpinner ? (
-                                <Loader2 className="w-5 h-5 animate-spin text-black" />
-                            ) : isThisMixPlaying && isPlaying ? (
-                                <Pause className="w-5 h-5 fill-current text-black" />
-                            ) : (
-                                <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                            )}
-                        </button>
-                    )}
-
-                    {/* Shuffle Button */}
-                    {mix.tracks && mix.tracks.length > 1 && (
-                        <button
-                            onClick={handleShuffle}
-                            className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all"
-                            title="Shuffle play"
-                        >
-                            <Shuffle className="w-5 h-5" />
-                        </button>
-                    )}
-
-                    {/* Save as Playlist Button */}
-                    <button
-                        onClick={handleSaveAsPlaylist}
-                        disabled={isSaving}
-                        className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Save className="w-4 h-4" />
-                        <span className="hidden sm:inline">
-                            {isSaving ? "Saving..." : "Save as Playlist"}
-                        </span>
-                    </button>
-                </div>
-            </div>
-
-            {/* Track Listing */}
-            <div className="px-4 md:px-8 pb-32">
-                {mix.tracks && mix.tracks.length > 0 ? (
-                    <div className="w-full">
-                        {/* Table Header */}
-                        <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 text-xs text-gray-400 uppercase tracking-wider border-b border-white/10 mb-2">
-                            <span className="text-center">#</span>
-                            <span>Title</span>
-                            <span>Album</span>
-                            <span className="text-right">Duration</span>
-                        </div>
-
-                        {/* Track Rows */}
-                        <div>
-                            {mix.tracks.map(
-                                (track: MixTrack, index: number) => {
-                                    const isCurrentlyPlaying =
-                                        currentTrack?.id === track.id;
-                                    const isInQueue = queuedTrackIds.has(
-                                        track.id,
-                                    );
-                                    return (
-                                        <div
-                                            key={track.id}
-                                            onClick={() =>
-                                                handlePlayTrack(index)
-                                            }
-                                            className={cn(
-                                                "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer",
-                                                isCurrentlyPlaying &&
-                                                    "bg-white/10",
-                                                isInQueue &&
-                                                    !isCurrentlyPlaying &&
-                                                    "bg-brand/[0.06]",
-                                            )}
-                                        >
-                                            {/* Track Number / Play Icon */}
-                                            <div className="flex items-center justify-center">
-                                                <span
-                                                    className={cn(
-                                                        "text-sm group-hover:hidden",
-                                                        isCurrentlyPlaying
-                                                            ? "text-brand"
-                                                            : "text-gray-400",
-                                                    )}
-                                                >
-                                                    {isCurrentlyPlaying &&
-                                                    isPlaying ? (
-                                                        <Music className="w-4 h-4 text-brand animate-pulse" />
-                                                    ) : (
-                                                        index + 1
-                                                    )}
-                                                </span>
-                                                <Play className="w-4 h-4 text-white hidden group-hover:block" />
-                                            </div>
-
-                                            {/* Title + Artist */}
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div className="relative w-10 h-10 bg-surface-highlight rounded shrink-0 overflow-hidden">
-                                                    {track.album?.coverUrl ? (
-                                                        <Image
-                                                            src={api.getCoverArtUrl(
-                                                                track.album
-                                                                    .coverUrl,
-                                                                100,
-                                                            )}
-                                                            alt={track.title}
-                                                            fill
-                                                            sizes="40px"
-                                                            className="object-cover"
-                                                            unoptimized
-                                                        />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center">
-                                                            <Music className="w-5 h-5 text-gray-400" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p
-                                                        className={cn(
-                                                            "text-sm font-medium flex items-center gap-2 min-w-0",
-                                                            isCurrentlyPlaying
-                                                                ? "text-brand"
-                                                                : "text-white",
-                                                        )}
-                                                    >
-                                                        <span className="truncate">
-                                                            {track.title}
-                                                        </span>
-                                                        {isInQueue && (
-                                                            <span className="shrink-0 text-[10px] bg-brand/15 text-brand-light px-1.5 py-0.5 rounded border border-brand/30 font-medium">
-                                                                IN QUEUE
-                                                            </span>
-                                                        )}
-                                                    </p>
-                                                    <p className="text-xs text-gray-400 truncate">
-                                                        {
-                                                            track.album.artist
-                                                                .name
-                                                        }
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            {/* Album (hidden on mobile) */}
-                                            <p className="hidden md:flex items-center text-sm text-gray-400 truncate">
-                                                {track.album.title}
-                                            </p>
-
-                                            {/* Duration + Actions */}
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleAddToQueue(track);
-                                                    }}
-                                                    title="Add to Queue"
-                                                >
-                                                    <ListPlus className="w-4 h-4" />
-                                                </button>
-                                                <span className="text-sm text-gray-400 w-12 text-right">
-                                                    {formatTime(track.duration)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    );
-                                },
-                            )}
-                        </div>
-                    </div>
+                    </MusicDetailTrackSurface>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <div className="w-20 h-20 bg-surface-highlight rounded-full flex items-center justify-center mb-4">
-                            <Music className="w-10 h-10 text-gray-400" />
-                        </div>
-                        <h3 className="text-lg font-medium text-white mb-1">
-                            No tracks
-                        </h3>
-                        <p className="text-sm text-gray-400">
-                            This mix is empty
-                        </p>
-                    </div>
+                    <EmptyState
+                        icon={<Music className="h-7 w-7" aria-hidden="true" />}
+                        title={mixRu.noTracks}
+                        description={mixRu.empty}
+                    />
                 )}
-            </div>
+            </main>
         </div>
     );
+}
+
+function mixTrackSlots(
+    track: MixTrack,
+    state: RowState,
+    onAddToQueue: () => void,
+): TrackRowSlots {
+    return {
+        titleBadges: state.isInQueue ? (
+            <span className="rounded-full border border-brand/30 bg-brand/15 px-1.5 py-0.5 text-[10px] font-medium text-brand-light">
+                {mixRu.inQueue}
+            </span>
+        ) : null,
+        middleColumns: (
+            <p className="text-content-muted hidden items-center truncate text-sm md:flex">
+                {track.album.title}
+            </p>
+        ),
+        trailingActions: (
+            <div className="flex items-center justify-end gap-2">
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onAddToQueue();
+                    }}
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                    title={mixRu.addToQueue}
+                    aria-label={`${mixRu.addToQueue}: ${track.title}`}
+                >
+                    <ListPlus className="h-4 w-4" />
+                </button>
+            </div>
+        ),
+    };
 }

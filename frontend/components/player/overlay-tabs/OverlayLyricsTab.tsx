@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { useLyrics } from "@/hooks/useLyrics";
 import { SyncedLyrics } from "../SyncedLyrics";
 import { buildTabTransitionProps } from "./overlayTabMotion";
+import { ru } from "@/lib/i18n/ru";
 
 interface LyricsLookupTrack {
     id: string;
@@ -59,12 +60,12 @@ export const OverlayLyricsTab = memo(function OverlayLyricsTab({
             {isLyricsLoading ? (
                 <div className="flex h-full items-center justify-center gap-2 text-gray-400">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Loading lyrics...</span>
+                    <span className="text-sm">{ru.player.lyricsLoading}</span>
                 </div>
             ) : isLyricsError ? (
                 <div className="flex h-full items-center justify-center px-4">
                     <p className="text-center text-sm text-gray-400">
-                        Failed to load lyrics
+                        Не удалось загрузить текст песни
                     </p>
                 </div>
             ) : (

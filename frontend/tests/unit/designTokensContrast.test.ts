@@ -40,6 +40,7 @@ test("globals.css @theme stays synchronized with DESIGN_TOKENS", () => {
 
 test("text and brand tokens meet the normal-text contrast floor", () => {
     for (const foreground of [
+        DESIGN_TOKENS["content-muted"],
         DESIGN_TOKENS["content-secondary"],
         DESIGN_TOKENS["content-body"],
         DESIGN_TOKENS.brand,
@@ -49,6 +50,55 @@ test("text and brand tokens meet the normal-text contrast floor", () => {
         assert.ok(
             contrastRatio(foreground, DESIGN_TOKENS.surface) >= AA_NORMAL,
         );
+    }
+});
+
+test("the spectral-stage palette stays on the approved semantic values", () => {
+    assert.deepEqual(
+        {
+            canvas: DESIGN_TOKENS.surface,
+            stage: DESIGN_TOKENS["surface-raised"],
+            surface: DESIGN_TOKENS["surface-elevated"],
+            active: DESIGN_TOKENS["surface-active"],
+            ink: DESIGN_TOKENS.content,
+            muted: DESIGN_TOKENS["content-muted"],
+            signal: DESIGN_TOKENS.brand,
+        },
+        {
+            canvas: "#090909",
+            stage: "#121214",
+            surface: "#1c1b1e",
+            active: "#28272b",
+            ink: "#faf8fc",
+            muted: "#aaa3b0",
+            signal: "#a970ff",
+        },
+    );
+});
+
+test("secondary copy remains readable on every shared application surface", () => {
+    const surfaces = [
+        DESIGN_TOKENS.surface,
+        DESIGN_TOKENS["surface-sunken"],
+        DESIGN_TOKENS["surface-raised"],
+        DESIGN_TOKENS["surface-elevated"],
+        DESIGN_TOKENS["surface-overlay"],
+        DESIGN_TOKENS["surface-active"],
+        DESIGN_TOKENS["surface-highlight"],
+        DESIGN_TOKENS["surface-hover"],
+    ];
+
+    for (const foreground of [
+        DESIGN_TOKENS["content-muted"],
+        DESIGN_TOKENS["content-secondary"],
+        DESIGN_TOKENS["content-body"],
+    ]) {
+        for (const background of surfaces) {
+            assert.ok(
+                contrastRatio(foreground, background) >= AA_NORMAL,
+                `${foreground} must remain readable on ${background}`,
+            );
+        }
     }
 });
 

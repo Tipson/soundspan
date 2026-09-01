@@ -49,10 +49,10 @@ export function AudiobookActionBar({
                     className="w-14 h-14 rounded-full bg-brand-hover hover:bg-brand-light hover:scale-105 transition-all flex items-center justify-center shadow-lg"
                     title={
                         showingPause
-                            ? "Pause"
+                            ? "Пауза"
                             : hasProgress && !isFinished
-                              ? "Resume"
-                              : "Play"
+                              ? "Продолжить"
+                              : "Слушать"
                     }
                 >
                     {showSpinner ? (
@@ -105,14 +105,14 @@ export function AudiobookActionBar({
                         <button
                             onClick={onResetProgress}
                             className="p-2.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-all"
-                            title="Reset progress"
+                            title="Сбросить прогресс"
                         >
                             <RotateCcw className="w-5 h-5" />
                         </button>
                         <button
                             onClick={onMarkAsCompleted}
                             className="p-2.5 rounded-full text-green-400/80 hover:text-green-400 hover:bg-green-500/10 transition-all"
-                            title="Mark as completed"
+                            title="Отметить как прослушанную"
                         >
                             <CheckCircle className="w-5 h-5" />
                         </button>
@@ -123,10 +123,10 @@ export function AudiobookActionBar({
                     <button
                         onClick={onResetProgress}
                         className="px-4 py-2 rounded-full text-sm font-medium bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all flex items-center gap-2"
-                        title="Listen again"
+                        title="Слушать снова"
                     >
                         <RotateCcw className="w-4 h-4" />
-                        <span>Listen Again</span>
+                        <span>Слушать снова</span>
                     </button>
                 )}
             </div>

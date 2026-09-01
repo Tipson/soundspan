@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useMemo, ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { ru } from "@/lib/i18n/ru";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
 interface PagedGridCarouselProps<T> {
@@ -96,18 +97,19 @@ export function PagedGridCarousel<T>({
             {/* Left Arrow (desktop only) */}
             {!isMobileOrTablet && canScrollLeft && (
                 <button
+                    type="button"
                     onClick={() => scroll("left")}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/80  flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-black hover:scale-105 border border-white/10 shadow-lg -translate-x-1/2"
-                    aria-label="Scroll left"
+                    className="absolute left-0 top-1/2 z-10 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl border border-line bg-surface-overlay text-content opacity-0 shadow-xl transition-[opacity,background-color,border-color,transform] duration-150 group-hover/carousel:opacity-100 hover:border-line-muted hover:bg-surface-elevated focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light active:scale-[0.98] motion-reduce:transition-none"
+                    aria-label={ru.common.scrollLeft}
                 >
-                    <ChevronLeft className="w-5 h-5 text-white" />
+                    <ChevronLeft className="size-5" />
                 </button>
             )}
 
             {/* Scrollable Container */}
             <div
                 ref={scrollRef}
-                className="flex overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory gap-3"
+                className="flex touch-pan-x snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain scroll-smooth scrollbar-hide motion-reduce:scroll-auto"
             >
                 {pages.map((page, pageIndex) => (
                     <div
@@ -141,29 +143,38 @@ export function PagedGridCarousel<T>({
             {/* Right Arrow (desktop only) */}
             {!isMobileOrTablet && canScrollRight && (
                 <button
+                    type="button"
                     onClick={() => scroll("right")}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/80  flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-black hover:scale-105 border border-white/10 shadow-lg translate-x-1/2"
-                    aria-label="Scroll right"
+                    className="absolute right-0 top-1/2 z-10 flex size-11 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl border border-line bg-surface-overlay text-content opacity-0 shadow-xl transition-[opacity,background-color,border-color,transform] duration-150 group-hover/carousel:opacity-100 hover:border-line-muted hover:bg-surface-elevated focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light active:scale-[0.98] motion-reduce:transition-none"
+                    aria-label={ru.common.scrollRight}
                 >
-                    <ChevronRight className="w-5 h-5 text-white" />
+                    <ChevronRight className="size-5" />
                 </button>
             )}
 
             {/* Page indicators */}
             {pages.length > 1 && (
-                <div className="flex justify-center gap-1.5 mt-3">
+                <div className="mt-1 flex justify-center">
                     {pages.map((_, index) => (
                         <button
                             key={index}
+                            type="button"
                             onClick={() => goToPage(index)}
-                            className={cn(
-                                "w-1.5 h-1.5 rounded-full transition-colors",
-                                index === currentPage
-                                    ? "bg-white"
-                                    : "bg-white/30 hover:bg-white/50",
-                            )}
-                            aria-label={`Go to page ${index + 1}`}
-                        />
+                            className="flex size-11 items-center justify-center rounded-xl transition-colors hover:bg-surface-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            aria-label={`${ru.common.goToPage} ${index + 1}`}
+                            aria-current={
+                                index === currentPage ? "page" : undefined
+                            }
+                        >
+                            <span
+                                className={cn(
+                                    "size-1.5 rounded-full transition-[width,background-color] duration-150 motion-reduce:transition-none",
+                                    index === currentPage
+                                        ? "w-5 bg-brand"
+                                        : "bg-content-disabled",
+                                )}
+                            />
+                        </button>
                     ))}
                 </div>
             )}

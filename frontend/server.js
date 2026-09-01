@@ -126,6 +126,7 @@ const apiProxy = createBackendProxy({
     errorMessage: "API backend unavailable",
     errorCode: "API_PROXY_UNAVAILABLE",
     firstByteTimeout: true,
+    promoteAuthToken: true,
 });
 
 app.prepare().then(() => {

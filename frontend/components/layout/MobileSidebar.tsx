@@ -1,32 +1,27 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
-    Compass,
+    Bell,
     Download,
     Heart,
-    Home,
     Inbox,
+    ListMusic,
     LogOut,
-    Radio,
-    RefreshCw,
     Settings,
     Shield,
-    Users,
-    Waves,
+    Upload,
     X,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
-import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
-import { EqBars } from "@/components/ui/EqBars";
-import Image from "next/image";
-import { MOBILE_QUICK_LINKS } from "./socialNavigation";
 import { BRAND_NAME } from "@/lib/brand";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { ru } from "@/lib/i18n/ru";
 
 interface MobileSidebarProps {
     isOpen: boolean;
@@ -34,198 +29,156 @@ interface MobileSidebarProps {
     hasActiveSessions: boolean;
 }
 
+const personalLinks = [
+    { name: ru.library.likedSongs, href: "/playlist/my-liked", icon: Heart },
+    { name: ru.library.playlists, href: "/playlists", icon: ListMusic },
+    {
+        name: ru.nav.downloads,
+        href: "/library?tab=downloads",
+        icon: Download,
+    },
+    { name: ru.nav.importPlaylist, href: "/import", icon: Upload },
+] as const;
+
 /**
- * Renders the MobileSidebar component.
+ * Mobile account drawer. Primary playback navigation remains available in the
+ * bottom bar; this drawer adds library shortcuts and account administration.
  */
-export function MobileSidebar({
-    isOpen,
-    onClose,
-    hasActiveSessions,
-}: MobileSidebarProps) {
+export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     const pathname = usePathname();
     const { user, logout } = useAuth();
     const { toast } = useToast();
-    const [isSyncing, setIsSyncing] = useState(false);
 
-    // Close on route change
     useEffect(() => {
         onClose();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname]);
 
-    // Handle library sync
-    const handleSync = async () => {
-        if (isSyncing) return;
-
-        try {
-            setIsSyncing(true);
-            await api.scanLibrary();
-            window.dispatchEvent(new CustomEvent("notifications-changed"));
-            onClose();
-        } catch (error) {
-            sharedFrontendLogger.error("Failed to sync library:", error);
-            toast.error("Failed to start scan. Please try again.");
-        } finally {
-            setTimeout(() => setIsSyncing(false), 2000);
-        }
-    };
-
-    // Handle logout
     const handleLogout = async () => {
         try {
             await logout();
-            toast.success("Logged out successfully");
+            toast.success(ru.nav.logoutSuccess);
             onClose();
         } catch (error) {
             sharedFrontendLogger.error("Logout error:", error);
-            toast.error("Failed to logout");
+            toast.error(ru.nav.logoutFailed);
         }
+    };
+
+    const handleOpenNotifications = () => {
+        onClose();
+        window.dispatchEvent(new CustomEvent("open-activity-panel"));
     };
 
     if (!isOpen) return null;
 
-    const quickLinkIcons: Record<string, typeof Compass> = {
-        "/": Home,
-        "/explore": Compass,
-        "/discover": Compass,
-        "/import": Download,
-        "/playlist/my-liked": Heart,
-        "/radio": Radio,
-        "/vibe": Waves,
-        "/listen-together": Users,
-    };
+    const linkClassName = (active: boolean) =>
+        cn(
+            "flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light",
+            active
+                ? "bg-white/[0.09] text-white"
+                : "text-content-secondary hover:bg-white/[0.055] hover:text-white",
+        );
 
     return (
         <>
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-black/60  z-50 transition-opacity"
+            <button
+                type="button"
+                className="fixed inset-0 z-50 cursor-default bg-black/70 backdrop-blur-[2px]"
                 onClick={onClose}
-                aria-hidden="true"
+                aria-label={ru.nav.closeMenuBackdrop}
             />
 
-            {/* Sidebar Drawer */}
-            <div
-                className="fixed inset-y-0 left-0 w-[280px] bg-surface z-50 flex flex-col overflow-hidden transform transition-transform border-r border-white/[0.06] z-100"
+            <aside
+                data-shell-drawer="account"
+                className="mobile-sidebar-sheet fixed inset-y-0 left-0 z-[60] flex w-[min(86vw,304px)] flex-col overflow-hidden rounded-r-[1.75rem] shadow-[24px_0_80px_rgba(0,0,0,0.48)]"
                 style={{
-                    paddingTop: "env(safe-area-inset-top)",
+                    paddingTop: "var(--safe-area-top)",
+                    paddingBottom: "var(--safe-area-bottom)",
                 }}
+                role="dialog"
+                aria-modal="true"
+                aria-label={ru.nav.navigationMenu}
             >
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+                <div className="flex min-h-16 items-center justify-between border-b border-white/[0.07] px-4">
                     <Link
                         href="/"
-                        className="flex-1 min-w-0 flex items-center gap-3"
+                        className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         onClick={onClose}
                     >
                         <Image
                             src="/assets/images/soundspan.webp"
                             alt={BRAND_NAME}
-                            width={32}
-                            height={32}
-                            sizes="32px"
+                            width={36}
+                            height={36}
+                            sizes="36px"
                             className="flex-shrink-0"
                         />
-                        <span className="brand-wordmark text-2xl font-bold text-white tracking-tight truncate">
+                        <span className="brand-wordmark truncate text-[1.75rem] font-bold text-white">
                             {BRAND_NAME}
                         </span>
                     </Link>
                     <button
+                        type="button"
                         onClick={onClose}
-                        className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white transition-colors rounded-full hover:bg-white/10"
-                        aria-label="Close menu"
+                        className="flex h-11 w-11 items-center justify-center rounded-xl text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        aria-label={ru.nav.closeMenu}
                     >
-                        <X className="w-5 h-5" />
+                        <X className="h-5 w-5" />
                     </button>
                 </div>
 
-                {/* Menu Content */}
                 <nav
-                    className="flex-1 overflow-y-auto py-4"
-                    role="navigation"
-                    aria-label="Mobile menu"
+                    className="flex-1 overflow-y-auto px-3 py-4"
+                    aria-label={ru.nav.mobileMenu}
                 >
-                    {/* Quick Links Section */}
-                    <div className="px-3 mb-6">
-                        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-3 mb-2">
-                            Quick Links
-                        </div>
-                        {MOBILE_QUICK_LINKS.map((link) => {
-                            const Icon = quickLinkIcons[link.href] ?? Compass;
+                    <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
+                        Ваша музыка
+                    </p>
+                    <div className="space-y-1">
+                        {personalLinks.map((link) => {
+                            const active = pathname === link.href.split("?")[0];
+                            const Icon = link.icon;
                             return (
                                 <Link
                                     key={link.href}
                                     href={link.href}
-                                    aria-current={
-                                        pathname === link.href
-                                            ? "page"
-                                            : undefined
-                                    }
-                                    aria-label={link.name}
-                                    className={cn(
-                                        "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors",
-                                        pathname === link.href
-                                            ? "bg-white/10 text-white"
-                                            : "text-gray-400 hover:text-white hover:bg-white/5",
-                                    )}
+                                    aria-current={active ? "page" : undefined}
+                                    className={linkClassName(active)}
                                 >
-                                    <Icon className="w-5 h-5" />
-                                    <span className="text-[15px] font-medium">
-                                        {link.name}
-                                    </span>
-                                    {link.href === "/listen-together" &&
-                                        hasActiveSessions && <EqBars />}
+                                    <Icon className="h-5 w-5" />
+                                    <span>{link.name}</span>
                                 </Link>
                             );
                         })}
                     </div>
 
-                    {/* Actions Section */}
-                    <div className="px-3">
-                        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-3 mb-2">
-                            Actions
-                        </div>
+                    <div className="my-4 border-t border-white/[0.07]" />
+                    <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-content-muted">
+                        Аккаунт
+                    </p>
+                    <button
+                        type="button"
+                        onClick={handleOpenNotifications}
+                        className={linkClassName(false)}
+                        aria-label={ru.nav.openNotifications}
+                    >
+                        <Bell className="h-5 w-5" />
+                        <span>{ru.nav.notifications}</span>
+                    </button>
+                    <Link
+                        href="/settings"
+                        aria-current={
+                            pathname === "/settings" ? "page" : undefined
+                        }
+                        className={linkClassName(pathname === "/settings")}
+                    >
+                        <Settings className="h-5 w-5" />
+                        <span>{ru.nav.settings}</span>
+                    </Link>
 
-                        <button
-                            onClick={handleSync}
-                            disabled={isSyncing}
-                            className={cn(
-                                "w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-colors text-left",
-                                isSyncing
-                                    ? "text-green-400"
-                                    : "text-gray-400 hover:text-white hover:bg-white/5",
-                            )}
-                        >
-                            <RefreshCw
-                                className={cn(
-                                    "w-5 h-5",
-                                    isSyncing && "animate-spin",
-                                )}
-                            />
-                            <span className="text-[15px] font-medium">
-                                {isSyncing ? "Syncing..." : "Sync Library"}
-                            </span>
-                        </button>
-
-                        <Link
-                            href="/settings"
-                            aria-current={
-                                pathname === "/settings" ? "page" : undefined
-                            }
-                            className={cn(
-                                "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors",
-                                pathname === "/settings"
-                                    ? "bg-white/10 text-white"
-                                    : "text-gray-400 hover:text-white hover:bg-white/5",
-                            )}
-                        >
-                            <Settings className="w-5 h-5" />
-                            <span className="text-[15px] font-medium">
-                                Settings
-                            </span>
-                        </Link>
-
-                        {user?.role === "admin" && (
+                    {user?.role === "admin" ? (
+                        <>
                             <Link
                                 href="/requests"
                                 aria-current={
@@ -233,53 +186,40 @@ export function MobileSidebar({
                                         ? "page"
                                         : undefined
                                 }
-                                className={cn(
-                                    "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors",
-                                    pathname === "/requests"
-                                        ? "bg-white/10 text-white"
-                                        : "text-gray-400 hover:text-white hover:bg-white/5",
+                                className={linkClassName(
+                                    pathname === "/requests",
                                 )}
                             >
-                                <Inbox className="w-5 h-5" />
-                                <span className="text-[15px] font-medium">
-                                    Requests
-                                </span>
+                                <Inbox className="h-5 w-5" />
+                                <span>{ru.nav.requests}</span>
                             </Link>
-                        )}
-
-                        {user?.role === "admin" && (
                             <Link
                                 href="/admin"
                                 aria-current={
                                     pathname === "/admin" ? "page" : undefined
                                 }
-                                className={cn(
-                                    "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors",
-                                    pathname === "/admin"
-                                        ? "bg-white/10 text-white"
-                                        : "text-gray-400 hover:text-white hover:bg-white/5",
-                                )}
+                                className={linkClassName(pathname === "/admin")}
                             >
-                                <Shield className="w-5 h-5" />
-                                <span className="text-[15px] font-medium">
-                                    Admin
-                                </span>
+                                <Shield className="h-5 w-5" />
+                                <span>{ru.nav.admin}</span>
                             </Link>
-                        )}
-                    </div>
+                        </>
+                    ) : null}
                 </nav>
 
-                {/* Footer - Logout */}
-                <div className="border-t border-white/[0.06] p-3">
+                <div className="border-t border-white/[0.07] p-3">
                     <button
+                        type="button"
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                        className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                     >
-                        <LogOut className="w-5 h-5" />
-                        <span className="text-[15px] font-medium">Logout</span>
+                        <LogOut className="h-5 w-5" />
+                        <span className="text-[15px] font-medium">
+                            {ru.nav.logout}
+                        </span>
                     </button>
                 </div>
-            </div>
+            </aside>
         </>
     );
 }

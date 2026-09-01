@@ -12,9 +12,10 @@
  *   synchronously stops the previous stream (kills double-play).
  * - One optional muted, never-playing buffer element for preload
  *   (capped at one; warms the browser cache for gapless switches).
- * - No AudioContext on the default path — hi-res FLAC rides the bare
- *   media pipeline. The only sanctioned bridge is the gated iOS
- *   standalone PWA bridge (see iosStandalonePwaBridge.ts).
+ * - No AudioContext on the production path — hi-res FLAC and iOS PWA
+ *   background playback both ride the bare media pipeline. The isolated
+ *   bridge implementation remains closed by policy (see
+ *   iosStandalonePwaBridge.ts).
  * - End detection is the native `ended` event only (media-pipeline
  *   driven; fires under background timer throttling). Position updates
  *   come from `timeupdate` plus a 1s ticker.
@@ -88,7 +89,7 @@ export interface NativeAudioElementEngineOptions {
     ) => () => void;
     /** Page-visibility probe for error classification. */
     isPageHidden?: () => boolean;
-    /** Gate for the iOS standalone PWA AudioContext bridge. */
+    /** Injectable compatibility bridge gate; production policy is closed. */
     iosBridgeGate?: () => boolean;
     /** Bridge instance (injectable for tests). */
     iosBridge?: IosStandaloneAudioContextBridge;

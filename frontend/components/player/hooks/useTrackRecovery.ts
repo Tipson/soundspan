@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { playbackStateMachine } from "@/lib/audio";
 import {
     getListenTogetherSessionSnapshot,
@@ -27,6 +27,9 @@ import {
 } from "@/lib/audio-engine/playbackRecoveryPolicy";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import type { usePlaybackRecoveryHelpers } from "./usePlaybackRecoveryHelpers";
+import type { Track } from "@/lib/audio-state-context";
+import type { QueueItem } from "@/lib/queue-item";
+import { useUnavailableYtMusicRecovery } from "./useUnavailableYtMusicRecovery";
 import {
     isPlaybackAutoRestartSuppressed,
     setPlaybackAutoRestartSuppressed,
@@ -40,7 +43,17 @@ interface UseTrackRecoveryOptions {
     next: (origin: PlaybackAdvanceOrigin) => void;
     setCurrentTime: (time: number) => void;
     setIsBuffering: (isBuffering: boolean) => void;
+    setCurrentTrack: (
+        value: Track | null | ((previous: Track | null) => Track | null),
+    ) => void;
+    setQueue: (
+        value: QueueItem[] | ((previous: QueueItem[]) => QueueItem[]),
+    ) => void;
 }
+
+type TrackErrorSkipDisposition =
+    | { kind: "system_failure" }
+    | { kind: "confirmed_provider_unavailable"; failureKey: string };
 
 /** Preserves startup, transient-error, and queue-skip recovery callbacks. */
 export function useTrackRecovery({
@@ -49,7 +62,14 @@ export function useTrackRecovery({
     next,
     setCurrentTime,
     setIsBuffering,
+    setCurrentTrack,
+    setQueue,
 }: UseTrackRecoveryOptions) {
+    const latestNextRef = useRef(next);
+    useEffect(() => {
+        latestNextRef.current = next;
+    }, [next]);
+
     const {
         clearStartupPlaybackRecovery,
         clearPendingTrackErrorSkip,
@@ -81,6 +101,13 @@ export function useTrackRecovery({
         transientTrackRecoveryLoadListenerRef,
         transientTrackRecoveryTimeoutRef,
     } = refs;
+    const unavailableYtMusicRecovery = useUnavailableYtMusicRecovery({
+        refs,
+        playbackRecoveryHelpers,
+        setCurrentTrack,
+        setQueue,
+        setIsBuffering,
+    });
 
     const scheduleStartupPlaybackRecovery = useCallback(
         (trackId: string | null, recheckCount: number = 0) => {
@@ -269,7 +296,12 @@ export function useTrackRecovery({
     }, [isLoadingRef, setIsBuffering]);
 
     const scheduleTrackErrorSkip = useCallback(
-        (failedTrackId: string | null): boolean => {
+        (
+            failedTrackId: string | null,
+            disposition: TrackErrorSkipDisposition = {
+                kind: "system_failure",
+            },
+        ): boolean => {
             if (
                 pendingTrackErrorSkipRef.current &&
                 pendingTrackErrorTrackIdRef.current === failedTrackId
@@ -281,9 +313,10 @@ export function useTrackRecovery({
                 return true;
             }
 
-            // Record the error in the circuit breaker. If it trips (3 consecutive
-            // errors without a successful play), halt auto-advance to prevent
-            // infinite rapid error loops.
+            // System/transport failures use the consecutive-error threshold.
+            // A backend-confirmed unavailable provider item is instead remembered
+            // by occurrence: distinct unavailable entries can be skipped, while a
+            // repeat proves the queue has cycled and trips the same stop guard.
             // Error-driven repeat-one and unchanged-track LT recovery must prove
             // progress again. Non-error LT resyncs leave the breaker unchanged,
             // so they need no second confirmation; podcast seek-reload does not
@@ -294,7 +327,11 @@ export function useTrackRecovery({
                     failedTrackId,
                 );
             const justTripped =
-                consecutiveErrorBreakerRef.current.recordError();
+                disposition.kind === "confirmed_provider_unavailable"
+                    ? consecutiveErrorBreakerRef.current.recordConfirmedUnavailable(
+                          disposition.failureKey,
+                      )
+                    : consecutiveErrorBreakerRef.current.recordError();
             if (consecutiveErrorBreakerRef.current.isTripped()) {
                 stopAutomaticPlaybackRestarts();
                 if (justTripped) {
@@ -303,10 +340,13 @@ export function useTrackRecovery({
                         {
                             consecutiveErrors:
                                 consecutiveErrorBreakerRef.current.getErrorCount(),
+                            failureKind: disposition.kind,
                         },
                     );
                     toast.error(
-                        "Playback stopped — multiple tracks failed in a row. Check your connection or try again.",
+                        disposition.kind === "confirmed_provider_unavailable"
+                            ? "Воспроизведение остановлено: оставшиеся треки провайдера недоступны. Выберите другой трек или повторите попытку позже."
+                            : "Воспроизведение остановлено: несколько треков подряд не удалось загрузить. Проверьте подключение и повторите попытку.",
                         { duration: 6000 },
                     );
                 }
@@ -348,12 +388,12 @@ export function useTrackRecovery({
                 lastTrackIdRef.current = null;
                 isLoadingRef.current = false;
                 advancePlayIntentAtMsRef.current = Date.now();
-                next("error");
+                latestNextRef.current("error");
             }, TRACK_ERROR_SKIP_DELAY_MS);
             return false;
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.
-        [clearPendingTrackErrorSkip, next, stopAutomaticPlaybackRestarts],
+        [clearPendingTrackErrorSkip, stopAutomaticPlaybackRestarts],
     );
 
     const attemptTransientTrackRecovery = useCallback(
@@ -389,6 +429,11 @@ export function useTrackRecovery({
             }
 
             transientTrackRecoveryAttemptRef.current += 1;
+            playbackProgressConfirmationRef.current =
+                rearmPlaybackProgressConfirmationOnError(
+                    playbackProgressConfirmationRef.current,
+                    failedTrackId,
+                );
             const attemptNumber = transientTrackRecoveryAttemptRef.current;
             clearPendingTrackErrorSkip();
             clearTransientTrackRecovery(false);
@@ -471,5 +516,6 @@ export function useTrackRecovery({
         requestListenTogetherFollowerRecovery,
         scheduleTrackErrorSkip,
         attemptTransientTrackRecovery,
+        ...unavailableYtMusicRecovery,
     };
 }

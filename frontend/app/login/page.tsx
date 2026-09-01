@@ -13,7 +13,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import { GalaxyBackground } from "@/components/ui/GalaxyBackground";
+import { AuthPanel, AuthStage } from "@/features/auth/components/AuthStage";
 import { LocalLoginForm } from "@/features/auth/components/LocalLoginForm";
 import { OidcInviteForm } from "@/features/auth/components/OidcInviteForm";
 import { OidcLinkForm } from "@/features/auth/components/OidcLinkForm";
@@ -25,12 +25,9 @@ import {
 } from "@/features/auth/oidc";
 import { api } from "@/lib/api";
 import type { AuthConfig } from "@/lib/api/auth";
-import {
-    BRAND_MARKETING_TAGLINE,
-    BRAND_NAME,
-    BRAND_NAME_TRADEMARK,
-} from "@/lib/brand";
+import { BRAND_NAME } from "@/lib/brand";
 import { frontendLogger } from "@/lib/logger";
+import { pluralRu, ru, userFacingError } from "@/lib/i18n/ru";
 
 interface Artist {
     id: string;
@@ -55,13 +52,17 @@ const ONBOARDING_QUERY_KEY = ["onboarding", "status"] as const;
 
 function LoadingPage({ message }: { message?: string }) {
     return (
-        <div
-            role="status"
-            className="min-h-screen flex flex-col gap-3 items-center justify-center bg-black text-white/70"
-        >
-            <Loader2 className="w-8 h-8 animate-spin" />
-            {message && <p>{message}</p>}
-        </div>
+        <AuthStage footer={false}>
+            <AuthPanel>
+                <div
+                    role="status"
+                    className="flex flex-col items-center gap-3 py-8 text-content-secondary"
+                >
+                    <Loader2 className="h-8 w-8 animate-spin motion-reduce:animate-none" />
+                    <p>{message ?? "Готовим вход в Soundspan…"}</p>
+                </div>
+            </AuthPanel>
+        </AuthStage>
     );
 }
 
@@ -126,7 +127,7 @@ function useLoginArtists(): { artists: Artist[]; currentIndex: number } {
                     .filter((item) => item.type === "artist")
                     .map((item) => ({
                         id: item.id || "",
-                        name: item.name || "Unknown Artist",
+                        name: item.name || "Неизвестный артист",
                         heroUrl:
                             item.userHeroUrl ||
                             item.heroUrl ||
@@ -188,11 +189,7 @@ function useOidcCodeExchange(
                 loginLogger.error("OIDC code exchange failed", {
                     error: caught,
                 });
-                setError(
-                    caught instanceof Error
-                        ? caught.message
-                        : "Unable to complete SSO sign-in",
-                );
+                setError(userFacingError(caught, ru.auth.completeSsoError));
                 stripQueryParameter("ssoCode");
                 setState({ failed: true, pending: false });
             });
@@ -249,18 +246,18 @@ function LoginPageContent() {
 
 function AuthConfigFailure({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-black p-4">
-            <div className="max-w-md text-center text-white space-y-4">
-                <p role="alert">Unable to load sign-in options.</p>
+        <AuthStage footer={false}>
+            <AuthPanel className="text-center">
+                <p role="alert">{ru.auth.loadOptionsError}</p>
                 <button
                     type="button"
                     onClick={onRetry}
-                    className="px-4 py-2 rounded-lg bg-brand text-black font-semibold"
+                    className="mt-5 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-brand px-5 py-2.5 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 >
-                    Retry
+                    {ru.common.retry}
                 </button>
-            </div>
-        </div>
+            </AuthPanel>
+        </AuthStage>
     );
 }
 
@@ -298,17 +295,20 @@ function LoginCard({ config, parameters, exchange, error }: LoginCardProps) {
         authenticated,
     );
     return (
-        <div className="bg-[#111]/90 rounded-lg p-6 md:p-8 border border-white/10 shadow-xl">
-            <h1 className="text-2xl font-bold text-white mb-1 text-center">
-                Welcome back
+        <AuthPanel>
+            <p className="text-center text-[0.68rem] font-bold uppercase tracking-[0.18em] text-brand-light">
+                Ваш Soundspan
+            </p>
+            <h1 className="mt-2 text-center text-2xl font-black tracking-[-0.035em] text-content sm:text-3xl">
+                {ru.auth.welcomeBack}
             </h1>
-            <p className="text-white/60 text-center mb-8">
-                Sign in to continue to {BRAND_NAME}
+            <p className="mb-7 mt-2 text-center text-sm leading-6 text-content-secondary">
+                {ru.auth.continueTo} {BRAND_NAME}
             </p>
             {error && (
                 <div
                     role="alert"
-                    className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-400 animate-shake"
+                    className="mb-4 rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm leading-5 text-red-200"
                 >
                     {error}
                 </div>
@@ -317,17 +317,17 @@ function LoginCard({ config, parameters, exchange, error }: LoginCardProps) {
             {config.localLoginEnabled &&
                 !parameters.ssoLink &&
                 !parameters.ssoInvite && (
-                    <p className="text-center text-white/50 text-sm mt-6">
-                        Have an invite code?{" "}
+                    <p className="mt-6 text-center text-sm text-content-muted">
+                        {ru.auth.inviteQuestion}{" "}
                         <Link
                             href="/register"
-                            className="text-brand hover:text-brand-hover transition-colors"
+                            className="inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-brand-light transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                         >
-                            Create an account
+                            {ru.auth.signUp}
                         </Link>
                     </p>
                 )}
-        </div>
+        </AuthPanel>
     );
 }
 
@@ -340,7 +340,7 @@ function selectLoginFlow(
     authenticated: () => void,
 ): ReactNode {
     if (parameters.ssoCode && !exchange.failed) {
-        return <LoadingPageContent message="Completing SSO sign-in…" />;
+        return <LoadingPageContent message={ru.auth.completeSso} />;
     }
     if (parameters.ssoLink) {
         return (
@@ -373,7 +373,7 @@ function LoadingPageContent({ message }: { message: string }) {
     return (
         <div
             role="status"
-            className="flex flex-col items-center gap-3 py-4 text-white/70"
+            className="flex flex-col items-center gap-3 py-4 text-content-secondary"
         >
             <Loader2 className="w-6 h-6 animate-spin" />
             <p>{message}</p>
@@ -390,7 +390,7 @@ function RedirectingContent({
 }) {
     return (
         <div className="space-y-4">
-            <LoadingPageContent message="Redirecting to SSO…" />
+            <LoadingPageContent message={ru.auth.redirectSso} />
             <SsoButton providerName={providerName} onClick={onClick} />
         </div>
     );
@@ -413,12 +413,12 @@ function DefaultLoginOptions({
             )}
             {config.oidcEnabled && config.localLoginEnabled && (
                 <div
-                    className="flex items-center gap-3 text-xs text-white/40"
+                    className="flex items-center gap-3 text-xs text-content-muted"
                     aria-hidden="true"
                 >
-                    <span className="h-px flex-1 bg-white/10" />
-                    or
-                    <span className="h-px flex-1 bg-white/10" />
+                    <span className="h-px flex-1 bg-line" />
+                    {ru.auth.or}
+                    <span className="h-px flex-1 bg-line" />
                 </div>
             )}
             {config.localLoginEnabled && <LocalLoginForm />}
@@ -437,22 +437,21 @@ function LoginScene({
 }) {
     const currentArtist = artists[currentIndex];
     return (
-        <div className="min-h-screen w-full relative overflow-hidden">
-            <LoginBackground
-                currentArtist={currentArtist}
-                currentIndex={currentIndex}
-            />
-            {currentArtist && <ArtistInfo artist={currentArtist} />}
-            <div className="relative z-20 min-h-screen flex items-center justify-center p-4">
-                <div className="w-full max-w-md">
-                    <BrandLogo />
-                    {children}
-                    <p className="text-center text-white/40 text-sm mt-6">
-                        © 2025 {BRAND_NAME}. {BRAND_MARKETING_TAGLINE}
-                    </p>
-                </div>
-            </div>
-        </div>
+        <AuthStage
+            backdrop={
+                <LoginBackground
+                    currentArtist={currentArtist}
+                    currentIndex={currentIndex}
+                />
+            }
+            aside={
+                currentArtist ? (
+                    <ArtistInfo artist={currentArtist} />
+                ) : undefined
+            }
+        >
+            {children}
+        </AuthStage>
     );
 }
 
@@ -464,14 +463,7 @@ function LoginBackground({
     currentIndex: number;
 }) {
     return (
-        <div className="absolute inset-0 bg-[#000]">
-            <div className="absolute inset-0 bg-gradient-to-br from-brand/5 via-transparent to-transparent" />
-            <div className="opacity-[0.08]">
-                <GalaxyBackground
-                    primaryColor="#3b82f6"
-                    secondaryColor="#3b82f6"
-                />
-            </div>
+        <div className="absolute inset-0">
             {currentArtist?.heroUrl && (
                 <>
                     <div
@@ -486,9 +478,8 @@ function LoginBackground({
                             priority
                         />
                     </div>
-                    <div className="absolute inset-0 backdrop-blur-[100px] bg-black/60" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/80" />
+                    <div className="absolute inset-0 bg-surface/70 backdrop-blur-[100px]" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/55 to-surface/60" />
                 </>
             )}
         </div>
@@ -497,42 +488,24 @@ function LoginBackground({
 
 function ArtistInfo({ artist }: { artist: Artist }) {
     return (
-        <div className="absolute bottom-8 left-8 z-10 text-white max-w-md animate-fade-in">
-            <p className="text-sm font-medium text-white/60 mb-2">
-                Featured Artist
+        <div className="max-w-xl animate-fade-in text-content motion-reduce:animate-none">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-brand-light">
+                {ru.auth.featuredArtist}
             </p>
-            <h2 className="text-3xl md:text-4xl font-bold mb-2 drop-shadow-2xl">
+            <h2 className="mb-3 text-4xl font-black tracking-[-0.045em] drop-shadow-2xl xl:text-5xl">
                 {artist.name}
             </h2>
             {artist.albumCount !== undefined && (
-                <p className="text-white/70 text-sm">
-                    {artist.albumCount} album
-                    {artist.albumCount !== 1 ? "s" : ""} in your library
+                <p className="text-sm text-content-secondary">
+                    {artist.albumCount}{" "}
+                    {pluralRu(artist.albumCount, [
+                        "альбом",
+                        "альбома",
+                        "альбомов",
+                    ])}{" "}
+                    {ru.auth.inYourLibrary}
                 </p>
             )}
-        </div>
-    );
-}
-
-function BrandLogo() {
-    return (
-        <div className="flex items-center justify-center mb-8">
-            <div className="relative flex gap-3 items-center group">
-                <div className="relative">
-                    <div className="absolute inset-0 bg-white/10 blur-xl rounded-full group-hover:bg-white/20 transition-all duration-300" />
-                    <Image
-                        src="/assets/images/soundspan.webp"
-                        alt={BRAND_NAME}
-                        width={60}
-                        height={60}
-                        sizes="60px"
-                        className="relative z-10 drop-shadow-2xl"
-                    />
-                </div>
-                <span className="brand-wordmark text-5xl font-bold bg-gradient-to-r from-white via-white to-gray-200 bg-clip-text text-transparent drop-shadow-2xl">
-                    {BRAND_NAME_TRADEMARK}
-                </span>
-            </div>
         </div>
     );
 }

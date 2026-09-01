@@ -11,6 +11,7 @@ import {
     artistsDetailRouter,
     artistsDeletionRouter,
 } from "./artists";
+import { artistTracksRouter } from "./artistTracks";
 import { artistCountsRouter } from "./artistCounts";
 import { imageBackfillRouter } from "./imageBackfill";
 import { metadataBackfillRouter } from "./metadataBackfill";
@@ -31,6 +32,7 @@ import { coverArtRouter } from "./coverArt";
 import { remoteTracksRouter } from "./remoteTracks";
 import { radioRouter } from "./radio";
 import { radioPlaylistRouter } from "./radioPlaylists";
+import { savedMusicEntitiesRouter } from "./savedMusicEntities";
 
 const router = Router();
 
@@ -49,6 +51,7 @@ router.use(artistsListRouter);
 router.use(artistCountsRouter);
 router.use(imageBackfillRouter);
 router.use(metadataBackfillRouter);
+router.use(artistTracksRouter);
 router.use(artistsDetailRouter);
 router.use(albumsBrowseRouter);
 router.use(tracksBrowseRouter);
@@ -58,6 +61,7 @@ router.use(tracksPreferenceReadRouter);
 router.use(albumsPreferenceRouter);
 router.use(tracksPreferenceWriteRouter);
 router.use(remoteTracksRouter);
+router.use(savedMusicEntitiesRouter);
 router.use(tracksDetailRouter);
 router.use(tracksDeletionRouter);
 router.use(albumsDeletionRouter);

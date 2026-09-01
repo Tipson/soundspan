@@ -24,8 +24,14 @@ export function assertSafeScaleDatabaseName(databaseName: string): void {
 /** Apply the repository's real Prisma migration chain to the throwaway database. */
 export async function applyScaleMigrations(databaseUrl: string): Promise<void> {
     const backendRoot = join(__dirname, "..");
-    const prismaBinary = join(backendRoot, "node_modules", ".bin", "prisma");
-    await execFile(prismaBinary, ["migrate", "deploy"], {
+    const prismaCli = join(
+        backendRoot,
+        "node_modules",
+        "prisma",
+        "build",
+        "index.js",
+    );
+    await execFile(process.execPath, [prismaCli, "migrate", "deploy"], {
         cwd: backendRoot,
         env: { ...process.env, DATABASE_URL: databaseUrl },
         timeout: MIGRATION_TIMEOUT_MS,

@@ -10,9 +10,11 @@ test.describe("Listen Together", () => {
         await page.goto("/listen-together");
 
         await expect(
-            page.getByRole("heading", { name: /listen together/i }),
+            page.getByRole("heading", { name: /слушаем вместе/i }),
         ).toBeVisible();
-        await expect(page.getByText("Create a Group")).toBeVisible({
+        await expect(
+            page.getByRole("button", { name: "Создать группу" }),
+        ).toBeVisible({
             timeout: 10000,
         });
     });

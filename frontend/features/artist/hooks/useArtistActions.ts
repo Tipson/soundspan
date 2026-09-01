@@ -10,6 +10,13 @@ import { toAddToPlaylistRef } from "@/lib/trackRef";
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { publishDeviceOfflineLikedChange } from "@/features/device-offline/likedAutomation";
+import {
+    artistRu,
+    formatArtistLikedTracks,
+    formatArtistPlaylistAdded,
+    formatArtistPlaylistPartial,
+} from "@/lib/i18n/musicPagesRu";
 
 /**
  * Executes useArtistActions.
@@ -101,7 +108,7 @@ export function useArtistActions() {
                     title: track.title,
                     artist: { name: artist.name, id: artist.id },
                     album: {
-                        title: track.album?.title || "Unknown Album",
+                        title: track.album?.title || artistRu.unknownAlbum,
                         coverArt: track.album?.coverArt,
                         id: track.album?.id,
                         albumLoudnessLufs:
@@ -141,7 +148,7 @@ export function useArtistActions() {
                 });
 
                 if (allTracks.length === 0) {
-                    toast.info("No local tracks available to add");
+                    toast.info(artistRu.noLocalTracksToAdd);
                     return;
                 }
 
@@ -151,7 +158,7 @@ export function useArtistActions() {
                     "Failed to add artist to queue:",
                     error,
                 );
-                toast.error("Failed to add tracks to queue");
+                toast.error(artistRu.addQueueFailed);
             }
         },
         [addTracksToQueue],
@@ -175,7 +182,7 @@ export function useArtistActions() {
                 });
 
                 if (allTracks.length === 0) {
-                    toast.info("No local tracks to like");
+                    toast.info(artistRu.noLocalTracksToLike);
                     return;
                 }
 
@@ -217,7 +224,8 @@ export function useArtistActions() {
                     queryClient.invalidateQueries({
                         queryKey: queryKeys.likedPlaylistAll(),
                     });
-                    toast.success(`Liked ${allTracks.length} tracks`);
+                    publishDeviceOfflineLikedChange();
+                    toast.success(formatArtistLikedTracks(allTracks.length));
                 } catch (error) {
                     // Rollback: restore previous cache values then refetch
                     for (const track of allTracks) {
@@ -245,7 +253,7 @@ export function useArtistActions() {
                     "Failed to like all artist tracks:",
                     error,
                 );
-                toast.error("Failed to like all tracks");
+                toast.error(artistRu.likeAllFailed);
             }
         },
         [queryClient],
@@ -268,7 +276,7 @@ export function useArtistActions() {
             });
 
             if (allTracks.length === 0) {
-                toast.info("No local tracks to add");
+                toast.info(artistRu.noLocalTracksForPlaylist);
                 return;
             }
 
@@ -300,16 +308,23 @@ export function useArtistActions() {
             }
 
             const failed = allTracks.length - added;
-            if (failed > 0 && added === 0) {
-                toast.error("Failed to add tracks to playlist");
-                throw new Error(
-                    `All ${failed} tracks failed to add to playlist`,
+            if (failed > 0) {
+                const error = new Error(
+                    `Failed to add ${failed} of ${allTracks.length} artist tracks to playlist`,
                 );
-            } else if (failed > 0) {
-                toast.warning(`Added ${added} tracks, ${failed} failed`);
-            } else {
-                toast.success(`Added ${allTracks.length} tracks to playlist`);
+                sharedFrontendLogger.error(
+                    "Failed to add all artist tracks to playlist:",
+                    error,
+                );
+                if (added === 0) {
+                    toast.error(artistRu.addPlaylistFailed);
+                } else {
+                    toast.warning(formatArtistPlaylistPartial(added, failed));
+                }
+                throw error;
             }
+
+            toast.success(formatArtistPlaylistAdded(allTracks.length));
         },
         [],
     );

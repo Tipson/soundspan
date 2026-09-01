@@ -14,6 +14,8 @@ import { Podcast, Episode, PodcastPreview } from "../types";
 import { queryKeys } from "@/hooks/useQueries";
 import { dispatchQueryEvent } from "@/lib/query-events";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { podcastRu } from "@/lib/i18n/podcastRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 function buildForwardEpisodeQueue(
     selectedEpisode: Episode,
@@ -73,11 +75,7 @@ export function usePodcastActions(podcastId: string) {
                 }
             } catch (error: unknown) {
                 sharedFrontendLogger.error("Subscribe error:", error);
-                alert(
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to subscribe to podcast",
-                );
+                alert(userFacingError(error, podcastRu.errors.subscribeFailed));
             } finally {
                 setIsSubscribing(false);
             }

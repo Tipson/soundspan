@@ -92,7 +92,7 @@ test("renders unavailable state when initial fetch fails", async () => {
     const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
-    assert.match(html, /Social status unavailable/);
+    assert.match(html, /Статус друзей недоступен/);
 });
 
 test("renders loading spinner when query is still loading and no users are present", async () => {
@@ -102,15 +102,18 @@ test("renders loading spinner when query is still loading and no users are prese
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /animate-spin/);
-    assert.doesNotMatch(html, /No one online/);
+    assert.doesNotMatch(html, /Сейчас никого нет онлайн/);
 });
 
 test("renders empty state when there are no users and no request error", async () => {
     const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
-    assert.match(html, /No one online/);
-    assert.match(html, /Users sharing presence will appear here/);
+    assert.match(html, /Сейчас никого нет онлайн/);
+    assert.match(
+        html,
+        /Здесь появятся пользователи, которые делятся своим статусом/,
+    );
 });
 
 test("keeps rendering social users when a refetch error occurs", async () => {
@@ -131,7 +134,7 @@ test("keeps rendering social users when a refetch error occurs", async () => {
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
     assert.match(html, /Listener/);
-    assert.doesNotMatch(html, /Social status unavailable/);
+    assert.doesNotMatch(html, /Статус друзей недоступен/);
 });
 
 test("renders paused track details with cover art, listen-together badge, and plain text track metadata without ids", async () => {
@@ -159,10 +162,10 @@ test("renders paused track details with cover art, listen-together badge, and pl
     const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
-    assert.match(html, /1 online/);
-    assert.match(html, /Live/);
-    assert.match(html, /Paused/);
-    assert.match(html, /In a Listen Together session/);
+    assert.match(html, /1 пользователь онлайн/);
+    assert.match(html, /В реальном времени/);
+    assert.match(html, /Пауза/);
+    assert.match(html, /Участвует в совместном прослушивании/);
     assert.match(html, /src=\"\/api\/cover\/cover-1\?size=32\"/);
     assert.match(html, /@listener_user/);
     assert.match(html, />Song One</);
@@ -196,10 +199,10 @@ test("renders playing state with song and artist links when ids are present", as
     const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
-    assert.match(html, /Playing/);
+    assert.match(html, /Слушает/);
     assert.match(html, /href=\"\/album\/album-1\"/);
     assert.match(html, /href=\"\/artist\/artist-1\"/);
-    assert.doesNotMatch(html, /Not currently playing/);
+    assert.doesNotMatch(html, /Сейчас ничего не слушает/);
 });
 
 test("renders idle users as not currently playing", async () => {
@@ -227,8 +230,8 @@ test("renders idle users as not currently playing", async () => {
     const { SocialTab } = await import("../../components/activity/SocialTab");
     const html = renderToStaticMarkup(React.createElement(SocialTab));
 
-    assert.match(html, /Idle/);
-    assert.match(html, /Not currently playing/);
+    assert.match(html, /Неактивен/);
+    assert.match(html, /Сейчас ничего не слушает/);
     assert.doesNotMatch(html, /href=\"\/album\/album-1\"/);
     assert.doesNotMatch(html, /href=\"\/artist\/artist-1\"/);
 });
@@ -290,11 +293,11 @@ test("formats last seen timestamps for now, minutes, hours, today, and invalid d
             await import("../../components/activity/SocialTab");
         const html = renderToStaticMarkup(React.createElement(SocialTab));
 
-        assert.match(html, />now</);
-        assert.match(html, />5m</);
-        assert.match(html, />2h</);
-        assert.match(html, />today</);
-        assert.match(html, />online</);
+        assert.match(html, />только что</);
+        assert.match(html, />5 мин назад</);
+        assert.match(html, />2 ч назад</);
+        assert.match(html, />19 февр/);
+        assert.match(html, />недавно</);
     } finally {
         Date.now = originalNow;
     }

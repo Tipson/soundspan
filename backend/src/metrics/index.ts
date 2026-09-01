@@ -74,6 +74,11 @@ import {
 } from "./soulseekAlbumMetrics";
 import { createScrobbleMetrics, type ScrobbleOutcome } from "./scrobbleMetrics";
 import type { ScrobbleService } from "../services/scrobbleTypes";
+import {
+    createRecommendationMetrics,
+    type RecommendationExposureMetricInput,
+    type RecommendationGenerationMetricInput,
+} from "./recommendationMetrics";
 
 export type {
     FederationAuthFailureReason,
@@ -106,6 +111,7 @@ const catalogMetrics = createCatalogMetrics(metricsRegistry);
 const schedulerMetrics = createSchedulerMetrics(metricsRegistry);
 const soulseekAlbumMetrics = createSoulseekAlbumMetrics(metricsRegistry);
 const scrobbleMetrics = createScrobbleMetrics(metricsRegistry);
+const recommendationMetrics = createRecommendationMetrics(metricsRegistry);
 createLoudnessMetrics(metricsRegistry, prisma, {
     getBackfillOutcomes: async () => {
         const { redisClient } = await import("../utils/redis");
@@ -191,6 +197,27 @@ export function recordScrobbleOutcome(
     outcome: ScrobbleOutcome,
 ): void {
     scrobbleMetrics.submissions.inc({ service, outcome });
+}
+
+/** Records one persisted recommendation generation and its bounded health data. */
+export function recordRecommendationGenerationMetrics(
+    input: RecommendationGenerationMetricInput,
+): void {
+    recommendationMetrics.recordGeneration(input);
+}
+
+/** Adds the exposures persisted for one recommendation generation. */
+export function recordRecommendationExposures(
+    input: RecommendationExposureMetricInput,
+): void {
+    recommendationMetrics.recordExposures(input);
+}
+
+/** Records one playback outcome attributed to a served recommendation. */
+export function recordRecommendationPlaybackOutcome(
+    outcome: string | null,
+): void {
+    recommendationMetrics.recordPlaybackOutcome(outcome);
 }
 
 /** Records one completed scheduler job duration. */

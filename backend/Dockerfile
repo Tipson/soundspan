@@ -11,6 +11,16 @@ FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea05
 
 WORKDIR /app
 
+# Keep dependency fetches resilient on hosts whose IPv6 route is advertised but
+# unusable. BuildKit caches npm/Prisma downloads outside the image, so source-only
+# rebuilds do not redownload the dependency graph.
+ENV NODE_OPTIONS=--dns-result-order=ipv4first \
+    NPM_CONFIG_FETCH_RETRIES=10 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=300000 \
+    NPM_CONFIG_MAXSOCKETS=4
+
 # Inject monorepo contract package into /packages so file:../packages/* links resolve.
 COPY --from=media-metadata-contract . /packages/media-metadata-contract
 
@@ -21,15 +31,17 @@ COPY prisma ./prisma/
 COPY prisma.config.ts ./
 COPY databaseUrl.js ./
 
-# Install all deps (includes dev deps needed for tsx/prisma CLI)
-RUN npm ci && \
-    npm cache clean --force
+# Install all deps (includes dev deps needed for tsx/prisma CLI). The cache is
+# not copied into any runtime stage.
+RUN --mount=type=cache,id=soundspan-npm-backend,target=/root/.npm,sharing=locked \
+    npm ci --prefer-offline
 
 # Build local contract package expected by backend imports.
 RUN npx tsc -p /packages/media-metadata-contract/tsconfig.json
 
 # Generate Prisma client once against repo schema
-RUN npx prisma generate
+RUN --mount=type=cache,id=soundspan-prisma,target=/root/.cache/prisma,sharing=locked \
+    npx prisma generate
 
 # Stage 2: Build TypeScript output for runtime stages
 FROM deps AS build
@@ -82,10 +94,10 @@ CMD ["node", "dist/worker.js"]
 # "prisma/config", which must resolve from the app's own node_modules, so the
 # CLI is reinstalled locally after prune (a global CLI cannot satisfy it).
 FROM build AS api-deps
-RUN PRISMA_VERSION=$(node -p "require('./node_modules/prisma/package.json').version") && \
+RUN --mount=type=cache,id=soundspan-npm-backend,target=/root/.npm,sharing=locked \
+    PRISMA_VERSION=$(node -p "require('./node_modules/prisma/package.json').version") && \
     npm prune --omit=dev && \
-    npm install --no-save prisma@"$PRISMA_VERSION" && \
-    npm cache clean --force
+    npm install --no-save --prefer-offline prisma@"$PRISMA_VERSION"
 
 # Stage 5: API runtime (compiled JS + migrations entrypoint; default backend target)
 FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848 AS api-runtime

@@ -31,7 +31,7 @@ const VARIANT_ACCENT: Record<PlaybackQualityBadgeValue["variant"], string> = {
 const SERVICE_LABELS: Record<PlaybackQualityBadgeValue["variant"], string> = {
     tidal: "TIDAL",
     youtube: "YouTube Music",
-    local: "Local Library",
+    local: "Локальная библиотека",
 };
 
 /**
@@ -43,7 +43,7 @@ export function resolveServiceLabel(
     track: { source?: string; peer?: { name?: string } | null } | null,
 ): string {
     if (variant === "local" && track?.source === "federated") {
-        return track.peer?.name || "Peer Library";
+        return track.peer?.name || "Библиотека другого сервера";
     }
     return SERVICE_LABELS[variant];
 }
@@ -57,7 +57,7 @@ function StatRow({
 }) {
     if (value === null || value === undefined) return null;
     const display =
-        typeof value === "boolean" ? (value ? "Yes" : "No") : String(value);
+        typeof value === "boolean" ? (value ? "Да" : "Нет") : String(value);
     return (
         <div className="flex items-baseline justify-between gap-3">
             <span className="text-gray-400 text-xs whitespace-nowrap">
@@ -151,74 +151,74 @@ export function PlaybackQualityBadgeWithStats({
     const variant = badge.variant;
 
     rows.push({
-        label: "Service",
+        label: "Источник",
         value: resolveServiceLabel(variant, currentTrack),
     });
 
     if (variant === "local" && currentTrack?.filePath) {
         const parts = currentTrack.filePath.split(/[/\\]/);
-        rows.push({ label: "File", value: parts[parts.length - 1] });
+        rows.push({ label: "Файл", value: parts[parts.length - 1] });
     }
 
     if (variant === "tidal" && tidalQuality) {
         rows.push({
-            label: "Codec",
+            label: "Кодек",
             value: friendlyCodecName(tidalQuality.codec).toUpperCase(),
         });
-        rows.push({ label: "Quality", value: tidalQuality.quality });
+        rows.push({ label: "Качество", value: tidalQuality.quality });
         const tidalBitrate = isLikelyLosslessTidal(tidalQuality)
             ? null
             : estimateTidalLossyBitrateKbps(tidalQuality.quality);
         rows.push({
-            label: "Bitrate",
+            label: "Битрейт",
             value: tidalBitrate ? `${tidalBitrate} kbps` : null,
         });
         rows.push({
-            label: "Bit Depth",
+            label: "Разрядность",
             value: tidalQuality.bitDepth
                 ? `${tidalQuality.bitDepth}-bit`
                 : null,
         });
         rows.push({
-            label: "Sample Rate",
+            label: "Частота дискретизации",
             value: formatSampleRateKHz(tidalQuality.sampleRate),
         });
         rows.push({
-            label: "Lossless",
+            label: "Без потерь",
             value: isLikelyLosslessTidal(tidalQuality),
         });
     } else if (variant === "youtube") {
         rows.push({
-            label: "Codec",
+            label: "Кодек",
             value: codec ? friendlyCodecName(codec).toUpperCase() : null,
         });
         rows.push({
-            label: "Bitrate",
+            label: "Битрейт",
             value: bitrate && bitrate > 0 ? `${bitrate} kbps` : null,
         });
     } else if (variant === "local" && localQuality) {
         rows.push({
-            label: "Codec",
+            label: "Кодек",
             value: friendlyCodecName(localQuality.codec).toUpperCase(),
         });
         rows.push({
-            label: "Bitrate",
+            label: "Битрейт",
             value:
                 localQuality.bitrate && localQuality.bitrate > 0
                     ? `${localQuality.bitrate} kbps`
                     : null,
         });
         rows.push({
-            label: "Bit Depth",
+            label: "Разрядность",
             value: localQuality.bitDepth
                 ? `${localQuality.bitDepth}-bit`
                 : null,
         });
         rows.push({
-            label: "Sample Rate",
+            label: "Частота дискретизации",
             value: formatSampleRateKHz(localQuality.sampleRate),
         });
-        rows.push({ label: "Lossless", value: localQuality.lossless });
+        rows.push({ label: "Без потерь", value: localQuality.lossless });
     }
 
     // Delivery mode (local only, when stream profile available)
@@ -228,8 +228,8 @@ export function PlaybackQualityBadgeWithStats({
         streamProfile.mode
     ) {
         rows.push({
-            label: "Delivery",
-            value: "Direct",
+            label: "Передача",
+            value: "Напрямую",
         });
     }
 
@@ -268,13 +268,13 @@ export function PlaybackQualityBadgeWithStats({
                     <h3
                         className={`font-bold text-xs ${VARIANT_ACCENT[variant]}`}
                     >
-                        Stream Info
+                        Информация о потоке
                     </h3>
                     {isMobile && (
                         <button
                             onClick={handleClose}
                             className="text-gray-400 hover:text-white transition-colors p-0.5"
-                            aria-label="Close stream info"
+                            aria-label="Закрыть информацию о потоке"
                         >
                             <X className="w-3.5 h-3.5" />
                         </button>

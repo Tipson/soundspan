@@ -17,20 +17,48 @@ Start-here index for domain modules under `frontend/features`.
 | `auth`      | `frontend/features/auth/README.md`      | `frontend/app/login/page.tsx`                                                                                                  |
 | `audiobook` | `frontend/features/audiobook/README.md` | `frontend/app/audiobooks/series/[name]/page.tsx`                                                                               |
 | `discover`  | `frontend/features/discover/README.md`  | `frontend/app/discover/page.tsx`<br>`frontend/app/mix/[id]/page.tsx`                                                           |
+| `device-offline` | `frontend/features/device-offline/README.md` | `frontend/app/library/page.tsx`                                                                                          |
 | `explore`   | `frontend/features/explore/README.md`   | `frontend/app/explore/page.tsx`<br>`frontend/app/library/page.tsx`<br>`frontend/app/page.tsx`<br>`frontend/app/radio/page.tsx` |
 | `home`      | `frontend/features/home/README.md`      | `frontend/app/explore/page.tsx`<br>`frontend/app/library/page.tsx`<br>`frontend/app/page.tsx`<br>`frontend/app/radio/page.tsx` |
 | `library`   | `frontend/features/library/README.md`   | `frontend/app/explore/page.tsx`<br>`frontend/app/library/page.tsx`<br>`frontend/app/page.tsx`<br>`frontend/app/radio/page.tsx` |
 | `library-health` | `frontend/features/library-health/README.md` | `frontend/app/admin/page.tsx`                                                                                             |
 | `podcast`   | `frontend/features/podcast/README.md`   | `frontend/app/podcasts/page.tsx`                                                                                               |
+| `playlist`  | `frontend/features/playlist/README.md`  | `frontend/app/playlist/[id]/page.tsx`<br>`frontend/app/playlist/my-liked/page.tsx`                                             |
 | `search`    | `frontend/features/search/README.md`    | `frontend/app/playlists/page.tsx`<br>`frontend/app/search/page.tsx`                                                            |
 | `social`    | `frontend/features/social/README.md`    | `frontend/app/page.tsx`<br>`frontend/app/peer-playlists/[peerId]/[remoteId]/page.tsx`                                          |
 | `settings`  | `frontend/features/settings/README.md`  | `frontend/app/device/page.tsx`<br>`frontend/app/settings/page.tsx`                                                             |
+| `taste-profile` | `frontend/features/taste-profile/README.md` | Authenticated application shell; later account-settings editor                                                        |
 
-## Recognized Exception: Vibe Map
+## Recognized Exception: Vibe
 
-The Vibe Map — the interactive vibe navigator — does **not** live under `frontend/features/`. Its components, hooks, and model live in `frontend/components/vibe/` (entrypoint `VibeMapTab.tsx` / `VibeMapView.tsx`), its route is `frontend/app/vibe/page.tsx`, and its unit coverage is `frontend/tests/unit/` (`mapSearch`, `vibeMapModel`, `vibeModeMachine`, `travelCompass`, and siblings). It is indexed here so the surface is discoverable and its placement is a documented, recognized location rather than undocumented drift.
+The online-first personal-radio route lives at `frontend/app/vibe/page.tsx`,
+while its interactive Wave surface lives under `frontend/components/vibe/` in
+`VibeAvailability.tsx`. The user-facing route always uses provider-catalog
+recommendations and account listening signals; it does not depend on local
+files, audio embeddings, or the legacy map components that remain in this
+directory.
 
-Relocating it to `frontend/features/vibe/` to match the domain-module convention is an owner decision (large import churn across `frontend/components/vibe/**` and the tests above) and has not been made; until then, extend the Vibe Map in place under `frontend/components/vibe/`.
+Vibe stays in this recognized location to avoid broad import churn. Extend the
+personal-radio surface in `VibeAvailability.tsx`; its accessible mobile sheet /
+desktop dialog for the supported For you, New to me, and Familiar directions,
+plus the independent mood or listening-context choice, is isolated in
+`WaveDirectionSheet.tsx`. The selected pair is deep-linked and changes the
+personalized endpoint request. Cover user-visible behavior in
+`frontend/tests/component/vibePage.component.test.ts`.
+
+The ambient Wave visualization is presentational and stays independent from the
+playback audio graph. `VibeAmbientMotion.tsx` uses analyzed BPM and energy only
+when those fields already exist on the current track. Online-first provider
+tracks without analysis use a deterministic visual cadence derived from the
+track identity, Wave direction, and mood until hybrid analysis supplies real
+features. That fallback is not presented as measured BPM or energy, and the
+visualizer must not connect an `AudioContext`, analyzer, or media-element source.
+
+Home is the single online-first landing page. It composes the personal feed with
+live provider discovery in `home/components/HomeOnlineDiscovery.tsx`; the old
+`/explore` root redirects to Home while its nested provider collection routes
+remain valid. Main navigation intentionally contains only Home, Library, and
+Vibe.
 
 ## Update Rule
 

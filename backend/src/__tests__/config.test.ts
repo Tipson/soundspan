@@ -245,6 +245,49 @@ describe("config module", () => {
         expect(config.vibeEmbedConcurrency).toBe(1);
     });
 
+    it("uses safe hybrid recommendation and remote-analysis defaults", async () => {
+        const { config } = await loadConfigModule({
+            RECOMMENDATION_ENGINE_MODE: undefined,
+            REMOTE_ANALYSIS_ENABLED: undefined,
+            REMOTE_ANALYSIS_DAILY_BUDGET: undefined,
+            REMOTE_ANALYSIS_CONCURRENCY: undefined,
+        });
+
+        expect(config.recommendations).toEqual({
+            mode: "shadow",
+            remoteAnalysisEnabled: false,
+            remoteAnalysisDailyBudget: 100,
+            remoteAnalysisConcurrency: 1,
+        });
+    });
+
+    it("parses explicit hybrid recommendation controls", async () => {
+        const { config } = await loadConfigModule({
+            RECOMMENDATION_ENGINE_MODE: "active",
+            REMOTE_ANALYSIS_ENABLED: "true",
+            REMOTE_ANALYSIS_DAILY_BUDGET: "250",
+            REMOTE_ANALYSIS_CONCURRENCY: "2",
+        });
+
+        expect(config.recommendations).toEqual({
+            mode: "active",
+            remoteAnalysisEnabled: true,
+            remoteAnalysisDailyBudget: 250,
+            remoteAnalysisConcurrency: 2,
+        });
+    });
+
+    it.each([
+        ["RECOMMENDATION_ENGINE_MODE", "experimental"],
+        ["REMOTE_ANALYSIS_ENABLED", "yes"],
+        ["REMOTE_ANALYSIS_DAILY_BUDGET", "0"],
+        ["REMOTE_ANALYSIS_DAILY_BUDGET", "10001"],
+        ["REMOTE_ANALYSIS_CONCURRENCY", "0"],
+        ["REMOTE_ANALYSIS_CONCURRENCY", "3"],
+    ])("rejects invalid hybrid control %s=%s", async (name, value) => {
+        await expectStartupValidationFailure({ [name]: value }, name);
+    });
+
     it("defaults the loudness target to the ReplayGain 2 reference", async () => {
         const { config } = await loadConfigModule({
             LOUDNESS_TARGET_LUFS: undefined,
@@ -765,6 +808,11 @@ describe("config module", () => {
 
     it("falls back to SESSION_SECRET when JWT_SECRET is absent", async () => {
         const fallback = await loadConfigModule({ JWT_SECRET: undefined });
+        expect(fallback.config.jwtSecret).toBe(requiredEnv().SESSION_SECRET);
+    });
+
+    it("treats an empty optional JWT_SECRET as absent", async () => {
+        const fallback = await loadConfigModule({ JWT_SECRET: "" });
         expect(fallback.config.jwtSecret).toBe(requiredEnv().SESSION_SECRET);
     });
 

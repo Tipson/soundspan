@@ -15,6 +15,7 @@
  */
 
 import { SlidersHorizontal, X } from "lucide-react";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import {
     FILTERABLE_MOODS,
     VIBE_ACCENTS,
@@ -128,7 +129,7 @@ function DualRange({
                     max={1}
                     step={0.05}
                     value={lo}
-                    aria-label={`${label} minimum`}
+                    aria-label={`${label}: ${vibeMapRu.filters.minimum}`}
                     onChange={(e) =>
                         onChange([Math.min(parseFloat(e.target.value), hi), hi])
                     }
@@ -140,7 +141,7 @@ function DualRange({
                     max={1}
                     step={0.05}
                     value={hi}
-                    aria-label={`${label} maximum`}
+                    aria-label={`${label}: ${vibeMapRu.filters.maximum}`}
                     onChange={(e) =>
                         onChange([lo, Math.max(parseFloat(e.target.value), lo)])
                     }
@@ -176,12 +177,12 @@ function CollapsedFilters({
                 type="button"
                 onClick={expand}
                 aria-expanded={false}
-                title="Show filters"
+                title={vibeMapRu.filters.show}
                 className="pointer-events-auto inline-flex items-center gap-2 h-10 px-3 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg text-sm text-gray-200 hover:bg-black/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
             >
                 <SlidersHorizontal className="w-4 h-4" />
                 <span className="tabular-nums">
-                    Filters · {visibleCount}/{total}
+                    {vibeMapRu.filters.title} · {visibleCount}/{total}
                 </span>
             </button>
         </div>
@@ -200,16 +201,18 @@ function FiltersHeader({
     return (
         <div className="flex items-center gap-2 mb-2">
             <SlidersHorizontal className="w-4 h-4 text-indigo-300" />
-            <span className="text-sm font-semibold text-white">Filters</span>
+            <span className="text-sm font-semibold text-white">
+                {vibeMapRu.filters.title}
+            </span>
             <span className="text-xs text-gray-400 tabular-nums">
-                {visible}/{total} visible
+                {visible}/{total} {vibeMapRu.filters.visible}
             </span>
             <button
                 type="button"
                 onClick={collapse}
                 aria-expanded={true}
-                aria-label="Collapse filters"
-                title="Collapse filters"
+                aria-label={vibeMapRu.filters.collapse}
+                title={vibeMapRu.filters.collapse}
                 className="ml-auto -mr-1 inline-flex items-center justify-center w-10 h-10 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
             >
                 <X className="w-4 h-4" />
@@ -240,7 +243,7 @@ function MoodFilters({
                                     ? filters.soloMood(mood)
                                     : filters.toggleMood(mood)
                             }
-                            title={`${moodLabel(mood)} — click to toggle, shift-click to solo`}
+                            title={`${moodLabel(mood)} — ${vibeMapRu.filters.toggleMood}`}
                             className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${active ? "bg-white/10 border-white/15 text-gray-200 opacity-100" : "border-white/10 text-gray-300 opacity-35"}`}
                         >
                             <span
@@ -254,13 +257,15 @@ function MoodFilters({
                 <button
                     type="button"
                     onClick={filters.selectAllMoods}
-                    title="Show all moods"
+                    title={vibeMapRu.filters.showAllMoods}
                     className="inline-flex items-center h-9 px-3 rounded-full border border-white/10 text-xs text-gray-300 hover:bg-white/10 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
                 >
-                    All
+                    {vibeMapRu.filters.all}
                 </button>
             </div>
-            <p className="mt-1.5 text-xs text-gray-400">shift-click to solo</p>
+            <p className="mt-1.5 text-xs text-gray-400">
+                {vibeMapRu.filters.soloHint}
+            </p>
         </>
     );
 }
@@ -269,16 +274,16 @@ function FilterRanges({ filters }: { filters: FiltersSlice }) {
     return (
         <>
             <DualRange
-                label="Energy"
-                lowLabel="calm"
-                highLabel="intense"
+                label={vibeMapRu.filters.energy}
+                lowLabel={vibeMapRu.filters.calm}
+                highLabel={vibeMapRu.filters.intense}
                 value={filters.energyRange}
                 onChange={filters.setEnergyRange}
             />
             <DualRange
-                label="Mood"
-                lowLabel="sad"
-                highLabel="happy"
+                label={vibeMapRu.filters.mood}
+                lowLabel={vibeMapRu.filters.sad}
+                highLabel={vibeMapRu.filters.happy}
                 value={filters.valenceRange}
                 onChange={filters.setValenceRange}
             />

@@ -8,11 +8,12 @@ import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Music2 } from "lucide-react";
 import { api } from "@/lib/api";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { frontendLogger } from "@/lib/logger";
 import type { TidalGenre } from "@/hooks/useQueries";
+import { pluralRu } from "@/lib/i18n/ru";
 
 interface GenrePlaylist {
     playlistId: string;
@@ -98,7 +99,7 @@ export function TidalMoodsGenresSection({
             frontendLogger.warn("Failed to load TIDAL genre playlists", error);
             setPlaylists([]);
             setLoadError(
-                "Failed to load playlists. Try another mood or genre.",
+                "Не удалось загрузить плейлисты. Выберите другое настроение или жанр.",
             );
         } finally {
             if (thisRequest === requestIdRef.current) {
@@ -127,7 +128,7 @@ export function TidalMoodsGenresSection({
                             onClick={handleBack}
                             className="px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-medium hover:bg-white/20 transition-colors"
                         >
-                            &larr; Back
+                            &larr; Назад
                         </button>
                         <h2 className="text-xl font-bold text-white">
                             {activeTitle}
@@ -168,7 +169,12 @@ export function TidalMoodsGenresSection({
                                     </h3>
                                     {item.numTracks > 0 && (
                                         <p className="text-xs text-gray-400 truncate">
-                                            {item.numTracks} tracks
+                                            {item.numTracks}{" "}
+                                            {pluralRu(item.numTracks, [
+                                                "трек",
+                                                "трека",
+                                                "треков",
+                                            ])}
                                         </p>
                                     )}
                                 </Link>
@@ -180,7 +186,7 @@ export function TidalMoodsGenresSection({
                         <div className="flex flex-col items-center justify-center py-20 text-center">
                             <Music2 className="w-12 h-12 text-gray-400 mb-4" />
                             <h3 className="text-lg font-medium text-white mb-2">
-                                Unable to load playlists
+                                Не удалось загрузить плейлисты
                             </h3>
                             <p className="text-sm text-gray-400">{loadError}</p>
                         </div>
@@ -192,10 +198,10 @@ export function TidalMoodsGenresSection({
                             <div className="flex flex-col items-center justify-center py-20 text-center">
                                 <Music2 className="w-12 h-12 text-gray-400 mb-4" />
                                 <h3 className="text-lg font-medium text-white mb-2">
-                                    No playlists found
+                                    Плейлисты не найдены
                                 </h3>
                                 <p className="text-sm text-gray-400">
-                                    Try another mood or genre.
+                                    Выберите другое настроение или жанр.
                                 </p>
                             </div>
                         )}
@@ -209,7 +215,7 @@ export function TidalMoodsGenresSection({
             {/* Mood Pills */}
             {moods.length > 0 && (
                 <section>
-                    <SectionHeader title="Moods" badge={<TidalBadge />} />
+                    <SectionHeader title="Настроения" badge={<TidalBadge />} />
                     <PillRow items={moods} onPillClick={handlePillClick} />
                 </section>
             )}
@@ -217,7 +223,7 @@ export function TidalMoodsGenresSection({
             {/* Genre Pills */}
             {genres.length > 0 && (
                 <section>
-                    <SectionHeader title="Genres" badge={<TidalBadge />} />
+                    <SectionHeader title="Жанры" badge={<TidalBadge />} />
                     <PillRow items={genres} onPillClick={handlePillClick} />
                 </section>
             )}

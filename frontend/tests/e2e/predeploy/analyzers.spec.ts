@@ -10,7 +10,9 @@ test.describe("Analyzers", () => {
         await expect(page.locator("body")).toBeVisible();
 
         // Should see the main navigation
-        await expect(page.locator("text=Library")).toBeVisible({
+        await expect(
+            page.getByText("Коллекция", { exact: true }).first(),
+        ).toBeVisible({
             timeout: 5000,
         });
     });

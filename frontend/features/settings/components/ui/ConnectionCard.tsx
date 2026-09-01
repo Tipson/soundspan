@@ -26,10 +26,10 @@ export function ConnectionCard({
     isLoading,
 }: ConnectionCardProps) {
     return (
-        <div className="flex items-center justify-between py-4 px-4 bg-surface-hover rounded-lg">
-            <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-4 rounded-2xl border border-line bg-surface-elevated/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
                 {/* Icon */}
-                <div className="w-10 h-10 rounded-full bg-surface-highlight flex items-center justify-center overflow-hidden">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-highlight">
                     {typeof icon === "string" ? (
                         <Image
                             src={icon}
@@ -45,17 +45,17 @@ export function ConnectionCard({
                 </div>
 
                 {/* Text */}
-                <div>
-                    <div className="text-sm font-medium text-white">
+                <div className="min-w-0">
+                    <div className="text-sm font-semibold text-content">
                         {title}
                     </div>
                     {connected && connectedAs ? (
-                        <div className="text-xs text-gray-400">
-                            Connected as{" "}
-                            <span className="text-white">{connectedAs}</span>
+                        <div className="mt-1 text-xs text-content-muted">
+                            Подключено как{" "}
+                            <span className="text-content">{connectedAs}</span>
                         </div>
                     ) : description ? (
-                        <div className="text-xs text-gray-400">
+                        <div className="mt-1 text-xs leading-5 text-content-muted">
                             {description}
                         </div>
                     ) : null}
@@ -67,16 +67,16 @@ export function ConnectionCard({
                 onClick={connected ? onDisconnect : onConnect}
                 disabled={isLoading}
                 className={`
-                    px-4 py-1.5 text-sm font-medium rounded-full transition-colors
+                    inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors
                     ${isLoading ? "opacity-50 cursor-not-allowed" : ""}
                     ${
                         connected
-                            ? "bg-transparent border border-gray-600 text-white hover:border-white hover:scale-105"
-                            : "bg-white text-black hover:scale-105"
+                            ? "border border-line-muted bg-transparent text-content hover:border-white/30 hover:bg-white/[0.05]"
+                            : "bg-brand text-black hover:bg-brand-hover"
                     }
                 `}
             >
-                {isLoading ? "..." : connected ? "Disconnect" : "Connect"}
+                {isLoading ? "…" : connected ? "Отключить" : "Подключить"}
             </button>
         </div>
     );

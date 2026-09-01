@@ -54,9 +54,10 @@ export function WithNotifications<TBase extends ApiClientConstructor>(
             limit: number = 20,
             signal?: AbortSignal,
             source: "all" | "local" | "peers" = "all",
+            offset: number = 0,
         ) {
             return this.request<ApiData>(
-                `/search?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}&source=${source}`,
+                `/search?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}&offset=${offset}&source=${source}`,
                 { signal },
             );
         }

@@ -3,7 +3,6 @@ import { logger } from "./logger";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { AppError, ErrorCode, ErrorCategory } from "./errors";
-import { getSystemSettings } from "./systemSettings";
 import { parseEnvInt } from "./envParsers";
 
 const ffmpegLogger = logger.child("FFmpeg");
@@ -73,6 +72,12 @@ export interface MusicConfig {
  * Validate and load music configuration
  */
 export async function validateMusicConfig(): Promise<MusicConfig> {
+    // Loading systemSettings at module initialization pulls in Prisma. Config
+    // must first resolve DATABASE_URL from the split-runtime POSTGRES_* values,
+    // otherwise the adapter is permanently created with an empty connection
+    // string and falls back to 127.0.0.1. Keep this dependency lazy so config
+    // bootstrap completes before database-backed settings are read.
+    const { getSystemSettings } = await import("./systemSettings");
     // Get system settings to use configured paths
     const settings = await getSystemSettings();
 

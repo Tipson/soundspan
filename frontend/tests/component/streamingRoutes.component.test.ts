@@ -64,6 +64,17 @@ const artistState = {
         { id: "owned-1", title: "Owned Album", owned: true },
         { id: "available-1", title: "Available Album", owned: false },
     ] as Array<Record<string, unknown>>,
+    providerAlbums: [] as Array<Record<string, unknown>>,
+    artistProvider: null as "ytmusic" | null,
+    providerCatalogTracks: [] as Array<Record<string, unknown>>,
+    libraryArtistTracks: [] as Array<Record<string, unknown>>,
+    providerCatalogLoading: false,
+    providerCatalogHasNextPage: false,
+    providerFallbackData: null as {
+        artist: { topTracks?: Array<Record<string, unknown>> };
+        providerAlbums: Array<Record<string, unknown>>;
+    } | null,
+    providerFallbackLoading: false,
     tidalTopTracks: {
         enrichedTopTracks: null as unknown[] | null,
         isMatching: false,
@@ -74,6 +85,10 @@ const artistState = {
         isMatching: false,
         isStatusResolved: true,
     },
+};
+
+const navigationState = {
+    artistView: null as string | null,
 };
 
 const discoverState = {
@@ -129,19 +144,34 @@ const capture = {
     artistPopularTracks: null as Record<string, unknown> | null,
     artistActionBar: null as Record<string, unknown> | null,
     discoverActionBar: null as Record<string, unknown> | null,
+    providerAlbums: null as Record<string, unknown> | null,
+    providerFallbackEnabled: false,
+    playedTracks: null as Array<Record<string, unknown>> | null,
+    playedStartIndex: null as number | null,
+    playNowTrack: null as Record<string, unknown> | null,
+    albumPlayAlbum: null as Record<string, unknown> | null,
+    albumPlayStartIndex: null as number | null,
+    albumPlayNowTrack: null as Record<string, unknown> | null,
 };
 
 mock.module("next/navigation", {
-    exports: {
+    namedExports: {
         useRouter: () => ({
             push: () => undefined,
             back: () => undefined,
         }),
+        usePathname: () => "/artist/artist-1",
+        useSearchParams: () =>
+            new URLSearchParams(
+                navigationState.artistView
+                    ? `view=${navigationState.artistView}`
+                    : "",
+            ),
     },
 });
 
 mock.module("@/lib/audio-context", {
-    exports: {
+    namedExports: {
         useAudioState: () => ({
             currentTrack: null,
         }),
@@ -153,14 +183,22 @@ mock.module("@/lib/audio-context", {
         }),
         useAudioControls: () => ({
             pause: () => undefined,
-            playTracks: () => undefined,
-            playNow: () => undefined,
+            playTracks: (
+                tracks: Array<Record<string, unknown>>,
+                startIndex = 0,
+            ) => {
+                capture.playedTracks = tracks;
+                capture.playedStartIndex = startIndex;
+            },
+            playNow: (track: Record<string, unknown>) => {
+                capture.playNowTrack = track;
+            },
         }),
     },
 });
 
 mock.module("@/lib/download-context", {
-    exports: {
+    namedExports: {
         useDownloadContext: () => ({
             isPendingByMbid: () => false,
             downloadsEnabled: true,
@@ -169,7 +207,7 @@ mock.module("@/lib/download-context", {
 });
 
 mock.module("@/lib/listen-together-context", {
-    exports: {
+    namedExports: {
         useListenTogether: () => ({
             isInGroup: false,
         }),
@@ -177,7 +215,7 @@ mock.module("@/lib/listen-together-context", {
 });
 
 mock.module("@/lib/features-context", {
-    exports: {
+    namedExports: {
         useFeatures: () => ({
             musicCNN: false,
             vibeEmbeddings: false,
@@ -191,7 +229,7 @@ mock.module("@/lib/features-context", {
 });
 
 mock.module("@/hooks/useImageColor", {
-    exports: {
+    namedExports: {
         useImageColor: () => ({
             colors: {
                 vibrant: "#4488ee",
@@ -202,7 +240,7 @@ mock.module("@/hooks/useImageColor", {
 });
 
 mock.module("@/lib/api", {
-    exports: {
+    namedExports: {
         api: {
             getCoverArtUrl: (id: string, size: number) =>
                 `/cover/${encodeURIComponent(id)}?size=${size}`,
@@ -220,27 +258,27 @@ mock.module("@/lib/api", {
 });
 
 mock.module("@/components/ui/LoadingScreen", {
-    exports: {
+    namedExports: {
         LoadingScreen: ({ message }: { message?: string }) =>
             React.createElement("div", null, "loading-screen", message ?? ""),
     },
 });
 
 mock.module("@/components/ui/GradientSpinner", {
-    exports: {
+    namedExports: {
         GradientSpinner: marker("gradient-spinner"),
     },
 });
 
 mock.module("lucide-react", {
-    exports: {
+    namedExports: {
         RefreshCw: Icon,
         Music2: Icon,
     },
 });
 
 mock.module("sonner", {
-    exports: {
+    namedExports: {
         toast: {
             success: () => undefined,
             error: () => undefined,
@@ -250,7 +288,7 @@ mock.module("sonner", {
 });
 
 mock.module("@/features/album/hooks/useAlbumData", {
-    exports: {
+    namedExports: {
         useAlbumData: () => ({
             album: albumState.album,
             source: albumState.source,
@@ -262,7 +300,7 @@ mock.module("@/features/album/hooks/useAlbumData", {
 });
 
 mock.module("@/features/album/hooks/useTidalGapFill", {
-    exports: {
+    namedExports: {
         useTidalGapFill: () => ({
             enrichedTracks: albumState.tidalGapFill.enrichedTracks,
             isMatching: albumState.tidalGapFill.isMatching,
@@ -272,7 +310,7 @@ mock.module("@/features/album/hooks/useTidalGapFill", {
 });
 
 mock.module("@/features/album/hooks/useYtMusicGapFill", {
-    exports: {
+    namedExports: {
         useYtMusicGapFill: () => ({
             enrichedTracks: albumState.ytGapFill.enrichedTracks,
             isMatching: albumState.ytGapFill.isMatching,
@@ -282,7 +320,7 @@ mock.module("@/features/album/hooks/useYtMusicGapFill", {
 });
 
 mock.module("@/features/album/hooks/useAlbumRequest", {
-    exports: {
+    namedExports: {
         useAlbumRequest: () => ({
             requestsEnabled: false,
             isRequestedAlbum: false,
@@ -293,11 +331,16 @@ mock.module("@/features/album/hooks/useAlbumRequest", {
 });
 
 mock.module("@/features/album/hooks/useAlbumActions", {
-    exports: {
+    namedExports: {
         useAlbumActions: () => ({
-            playAlbum: () => undefined,
+            playAlbum: (album: Record<string, unknown>, startIndex = 0) => {
+                capture.albumPlayAlbum = album;
+                capture.albumPlayStartIndex = startIndex;
+            },
             shufflePlay: () => undefined,
-            playTrackNow: () => undefined,
+            playTrackNow: (track: Record<string, unknown>) => {
+                capture.albumPlayNowTrack = track;
+            },
             addAllToQueue: () => undefined,
             downloadAlbum: () => undefined,
             setAlbumPreference: async () => undefined,
@@ -308,19 +351,19 @@ mock.module("@/features/album/hooks/useAlbumActions", {
 });
 
 mock.module("@/components/ui/PlaylistSelector", {
-    exports: {
+    namedExports: {
         PlaylistSelector: marker("playlist-selector"),
     },
 });
 
 mock.module("@/features/album/components/AlbumHero", {
-    exports: {
+    namedExports: {
         AlbumHero: marker("album-hero"),
     },
 });
 
 mock.module("@/features/album/components/AlbumActionBar", {
-    exports: {
+    namedExports: {
         AlbumActionBar: (props: Record<string, unknown>) => {
             capture.albumActionBar = props;
             return React.createElement("div", null, "album-action-bar");
@@ -329,7 +372,7 @@ mock.module("@/features/album/components/AlbumActionBar", {
 });
 
 mock.module("@/features/album/components/TrackList", {
-    exports: {
+    namedExports: {
         TrackList: (props: Record<string, unknown>) => {
             capture.albumTrackList = props;
             return React.createElement("div", null, "album-track-list");
@@ -338,13 +381,13 @@ mock.module("@/features/album/components/TrackList", {
 });
 
 mock.module("@/features/album/components/SimilarAlbums", {
-    exports: {
+    namedExports: {
         SimilarAlbums: marker("similar-albums"),
     },
 });
 
 mock.module("@/features/artist/hooks/useArtistAlbumRequests", {
-    exports: {
+    namedExports: {
         useArtistAlbumRequests: () => ({
             requestsEnabled: false,
             isRequestableAlbum: () => false,
@@ -356,10 +399,12 @@ mock.module("@/features/artist/hooks/useArtistAlbumRequests", {
 });
 
 mock.module("@/features/artist/hooks/useArtistData", {
-    exports: {
+    namedExports: {
         useArtistData: () => ({
             artist: artistState.artist,
             albums: artistState.albums,
+            providerAlbums: artistState.providerAlbums,
+            artistProvider: artistState.artistProvider,
             loading: artistState.loading,
             detailsLoading: artistState.detailsLoading,
             error: artistState.error,
@@ -371,8 +416,52 @@ mock.module("@/features/artist/hooks/useArtistData", {
     },
 });
 
+mock.module("@/features/artist/hooks/useArtistTracks", {
+    namedExports: {
+        useArtistTracks: () => ({
+            tracks: artistState.libraryArtistTracks,
+            total: artistState.libraryArtistTracks.length,
+            isLoading: false,
+            hasNextPage: false,
+            isFetchingNextPage: false,
+            fetchNextPage: async () => undefined,
+        }),
+    },
+});
+
+mock.module("@/features/artist/hooks/useProviderArtistTracks", {
+    namedExports: {
+        useProviderArtistTracks: () => ({
+            tracks: artistState.providerCatalogTracks,
+            isLoading: artistState.providerCatalogLoading,
+            failedReleaseCount: 0,
+            loadedReleaseCount: artistState.providerAlbums.length,
+            totalReleaseCount: artistState.providerAlbums.length,
+            hasNextPage: artistState.providerCatalogHasNextPage,
+            isFetchingNextPage: false,
+            fetchNextPage: () => undefined,
+        }),
+    },
+});
+
+mock.module("@/features/artist/hooks/useProviderArtistFallback", {
+    namedExports: {
+        useProviderArtistFallback: (_artistName: string, enabled: boolean) => {
+            capture.providerFallbackEnabled = enabled;
+            return {
+                data: artistState.providerFallbackData,
+                channelId: artistState.providerFallbackData
+                    ? "UCprovider"
+                    : null,
+                isLoading: artistState.providerFallbackLoading,
+                isError: false,
+            };
+        },
+    },
+});
+
 mock.module("@/features/artist/hooks/useArtistActions", {
-    exports: {
+    namedExports: {
         useArtistActions: () => ({
             playAll: () => undefined,
             shufflePlay: () => undefined,
@@ -382,7 +471,7 @@ mock.module("@/features/artist/hooks/useArtistActions", {
 });
 
 mock.module("@/features/artist/hooks/useDownloadActions", {
-    exports: {
+    namedExports: {
         useDownloadActions: () => ({
             downloadArtist: () => undefined,
             downloadAlbum: () => undefined,
@@ -391,7 +480,7 @@ mock.module("@/features/artist/hooks/useDownloadActions", {
 });
 
 mock.module("@/features/artist/hooks/useTidalTopTracks", {
-    exports: {
+    namedExports: {
         useTidalTopTracks: () => ({
             enrichedTopTracks: artistState.tidalTopTracks.enrichedTopTracks,
             isMatching: artistState.tidalTopTracks.isMatching,
@@ -401,7 +490,7 @@ mock.module("@/features/artist/hooks/useTidalTopTracks", {
 });
 
 mock.module("@/features/artist/hooks/useYtMusicTopTracks", {
-    exports: {
+    namedExports: {
         useYtMusicTopTracks: () => ({
             enrichedTopTracks: artistState.ytTopTracks.enrichedTopTracks,
             isMatching: artistState.ytTopTracks.isMatching,
@@ -411,13 +500,13 @@ mock.module("@/features/artist/hooks/useYtMusicTopTracks", {
 });
 
 mock.module("@/features/artist/components/ArtistHero", {
-    exports: {
+    namedExports: {
         ArtistHero: marker("artist-hero"),
     },
 });
 
 mock.module("@/features/artist/components/ArtistActionBar", {
-    exports: {
+    namedExports: {
         ArtistActionBar: (props: Record<string, unknown>) => {
             capture.artistActionBar = props;
             return React.createElement("div", null, "artist-action-bar");
@@ -426,13 +515,13 @@ mock.module("@/features/artist/components/ArtistActionBar", {
 });
 
 mock.module("@/features/artist/components/ArtistBio", {
-    exports: {
+    namedExports: {
         ArtistBio: marker("artist-bio"),
     },
 });
 
 mock.module("@/features/artist/components/PopularTracks", {
-    exports: {
+    namedExports: {
         PopularTracks: (props: Record<string, unknown>) => {
             capture.artistPopularTracks = props;
             return React.createElement("div", null, "popular-tracks");
@@ -441,31 +530,40 @@ mock.module("@/features/artist/components/PopularTracks", {
 });
 
 mock.module("@/features/artist/components/Discography", {
-    exports: {
+    namedExports: {
         Discography: marker("discography"),
     },
 });
 
 mock.module("@/features/artist/components/AvailableAlbums", {
-    exports: {
+    namedExports: {
         AvailableAlbums: marker("available-albums"),
     },
 });
 
 mock.module("@/features/artist/components/SimilarArtists", {
-    exports: {
+    namedExports: {
         SimilarArtists: marker("similar-artists"),
     },
 });
 
+mock.module("@/features/search/components/ProviderAlbumsGrid", {
+    namedExports: {
+        ProviderAlbumsGrid: (props: Record<string, unknown>) => {
+            capture.providerAlbums = props;
+            return React.createElement("div", null, "provider-albums");
+        },
+    },
+});
+
 mock.module("@/components/ui/ReleaseSelectionModal", {
-    exports: {
+    namedExports: {
         ReleaseSelectionModal: marker("release-selection-modal"),
     },
 });
 
 mock.module("@/features/discover/hooks/useDiscoverData", {
-    exports: {
+    namedExports: {
         useDiscoverData: () => ({
             playlist: discoverState.playlist,
             config: discoverState.config,
@@ -481,7 +579,7 @@ mock.module("@/features/discover/hooks/useDiscoverData", {
 });
 
 mock.module("@/features/discover/hooks/useDiscoverProviderGapFill", {
-    exports: {
+    namedExports: {
         useDiscoverProviderGapFill: () => ({
             tracks:
                 discoverState.providerTracks ||
@@ -496,7 +594,7 @@ mock.module("@/features/discover/hooks/useDiscoverProviderGapFill", {
 });
 
 mock.module("@/features/discover/hooks/useDiscoverActions", {
-    exports: {
+    namedExports: {
         useDiscoverActions: () => ({
             handleGenerate: () => undefined,
             handlePlayPlaylist: () => undefined,
@@ -507,7 +605,7 @@ mock.module("@/features/discover/hooks/useDiscoverActions", {
 });
 
 mock.module("@/features/discover/hooks/usePreviewPlayer", {
-    exports: {
+    namedExports: {
         usePreviewPlayer: () => ({
             currentPreview: null,
             handleTogglePreview: () => undefined,
@@ -516,13 +614,13 @@ mock.module("@/features/discover/hooks/usePreviewPlayer", {
 });
 
 mock.module("@/features/discover/components/DiscoverHero", {
-    exports: {
+    namedExports: {
         DiscoverHero: marker("discover-hero"),
     },
 });
 
 mock.module("@/features/discover/components/DiscoverActionBar", {
-    exports: {
+    namedExports: {
         DiscoverActionBar: (props: Record<string, unknown>) => {
             capture.discoverActionBar = props;
             return React.createElement("div", null, "discover-action-bar");
@@ -531,25 +629,25 @@ mock.module("@/features/discover/components/DiscoverActionBar", {
 });
 
 mock.module("@/features/discover/components/DiscoverSettings", {
-    exports: {
+    namedExports: {
         DiscoverSettings: marker("discover-settings"),
     },
 });
 
 mock.module("@/features/discover/components/TrackList", {
-    exports: {
+    namedExports: {
         TrackList: marker("discover-track-list"),
     },
 });
 
 mock.module("@/features/discover/components/UnavailableAlbums", {
-    exports: {
+    namedExports: {
         UnavailableAlbums: marker("unavailable-albums"),
     },
 });
 
 mock.module("@/features/discover/components/HowItWorks", {
-    exports: {
+    namedExports: {
         HowItWorks: marker("how-it-works"),
     },
 });
@@ -599,6 +697,15 @@ beforeEach(() => {
         { id: "owned-1", title: "Owned Album", owned: true },
         { id: "available-1", title: "Available Album", owned: false },
     ];
+    artistState.providerAlbums = [];
+    artistState.artistProvider = null;
+    artistState.providerCatalogTracks = [];
+    artistState.libraryArtistTracks = [];
+    artistState.providerCatalogLoading = false;
+    artistState.providerCatalogHasNextPage = false;
+    artistState.providerFallbackData = null;
+    artistState.providerFallbackLoading = false;
+    navigationState.artistView = null;
     artistState.tidalTopTracks = {
         enrichedTopTracks: null,
         isMatching: false,
@@ -646,6 +753,14 @@ beforeEach(() => {
     capture.artistPopularTracks = null;
     capture.artistActionBar = null;
     capture.discoverActionBar = null;
+    capture.providerAlbums = null;
+    capture.providerFallbackEnabled = false;
+    capture.playedTracks = null;
+    capture.playedStartIndex = null;
+    capture.playNowTrack = null;
+    capture.albumPlayAlbum = null;
+    capture.albumPlayStartIndex = null;
+    capture.albumPlayNowTrack = null;
 });
 
 function resolvedParams(id: string) {
@@ -675,9 +790,9 @@ test("album route shows error state when album payload is missing", async () => 
         React.createElement(AlbumPage, { params: resolvedParams("album-404") }),
     );
 
-    assert.match(html, /Error Loading Album/);
-    assert.match(html, /Album not found/);
-    assert.match(html, /Back to Albums/);
+    assert.match(html, /Не удалось загрузить альбом/);
+    assert.match(html, /Альбом не найден/);
+    assert.match(html, /Вернуться к альбомам/);
 });
 
 test("album route renders placeholders while details are loading without tracks", async () => {
@@ -723,6 +838,38 @@ test("album route forwards provider matching and discovery fallback source to ch
     assert.equal(capture.albumActionBar?.source, "discovery");
 });
 
+test("album track selection starts the album queue at the selected row", async () => {
+    const tracks = [
+        { id: "album-track-1", title: "First", duration: 180 },
+        { id: "album-track-2", title: "Second", duration: 181 },
+        { id: "album-track-3", title: "Third", duration: 182 },
+    ];
+    albumState.album = {
+        id: "album-queue",
+        title: "Queue Album",
+        artist: { id: "artist-queue", name: "Queue Artist" },
+        tracks,
+        similarAlbums: [],
+    };
+
+    const AlbumPage = (await import("../../app/album/[id]/page")).default;
+    renderToStaticMarkup(
+        React.createElement(AlbumPage, {
+            params: resolvedParams("album-queue"),
+        }),
+    );
+
+    const onPlayTrack = capture.albumTrackList?.onPlayTrack as
+        | ((track: Record<string, unknown>, index: number) => void)
+        | undefined;
+    assert.ok(onPlayTrack);
+    onPlayTrack(tracks[1], 1);
+
+    assert.equal(capture.albumPlayAlbum?.id, "album-queue");
+    assert.equal(capture.albumPlayStartIndex, 1);
+    assert.equal(capture.albumPlayNowTrack, null);
+});
+
 test("artist route shows loading state for initial artist request", async () => {
     artistState.loading = true;
 
@@ -730,7 +877,7 @@ test("artist route shows loading state for initial artist request", async () => 
     const html = renderToStaticMarkup(React.createElement(ArtistPage));
 
     assert.match(html, /loading-screen/);
-    assert.match(html, /Loading artist/);
+    assert.match(html, /Загружаем исполнителя/);
 });
 
 test("artist route shows not-found fallback when data fails", async () => {
@@ -740,8 +887,8 @@ test("artist route shows not-found fallback when data fails", async () => {
     const ArtistPage = (await import("../../app/artist/[id]/page")).default;
     const html = renderToStaticMarkup(React.createElement(ArtistPage));
 
-    assert.match(html, /Artist Not Found/);
-    assert.match(html, /Go Back/);
+    assert.match(html, /Исполнитель не найден/);
+    assert.match(html, /Назад/);
 });
 
 test("artist route shows progressive placeholders for library artist with details still loading", async () => {
@@ -758,9 +905,9 @@ test("artist route shows progressive placeholders for library artist with detail
     const ArtistPage = (await import("../../app/artist/[id]/page")).default;
     const html = renderToStaticMarkup(React.createElement(ArtistPage));
 
-    assert.match(html, /Popular/);
-    assert.match(html, /Albums Available/);
-    assert.match(html, /Fans Also Like/);
+    assert.match(html, /Популярные треки/);
+    assert.match(html, /Доступные альбомы/);
+    assert.match(html, /Похожие исполнители/);
     assert.doesNotMatch(html, /popular-tracks/);
 });
 
@@ -794,9 +941,339 @@ test("artist route renders popular tracks and provider matching metadata", async
     assert.equal(capture.artistPopularTracks?.isProviderMatching, true);
     assert.equal(
         capture.artistPopularTracks?.popularHref,
-        "/artist/artist-1/popular",
+        "/artist/artist-1?view=tracks",
     );
     assert.equal(capture.artistActionBar?.source, "discovery");
+});
+
+test("artist route puts playable music before the long About section", async () => {
+    artistState.source = "discovery";
+    artistState.artist = {
+        id: "artist-1",
+        name: "Artist One",
+        bio: "A long artist biography",
+        topTracks: [
+            {
+                id: "top-1",
+                title: "Top Track",
+                duration: 200,
+                streamSource: "youtube",
+                youtubeVideoId: "top-track",
+            },
+        ],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.ok(html.indexOf("popular-tracks") < html.indexOf("artist-bio"));
+    assert.doesNotMatch(html, /data-artist-page-canvas="open"[^>]*\bpb-/);
+});
+
+test("artist popular-track selection starts the visible artist queue at that row", async () => {
+    const topTracks = [
+        {
+            id: "yt:artist-track-1",
+            title: "First",
+            duration: 200,
+            streamSource: "youtube",
+            youtubeVideoId: "artist-track-1",
+            artist: { id: "artist-queue", name: "Queue Artist" },
+            album: { title: "Singles" },
+        },
+        {
+            id: "yt:artist-track-2",
+            title: "Second",
+            duration: 201,
+            streamSource: "youtube",
+            youtubeVideoId: "artist-track-2",
+            artist: { id: "artist-queue", name: "Queue Artist" },
+            album: { title: "Singles" },
+        },
+        {
+            id: "yt:artist-track-3",
+            title: "Third",
+            duration: 202,
+            streamSource: "youtube",
+            youtubeVideoId: "artist-track-3",
+            artist: { id: "artist-queue", name: "Queue Artist" },
+            album: { title: "Singles" },
+        },
+    ];
+    artistState.source = "discovery";
+    artistState.artistProvider = "ytmusic";
+    artistState.artist = {
+        id: "ytartist:artist-queue",
+        name: "Queue Artist",
+        topTracks,
+        similarArtists: [],
+    };
+    artistState.albums = [];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    renderToStaticMarkup(React.createElement(ArtistPage));
+
+    const onPlayTrack = capture.artistPopularTracks?.onPlayTrack as
+        | ((
+              track: Record<string, unknown>,
+              index: number,
+              visibleTracks: Array<Record<string, unknown>>,
+          ) => void)
+        | undefined;
+    assert.ok(onPlayTrack);
+    onPlayTrack(topTracks[1], 1, topTracks);
+
+    assert.deepEqual(
+        capture.playedTracks?.map((track) => track.youtubeVideoId),
+        ["artist-track-1", "artist-track-2", "artist-track-3"],
+    );
+    assert.equal(capture.playedStartIndex, 1);
+    assert.equal(capture.playNowTrack, null);
+});
+
+test("YouTube Music artist route exposes playable tracks and provider albums", async () => {
+    artistState.source = "discovery";
+    artistState.artistProvider = "ytmusic";
+    artistState.artist = {
+        id: "ytartist:UCmassiveattack",
+        name: "Massive Attack",
+        topTracks: [
+            {
+                id: "yt:teardrop",
+                title: "Teardrop",
+                duration: 331,
+                streamSource: "youtube",
+                youtubeVideoId: "teardrop",
+                artist: {
+                    id: "ytartist:UCmassiveattack",
+                    name: "Massive Attack",
+                },
+                album: { title: "Mezzanine" },
+            },
+        ],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerAlbums = [
+        {
+            type: "album",
+            id: "MPREb_mezzanine",
+            browseId: "MPREb_mezzanine",
+            name: "Mezzanine",
+            artist: "Massive Attack",
+            provider: "ytmusic",
+        },
+    ];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.match(html, /provider-albums/);
+    assert.equal(
+        (capture.providerAlbums?.albums as Array<{ browseId: string }>)[0]
+            .browseId,
+        "MPREb_mezzanine",
+    );
+    assert.equal(
+        capture.artistPopularTracks?.popularHref,
+        "/artist/artist-1?view=tracks",
+    );
+    assert.equal(capture.artistActionBar?.downloadsEnabled, false);
+
+    (capture.artistActionBar?.onPlayAll as () => void)();
+    assert.equal(capture.playedTracks?.[0]?.youtubeVideoId, "teardrop");
+    assert.equal(capture.playedTracks?.[0]?.streamSource, "youtube");
+});
+
+test("YouTube Music Tracks view waits for release aggregation instead of showing a false empty state", async () => {
+    navigationState.artistView = "tracks";
+    artistState.source = "discovery";
+    artistState.artistProvider = "ytmusic";
+    artistState.artist = {
+        id: "ytartist:UClinkinpark",
+        name: "Linkin Park",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.providerAlbums = Array.from({ length: 16 }, (_, index) => ({
+        type: "album",
+        id: `MPREb_${index}`,
+        browseId: `MPREb_${index}`,
+        name: `Release ${index}`,
+        artist: "Linkin Park",
+        provider: "ytmusic",
+    }));
+    artistState.providerCatalogLoading = true;
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const loadingHtml = renderToStaticMarkup(React.createElement(ArtistPage));
+    assert.match(loadingHtml, /Популярные треки/);
+    assert.doesNotMatch(loadingHtml, /Нет доступных треков/);
+
+    artistState.providerCatalogLoading = false;
+    artistState.providerCatalogHasNextPage = true;
+    const partialHtml = renderToStaticMarkup(React.createElement(ArtistPage));
+    assert.match(partialHtml, /Показать ещё треки/);
+    assert.match(
+        partialHtml,
+        /aria-label="Загрузить следующую часть каталога треков"/,
+    );
+    assert.match(partialHtml, /Каталог загружается постепенно/);
+    assert.doesNotMatch(partialHtml, /Нет доступных треков/);
+
+    artistState.providerCatalogHasNextPage = false;
+    artistState.providerCatalogLoading = false;
+    artistState.providerCatalogTracks = [
+        {
+            id: "yt:from-zero",
+            title: "From Zero",
+            duration: 200,
+            streamSource: "youtube",
+            youtubeVideoId: "from-zero",
+            artist: { name: "Linkin Park" },
+            album: { title: "From Zero" },
+        },
+    ];
+    const loadedHtml = renderToStaticMarkup(React.createElement(ArtistPage));
+    assert.match(loadedHtml, /popular-tracks/);
+    assert.doesNotMatch(loadedHtml, /Нет доступных треков/);
+});
+
+test("local artist Tracks view merges indexed and exact provider tracks", async () => {
+    navigationState.artistView = "tracks";
+    artistState.source = "library";
+    artistState.artist = {
+        id: "local-linkin-park",
+        name: "Linkin Park",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.libraryArtistTracks = [
+        {
+            id: "local-numb",
+            title: "Numb",
+            duration: 187,
+            filePath: "/music/Numb.flac",
+            artist: { name: "Linkin Park" },
+            album: { title: "Meteora" },
+        },
+    ];
+    artistState.providerFallbackData = {
+        artist: { topTracks: [] },
+        providerAlbums: [
+            {
+                type: "album",
+                id: "MPREb_from-zero",
+                browseId: "MPREb_from-zero",
+                name: "From Zero",
+                artist: "Linkin Park",
+                provider: "ytmusic",
+            },
+        ],
+    };
+    artistState.providerCatalogTracks = [
+        {
+            id: "yt:the-emptiness-machine",
+            title: "The Emptiness Machine",
+            duration: 190,
+            streamSource: "youtube",
+            youtubeVideoId: "the-emptiness-machine",
+            artist: { name: "Linkin Park" },
+            album: { title: "From Zero" },
+        },
+    ];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.equal(capture.providerFallbackEnabled, true);
+    assert.match(html, /popular-tracks/);
+    assert.deepEqual(
+        (capture.artistPopularTracks?.tracks as Array<{ title: string }>).map(
+            (track) => track.title,
+        ),
+        ["Numb", "The Emptiness Machine"],
+    );
+    assert.doesNotMatch(html, /Нет доступных треков/);
+});
+
+test("local artist Overview actions use exact provider top tracks", async () => {
+    artistState.source = "library";
+    artistState.artist = {
+        id: "local-linkin-park",
+        name: "Linkin Park",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerFallbackData = {
+        artist: {
+            topTracks: [
+                {
+                    id: "yt:numb",
+                    title: "Numb",
+                    duration: 187,
+                    streamSource: "youtube",
+                    youtubeVideoId: "numb",
+                    artist: { name: "Linkin Park" },
+                    album: { title: "Meteora" },
+                },
+            ],
+        },
+        providerAlbums: [],
+    };
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.deepEqual(
+        (capture.artistPopularTracks?.tracks as Array<{ title: string }>).map(
+            (track) => track.title,
+        ),
+        ["Numb"],
+    );
+    (capture.artistActionBar?.onPlayAll as () => void)();
+    assert.equal(capture.playedTracks?.[0]?.youtubeVideoId, "numb");
+});
+
+test("local artist release views expose the exact provider catalog", async () => {
+    navigationState.artistView = "albums";
+    artistState.source = "library";
+    artistState.artist = {
+        id: "local-rammstein",
+        name: "Rammstein",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerFallbackData = {
+        artist: { topTracks: [] },
+        providerAlbums: [
+            {
+                type: "album",
+                id: "MPREb_mutter",
+                browseId: "MPREb_mutter",
+                name: "Mutter",
+                artist: "Rammstein",
+                provider: "ytmusic",
+            },
+        ],
+    };
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.equal(capture.providerFallbackEnabled, true);
+    assert.match(html, /provider-albums/);
+    assert.deepEqual(
+        (capture.providerAlbums?.albums as Array<{ browseId: string }>).map(
+            (album) => album.browseId,
+        ),
+        ["MPREb_mutter"],
+    );
 });
 
 test("discover route shows spinner while loading", async () => {
@@ -818,9 +1295,9 @@ test("discover route renders source mix and track list when playlist has tracks"
     const DiscoverPage = (await import("../../app/discover/page")).default;
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
-    assert.match(html, /Source mix: 1 local/);
-    assert.match(html, /2 TIDAL gap-fill/);
-    assert.match(html, /3 YouTube Music gap-fill/);
+    assert.match(html, /Источники: 1 на устройстве/);
+    assert.match(html, /2 TIDAL — дополнение/);
+    assert.match(html, /3 YouTube Music — дополнение/);
     assert.match(html, /discover-track-list/);
     assert.match(html, /how-it-works/);
 });
@@ -839,7 +1316,7 @@ test("discover route keeps unavailable albums visible while tracks are still res
     const DiscoverPage = (await import("../../app/discover/page")).default;
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
-    assert.match(html, /still finishing this week&#x27;s track list/);
+    assert.match(html, /Завершаем список треков на эту неделю/);
     assert.match(html, /unavailable-albums/);
 });
 
@@ -858,7 +1335,7 @@ test("discover route shows resolving state when generation is recent but playlis
     const DiscoverPage = (await import("../../app/discover/page")).default;
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
-    assert.match(html, /Loading your latest Discover Weekly/);
+    assert.match(html, /Загружаем свежие «Открытия недели»/);
 });
 
 test("discover route shows empty-call-to-action when no playlist exists yet", async () => {
@@ -876,7 +1353,7 @@ test("discover route shows empty-call-to-action when no playlist exists yet", as
     const DiscoverPage = (await import("../../app/discover/page")).default;
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
-    assert.match(html, /No Discover Weekly Yet/);
-    assert.match(html, /Generate Now/);
+    assert.match(html, /«Открытий недели» пока нет/);
+    assert.match(html, /Собрать сейчас/);
     assert.equal(capture.discoverActionBar?.isGenerating, false);
 });

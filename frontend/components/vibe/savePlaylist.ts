@@ -17,6 +17,10 @@
 
 import { api } from "@/lib/api";
 import { createFrontendLogger } from "@/lib/logger";
+import {
+    partiallySavedTracksMessage,
+    savedTracksMessage,
+} from "@/lib/i18n/vibeMapRu";
 
 const logger = createFrontendLogger("Vibe.savePlaylist");
 
@@ -102,28 +106,28 @@ export function describeSaveResult(
     if (failed === 0) {
         return {
             tone: "success",
-            message: `Saved ${result.added} track${result.added === 1 ? "" : "s"} to ${name}`,
+            message: savedTracksMessage(name, result.added),
         };
     }
     return {
         tone: "warning",
-        message: `Saved ${result.added} of ${result.added + failed} tracks to ${name} — ${failed} track${failed === 1 ? "" : "s"} couldn't be added`,
+        message: partiallySavedTracksMessage(name, result.added, failed),
     };
 }
 
 const MONTH_LABELS = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
+    "янв.",
+    "февр.",
+    "мар.",
+    "апр.",
+    "мая",
+    "июн.",
+    "июл.",
+    "авг.",
+    "сент.",
+    "окт.",
+    "нояб.",
+    "дек.",
 ] as const;
 
 /**

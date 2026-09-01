@@ -9,7 +9,7 @@ import { useAudioVolumeMode } from "@/lib/audio-volume-mode-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
 import { useStreamBitrate } from "@/hooks/useStreamBitrate";
-import Image from "next/image";
+import { CachedImage } from "@/components/ui/CachedImage";
 import Link from "next/link";
 import {
     Play,
@@ -23,29 +23,23 @@ import {
     ChevronUp,
     ChevronDown,
     Music as MusicIcon,
-    Shuffle,
+    Loader2,
+    RefreshCw,
     Repeat,
     Repeat1,
-    Loader2,
-    AudioWaveform,
-    RefreshCw,
-    Radio,
+    Shuffle,
 } from "lucide-react";
-import { useMemo, useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/utils/cn";
 import { formatTime, clampTime } from "@/utils/formatTime";
 import { SeekSlider } from "./SeekSlider";
 import { SyncBadge } from "@/components/player/SyncBadge";
-import { TrackPreferenceButtons } from "./TrackPreferenceButtons";
+import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaybackQualityBadgeWithStats } from "./PlaybackQualityBadgeWithStats";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
-import { useFeatures } from "@/lib/features-context";
-import { api } from "@/lib/api";
-import { toast } from "sonner";
-import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { APP_VERSION } from "@/lib/version";
 import { PeerBadge } from "@/components/ui/PeerBadge";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * FullPlayer - UI-only component for desktop bottom player
@@ -58,12 +52,10 @@ export function FullPlayer() {
         currentAudiobook,
         currentPodcast,
         playbackType,
+        queue,
         isShuffle,
         repeatMode,
         vibeMode,
-        vibeSourceFeatures,
-        queue,
-        currentIndex,
     } = useAudioState();
     const { volume, isMuted, playerMode } = useAudioVolumeMode();
 
@@ -91,55 +83,11 @@ export function FullPlayer() {
         toggleMute,
         toggleShuffle,
         toggleRepeat,
-        startVibeMode,
-        stopVibeMode,
-        setUpcoming,
         skipForward,
         skipBackward,
     } = useAudioControls();
     const preferenceTrackId =
         playbackType === "track" ? currentTrack?.id : undefined;
-
-    // Get current track's audio features for vibe comparison
-    const currentQueueItem = queue[currentIndex];
-    const currentTrackFeatures =
-        currentQueueItem && currentQueueItem.itemType !== "episode"
-            ? currentQueueItem.audioFeatures || null
-            : null;
-
-    // Calculate vibe match score (simplified version - compares key audio features)
-    const vibeMatchScore = useMemo(() => {
-        if (!vibeMode || !vibeSourceFeatures || !currentTrackFeatures)
-            return null;
-
-        // Compare key features: energy, valence, danceability, arousal
-        const features = [
-            "energy",
-            "valence",
-            "danceability",
-            "arousal",
-        ] as const;
-        const scores: number[] = [];
-
-        for (const key of features) {
-            const sourceVal =
-                vibeSourceFeatures[key as keyof typeof vibeSourceFeatures];
-            const currentVal =
-                currentTrackFeatures[key as keyof typeof currentTrackFeatures];
-
-            if (
-                typeof sourceVal === "number" &&
-                typeof currentVal === "number"
-            ) {
-                const diff = Math.abs(sourceVal - currentVal);
-                scores.push(1 - diff);
-            }
-        }
-
-        if (scores.length === 0) return null;
-        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-        return Math.round(avgScore * 100);
-    }, [vibeMode, vibeSourceFeatures, currentTrackFeatures]);
 
     const duration = (() => {
         // Prefer canonical durations for long-form media to avoid stale/misreported playbackDuration.
@@ -209,71 +157,15 @@ export function FullPlayer() {
 
     const { title, subtitle, coverUrl, artistLink, mediaLink, hasMedia } =
         useMediaInfo(100);
+    const isLongForm =
+        playbackType === "podcast" || playbackType === "audiobook";
     const { qualityBadge } = useStreamBitrate();
-
-    const {
-        vibeEmbeddings,
-        showVersion,
-        loading: featuresLoading,
-    } = useFeatures();
-    const [isVibeLoading, setIsVibeLoading] = useState(false);
-    const [isRadioLoading, setIsRadioLoading] = useState(false);
-
-    const handleVibeToggle = async () => {
-        if (!currentTrack?.id) return;
-        if (vibeMode) {
-            stopVibeMode();
-            toast.success("Vibe mode off");
-            return;
-        }
-        setIsVibeLoading(true);
-        try {
-            const result = await startVibeMode();
-            if (result.success && result.trackCount > 0) {
-                toast.success("Vibe mode on", {
-                    description: `${result.trackCount} similar tracks queued`,
-                    icon: (
-                        <AudioWaveform className="w-4 h-4 text-brand-hover" />
-                    ),
-                });
-            } else {
-                toast.error("Couldn't find matching tracks");
-            }
-        } catch (error) {
-            sharedFrontendLogger.error("Failed to start vibe match:", error);
-            toast.error("Failed to match vibe");
-        } finally {
-            setIsVibeLoading(false);
-        }
-    };
-
-    const handleStartRadio = async () => {
-        if (!currentTrack?.artist?.id) return;
-        setIsRadioLoading(true);
-        try {
-            const response = await api.getRadioTracks(
-                "artist",
-                currentTrack.artist.id,
-            );
-            if (response.tracks && response.tracks.length > 0) {
-                const filtered = response.tracks.filter(
-                    (t: { id: string }) => t.id !== currentTrack.id,
-                );
-                setUpcoming(filtered);
-                toast.success(
-                    `Playing ${currentTrack.artist.name} Radio (${filtered.length} tracks)`,
-                );
-            } else {
-                toast.error(
-                    "Not enough similar music in your library for artist radio",
-                );
-            }
-        } catch {
-            toast.error("Failed to start artist radio");
-        } finally {
-            setIsRadioLoading(false);
-        }
-    };
+    const repeatLabel =
+        repeatMode === "one"
+            ? ru.player.repeatOne
+            : repeatMode === "all"
+              ? ru.player.repeatAll
+              : ru.player.repeatOff;
 
     // Determine if seeking is allowed
     const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -339,116 +231,157 @@ export function FullPlayer() {
             document.removeEventListener("mousedown", handleClickOutside);
     }, [showVolumePopup]);
 
+    const playerDiagnostics = qualityBadge ? (
+        <div
+            className="mt-1 flex items-center justify-between gap-3 border-t border-white/10 px-2 py-2"
+            data-player-diagnostics="overflow"
+        >
+            <span className="text-[11px] font-medium text-content-muted">
+                {ru.player.stream}
+            </span>
+            <PlaybackQualityBadgeWithStats badge={qualityBadge} size="mini" />
+        </div>
+    ) : null;
+
     return (
-        <div className="relative flex-shrink-0">
-            <div className="relative bg-black border-t border-white/[0.08] h-24">
-                {/* Desktop-wide progress tracker — z above overlay (z-[9999]) so handle isn't covered.
-                    pb-5 creates a generous invisible hit zone below the 4px track so the seekbar
-                    is easy to grab; the hit zone also blocks handleBarClick from toggling overlay. */}
+        <footer
+            className="desktop-player-dock relative isolate flex-shrink-0"
+            data-player-surface="desktop"
+            aria-label="Плеер"
+        >
+            <div className="desktop-player-surface relative h-32 overflow-visible">
+                {coverUrl && hasMedia ? (
+                    <div
+                        className="pointer-events-none absolute inset-0 overflow-hidden"
+                        aria-hidden="true"
+                        data-player-artwork-atmosphere
+                    >
+                        <CachedImage
+                            key={`player-atmosphere-${coverUrl}`}
+                            src={coverUrl}
+                            alt=""
+                            fill
+                            sizes="100vw"
+                            className="scale-125 object-cover opacity-[0.5] blur-3xl saturate-150"
+                            priority
+                            unoptimized
+                        />
+                    </div>
+                ) : null}
                 <div
-                    className="absolute inset-x-0 top-0 z-[10000]"
-                    data-seek-zone
-                >
-                    <SeekSlider
-                        progress={progress}
-                        duration={duration}
-                        currentTime={displayTime}
-                        onSeek={handleSeek}
-                        canSeek={canSeek}
-                        hasMedia={hasMedia}
-                        downloadProgress={downloadProgress}
-                        variant="default"
-                        alwaysShowHandle
-                        handleClassName="w-2.5 h-2.5 shadow-xl shadow-black/50"
-                        className="h-1 rounded-none"
-                        hitZoneClassName="pb-5"
-                    />
-                </div>
-                {/* Subtle top glow */}
-                <div className="absolute top-1 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none" />
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-warning/30 via-ai/15 to-brand/25"
+                    aria-hidden="true"
+                    data-player-spectral-glow
+                />
+                <div
+                    className="pointer-events-none absolute inset-0 bg-black/55 backdrop-blur-2xl"
+                    aria-hidden="true"
+                    data-player-scrim
+                />
                 <div
                     className={cn(
-                        "grid grid-cols-[1fr_auto_1fr] items-center h-full px-6 pt-1",
+                        "desktop-player-layout relative z-10 grid h-full grid-cols-[minmax(240px,1fr)_minmax(360px,1.35fr)_minmax(240px,1fr)] grid-rows-[76px_36px] items-center gap-x-6 px-6 py-2",
                         hasMedia && "cursor-pointer",
                     )}
+                    data-player-layout="identity-transport-actions"
+                    data-player-control-budget={
+                        isLongForm
+                            ? "longform-5-utilities-4"
+                            : "music-5-utilities-4"
+                    }
                     onClick={handleBarClick}
                 >
-                    {/* Artwork & Info — left-aligned, expands rightward */}
-                    <div className="flex items-center gap-3 min-w-0 mr-4">
+                    <div
+                        className="row-span-2 flex min-w-0 items-center gap-4"
+                        data-player-region="identity"
+                        aria-label="Сейчас играет"
+                    >
                         {mediaLink ? (
                             <Link
                                 href={mediaLink}
                                 prefetch={false}
-                                className="relative w-14 h-14 flex-shrink-0 group"
+                                className="group relative h-[88px] w-[88px] flex-shrink-0"
                             >
-                                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-lg blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                <div className="relative w-full h-full bg-gradient-to-br from-[#2a2a2a] to-surface-hover rounded-lg overflow-hidden shadow-lg flex items-center justify-center">
+                                <div className="absolute inset-0 rounded-[10px] bg-white/15 opacity-0 blur-md transition-opacity duration-200 group-hover:opacity-100" />
+                                <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[10px] bg-surface-hover shadow-lg ring-1 ring-white/10">
                                     {coverUrl ? (
-                                        <Image
+                                        <CachedImage
                                             key={coverUrl}
                                             src={coverUrl}
                                             alt={title}
                                             fill
-                                            sizes="56px"
+                                            sizes="88px"
                                             className="object-cover"
                                             priority
                                             unoptimized
                                         />
                                     ) : (
-                                        <MusicIcon className="w-6 h-6 text-gray-400" />
+                                        <MusicIcon className="h-7 w-7 text-content-muted" />
                                     )}
                                 </div>
                             </Link>
                         ) : (
-                            <div className="relative w-14 h-14 flex-shrink-0">
-                                <div className="relative w-full h-full bg-gradient-to-br from-[#2a2a2a] to-surface-hover rounded-lg overflow-hidden shadow-lg flex items-center justify-center">
-                                    <MusicIcon className="w-6 h-6 text-gray-400" />
+                            <div className="relative h-[88px] w-[88px] flex-shrink-0">
+                                <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[10px] bg-surface-hover shadow-lg ring-1 ring-white/10">
+                                    {coverUrl ? (
+                                        <CachedImage
+                                            key={coverUrl}
+                                            src={coverUrl}
+                                            alt={title}
+                                            fill
+                                            sizes="88px"
+                                            className="object-cover"
+                                            priority
+                                            unoptimized
+                                        />
+                                    ) : (
+                                        <MusicIcon className="h-7 w-7 text-content-muted" />
+                                    )}
                                 </div>
                             </div>
                         )}
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                             {mediaLink ? (
                                 <Link
                                     href={mediaLink}
                                     prefetch={false}
                                     className="block min-w-0 hover:underline"
                                 >
-                                    <h4 className="text-white font-semibold truncate text-sm">
+                                    <h4 className="truncate text-base font-semibold leading-6 text-content">
                                         {title}
                                     </h4>
                                 </Link>
                             ) : (
-                                <h4 className="text-white font-semibold truncate text-sm">
+                                <h4 className="truncate text-base font-semibold leading-6 text-content">
                                     {title}
                                 </h4>
                             )}
-                            {artistLink ? (
-                                <Link
-                                    href={artistLink}
-                                    prefetch={false}
-                                    className="block min-w-0 hover:underline"
-                                >
-                                    <p className="text-xs text-gray-400 truncate">
+                            <div className="flex min-w-0 items-center gap-2">
+                                {artistLink ? (
+                                    <Link
+                                        href={artistLink}
+                                        prefetch={false}
+                                        className="min-w-0 hover:underline"
+                                    >
+                                        <p className="truncate text-[13px] leading-5 text-content-muted">
+                                            {subtitle}
+                                        </p>
+                                    </Link>
+                                ) : mediaLink ? (
+                                    <Link
+                                        href={mediaLink}
+                                        prefetch={false}
+                                        className="min-w-0 hover:underline"
+                                    >
+                                        <p className="truncate text-[13px] leading-5 text-content-muted">
+                                            {subtitle}
+                                        </p>
+                                    </Link>
+                                ) : (
+                                    <p className="truncate text-[13px] leading-5 text-content-muted">
                                         {subtitle}
                                     </p>
-                                </Link>
-                            ) : mediaLink ? (
-                                <Link
-                                    href={mediaLink}
-                                    prefetch={false}
-                                    className="block min-w-0 hover:underline"
-                                >
-                                    <p className="text-xs text-gray-400 truncate">
-                                        {subtitle}
-                                    </p>
-                                </Link>
-                            ) : (
-                                <p className="text-xs text-gray-400 truncate">
-                                    {subtitle}
-                                </p>
-                            )}
-                            {/* Status badges */}
-                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                )}
                                 {currentTrack?.source === "federated" &&
                                     currentTrack.peer && (
                                         <PeerBadge
@@ -456,72 +389,60 @@ export function FullPlayer() {
                                             online={currentTrack.peer.online}
                                         />
                                     )}
-                                {/* Vibe match score when in vibe mode */}
-                                {vibeMode && vibeMatchScore !== null && (
-                                    <span
-                                        className={cn(
-                                            "inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                            vibeMatchScore >= 80
-                                                ? "bg-green-500/20 text-green-400"
-                                                : vibeMatchScore >= 60
-                                                  ? "bg-brand/20 text-brand"
-                                                  : "bg-orange-500/20 text-orange-400",
-                                        )}
-                                    >
-                                        <AudioWaveform className="w-2.5 h-2.5" />
-                                        {vibeMatchScore}% match
-                                    </span>
-                                )}
-                                {/* Listen Together sync indicator */}
-                                <SyncBadge />
+                                <SyncBadge compact />
                             </div>
                         </div>
                     </div>
 
-                    {/* Controls — truly centered column */}
-                    <div className="flex items-center justify-center gap-4">
-                        {/* Buttons */}
+                    <div
+                        className="col-start-2 row-start-1 flex items-center justify-center self-end"
+                        data-player-region="transport"
+                        data-player-level="controls"
+                        aria-label={ru.player.controls}
+                    >
                         <div
-                            className="flex items-center gap-6"
+                            className="player-transport flex items-center gap-2 xl:gap-3"
                             role="group"
-                            aria-label="Playback controls"
+                            aria-label={ru.player.controls}
+                            data-player-control-group="primary"
                         >
-                            {/* Shuffle */}
-                            <button
-                                onClick={toggleShuffle}
-                                className={cn(
-                                    "transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                    isShuffle
-                                        ? "text-green-500 hover:text-green-400"
-                                        : "text-gray-400 hover:text-white",
-                                )}
-                                disabled={!hasMedia || playbackType !== "track"}
-                                aria-label="Shuffle"
-                                aria-pressed={isShuffle}
-                                title="Shuffle"
-                            >
-                                <Shuffle className="w-[18px] h-[18px]" />
-                            </button>
+                            {!isLongForm && (
+                                <button
+                                    onClick={toggleShuffle}
+                                    className={cn(
+                                        "player-control transition-colors",
+                                        isShuffle
+                                            ? "bg-white/10 text-brand-hover"
+                                            : "text-content-muted hover:text-content",
+                                    )}
+                                    disabled={!hasMedia || vibeMode}
+                                    aria-label={ru.player.shuffle}
+                                    aria-pressed={isShuffle}
+                                    title={ru.player.shuffle}
+                                    data-player-control="shuffle"
+                                >
+                                    <Shuffle className="h-5 w-5" />
+                                </button>
+                            )}
 
-                            {/* Skip back 15s — a seek, so gated on canSeek like the seek slider
-                                (false while an uncached podcast episode is still caching);
-                                independent of queue length */}
-                            <button
-                                onClick={() => skipBackward(15)}
-                                className="text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
-                                disabled={!hasMedia || !canSeek}
-                                aria-label="Skip back 15 seconds"
-                                title="Skip back 15 seconds"
-                            >
-                                <RotateCcw className="w-[18px] h-[18px]" />
-                            </button>
+                            {isLongForm && (
+                                <button
+                                    onClick={() => skipBackward(15)}
+                                    className="player-control text-content-muted hover:text-content"
+                                    disabled={!hasMedia || !canSeek}
+                                    aria-label={ru.player.skipBack15}
+                                    title={ru.player.skipBack15}
+                                >
+                                    <RotateCcw className="h-[18px] w-[18px]" />
+                                </button>
+                            )}
 
                             <button
                                 onClick={previous}
-                                className="text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                className="player-control text-content-muted hover:text-content"
                                 disabled={!hasMedia || queue.length === 0}
-                                aria-label="Previous track"
-                                title="Previous track"
+                                aria-label={ru.player.previous}
+                                title={ru.player.previous}
                             >
                                 <SkipBack className="w-6 h-6" />
                             </button>
@@ -529,37 +450,37 @@ export function FullPlayer() {
                             <button
                                 onClick={handlePlayPauseClick}
                                 className={cn(
-                                    "w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 relative group",
+                                    "player-control-primary group relative flex h-12 w-12 items-center justify-center rounded-full",
                                     audioError
-                                        ? "bg-red-500 text-white hover:scale-110 hover:bg-red-400"
+                                        ? "bg-error text-content hover:scale-[1.04] hover:brightness-110"
                                         : hasMedia && !isBuffering
-                                          ? "bg-white text-black hover:scale-110 shadow-lg shadow-white/20 hover:shadow-white/30"
+                                          ? "bg-content text-surface hover:scale-[1.04] shadow-lg shadow-black/25"
                                           : isBuffering
-                                            ? "bg-white/80 text-black"
-                                            : "bg-gray-700 text-gray-400 cursor-not-allowed",
+                                            ? "bg-content/80 text-surface"
+                                            : "cursor-not-allowed bg-surface-active text-content-disabled",
                                 )}
                                 disabled={!hasMedia || isBuffering}
                                 aria-label={
                                     audioError
-                                        ? "Retry playback"
+                                        ? ru.player.retry
                                         : isBuffering
-                                          ? "Buffering..."
+                                          ? ru.player.buffering
                                           : isPlaying
-                                            ? "Pause"
-                                            : "Play"
+                                            ? ru.common.pause
+                                            : ru.common.play
                                 }
                                 title={
                                     audioError
-                                        ? "Retry playback"
+                                        ? ru.player.retry
                                         : isBuffering
-                                          ? "Buffering..."
+                                          ? ru.player.buffering
                                           : isPlaying
-                                            ? "Pause"
-                                            : "Play"
+                                            ? ru.common.pause
+                                            : ru.common.play
                                 }
                             >
                                 {hasMedia && !isBuffering && !audioError && (
-                                    <div className="absolute inset-0 rounded-full bg-white blur-md opacity-0 group-hover:opacity-50 transition-opacity duration-200" />
+                                    <div className="absolute inset-0 rounded-full bg-content blur-md opacity-0 transition-opacity duration-200 group-hover:opacity-30" />
                                 )}
                                 {audioError ? (
                                     <RefreshCw className="w-6 h-6 relative z-10" />
@@ -574,151 +495,116 @@ export function FullPlayer() {
 
                             <button
                                 onClick={next}
-                                className="text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                className="player-control text-content-muted hover:text-content"
                                 disabled={!hasMedia || queue.length === 0}
-                                aria-label="Next track"
-                                title="Next track"
+                                aria-label={ru.player.next}
+                                title={ru.player.next}
                             >
                                 <SkipForward className="w-6 h-6" />
                             </button>
 
-                            {/* Skip forward 15s — a seek, so gated on canSeek like the seek slider
-                                (false while an uncached podcast episode is still caching);
-                                independent of queue length */}
-                            <button
-                                onClick={() => skipForward(15)}
-                                className="text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
-                                disabled={!hasMedia || !canSeek}
-                                aria-label="Skip forward 15 seconds"
-                                title="Skip forward 15 seconds"
-                            >
-                                <RotateCw className="w-[18px] h-[18px]" />
-                            </button>
-
-                            {/* Repeat */}
-                            <button
-                                onClick={toggleRepeat}
-                                className={cn(
-                                    "transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                    repeatMode !== "off"
-                                        ? "text-green-500 hover:text-green-400"
-                                        : "text-gray-400 hover:text-white",
-                                )}
-                                disabled={!hasMedia || playbackType !== "track"}
-                                aria-label={
-                                    repeatMode === "off"
-                                        ? "Repeat off"
-                                        : repeatMode === "all"
-                                          ? "Repeat all"
-                                          : "Repeat one"
-                                }
-                                aria-pressed={repeatMode !== "off"}
-                                title={
-                                    repeatMode === "off"
-                                        ? "Repeat: Off"
-                                        : repeatMode === "all"
-                                          ? "Repeat: All (loop queue)"
-                                          : "Repeat: One (play current track twice)"
-                                }
-                            >
-                                {repeatMode === "one" ? (
-                                    <Repeat1 className="w-[18px] h-[18px]" />
-                                ) : (
-                                    <Repeat className="w-[18px] h-[18px]" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Right Controls — right-aligned */}
-                    <div className="flex items-center justify-end ml-4 gap-4">
-                        {/* Quality badge — centered in space between controls and time */}
-                        <div className="flex-1 flex justify-center">
-                            {qualityBadge && (
-                                <PlaybackQualityBadgeWithStats
-                                    badge={qualityBadge}
-                                    size="full"
-                                />
-                            )}
-                        </div>
-
-                        {/* Timer */}
-                        <span
-                            className={cn(
-                                "text-sm font-medium tabular-nums whitespace-nowrap",
-                                hasMedia ? "text-gray-300" : "text-gray-400",
-                            )}
-                        >
-                            {formatTime(displayTime)}
-                            {" / "}
-                            {formatTime(duration)}
-                        </span>
-
-                        {/* Icon group: radio, vibe, heart, 3-dot, volume, chevron — equally spaced, vertically centered */}
-                        <div className="flex items-center gap-2.5">
-                            {/* Radio */}
-                            {currentTrack?.artist?.id &&
-                                playbackType === "track" && (
-                                    <button
-                                        onClick={handleStartRadio}
-                                        disabled={isRadioLoading}
-                                        className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
-                                        title="Start artist radio"
-                                        aria-label="Start Radio"
-                                    >
-                                        {isRadioLoading ? (
-                                            <Loader2 className="w-[18px] h-[18px] animate-spin" />
-                                        ) : (
-                                            <Radio className="w-[18px] h-[18px]" />
-                                        )}
-                                    </button>
-                                )}
-
-                            {/* Vibe */}
-                            {!featuresLoading && vibeEmbeddings && (
+                            {isLongForm && (
                                 <button
-                                    onClick={handleVibeToggle}
-                                    disabled={isVibeLoading}
-                                    className={cn(
-                                        "flex items-center justify-center w-8 h-8 transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                        vibeMode
-                                            ? "text-brand-hover hover:text-brand-hover"
-                                            : "text-gray-400 hover:text-white",
-                                    )}
-                                    title={
-                                        vibeMode
-                                            ? "Turn off vibe mode"
-                                            : "Match this vibe"
-                                    }
-                                    aria-label="Match Vibe"
+                                    onClick={() => skipForward(15)}
+                                    className="player-control text-content-muted hover:text-content"
+                                    disabled={!hasMedia || !canSeek}
+                                    aria-label={ru.player.skipForward15}
+                                    title={ru.player.skipForward15}
                                 >
-                                    {isVibeLoading ? (
-                                        <Loader2 className="w-[18px] h-[18px] animate-spin" />
-                                    ) : (
-                                        <AudioWaveform className="w-[18px] h-[18px]" />
-                                    )}
+                                    <RotateCw className="h-[18px] w-[18px]" />
                                 </button>
                             )}
 
-                            {/* Heart */}
-                            <TrackPreferenceButtons
-                                trackId={preferenceTrackId}
-                                buttonSizeClassName="h-8 w-8"
-                                iconSizeClassName="h-[18px] w-[18px]"
-                                metadata={buildPreferenceMetadata(currentTrack)}
-                            />
+                            {!isLongForm && (
+                                <button
+                                    onClick={toggleRepeat}
+                                    className={cn(
+                                        "player-control transition-colors",
+                                        repeatMode !== "off"
+                                            ? "bg-white/10 text-brand-hover"
+                                            : "text-content-muted hover:text-content",
+                                    )}
+                                    disabled={!hasMedia}
+                                    aria-label={repeatLabel}
+                                    aria-pressed={repeatMode !== "off"}
+                                    title={repeatLabel}
+                                    data-player-control="repeat"
+                                    data-repeat-mode={repeatMode}
+                                >
+                                    {repeatMode === "one" ? (
+                                        <Repeat1 className="h-5 w-5" />
+                                    ) : (
+                                        <Repeat className="h-5 w-5" />
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
-                            {/* 3-dot context menu for current track */}
+                    <div
+                        className="col-start-2 row-start-2 flex min-w-0 items-center gap-3 self-start"
+                        data-player-level="timeline"
+                        data-seek-zone
+                    >
+                        <span
+                            className="w-10 flex-shrink-0 text-right text-[11px] font-medium tabular-nums text-content-secondary"
+                            data-player-time="current"
+                        >
+                            {formatTime(displayTime)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <SeekSlider
+                                progress={progress}
+                                duration={duration}
+                                currentTime={displayTime}
+                                onSeek={handleSeek}
+                                canSeek={canSeek}
+                                hasMedia={hasMedia}
+                                downloadProgress={downloadProgress}
+                                variant="minimal"
+                                alwaysShowHandle
+                                handleClassName="h-2.5 w-2.5 shadow-xl shadow-black/50"
+                                className="h-[3px]"
+                                hitZoneClassName="py-2"
+                            />
+                        </div>
+                        <span
+                            className="w-10 flex-shrink-0 text-[11px] font-medium tabular-nums text-content-secondary"
+                            data-player-time="duration"
+                        >
+                            {formatTime(duration)}
+                        </span>
+                    </div>
+
+                    <div
+                        className="player-utilities col-start-3 row-span-2 row-start-1 flex min-w-0 items-center justify-end gap-1"
+                        data-player-region="actions"
+                        data-player-control-group="utilities"
+                        aria-label="Действия с текущим треком"
+                    >
+                        <div className="flex items-center gap-1">
+                            {currentTrack && playbackType === "track" ? (
+                                <CurrentTrackPreferenceButtons
+                                    trackId={preferenceTrackId}
+                                    mode="both"
+                                    buttonSizeClassName="h-10 w-10"
+                                    iconSizeClassName="h-[18px] w-[18px]"
+                                    metadata={buildPreferenceMetadata(
+                                        currentTrack,
+                                    )}
+                                />
+                            ) : null}
+
                             {currentTrack && playbackType === "track" && (
                                 <TrackOverflowMenu
                                     track={currentTrack}
                                     showPlayNext={false}
-                                    triggerClassName="!opacity-100 text-gray-400 hover:text-white"
+                                    triggerClassName="!flex !h-10 !w-10 !items-center !justify-center !p-0 !opacity-100 text-content-muted hover:text-content"
                                     menuClassName="bottom-full top-auto mb-1 mt-0 z-[10001]"
+                                    extraItemsAfter={playerDiagnostics}
                                 />
                             )}
 
-                            {/* Volume icon + vertical popup */}
                             <div
                                 ref={volumePopupRef}
                                 className="relative z-[10000] flex items-center justify-center"
@@ -727,9 +613,11 @@ export function FullPlayer() {
                             >
                                 <button
                                     onClick={toggleMute}
-                                    className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110"
+                                    className="player-control text-content-muted hover:text-content"
                                     aria-label={
-                                        volume === 0 ? "Unmute" : "Mute"
+                                        volume === 0
+                                            ? ru.player.unmute
+                                            : ru.player.mute
                                     }
                                 >
                                     {isMuted || volume === 0 ? (
@@ -739,7 +627,6 @@ export function FullPlayer() {
                                     )}
                                 </button>
 
-                                {/* Vertical volume slider popup */}
                                 <div
                                     className={cn(
                                         "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-1.5 py-3 bg-surface-hover border border-white/10 rounded-lg shadow-xl transition-all duration-200 overflow-hidden",
@@ -756,7 +643,7 @@ export function FullPlayer() {
                                                 max="100"
                                                 value={volume * 100}
                                                 onChange={handleVolumeChange}
-                                                aria-label="Volume"
+                                                aria-label={ru.player.volume}
                                                 aria-valuemin={0}
                                                 aria-valuemax={100}
                                                 aria-valuenow={Math.round(
@@ -764,7 +651,7 @@ export function FullPlayer() {
                                                 )}
                                                 aria-valuetext={`${Math.round(volume * 100)} percent`}
                                                 style={{
-                                                    background: `linear-gradient(to right, #fff ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)`,
+                                                    background: `linear-gradient(to right, var(--music-ink) ${volume * 100}%, var(--music-line-strong) ${volume * 100}%)`,
                                                 }}
                                                 className="absolute w-24 h-1 rounded-full appearance-none cursor-pointer -rotate-90 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-white/30"
                                             />
@@ -785,21 +672,21 @@ export function FullPlayer() {
                                     }
                                 }}
                                 className={cn(
-                                    "flex items-center justify-center w-8 h-8 transition-all duration-200",
+                                    "player-control",
                                     hasMedia
-                                        ? "text-gray-400 hover:text-white hover:scale-110"
-                                        : "text-gray-400 cursor-not-allowed",
+                                        ? "text-content-muted hover:text-content"
+                                        : "cursor-not-allowed text-content-disabled",
                                 )}
                                 disabled={!hasMedia}
                                 aria-label={
                                     playerMode === "overlay"
-                                        ? "Close overlay player"
-                                        : "Open overlay player"
+                                        ? ru.player.close
+                                        : ru.player.open
                                 }
                                 title={
                                     playerMode === "overlay"
-                                        ? "Close overlay player"
-                                        : "Open overlay player"
+                                        ? ru.player.close
+                                        : ru.player.open
                                 }
                             >
                                 {playerMode === "overlay" ? (
@@ -811,13 +698,7 @@ export function FullPlayer() {
                         </div>
                     </div>
                 </div>
-                {/* Version badge — absolutely positioned bottom-right, doesn't affect layout */}
-                {showVersion && (
-                    <span className="absolute bottom-1 right-2 text-[9px] text-white/20 pointer-events-none select-none">
-                        {APP_VERSION}
-                    </span>
-                )}
             </div>
-        </div>
+        </footer>
     );
 }

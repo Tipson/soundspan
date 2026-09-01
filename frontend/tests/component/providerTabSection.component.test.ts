@@ -48,7 +48,7 @@ mock.module("@/features/explore/components/TidalFeaturedShelvesSection", {
     },
 });
 
-mock.module("@/components/layout/SectionHeader", {
+mock.module("@/features/home/components/SectionHeader", {
     namedExports: {
         SectionHeader: ({ title }: { title: string }) =>
             React.createElement("h2", null, title),
@@ -219,8 +219,8 @@ test("ProviderTabSection: failed YouTube mixes render an inline availability not
         React.createElement(ProviderTabSection, props),
     );
 
-    assert.match(html, /Your Mixes/);
-    assert.match(html, /YouTube Music mixes aren&#x27;t available right now\./);
+    assert.match(html, /Ваши миксы/);
+    assert.match(html, /Миксы YouTube Music сейчас недоступны\./);
 });
 
 test("ProviderTabSection: a YouTube failure note replaces its section in order", async () => {
@@ -245,7 +245,7 @@ test("ProviderTabSection: a YouTube failure note replaces its section in order",
     const moodsIndex = html.indexOf("moods-genres-section");
     const featuredIndex = html.indexOf("featured-shelves-section");
     const chartsFailureIndex = html.indexOf(
-        "YouTube Music charts aren&#x27;t available right now.",
+        "Чарты YouTube Music сейчас недоступны.",
     );
     assert.ok(mixesIndex < moodsIndex);
     assert.ok(moodsIndex < featuredIndex);
@@ -274,7 +274,7 @@ test("ProviderTabSection: a TIDAL failure note replaces its section in order", a
     const moodsGenresIndex = html.indexOf("tidal-moods-genres");
     const featuredIndex = html.indexOf("tidal-featured-shelves");
     const exploreFailureIndex = html.indexOf(
-        "TIDAL explore shelves aren&#x27;t available right now.",
+        "Подборки раздела обзора TIDAL сейчас недоступны.",
     );
     assert.ok(mixesIndex < moodsGenresIndex);
     assert.ok(moodsGenresIndex < featuredIndex);

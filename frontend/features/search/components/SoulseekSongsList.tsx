@@ -1,7 +1,8 @@
 import { Music, Download, CheckCircle } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { SoulseekResult } from "../types";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { SearchSectionHeader } from "./SearchSectionHeader";
+import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
 
 interface SoulseekSongsListProps {
     soulseekResults: SoulseekResult[];
@@ -56,9 +57,12 @@ export const parseFilename = (
                 title: parts.slice(1).join(" - ").trim(),
             };
         }
-        return { artist: "Unknown", title: nameWithoutExt };
+        return {
+            artist: searchExtrasRu.soulseek.unknownArtist,
+            title: nameWithoutExt,
+        };
     }
-    return { artist: "Unknown", title: filename };
+    return { artist: searchExtrasRu.soulseek.unknownArtist, title: filename };
 };
 
 /**
@@ -74,9 +78,12 @@ export function SoulseekSongsList({
     }
 
     return (
-        <section>
-            <SectionHeader title="Songs" />
-            <div className="space-y-2" data-tv-section="search-results-songs">
+        <div>
+            <SearchSectionHeader
+                title={searchExtrasRu.soulseek.title}
+                description={searchExtrasRu.soulseek.description}
+            />
+            <div className="space-y-1.5" data-tv-section="search-results-songs">
                 {soulseekResults.slice(0, 5).map((result, index) => {
                     const parsed = result.parsedArtist
                         ? {
@@ -96,16 +103,16 @@ export function SoulseekSongsList({
                     return (
                         <div
                             key={`${result.username}-${result.filename}-${index}`}
-                            className="flex items-center gap-4 p-3 rounded hover:bg-surface-hover group"
+                            className="group flex min-h-14 items-center gap-3 rounded-xl border border-transparent px-2.5 py-2 transition-colors hover:border-white/[0.06] hover:bg-white/[0.045] sm:gap-4 sm:px-3"
                         >
-                            <div className="w-10 h-10 bg-surface-elevated rounded flex items-center justify-center flex-shrink-0">
-                                <Music className="w-5 h-5 text-gray-400" />
+                            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-surface-elevated">
+                                <Music className="h-5 w-5 text-content-muted" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <h4 className="text-base font-bold text-white truncate">
+                                <h4 className="truncate text-sm font-semibold text-content sm:text-base">
                                     {parsed.title}
                                 </h4>
-                                <p className="text-sm text-[#b3b3b3] truncate">
+                                <p className="truncate text-xs text-content-secondary sm:text-sm">
                                     {parsed.artist}
                                 </p>
                             </div>
@@ -118,21 +125,24 @@ export function SoulseekSongsList({
                                     onClick={() => onDownload(result)}
                                     disabled={isDownloading}
                                     className={cn(
-                                        "px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 text-sm",
+                                        "flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                                         isDownloading
                                             ? "bg-green-600/20 text-green-400 cursor-not-allowed"
-                                            : "bg-brand text-black hover:bg-brand-dark hover:scale-105",
+                                            : "bg-brand text-black hover:bg-brand-dark hover:scale-[1.02] motion-reduce:hover:scale-100",
                                     )}
                                 >
                                     {isDownloading ? (
                                         <>
                                             <CheckCircle className="w-4 h-4" />
-                                            Downloading
+                                            {
+                                                searchExtrasRu.soulseek
+                                                    .downloading
+                                            }
                                         </>
                                     ) : (
                                         <>
                                             <Download className="w-4 h-4" />
-                                            Download
+                                            {searchExtrasRu.soulseek.download}
                                         </>
                                     )}
                                 </button>
@@ -141,6 +151,6 @@ export function SoulseekSongsList({
                     );
                 })}
             </div>
-        </section>
+        </div>
     );
 }

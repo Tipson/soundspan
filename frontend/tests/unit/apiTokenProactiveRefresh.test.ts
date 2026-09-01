@@ -292,15 +292,8 @@ test("does not replay a stale session mutation after a replacement login", async
             ),
         );
 
-        await assert.rejects(sessionARequest, (error: unknown) => {
-            assert.ok(error instanceof Error);
-            const apiError = error as Error & {
-                status?: number;
-                data?: Record<string, unknown>;
-            };
-            assert.equal(apiError.status, 401);
-            assert.equal(apiError.data?.code, "AUTH_REQUIRED");
-            return true;
+        await assert.rejects(sessionARequest, {
+            name: "SupersededAuthSessionError",
         });
 
         assert.equal(dangerRequestCount, 1);
@@ -354,11 +347,8 @@ test("a pre-login request cannot replay under a later session", async (testConte
             ),
         );
 
-        await assert.rejects(anonymousRequest, (error: unknown) => {
-            assert.ok(error instanceof Error);
-            const apiError = error as Error & { status?: number };
-            assert.equal(apiError.status, 401);
-            return true;
+        await assert.rejects(anonymousRequest, {
+            name: "SupersededAuthSessionError",
         });
 
         assert.equal(dangerRequestCount, 1);

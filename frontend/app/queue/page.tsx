@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Virtuoso } from "react-virtuoso";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAudioState, useAudioControls } from "@/lib/audio-context";
@@ -44,7 +43,12 @@ import { toAddToPlaylistRef } from "@/lib/trackRef";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { PeerBadge } from "@/components/ui/PeerBadge";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import {
+    formatQueueCount,
+    formatQueueSaveDescription,
+    formatQueueSaved,
+    queueRu,
+} from "@/lib/i18n/musicPagesRu";
 
 /**
  * Rows rendered on the first pass before react-virtuoso measures the
@@ -101,14 +105,12 @@ export default function QueuePage() {
 
     const handleClearQueue = () => {
         clearQueue();
-        toast.success(
-            isInGroup ? "Listen Together queue cleared" : "Queue cleared",
-        );
+        toast.success(isInGroup ? queueRu.sharedCleared : queueRu.cleared);
     };
 
     const handleRemoveTrack = (index: number) => {
         removeFromQueue(index);
-        toast.success("Removed from queue");
+        toast.success(queueRu.removed);
     };
 
     const handlePlayFromQueue = (index: number) => {
@@ -118,28 +120,26 @@ export default function QueuePage() {
             queueTrack.source === "federated" &&
             queueTrack.peer?.online === false
         ) {
-            toast.info("This peer is offline");
+            toast.info(queueRu.peerOffline);
             return;
         }
         const availability = isInGroup
             ? trackAvailability.get(index)
             : undefined;
         if (availability?.available === false) {
-            toast.info(
-                "Track unavailable for your account in this Listen Together session",
-            );
+            toast.info(queueRu.unavailableInSession);
             return;
         }
         if (isInGroup) {
             if (!isHost) {
-                toast.info("Only the host can change the current track");
+                toast.info(queueRu.hostOnly);
                 return;
             }
             syncSetTrack(index);
             return;
         }
         playQueueIndex(index);
-        toast.success("Playing from queue");
+        toast.success(queueRu.playingFromQueue);
     };
 
     // Both the arrow actions and drag-and-drop route through the shared
@@ -244,7 +244,8 @@ export default function QueuePage() {
 
     const handleSaveAsPlaylist = async () => {
         const name =
-            playlistName.trim() || `Queue — ${new Date().toLocaleDateString()}`;
+            playlistName.trim() ||
+            `${queueRu.title} — ${new Date().toLocaleDateString("ru-RU")}`;
         setIsSaving(true);
         try {
             const playlist = await api.createPlaylist(name);
@@ -254,12 +255,12 @@ export default function QueuePage() {
                     toAddToPlaylistRef(track),
                 );
             }
-            toast.success(`Saved ${playlistTracks.length} tracks to "${name}"`);
+            toast.success(formatQueueSaved(playlistTracks.length, name));
             setShowSaveDialog(false);
             setPlaylistName("");
             router.push(`/playlist/${playlist.id}`);
         } catch {
-            toast.error("Failed to save playlist");
+            toast.error(queueRu.saveFailed);
         } finally {
             setIsSaving(false);
         }
@@ -283,31 +284,31 @@ export default function QueuePage() {
     const isCurrentUnavailable = currentAvailability?.available === false;
 
     return (
-        <div className="min-h-screen bg-surface">
-            <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6">
+        <div data-consumer-surface="queue" className="min-h-screen bg-surface">
+            <div className="mx-auto max-w-5xl space-y-10 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
                 {/* Header */}
                 <PageHeader
-                    title={isInGroup ? "Listen Together Queue" : "Queue"}
-                    subtitle={`${queue.length} item${queue.length !== 1 ? "s" : ""} in queue`}
+                    title={isInGroup ? queueRu.sharedTitle : queueRu.title}
+                    subtitle={formatQueueCount(queue.length)}
                     icon={ListMusic}
                     iconClassName="text-brand"
                     className="mb-8"
                     actions={
                         queue.length > 0 ? (
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <Button
                                     variant="secondary"
                                     onClick={() => setShowSaveDialog(true)}
                                 >
                                     <Save className="w-4 h-4 mr-2" />
-                                    Save as Playlist
+                                    {queueRu.saveAsPlaylist}
                                 </Button>
                                 <Button
                                     variant="secondary"
                                     onClick={handleClearQueue}
                                 >
                                     <Trash2 className="w-4 h-4 mr-2" />
-                                    Clear Queue
+                                    {queueRu.clearQueue}
                                 </Button>
                             </div>
                         ) : null
@@ -316,164 +317,168 @@ export default function QueuePage() {
 
                 {/* Empty State */}
                 {queue.length === 0 && (
-                    <EmptyState
-                        icon={<ListMusic />}
-                        title="No tracks in queue"
-                        description="Start playing music to see your queue here"
-                        action={{
-                            label: "Browse Library",
-                            onClick: () => router.push("/library"),
-                        }}
-                    />
+                    <section
+                        data-consumer-state="empty"
+                        className="border-y border-line"
+                    >
+                        <EmptyState
+                            icon={<ListMusic />}
+                            title={queueRu.emptyTitle}
+                            description={queueRu.emptyDescription}
+                            action={{
+                                label: queueRu.browseLibrary,
+                                onClick: () => router.push("/library"),
+                            }}
+                        />
+                    </section>
                 )}
 
                 {/* Now Playing */}
                 {currentTrack && (
-                    <section className="bg-[#111] rounded-lg p-6">
-                        <SectionHeader title="Now Playing" size="sm" />
-                        <Card>
-                            <div
-                                className={`flex items-center gap-4 p-4 bg-surface-hover border-l-2 border-ai group ${isCurrentUnavailable ? "opacity-50" : ""}`}
-                            >
-                                <div className="relative flex-shrink-0 w-16 h-16">
-                                    {currentTrack.album?.coverArt ? (
-                                        <Image
-                                            src={api.getCoverArtUrl(
-                                                currentTrack.album.coverArt,
-                                                100,
-                                            )}
-                                            alt={currentTrack.album.title}
-                                            fill
-                                            sizes="64px"
-                                            className="object-cover rounded-sm"
-                                            unoptimized
-                                        />
-                                    ) : (
-                                        <div className="w-16 h-16 bg-surface rounded-sm flex items-center justify-center">
-                                            <Music className="w-6 h-6 text-gray-400" />
-                                        </div>
-                                    )}
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <Play className="w-6 h-6 text-ai-hover fill-ai-hover animate-pulse" />
-                                    </div>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-sm font-medium text-ai-hover truncate">
-                                        {currentTrack.displayTitle ??
-                                            currentTrack.title}
-                                    </h3>
-                                    <p className="text-sm text-gray-400 truncate">
-                                        {currentTrack.artist?.name}
-                                    </p>
-                                    <div className="mt-1 flex items-center gap-2">
-                                        {isCurrentUnavailable ? (
-                                            <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-500/50 rounded px-1.5 py-0.5">
-                                                Unavailable
-                                            </span>
-                                        ) : null}
-                                        {isInGroup &&
-                                        resolveQueueSource(
-                                            currentIndex,
-                                            currentTrack.streamSource,
-                                        ) === "tidal" ? (
-                                            <TidalBadge />
-                                        ) : null}
-                                        {isInGroup &&
-                                        resolveQueueSource(
-                                            currentIndex,
-                                            currentTrack.streamSource,
-                                        ) === "youtube" ? (
-                                            <YouTubeBadge />
-                                        ) : null}
-                                        {currentTrack.source === "federated" &&
-                                        currentTrack.peer ? (
-                                            <PeerBadge
-                                                peerName={
-                                                    currentTrack.peer.name
-                                                }
-                                                online={
-                                                    currentTrack.peer.online
-                                                }
-                                            />
-                                        ) : null}
-                                    </div>
-                                    <p className="text-xs text-gray-400 truncate">
-                                        {currentTrack.album?.title}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
-                                        {formatTime(currentTrack.duration)}
-                                    </span>
-                                    <TrackPreferenceButtons
-                                        trackId={currentTrack.id}
-                                        mode="up-only"
-                                        buttonSizeClassName="h-8 w-8"
-                                        iconSizeClassName="h-4 w-4"
-                                        metadata={buildPreferenceMetadata(
-                                            currentTrack,
+                    <section className="border-t border-line pt-6">
+                        <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
+                            {queueRu.nowPlaying}
+                        </h2>
+                        <div
+                            className={`group flex flex-wrap items-center gap-3 border-y border-line bg-surface-elevated/40 px-3 py-4 sm:gap-4 sm:px-4 ${isCurrentUnavailable ? "opacity-50" : ""}`}
+                        >
+                            <div className="relative flex-shrink-0 w-16 h-16">
+                                {currentTrack.album?.coverArt ? (
+                                    <Image
+                                        src={api.getCoverArtUrl(
+                                            currentTrack.album.coverArt,
+                                            100,
                                         )}
+                                        alt={currentTrack.album.title}
+                                        fill
+                                        sizes="64px"
+                                        className="object-cover rounded-sm"
+                                        unoptimized
                                     />
-                                    <TrackOverflowMenu
-                                        track={currentTrack}
-                                        showPlayNext={false}
-                                        showAddToQueue={false}
-                                    />
+                                ) : (
+                                    <div className="w-16 h-16 bg-surface rounded-sm flex items-center justify-center">
+                                        <Music className="h-6 w-6 text-content-muted" />
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Play className="h-6 w-6 animate-pulse fill-brand text-brand motion-reduce:animate-none" />
                                 </div>
                             </div>
-                        </Card>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="truncate text-sm font-semibold text-brand-light">
+                                    {currentTrack.displayTitle ??
+                                        currentTrack.title}
+                                </h3>
+                                <p className="truncate text-sm text-content-muted">
+                                    {currentTrack.artist?.name}
+                                </p>
+                                <div className="mt-1 flex items-center gap-2">
+                                    {isCurrentUnavailable ? (
+                                        <span className="rounded border border-line-strong px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-content-muted">
+                                            {queueRu.unavailable}
+                                        </span>
+                                    ) : null}
+                                    {isInGroup &&
+                                    resolveQueueSource(
+                                        currentIndex,
+                                        currentTrack.streamSource,
+                                    ) === "tidal" ? (
+                                        <TidalBadge />
+                                    ) : null}
+                                    {isInGroup &&
+                                    resolveQueueSource(
+                                        currentIndex,
+                                        currentTrack.streamSource,
+                                    ) === "youtube" ? (
+                                        <YouTubeBadge />
+                                    ) : null}
+                                    {currentTrack.source === "federated" &&
+                                    currentTrack.peer ? (
+                                        <PeerBadge
+                                            peerName={currentTrack.peer.name}
+                                            online={currentTrack.peer.online}
+                                        />
+                                    ) : null}
+                                </div>
+                                <p className="truncate text-xs text-content-muted">
+                                    {currentTrack.album?.title}
+                                </p>
+                            </div>
+                            <div className="ml-auto flex items-center gap-1">
+                                <span className="hidden w-10 text-right text-xs tabular-nums text-content-muted sm:block">
+                                    {formatTime(currentTrack.duration)}
+                                </span>
+                                <TrackPreferenceButtons
+                                    trackId={currentTrack.id}
+                                    mode="up-only"
+                                    buttonSizeClassName="h-11 w-11"
+                                    iconSizeClassName="h-4 w-4"
+                                    metadata={buildPreferenceMetadata(
+                                        currentTrack,
+                                    )}
+                                />
+                                <TrackOverflowMenu
+                                    track={currentTrack}
+                                    triggerClassName="h-11 w-11 p-0"
+                                    showPlayNext={false}
+                                    showAddToQueue={false}
+                                />
+                            </div>
+                        </div>
                     </section>
                 )}
 
                 {/* Now Playing (podcast episode) */}
                 {currentEpisode && (
-                    <section className="bg-[#111] rounded-lg p-6">
-                        <SectionHeader title="Now Playing" size="sm" />
-                        <Card>
-                            <div className="flex items-center gap-4 p-4 bg-surface-hover border-l-2 border-ai">
-                                <div className="relative flex-shrink-0 w-16 h-16">
-                                    {currentEpisode.coverUrl ? (
-                                        <Image
-                                            src={currentEpisode.coverUrl}
-                                            alt={currentEpisode.podcastTitle}
-                                            fill
-                                            sizes="64px"
-                                            className="object-cover rounded-sm"
-                                            unoptimized
-                                        />
-                                    ) : (
-                                        <div className="w-16 h-16 bg-surface rounded-sm flex items-center justify-center">
-                                            <Music className="w-6 h-6 text-gray-400" />
-                                        </div>
-                                    )}
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <Play className="w-6 h-6 text-ai-hover fill-ai-hover animate-pulse" />
+                    <section className="border-t border-line pt-6">
+                        <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
+                            {queueRu.nowPlaying}
+                        </h2>
+                        <div className="flex flex-wrap items-center gap-3 border-y border-line bg-surface-elevated/40 px-3 py-4 sm:gap-4 sm:px-4">
+                            <div className="relative flex-shrink-0 w-16 h-16">
+                                {currentEpisode.coverUrl ? (
+                                    <Image
+                                        src={currentEpisode.coverUrl}
+                                        alt={currentEpisode.podcastTitle}
+                                        fill
+                                        sizes="64px"
+                                        className="object-cover rounded-sm"
+                                        unoptimized
+                                    />
+                                ) : (
+                                    <div className="w-16 h-16 bg-surface rounded-sm flex items-center justify-center">
+                                        <Music className="h-6 w-6 text-content-muted" />
                                     </div>
+                                )}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Play className="h-6 w-6 animate-pulse fill-brand text-brand motion-reduce:animate-none" />
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-sm font-medium text-ai-hover truncate">
-                                        {currentEpisode.title}
-                                    </h3>
-                                    <p className="text-sm text-gray-400 truncate">
-                                        {currentEpisode.podcastTitle}
-                                    </p>
-                                </div>
-                                <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
-                                    {formatTime(currentEpisode.duration)}
-                                </span>
                             </div>
-                        </Card>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="truncate text-sm font-semibold text-brand-light">
+                                    {currentEpisode.title}
+                                </h3>
+                                <p className="truncate text-sm text-content-muted">
+                                    {currentEpisode.podcastTitle}
+                                </p>
+                            </div>
+                            <span className="ml-auto text-right text-xs tabular-nums text-content-muted">
+                                {formatTime(currentEpisode.duration)}
+                            </span>
+                        </div>
                     </section>
                 )}
 
                 {/* Next Up */}
                 {nextTracks.length > 0 && (
-                    <section className="bg-[#111] rounded-lg p-6">
-                        <SectionHeader
-                            title={`Next Up (${nextTracks.length})`}
-                            size="sm"
-                        />
-                        <Card>
+                    <section
+                        data-queue-track-surface="open"
+                        className="border-t border-line pt-6"
+                    >
+                        <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
+                            {queueRu.nextUp} ({nextTracks.length})
+                        </h2>
+                        <div className="overflow-hidden border-y border-line">
                             <Virtuoso
                                 totalCount={nextTracks.length}
                                 initialItemCount={Math.min(
@@ -549,7 +554,7 @@ export default function QueuePage() {
                                             {dragOver?.idx === idx &&
                                                 dragFromIdx !== idx && (
                                                     <div
-                                                        className={`pointer-events-none absolute left-0 right-0 h-0.5 rounded bg-blue-400 z-10 ${
+                                                        className={`pointer-events-none absolute left-0 right-0 z-10 h-0.5 rounded bg-brand ${
                                                             dragOver.position ===
                                                             "before"
                                                                 ? "top-0"
@@ -562,18 +567,17 @@ export default function QueuePage() {
                                     );
                                 }}
                             />
-                        </Card>
+                        </div>
                     </section>
                 )}
 
                 {/* Previously Played */}
                 {previousTracks.length > 0 && (
-                    <section className="bg-[#111] rounded-lg p-6">
-                        <SectionHeader
-                            title={`Previously Played (${previousTracks.length})`}
-                            size="sm"
-                        />
-                        <Card>
+                    <section className="border-t border-line pt-6">
+                        <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
+                            {queueRu.previouslyPlayed} ({previousTracks.length})
+                        </h2>
+                        <div className="overflow-hidden border-y border-line">
                             <Virtuoso
                                 totalCount={previousTracks.length}
                                 initialItemCount={Math.min(
@@ -614,29 +618,37 @@ export default function QueuePage() {
                                     );
                                 }}
                             />
-                        </Card>
+                        </div>
                     </section>
                 )}
             </div>
 
             {/* Save as Playlist Dialog */}
             {showSaveDialog && (
-                <div
-                    className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
-                    onClick={() => setShowSaveDialog(false)}
-                >
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <button
+                        type="button"
+                        aria-label="Закрыть диалог сохранения плейлиста"
+                        className="absolute inset-0 cursor-default bg-black/75"
+                        onClick={() => setShowSaveDialog(false)}
+                    />
                     <div
-                        className="bg-surface-sunken rounded-xl max-w-md w-full overflow-hidden border border-white/10 shadow-2xl"
-                        onClick={(e) => e.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="queue-save-dialog-title"
+                        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface-overlay shadow-2xl"
                     >
                         <div className="p-6">
-                            <h2 className="text-lg font-bold text-white mb-1">
-                                Save Queue as Playlist
+                            <h2
+                                id="queue-save-dialog-title"
+                                className="mb-1 text-lg font-bold text-content"
+                            >
+                                {queueRu.saveDialogTitle}
                             </h2>
-                            <p className="text-sm text-gray-400 mb-4">
-                                Save {playlistTracks.length} track
-                                {playlistTracks.length !== 1 ? "s" : ""} to a
-                                new playlist
+                            <p className="mb-4 text-sm text-content-muted">
+                                {formatQueueSaveDescription(
+                                    playlistTracks.length,
+                                )}
                             </p>
                             <input
                                 type="text"
@@ -647,24 +659,24 @@ export default function QueuePage() {
                                 onKeyDown={(e) =>
                                     e.key === "Enter" && handleSaveAsPlaylist()
                                 }
-                                placeholder={`Queue — ${new Date().toLocaleDateString()}`}
-                                className="w-full px-3 py-2 bg-surface-hover border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-brand/50"
+                                placeholder={`${queueRu.title} — ${new Date().toLocaleDateString("ru-RU")}`}
+                                className="min-h-11 w-full rounded-xl border border-line bg-surface-elevated px-4 py-2.5 text-content outline-none transition-colors placeholder:text-content-muted focus:border-brand/60 focus:ring-2 focus:ring-brand/20"
                                 autoFocus
                             />
                         </div>
                         <div className="flex gap-3 p-6 pt-0">
                             <button
                                 onClick={() => setShowSaveDialog(false)}
-                                className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white font-medium rounded-lg transition-colors border border-white/10"
+                                className="min-h-11 flex-1 rounded-xl border border-line bg-surface-elevated px-4 py-2.5 font-medium text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                             >
-                                Cancel
+                                {queueRu.cancel}
                             </button>
                             <button
                                 onClick={handleSaveAsPlaylist}
                                 disabled={isSaving}
-                                className="flex-1 px-4 py-2.5 bg-brand hover:bg-brand-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                                className="min-h-11 flex-1 rounded-xl bg-brand px-4 py-2.5 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-50"
                             >
-                                {isSaving ? "Saving..." : "Save"}
+                                {isSaving ? queueRu.saving : queueRu.save}
                             </button>
                         </div>
                     </div>
@@ -692,14 +704,14 @@ function EpisodeQueueRow({
 }) {
     return (
         <div
-            className={`flex items-center gap-4 p-4 hover:bg-surface-hover transition-colors group border-b border-surface-active ${played ? "opacity-50" : ""}`}
+            className={`group flex flex-wrap items-center gap-3 border-b border-line px-3 py-3 transition-colors hover:bg-surface-elevated/70 motion-reduce:transition-none sm:gap-4 sm:px-4 ${played ? "opacity-50" : ""}`}
         >
             {dragHandleProps && (
                 <button
                     {...dragHandleProps}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white cursor-grab active:cursor-grabbing"
-                    title="Drag to reorder"
-                    aria-label="Drag to reorder"
+                    className="hidden h-11 w-11 cursor-grab items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light active:cursor-grabbing motion-reduce:transition-none sm:flex"
+                    title={queueRu.dragToReorder}
+                    aria-label={queueRu.dragToReorder}
                 >
                     <GripVertical className="w-5 h-5" />
                 </button>
@@ -716,29 +728,29 @@ function EpisodeQueueRow({
                     />
                 ) : (
                     <div className="w-12 h-12 bg-surface rounded-sm flex items-center justify-center">
-                        <Music className="w-5 h-5 text-gray-400" />
+                        <Music className="h-5 w-5 text-content-muted" />
                     </div>
                 )}
             </div>
             <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-white truncate">
+                <h3 className="truncate text-sm font-medium text-content">
                     {episode.title}
                 </h3>
-                <p className="text-sm text-gray-400 truncate">
+                <p className="truncate text-sm text-content-muted">
                     {episode.podcastTitle}
                 </p>
-                <p className="text-[11px] text-gray-400 truncate">
-                    Podcast episode
+                <p className="truncate text-[11px] text-content-muted">
+                    {queueRu.podcastEpisode}
                 </p>
             </div>
             {(onPlay || onRemove) && (
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="ml-auto flex items-center gap-1">
                     {onPlay && (
                         <button
                             onClick={onPlay}
-                            className="p-2 hover:bg-surface rounded-md transition-colors"
-                            title="Play now"
-                            aria-label="Play now"
+                            className="flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            title={queueRu.playNow}
+                            aria-label={queueRu.playNow}
                         >
                             <Play className="w-4 h-4" />
                         </button>
@@ -746,15 +758,16 @@ function EpisodeQueueRow({
                     {onRemove && (
                         <button
                             onClick={onRemove}
-                            className="p-2 hover:bg-surface rounded-md transition-colors text-red-400 hover:text-red-300"
-                            title="Remove from queue"
+                            className="flex h-11 w-11 items-center justify-center rounded-xl text-error transition-colors hover:bg-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error motion-reduce:transition-none"
+                            title={queueRu.removeFromQueue}
+                            aria-label={queueRu.removeFromQueue}
                         >
                             <X className="w-4 h-4" />
                         </button>
                     )}
                 </div>
             )}
-            <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
+            <span className="hidden w-10 text-right text-xs tabular-nums text-content-muted sm:block">
                 {formatTime(episode.duration)}
             </span>
         </div>
@@ -804,14 +817,14 @@ function NextTrackRow({
 
     return (
         <div
-            className={`flex items-center gap-4 p-4 hover:bg-surface-hover transition-colors group border-b border-surface-active ${isUnavailable ? "opacity-50" : ""}`}
+            className={`group flex flex-wrap items-center gap-3 border-b border-line px-3 py-3 transition-colors hover:bg-surface-elevated/70 motion-reduce:transition-none sm:gap-4 sm:px-4 ${isUnavailable ? "opacity-50" : ""}`}
         >
             {!isInGroup && dragHandleProps && (
                 <button
                     {...dragHandleProps}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-white cursor-grab active:cursor-grabbing"
-                    title="Drag to reorder"
-                    aria-label="Drag to reorder"
+                    className="hidden h-11 w-11 cursor-grab items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light active:cursor-grabbing motion-reduce:transition-none sm:flex"
+                    title={queueRu.dragToReorder}
+                    aria-label={queueRu.dragToReorder}
                 >
                     <GripVertical className="w-5 h-5" />
                 </button>
@@ -828,21 +841,21 @@ function NextTrackRow({
                     />
                 ) : (
                     <div className="w-12 h-12 bg-surface rounded-sm flex items-center justify-center">
-                        <Music className="w-5 h-5 text-gray-400" />
+                        <Music className="h-5 w-5 text-content-muted" />
                     </div>
                 )}
             </div>
             <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-white truncate">
+                <h3 className="truncate text-sm font-medium text-content">
                     {track.displayTitle ?? track.title}
                 </h3>
-                <p className="text-sm text-gray-400 truncate">
+                <p className="truncate text-sm text-content-muted">
                     {track.artist?.name}
                 </p>
                 <div className="mt-1 flex items-center gap-2">
                     {isUnavailable ? (
-                        <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-500/50 rounded px-1.5 py-0.5">
-                            Unavailable
+                        <span className="rounded border border-line-strong px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-content-muted">
+                            {queueRu.unavailable}
                         </span>
                     ) : null}
                     {isInGroup && resolvedSource === "tidal" ? (
@@ -859,29 +872,32 @@ function NextTrackRow({
                     ) : null}
                 </div>
                 {track.album?.title && (
-                    <p className="text-[11px] text-gray-400 truncate">
+                    <p className="truncate text-[11px] text-content-muted">
                         {track.album.title}
                     </p>
                 )}
             </div>
-            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div
+                data-queue-row-actions="responsive"
+                className="order-last flex basis-full items-center justify-end gap-1 sm:order-none sm:ml-auto sm:basis-auto"
+            >
                 {!isInGroup && (
                     <>
                         <button
                             onClick={() => onMoveUp(queueIndex)}
                             disabled={queueIndex <= currentIndex + 1}
-                            className="p-2 hover:bg-surface rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Move up"
-                            aria-label="Move up"
+                            className="flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none"
+                            title={queueRu.moveUp}
+                            aria-label={queueRu.moveUp}
                         >
                             <ChevronUp className="w-4 h-4" />
                         </button>
                         <button
                             onClick={() => onMoveDown(queueIndex)}
                             disabled={queueIndex >= queueLength - 1}
-                            className="p-2 hover:bg-surface rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Move down"
-                            aria-label="Move down"
+                            className="flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none"
+                            title={queueRu.moveDown}
+                            aria-label={queueRu.moveDown}
                         >
                             <ChevronDown className="w-4 h-4" />
                         </button>
@@ -890,26 +906,27 @@ function NextTrackRow({
                 <button
                     onClick={() => onPlay(queueIndex)}
                     disabled={isUnavailable}
-                    className="p-2 hover:bg-surface rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Play now"
-                    aria-label="Play now"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+                    title={queueRu.playNow}
+                    aria-label={queueRu.playNow}
                 >
                     <Play className="w-4 h-4" />
                 </button>
             </div>
             <div className="flex items-center gap-1">
-                <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
+                <span className="hidden w-10 text-right text-xs tabular-nums text-content-muted md:block">
                     {formatTime(track.duration)}
                 </span>
                 <TrackPreferenceButtons
                     trackId={track.id}
                     mode="up-only"
-                    buttonSizeClassName="h-8 w-8"
+                    buttonSizeClassName="h-11 w-11"
                     iconSizeClassName="h-4 w-4"
                     metadata={buildPreferenceMetadata(track)}
                 />
                 <TrackOverflowMenu
                     track={track}
+                    triggerClassName="h-11 w-11 p-0"
                     showPlayNext={false}
                     showAddToQueue={false}
                     extraItemsAfter={
@@ -919,8 +936,8 @@ function NextTrackRow({
                                 onRemove(queueIndex);
                             }}
                             icon={<X className="h-4 w-4" />}
-                            label="Remove from queue"
-                            className="text-red-400 hover:text-red-300"
+                            label={queueRu.removeFromQueue}
+                            className="text-error hover:text-error/80"
                         />
                     }
                 />
@@ -954,7 +971,7 @@ function PreviousTrackRow({
 
     return (
         <div
-            className={`flex items-center gap-4 p-4 hover:bg-surface-hover transition-colors group opacity-50 border-b border-surface-active ${isUnavailable ? "opacity-30" : ""}`}
+            className={`group flex flex-wrap items-center gap-3 border-b border-line px-3 py-3 opacity-50 transition-colors hover:bg-surface-elevated/70 motion-reduce:transition-none sm:gap-4 sm:px-4 ${isUnavailable ? "opacity-30" : ""}`}
         >
             <div className="relative flex-shrink-0 w-12 h-12">
                 {track.album?.coverArt ? (
@@ -968,21 +985,21 @@ function PreviousTrackRow({
                     />
                 ) : (
                     <div className="w-12 h-12 bg-surface rounded-sm flex items-center justify-center">
-                        <Music className="w-5 h-5 text-gray-400" />
+                        <Music className="h-5 w-5 text-content-muted" />
                     </div>
                 )}
             </div>
             <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-white truncate">
+                <h3 className="truncate text-sm font-medium text-content">
                     {track.title}
                 </h3>
-                <p className="text-sm text-gray-400 truncate">
+                <p className="truncate text-sm text-content-muted">
                     {track.artist?.name}
                 </p>
                 <div className="mt-1 flex items-center gap-2">
                     {isUnavailable ? (
-                        <span className="text-[10px] uppercase tracking-wide text-gray-400 border border-gray-500/50 rounded px-1.5 py-0.5">
-                            Unavailable
+                        <span className="rounded border border-line-strong px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-content-muted">
+                            {queueRu.unavailable}
                         </span>
                     ) : null}
                     {isInGroup && resolvedSource === "tidal" ? (
@@ -999,24 +1016,25 @@ function PreviousTrackRow({
                     ) : null}
                 </div>
                 {track.album?.title && (
-                    <p className="text-[11px] text-gray-400 truncate">
+                    <p className="truncate text-[11px] text-content-muted">
                         {track.album.title}
                     </p>
                 )}
             </div>
-            <div className="flex items-center gap-1">
-                <span className="text-xs text-gray-400 w-10 text-right tabular-nums">
+            <div className="ml-auto flex items-center gap-1">
+                <span className="hidden w-10 text-right text-xs tabular-nums text-content-muted sm:block">
                     {formatTime(track.duration)}
                 </span>
                 <TrackPreferenceButtons
                     trackId={track.id}
                     mode="up-only"
-                    buttonSizeClassName="h-8 w-8"
+                    buttonSizeClassName="h-11 w-11"
                     iconSizeClassName="h-4 w-4"
                     metadata={buildPreferenceMetadata(track)}
                 />
                 <TrackOverflowMenu
                     track={track}
+                    triggerClassName="h-11 w-11 p-0"
                     showPlayNext={false}
                     showAddToQueue={false}
                 />

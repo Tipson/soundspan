@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 import Image from "next/image";
 import { UserSettings } from "../../types";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 
 interface AccountSectionProps {
     settings: UserSettings;
@@ -77,7 +78,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
         const trimmed = email.trim();
         if (!trimmed) {
             setEmailStatus("error");
-            setEmailMessage("Email required");
+            setEmailMessage("Укажите почту");
             return;
         }
         setSavingEmail(true);
@@ -85,10 +86,10 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
         try {
             await api.post("/auth/change-email", { email: trimmed });
             setEmailStatus("success");
-            setEmailMessage("Updated");
+            setEmailMessage("Обновлено");
         } catch (error: unknown) {
             setEmailStatus("error");
-            setEmailMessage(error instanceof Error ? error.message : "Failed");
+            setEmailMessage(userFacingError(error, "Не удалось сохранить"));
         } finally {
             setSavingEmail(false);
         }
@@ -98,17 +99,17 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
     const handleChangePassword = async () => {
         if (!currentPassword || !newPassword || !confirmPassword) {
             setPasswordStatus("error");
-            setPasswordMessage("All fields required");
+            setPasswordMessage("Заполните все поля");
             return;
         }
         if (newPassword.length < 6) {
             setPasswordStatus("error");
-            setPasswordMessage("Min 6 characters");
+            setPasswordMessage("Не менее 6 символов");
             return;
         }
         if (newPassword !== confirmPassword) {
             setPasswordStatus("error");
-            setPasswordMessage("Passwords don't match");
+            setPasswordMessage("Пароли не совпадают");
             return;
         }
 
@@ -120,7 +121,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                 newPassword,
             });
             setPasswordStatus("success");
-            setPasswordMessage("Changed");
+            setPasswordMessage("Пароль изменён");
             setCurrentPassword("");
             setNewPassword("");
             setConfirmPassword("");
@@ -128,7 +129,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
         } catch (error: unknown) {
             setPasswordStatus("error");
             setPasswordMessage(
-                error instanceof Error ? error.message : "Failed",
+                userFacingError(error, "Не удалось изменить пароль"),
             );
         } finally {
             setChangingPassword(false);
@@ -141,13 +142,11 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
         try {
             await enable2FA(twoFactorToken);
             setTfaStatus("success");
-            setTfaMessage("Enabled");
+            setTfaMessage("Включено");
             setTwoFactorToken("");
         } catch (error: unknown) {
             setTfaStatus("error");
-            setTfaMessage(
-                error instanceof Error ? error.message : "Invalid code",
-            );
+            setTfaMessage(userFacingError(error, "Неверный код"));
         }
     };
 
@@ -159,7 +158,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
             setTfaStatus("idle");
         } catch (error: unknown) {
             setTfaStatus("error");
-            setTfaMessage(error instanceof Error ? error.message : "Failed");
+            setTfaMessage(userFacingError(error, "Не удалось включить"));
         }
     };
 
@@ -169,38 +168,41 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
         try {
             await disable2FA(disablePassword, disableToken);
             setTfaStatus("success");
-            setTfaMessage("Disabled");
+            setTfaMessage("Выключено");
             setDisablePassword("");
             setDisableToken("");
             setShowDisableFlow(false);
         } catch (error: unknown) {
             setTfaStatus("error");
-            setTfaMessage(error instanceof Error ? error.message : "Failed");
+            setTfaMessage(userFacingError(error, "Не удалось выключить"));
         }
     };
 
     return (
         <>
-            <SettingsSection id="account" title="Account">
+            <SettingsSection id="account" title={ru.settings.account}>
                 {/* Display Name */}
                 <SettingsRow
-                    label="Display Name"
-                    description="Optional name shown in supported user-facing areas. Max 80 characters."
+                    label="Отображаемое имя"
+                    description="Необязательное имя для интерфейса. Не более 80 символов."
+                    htmlFor="display-name"
                 >
                     <div className="w-64">
                         <SettingsInput
                             id="display-name"
+                            name="displayName"
+                            autoComplete="name"
                             type="text"
                             value={displayName}
                             onChange={(value) =>
                                 onUpdate({ displayName: value })
                             }
-                            placeholder="e.g. Jane or Jane Doe"
+                            placeholder="Например, Анна"
                         />
                         {!isDisplayNameValid && (
                             <p className="mt-1 text-xs text-red-400">
-                                Use only letters, numbers, spaces, periods, and
-                                hyphens.
+                                Используйте только латинские буквы, цифры,
+                                пробелы, точки и дефисы.
                             </p>
                         )}
                     </div>
@@ -208,21 +210,24 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
 
                 {/* Username Display */}
                 <SettingsRow
-                    label="Username"
-                    description={`Logged in as ${user?.username}`}
+                    label="Имя пользователя"
+                    description={`Вы вошли как ${user?.username}`}
                 >
                     <span className="text-sm text-gray-400">{user?.role}</span>
                 </SettingsRow>
 
                 {/* Email */}
                 <SettingsRow
-                    label="Email"
-                    description="Used for login and account recovery"
+                    label="Электронная почта"
+                    description="Используется для входа и восстановления аккаунта"
+                    htmlFor="email"
                 >
                     <div className="flex items-center gap-3">
                         <div className="w-64">
                             <SettingsInput
                                 id="email"
+                                name="email"
+                                autoComplete="email"
                                 type="email"
                                 value={email}
                                 onChange={setEmail}
@@ -238,7 +243,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                             className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full
                                 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
-                            {savingEmail ? "Saving..." : "Save"}
+                            {savingEmail ? ru.settings.saving : ru.common.save}
                         </button>
                         <InlineStatus
                             status={emailStatus}
@@ -250,22 +255,22 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
 
                 {/* Change Password */}
                 <SettingsRow
-                    label="Password"
-                    description="Change your account password"
+                    label="Пароль"
+                    description="Измените пароль аккаунта"
                 >
                     {!showPasswordForm ? (
                         <button
                             onClick={() => setShowPasswordForm(true)}
                             className="text-sm text-white hover:underline"
                         >
-                            Change
+                            Изменить
                         </button>
                     ) : (
                         <button
                             onClick={() => setShowPasswordForm(false)}
                             className="text-sm text-gray-400 hover:text-white"
                         >
-                            Cancel
+                            {ru.common.cancel}
                         </button>
                     )}
                 </SettingsRow>
@@ -273,22 +278,31 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                 {showPasswordForm && (
                     <div className="py-4 space-y-3 border-t border-b border-white/5">
                         <SettingsInput
+                            id="current-password"
+                            name="currentPassword"
+                            autoComplete="current-password"
                             type="password"
                             value={currentPassword}
                             onChange={setCurrentPassword}
-                            placeholder="Current password"
+                            placeholder="Текущий пароль"
                         />
                         <SettingsInput
+                            id="new-password"
+                            name="newPassword"
+                            autoComplete="new-password"
                             type="password"
                             value={newPassword}
                             onChange={setNewPassword}
-                            placeholder="New password (min 6 characters)"
+                            placeholder="Новый пароль (не менее 6 символов)"
                         />
                         <SettingsInput
+                            id="confirm-password"
+                            name="confirmPassword"
+                            autoComplete="new-password"
                             type="password"
                             value={confirmPassword}
                             onChange={setConfirmPassword}
-                            placeholder="Confirm new password"
+                            placeholder="Повторите новый пароль"
                         />
                         <div className="inline-flex items-center gap-3">
                             <button
@@ -303,8 +317,8 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
                                 {changingPassword
-                                    ? "Changing..."
-                                    : "Change Password"}
+                                    ? "Изменяем…"
+                                    : "Изменить пароль"}
                             </button>
                             <InlineStatus
                                 status={passwordStatus}
@@ -317,11 +331,11 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
 
                 {/* Two-Factor Authentication */}
                 <SettingsRow
-                    label="Two-factor authentication"
+                    label="Двухфакторная аутентификация"
                     description={
                         twoFactorEnabled
-                            ? "Enabled"
-                            : "Add extra security to your account"
+                            ? "Включена"
+                            : "Дополнительная защита аккаунта"
                     }
                 >
                     {!settingUpTwoFactor &&
@@ -332,7 +346,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                     onClick={() => setShowDisableFlow(true)}
                                     className="text-sm text-red-400 hover:text-red-300"
                                 >
-                                    Disable
+                                    Выключить
                                 </button>
                                 <InlineStatus
                                     status={tfaStatus}
@@ -348,8 +362,8 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                     className="text-sm text-white hover:underline disabled:opacity-50"
                                 >
                                     {tfaStatus === "loading"
-                                        ? "Starting..."
-                                        : "Enable"}
+                                        ? "Запускаем…"
+                                        : "Включить"}
                                 </button>
                                 <InlineStatus
                                     status={tfaStatus}
@@ -364,8 +378,8 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                 {settingUpTwoFactor && (
                     <div className="py-4 space-y-4 border-t border-b border-white/5">
                         <p className="text-sm text-gray-400">
-                            Scan the QR code with your authenticator app, then
-                            enter the code below.
+                            Отсканируйте QR-код в приложении-аутентификаторе и
+                            введите полученный код ниже.
                         </p>
 
                         {twoFactorQR && (
@@ -373,7 +387,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                 <div className="bg-white p-3 rounded-lg">
                                     <Image
                                         src={twoFactorQR}
-                                        alt="2FA QR Code"
+                                        alt="QR-код для двухфакторной аутентификации"
                                         width={160}
                                         height={160}
                                         sizes="160px"
@@ -387,7 +401,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                         {twoFactorSecret && (
                             <div className="text-center">
                                 <p className="text-xs text-gray-400 mb-1">
-                                    Manual entry code:
+                                    Код для ручного ввода:
                                 </p>
                                 <code className="text-sm text-white bg-surface-highlight px-3 py-1 rounded font-mono">
                                     {twoFactorSecret}
@@ -396,6 +410,9 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                         )}
 
                         <SettingsInput
+                            id="two-factor-token"
+                            name="twoFactorToken"
+                            autoComplete="one-time-code"
                             type="text"
                             value={twoFactorToken}
                             onChange={(v) =>
@@ -403,7 +420,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                     v.replace(/\D/g, "").slice(0, 6),
                                 )
                             }
-                            placeholder="Enter 6-digit code"
+                            placeholder="Введите 6-значный код"
                         />
 
                         <div className="inline-flex items-center gap-3">
@@ -413,7 +430,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                 className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                             >
-                                Verify
+                                Проверить
                             </button>
                             <button
                                 onClick={() => {
@@ -422,7 +439,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                 }}
                                 className="px-4 py-2 text-sm text-gray-400 hover:text-white"
                             >
-                                Cancel
+                                {ru.common.cancel}
                             </button>
                             <InlineStatus
                                 status={tfaStatus}
@@ -437,15 +454,22 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                 {showDisableFlow && (
                     <div className="py-4 space-y-3 border-t border-b border-white/5">
                         <p className="text-sm text-yellow-500">
-                            Enter your password and current code to disable 2FA.
+                            Введите пароль и текущий код, чтобы выключить
+                            двухфакторную аутентификацию.
                         </p>
                         <SettingsInput
+                            id="disable-two-factor-password"
+                            name="disableTwoFactorPassword"
+                            autoComplete="current-password"
                             type="password"
                             value={disablePassword}
                             onChange={setDisablePassword}
-                            placeholder="Password"
+                            placeholder="Пароль"
                         />
                         <SettingsInput
+                            id="disable-two-factor-token"
+                            name="disableTwoFactorToken"
+                            autoComplete="one-time-code"
                             type="text"
                             value={disableToken}
                             onChange={(v) =>
@@ -453,7 +477,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                     v.replace(/\D/g, "").slice(0, 6),
                                 )
                             }
-                            placeholder="6-digit code"
+                            placeholder="6-значный код"
                         />
                         <div className="inline-flex items-center gap-3">
                             <button
@@ -465,7 +489,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                 className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-full
                                     hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                                Disable 2FA
+                                Выключить 2FA
                             </button>
                             <button
                                 onClick={() => {
@@ -475,7 +499,7 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                                 }}
                                 className="px-4 py-2 text-sm text-gray-400 hover:text-white"
                             >
-                                Cancel
+                                {ru.common.cancel}
                             </button>
                             <InlineStatus
                                 status={tfaStatus}
@@ -491,13 +515,13 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
             <Modal
                 isOpen={showRecoveryCodes}
                 onClose={closeRecoveryCodes}
-                title="Recovery Codes"
+                title="Коды восстановления"
             >
                 <div className="space-y-4">
                     <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
                         <p className="text-sm text-red-300">
-                            Save these codes! You&apos;ll need them if you lose
-                            your authenticator.
+                            Сохраните эти коды. Они понадобятся, если вы
+                            потеряете доступ к приложению-аутентификатору.
                         </p>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -519,13 +543,13 @@ export function AccountSection({ settings, onUpdate }: AccountSectionProps) {
                             }
                             className="px-4 py-2 bg-line-strong text-white text-sm rounded-full hover:bg-line-muted"
                         >
-                            Copy
+                            Копировать
                         </button>
                         <button
                             onClick={closeRecoveryCodes}
                             className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full hover:scale-105 transition-transform"
                         >
-                            Done
+                            Готово
                         </button>
                     </div>
                 </div>

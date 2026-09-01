@@ -378,6 +378,16 @@ def test_classify_single_video(url: Any) -> None:
     assert result["video_id"] == VIDEO_ID
 
 
+def test_classify_youtube_url_uses_the_parsed_host_not_url_substrings() -> None:
+    legitimate = classify_youtube_url(
+        f"https://www.youtube.com/watch?v={VIDEO_ID}&next=https://music.youtube.com/"
+    )
+    disguised = classify_youtube_url(f"https://attacker.example/youtube.com/watch?v={VIDEO_ID}")
+
+    assert legitimate == {"kind": "video", "video_id": VIDEO_ID}
+    assert disguised == {"kind": "unknown"}
+
+
 def test_classify_channel_handle() -> None:
     result = classify_youtube_url("https://www.youtube.com/@BookClubRadio")
     assert result["kind"] == "channel"

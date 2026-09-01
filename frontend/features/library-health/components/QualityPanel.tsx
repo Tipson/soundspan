@@ -3,6 +3,12 @@
 import { useCallback, useState } from "react";
 import { api, type LibraryHealthSummary } from "@/lib/api";
 import { formatKbps } from "../format";
+import {
+    formatQualitySummaryRu,
+    formatShowingRu,
+    formatTrackCountRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
 import { useInsightPanelLoader } from "../hooks/useInsightPanelLoader";
 import { InsightPanel } from "./InsightPanel";
 
@@ -25,14 +31,17 @@ export function QualityPanel({
     );
     const page = useInsightPanelLoader(
         fetchPage,
-        "Failed to load quality outliers",
+        libraryOperationsRu.libraryInsights.quality.loadFailed,
         refreshToken,
     );
 
     return (
         <InsightPanel
-            title="Quality outliers"
-            subtitle={`${quality.albumsBelowFloor} lossy albums below ${quality.floorKbps} kbps`}
+            title={libraryOperationsRu.libraryInsights.quality.title}
+            subtitle={formatQualitySummaryRu(
+                quality.albumsBelowFloor,
+                quality.floorKbps,
+            )}
             isTruncated={quality.isTruncated}
             onFirstExpand={page.onFirstExpand}
             onRetry={page.load}
@@ -40,7 +49,9 @@ export function QualityPanel({
             error={page.error}
         >
             <div className="flex flex-wrap items-center gap-2 mb-3">
-                <span className="text-xs text-gray-400">Bitrate floor:</span>
+                <span className="text-xs text-gray-400">
+                    {libraryOperationsRu.libraryInsights.quality.bitrateFloor}
+                </span>
                 {FLOOR_CHOICES.map((choice) => (
                     <button
                         key={choice}
@@ -72,19 +83,22 @@ export function QualityPanel({
                             </span>
                             <span className="text-gray-500 whitespace-nowrap">
                                 ~{formatKbps(album.averageBitrateKbps)} ·{" "}
-                                {album.trackCount} tracks
+                                {formatTrackCountRu(album.trackCount)}
                             </span>
                         </li>
                     ))}
                     {page.data.items.length === 0 && (
                         <li className="text-xs text-gray-500">
-                            No lossy albums below this floor.
+                            {libraryOperationsRu.libraryInsights.quality.empty}
                         </li>
                     )}
                     {page.data.total > page.data.items.length && (
                         <li className="text-xs text-gray-500 pt-1">
-                            Showing {page.data.items.length} of{" "}
-                            {page.data.total}.
+                            {formatShowingRu(
+                                page.data.items.length,
+                                page.data.total,
+                                ["альбом", "альбома", "альбомов"],
+                            )}
                         </li>
                     )}
                 </ul>

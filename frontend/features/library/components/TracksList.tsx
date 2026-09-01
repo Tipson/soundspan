@@ -127,7 +127,7 @@ export function TracksList({
                             onDelete(track.id, track.title);
                         }}
                         icon={<Trash2 className="h-4 w-4" />}
-                        label="Delete track"
+                        label="Удалить трек"
                         className="text-red-400 hover:text-red-300"
                     />
                 ) : undefined,
@@ -154,8 +154,8 @@ export function TracksList({
             emptyState={
                 <EmptyState
                     icon={<AudioLines className="w-12 h-12" />}
-                    title="No songs yet"
-                    description="Your library is empty. Sync your music to get started."
+                    title="Треков пока нет"
+                    description="В коллекции пока нет треков. Добавьте или сохраните музыку, чтобы начать."
                 />
             }
             header={
@@ -163,8 +163,8 @@ export function TracksList({
                     className="grid-cols-[auto_1fr_1fr_auto] gap-3"
                     columns={[
                         { label: "#", className: "w-8 text-center" },
-                        { label: "Title" },
-                        { label: "Album" },
+                        { label: "Название" },
+                        { label: "Альбом" },
                         { label: "", className: "w-[230px]" },
                     ]}
                 />

@@ -9,6 +9,12 @@ import {
 } from "@/hooks/useMusicRequests";
 import { isRequestableMbid } from "@/lib/musicRequests";
 import type { Album } from "../types";
+import {
+    formatReleaseRequestedRu,
+    formatRequestingReleaseRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 /**
  * Request-flow state for the artist page's album grids: which albums the
@@ -35,22 +41,22 @@ export function useArtistAlbumRequests(artistName: string) {
         const rgMbid = albumRgMbid(album);
         if (!rgMbid || create.isPending) return;
         const toastId = `music-request-${rgMbid}`;
-        toast.loading(`Requesting ${album.title}...`, { id: toastId });
+        toast.loading(formatRequestingReleaseRu(album.title), { id: toastId });
         try {
             await create.mutateAsync({
                 artistName,
                 albumTitle: album.title,
                 rgMbid,
             });
-            toast.success(
-                `Requested ${album.title} — an admin will review it`,
-                { id: toastId },
-            );
+            toast.success(formatReleaseRequestedRu(album.title), {
+                id: toastId,
+            });
         } catch (error) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to submit the request",
+                userFacingError(
+                    error,
+                    libraryOperationsRu.requests.actionFailed,
+                ),
                 { id: toastId },
             );
         }

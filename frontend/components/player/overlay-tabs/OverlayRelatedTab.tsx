@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import type { Track } from "@/lib/audio-state-context";
 import {
     buildStreamMatchQuery,
+    getRelatedTrackArtistName,
     getRelatedTrackKey,
     partitionTidalBatchMatches,
     selectTracksNeedingStreamMatch,
@@ -27,6 +28,7 @@ import type {
     RelatedArtist,
     RelatedTrack,
 } from "./overlayRelatedTypes";
+import { ru } from "@/lib/i18n/ru";
 
 /**
  * Stream matches survive tab switches and track changes without re-calling
@@ -111,7 +113,7 @@ function buildLibraryPlaybackTrack(
         },
         album: {
             id: track.album?.id,
-            title: track.album?.title || "Unknown album",
+            title: track.album?.title || ru.common.unknownAlbum,
             coverArt: track.album?.coverArt || track.album?.coverUrl,
         },
         duration: track.duration || 0,
@@ -135,7 +137,7 @@ function buildStreamPlaybackTrack(
         title: track.title,
         artist: { name: artistName },
         album: {
-            title: track.album?.title || "Related Tracks",
+            title: track.album?.title || ru.player.relatedTracks,
             coverArt: track.album?.coverArt || track.album?.coverUrl,
         },
         duration: match.duration || track.duration || 0,
@@ -184,89 +186,47 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
     );
 
     const {
-        data: relatedTrackData,
-        isLoading: isRelatedTracksLoading,
-        isError: isRelatedTracksError,
+        data: relatedData,
+        isLoading: isRelatedLoading,
+        isError: isRelatedError,
     } = useQuery({
-        queryKey: queryKeys.playerRelatedTracks(currentTrack?.id),
+        queryKey: queryKeys.playerRelated(currentTrack?.id),
         queryFn: async () => {
-            if (!currentTrack?.id) return [];
-            const response = await api.getSimilarTracks(
+            if (!currentTrack?.id) {
+                return { tracks: [], artists: [], albums: [] };
+            }
+            return api.getPlayerRelated(
                 currentTrack.id,
                 12,
                 currentTrack.artist?.name,
                 currentTrack.displayTitle || currentTrack.title,
             );
-            return response.recommendations || [];
         },
         enabled: isTrackPlayback && !!currentTrack?.id,
         staleTime: 5 * 60 * 1000,
         retry: 1,
     });
 
-    const {
-        data: relatedArtistsData,
-        isLoading: isRelatedArtistsLoading,
-        isError: isRelatedArtistsError,
-    } = useQuery({
-        queryKey: queryKeys.playerRelatedArtists(
-            currentTrack?.artist?.name,
-            currentTrack?.artist?.mbid,
-        ),
-        queryFn: async () => {
-            if (!currentTrack?.artist?.name) return [];
-            const response = await api.discoverSimilarArtists(
-                currentTrack.artist.name,
-                currentTrack.artist.mbid || "",
-                8,
-            );
-            return response.similarArtists || [];
-        },
-        enabled: isTrackPlayback && !!currentTrack?.artist?.name,
-        staleTime: 30 * 60 * 1000,
-        retry: 1,
-    });
-
-    const {
-        data: moreFromArtistData,
-        isLoading: isMoreFromArtistLoading,
-        isError: isMoreFromArtistError,
-    } = useQuery({
-        queryKey: queryKeys.playerRelatedAlbums(currentTrack?.artist?.id),
-        queryFn: async () => {
-            if (!currentTrack?.artist?.id) return [];
-            const response = await api.getAlbums({
-                artistId: currentTrack.artist.id,
-                limit: 8,
-                sortBy: "recent",
-            });
-            return response.albums || [];
-        },
-        enabled: isTrackPlayback && !!currentTrack?.artist?.id,
-        staleTime: 10 * 60 * 1000,
-        retry: 1,
-    });
-
     const relatedTracks = useMemo<RelatedTrack[]>(
         () =>
-            Array.isArray(relatedTrackData)
-                ? (relatedTrackData as RelatedTrack[])
+            Array.isArray(relatedData?.tracks)
+                ? (relatedData.tracks as RelatedTrack[])
                 : [],
-        [relatedTrackData],
+        [relatedData?.tracks],
     );
     const relatedArtists = useMemo<RelatedArtist[]>(
         () =>
-            Array.isArray(relatedArtistsData)
-                ? (relatedArtistsData as RelatedArtist[])
+            Array.isArray(relatedData?.artists)
+                ? (relatedData.artists as RelatedArtist[])
                 : [],
-        [relatedArtistsData],
+        [relatedData?.artists],
     );
     const moreFromArtist = useMemo<RelatedAlbum[]>(
         () =>
-            Array.isArray(moreFromArtistData)
-                ? (moreFromArtistData as RelatedAlbum[])
+            Array.isArray(relatedData?.albums)
+                ? (relatedData.albums as RelatedAlbum[])
                 : [],
-        [moreFromArtistData],
+        [relatedData?.albums],
     );
     const sortedRelatedTracks = useMemo(
         () => sortRelatedTracksByRelevance(relatedTracks),
@@ -276,6 +236,33 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
         () => sortedRelatedTracks.slice(0, 8),
         [sortedRelatedTracks],
     );
+
+    useEffect(() => {
+        const directMatches: Record<string, RelatedStreamMatch> = {};
+        for (const track of visibleRelatedTracks) {
+            const key = getRelatedTrackKey(track);
+            if (streamMatches[key]) continue;
+            if (track.streamSource === "youtube" && track.youtubeVideoId) {
+                directMatches[key] = {
+                    streamSource: "youtube",
+                    youtubeVideoId: track.youtubeVideoId,
+                    title: track.title,
+                    duration: track.duration,
+                };
+            } else if (track.streamSource === "tidal" && track.tidalTrackId) {
+                directMatches[key] = {
+                    streamSource: "tidal",
+                    tidalTrackId: track.tidalTrackId,
+                    title: track.title,
+                    artist: getRelatedTrackArtistName(track),
+                    duration: track.duration,
+                };
+            }
+        }
+        if (Object.keys(directMatches).length > 0) {
+            addStreamMatches(directMatches);
+        }
+    }, [addStreamMatches, streamMatches, visibleRelatedTracks]);
 
     useEffect(() => {
         if (!isTrackPlayback) return;
@@ -350,7 +337,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
     const playRelatedTrack = useCallback(
         async (track: RelatedTrack) => {
             const artistName =
-                track.album?.artist?.name || track.artist || "Unknown artist";
+                getRelatedTrackArtistName(track) || ru.common.unknownArtist;
 
             if (track.inLibrary && track.id) {
                 playTrack(buildLibraryPlaybackTrack(track, artistName));
@@ -361,7 +348,23 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
             setMatchingTrackKey(trackKey);
             try {
                 let resolvedMatch: RelatedStreamMatch | null =
-                    streamMatches[trackKey] ?? null;
+                    streamMatches[trackKey] ??
+                    (track.streamSource === "youtube" && track.youtubeVideoId
+                        ? {
+                              streamSource: "youtube",
+                              youtubeVideoId: track.youtubeVideoId,
+                              title: track.title,
+                              duration: track.duration,
+                          }
+                        : track.streamSource === "tidal" && track.tidalTrackId
+                          ? {
+                                streamSource: "tidal",
+                                tidalTrackId: track.tidalTrackId,
+                                title: track.title,
+                                artist: artistName,
+                                duration: track.duration,
+                            }
+                          : null);
                 if (!resolvedMatch) {
                     resolvedMatch = await resolveSingleStreamMatch(track);
                 }
@@ -387,9 +390,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
                     return;
                 }
 
-                toast.error(
-                    "No playable stream found for this related track yet",
-                );
+                toast.error(ru.player.noPlayableRelated);
             } finally {
                 setMatchingTrackKey(null);
             }
@@ -404,19 +405,17 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
             className="h-full space-y-5 overflow-y-auto px-4 py-3"
         >
             <RelatedSectionShell
-                title="Similar Songs"
-                isLoading={isRelatedTracksLoading}
-                isError={isRelatedTracksError}
-                errorText="Failed to load similar songs."
+                title={ru.player.relatedTracks}
+                isLoading={isRelatedLoading}
+                isError={isRelatedError}
+                errorText={ru.player.relatedTracksFailed}
                 onRetry={() =>
                     queryClient.invalidateQueries({
-                        queryKey: queryKeys.playerRelatedTracks(
-                            currentTrack?.id,
-                        ),
+                        queryKey: queryKeys.playerRelated(currentTrack?.id),
                     })
                 }
                 isEmpty={sortedRelatedTracks.length === 0}
-                emptyText="No similar songs found."
+                emptyText={ru.player.noRelatedTracks}
             >
                 <SimilarSongsList
                     tracks={visibleRelatedTracks}
@@ -427,20 +426,17 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
             </RelatedSectionShell>
 
             <RelatedSectionShell
-                title="Similar Artists"
-                isLoading={isRelatedArtistsLoading}
-                isError={isRelatedArtistsError}
-                errorText="Failed to load similar artists."
+                title={ru.player.relatedArtists}
+                isLoading={isRelatedLoading}
+                isError={isRelatedError}
+                errorText={ru.player.relatedArtistsFailed}
                 onRetry={() =>
                     queryClient.invalidateQueries({
-                        queryKey: queryKeys.playerRelatedArtists(
-                            currentTrack?.artist?.name,
-                            currentTrack?.artist?.mbid,
-                        ),
+                        queryKey: queryKeys.playerRelated(currentTrack?.id),
                     })
                 }
                 isEmpty={relatedArtists.length === 0}
-                emptyText="No similar artists found."
+                emptyText={ru.player.noRelatedArtists}
             >
                 <SimilarArtistsGrid
                     artists={relatedArtists}
@@ -449,19 +445,17 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
             </RelatedSectionShell>
 
             <RelatedSectionShell
-                title="More From This Artist"
-                isLoading={isMoreFromArtistLoading}
-                isError={isMoreFromArtistError}
-                errorText="Failed to load albums."
+                title={ru.player.moreFromArtist}
+                isLoading={isRelatedLoading}
+                isError={isRelatedError}
+                errorText={ru.player.albumsFailed}
                 onRetry={() =>
                     queryClient.invalidateQueries({
-                        queryKey: queryKeys.playerRelatedAlbums(
-                            currentTrack?.artist?.id,
-                        ),
+                        queryKey: queryKeys.playerRelated(currentTrack?.id),
                     })
                 }
                 isEmpty={moreFromArtist.length === 0}
-                emptyText="No albums found."
+                emptyText={ru.player.noAlbums}
             >
                 <MoreFromArtistGrid
                     albums={moreFromArtist}

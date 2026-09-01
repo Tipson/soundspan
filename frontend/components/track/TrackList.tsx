@@ -281,8 +281,8 @@ export function TrackList<T>({
                             }
                         }}
                         onDragEnd={clearDragState}
-                        title="Drag to reorder"
-                        aria-label={`Reorder ${rowItem.title}, use arrow keys to move`}
+                        title="Перетащить для изменения порядка"
+                        aria-label={`Изменить позицию трека «${rowItem.title}»: используйте клавиши со стрелками`}
                         className={cn(
                             "absolute left-0 top-0 bottom-0 z-10 hidden md:flex w-4 cursor-grab touch-none",
                             "items-center justify-center text-gray-400 hover:text-white",

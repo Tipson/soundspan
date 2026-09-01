@@ -2,6 +2,7 @@
 
 /** Floating controls and mutually exclusive map panels. */
 
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import { AlchemyTray } from "./AlchemyTray";
 import { FiltersPanel } from "./FiltersPanel";
 import { JourneyPanel } from "./JourneyPanel";
@@ -33,15 +34,15 @@ function MapViewControls({ model }: { model: VibeMapViewModel }) {
     const current = model.audio.currentTrack;
     const canLocate = !!(current && model.trackById.has(current.id));
     const locateHint = canLocate
-        ? "Fly to now playing"
+        ? vibeMapRu.controls.flyToNowPlaying
         : current
-          ? "Now playing isn't on the map"
-          : "Nothing playing";
+          ? vibeMapRu.controls.nowPlayingOffMap
+          : vibeMapRu.controls.nothingPlaying;
     const journeyHint = model.vibe.canStartJourney
-        ? "Plan a journey from the current track"
+        ? vibeMapRu.controls.planFromCurrent
         : model.vibe.mode === "alchemy"
-          ? "Close alchemy (Esc) first"
-          : "Play a track (or pick one in Travel) to start a journey";
+          ? vibeMapRu.controls.closeAlchemyFirst
+          : vibeMapRu.controls.playToStartJourney;
     return (
         <ViewControls
             onZoomIn={() => model.camera.zoomByCenter(1.3)}

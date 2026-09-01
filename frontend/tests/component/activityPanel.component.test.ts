@@ -28,7 +28,18 @@ mock.module("@/hooks/useNotifications", {
     namedExports: {
         useNotifications: (options?: { enabled?: boolean }) => {
             state.notificationHookOptions.push(options);
-            return { unreadCount: state.unreadCount };
+            return {
+                unreadCount: state.unreadCount,
+                notifications: Array.from(
+                    { length: state.unreadCount },
+                    (_, index) => ({
+                        id: `n-${index}`,
+                        type: "import_complete",
+                        title: "Import complete",
+                        read: false,
+                    }),
+                ),
+            };
         },
         useActiveDownloads: (options?: { enabled?: boolean }) => {
             state.activeDownloadsHookOptions.push(options);
@@ -164,10 +175,11 @@ test("shows all tabs for admin users on desktop", async () => {
         }),
     );
 
-    assert.match(html, />Notifications</);
-    assert.match(html, />Active</);
-    assert.match(html, />History</);
-    assert.match(html, />Social</);
+    assert.match(html, />Уведомления</);
+    assert.match(html, />Активные</);
+    assert.match(html, />История</);
+    assert.match(html, />Импорт</);
+    assert.match(html, />Сейчас онлайн</);
     assert.match(html, /notifications-tab/);
     assert.equal(
         state.notificationHookOptions.some(
@@ -183,7 +195,7 @@ test("shows all tabs for admin users on desktop", async () => {
     );
 });
 
-test("hides admin-only tabs for non-admin users and falls back from hidden active tab", async () => {
+test("keeps ordinary-user activity focused on notifications and imports", async () => {
     state.userRole = "user";
     state.socialUsers = [{ id: "u1" }];
 
@@ -198,10 +210,11 @@ test("hides admin-only tabs for non-admin users and falls back from hidden activ
         }),
     );
 
-    assert.match(html, />Notifications</);
-    assert.match(html, />Social</);
-    assert.doesNotMatch(html, />Active</);
-    assert.doesNotMatch(html, />History</);
+    assert.match(html, />Уведомления</);
+    assert.match(html, />Импорт</);
+    assert.doesNotMatch(html, />Сейчас онлайн</);
+    assert.doesNotMatch(html, />Активные</);
+    assert.doesNotMatch(html, />История</);
     assert.match(html, /notifications-tab/);
 });
 
@@ -226,18 +239,21 @@ test("renders mobile overlay with social content and capped badges", async () =>
         }),
     );
 
-    assert.match(html, /title="Close"/);
+    assert.match(html, /title="Закрыть панель активности"/);
     assert.match(html, /social-tab/);
     assert.match(html, /99\+/);
 });
 
-test("renders controlled active, history, and social content", async () => {
+test("renders controlled active, history, imports, and social content", async () => {
     const { ActivityPanel } =
         await import("../../components/layout/ActivityPanel");
 
-    const tabCases: Array<[string, "active" | "history" | "social"]> = [
+    const tabCases: Array<
+        [string, "active" | "history" | "imports" | "social"]
+    > = [
         ["active-tab", "active"],
         ["history-tab", "history"],
+        ["imports-tab", "imports"],
         ["social-tab", "social"],
     ];
 
@@ -270,7 +286,7 @@ test("returns null for closed mobile panel", async () => {
     assert.equal(html, "");
 });
 
-test("renders collapsed desktop strip without the panel badge when idle", async () => {
+test("closed desktop activity does not reserve a permanent sidebar strip", async () => {
     const { ActivityPanel } =
         await import("../../components/layout/ActivityPanel");
 
@@ -281,9 +297,7 @@ test("renders collapsed desktop strip without the panel badge when idle", async 
         }),
     );
 
-    assert.match(html, /Open activity panel/);
-    assert.match(html, /translateX\(332px\)/);
-    assert.doesNotMatch(html, /w-2\.5 h-2\.5/);
+    assert.equal(html, "");
     assert.equal(
         state.notificationHookOptions.some(
             (options) => options?.enabled === false,
@@ -298,6 +312,31 @@ test("renders collapsed desktop strip without the panel badge when idle", async 
     );
 });
 
+test("open desktop activity overlays content instead of shrinking it", async () => {
+    const { ActivityPanel } =
+        await import("../../components/layout/ActivityPanel");
+
+    const html = renderToStaticMarkup(
+        React.createElement(ActivityPanel, {
+            isOpen: true,
+            onToggle: () => undefined,
+        }),
+    );
+
+    assert.match(html, /data-activity-panel-layout="overlay"/);
+    assert.match(
+        html,
+        /top-\[calc\(var\(--app-topbar-height-desktop\)\+var\(--safe-area-top\)\+12px\)\]/,
+        "desktop panel must begin below the top bar and its safe gap",
+    );
+    assert.match(
+        html,
+        /bottom-\[calc\(var\(--app-player-height-desktop\)\+var\(--safe-area-bottom\)\+12px\)\]/,
+        "desktop panel must stop above the player dock and its safe gap",
+    );
+    assert.doesNotMatch(html, /Открыть панель активности/);
+});
+
 test("activity panel toggle hides on mobile and renders on desktop", async () => {
     const { ActivityPanelToggle } =
         await import("../../components/layout/ActivityPanel");
@@ -309,7 +348,7 @@ test("activity panel toggle hides on mobile and renders on desktop", async () =>
     state.isMobile = false;
     state.unreadCount = 1;
     html = renderToStaticMarkup(React.createElement(ActivityPanelToggle));
-    assert.match(html, /Toggle activity panel/);
+    assert.match(html, /Открыть или закрыть панель активности/);
     assert.match(html, /w-1 h-1 rounded-full/);
 });
 

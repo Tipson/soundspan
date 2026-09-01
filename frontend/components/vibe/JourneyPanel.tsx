@@ -9,6 +9,7 @@
  */
 
 import { ListPlus, Loader2, MapPin, Play, Route, X } from "lucide-react";
+import { vibeMapRu, vibeTrackCount } from "@/lib/i18n/vibeMapRu";
 import {
     VIBE_PANEL_CLASS,
     VIBE_PANEL_STYLE,
@@ -16,11 +17,10 @@ import {
 } from "./TravelPanel";
 import type { JourneyView } from "./useVibeMode";
 import { VibeTrackRow } from "./VibeTrackRow";
+import { moodLabel } from "./types";
 
 /** Mood buckets thinner than this can't seed a journey (mirrors the backend). */
 const MIN_MOOD_TRACKS = 5;
-
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function JourneyHeader({
     fromLabel,
@@ -31,20 +31,21 @@ function JourneyHeader({
             <div className="flex items-center gap-2 mb-2">
                 <Route className="w-4 h-4 text-indigo-300" />
                 <span className="text-sm font-semibold text-white">
-                    Journey
+                    {vibeMapRu.journey.title}
                 </span>
                 <button
                     type="button"
                     onClick={close}
-                    aria-label="Exit journey (Esc)"
-                    title="Exit journey (Esc)"
+                    aria-label={vibeMapRu.journey.exit}
+                    title={vibeMapRu.journey.exit}
                     className={PANEL_CLOSE_CLASS}
                 >
                     <X className="w-4 h-4" />
                 </button>
             </div>
             <p className="text-xs text-gray-400 mb-2">
-                From <span className="text-white">{fromLabel}</span>
+                {vibeMapRu.journey.from}{" "}
+                <span className="text-white">{fromLabel}</span>
             </p>
         </>
     );
@@ -55,7 +56,7 @@ function DestinationPicker({ view }: { view: JourneyView }) {
     return (
         <>
             <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-                Destination
+                {vibeMapRu.journey.destination}
             </p>
             <button
                 type="button"
@@ -65,10 +66,10 @@ function DestinationPicker({ view }: { view: JourneyView }) {
             >
                 <MapPin className="w-4 h-4 shrink-0" />
                 {picking
-                    ? "Click a dot to set destination…"
+                    ? vibeMapRu.journey.clickDestination
                     : destTrackId
-                      ? `Destination: ${destLabel}`
-                      : "Pick a destination on the map"}
+                      ? `${vibeMapRu.journey.destinationPrefix}: ${destLabel}`
+                      : vibeMapRu.journey.chooseOnMap}
             </button>
         </>
     );
@@ -89,12 +90,12 @@ function MoodChoices({ view }: { view: JourneyView }) {
                         aria-pressed={active}
                         title={
                             thin
-                                ? "Not enough analyzed tracks for this mood"
-                                : `${m.trackCount} tracks`
+                                ? vibeMapRu.journey.notEnoughMoodTracks
+                                : vibeTrackCount(m.trackCount)
                         }
                         className={`inline-flex items-center gap-1 min-h-[36px] px-3 py-1.5 rounded-full border text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${active ? "border-indigo-400/60 bg-indigo-500/30 text-white" : "border-white/10 text-gray-300 hover:bg-white/5"} disabled:opacity-30 disabled:cursor-not-allowed`}
                     >
-                        {cap(m.mood)}{" "}
+                        {moodLabel(m.mood)}{" "}
                         <span className="tabular-nums text-gray-400">
                             {m.trackCount}
                         </span>
@@ -109,14 +110,14 @@ function JourneySubmission({ view }: { view: JourneyView }) {
     return (
         <>
             <label className="flex items-center gap-2 mb-3 text-xs text-gray-300">
-                <span className="w-10">Steps</span>
+                <span className="w-10">{vibeMapRu.journey.steps}</span>
                 <input
                     type="range"
                     min={4}
                     max={16}
                     step={1}
                     value={view.steps}
-                    aria-label="Journey steps"
+                    aria-label={vibeMapRu.journey.stepsAria}
                     onChange={(e) =>
                         view.setSteps(parseInt(e.target.value, 10))
                     }
@@ -137,7 +138,7 @@ function JourneySubmission({ view }: { view: JourneyView }) {
                 ) : (
                     <Route className="w-4 h-4" />
                 )}
-                Build journey
+                {vibeMapRu.journey.build}
             </button>
             {view.error && (
                 <p className="text-xs text-red-400 mb-2">{view.error}</p>
@@ -154,14 +155,14 @@ function RouteActions({ view }: { view: JourneyView }) {
                 onClick={view.play}
                 className="inline-flex items-center gap-1 min-h-[36px] px-2 rounded-lg text-xs text-indigo-300 hover:text-white hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
             >
-                <Play className="w-3.5 h-3.5" /> Play journey
+                <Play className="w-3.5 h-3.5" /> {vibeMapRu.journey.play}
             </button>
             <button
                 type="button"
                 onClick={view.save}
                 disabled={view.saving}
-                title="Save this journey as a playlist"
-                aria-label="Save journey as playlist"
+                title={vibeMapRu.journey.saveTitle}
+                aria-label={vibeMapRu.journey.saveTitle}
                 className="inline-flex items-center gap-1 min-h-[36px] px-2 rounded-lg text-xs text-indigo-300 hover:text-white hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 disabled:opacity-30 disabled:cursor-not-allowed"
             >
                 {view.saving ? (
@@ -169,7 +170,7 @@ function RouteActions({ view }: { view: JourneyView }) {
                 ) : (
                     <ListPlus className="w-3.5 h-3.5" />
                 )}
-                Save
+                {vibeMapRu.journey.save}
             </button>
         </div>
     );
@@ -182,8 +183,8 @@ function JourneyRoute({ view }: { view: JourneyView }) {
             <div className="flex items-center justify-between mb-1">
                 <p className="text-xs uppercase tracking-wide text-gray-400">
                     {view.targetLabel
-                        ? `Route to ${view.targetLabel}`
-                        : "Route"}
+                        ? `${vibeMapRu.journey.routeTo} ${view.targetLabel}`
+                        : vibeMapRu.journey.route}
                 </p>
                 <RouteActions view={view} />
             </div>
@@ -212,7 +213,7 @@ function DriftChoices({ view }: { view: JourneyView }) {
     return (
         <div className="border-t border-white/10 pt-2">
             <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-                Drift toward…
+                {vibeMapRu.journey.drift}
             </p>
             <div className="flex flex-wrap gap-1.5">
                 {choices.map((m) => (
@@ -220,10 +221,10 @@ function DriftChoices({ view }: { view: JourneyView }) {
                         key={m.mood}
                         type="button"
                         onClick={() => view.drift(m.mood)}
-                        title={`Drift 12 steps toward ${cap(m.mood)}`}
+                        title={`${vibeMapRu.journey.drift} ${moodLabel(m.mood)} · 12`}
                         className="inline-flex items-center min-h-[36px] px-3 py-1.5 rounded-full border border-white/10 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
                     >
-                        {cap(m.mood)}
+                        {moodLabel(m.mood)}
                     </button>
                 ))}
             </div>

@@ -12,6 +12,16 @@ export interface TrackAlbumResolution {
     source: "musicbrainz-album" | "musicbrainz-recording" | "lastfm" | "deezer";
 }
 
+/** Canonical artist identity returned by the MusicBrainz provider lookup. */
+export interface MusicBrainzArtistSearchResult {
+    mbid: string;
+    name: string;
+    disambiguation: string | null;
+    country: string | null;
+    type: string | null;
+    score: number;
+}
+
 /** Add metadata-domain operations to an API client base class. */
 export function WithMetadata<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class MetadataApi extends Base {
@@ -93,18 +103,15 @@ export function WithMetadata<TBase extends ApiClientConstructor>(Base: TBase) {
             );
         }
 
-        async searchMusicBrainzArtists(query: string): Promise<{
-            artists: Array<{
-                mbid: string;
-                name: string;
-                disambiguation: string | null;
-                country: string | null;
-                type: string | null;
-                score: number;
-            }>;
+        async searchMusicBrainzArtists(
+            query: string,
+            signal?: AbortSignal,
+        ): Promise<{
+            artists: MusicBrainzArtistSearchResult[];
         }> {
             return this.request(
                 `/enrichment/search/musicbrainz/artists?q=${encodeURIComponent(query)}`,
+                { signal },
             );
         }
 

@@ -14,6 +14,8 @@ mock.module("lucide-react", {
     namedExports: {
         Check: icon("check"),
         Inbox: icon("inbox"),
+        AlertTriangle: icon("alert-triangle"),
+        RefreshCw: icon("refresh-cw"),
         X: icon("x"),
     },
 });
@@ -50,6 +52,9 @@ mock.module("next/link", {
 interface QueryState {
     data: unknown[] | undefined;
     isLoading: boolean;
+    isError?: boolean;
+    error?: unknown;
+    refetch?: () => Promise<unknown>;
 }
 
 const state: {
@@ -117,14 +122,17 @@ test("admin view lists requests with requester and review actions", async () => 
     const { default: RequestsPage } = await import("../../app/requests/page");
     const html = renderToStaticMarkup(React.createElement(RequestsPage));
 
-    assert.match(html, />Requests</);
+    assert.match(html, />Запросы</);
     assert.match(html, />Boards of Canada</);
     assert.match(html, />Geogaddi</);
-    assert.match(html, /Requested by alice/);
-    assert.match(html, />Approve</);
-    assert.match(html, />Decline</);
-    assert.match(html, /1 pending/);
-    assert.doesNotMatch(html, />Cancel</);
+    assert.match(html, /Запросил alice/);
+    assert.match(html, />Одобрить</);
+    assert.match(html, />Отклонить</);
+    assert.match(html, /1 на рассмотрении/);
+    assert.match(html, /data-utility-page="requests"/);
+    assert.match(html, /data-page-header="editorial"/);
+    assert.match(html, /min-h-11/);
+    assert.doesNotMatch(html, />Отменить</);
 });
 
 test("admin review actions disappear for settled requests", async () => {
@@ -136,9 +144,9 @@ test("admin review actions disappear for settled requests", async () => {
     const { default: RequestsPage } = await import("../../app/requests/page");
     const html = renderToStaticMarkup(React.createElement(RequestsPage));
 
-    assert.match(html, /In library/);
-    assert.doesNotMatch(html, />Approve</);
-    assert.doesNotMatch(html, />Decline</);
+    assert.match(html, /В коллекции/);
+    assert.doesNotMatch(html, />Одобрить</);
+    assert.doesNotMatch(html, />Отклонить</);
 });
 
 test("non-admin view shows own requests with cancel for pending", async () => {
@@ -155,11 +163,11 @@ test("non-admin view shows own requests with cancel for pending", async () => {
     const { default: RequestsPage } = await import("../../app/requests/page");
     const html = renderToStaticMarkup(React.createElement(RequestsPage));
 
-    assert.match(html, />My Requests</);
-    assert.match(html, />Cancel</);
-    assert.match(html, />Declined</);
-    assert.doesNotMatch(html, />Approve</);
-    assert.doesNotMatch(html, /Requested by/);
+    assert.match(html, />Мои запросы</);
+    assert.match(html, />Отменить</);
+    assert.match(html, />Отклонён</);
+    assert.doesNotMatch(html, />Одобрить</);
+    assert.doesNotMatch(html, /Запросил/);
 });
 
 test("request rows link to resolved artist and album pages", async () => {
@@ -204,6 +212,28 @@ test("empty state guides users toward the library", async () => {
     const { default: RequestsPage } = await import("../../app/requests/page");
     const html = renderToStaticMarkup(React.createElement(RequestsPage));
 
-    assert.match(html, /haven(&#x27;|')t requested anything yet/);
+    assert.match(html, /Вы пока ничего не запросили/);
     assert.match(html, /href="\/library"/);
+});
+
+test("request loading failures render a retryable semantic state", async () => {
+    state.auth = {
+        user: { id: "user-1", role: "user" },
+        isAuthenticated: true,
+        isLoading: false,
+    };
+    state.mineQuery = {
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error: new Error("backend detail"),
+        refetch: async () => ({}),
+    };
+
+    const { default: RequestsPage } = await import("../../app/requests/page");
+    const html = renderToStaticMarkup(React.createElement(RequestsPage));
+
+    assert.match(html, /role="alert"/);
+    assert.match(html, /Не удалось загрузить запросы/);
+    assert.match(html, />Повторить</);
 });

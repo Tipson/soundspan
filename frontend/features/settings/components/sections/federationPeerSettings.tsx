@@ -7,6 +7,7 @@ import type {
     FederationDedupEntry,
     FederationPeer,
 } from "@/lib/api/federation";
+import { adminManagementRu } from "@/lib/i18n/adminManagementRu";
 
 const fieldClassName =
     "w-24 rounded-lg border border-white/10 bg-surface px-2 py-1 text-xs text-white placeholder:text-gray-500 focus:border-white/30 focus:outline-none";
@@ -55,12 +56,8 @@ export function PeerSettingsPanel({
                     : {}),
             });
             await onSaved();
-        } catch (error: unknown) {
-            onError(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to save peer settings",
-            );
+        } catch {
+            onError(adminManagementRu.federation.saveSettingsError);
         } finally {
             setSaving(false);
         }
@@ -77,13 +74,13 @@ export function PeerSettingsPanel({
                             setShowDuplicates(event.target.checked)
                         }
                     />
-                    Show this peer&apos;s copies of tracks you already own
+                    {adminManagementRu.federation.showDuplicateCopies}
                 </label>
             )}
             {hasInbound && (
                 <div className="flex flex-wrap items-center gap-3 text-xs text-gray-300">
                     <label className="flex items-center gap-2">
-                        Max streams
+                        {adminManagementRu.federation.maxStreams}
                         <input
                             value={maxStreams}
                             onChange={(event) =>
@@ -95,7 +92,7 @@ export function PeerSettingsPanel({
                         />
                     </label>
                     <label className="flex items-center gap-2">
-                        Max kbps
+                        {adminManagementRu.federation.maxKbps}
                         <input
                             value={maxKbps}
                             onChange={(event) => setMaxKbps(event.target.value)}
@@ -112,7 +109,9 @@ export function PeerSettingsPanel({
                 onClick={() => void save()}
                 className="rounded-full bg-white px-3 py-1 text-[10px] font-semibold text-black disabled:opacity-50"
             >
-                {saving ? "Saving…" : "Save settings"}
+                {saving
+                    ? adminManagementRu.federation.saving
+                    : adminManagementRu.federation.saveSettings}
             </button>
         </div>
     );
@@ -146,12 +145,8 @@ export function PeerDedupList({
                     cursor ? [...previous, ...page.items] : page.items,
                 );
                 setNextCursor(page.nextCursor);
-            } catch (error: unknown) {
-                onError(
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to load dedup matches",
-                );
+            } catch {
+                onError(adminManagementRu.federation.loadDedupError);
             } finally {
                 setLoading(false);
             }
@@ -174,12 +169,8 @@ export function PeerDedupList({
                     entry.federatedTrack.id === trackId ? updated : entry,
                 ),
             );
-        } catch (error: unknown) {
-            onError(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update dedup match",
-            );
+        } catch {
+            onError(adminManagementRu.federation.updateDedupError);
         } finally {
             setBusyId(null);
         }
@@ -188,15 +179,15 @@ export function PeerDedupList({
     if (loading && entries.length === 0) {
         return (
             <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading dedup
-                matches…
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {adminManagementRu.federation.loadDedup}
             </div>
         );
     }
     if (entries.length === 0) {
         return (
             <p className="mt-3 text-xs text-gray-500">
-                No deduplicated tracks for this peer.
+                {adminManagementRu.federation.noDedup}
             </p>
         );
     }
@@ -217,7 +208,7 @@ export function PeerDedupList({
                     onClick={() => void load(nextCursor)}
                     className="text-xs text-gray-400 underline-offset-2 hover:underline"
                 >
-                    Load more
+                    {adminManagementRu.federation.loadMore}
                 </button>
             )}
         </div>
@@ -240,9 +231,11 @@ function DedupRow({
             </p>
             <p className="truncate text-gray-500">
                 {entry.localTrack
-                    ? `Hidden behind: ${dedupTrackLabel(entry.localTrack)}${entry.tier ? ` · ${entry.tier}` : ""}`
-                    : "Not linked to a local track"}
-                {entry.pinned ? " · pinned" : ""}
+                    ? `${adminManagementRu.federation.hiddenBehind}: ${dedupTrackLabel(entry.localTrack)}${entry.tier ? ` · ${entry.tier}` : ""}`
+                    : adminManagementRu.federation.notLinked}
+                {entry.pinned
+                    ? ` · ${adminManagementRu.federation.pinned}`
+                    : ""}
             </p>
             <div className="mt-1 flex gap-2">
                 {entry.localTrack && (
@@ -254,7 +247,7 @@ function DedupRow({
                         }
                         className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white disabled:opacity-50"
                     >
-                        Unlink
+                        {adminManagementRu.federation.unlink}
                     </button>
                 )}
                 <button
@@ -263,7 +256,7 @@ function DedupRow({
                     onClick={() => void onAct(entry.federatedTrack.id, "reset")}
                     className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white disabled:opacity-50"
                 >
-                    Re-match
+                    {adminManagementRu.federation.rematch}
                 </button>
             </div>
         </div>

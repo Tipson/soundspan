@@ -10,17 +10,11 @@ import {
 } from "@/hooks/useSocialPresence";
 import { PeerPresenceSection } from "@/components/activity/PeerPresenceSection";
 import { api } from "@/lib/api";
-
-function formatLastSeen(isoDate: string): string {
-    const parsed = Date.parse(isoDate);
-    if (Number.isNaN(parsed)) return "online";
-
-    const diffMs = Date.now() - parsed;
-    if (diffMs < 60_000) return "now";
-    if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m`;
-    if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h`;
-    return "today";
-}
+import {
+    adminActivityRu,
+    formatActivityRelativeTime,
+} from "@/lib/i18n/adminActivityRu";
+import { pluralRu } from "@/lib/i18n/ru";
 
 function getListeningStatusDisplay(
     status: SocialOnlineUser["listeningStatus"],
@@ -28,14 +22,14 @@ function getListeningStatusDisplay(
     switch (status) {
         case "playing":
             return {
-                label: "Playing",
+                label: adminActivityRu.activity.social.statuses.playing,
                 badgeClass:
                     "text-green-300 border-green-400/30 bg-green-400/10",
                 dotClass: "bg-green-400",
             };
         case "paused":
             return {
-                label: "Paused",
+                label: adminActivityRu.activity.social.statuses.paused,
                 badgeClass:
                     "text-amber-300 border-amber-400/30 bg-amber-400/10",
                 dotClass: "bg-amber-400",
@@ -43,7 +37,7 @@ function getListeningStatusDisplay(
         case "idle":
         default:
             return {
-                label: "Idle",
+                label: adminActivityRu.activity.social.statuses.idle,
                 badgeClass: "text-white/50 border-white/15 bg-white/5",
                 dotClass: "bg-white/40",
             };
@@ -78,7 +72,11 @@ export function SocialTab({
 
     if (showLoadingState) {
         return (
-            <div className="flex items-center justify-center py-8">
+            <div
+                className="flex items-center justify-center py-8"
+                role="status"
+                aria-label={adminActivityRu.activity.loading}
+            >
                 <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
             </div>
         );
@@ -89,10 +87,10 @@ export function SocialTab({
             <div className="flex flex-col items-center justify-center py-12 text-center px-6">
                 <Users className="w-8 h-8 text-white/20 mb-3" />
                 <p className="text-sm text-white/40">
-                    Social status unavailable
+                    {adminActivityRu.activity.social.unavailable}
                 </p>
                 <p className="text-xs text-white/30 mt-1">
-                    Presence data could not be loaded right now.
+                    {adminActivityRu.activity.social.unavailableHint}
                 </p>
             </div>
         );
@@ -102,9 +100,11 @@ export function SocialTab({
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Users className="w-8 h-8 text-white/20 mb-3" />
-                <p className="text-sm text-white/40">No one online</p>
+                <p className="text-sm text-white/40">
+                    {adminActivityRu.activity.social.empty}
+                </p>
                 <p className="text-xs text-white/30 mt-1">
-                    Users sharing presence will appear here.
+                    {adminActivityRu.activity.social.emptyHint}
                 </p>
             </div>
         );
@@ -118,20 +118,33 @@ export function SocialTab({
                     role="status"
                     aria-live="polite"
                 >
-                    {users.length} online
-                    {hasPeerUsers &&
-                        ` · ${peers.reduce((total, peer) => total + peer.users.length, 0)} on peers`}
+                    {users.length}{" "}
+                    {pluralRu(users.length, [
+                        "пользователь онлайн",
+                        "пользователя онлайн",
+                        "пользователей онлайн",
+                    ])}
+                    {hasPeerUsers && (
+                        <>
+                            {" · "}
+                            {peers.reduce(
+                                (total, peer) => total + peer.users.length,
+                                0,
+                            )}{" "}
+                            на других серверах
+                        </>
+                    )}
                 </span>
                 <span className="text-xs text-green-400 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                    Live
+                    {adminActivityRu.activity.social.live}
                 </span>
             </div>
 
             <div
                 className="flex-1 overflow-y-auto"
                 role="list"
-                aria-label="Online users sharing presence"
+                aria-label={adminActivityRu.activity.social.onlineUsersAria}
             >
                 {users.map((user) => {
                     const listeningStatus = getListeningStatusDisplay(
@@ -184,7 +197,7 @@ export function SocialTab({
                                                 "inline-flex items-center gap-1 text-[10px] uppercase tracking-wide rounded border px-1.5 py-0.5",
                                                 listeningStatus.badgeClass,
                                             )}
-                                            title={`Listening status: ${listeningStatus.label}`}
+                                            title={`${adminActivityRu.activity.social.listeningStatus}: ${listeningStatus.label}`}
                                         >
                                             <span
                                                 className={cn(
@@ -197,8 +210,14 @@ export function SocialTab({
                                         {user.isInListenTogetherGroup && (
                                             <span
                                                 className="inline-flex items-center justify-center font-bold rounded text-[9px] px-1 py-0.5 leading-none bg-ai/20 text-ai-hover"
-                                                title="In a Listen Together session"
-                                                aria-label="In a Listen Together session"
+                                                title={
+                                                    adminActivityRu.activity
+                                                        .social.listenTogether
+                                                }
+                                                aria-label={
+                                                    adminActivityRu.activity
+                                                        .social.listenTogether
+                                                }
                                             >
                                                 <Users className="w-2.5 h-2.5" />
                                             </span>
@@ -261,7 +280,10 @@ export function SocialTab({
                                     ) : (
                                         <p className="text-xs text-white/35 mt-1 flex items-center gap-1.5">
                                             <span className="w-2 h-2 rounded-full bg-white/40 shrink-0" />
-                                            Not currently playing
+                                            {
+                                                adminActivityRu.activity.social
+                                                    .notPlaying
+                                            }
                                         </p>
                                     )}
                                 </div>
@@ -273,9 +295,11 @@ export function SocialTab({
                                     )}
                                     title={new Date(
                                         user.lastHeartbeatAt,
-                                    ).toLocaleString()}
+                                    ).toLocaleString("ru-RU")}
                                 >
-                                    {formatLastSeen(user.lastHeartbeatAt)}
+                                    {formatActivityRelativeTime(
+                                        user.lastHeartbeatAt,
+                                    )}
                                 </div>
                             </div>
                         </div>

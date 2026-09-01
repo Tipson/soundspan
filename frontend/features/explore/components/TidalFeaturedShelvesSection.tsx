@@ -4,7 +4,7 @@
  * Shows TIDAL curated home + explore shelves combined.
  */
 
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { api } from "@/lib/api";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import type {
@@ -61,7 +61,7 @@ export function TidalFeaturedShelvesSection({
             {allShelves.map((shelf, idx) => (
                 <section key={shelf.title ?? idx}>
                     <SectionHeader
-                        title={shelf.title ?? "Featured"}
+                        title={shelf.title ?? "Подборки"}
                         badge={<TidalBadge />}
                     />
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">

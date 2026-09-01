@@ -389,6 +389,14 @@ test("useTidalTopTracks enriches only unowned top tracks", async () => {
                 duration: 0,
                 album: { id: "", title: "Unknown Album" },
             },
+            {
+                id: "exact-yt-track",
+                title: "Exact YouTube",
+                duration: 240,
+                streamSource: "youtube" as const,
+                youtubeVideoId: "already-exact",
+                album: { id: "", title: "Unknown Album" },
+            },
         ],
     };
 
@@ -401,6 +409,8 @@ test("useTidalTopTracks enriches only unowned top tracks", async () => {
     assert.equal(result.enrichedTopTracks?.[1].streamSource, "tidal");
     assert.equal(result.enrichedTopTracks?.[1].tidalTrackId, 777);
     assert.equal(result.enrichedTopTracks?.[1].duration, 260);
+    assert.equal(result.enrichedTopTracks?.[2].streamSource, "youtube");
+    assert.equal(result.enrichedTopTracks?.[2].youtubeVideoId, "already-exact");
 });
 
 test("useYtMusicTopTracks preserves TIDAL tracks and enriches unowned non-tidal tracks", async () => {
@@ -435,6 +445,14 @@ test("useYtMusicTopTracks preserves TIDAL tracks and enriches unowned non-tidal 
                 duration: 190,
                 album: { id: "owned-1", title: "Owned Album" },
             },
+            {
+                id: "exact-yt-track",
+                title: "Exact YouTube",
+                duration: 240,
+                streamSource: "youtube",
+                youtubeVideoId: "already-exact",
+                album: { id: "", title: "Unknown Album" },
+            },
         ],
     };
 
@@ -447,6 +465,8 @@ test("useYtMusicTopTracks preserves TIDAL tracks and enriches unowned non-tidal 
     assert.equal(result.enrichedTopTracks?.[1].youtubeVideoId, "yt-artist-2");
     assert.equal(result.enrichedTopTracks?.[1].duration, 233);
     assert.equal(result.enrichedTopTracks?.[2].streamSource, undefined);
+    assert.equal(result.enrichedTopTracks?.[3].streamSource, "youtube");
+    assert.equal(result.enrichedTopTracks?.[3].youtubeVideoId, "already-exact");
 });
 
 test("useDiscoverProviderGapFill marks tracks local when neither provider is available", async () => {

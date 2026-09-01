@@ -256,6 +256,10 @@ test("Queue page Next Up tracks render TrackOverflowMenu trigger", async () => {
 
     const html = renderToStaticMarkup(React.createElement(QueuePage));
 
+    assert.match(html, /data-consumer-surface="queue"/);
+    assert.match(html, /data-queue-track-surface="open"/);
+    assert.doesNotMatch(html, /data-testid="card"/);
+
     // Should have overflow menu triggers for Now Playing + each Next Up track (1 + 2)
     const triggerMatches = html.match(/aria-haspopup="menu"/g);
     assert.ok(triggerMatches, "Should render overflow menu triggers");
@@ -272,15 +276,15 @@ test("Queue page replaces standalone Remove button with overflow menu", async ()
 
     const html = renderToStaticMarkup(React.createElement(QueuePage));
 
-    // Should NOT have standalone "Remove" titled button (was the X button)
+    // Should NOT have a standalone remove button (the action lives in overflow)
     assert.doesNotMatch(
         html,
-        /title="Remove"/,
+        /title="Удалить из очереди"/,
         "Should not have standalone Remove button",
     );
 
     // Should still have the overflow menu trigger
-    assert.match(html, /Track actions/, "Should have overflow menu");
+    assert.match(html, /Действия с треком/, "Should have overflow menu");
 });
 
 test("Queue page keeps Move Up/Down and Play buttons alongside overflow menu", async () => {
@@ -290,11 +294,33 @@ test("Queue page keeps Move Up/Down and Play buttons alongside overflow menu", a
     const html = renderToStaticMarkup(React.createElement(QueuePage));
 
     // Move buttons should still exist
-    assert.match(html, /title="Move up"/, "Should keep Move up button");
-    assert.match(html, /title="Move down"/, "Should keep Move down button");
+    assert.match(
+        html,
+        /title="Переместить выше"/,
+        "Should keep Move up button",
+    );
+    assert.match(
+        html,
+        /title="Переместить ниже"/,
+        "Should keep Move down button",
+    );
 
     // Play now button should still exist
-    assert.match(html, /title="Play now"/, "Should keep Play now button");
+    assert.match(
+        html,
+        /title="Воспроизвести сейчас"/,
+        "Should keep Play now button",
+    );
+    assert.match(
+        html,
+        /data-queue-row-actions="responsive" class="[^"]*\bflex\b[^"]*"/,
+        "Direct queue actions should remain visible on touch layouts",
+    );
+    assert.doesNotMatch(
+        html,
+        /data-queue-row-actions="responsive" class="[^"]*\bhidden\b/,
+        "Direct queue actions should not be hidden on mobile",
+    );
 });
 
 // ─── 5.1 Save Queue as Playlist ───────────────────────────────────────
@@ -305,10 +331,10 @@ test("Queue page renders Save as Playlist button when queue has tracks", async (
 
     const html = renderToStaticMarkup(React.createElement(QueuePage));
 
-    // Should have a "Save as Playlist" button
+    // The queue can still be saved as a playlist after localization.
     assert.match(
         html,
-        /Save as Playlist/,
+        /Сохранить как плейлист/,
         "Should render Save as Playlist button",
     );
 });
@@ -325,7 +351,7 @@ test("Queue page does not render Save as Playlist when queue is empty", async ()
     // Should NOT have the button when empty
     assert.doesNotMatch(
         html,
-        /Save as Playlist/,
+        /Сохранить как плейлист/,
         "Should not render Save as Playlist when empty",
     );
 });

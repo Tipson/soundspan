@@ -5,60 +5,28 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 const state = {
     isLoading: false,
-    isRefreshingMixes: false,
-    recentlyListened: [{ id: "listen-1" }] as unknown[],
-    recentlyAdded: [{ id: "artist-1" }] as unknown[],
     recommended: [{ id: "artist-2" }] as unknown[],
-    mixes: [
-        {
-            id: "mix-1",
-            name: "Daily Mix 1",
-            description: "desc",
-            coverUrls: [],
-            trackCount: 10,
-        },
-    ] as unknown[],
-    likedSummary: { total: 42, coverUrl: "/covers/liked.jpg" } as {
-        total: number;
-        coverUrl: string | null;
-    } | null,
+    mixes: [{ id: "mix-1", name: "Daily Mix", trackCount: 10 }] as unknown[],
     discoverWeekly: {
-        weekStart: "2026-02-24",
-        weekEnd: "2026-03-02",
+        weekStart: "2026-08-24",
+        weekEnd: "2026-08-30",
         totalCount: 25,
-        coverUrl: "/covers/discover.jpg",
-    } as {
-        weekStart: string;
-        weekEnd: string;
-        totalCount: number;
-        coverUrl: string | null;
-    } | null,
-    communityPlaylists: [
-        {
-            id: "pl-1",
-            source: "ytmusic",
-            type: "playlist",
-            title: "Community Hits",
-            description: "Popular",
-            creator: "",
-            imageUrl: null,
-            url: "",
+        coverUrl: null,
+    } as unknown,
+    popularArtists: [{ id: "popular-1" }] as unknown[],
+    personalizedFeed: {
+        shelves: {
+            quickPicks: [{ id: "quick", title: "Quick One" }],
+            listenAgain: [{ id: "again", title: "Again One" }],
+            discovery: [{ id: "fresh", title: "Fresh One" }],
         },
-    ] as unknown[],
-    popularArtists: [{ id: "pop-1" }] as unknown[],
-    recentPodcasts: [] as unknown[],
-    recentAudiobooks: [] as unknown[],
-    isCommunityPlaylistsLoading: false,
-};
-
-const featuresState = {
-    musicCNN: false,
-    vibeEmbeddings: false,
-    audioAnalysis: true,
-    discovery: true,
-    autoPlaylists: true,
-    showVersion: false,
-    loading: false,
+        degraded: false,
+        reason: null,
+        seedCount: 3,
+    } as unknown,
+    isPersonalizedLoading: false,
+    isPersonalizedUnavailable: false,
+    showYtMusicExplore: true,
 };
 
 const marker = (label: string) => {
@@ -67,30 +35,16 @@ const marker = (label: string) => {
     return Component;
 };
 
-const Icon = () => React.createElement("i");
-
-mock.module("@/lib/features-context", {
-    namedExports: {
-        useFeatures: () => featuresState,
-    },
-});
-
 mock.module("@/features/home/hooks/useHomeData", {
     namedExports: {
         useHomeData: () => ({
-            recentlyListened: state.recentlyListened,
-            recentlyAdded: state.recentlyAdded,
-            recommended: state.recommended,
-            mixes: state.mixes,
-            likedSummary: state.likedSummary,
-            discoverWeekly: state.discoverWeekly,
-            communityPlaylists: state.communityPlaylists,
-            popularArtists: state.popularArtists,
-            recentPodcasts: state.recentPodcasts,
-            recentAudiobooks: state.recentAudiobooks,
-            isLoading: state.isLoading,
-            isRefreshingMixes: state.isRefreshingMixes,
-            isCommunityPlaylistsLoading: state.isCommunityPlaylistsLoading,
+            ...state,
+            isRefreshingMixes: false,
+            homeShelves: [{ title: "From YouTube Music" }],
+            chartPlaylists: [{ id: "chart-1" }],
+            moodCategories: [{ title: "Moods" }],
+            genreCategories: [{ title: "Genres" }],
+            isMoodsLoading: false,
             handleRefreshMixes: async () => undefined,
         }),
     },
@@ -100,19 +54,75 @@ mock.module("@/components/ui/LoadingScreen", {
     namedExports: { LoadingScreen: marker("loading-screen") },
 });
 
-mock.module("@/features/home/components/HomeHero", {
-    namedExports: { HomeHero: marker("home-hero") },
+mock.module("@/features/home/components/HomeWaveHero", {
+    namedExports: { HomeWaveHero: marker("compact-wave-hero") },
 });
 
-mock.module("@/components/layout/SectionHeader", {
+mock.module("@/features/home/components/HomeQuickActions", {
+    namedExports: { HomeQuickActions: marker("home-quick-actions") },
+});
+
+mock.module("@/features/home/components/HomeListeningDashboard", {
+    namedExports: {
+        HomeListeningDashboard: ({
+            tracks,
+            children,
+        }: {
+            tracks: Array<{ title: string }>;
+            children?: React.ReactNode;
+        }) =>
+            React.createElement(
+                "div",
+                { "data-listening-dashboard": true },
+                `listening-dashboard:${tracks.map((track) => track.title).join(",")}`,
+                children,
+            ),
+    },
+});
+
+mock.module("@/features/home/components/HomeMadeForYou", {
+    namedExports: {
+        HomeMadeForYou: ({
+            discoverWeekly,
+            mixes,
+            personalizedFeed,
+        }: {
+            discoverWeekly: unknown;
+            mixes: unknown[];
+            personalizedFeed: {
+                shelves?: { discovery?: unknown[] };
+            } | null;
+        }) =>
+            React.createElement(
+                "div",
+                null,
+                `made-for-you:${discoverWeekly ? "weekly" : "none"}:${mixes.length}:${personalizedFeed?.shelves?.discovery?.length ?? 0}`,
+            ),
+    },
+});
+
+mock.module("@/features/home/components/HomeOnlineDiscovery", {
+    namedExports: {
+        HomeOnlineDiscovery: ({
+            enabled,
+            homeShelves,
+        }: {
+            enabled: boolean;
+            homeShelves: unknown[];
+        }) =>
+            React.createElement(
+                "div",
+                null,
+                `online-discovery:${enabled}:${homeShelves.length}`,
+            ),
+    },
+});
+
+mock.module("@/features/home/components/SectionHeader", {
     namedExports: {
         SectionHeader: ({ title }: { title: string }) =>
             React.createElement("h2", null, title),
     },
-});
-
-mock.module("@/features/home/components/ContinueListening", {
-    namedExports: { ContinueListening: marker("continue-listening") },
 });
 
 mock.module("@/features/home/components/ArtistsGrid", {
@@ -123,195 +133,78 @@ mock.module("@/features/home/components/PopularArtistsGrid", {
     namedExports: { PopularArtistsGrid: marker("popular-artists-grid") },
 });
 
-mock.module("@/features/home/components/PodcastsGrid", {
-    namedExports: { PodcastsGrid: marker("podcasts-grid") },
-});
-
-mock.module("@/features/home/components/AudiobooksGrid", {
-    namedExports: { AudiobooksGrid: marker("audiobooks-grid") },
-});
-
-mock.module("@/components/ui/YouTubeBadge", {
-    namedExports: {
-        YouTubeBadge: () => React.createElement("span", null, "YT"),
-    },
-});
-
 mock.module("@/components/ui/LastFmBadge", {
-    namedExports: {
-        LastFmBadge: () => React.createElement("span", null, "Last.fm"),
-    },
-});
-
-mock.module("@/components/ui/GradientSpinner", {
-    namedExports: { GradientSpinner: marker("gradient-spinner") },
-});
-
-mock.module("@/features/social/components/PeerPlaylistsShelf", {
-    namedExports: { PeerPlaylistsShelf: () => null },
-});
-mock.module("@/features/home/components/FeaturedPlaylistsGrid", {
-    namedExports: { FeaturedPlaylistsGrid: marker("featured-playlists-grid") },
-});
-
-mock.module("@/features/home/components/StaticPlaylistCard", {
-    namedExports: {
-        StaticPlaylistCard: ({
-            title,
-            subtitle,
-        }: {
-            title: string;
-            subtitle: string;
-        }) => React.createElement("div", null, `${title} — ${subtitle}`),
-    },
-});
-
-mock.module("@/components/ui/HorizontalCarousel", {
-    namedExports: {
-        HorizontalCarousel: ({ children }: { children: React.ReactNode }) =>
-            React.createElement("div", { "data-testid": "carousel" }, children),
-        CarouselItem: ({ children }: { children: React.ReactNode }) =>
-            React.createElement(
-                "div",
-                { "data-testid": "carousel-item" },
-                children,
-            ),
-    },
-});
-
-mock.module("@/components/MixCard", {
-    namedExports: {
-        MixCard: ({ mix }: { mix: { name: string } }) =>
-            React.createElement("div", null, `mix-card:${mix.name}`),
-    },
-});
-
-mock.module("lucide-react", {
-    namedExports: { Heart: Icon, Compass: Icon, RefreshCw: Icon },
+    namedExports: { LastFmBadge: marker("lastfm") },
 });
 
 beforeEach(() => {
-    featuresState.autoPlaylists = true;
     state.isLoading = false;
-    state.isRefreshingMixes = false;
-    state.recentlyListened = [{ id: "listen-1" }];
-    state.recentlyAdded = [{ id: "artist-1" }];
-    state.recommended = [{ id: "artist-2" }];
-    state.mixes = [
-        {
-            id: "mix-1",
-            name: "Daily Mix 1",
-            description: "desc",
-            coverUrls: [],
-            trackCount: 10,
-        },
-    ];
-    state.likedSummary = { total: 42, coverUrl: "/covers/liked.jpg" };
+    state.mixes = [{ id: "mix-1", name: "Daily Mix", trackCount: 10 }];
     state.discoverWeekly = {
-        weekStart: "2026-02-24",
-        weekEnd: "2026-03-02",
+        weekStart: "2026-08-24",
+        weekEnd: "2026-08-30",
         totalCount: 25,
-        coverUrl: "/covers/discover.jpg",
+        coverUrl: null,
     };
-    state.communityPlaylists = [
-        {
-            id: "pl-1",
-            source: "ytmusic",
-            type: "playlist",
-            title: "Community Hits",
-            description: "Popular",
-            creator: "",
-            imageUrl: null,
-            url: "",
+    state.personalizedFeed = {
+        shelves: {
+            quickPicks: [{ id: "quick", title: "Quick One" }],
+            listenAgain: [{ id: "again", title: "Again One" }],
+            discovery: [{ id: "fresh", title: "Fresh One" }],
         },
-    ];
-    state.popularArtists = [{ id: "pop-1" }];
-    state.recentPodcasts = [];
-    state.recentAudiobooks = [];
-    state.isCommunityPlaylistsLoading = false;
+        degraded: false,
+        reason: null,
+        seedCount: 3,
+    };
+    state.isPersonalizedLoading = false;
+    state.isPersonalizedUnavailable = false;
+    state.showYtMusicExplore = true;
 });
 
-test("home page renders loading screen while data is loading", async () => {
+test("Home shows a loading screen before the unified feed is ready", async () => {
     state.isLoading = true;
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
     assert.match(html, /loading-screen/);
-    assert.doesNotMatch(html, /Continue Listening/);
 });
 
-test("home page renders hero and all sections with data", async () => {
+test("Home unifies personal playback and real online discovery", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /home-hero/);
-    assert.match(html, /Continue Listening/);
-    assert.match(html, /Recently Added/);
-    assert.match(html, /Made For You/);
-    assert.match(html, /Trending Community Playlists/);
-    assert.match(html, /Recommended For You/);
+    assert.match(html, /data-home-layout="personal-dashboard"/);
+    assert.match(html, /data-home-region="wave"/);
+    assert.match(html, /compact-wave-hero/);
+    assert.match(html, /listening-dashboard:Again One,Quick One,Fresh One/);
+    assert.match(html, /data-home-region="mixes"/);
+    assert.match(html, /made-for-you:weekly:1:1/);
+    assert.match(html, /online-discovery:true:1/);
+    assert.ok(
+        html.indexOf("compact-wave-hero") < html.indexOf("listening-dashboard"),
+    );
+    assert.ok(
+        html.indexOf("listening-dashboard") < html.indexOf("made-for-you"),
+    );
+    assert.ok(html.indexOf("made-for-you") < html.indexOf("online-discovery"));
+    assert.doesNotMatch(html, /home-quick-actions/);
 });
 
-test("home page shows My Liked and Discover Weekly in Made For You", async () => {
+test("Home omits legacy local-library Explore surfaces", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.match(html, /My Liked/);
-    assert.match(html, /42 tracks/);
-    assert.match(html, /Discover Weekly/);
-    assert.match(html, /25 tracks/);
-    assert.match(html, /mix-card:Daily Mix 1/);
+    assert.doesNotMatch(html, /mood-pills|Library Radio|Recently Added/);
+    assert.doesNotMatch(html, /Podcasts|Audiobooks|Listen Together/);
 });
 
-test("home page hides Continue Listening when empty", async () => {
-    state.recentlyListened = [];
-    const HomePage = (await import("../../app/page")).default;
-    const html = renderToStaticMarkup(React.createElement(HomePage));
-
-    assert.doesNotMatch(html, /Continue Listening/);
-    assert.match(html, /Recently Added/);
-});
-
-test("home page hides Recently Added when empty", async () => {
-    state.recentlyAdded = [];
-    const HomePage = (await import("../../app/page")).default;
-    const html = renderToStaticMarkup(React.createElement(HomePage));
-
-    assert.doesNotMatch(html, /Recently Added/);
-    assert.match(html, /Continue Listening/);
-});
-
-test("home page hides Made For You when all sources empty", async () => {
-    state.likedSummary = null;
-    state.discoverWeekly = null;
+test("Home keeps real personal shelves when generated mixes are unavailable", async () => {
     state.mixes = [];
+    state.discoverWeekly = null;
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
-    assert.doesNotMatch(html, /Made For You/);
-});
-
-test("home page hides Trending Community Playlists when empty", async () => {
-    state.communityPlaylists = [];
-    const HomePage = (await import("../../app/page")).default;
-    const html = renderToStaticMarkup(React.createElement(HomePage));
-
-    assert.doesNotMatch(html, /Trending Community Playlists/);
-});
-
-test("home page hides Recommended For You when empty", async () => {
-    state.recommended = [];
-    const HomePage = (await import("../../app/page")).default;
-    const html = renderToStaticMarkup(React.createElement(HomePage));
-
-    assert.doesNotMatch(html, /Recommended For You/);
-});
-
-test("home page hides the mixes Refresh button when autoPlaylists is disabled", async () => {
-    featuresState.autoPlaylists = false;
-    const HomePage = (await import("../../app/page")).default;
-    const html = renderToStaticMarkup(React.createElement(HomePage));
-
-    assert.match(html, /Made For You/);
-    assert.doesNotMatch(html, /Refresh/);
+    assert.match(html, /listening-dashboard:Again One,Quick One,Fresh One/);
+    assert.match(html, /made-for-you:none:0:1/);
+    assert.doesNotMatch(html, /Daily Mix|Discover Weekly/);
 });

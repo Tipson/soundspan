@@ -36,7 +36,8 @@
         "test:manual:download-dedup": "tsx scripts/manual-tests/downloadDedup.ts",
         "sync": "tsx src/workers/sync.ts",
         "create:testuser": "tsx scripts/create-test-user.ts",
-        "generate:vocabulary": "tsx scripts/generateVibeVocabulary.ts"
+        "generate:vocabulary": "tsx scripts/generateVibeVocabulary.ts",
+        "recommendations:evaluate-shadow": "tsx src/scripts/evaluateRecommendationShadow.ts"
     },
     "dependencies": {
         "@bull-board/api": "^9.4.0",

@@ -29,6 +29,7 @@ import {
     isGenreCategory,
     isHiddenGenreItem,
 } from "@/features/explore/genreClassification";
+import { preserveDiscoverPrefixData } from "@/features/search/discoverSearchPlaceholder";
 
 import { queryKeys } from "../lib/queryKeys";
 
@@ -623,11 +624,12 @@ export function useSearchQuery(
         | "podcasts" = "all",
     limit: number = 20,
     source: "all" | "local" | "peers" = "all",
+    enabled: boolean = true,
 ) {
     return useQuery({
         queryKey: queryKeys.search(query, type, limit, source),
         queryFn: ({ signal }) => api.search(query, type, limit, signal, source),
-        enabled: query.length >= 2, // Only search if query is at least 2 characters
+        enabled: enabled && query.length >= 2, // Only search if query is at least 2 characters
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 }
@@ -652,6 +654,13 @@ export function useDiscoverSearchQuery(
         queryKey: queryKeys.discoverSearch(query, type, limit),
         queryFn: ({ signal }) => api.discoverSearch(query, type, limit, signal),
         enabled: query.length >= 2,
+        placeholderData: (previousData, previousQuery) =>
+            preserveDiscoverPrefixData(
+                previousData,
+                previousQuery?.queryKey,
+                query,
+                type,
+            ),
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 }
@@ -793,11 +802,15 @@ export function useMixQuery(id: string | undefined) {
  * @example
  * const { data } = usePopularArtistsQuery(20);
  */
-export function usePopularArtistsQuery(limit: number = 20) {
+export function usePopularArtistsQuery(
+    limit: number = 20,
+    options?: { enabled?: boolean },
+) {
     return useQuery({
         queryKey: queryKeys.popularArtists(limit),
         queryFn: () => api.getPopularArtists(limit),
         staleTime: 10 * 60 * 1000, // 10 minutes
+        enabled: options?.enabled ?? true,
     });
 }
 

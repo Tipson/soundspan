@@ -6,18 +6,40 @@ import { renderToStaticMarkup } from "react-dom/server";
 mock.module("lucide-react", {
     namedExports: {
         Music: () => React.createElement("svg", { "data-icon": "music" }),
+        Disc3: () => React.createElement("svg", { "data-icon": "disc" }),
+        ArrowUpRight: () =>
+            React.createElement("svg", { "data-icon": "arrow-up-right" }),
     },
 });
 
 mock.module("next/image", {
-    defaultExport: ({ alt }: { alt?: string }) =>
-        React.createElement("img", { alt }),
+    defaultExport: ({
+        alt,
+        src,
+        loading,
+        fetchPriority,
+        sizes,
+    }: {
+        alt?: string;
+        src?: string;
+        loading?: string;
+        fetchPriority?: string;
+        sizes?: string;
+    }) =>
+        React.createElement("img", {
+            alt,
+            src,
+            loading,
+            fetchPriority,
+            sizes,
+        }),
 });
 
 mock.module("@/lib/api", {
     namedExports: {
         api: {
             getCoverArtUrl: (url: string) => `/proxied/${url}`,
+            getBrowseImageUrl: (url: string) => `/browse-proxied/${url}`,
             getTidalStreamingStatus: async () => ({
                 enabled: false,
                 available: false,
@@ -111,11 +133,132 @@ test("top result prefers the library artist by default", async () => {
     assert.match(html, /href="\/artist\/lib-1"/);
 });
 
+test("exact library artists retain the matching YouTube Music catalog identity", async () => {
+    const { TopResult } =
+        await import("../../features/search/components/TopResult");
+    const html = renderToStaticMarkup(
+        React.createElement(TopResult, {
+            libraryArtist: {
+                id: "library-linkin-park",
+                name: "Linkin Park",
+                heroUrl: "https://img/library-linkin-park.jpg",
+            },
+            discoveryArtist: {
+                type: "music",
+                name: "Linkin Park",
+                youtubeChannelId: "UC-linkin-park",
+                image: "https://img/provider-linkin-park.jpg",
+            },
+        } as never),
+    );
+
+    assert.match(
+        html,
+        /href="\/artist\/Linkin%20Park\?provider=ytmusic&amp;channelId=UC-linkin-park"/,
+    );
+    assert.match(html, /\/proxied\/https:\/\/img\/library-linkin-park\.jpg/);
+});
+
 test("top result prefers an exact external match when asked", async () => {
     const html = await renderTopResult(true);
     assert.match(html, />Drake</);
     assert.match(html, /href="\/artist\/b49b81cc-d5b7-4bdd-aadb-385df8de69a6"/);
     assert.doesNotMatch(html, /Nick Drake/);
+});
+
+test("top result prioritizes its above-the-fold artist artwork at the rendered sizes", async () => {
+    const { TopResult } =
+        await import("../../features/search/components/TopResult");
+    const html = renderToStaticMarkup(
+        React.createElement(TopResult, {
+            discoveryArtist: {
+                type: "music",
+                name: "Massive Attack",
+                image: "https://img/massive-attack.jpg",
+            },
+        } as never),
+    );
+
+    assert.match(html, /loading="eager"/);
+    assert.match(html, /fetchPriority="high"/);
+    assert.match(html, /sizes="\(min-width: 640px\) 112px, 96px"/);
+});
+
+test("YouTube Music-only artists keep their provider channel route identity", async () => {
+    const { TopResult } =
+        await import("../../features/search/components/TopResult");
+    const html = renderToStaticMarkup(
+        React.createElement(TopResult, {
+            discoveryArtist: {
+                type: "music",
+                name: "Massive Attack",
+                youtubeChannelId: "UCmassiveattack",
+            },
+        } as never),
+    );
+
+    assert.match(
+        html,
+        /href="\/artist\/Massive%20Attack\?provider=ytmusic&amp;channelId=UCmassiveattack"/,
+    );
+});
+
+test("YouTube Music-only related artists use the provider-aware artist route", async () => {
+    const { SimilarArtistsGrid } =
+        await import("../../features/search/components/SimilarArtistsGrid");
+    const html = renderToStaticMarkup(
+        React.createElement(SimilarArtistsGrid, {
+            similarArtists: [
+                {
+                    type: "music",
+                    name: "Portishead",
+                    youtubeChannelId: "UCportishead",
+                    provider: "ytmusic",
+                },
+            ],
+        } as never),
+    );
+
+    assert.match(
+        html,
+        /href="\/artist\/Portishead\?provider=ytmusic&amp;channelId=UCportishead"/,
+    );
+});
+
+test("search artists keep one exact duplicate and prefer its canonical provider route", async () => {
+    const { SearchArtistsGrid } =
+        await import("../../features/search/components/SearchArtistsGrid");
+    const html = renderToStaticMarkup(
+        React.createElement(SearchArtistsGrid, {
+            libraryArtists: [
+                { id: "local-portishead", name: "Portishead", heroUrl: "" },
+            ],
+            discoveryArtists: [
+                {
+                    type: "music",
+                    name: "Portishead",
+                    youtubeChannelId: "UCduplicate",
+                },
+                {
+                    type: "music",
+                    name: "Massive Attack",
+                    youtubeChannelId: "UCmassiveattack",
+                },
+            ],
+            limit: 2,
+        } as never),
+    );
+
+    assert.doesNotMatch(html, /href="\/artist\/local-portishead"/);
+    assert.match(
+        html,
+        /href="\/artist\/Portishead\?provider=ytmusic&amp;channelId=UCduplicate"/,
+    );
+    assert.match(
+        html,
+        /href="\/artist\/Massive%20Attack\?provider=ytmusic&amp;channelId=UCmassiveattack"/,
+    );
+    assert.equal((html.match(/>Portishead</g) ?? []).length, 1);
 });
 
 test("discover tracks render artist links and album context", async () => {
@@ -148,7 +291,58 @@ test("discover tracks render artist links and album context", async () => {
     // rows expose the artist destination through their accessible label.
     assert.match(html, /Headlines/);
     assert.match(html, /Drake — Take Care/);
-    assert.match(html, /aria-label="Go to Drake"/);
+    assert.match(html, /aria-label="Открыть исполнителя Drake"/);
     assert.match(html, /Orphan Song/);
     assert.doesNotMatch(html, /href="\/artist\//);
+});
+
+test("provider albums link to the existing playable YouTube Music album page", async () => {
+    const { ProviderAlbumsGrid } =
+        await import("../../features/search/components/ProviderAlbumsGrid");
+    const html = renderToStaticMarkup(
+        React.createElement(ProviderAlbumsGrid, {
+            albums: [
+                {
+                    type: "album",
+                    id: "MPREb_mezzanine",
+                    browseId: "MPREb_mezzanine",
+                    name: "Mezzanine",
+                    artist: "Massive Attack",
+                    image: "https://img/mezzanine.jpg",
+                    year: "1998",
+                    provider: "ytmusic",
+                },
+            ],
+        } as never),
+    );
+
+    assert.match(
+        html,
+        /href="\/explore\/yt-playlist\/MPREb_mezzanine\?type=album"/,
+    );
+    assert.match(html, /Mezzanine/);
+    assert.match(html, /Massive Attack/);
+    assert.match(html, /1998/);
+    assert.match(html, /\/browse-proxied\/https:\/\/img\/mezzanine.jpg/);
+});
+
+test("library album shadows keep the canonical discovery deep-link", async () => {
+    const { LibraryAlbumsGrid } =
+        await import("../../features/search/components/LibraryAlbumsGrid");
+    const html = renderToStaticMarkup(
+        React.createElement(LibraryAlbumsGrid, {
+            albums: [
+                {
+                    id: "local-shadow-cuid",
+                    rgMbid: "release-group-from-zero",
+                    title: "From Zero",
+                    artist: { name: "Linkin Park" },
+                    source: "local",
+                },
+            ],
+        } as never),
+    );
+
+    assert.match(html, /href="\/album\/release-group-from-zero"/);
+    assert.doesNotMatch(html, /href="\/album\/local-shadow-cuid"/);
 });

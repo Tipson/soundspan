@@ -1,3 +1,8 @@
+"use client";
+
+import { useContext } from "react";
+import { SettingsFieldContext } from "./settingsFieldContext";
+
 interface SettingsToggleProps {
     id?: string;
     checked: boolean;
@@ -14,22 +19,25 @@ export function SettingsToggle({
     onChange,
     disabled,
 }: SettingsToggleProps) {
+    const rowContext = useContext(SettingsFieldContext);
+
     return (
-        <label className="relative inline-flex items-center cursor-pointer">
+        <label className="relative inline-flex min-h-11 min-w-11 items-center justify-center cursor-pointer">
             <input
                 id={id}
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => onChange(e.target.checked)}
                 disabled={disabled}
+                aria-labelledby={rowContext?.labelId}
                 className="sr-only peer"
             />
             <div
                 className={`
-                w-10 h-6 rounded-full transition-colors
+                relative w-10 h-6 rounded-full transition-colors
                 ${disabled ? "opacity-50 cursor-not-allowed" : ""}
-                ${checked ? "bg-[#1DB954]" : "bg-line-muted"}
-                peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1DB954]/30
+                ${checked ? "bg-brand" : "bg-line-muted"}
+                peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-brand-hover
                 after:content-[''] after:absolute after:top-[2px] after:left-[2px]
                 after:bg-white after:rounded-full after:h-5 after:w-5
                 after:transition-transform after:duration-200

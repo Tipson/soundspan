@@ -44,12 +44,14 @@ export function UniversalPlayer() {
                         {playerMode === "overlay" && hasMedia ? (
                             <motion.div
                                 key="overlay-player"
-                                initial={{ opacity: 0, y: 18, scale: 0.995 }}
+                                data-player-transition="overlay"
+                                initial={{ opacity: 0, y: 14, scale: 0.995 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 52, scale: 0.992 }}
                                 transition={{
-                                    duration: 0.2,
-                                    ease: [0.22, 1, 0.36, 1],
+                                    type: "spring",
+                                    bounce: 0,
+                                    duration: 0.32,
                                 }}
                             >
                                 <OverlayPlayer />
@@ -58,12 +60,14 @@ export function UniversalPlayer() {
                             /* On mobile/tablet: only mini player (no full player) */
                             <motion.div
                                 key="mini-player"
-                                initial={{ opacity: 0, y: 20 }}
+                                data-player-transition="mini"
+                                initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 20 }}
+                                exit={{ opacity: 0, y: 12 }}
                                 transition={{
-                                    duration: 0.2,
-                                    ease: [0.22, 1, 0.36, 1],
+                                    type: "spring",
+                                    bounce: 0,
+                                    duration: 0.28,
                                 }}
                             >
                                 <MiniPlayer />
@@ -79,12 +83,14 @@ export function UniversalPlayer() {
                         {playerMode === "overlay" && hasMedia && (
                             <motion.div
                                 key="desktop-overlay-player"
+                                data-player-transition="overlay"
                                 initial={{ opacity: 0, y: 18, scale: 0.995 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, y: 22, scale: 0.998 }}
                                 transition={{
-                                    duration: 0.18,
-                                    ease: [0.22, 1, 0.36, 1],
+                                    type: "spring",
+                                    bounce: 0,
+                                    duration: 0.34,
                                 }}
                             >
                                 <OverlayPlayer />

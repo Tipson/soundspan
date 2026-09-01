@@ -46,17 +46,18 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                     <div className="max-w-md w-full text-center space-y-6">
                         <div className="space-y-2">
                             <h1 className="text-2xl font-bold">
-                                Something went wrong
+                                Что-то пошло не так
                             </h1>
                             <p className="text-gray-400">
-                                An unexpected error occurred. Please try
-                                reloading the page.
+                                Произошла непредвиденная ошибка. Попробуйте
+                                перезагрузить страницу.
                             </p>
                         </div>
                         {this.state.error && (
                             <div className="bg-gray-900 p-4 rounded-lg text-left">
                                 <p className="text-sm font-mono text-red-400 break-words">
-                                    {this.state.error.message}
+                                    Технические сведения записаны в журнал
+                                    приложения.
                                 </p>
                             </div>
                         )}
@@ -64,7 +65,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                             onClick={this.handleReload}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
                         >
-                            Reload Page
+                            Перезагрузить страницу
                         </button>
                     </div>
                 </div>

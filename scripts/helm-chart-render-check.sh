@@ -101,6 +101,24 @@ assert_deployment_env_absent() {
   fi
 }
 
+assert_deployment_music_mount_writable() {
+  local deployment_name="$1"
+  local manifest_file="$2"
+
+  if ! DEPLOYMENT_NAME="$deployment_name" MUSIC_CLAIM="${RELEASE_NAME}-music" perl -0777 -ne '
+      for my $doc (split /^---/m, $_) {
+          next unless $doc =~ /kind:\s*Deployment/;
+          next unless $doc =~ /^  name: \Q$ENV{DEPLOYMENT_NAME}\E$/m;
+          exit 0 if $doc =~ /- name:\s+music\s+mountPath:\s+\/music/s
+              && $doc !~ /- name:\s+music\s+mountPath:\s+\/music\s+readOnly:\s+true/s
+              && $doc =~ /- name:\s+music\s+persistentVolumeClaim:\s+claimName:\s+\Q$ENV{MUSIC_CLAIM}\E/s;
+      }
+      exit 1' "$manifest_file"; then
+    echo "[ERROR] ${deployment_name} must mount the shared music claim read-write" >&2
+    exit 1
+  fi
+}
+
 assert_deployment_env_secret_ref() {
   local deployment_name="$1"
   local env_name="$2"
@@ -226,13 +244,65 @@ tmp_frontend_uid="$(mktemp)"
 tmp_metrics="$(mktemp)"
 tmp_acoustid_value="$(mktemp)"
 tmp_acoustid_existing="$(mktemp)"
-trap 'rm -f "$tmp_aio" "$tmp_aio_sidecars" "$tmp_aio_rotated_secrets" "$tmp_aio_secret_overrides" "$tmp_aio_oidc" "$tmp_aio_digests" "$tmp_aio_reserved_labels" "$tmp_individual_ha" "$tmp_individual_component_database" "$tmp_individual_external_database" "$tmp_individual_digests" "$tmp_individual_reserved_labels" "$tmp_individual_oidc" "$tmp_individual_notes" "$tmp_global_env" "$tmp_sidecars" "$tmp_dclap_default" "$tmp_dclap_aio" "$tmp_dclap_enabled" "$tmp_dclap_override" "$tmp_dclap_scaled" "$tmp_secret" "$tmp_secret_explicit" "$tmp_secret_existing" "$tmp_frontend_uid" "$tmp_metrics" "$tmp_acoustid_value" "$tmp_acoustid_existing"' EXIT
+tmp_recommendations_aio="$(mktemp)"
+tmp_recommendations_individual_default="$(mktemp)"
+tmp_recommendations_individual="$(mktemp)"
+trap 'rm -f "$tmp_aio" "$tmp_aio_sidecars" "$tmp_aio_rotated_secrets" "$tmp_aio_secret_overrides" "$tmp_aio_oidc" "$tmp_aio_digests" "$tmp_aio_reserved_labels" "$tmp_individual_ha" "$tmp_individual_component_database" "$tmp_individual_external_database" "$tmp_individual_digests" "$tmp_individual_reserved_labels" "$tmp_individual_oidc" "$tmp_individual_notes" "$tmp_global_env" "$tmp_sidecars" "$tmp_dclap_default" "$tmp_dclap_aio" "$tmp_dclap_enabled" "$tmp_dclap_override" "$tmp_dclap_scaled" "$tmp_secret" "$tmp_secret_explicit" "$tmp_secret_existing" "$tmp_frontend_uid" "$tmp_metrics" "$tmp_acoustid_value" "$tmp_acoustid_existing" "$tmp_recommendations_aio" "$tmp_recommendations_individual_default" "$tmp_recommendations_individual"' EXIT
 
 echo "[CHECK] helm lint (${CHART_PATH})"
 helm lint "$CHART_PATH"
 
 echo "[CHECK] render default AIO mode"
 helm template "$RELEASE_NAME" "$CHART_PATH" >"$tmp_aio"
+helm template "$RELEASE_NAME" "$CHART_PATH" \
+  --set deploymentMode=individual \
+  --set backendWorker.enabled=true \
+  >"$tmp_recommendations_individual_default"
+
+for deployment_name in "$RELEASE_NAME" "${RELEASE_NAME}-backend" "${RELEASE_NAME}-backend-worker"; do
+  manifest_file="$tmp_aio"
+  if [[ "$deployment_name" != "$RELEASE_NAME" ]]; then
+    manifest_file="$tmp_recommendations_individual_default"
+  fi
+  for env_name in \
+    RECOMMENDATION_ENGINE_MODE \
+    REMOTE_ANALYSIS_ENABLED \
+    REMOTE_ANALYSIS_DAILY_BUDGET \
+    REMOTE_ANALYSIS_CONCURRENCY; do
+    assert_deployment_env_absent "$deployment_name" "$env_name" "$manifest_file"
+  done
+done
+
+echo "[CHECK] render hybrid recommendation controls across AIO and individual workloads"
+helm template "$RELEASE_NAME" "$CHART_PATH" \
+  --set-string config.recommendations.engineMode=active \
+  --set config.recommendations.remoteAnalysisEnabled=true \
+  --set config.recommendations.remoteAnalysisDailyBudget=250 \
+  --set config.recommendations.remoteAnalysisConcurrency=2 \
+  >"$tmp_recommendations_aio"
+helm template "$RELEASE_NAME" "$CHART_PATH" \
+  --set deploymentMode=individual \
+  --set backendWorker.enabled=true \
+  --set audioAnalyzer.enabled=true \
+  --set-string config.recommendations.engineMode=active \
+  --set config.recommendations.remoteAnalysisEnabled=true \
+  --set config.recommendations.remoteAnalysisDailyBudget=250 \
+  --set config.recommendations.remoteAnalysisConcurrency=2 \
+  >"$tmp_recommendations_individual"
+
+for deployment_name in "$RELEASE_NAME" "${RELEASE_NAME}-backend" "${RELEASE_NAME}-backend-worker"; do
+  manifest_file="$tmp_recommendations_aio"
+  if [[ "$deployment_name" != "$RELEASE_NAME" ]]; then
+    manifest_file="$tmp_recommendations_individual"
+  fi
+  assert_deployment_env_value "$deployment_name" "RECOMMENDATION_ENGINE_MODE" "active" "$manifest_file"
+  assert_deployment_env_value "$deployment_name" "REMOTE_ANALYSIS_ENABLED" "true" "$manifest_file"
+  assert_deployment_env_value "$deployment_name" "REMOTE_ANALYSIS_DAILY_BUDGET" "250" "$manifest_file"
+  assert_deployment_env_value "$deployment_name" "REMOTE_ANALYSIS_CONCURRENCY" "2" "$manifest_file"
+done
+
+assert_deployment_music_mount_writable "${RELEASE_NAME}-backend-worker" "$tmp_recommendations_individual"
+assert_deployment_music_mount_writable "${RELEASE_NAME}-audio-analyzer" "$tmp_recommendations_individual"
 
 echo "[CHECK] render AcoustID value in AIO and individual analyzer deployments"
 helm template "$RELEASE_NAME" "$CHART_PATH" \
@@ -587,6 +657,8 @@ helm template "$RELEASE_NAME" "$CHART_PATH" \
   --set deploymentMode=individual \
   --set tidalSidecar.enabled=true \
   --set ytmusicStreamer.enabled=true \
+  --set-string ytmusicStreamer.env.YTMUSIC_LANGUAGE=ru \
+  --set-string ytmusicStreamer.env.YTMUSIC_LOCATION=RU \
   >"$tmp_sidecars"
 
 for sidecar in tidal ytmusic; do
@@ -606,6 +678,8 @@ for sidecar in tidal ytmusic; do
   fi
 done
 assert_deployment_termination_grace "${RELEASE_NAME}-ytmusic" "30" "$tmp_sidecars"
+assert_deployment_env_value "${RELEASE_NAME}-ytmusic" "YTMUSIC_LANGUAGE" "ru" "$tmp_sidecars"
+assert_deployment_env_value "${RELEASE_NAME}-ytmusic" "YTMUSIC_LOCATION" "RU" "$tmp_sidecars"
 assert_service_selectors_isolated "individual with HTTP sidecars" "$tmp_sidecars"
 
 echo "[CHECK] render default-off DCLAP provider in individual mode"

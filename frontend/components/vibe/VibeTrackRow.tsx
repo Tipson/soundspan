@@ -17,6 +17,8 @@
  */
 
 import { calibratedMatch } from "./vibeMatch";
+import { cn } from "@/utils/cn";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 
 export interface VibeTrackRowProps {
     title: string;
@@ -37,6 +39,61 @@ export interface VibeTrackRowProps {
     hint?: string;
     /** Extra wrapper class names (layout tweaks between call sites). */
     className?: string;
+}
+
+/** Circular similarity readout shared by Vibe exploration rows and panels. */
+export function SimilarityBadge({
+    similarity,
+    size = "md",
+}: {
+    similarity: number;
+    size?: "sm" | "md" | "lg";
+}) {
+    const percent = Math.round(similarity * 100);
+    const sizeClasses = {
+        sm: "w-10 h-10 text-xs",
+        md: "w-14 h-14 text-sm",
+        lg: "w-20 h-20 text-lg",
+    };
+
+    return (
+        <div
+            className={cn(
+                "relative flex items-center justify-center rounded-full font-semibold",
+                sizeClasses[size],
+                percent >= 80
+                    ? "text-success"
+                    : percent >= 60
+                      ? "text-ai"
+                      : "text-content-muted",
+            )}
+        >
+            {/* Outer ring */}
+            <svg className="absolute inset-0 w-full h-full -rotate-90">
+                <circle
+                    cx="50%"
+                    cy="50%"
+                    r="45%"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeOpacity="0.15"
+                />
+                <circle
+                    cx="50%"
+                    cy="50%"
+                    r="45%"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeDasharray={`${similarity * 283} 283`}
+                    className="transition-all duration-500"
+                />
+            </svg>
+            <span className="tabular-nums">{percent}%</span>
+        </div>
+    );
 }
 
 function TrackRowContent({
@@ -71,7 +128,7 @@ function TrackRowContent({
             </span>
             {!onMap && (
                 <span className="shrink-0 text-xs uppercase tracking-wide text-amber-400/80 border border-amber-400/30 rounded px-1 py-0.5">
-                    not on map
+                    {vibeMapRu.map.notOnMap}
                 </span>
             )}
             <span

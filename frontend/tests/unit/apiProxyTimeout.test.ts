@@ -17,7 +17,37 @@ describe("resolveProxyTimeoutMs", () => {
 
     test("uses longer default timeout for import preview route", () => {
         const timeoutMs = resolveProxyTimeoutMs("api/import/preview", {});
-        assert.equal(timeoutMs, 90_000);
+        assert.equal(timeoutMs, 150_000);
+    });
+
+    test("keeps media streams alive beyond the backend 120-second budget", () => {
+        assert.equal(
+            resolveProxyTimeoutMs("api/ytmusic/stream-public/kXYiU_JCYtU", {}),
+            125_000,
+        );
+        assert.equal(
+            resolveProxyTimeoutMs("api/ytmusic/stream/kXYiU_JCYtU", {}),
+            125_000,
+        );
+        assert.equal(
+            resolveProxyTimeoutMs("api/youtube/stream/kXYiU_JCYtU", {}),
+            125_000,
+        );
+    });
+
+    test("lets unavailable-track recovery finish its bounded alternate probes", () => {
+        assert.equal(
+            resolveProxyTimeoutMs("api/ytmusic/recover-unavailable", {}),
+            90_000,
+        );
+        assert.equal(
+            resolveProxyTimeoutMs("/API/YTMusic/Recover-Unavailable/", {}),
+            90_000,
+        );
+        assert.equal(
+            resolveProxyTimeoutMs("api/ytmusic/recover-unavailable-extra", {}),
+            20_000,
+        );
     });
 
     test("respects import preview specific timeout override", () => {
@@ -30,7 +60,7 @@ describe("resolveProxyTimeoutMs", () => {
 
     test("uses import preview timeout when route has trailing slash", () => {
         const timeoutMs = resolveProxyTimeoutMs("/api/import/preview/", {});
-        assert.equal(timeoutMs, 90_000);
+        assert.equal(timeoutMs, 150_000);
     });
 
     test("falls back to defaults when env timeout values are invalid", () => {
@@ -45,6 +75,6 @@ describe("resolveProxyTimeoutMs", () => {
             PROXY_REQUEST_TIMEOUT_MS: "120000",
             PROXY_IMPORT_PREVIEW_TIMEOUT_MS: "invalid",
         });
-        assert.equal(timeoutMs, 120_000);
+        assert.equal(timeoutMs, 150_000);
     });
 });

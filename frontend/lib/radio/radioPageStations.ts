@@ -3,6 +3,10 @@ import { api, type RadioPlaylistFilter } from "@/lib/api";
 import type { RadioStationCardStation } from "@/components/ui/RadioStationCard";
 import { isGeneratedPlaylistDecade } from "@/lib/radio/openRadioStation";
 import { queryKeys } from "@/lib/queryKeys";
+import {
+    formatRadioDecadeDescription,
+    formatRadioTrackCount,
+} from "@/lib/i18n/utilityPagesRu";
 
 /**
  * Station shape used by the /radio page: the card's loose filter union is
@@ -72,7 +76,7 @@ const getDecadeName = (decade: number): string => {
 };
 
 const getDecadeDescription = (decade: number, count: number): string => {
-    return `${decade}-${decade + 9} • ${count} tracks`;
+    return formatRadioDecadeDescription(decade, count);
 };
 
 // Genre color mapping
@@ -110,7 +114,7 @@ export function buildGenreStations(genres: GenreCount[]): RadioPageStation[] {
         .map((g) => ({
             id: `genre-${g.genre}`,
             name: g.genre,
-            description: `${g.count} tracks`,
+            description: formatRadioTrackCount(g.count),
             color: getGenreColor(g.genre),
             filter: { type: "genre" as const, value: g.genre },
             minTracks: 15,

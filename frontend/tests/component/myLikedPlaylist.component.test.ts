@@ -150,6 +150,30 @@ mock.module("@/components/ui/PlaylistSelector", {
     },
 });
 
+mock.module(
+    "@/features/device-offline/components/DeviceCollectionDownloadButton",
+    {
+        namedExports: {
+            DeviceCollectionDownloadButton: ({
+                tracks,
+                collectionId,
+                collectionLabel,
+            }: {
+                tracks: Array<{ id: string }>;
+                collectionId: string;
+                collectionLabel: string;
+            }) =>
+                React.createElement("button", {
+                    type: "button",
+                    "data-testid": "device-collection-download",
+                    "data-collection-id": collectionId,
+                    "data-collection-label": collectionLabel,
+                    "data-track-ids": tracks.map((track) => track.id).join(","),
+                }),
+        },
+    },
+);
+
 mock.module("@/lib/trackRef", {
     namedExports: {
         toAddToPlaylistRef: (track: Record<string, unknown>) => track,
@@ -337,13 +361,15 @@ test("renders empty-state copy and hides action buttons when there are no tracks
 
     const html = renderWithQueryClient(MyLikedPlaylistPage);
 
-    assert.match(html, /No liked tracks yet/);
-    assert.match(html, /Tap the heart on any song to add it here\./);
+    assert.match(html, /<h1[^>]*>Любимые треки<\/h1>/);
+    assert.doesNotMatch(html, />My Liked</);
+    assert.match(html, /Любимых треков пока нет/);
+    assert.match(html, /Нажмите на сердечко рядом с треком/);
 
     // Action buttons should be hidden when there are no tracks
-    assert.doesNotMatch(html, /<span>Play All<\/span>/);
-    assert.doesNotMatch(html, /title="Shuffle/);
-    assert.doesNotMatch(html, /title="Add all to queue/);
+    assert.doesNotMatch(html, /<span>Воспроизвести всё<\/span>/);
+    assert.doesNotMatch(html, /title="Воспроизвести вперемешку/);
+    assert.doesNotMatch(html, /title="Добавить всё в очередь/);
 });
 
 test("renders consolidated action bar buttons when tracks exist", async () => {
@@ -357,11 +383,54 @@ test("renders consolidated action bar buttons when tracks exist", async () => {
     const html = renderWithQueryClient(mod.default);
 
     // Canonical order: Play, Shuffle, Add to Queue, Add to Playlist, Radio
-    assert.match(html, /<span>Play All<\/span>/);
-    assert.match(html, /title="Shuffle play"/);
-    assert.match(html, /title="Add all to queue"/);
-    assert.match(html, /title="Add all to playlist"/);
-    assert.match(html, /title="Start playlist radio"/);
+    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /title="Воспроизвести вперемешку"/);
+    assert.match(html, /title="Добавить всё в очередь"/);
+    assert.match(html, /title="Добавить всё в плейлист"/);
+    assert.match(html, /title="Запустить радио по плейлисту"/);
+    const hero = html.match(
+        /<header[^>]*data-music-detail="hero"[^>]*>[\s\S]*?<\/header>/,
+    )?.[0];
+    assert.ok(hero);
+    assert.match(hero, /data-music-detail="actions"/);
+    assert.match(hero, /data-detail-action-tier="primary"/);
+    assert.match(hero, /data-detail-action-tier="secondary"/);
+});
+
+test("My Liked offers a manual device download for downloadable tracks only", async () => {
+    state.likedData = {
+        playlist: { id: "my-liked", name: "My Liked" },
+        tracks: [
+            {
+                ...makeTrack("local-1", "Local"),
+                source: "local",
+            },
+            {
+                ...makeTrack("yt:video-1", "YouTube"),
+                source: "youtube",
+                streamSource: "youtube",
+                youtubeVideoId: "video-1",
+            },
+            {
+                ...makeTrack("peer-1", "Peer only"),
+                source: "peer",
+            },
+            {
+                ...makeTrack("tidal-missing", "Missing TIDAL id"),
+                source: "tidal",
+                streamSource: "tidal",
+            },
+        ],
+        total: 4,
+    };
+
+    const mod = await import("../../app/playlist/my-liked/page");
+    const html = renderWithQueryClient(mod.default);
+
+    assert.match(html, /data-testid="device-collection-download"/);
+    assert.match(html, /data-collection-id="playlist:my-liked"/);
+    assert.match(html, /data-collection-label="Любимые треки"/);
+    assert.match(html, /data-track-ids="local-1,yt:video-1"/);
 });
 
 test("shows Pause primary action and active like controls when a liked track is currently playing", async () => {
@@ -383,7 +452,7 @@ test("shows Pause primary action and active like controls when a liked track is 
     const MyLikedPlaylistPage = mod.default;
     const html = renderWithQueryClient(MyLikedPlaylistPage);
 
-    assert.match(html, /<span>Pause<\/span>/);
+    assert.match(html, /<span>Пауза<\/span>/);
     assert.match(html, /data-icon="pause"/);
 
     const thumbButtons = html.match(/data-testid="liked-track-thumb"/g) ?? [];
@@ -397,7 +466,7 @@ test("shows Pause primary action and active like controls when a liked track is 
     assert.match(html, /data-mode="up-only"/);
     assert.match(html, /data-signal="thumbs_up"/);
     assert.match(html, /data-resolve-from-query="false"/);
-    assert.match(html, /data-button-size="h-8 w-8"/);
+    assert.match(html, /data-button-size="h-11 w-11"/);
     assert.match(html, /data-icon-size="h-4 w-4"/);
 
     assert.doesNotMatch(html, /Delete Playlist/i);

@@ -8,11 +8,14 @@
 export interface RelatedTrackLike {
     id?: string;
     title: string;
-    artist?: string;
+    artist?: string | { id?: string; name?: string; mbid?: string };
     similarity?: number;
     inLibrary?: boolean;
     matchConfidence?: number;
     duration?: number;
+    streamSource?: "tidal" | "youtube";
+    tidalTrackId?: number;
+    youtubeVideoId?: string;
     album?: {
         title?: string;
         artist?: { name?: string };
@@ -43,14 +46,16 @@ export interface TidalBatchMatch {
     isrc?: string;
 }
 
+/** Read both the released string contract and the legacy object response. */
+export function getRelatedTrackArtistName(track: RelatedTrackLike): string {
+    if (typeof track.artist === "string") return track.artist;
+    return track.artist?.name || track.album?.artist?.name || "";
+}
+
 /** Stable identity for a related row: library id, else artist+title. */
 export function getRelatedTrackKey(track: RelatedTrackLike): string {
     if (track.id) return `lib:${track.id}`;
-    const normalizedArtist = (
-        track.artist ||
-        track.album?.artist?.name ||
-        "unknown"
-    )
+    const normalizedArtist = (getRelatedTrackArtistName(track) || "unknown")
         .trim()
         .toLowerCase();
     const normalizedTitle = (track.title || "unknown").trim().toLowerCase();
@@ -88,7 +93,13 @@ export function selectTracksNeedingStreamMatch<T extends RelatedTrackLike>(
 ): T[] {
     return tracks.filter((track) => {
         if (track.inLibrary) return false;
-        const hasArtist = !!(track.artist || track.album?.artist?.name);
+        if (
+            (track.streamSource === "youtube" && track.youtubeVideoId) ||
+            (track.streamSource === "tidal" && track.tidalTrackId)
+        ) {
+            return false;
+        }
+        const hasArtist = Boolean(getRelatedTrackArtistName(track).trim());
         if (!track.title || !hasArtist) return false;
         return !existingMatches[getRelatedTrackKey(track)];
     });
@@ -99,7 +110,7 @@ export function buildStreamMatchQuery(
     track: RelatedTrackLike,
 ): StreamMatchQuery {
     return {
-        artist: track.artist || track.album?.artist?.name || "",
+        artist: getRelatedTrackArtistName(track),
         title: track.title,
         albumTitle: track.album?.title,
         duration: track.duration,

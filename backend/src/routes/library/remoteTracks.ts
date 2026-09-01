@@ -1,21 +1,25 @@
 import { Router, type Request, type Response } from "express";
 import { asyncHandler } from "../../middleware/asyncHandler";
-import { prisma, Prisma } from "../../utils/db";
 import path from "path";
 import {
     applyTrackPreferenceOrderBias,
     applyTrackPreferenceSimilarityBias,
     normalizeTrackPreferenceSignal,
-    resolveTrackPreference,
-    TRACK_DISLIKE_ENTITY_TYPE,
 } from "../../services/trackPreference";
 import {
+    applyRemoteTrackPreferenceSignal,
     applyTrackPreferenceSignalToTrackIds,
     buildTrackPreferenceScoreMapForUser,
+    cancelRemoteTrackPreferenceIntent,
     formatAlbumPreferenceResponse,
     formatTrackPreferenceResponse,
     hasConnectedProviderToken,
+    loadRemoteTrackPreference,
+    parseRemoteTrackPreferenceReference,
+    reserveRemoteTrackPreferenceIntent,
     toLikedResponseTrack,
+    type RemoteTrackLikeTarget,
+    type RemoteTrackPreferenceReference,
 } from "../../services/libraryTrackPreferences";
 import {
     sendInternalRouteError,
@@ -23,28 +27,14 @@ import {
 } from "../../utils/routeErrorResponse";
 import { trackMappingService } from "../../services/trackMappingService";
 import { resolveRemoteTrackMetadataForRequest } from "../../services/remoteTrackMetadataResolver";
+import { logger } from "../../utils/logger";
 
 /**
  * Router segment for remoteTracks routes registered at this position.
  */
 export const remoteTracksRouter = Router();
+const remoteTrackPreferenceLogger = logger.child("RemoteTrackPreference");
 // ── Remote Track Preference (YT Music / TIDAL) ─────────────────
-
-function parseRemoteTrackId(
-    compositeId: string,
-): { provider: "youtube" | "tidal"; externalId: string } | null {
-    if (compositeId.startsWith("yt:")) {
-        const externalId = compositeId.slice(3).trim();
-        return externalId.length > 0
-            ? { provider: "youtube", externalId }
-            : null;
-    }
-    if (compositeId.startsWith("tidal:")) {
-        const externalId = compositeId.slice(6).trim();
-        return externalId.length > 0 ? { provider: "tidal", externalId } : null;
-    }
-    return null;
-}
 
 /**
  * @openapi
@@ -81,61 +71,14 @@ export async function handleGetRemoteTrackPreference(
         return sendRouteError(res, 401, "Authentication required");
     }
 
-    const parsed = parseRemoteTrackId(req.params.id);
+    const parsed = parseRemoteTrackPreferenceReference(req.params.id);
     if (!parsed) {
         return res.status(400).json({
             error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
         });
     }
 
-    let likedAt: Date | null = null;
-    if (parsed.provider === "tidal") {
-        const tidalTrackId = Number.parseInt(parsed.externalId, 10);
-        if (!Number.isFinite(tidalTrackId) || tidalTrackId <= 0) {
-            return res.status(400).json({
-                error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
-            });
-        }
-
-        const trackTidal = await prisma.trackTidal.findUnique({
-            where: { tidalId: tidalTrackId },
-            select: { id: true },
-        });
-        if (trackTidal) {
-            const liked = await prisma.likedRemoteTrack.findUnique({
-                where: {
-                    userId_trackTidalId: {
-                        userId,
-                        trackTidalId: trackTidal.id,
-                    },
-                },
-                select: { likedAt: true },
-            });
-            likedAt = liked?.likedAt ?? null;
-        }
-    } else {
-        const trackYtMusic = await prisma.trackYtMusic.findUnique({
-            where: { videoId: parsed.externalId },
-            select: { id: true },
-        });
-        if (trackYtMusic) {
-            const liked = await prisma.likedRemoteTrack.findUnique({
-                where: {
-                    userId_trackYtMusicId: {
-                        userId,
-                        trackYtMusicId: trackYtMusic.id,
-                    },
-                },
-                select: { likedAt: true },
-            });
-            likedAt = liked?.likedAt ?? null;
-        }
-    }
-
-    const preference = resolveTrackPreference({
-        likedAt,
-        dislikedAt: null,
-    });
+    const preference = await loadRemoteTrackPreference(userId, parsed);
 
     res.json(formatTrackPreferenceResponse(req.params.id, preference));
 }
@@ -145,7 +88,6 @@ remoteTracksRouter.get(
     asyncHandler(handleGetRemoteTrackPreference),
 );
 
-type ParsedRemoteTrackId = NonNullable<ReturnType<typeof parseRemoteTrackId>>;
 type RemotePreferenceMetadata = {
     title?: string;
     artist?: string;
@@ -166,23 +108,16 @@ function readRemotePreferenceMetadata(body: unknown): RemotePreferenceMetadata {
     return source as RemotePreferenceMetadata;
 }
 
-function parseTidalId(parsed: ParsedRemoteTrackId): number | undefined {
-    if (parsed.provider !== "tidal") return undefined;
-    const tidalId = Number.parseInt(parsed.externalId, 10);
-    return Number.isFinite(tidalId) && tidalId > 0 ? tidalId : undefined;
-}
-
 async function resolveLikedRemoteTrack(
-    parsed: ParsedRemoteTrackId,
+    parsed: RemoteTrackPreferenceReference,
     userId: string,
-    tidalId: number | undefined,
     metadata: RemotePreferenceMetadata,
 ) {
     const resolved = await resolveRemoteTrackMetadataForRequest({
         provider: parsed.provider,
         userId,
         ...(parsed.provider === "tidal"
-            ? { tidalId: tidalId as number }
+            ? { tidalId: parsed.tidalId }
             : { videoId: parsed.externalId }),
         fetchArtworkIfMissing: true,
         metadata,
@@ -190,7 +125,7 @@ async function resolveLikedRemoteTrack(
     return parsed.provider === "tidal"
         ? trackMappingService.ensureRemoteTrack({
               provider: "tidal",
-              tidalId: tidalId as number,
+              tidalId: parsed.tidalId,
               ...resolved,
           })
         : trackMappingService.ensureRemoteTrack({
@@ -202,59 +137,6 @@ async function resolveLikedRemoteTrack(
               duration: resolved.duration,
               thumbnailUrl: resolved.thumbnailUrl,
           });
-}
-
-async function saveRemoteTrackLike(
-    userId: string,
-    ensured: Awaited<ReturnType<typeof resolveLikedRemoteTrack>>,
-    likedAt: Date,
-): Promise<void> {
-    if (ensured.provider === "tidal") {
-        await prisma.likedRemoteTrack.upsert({
-            where: {
-                userId_trackTidalId: { userId, trackTidalId: ensured.id },
-            },
-            create: { userId, trackTidalId: ensured.id, likedAt },
-            update: { likedAt },
-        });
-        return;
-    }
-    await prisma.likedRemoteTrack.upsert({
-        where: {
-            userId_trackYtMusicId: { userId, trackYtMusicId: ensured.id },
-        },
-        create: { userId, trackYtMusicId: ensured.id, likedAt },
-        update: { likedAt },
-    });
-}
-
-async function clearRemoteTrackLike(
-    parsed: ParsedRemoteTrackId,
-    userId: string,
-): Promise<void> {
-    if (parsed.provider === "tidal") {
-        const tidalId = parseTidalId(parsed);
-        if (!tidalId) return;
-        const track = await prisma.trackTidal.findUnique({
-            where: { tidalId },
-            select: { id: true },
-        });
-        if (track) {
-            await prisma.likedRemoteTrack.deleteMany({
-                where: { userId, trackTidalId: track.id },
-            });
-        }
-        return;
-    }
-    const track = await prisma.trackYtMusic.findUnique({
-        where: { videoId: parsed.externalId },
-        select: { id: true },
-    });
-    if (track) {
-        await prisma.likedRemoteTrack.deleteMany({
-            where: { userId, trackYtMusicId: track.id },
-        });
-    }
 }
 
 /**
@@ -317,7 +199,7 @@ export async function handleSetRemoteTrackPreference(
         return sendRouteError(res, 401, "Authentication required");
     }
 
-    const parsed = parseRemoteTrackId(req.params.id);
+    const parsed = parseRemoteTrackPreferenceReference(req.params.id);
     if (!parsed) {
         return res.status(400).json({
             error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
@@ -335,28 +217,51 @@ export async function handleSetRemoteTrackPreference(
 
     const metadata = readRemotePreferenceMetadata(req.body);
     const now = new Date();
-    const tidalId = parseTidalId(parsed);
-    if (signal === "thumbs_up" && parsed.provider === "tidal" && !tidalId) {
-        return res.status(400).json({
-            error: "Invalid remote track ID. Use yt:videoId or tidal:trackId format.",
-        });
-    }
-    if (signal === "thumbs_up") {
-        const ensured = await resolveLikedRemoteTrack(
-            parsed,
-            userId,
-            tidalId,
-            metadata,
-        );
-        await saveRemoteTrackLike(userId, ensured, now);
-    } else {
-        await clearRemoteTrackLike(parsed, userId);
-    }
-
-    const preference = resolveTrackPreference({
-        likedAt: signal === "thumbs_up" ? now : null,
-        dislikedAt: null,
+    const intentToken = await reserveRemoteTrackPreferenceIntent({
+        userId,
+        reference: parsed,
+        requestedAt: now,
     });
+
+    let preference: Awaited<
+        ReturnType<typeof applyRemoteTrackPreferenceSignal>
+    >;
+    try {
+        let likedTarget: RemoteTrackLikeTarget | undefined;
+        if (signal === "thumbs_up") {
+            const ensured = await resolveLikedRemoteTrack(
+                parsed,
+                userId,
+                metadata,
+            );
+            likedTarget =
+                ensured.provider === "tidal"
+                    ? { provider: "tidal", trackTidalId: ensured.id }
+                    : { provider: "youtube", trackYtMusicId: ensured.id };
+        }
+        preference = await applyRemoteTrackPreferenceSignal({
+            userId,
+            reference: parsed,
+            signal,
+            now,
+            intentToken,
+            likedTarget,
+        });
+    } catch (error) {
+        try {
+            await cancelRemoteTrackPreferenceIntent({
+                userId,
+                reference: parsed,
+                intentToken,
+            });
+        } catch (cleanupError) {
+            remoteTrackPreferenceLogger.error(
+                "Failed to clean up a failed remote preference intent",
+                { cleanupError },
+            );
+        }
+        throw error;
+    }
 
     res.json(formatTrackPreferenceResponse(req.params.id, preference));
 }

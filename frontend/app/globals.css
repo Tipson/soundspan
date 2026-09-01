@@ -2,81 +2,114 @@
 
 @theme {
     /* Brand */
-    --color-brand: #3b82f6;
-    --color-brand-dark: #2563eb;
-    --color-brand-hover: #60a5fa;
-    --color-brand-light: #93c5fd;
+    --color-brand: #a970ff;
+    --color-brand-dark: #7f4bd3;
+    --color-brand-hover: #c497ff;
+    --color-brand-light: #decaff;
 
     /* AI */
-    --color-ai: #2323ff;
-    --color-ai-dark: #1a1acc;
-    --color-ai-hover: #5b5bff;
+    --color-ai: #d866c7;
+    --color-ai-dark: #a73e96;
+    --color-ai-hover: #f19ae5;
 
     /* Surfaces */
-    --color-surface: #0a0a0a;
-    --color-surface-active: #1c1c1c;
-    --color-surface-elevated: #181818;
-    --color-surface-highlight: #282828;
-    --color-surface-hover: #1a1a1a;
-    --color-surface-overlay: #141414;
-    --color-surface-raised: #0f0f0f;
-    --color-surface-sunken: #121212;
+    --color-surface: #090909;
+    --color-surface-active: #28272b;
+    --color-surface-elevated: #1c1b1e;
+    --color-surface-highlight: #28272b;
+    --color-surface-hover: #28272b;
+    --color-surface-overlay: #1c1b1e;
+    --color-surface-raised: #121214;
+    --color-surface-sunken: #101011;
 
     /* Lines */
-    --color-line: #262626;
-    --color-line-muted: #404040;
-    --color-line-strong: #333333;
+    --color-line: #2b292f;
+    --color-line-muted: #403c47;
+    --color-line-strong: #615a69;
 
     /* Content */
-    --color-content: #ffffff;
-    --color-content-body: #e5e5e5;
-    --color-content-disabled: #525252;
-    --color-content-muted: #737373;
-    --color-content-secondary: #a3a3a3;
+    --color-content: #faf8fc;
+    --color-content-body: #e8e3eb;
+    --color-content-disabled: #77717d;
+    --color-content-muted: #aaa3b0;
+    --color-content-secondary: #cdc6d1;
 
     /* Status */
-    --color-error: #ef4444;
-    --color-success: #22c55e;
-    --color-warning: #f59e0b;
+    --color-error: #ff738e;
+    --color-success: #64d8a8;
+    --color-warning: #f0a45c;
 }
 
 :root {
     /* soundspan Design System - Dark Theme Only */
 
-    /* Render native widgets (select popups, scrollbars, pickers) in the
-       browser's dark scheme; without this the OS light scheme paints
-       white popup menus behind our white text. */
+    /* Render native widgets (selects, date pickers, scrollbars) for the dark UI. */
     color-scheme: dark;
 
+    /* Soundspan music foundation */
+    --music-canvas: #090909;
+    --music-stage: #121214;
+    --music-surface: #1c1b1e;
+    --music-raised: #28272b;
+    --music-soft: #343138;
+    --music-ink: #faf8fc;
+    --music-ink-body: #e8e3eb;
+    --music-ink-muted: #cdc6d1;
+    --music-ink-faint: #aaa3b0;
+    --music-action: #a970ff;
+    --music-action-strong: #c497ff;
+    --music-positive: #64d8a8;
+    --music-negative: #ff738e;
+    --music-warning: #f0a45c;
+    --music-line: rgb(255 255 255 / 0.08);
+    --music-line-strong: rgb(255 255 255 / 0.14);
+    --music-radius-control: 10px;
+    --music-radius-card: 14px;
+    --music-radius-editorial: 20px;
+    --music-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --font-interface:
+        "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont,
+        Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-display:
+        "Segoe UI Variable Display", "Segoe UI", -apple-system,
+        BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+
     /* Background Layers */
-    --bg-primary: #0a0a0a; /* Primary canvas */
-    --bg-secondary: #0f0f0f; /* Cards, panels */
-    --bg-tertiary: #141414; /* Nested content, wells */
-    --bg-hover: #1a1a1a; /* Modals, dropdowns, hover */
-    --bg-active: #1c1c1c; /* Active/selected states */
+    --bg-primary: var(--music-canvas); /* Primary canvas */
+    --bg-secondary: var(--music-stage); /* Cards, panels */
+    --bg-tertiary: var(--music-surface); /* Nested content, wells */
+    --bg-hover: var(--music-raised); /* Modals, dropdowns, hover */
+    --bg-active: var(--music-soft); /* Active/selected states */
 
     /* Borders */
-    --border-subtle: #1c1c1c; /* Subtle borders (default) */
-    --border-interactive: #262626; /* Interactive elements */
-    --border-focus: #333333; /* Focus, selected states */
+    --border-subtle: var(--music-line); /* Subtle borders (default) */
+    --border-interactive: var(--music-line-strong); /* Interactive elements */
+    --border-focus: var(--music-action); /* Focus, selected states */
 
     /* Text Colors */
-    --text-primary: #ffffff; /* Primary headers */
-    --text-body: #e5e5e5; /* Body text */
-    --text-secondary: #a3a3a3; /* Secondary info */
-    --text-muted: #737373; /* Timestamps, meta */
-    --text-disabled: #525252; /* Disabled */
+    --text-primary: var(--music-ink); /* Primary headers */
+    --text-body: var(--music-ink-body); /* Body text */
+    --text-secondary: var(--music-ink-muted); /* Secondary info */
+    --text-muted: var(--music-ink-faint); /* Timestamps, meta */
+    --text-disabled: #77717d; /* Disabled */
 
     /* Actions */
-    --color-primary: #3b82f6; /* PRIMARY CTA ONLY - Blue */
-    --color-ai: #2323ff; /* AI features - Electric Blue */
-    --color-ai-dark: #1a1acc; /* AI selected */
+    --color-primary: var(--music-action); /* PRIMARY CTA ONLY */
+    --color-ai: #d866c7; /* Legacy semantic alias for assisted features */
+    --color-ai-dark: #a73e96; /* Legacy selected state */
 
     /* Status */
-    --color-success: #22c55e;
-    --color-warning: #f59e0b;
-    --color-error: #ef4444;
-    --color-info: #3b82f6;
+    --color-success: var(--music-positive);
+    --color-warning: var(--music-warning);
+    --color-error: var(--music-negative);
+    --color-info: var(--music-action);
+
+    /* Authenticated music shell geometry */
+    --app-topbar-height: 60px;
+    --app-topbar-height-desktop: 88px;
+    --app-bottom-nav-height: 60px;
+    --app-mini-player-height: 68px;
+    --app-player-height-desktop: 128px;
 }
 
 * {
@@ -86,34 +119,592 @@
 body {
     background: var(--bg-primary);
     color: var(--text-body);
-    font-family:
-        var(--font-montserrat),
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        Roboto,
-        Oxygen,
-        Ubuntu,
-        Cantarell,
-        sans-serif;
+    font-family: var(--font-interface);
+    font-optical-sizing: auto;
+    font-feature-settings:
+        "kern" 1,
+        "liga" 1;
+    line-height: 1.5;
     min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: clip;
+}
+
+h1,
+h2,
+h3 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+}
+
+h1 {
+    line-height: 1.04;
+    letter-spacing: -0.035em;
+}
+
+h2 {
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+}
+
+h3 {
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+    font: inherit;
+    -webkit-tap-highlight-color: transparent;
+}
+
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--music-action);
+    outline-offset: 3px;
 }
 
 .brand-wordmark {
-    font-family: var(--font-polea), var(--font-montserrat), sans-serif;
+    font-family: var(--font-polea), var(--font-interface);
     text-transform: lowercase;
     letter-spacing: 0.01em;
     line-height: 1;
 }
 
-/* AI-blue glow for the Vibe navigation entry */
+/* Vibe signal uses the same restrained musical accent as the rest of the app. */
 .nav-vibe-glow {
-    color: var(--color-ai-hover);
-    text-shadow: 0 0 12px color-mix(in srgb, var(--color-ai) 65%, transparent);
+    color: var(--music-action-strong);
+    text-shadow: 0 0 14px
+        color-mix(in srgb, var(--music-action) 28%, transparent);
 }
 
 .nav-vibe-glow:hover {
-    color: var(--color-brand-light);
+    color: var(--music-ink);
+}
+
+/* =====================================================
+   Authenticated music shell
+   ===================================================== */
+
+.shell-topbar {
+    background: color-mix(in srgb, var(--music-canvas) 94%, transparent);
+    box-shadow: 0 1px 0 color-mix(in srgb, white 5%, transparent);
+    backdrop-filter: blur(22px) saturate(125%);
+}
+
+.desktop-shell-frame,
+.mobile-shell-frame {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+}
+
+.desktop-shell-frame {
+    background:
+        radial-gradient(
+            ellipse at 72% -18%,
+            color-mix(in srgb, var(--color-ai) 6%, transparent),
+            transparent 46rem
+        ),
+        var(--music-canvas);
+}
+
+.desktop-content-stage,
+.mobile-app-stage {
+    background:
+        radial-gradient(
+            ellipse at 82% -12%,
+            color-mix(in srgb, var(--color-ai) 5%, transparent),
+            transparent 40rem
+        ),
+        linear-gradient(180deg, var(--music-canvas), var(--music-canvas));
+    border: 0;
+    box-shadow: none;
+    overscroll-behavior: contain;
+}
+
+.shell-sidebar {
+    border: 0;
+    border-right: 1px solid color-mix(in srgb, white 6%, transparent);
+    background: color-mix(in srgb, var(--music-canvas) 97%, black);
+    box-shadow: none;
+    backdrop-filter: blur(18px) saturate(120%);
+}
+
+.mobile-sidebar-sheet {
+    border: 0;
+    border-right: 1px solid color-mix(in srgb, white 10%, transparent);
+    background: color-mix(in srgb, var(--music-stage) 96%, transparent);
+    box-shadow: 20px 0 60px color-mix(in srgb, black 48%, transparent);
+    backdrop-filter: blur(24px) saturate(130%);
+}
+
+.shell-control,
+.shell-nav-item {
+    border-radius: var(--music-radius-control);
+    transition:
+        color 160ms var(--music-ease),
+        background-color 160ms var(--music-ease),
+        transform 100ms ease-out;
+}
+
+.shell-control {
+    border: 1px solid color-mix(in srgb, white 8%, transparent);
+    background: color-mix(in srgb, white 4%, transparent);
+}
+
+.shell-control:hover {
+    border-color: color-mix(in srgb, white 13%, transparent);
+    background: color-mix(in srgb, white 8%, transparent);
+}
+
+.shell-control:active,
+.shell-nav-item:active {
+    transform: scale(0.96);
+}
+
+.shell-sidebar-link[aria-current="page"]::before {
+    position: absolute;
+    left: -12px;
+    width: 3px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--music-warning);
+    box-shadow: 0 0 18px
+        color-mix(in srgb, var(--music-warning) 62%, transparent);
+    content: "";
+}
+
+.shell-search-field {
+    border-radius: var(--music-radius-control);
+    border: 1px solid color-mix(in srgb, white 9%, transparent);
+    background: color-mix(in srgb, var(--music-surface) 78%, transparent);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
+        0 10px 30px color-mix(in srgb, black 16%, transparent);
+    backdrop-filter: blur(18px) saturate(125%);
+    transition:
+        border-color 160ms var(--music-ease),
+        background-color 160ms var(--music-ease),
+        box-shadow 160ms var(--music-ease);
+}
+
+.shell-search-field:hover {
+    background: color-mix(in srgb, var(--music-raised) 82%, transparent);
+}
+
+.shell-search-field:focus {
+    border-color: color-mix(in srgb, var(--music-action) 64%, transparent);
+    background: color-mix(in srgb, var(--music-raised) 92%, transparent);
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--music-action) 13%, transparent),
+        0 16px 42px color-mix(in srgb, black 24%, transparent);
+}
+
+.music-filter-chip {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--music-line);
+    border-radius: 999px;
+    padding: 8px 16px;
+    background: color-mix(in srgb, var(--music-surface) 88%, transparent);
+    color: var(--music-ink-muted);
+    font-size: 0.875rem;
+    font-weight: 650;
+    line-height: 1;
+    text-decoration: none;
+    transition:
+        color 180ms var(--music-ease),
+        border-color 180ms var(--music-ease),
+        background-color 180ms var(--music-ease),
+        transform 180ms var(--music-ease);
+}
+
+.music-filter-chip:hover {
+    border-color: var(--music-line-strong);
+    background: var(--music-raised);
+    color: var(--music-ink);
+}
+
+.music-filter-chip:active {
+    transform: scale(0.98);
+}
+
+.music-filter-chip[data-state="active"] {
+    border-color: color-mix(in srgb, var(--music-action) 58%, transparent);
+    background: color-mix(
+        in srgb,
+        var(--music-action) 18%,
+        var(--music-surface)
+    );
+    color: var(--music-ink);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+}
+
+.music-filter-chip:focus-visible {
+    outline: 2px solid var(--music-action);
+    outline-offset: 3px;
+}
+
+.settings-page {
+    background:
+        radial-gradient(
+            ellipse at 72% -10%,
+            color-mix(in srgb, var(--music-action) 8%, transparent),
+            transparent 32rem
+        ),
+        transparent;
+}
+
+.settings-section-navigation {
+    z-index: 10;
+    border: 0;
+    border-radius: var(--music-radius-card);
+    padding: 8px;
+    background: color-mix(in srgb, var(--music-stage) 88%, transparent);
+    box-shadow: 0 18px 46px color-mix(in srgb, black 18%, transparent);
+    backdrop-filter: blur(18px) saturate(120%);
+}
+
+.settings-navigation-item {
+    min-height: 44px;
+    min-width: max-content;
+    border-radius: var(--music-radius-control);
+    padding: 10px 12px;
+    color: var(--music-ink-muted);
+    font-size: 0.8125rem;
+    font-weight: 620;
+    line-height: 1.2;
+    text-align: left;
+    transition:
+        color 180ms var(--music-ease),
+        background-color 180ms var(--music-ease),
+        transform 180ms var(--music-ease);
+}
+
+.settings-navigation-item:hover {
+    background: color-mix(in srgb, white 5%, transparent);
+    color: var(--music-ink);
+}
+
+.settings-navigation-item[data-state="active"] {
+    background: color-mix(
+        in srgb,
+        var(--music-action) 15%,
+        var(--music-raised)
+    );
+    color: var(--music-ink);
+    box-shadow: inset 3px 0 0 var(--music-action);
+}
+
+.settings-navigation-item:active {
+    transform: scale(0.985);
+}
+
+.settings-navigation-item:focus-visible {
+    outline: 2px solid var(--music-action);
+    outline-offset: 2px;
+}
+
+.settings-section-card {
+    border: 0;
+    border-radius: var(--music-radius-card);
+    padding: 20px;
+    background: color-mix(in srgb, var(--music-stage) 72%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+}
+
+.settings-row + .settings-row {
+    border-top: 1px solid color-mix(in srgb, white 6%, transparent);
+}
+
+@media (min-width: 768px) {
+    .music-filter-chip,
+    .settings-navigation-item {
+        min-height: 40px;
+    }
+
+    .settings-section-card {
+        padding: 26px 28px;
+    }
+}
+
+.mobile-shell-frame {
+    padding-top: calc(var(--app-topbar-height) + var(--safe-area-top));
+}
+
+.mobile-app-stage {
+    min-height: 0;
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.mobile-stage-content {
+    min-height: 100%;
+}
+
+.mobile-player-dock {
+    bottom: calc(var(--app-bottom-nav-height) + var(--safe-area-bottom) + 4px);
+    left: calc(8px + var(--safe-area-left));
+    right: calc(8px + var(--safe-area-right));
+    min-height: var(--app-mini-player-height);
+}
+
+.mobile-player-surface {
+    min-height: var(--app-mini-player-height);
+    background:
+        linear-gradient(
+            110deg,
+            color-mix(in srgb, var(--music-action) 6%, transparent),
+            transparent 48%
+        ),
+        color-mix(in srgb, var(--music-surface) 92%, transparent);
+    border: 1px solid color-mix(in srgb, white 9%, transparent);
+    box-shadow: 0 14px 38px color-mix(in srgb, black 52%, transparent);
+    backdrop-filter: blur(18px) saturate(132%);
+}
+
+.shell-signal-progress {
+    background: linear-gradient(
+        90deg,
+        var(--music-action),
+        var(--music-action-strong)
+    );
+    box-shadow: 0 0 14px
+        color-mix(in srgb, var(--music-action) 36%, transparent);
+}
+
+.mobile-bottom-navigation {
+    min-height: calc(var(--app-bottom-nav-height) + var(--safe-area-bottom));
+    background: color-mix(in srgb, var(--music-canvas) 91%, transparent);
+    box-shadow: 0 -12px 30px color-mix(in srgb, black 32%, transparent);
+    backdrop-filter: blur(18px) saturate(125%);
+}
+
+.desktop-player-dock {
+    z-index: 45;
+    min-height: var(--app-player-height-desktop);
+    padding: 0;
+    background: transparent;
+}
+
+.desktop-player-surface {
+    overflow: visible;
+    border: 0;
+    border-top: 1px solid color-mix(in srgb, white 8%, transparent);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--music-stage) 96%, transparent);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 3%, transparent),
+        0 -18px 48px color-mix(in srgb, black 26%, transparent);
+    backdrop-filter: blur(20px) saturate(132%);
+}
+
+.player-control {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    transition:
+        color 160ms var(--music-ease),
+        background-color 160ms var(--music-ease),
+        transform 100ms ease-out;
+}
+
+.player-control:hover:not(:disabled) {
+    background: color-mix(in srgb, white 7%, transparent);
+}
+
+.player-control:active:not(:disabled),
+.player-control-primary:active:not(:disabled) {
+    transform: scale(0.94);
+}
+
+.player-control:disabled,
+.player-control-primary:disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+}
+
+.player-control-primary {
+    transition:
+        color 160ms var(--music-ease),
+        background-color 160ms var(--music-ease),
+        box-shadow 160ms var(--music-ease),
+        transform 100ms ease-out;
+}
+
+.overlay-player-stage {
+    isolation: isolate;
+    background:
+        radial-gradient(
+            circle at 50% 30%,
+            color-mix(in srgb, var(--music-action) 13%, transparent),
+            transparent 42rem
+        ),
+        linear-gradient(180deg, var(--music-stage) 0%, var(--music-canvas) 72%);
+}
+
+.overlay-player-atmosphere {
+    position: absolute;
+    z-index: 0;
+    inset: -12%;
+    pointer-events: none;
+    opacity: 0.28;
+    filter: blur(64px) saturate(135%);
+    transform: scale(1.08);
+}
+
+.overlay-player-scrim {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(180deg, rgb(5 6 9 / 0.38), rgb(5 6 9 / 0.82) 68%),
+        radial-gradient(
+            ellipse at 50% 34%,
+            transparent 0%,
+            rgb(5 6 9 / 0.18) 52%,
+            rgb(5 6 9 / 0.5) 100%
+        );
+}
+
+.overlay-player-chrome {
+    background: linear-gradient(180deg, rgb(5 6 9 / 0.48), transparent);
+}
+
+.overlay-player-artwork-glow {
+    transform: scale(0.94);
+    filter: blur(42px) saturate(130%);
+}
+
+.overlay-player-artwork {
+    border: 0;
+    border-radius: 22px;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
+        0 34px 88px rgb(0 0 0 / 0.48);
+}
+
+.overlay-player-metadata {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.overlay-player-transport {
+    min-height: 72px;
+}
+
+.overlay-player-primary {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, white 30%, transparent),
+        0 16px 38px rgb(0 0 0 / 0.42),
+        0 0 30px color-mix(in srgb, var(--music-action) 15%, transparent);
+}
+
+.overlay-player-sheet {
+    background: color-mix(in srgb, var(--music-canvas) 91%, transparent);
+    box-shadow: 0 -24px 70px rgb(0 0 0 / 0.42);
+}
+
+.rare-player-control {
+    display: none;
+}
+
+@media (min-width: 1536px) {
+    .rare-player-control {
+        display: inline-flex;
+    }
+}
+
+@media (max-width: 1180px) {
+    .desktop-player-layout {
+        grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+        gap: 8px;
+        padding-inline: 12px;
+    }
+
+    .player-transport {
+        gap: 4px;
+    }
+
+    .player-utilities {
+        gap: 0;
+    }
+}
+
+@media (max-width: 767px) {
+    .overlay-player-atmosphere {
+        inset: -6%;
+        opacity: 0.22;
+        filter: blur(44px) saturate(125%);
+    }
+
+    .overlay-player-artwork {
+        border-radius: 22px;
+        box-shadow:
+            inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
+            0 22px 58px rgb(0 0 0 / 0.48);
+    }
+
+    .overlay-player-metadata {
+        border-radius: 20px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-player-transition],
+    .player-control,
+    .player-control-primary,
+    .shell-control,
+    .shell-nav-item,
+    .music-filter-chip {
+        transition-duration: 1ms !important;
+        transform: none !important;
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    .shell-topbar,
+    .shell-sidebar,
+    .mobile-sidebar-sheet,
+    .shell-search-field,
+    .desktop-player-surface,
+    .mobile-player-surface,
+    .mobile-bottom-navigation,
+    .overlay-player-metadata,
+    .overlay-player-sheet {
+        background: var(--music-stage);
+        backdrop-filter: none;
+    }
+
+    .overlay-player-atmosphere {
+        display: none;
+    }
+}
+
+@media (prefers-contrast: more) {
+    .shell-topbar,
+    .shell-sidebar,
+    .mobile-sidebar-sheet,
+    .desktop-player-surface,
+    .mobile-player-surface,
+    .overlay-player-artwork,
+    .overlay-player-metadata,
+    .overlay-player-sheet {
+        border-color: color-mix(in srgb, white 35%, transparent);
+    }
 }
 
 /* Make all buttons have pointer cursor */
@@ -138,21 +729,24 @@ button:disabled {
 /* Scrollbar Styling - Desktop only */
 @media (min-width: 769px) {
     ::-webkit-scrollbar {
-        width: 12px;
+        width: 8px;
+        height: 8px;
     }
 
     ::-webkit-scrollbar-track {
-        background: var(--bg-primary);
+        background: transparent;
     }
 
     ::-webkit-scrollbar-thumb {
-        background: var(--bg-hover);
-        border-radius: 6px;
-        border: 2px solid var(--bg-primary);
+        background: color-mix(in srgb, var(--music-ink-muted) 28%, transparent);
+        border-radius: 999px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-        background: var(--border-focus);
+        background: color-mix(in srgb, var(--music-ink-muted) 48%, transparent);
+        background-clip: padding-box;
     }
 }
 
@@ -600,19 +1194,11 @@ body.scanner-active .scanner-overlay {
 
 /* When running as installed PWA */
 @media all and (display-mode: standalone) {
-    /* Ensure body fills viewport properly */
+    /* The authenticated shell owns safe-area placement for fixed UI. */
     html,
     body {
-        height: 100%;
+        height: 100dvh;
         overflow: hidden;
-    }
-
-    /* Add padding for safe areas on iOS */
-    body {
-        padding-top: var(--safe-area-top);
-        padding-bottom: var(--safe-area-bottom);
-        padding-left: var(--safe-area-left);
-        padding-right: var(--safe-area-right);
     }
 }
 

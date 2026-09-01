@@ -25,6 +25,7 @@ import {
 } from "../utils/trackMatching";
 import { parseM3U } from "./m3uParser";
 import { remoteProviderAdapters } from "./remoteProviders/adapters";
+import { buildGenericImportPlaylistMixId } from "./genericImportIdentity";
 
 const log = logger.child("PlaylistImportService");
 const MATCH_BATCH_SIZE = 25;
@@ -32,6 +33,36 @@ const MATCH_BATCH_CONCURRENCY = 2;
 const UPSERT_CONCURRENCY = 6;
 const MAPPING_CREATE_CONCURRENCY = 8;
 const TIDAL_IMPORT_QUALITY = "HIGH";
+const IDEMPOTENT_PLAYLIST_TRANSACTION_ATTEMPTS = 2;
+
+interface PlaylistImportOptions {
+    idempotencyKey?: string;
+}
+
+function isPlaylistIdentityConflict(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) return false;
+    const candidate = error as {
+        code?: unknown;
+        meta?: { modelName?: unknown; target?: unknown };
+    };
+    if (candidate.code !== "P2002") return false;
+    if (
+        candidate.meta?.modelName !== undefined &&
+        candidate.meta.modelName !== "Playlist"
+    ) {
+        return false;
+    }
+
+    const target = candidate.meta?.target;
+    if (Array.isArray(target)) {
+        return target.includes("userId") && target.includes("mixId");
+    }
+    if (typeof target === "string") {
+        const normalized = target.toLowerCase();
+        return normalized.includes("userid") && normalized.includes("mixid");
+    }
+    return false;
+}
 
 function parseProviderUrlCandidate(rawUrl: string): URL | null {
     try {
@@ -215,7 +246,8 @@ class PlaylistImportService {
         userId?: string,
     ): Promise<{ name: string; tracks: ImportTrackMeta[] }> {
         if (source === "spotify") {
-            const playlist = await spotifyService.getPlaylist(sourceId);
+            const playlist =
+                await spotifyService.getPlaylistForImport(sourceId);
             if (!playlist) throw new Error("Spotify playlist not found");
 
             return {
@@ -474,7 +506,8 @@ class PlaylistImportService {
 
     /**
      * Execute import — creates Playlist + PlaylistItems from preview data.
-     * Accepts pre-resolved preview data directly to avoid re-fetching.
+     * Accepts pre-resolved preview data directly to avoid re-fetching. A supplied
+     * idempotency key reuses an owner-scoped playlist across durable job retries.
      */
     async importPlaylist(
         userId: string,
@@ -490,6 +523,7 @@ class PlaylistImportService {
             };
         },
         overrideName?: string,
+        options: PlaylistImportOptions = {},
     ): Promise<{
         playlistId: string;
         summary: {
@@ -501,36 +535,77 @@ class PlaylistImportService {
         };
     }> {
         const effectivePlaylistName = overrideName || previewData.playlistName;
-        const { importableTracks, skippedDuplicateLocalTracks } =
-            this.buildImportableTracks(previewData.resolved);
+        const importMixId =
+            options.idempotencyKey === undefined
+                ? null
+                : buildGenericImportPlaylistMixId(options.idempotencyKey);
+        const importableTracks = this.buildImportableTracks(
+            previewData.resolved,
+        );
 
         await this.validateResolvedTrackIds(importableTracks);
 
-        const playlist = await prisma.$transaction(async (tx) => {
-            const createdPlaylist = await tx.playlist.create({
-                data: {
-                    userId,
-                    name: effectivePlaylistName,
-                },
+        const persistPlaylist = () =>
+            prisma.$transaction(async (tx) => {
+                if (importMixId) {
+                    const existingPlaylist = await tx.playlist.findUnique({
+                        where: {
+                            userId_mixId: { userId, mixId: importMixId },
+                        },
+                        select: { id: true },
+                    });
+                    if (existingPlaylist) return existingPlaylist;
+                }
+
+                const createdPlaylist = await tx.playlist.create({
+                    data: {
+                        userId,
+                        name: effectivePlaylistName,
+                        ...(importMixId ? { mixId: importMixId } : {}),
+                    },
+                });
+
+                const items = importableTracks.map((r, sort) => ({
+                    playlistId: createdPlaylist.id,
+                    trackId: r.trackId || null,
+                    trackTidalId: r.trackTidalId || null,
+                    trackYtMusicId: r.trackYtMusicId || null,
+                    sort,
+                }));
+
+                if (items.length > 0) {
+                    const createdItems = await tx.playlistItem.createMany({
+                        data: items,
+                    });
+                    if (createdItems.count !== items.length) {
+                        throw new Error(
+                            "Playlist import item persistence was incomplete",
+                        );
+                    }
+                }
+
+                return createdPlaylist;
             });
 
-            const items = importableTracks.map((r, sort) => ({
-                playlistId: createdPlaylist.id,
-                trackId: r.trackId || null,
-                trackTidalId: r.trackTidalId || null,
-                trackYtMusicId: r.trackYtMusicId || null,
-                sort,
-            }));
-
-            if (items.length > 0) {
-                await tx.playlistItem.createMany({
-                    data: items,
-                    skipDuplicates: true,
-                });
+        let playlist: { id: string } | null = null;
+        const transactionAttempts = importMixId
+            ? IDEMPOTENT_PLAYLIST_TRANSACTION_ATTEMPTS
+            : 1;
+        for (let attempt = 1; attempt <= transactionAttempts; attempt += 1) {
+            try {
+                playlist = await persistPlaylist();
+                break;
+            } catch (error) {
+                const canRetryUniqueRace =
+                    importMixId !== null &&
+                    isPlaylistIdentityConflict(error) &&
+                    attempt < transactionAttempts;
+                if (!canRetryUniqueRace) throw error;
             }
-
-            return createdPlaylist;
-        });
+        }
+        if (!playlist) {
+            throw new Error("Playlist import transaction did not complete");
+        }
 
         await mapWithConcurrency(
             importableTracks,
@@ -553,13 +628,6 @@ class PlaylistImportService {
             },
         );
 
-        if (skippedDuplicateLocalTracks > 0) {
-            log.warn(
-                `Skipped ${skippedDuplicateLocalTracks} duplicate local matches ` +
-                    `for playlist "${effectivePlaylistName}" to satisfy unique (playlistId, trackId)`,
-            );
-        }
-
         log.info(
             `Imported playlist "${effectivePlaylistName}" for user ${userId}: ` +
                 `${previewData.summary.total} tracks (${previewData.summary.local} local, ` +
@@ -571,6 +639,25 @@ class PlaylistImportService {
             playlistId: playlist.id,
             summary: previewData.summary,
         };
+    }
+
+    /**
+     * Finds the playlist committed for one durable import job and owner.
+     */
+    async findImportedPlaylistId(
+        userId: string,
+        idempotencyKey: string,
+    ): Promise<string | null> {
+        const playlist = await prisma.playlist.findUnique({
+            where: {
+                userId_mixId: {
+                    userId,
+                    mixId: buildGenericImportPlaylistMixId(idempotencyKey),
+                },
+            },
+            select: { id: true },
+        });
+        return playlist?.id ?? null;
     }
 
     /**
@@ -651,27 +738,12 @@ class PlaylistImportService {
         };
     }
 
-    private buildImportableTracks(resolvedTracks: ResolvedTrack[]): {
-        importableTracks: ResolvedTrack[];
-        skippedDuplicateLocalTracks: number;
-    } {
-        const importableTracks: ResolvedTrack[] = [];
-        const seenLocalTrackIds = new Set<string>();
-        let skippedDuplicateLocalTracks = 0;
-
-        for (const resolved of resolvedTracks) {
-            if (resolved.source === "unresolved") continue;
-            if (resolved.trackId && seenLocalTrackIds.has(resolved.trackId)) {
-                skippedDuplicateLocalTracks += 1;
-                continue;
-            }
-            if (resolved.trackId) {
-                seenLocalTrackIds.add(resolved.trackId);
-            }
-            importableTracks.push(resolved);
-        }
-
-        return { importableTracks, skippedDuplicateLocalTracks };
+    private buildImportableTracks(
+        resolvedTracks: ResolvedTrack[],
+    ): ResolvedTrack[] {
+        return resolvedTracks.filter(
+            (resolved) => resolved.source !== "unresolved",
+        );
     }
 
     private async resolveTracks(
@@ -689,24 +761,18 @@ class PlaylistImportService {
             confidence: 0,
         }));
         const unresolved: IndexedImportTrack[] = [];
-        const seenLocalTrackIds = new Set<string>();
-        let duplicateLocalMatches = 0;
 
         for (let i = 0; i < tracks.length; i++) {
             const track = tracks[i];
             const localMatch = matchTrackAgainstLibrary(track, localCandidates);
             if (localMatch && localMatch.matchConfidence >= 70) {
-                if (!seenLocalTrackIds.has(localMatch.trackId)) {
-                    seenLocalTrackIds.add(localMatch.trackId);
-                    resolved[i] = {
-                        ...resolved[i],
-                        trackId: localMatch.trackId,
-                        source: "local",
-                        confidence: localMatch.matchConfidence,
-                    };
-                    continue;
-                }
-                duplicateLocalMatches += 1;
+                resolved[i] = {
+                    ...resolved[i],
+                    trackId: localMatch.trackId,
+                    source: "local",
+                    confidence: localMatch.matchConfidence,
+                };
+                continue;
             }
 
             unresolved.push({ index: i, track });
@@ -728,13 +794,6 @@ class PlaylistImportService {
             (item) => resolved[item.index].source === "unresolved",
         );
         await this.resolveWithYouTube(youtubeCandidates, resolved);
-
-        if (duplicateLocalMatches > 0) {
-            log.info(
-                `Detected ${duplicateLocalMatches} duplicate local matches; ` +
-                    "re-routed duplicates through provider matching",
-            );
-        }
 
         return resolved;
     }

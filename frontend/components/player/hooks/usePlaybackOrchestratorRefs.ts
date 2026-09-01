@@ -13,6 +13,7 @@ import type {
     DesiredLoadPlayIntent,
     OrchestratorEngineEventHandlers,
 } from "./audioPlaybackOrchestratorTypes";
+import type { AutoMatchVibeRequestResult } from "../autoMatchVibePlayback";
 
 interface UsePlaybackOrchestratorRefsOptions {
     currentTrack: Track | null;
@@ -59,6 +60,10 @@ export function usePlaybackOrchestratorRefs({
     const seekCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const cacheStatusPollingRef = useRef<NodeJS.Timeout | null>(null);
     const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const pendingManualProviderLoadRef = useRef<{
+        loadId: number;
+        timeout: NodeJS.Timeout;
+    } | null>(null);
     const loadTimeoutRetryCountRef = useRef<number>(0);
     const seekReloadListenerRef = useRef<(() => void) | null>(null);
     const seekReloadInProgressRef = useRef<boolean>(false);
@@ -94,7 +99,6 @@ export function usePlaybackOrchestratorRefs({
     );
     const queueLengthRef = useRef(queueLength);
     const playbackTypeRef = useRef(playbackType);
-    const lastLoggedRemotePlayKeyRef = useRef<string | null>(null);
     const activeEngineTrackIdRef = useRef<string | null>(null);
     const activeEngineLoadIdRef = useRef<number>(-1);
     const engineEventHandlersRef =
@@ -117,9 +121,19 @@ export function usePlaybackOrchestratorRefs({
     const transientTrackRecoveryTrackIdRef = useRef<string | null>(null);
     const transientTrackRecoveryAttemptRef = useRef<number>(0);
     const transientTrackRecoveryWindowStartedAtRef = useRef<number>(0);
-    const autoMatchVibePromiseRef = useRef<Promise<boolean> | null>(null);
+    const autoMatchVibePromiseRef =
+        useRef<Promise<AutoMatchVibeRequestResult> | null>(null);
     const autoMatchVibeTrackIdRef = useRef<string | null>(null);
     const autoMatchVibeLastAttemptAtRef = useRef<number>(0);
+    const pendingAutoMatchAdvanceRef = useRef<{
+        trackId: string;
+        queueIdentity: readonly unknown[];
+        playbackPositionGeneration: number;
+        viaWatchdog: boolean;
+        queueChanged: boolean;
+        requestSucceeded: boolean;
+        allowPlaybackPositionRemap: boolean;
+    } | null>(null);
     // YouTube Music: prefer authenticated stream when user has OAuth,
     // fall back to public stream otherwise.
     const ytMusicAuthenticatedRef = useRef<boolean>(false);
@@ -212,6 +226,7 @@ export function usePlaybackOrchestratorRefs({
         seekCheckTimeoutRef,
         cacheStatusPollingRef,
         loadTimeoutRef,
+        pendingManualProviderLoadRef,
         loadTimeoutRetryCountRef,
         seekReloadListenerRef,
         seekReloadInProgressRef,
@@ -233,7 +248,6 @@ export function usePlaybackOrchestratorRefs({
         currentTimeSnapshotTrackIdRef,
         queueLengthRef,
         playbackTypeRef,
-        lastLoggedRemotePlayKeyRef,
         activeEngineTrackIdRef,
         activeEngineLoadIdRef,
         engineEventHandlersRef,
@@ -251,6 +265,7 @@ export function usePlaybackOrchestratorRefs({
         autoMatchVibePromiseRef,
         autoMatchVibeTrackIdRef,
         autoMatchVibeLastAttemptAtRef,
+        pendingAutoMatchAdvanceRef,
         ytMusicAuthenticatedRef,
         startupStabilityRef,
         unexpectedStopStartupGuardRef,

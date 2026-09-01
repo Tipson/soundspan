@@ -1,10 +1,12 @@
 "use client";
 
+import { ru } from "@/lib/i18n/ru";
+
 const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
+    if (hour < 12) return ru.home.morning;
+    if (hour < 18) return ru.home.afternoon;
+    return ru.home.evening;
 };
 
 /**

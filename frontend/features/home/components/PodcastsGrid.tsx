@@ -10,6 +10,7 @@ import {
     HorizontalCarousel,
     CarouselItem,
 } from "@/components/ui/HorizontalCarousel";
+import { ru } from "@/lib/i18n/ru";
 
 interface PodcastsGridProps {
     podcasts: Podcast[];
@@ -58,7 +59,7 @@ const PodcastCard = memo(
                             {podcast.title}
                         </h3>
                         <p className="text-xs text-gray-400 truncate mt-0.5">
-                            {podcast.author || "Podcast"}
+                            {podcast.author || ru.home.podcast}
                         </p>
                     </div>
                 </Link>

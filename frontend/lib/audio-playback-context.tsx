@@ -41,6 +41,10 @@ import {
     isEngineTickDiscontinuity,
     shouldPublishClockTime,
 } from "@/lib/audio-clock-policy";
+import {
+    getUserPlaybackStorageGeneration,
+    isUserPlaybackStorageGenerationCurrent,
+} from "@/lib/userPlaybackStorage";
 
 export interface PlaybackStreamProfile {
     mode: "direct";
@@ -141,6 +145,9 @@ function readStorage(key: MigratingStorageKey): string | null {
  * Renders the AudioPlaybackProvider component.
  */
 export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
+    const [playbackStorageGeneration] = useState(
+        getUserPlaybackStorageGeneration,
+    );
     const [isPlaying, setIsPlaying] = useState(() => {
         if (typeof window === "undefined") return false;
         try {
@@ -402,7 +409,13 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
     // track-change reset below.
 
     useEffect(() => {
-        if (!isHydrated || typeof window === "undefined") return;
+        if (
+            !isHydrated ||
+            typeof window === "undefined" ||
+            !isUserPlaybackStorageGenerationCurrent(playbackStorageGeneration)
+        ) {
+            return;
+        }
         try {
             writeMigratingStorageItem(
                 STORAGE_KEYS.IS_PLAYING,
@@ -411,17 +424,29 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         } catch {
             // Ignore storage failures (private mode/quota/etc.)
         }
-    }, [isHydrated, isPlaying]);
+    }, [isHydrated, isPlaying, playbackStorageGeneration]);
 
     // Restore explicit play/pause intent from persisted backend playback state.
     useEffect(() => {
-        if (!isHydrated) return;
+        if (
+            !isHydrated ||
+            !isUserPlaybackStorageGenerationCurrent(playbackStorageGeneration)
+        ) {
+            return;
+        }
 
         let cancelled = false;
         void api
             .getPlaybackState()
             .then((serverState) => {
-                if (cancelled) return;
+                if (
+                    cancelled ||
+                    !isUserPlaybackStorageGenerationCurrent(
+                        playbackStorageGeneration,
+                    )
+                ) {
+                    return;
+                }
                 const resolvedIntent = resolveHydratedPlaybackIntent(
                     serverState,
                     initialIsPlayingRef.current,
@@ -437,7 +462,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         return () => {
             cancelled = true;
         };
-    }, [isHydrated]);
+    }, [isHydrated, playbackStorageGeneration]);
 
     // Sync currentTime from audiobook/podcast progress when not playing.
     useEffect(() => {
@@ -484,7 +509,13 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
 
     // Strictly invalidate persisted track position as soon as active track changes.
     useEffect(() => {
-        if (!isHydrated || typeof window === "undefined") return;
+        if (
+            !isHydrated ||
+            typeof window === "undefined" ||
+            !isUserPlaybackStorageGenerationCurrent(playbackStorageGeneration)
+        ) {
+            return;
+        }
         if (state.playbackType !== "track" || !state.currentTrack?.id) return;
 
         const currentTrackEpoch = resolveTrackPersistenceEpoch(
@@ -512,11 +543,18 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         state.playbackType,
         state.currentTrack?.id,
         trackPersistenceEpoch,
+        playbackStorageGeneration,
     ]);
 
     // Save currentTime to localStorage (throttled to avoid excessive writes)
     useEffect(() => {
-        if (!isHydrated || typeof window === "undefined") return;
+        if (
+            !isHydrated ||
+            typeof window === "undefined" ||
+            !isUserPlaybackStorageGenerationCurrent(playbackStorageGeneration)
+        ) {
+            return;
+        }
         const invocationTrackId =
             state.playbackType === "track"
                 ? (state.currentTrack?.id ?? null)
@@ -572,6 +610,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
         state.playbackType,
         state.currentTrack?.id,
         trackPersistenceEpoch,
+        playbackStorageGeneration,
     ]);
 
     // Ref for reading audio state inside the stable savePlaybackProgressToServer callback.
@@ -583,7 +622,15 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
 
     const savePlaybackProgressToServer = useCallback(
         async (force = false) => {
-            if (!isHydrated || !state.playbackType) return;
+            if (
+                !isHydrated ||
+                !state.playbackType ||
+                !isUserPlaybackStorageGenerationCurrent(
+                    playbackStorageGeneration,
+                )
+            ) {
+                return;
+            }
             if (progressSaveInFlightRef.current) return;
 
             const invocationSnapshot: PlaybackPersistenceSnapshot = {
@@ -639,7 +686,14 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
 
             progressSaveInFlightRef.current = true;
             try {
-                if (!isPersistenceSnapshotActive(invocationSnapshot)) return;
+                if (
+                    !isPersistenceSnapshotActive(invocationSnapshot) ||
+                    !isUserPlaybackStorageGenerationCurrent(
+                        playbackStorageGeneration,
+                    )
+                ) {
+                    return;
+                }
                 await api.savePlaybackState({
                     playbackType: invocationSnapshot.playbackType,
                     trackId: invocationSnapshot.trackId ?? undefined,
@@ -652,7 +706,14 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
                         currentTimeRef.current,
                     ),
                 });
-                if (!isPersistenceSnapshotActive(invocationSnapshot)) return;
+                if (
+                    !isPersistenceSnapshotActive(invocationSnapshot) ||
+                    !isUserPlaybackStorageGenerationCurrent(
+                        playbackStorageGeneration,
+                    )
+                ) {
+                    return;
+                }
                 lastServerProgressSaveRef.current = now;
                 writeMigratingStorageItem(
                     STORAGE_KEYS.LAST_PLAYBACK_STATE_SAVE_AT,
@@ -682,6 +743,7 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
             isPlaying,
             trackPersistenceEpoch,
             isPersistenceSnapshotActive,
+            playbackStorageGeneration,
         ],
     );
 

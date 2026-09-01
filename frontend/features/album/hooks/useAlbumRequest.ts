@@ -9,6 +9,12 @@ import {
 } from "@/hooks/useMusicRequests";
 import { isSyntheticRgMbid } from "../albumActionVisibility";
 import type { Album } from "../types";
+import {
+    formatReleaseRequestedRu,
+    formatRequestingReleaseRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
+import { ru, userFacingError } from "@/lib/i18n/ru";
 
 /**
  * Request-flow state and submit action for the album page. Only meaningful
@@ -29,25 +35,25 @@ export function useAlbumRequest(album: Album | null | undefined) {
     const requestAlbum = async () => {
         if (!album || !rgMbid || create.isPending) return;
         const toastId = `music-request-${rgMbid}`;
-        toast.loading(`Requesting ${album.title}...`, { id: toastId });
+        toast.loading(formatRequestingReleaseRu(album.title), { id: toastId });
         try {
             await create.mutateAsync({
-                artistName: album.artist?.name || "Unknown Artist",
+                artistName: album.artist?.name || ru.common.unknownArtist,
                 albumTitle: album.title,
                 rgMbid,
                 ...(album.artist?.mbid
                     ? { artistMbid: album.artist.mbid }
                     : {}),
             });
-            toast.success(
-                `Requested ${album.title} — an admin will review it`,
-                { id: toastId },
-            );
+            toast.success(formatReleaseRequestedRu(album.title), {
+                id: toastId,
+            });
         } catch (error) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to submit the request",
+                userFacingError(
+                    error,
+                    libraryOperationsRu.requests.actionFailed,
+                ),
                 { id: toastId },
             );
         }

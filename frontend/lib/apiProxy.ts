@@ -1,5 +1,6 @@
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { normalizeApiBaseUrlInput } from "./api-base-url";
+import { prepareFetchProxyAuthentication } from "./media-auth";
 const getEnv = (): Record<string, string | undefined> => {
     return (
         (
@@ -18,8 +19,15 @@ const getBackendUrl = (): string => {
 };
 
 const DEFAULT_PROXY_TIMEOUT_MS = 20_000;
-const DEFAULT_IMPORT_PREVIEW_PROXY_TIMEOUT_MS = 90_000;
+const DEFAULT_IMPORT_PREVIEW_PROXY_TIMEOUT_MS = 150_000;
+const DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS = 125_000;
+const DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS = 90_000;
 const IMPORT_PREVIEW_PROXY_PATH = "api/import/preview";
+const UNAVAILABLE_RECOVERY_PROXY_PATH = "api/ytmusic/recover-unavailable";
+const MEDIA_STREAM_PATH_PATTERNS = [
+    /^(?:api\/)?ytmusic\/(?:stream|stream-public)\/[^/]+$/,
+    /^(?:api\/)?youtube\/stream\/[^/]+$/,
+];
 
 const parsePositiveTimeoutMs = (value: string | undefined): number | null => {
     const parsed = Number(value);
@@ -32,6 +40,13 @@ const parsePositiveTimeoutMs = (value: string | undefined): number | null => {
 const normalizeTargetPath = (targetPath: string): string =>
     targetPath.replace(/^\/+|\/+$/g, "").toLowerCase();
 
+const isMediaStreamPath = (targetPath: string): boolean => {
+    const normalized = normalizeTargetPath(targetPath);
+    return MEDIA_STREAM_PATH_PATTERNS.some((pattern) =>
+        pattern.test(normalized),
+    );
+};
+
 export const resolveProxyTimeoutMs = (
     targetPath: string,
     env: Record<string, string | undefined> = getEnv(),
@@ -40,7 +55,19 @@ export const resolveProxyTimeoutMs = (
         parsePositiveTimeoutMs(env.PROXY_REQUEST_TIMEOUT_MS) ??
         DEFAULT_PROXY_TIMEOUT_MS;
 
-    if (normalizeTargetPath(targetPath) !== IMPORT_PREVIEW_PROXY_PATH) {
+    if (isMediaStreamPath(targetPath)) {
+        return Math.max(globalTimeout, DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS);
+    }
+
+    const normalizedPath = normalizeTargetPath(targetPath);
+    if (normalizedPath === UNAVAILABLE_RECOVERY_PROXY_PATH) {
+        return Math.max(
+            globalTimeout,
+            DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS,
+        );
+    }
+
+    if (normalizedPath !== IMPORT_PREVIEW_PROXY_PATH) {
         return globalTimeout;
     }
 
@@ -165,11 +192,11 @@ const wrapUpstreamBody = (
     });
 };
 
-const buildTargetUrl = (request: Request, targetPath: string): string => {
+const buildTargetUrl = (requestUrl: string, targetPath: string): string => {
     const base = getBackendUrl();
     const normalizedPath = targetPath.replace(/^\/+/, "");
     const url = new URL(`${base}/${normalizedPath}`);
-    url.search = new URL(request.url).search;
+    url.search = new URL(requestUrl).search;
     return url.toString();
 };
 
@@ -201,9 +228,14 @@ export const proxyRequest = async (
     methodOverride?: string,
 ): Promise<Response> => {
     // Used by frontend same-origin API mode (`/app/api/[...path]` route handlers).
-    const targetUrl = buildTargetUrl(request, targetPath);
     const headers = buildProxyHeaders(request);
     const method = methodOverride ?? request.method;
+    const sanitizedRequestUrl = prepareFetchProxyAuthentication(
+        request.url,
+        headers,
+        method,
+    );
+    const targetUrl = buildTargetUrl(sanitizedRequestUrl, targetPath);
 
     const controller = new AbortController();
     const upstreamSignal = request.signal;
@@ -248,8 +280,11 @@ export const proxyRequest = async (
         // If we forward those to the browser, it tries to decompress the
         // already-decompressed body and fails with "Failed to fetch".
         // Strip them so the browser treats the body as raw (uncompressed).
+        const contentEncoding = responseHeaders.get("content-encoding");
         responseHeaders.delete("content-encoding");
-        responseHeaders.delete("content-length");
+        if (contentEncoding && contentEncoding.toLowerCase() !== "identity") {
+            responseHeaders.delete("content-length");
+        }
         responseHeaders.delete("transfer-encoding");
 
         const responseBody = wrapUpstreamBody(

@@ -3,6 +3,7 @@ import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 GlobalRegistrator.register();
 (
@@ -11,7 +12,18 @@ GlobalRegistrator.register();
 
 const executeCalls: Array<{ previewData: any; name?: string }> = [];
 const previewCalls: string[] = [];
+const m3uPreviewCalls: Array<{ content: string; name?: string }> = [];
+const backgroundJobCalls: Array<{ url: string; name?: string }> = [];
 const toastErrors: string[] = [];
+const toastSuccesses: string[] = [];
+const routerReplaceCalls: Array<{
+    href: string;
+    options?: { scroll?: boolean };
+}> = [];
+let invalidatedQueries: unknown[] = [];
+let holdBackgroundJobSubmission = false;
+let releaseBackgroundJobSubmission: (() => void) | null = null;
+let searchParamsValue = "";
 
 const previewResponse = {
     playlistName: "Test Playlist",
@@ -35,6 +47,13 @@ mock.module("@/lib/api", {
                 previewCalls.push(url);
                 return previewResponse;
             },
+            previewM3UImport: async (content: string, name?: string) => {
+                m3uPreviewCalls.push({ content, name });
+                return {
+                    ...previewResponse,
+                    playlistName: name || previewResponse.playlistName,
+                };
+            },
             executePlaylistImport: async (input: {
                 previewData: any;
                 name?: string;
@@ -51,6 +70,18 @@ mock.module("@/lib/api", {
                     },
                 };
             },
+            submitImportJob: async (url: string, name?: string) => {
+                backgroundJobCalls.push({ url, name });
+                if (holdBackgroundJobSubmission) {
+                    await new Promise<void>((resolve) => {
+                        releaseBackgroundJobSubmission = resolve;
+                    });
+                }
+                return {
+                    deduped: false,
+                    job: { id: "job-123" },
+                };
+            },
         },
     },
 });
@@ -60,8 +91,11 @@ mock.module("next/navigation", {
         useRouter: () => ({
             back: () => undefined,
             push: () => undefined,
+            replace: (href: string, options?: { scroll?: boolean }) => {
+                routerReplaceCalls.push({ href, options });
+            },
         }),
-        useSearchParams: () => new URLSearchParams(),
+        useSearchParams: () => new URLSearchParams(searchParamsValue),
     },
 });
 
@@ -71,7 +105,7 @@ mock.module("@/lib/toast-context", {
             toast: {
                 error: (message: string) => toastErrors.push(message),
                 info: () => undefined,
-                success: () => undefined,
+                success: (message: string) => toastSuccesses.push(message),
             },
         }),
     },
@@ -98,9 +132,18 @@ after(() => {
 });
 
 beforeEach(() => {
+    releaseBackgroundJobSubmission?.();
+    holdBackgroundJobSubmission = false;
+    releaseBackgroundJobSubmission = null;
+    searchParamsValue = "";
     executeCalls.length = 0;
     previewCalls.length = 0;
+    m3uPreviewCalls.length = 0;
+    backgroundJobCalls.length = 0;
     toastErrors.length = 0;
+    toastSuccesses.length = 0;
+    routerReplaceCalls.length = 0;
+    invalidatedQueries = [];
     document.body.replaceChildren();
 });
 
@@ -110,9 +153,19 @@ async function mountImportPage() {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
+    const queryClient = new QueryClient();
+    queryClient.invalidateQueries = (async (filters: unknown) => {
+        invalidatedQueries.push(filters);
+    }) as typeof queryClient.invalidateQueries;
 
     await React.act(async () => {
-        root.render(React.createElement(ImportPage));
+        root.render(
+            React.createElement(
+                QueryClientProvider,
+                { client: queryClient },
+                React.createElement(ImportPage),
+            ),
+        );
     });
 
     return {
@@ -149,6 +202,63 @@ function findButton(container: HTMLElement, text: string): HTMLButtonElement {
     assert.ok(button instanceof HTMLButtonElement, `button not found: ${text}`);
     return button;
 }
+
+test("explains Spotify import boundaries and names the back button", async () => {
+    const { container, unmount } = await mountImportPage();
+
+    assert.ok(container.querySelector('[data-consumer-surface="import"]'));
+    assert.ok(container.querySelector('[data-page-header="editorial"]'));
+    const modeTabs = Array.from(
+        container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    assert.equal(modeTabs.length, 2);
+    assert.ok(modeTabs.every((tab) => tab.className.includes("min-h-11")));
+    assert.ok(container.querySelector('button[aria-label="Назад"]'));
+    assert.match(
+        container.textContent || "",
+        /Spotify используется только для чтения списка треков из публичного плейлиста/i,
+    );
+    assert.match(
+        container.textContent || "",
+        /не воспроизводит музыку из Spotify, не изменяет исходный плейлист и не сохраняет аудиофайлы на сервере/i,
+    );
+    assert.match(
+        container.textContent || "",
+        /Приватные плейлисты пока не поддерживаются/i,
+    );
+
+    await unmount();
+});
+
+test("imports a public Spotify playlist link without an OAuth connection", async () => {
+    const harness = await mountImportPage();
+    try {
+        assert.doesNotMatch(
+            harness.container.textContent || "",
+            /Connect Spotify|Spotify playlist access/i,
+        );
+        const input = harness.container.querySelector(
+            'input[placeholder^="Вставьте ссылку"]',
+        );
+        assert.ok(input instanceof HTMLInputElement, "playlist input missing");
+        await React.act(async () => {
+            typeInto(
+                input,
+                "https://open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45",
+            );
+        });
+
+        await click(findButton(harness.container, "Начать импорт"));
+        assert.deepEqual(backgroundJobCalls, [
+            {
+                url: "https://open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45",
+                name: undefined,
+            },
+        ]);
+    } finally {
+        await harness.unmount();
+    }
+});
 
 test("preview list renders provider resolution badges per track", async () => {
     const { PreviewTrackResolutionList } =
@@ -189,11 +299,11 @@ test("preview list renders provider resolution badges per track", async () => {
         }),
     );
 
-    assert.match(html, /LOCAL/);
+    assert.match(html, /ЛОКАЛЬНО/);
     assert.match(html, /YOUTUBE/);
     assert.match(html, /TIDAL/);
-    assert.match(html, /UNRESOLVED/);
-    assert.match(html, /No provider match/);
+    assert.match(html, /НЕ НАЙДЕНО/);
+    assert.match(html, /Совпадение у провайдеров не найдено/);
 });
 
 test("execute import action sends previewData instead of URL", async () => {
@@ -222,6 +332,57 @@ test("execute import action sends previewData instead of URL", async () => {
     assert.equal(executeCalls.length, 1);
     assert.deepEqual(executeCalls[0].previewData, previewData);
     assert.equal(executeCalls[0].name, "Imported Playlist");
+});
+
+test("keeps M3U preview and invalidates personalized home after import", async () => {
+    const harness = await mountImportPage();
+    const NativeFileReader = globalThis.FileReader;
+    try {
+        class ImmediateFileReader {
+            result: string | ArrayBuffer | null = null;
+            onload: ((event: Event) => void) | null = null;
+            onerror: ((event: Event) => void) | null = null;
+
+            readAsText(): void {
+                this.result =
+                    "#EXTM3U\n#EXTINF:180,Artist - Track\n/music/track.mp3\n";
+                this.onload?.(new Event("load"));
+            }
+        }
+        Object.defineProperty(globalThis, "FileReader", {
+            configurable: true,
+            value: ImmediateFileReader,
+        });
+
+        await click(findButton(harness.container, "Файл M3U"));
+        const input = harness.container.querySelector('input[type="file"]');
+        assert.ok(input instanceof HTMLInputElement, "M3U input missing");
+        const file = new File(
+            ["#EXTM3U\n#EXTINF:180,Artist - Track\n/music/track.mp3\n"],
+            "road-trip.m3u",
+            { type: "audio/x-mpegurl" },
+        );
+        Object.defineProperty(input, "files", {
+            configurable: true,
+            value: [file],
+        });
+        await React.act(async () => {
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        await click(findButton(harness.container, "Предпросмотр импорта"));
+        await click(findButton(harness.container, "Создать плейлист"));
+
+        assert.equal(m3uPreviewCalls.length, 1);
+        assert.deepEqual(invalidatedQueries, [
+            { queryKey: ["home", "personalized"] },
+        ]);
+    } finally {
+        Object.defineProperty(globalThis, "FileReader", {
+            configurable: true,
+            value: NativeFileReader,
+        });
+        await harness.unmount();
+    }
 });
 
 test("isSupportedPlaylistUrl accepts Spotify intl playlist URLs", async () => {
@@ -253,7 +414,133 @@ test("isSupportedPlaylistUrl rejects non-HTTP executable URL schemes", async () 
     }
 });
 
-test("playlist preview anchor renders only the canonical HTTP(S) URL", async () => {
+test("starts a durable background import without waiting for playlist preview", async () => {
+    const harness = await mountImportPage();
+    try {
+        const input = harness.container.querySelector(
+            'input[placeholder^="Вставьте ссылку"]',
+        );
+        assert.ok(input instanceof HTMLInputElement, "playlist input missing");
+
+        await React.act(async () => {
+            typeInto(
+                input,
+                " open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45 ",
+            );
+        });
+        await click(findButton(harness.container, "Начать импорт"));
+
+        assert.deepEqual(backgroundJobCalls, [
+            {
+                url: "https://open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45",
+                name: undefined,
+            },
+        ]);
+        assert.equal(previewCalls.length, 0);
+        assert.doesNotMatch(
+            harness.container.textContent ?? "",
+            /Preview Tracks First/i,
+        );
+        assert.match(
+            toastSuccesses[0] ?? "",
+            /вкладке импорта в панели активности/,
+        );
+    } finally {
+        await harness.unmount();
+    }
+});
+
+test("rapid import clicks submit only one background job", async () => {
+    const harness = await mountImportPage();
+    try {
+        const input = harness.container.querySelector(
+            'input[placeholder^="Вставьте ссылку"]',
+        );
+        assert.ok(input instanceof HTMLInputElement, "playlist input missing");
+        await React.act(async () => {
+            typeInto(
+                input,
+                "https://open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45",
+            );
+        });
+        holdBackgroundJobSubmission = true;
+        const button = findButton(harness.container, "Начать импорт");
+
+        await React.act(async () => {
+            button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await Promise.resolve();
+        });
+
+        assert.equal(backgroundJobCalls.length, 1);
+        releaseBackgroundJobSubmission?.();
+        await React.act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+    } finally {
+        releaseBackgroundJobSubmission?.();
+        await harness.unmount();
+    }
+});
+
+test("a URL query parameter starts the same durable background import", async () => {
+    const playlistUrl =
+        "https://open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45";
+    searchParamsValue = `?url=${encodeURIComponent(playlistUrl)}`;
+    const harness = await mountImportPage();
+    try {
+        for (
+            let attempt = 0;
+            attempt < 10 && backgroundJobCalls.length === 0;
+            attempt += 1
+        ) {
+            await React.act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 10));
+            });
+        }
+
+        assert.deepEqual(backgroundJobCalls, [
+            { url: playlistUrl, name: undefined },
+        ]);
+        assert.equal(previewCalls.length, 0);
+    } finally {
+        await harness.unmount();
+    }
+});
+
+test("successful background submission notifies an open Imports activity tab", async () => {
+    const harness = await mountImportPage();
+    let eventCount = 0;
+    let submittedJobId: unknown;
+    const handleChanged = (event: Event) => {
+        eventCount += 1;
+        submittedJobId = (event as CustomEvent<{ jobId?: unknown }>).detail
+            ?.jobId;
+    };
+    window.addEventListener("import-jobs-changed", handleChanged);
+    try {
+        const input = harness.container.querySelector(
+            'input[placeholder^="Вставьте ссылку"]',
+        );
+        assert.ok(input instanceof HTMLInputElement, "playlist input missing");
+        await React.act(async () => {
+            typeInto(
+                input,
+                "https://open.spotify.com/playlist/7jKitT906pkaQtjZrvqn45",
+            );
+        });
+        await click(findButton(harness.container, "Начать импорт"));
+
+        assert.equal(eventCount, 1);
+        assert.equal(submittedJobId, "job-123");
+    } finally {
+        window.removeEventListener("import-jobs-changed", handleChanged);
+        await harness.unmount();
+    }
+});
+
+test("background import submits only the canonical HTTP(S) URL", async () => {
     const cases = [
         {
             input: "  HTTP://OPEN.SPOTIFY.COM:80/playlist/AbC123  ",
@@ -269,7 +556,7 @@ test("playlist preview anchor renders only the canonical HTTP(S) URL", async () 
         const harness = await mountImportPage();
         try {
             const input = harness.container.querySelector(
-                'input[placeholder^="Paste a Spotify"]',
+                'input[placeholder^="Вставьте ссылку"]',
             );
             assert.ok(
                 input instanceof HTMLInputElement,
@@ -279,16 +566,10 @@ test("playlist preview anchor renders only the canonical HTTP(S) URL", async () 
             await React.act(async () => {
                 typeInto(input, testCase.input);
             });
-            await click(findButton(harness.container, "Preview Import"));
+            await click(findButton(harness.container, "Начать импорт"));
 
-            assert.equal(previewCalls.at(-1), testCase.canonical);
-            const anchor =
-                harness.container.querySelector('a[target="_blank"]');
-            assert.ok(
-                anchor instanceof HTMLAnchorElement,
-                "preview anchor missing",
-            );
-            assert.equal(anchor.getAttribute("href"), testCase.canonical);
+            assert.equal(backgroundJobCalls.at(-1)?.url, testCase.canonical);
+            assert.equal(previewCalls.length, 0);
         } finally {
             await harness.unmount();
         }

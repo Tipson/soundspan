@@ -66,10 +66,12 @@ async function renderSection(overrides: Partial<SystemSettings>) {
 test("renders disabled state when no download service is configured", async () => {
     const html = await renderSection({});
 
-    assert.match(html, /Download Preferences/);
-    assert.match(html, /Requires at least one download service/);
-    assert.match(html, />Soulseek \(Per-track\)</);
-    assert.doesNotMatch(html, /YouTube Music \(Albums\)/);
+    assert.match(html, /Загрузки на сервер/);
+    assert.match(html, /постоянных копий музыки на сервере/);
+    assert.match(html, /Сначала настройте хотя бы один сервис загрузок/);
+    assert.match(html, />Soulseek \(отдельные треки\)</);
+    assert.doesNotMatch(html, /YouTube Music \(альбомы\)/);
+    assert.doesNotMatch(html, /download music for imported playlists/i);
 });
 
 test("offers YouTube Music as a source when YT Music is enabled", async () => {
@@ -80,9 +82,10 @@ test("offers YouTube Music as a source when YT Music is enabled", async () => {
         downloadSource: "youtube",
     });
 
-    assert.match(html, />YouTube Music \(Albums\)</);
-    assert.match(html, />TIDAL \(Per-track \/ album\)</);
-    assert.doesNotMatch(html, /Requires at least one download service/);
+    assert.match(html, />YouTube Music \(альбомы\)</);
+    assert.match(html, />TIDAL \(треки и альбомы\)</);
+    assert.match(html, /по явному запросу постоянной копии на сервере/);
+    assert.doesNotMatch(html, /Сначала настройте хотя бы один сервис загрузок/);
 });
 
 test("fallback options exclude the current primary and include Try YouTube Music", async () => {
@@ -93,7 +96,7 @@ test("fallback options exclude the current primary and include Try YouTube Music
         downloadSource: "soulseek",
     });
 
-    assert.match(html, />Skip</);
-    assert.match(html, />Try YouTube Music</);
-    assert.doesNotMatch(html, />Try Soulseek</);
+    assert.match(html, />Пропустить</);
+    assert.match(html, />Попробовать YouTube Music</);
+    assert.doesNotMatch(html, />Попробовать Soulseek</);
 });

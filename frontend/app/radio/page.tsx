@@ -10,52 +10,74 @@ import {
     type RadioPageStation,
 } from "@/lib/radio/radioPageStations";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { SectionHeader } from "@/components/layout/SectionHeader";
 import { RadioStationCard } from "@/components/ui/RadioStationCard";
+import { radioRu } from "@/lib/i18n/utilityPagesRu";
 
 // Static radio stations
 const STATIC_STATIONS: RadioPageStation[] = [
     {
         id: "all",
-        name: "Shuffle All",
-        description: "Your entire library",
-        color: "from-brand/40 to-sky-400/30",
+        name: radioRu.allName,
+        description: radioRu.allDescription,
+        color: "from-brand/35 to-surface-highlight/40",
         filter: { type: "all" },
         minTracks: 10,
     },
     {
         id: "workout",
-        name: "Workout",
-        description: "High energy tracks",
-        color: "from-red-500/30 to-orange-600/30",
+        name: radioRu.workoutName,
+        description: radioRu.workoutDescription,
+        color: "from-error/30 to-warning/25",
         filter: { type: "workout" },
         minTracks: 15,
     },
     {
         id: "discovery",
-        name: "Discovery",
-        description: "Lesser-played gems",
-        color: "from-emerald-500/30 to-teal-600/30",
+        name: radioRu.discoveryName,
+        description: radioRu.discoveryDescription,
+        color: "from-success/25 to-brand/20",
         filter: { type: "discovery" },
         minTracks: 20,
     },
     {
         id: "favorites",
-        name: "Favorites",
-        description: "Most played",
-        color: "from-rose-500/30 to-pink-600/30",
+        name: radioRu.favoritesName,
+        description: radioRu.favoritesDescription,
+        color: "from-error/25 to-surface-highlight/40",
         filter: { type: "favorites" },
         minTracks: 10,
     },
 ];
 
+// Section Header Component
+function SectionHeader({
+    title,
+    description,
+}: {
+    title: string;
+    description?: string;
+}) {
+    return (
+        <div className="mb-5 max-w-2xl">
+            <h2 className="text-2xl font-black tracking-[-0.03em] text-content sm:text-3xl">
+                {title}
+            </h2>
+            {description && (
+                <p className="mt-1 text-sm leading-6 text-content-muted">
+                    {description}
+                </p>
+            )}
+        </div>
+    );
+}
+
 function StationGridSkeleton() {
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {Array.from({ length: 6 }).map((_, i) => (
                 <div
                     key={i}
-                    className="aspect-square rounded-lg bg-white/5 animate-pulse"
+                    className="aspect-square animate-pulse rounded-xl bg-surface-elevated motion-reduce:animate-none"
                 />
             ))}
         </div>
@@ -72,7 +94,7 @@ function StationGrid({
     onOpen: (station: RadioPageStation) => void;
 }) {
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {stations.map((station) => (
                 <RadioStationCard
                     key={station.id}
@@ -107,40 +129,32 @@ export default function RadioPage() {
     };
 
     return (
-        <div className="min-h-screen relative">
-            {/* Hero gradient */}
+        <div
+            data-consumer-surface="radio"
+            className="relative min-h-screen bg-surface"
+        >
             <div
-                className="absolute top-0 left-0 right-0 pointer-events-none"
-                style={{
-                    background:
-                        "linear-gradient(to bottom, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 40%, transparent 100%)",
-                    height: "35vh",
-                }}
-            />
-            <div
-                className="absolute top-0 left-0 right-0 pointer-events-none"
-                style={{
-                    background:
-                        "radial-gradient(ellipse at top, rgba(59, 130, 246, 0.1) 0%, transparent 70%)",
-                    height: "25vh",
-                }}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-brand/70 to-transparent"
             />
 
-            {/* Content */}
-            <div className="relative px-4 md:px-8 py-6">
+            <div
+                data-radio-stage="open"
+                className="relative mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8"
+            >
                 {/* Header */}
                 <PageHeader
-                    title="Radio Stations"
-                    subtitle="Generated stations from your library"
+                    title={radioRu.title}
+                    subtitle={radioRu.subtitle}
                     icon={AudioLines}
                     className="mb-8"
                 />
 
                 {/* Quick Start Section */}
-                <section className="mb-10">
+                <section className="mb-12 border-t border-line pt-7">
                     <SectionHeader
-                        title="Quick Start"
-                        description="Open a ready-made station from your library"
+                        title={radioRu.quickStart}
+                        description={radioRu.quickStartDescription}
                     />
                     <StationGrid
                         stations={STATIC_STATIONS}
@@ -151,10 +165,10 @@ export default function RadioPage() {
 
                 {/* Genres Section */}
                 {(isLoading || genreStations.length > 0) && (
-                    <section className="mb-10">
+                    <section className="mb-12 border-t border-line pt-7">
                         <SectionHeader
-                            title="By Genre"
-                            description="Shuffle tracks from specific genres"
+                            title={radioRu.byGenre}
+                            description={radioRu.byGenreDescription}
                         />
                         {isLoading ? (
                             <StationGridSkeleton />
@@ -170,10 +184,10 @@ export default function RadioPage() {
 
                 {/* Decades Section - Only show if there are decade stations */}
                 {(isLoading || decadeStations.length > 0) && (
-                    <section className="mb-10">
+                    <section className="mb-12 border-t border-line pt-7">
                         <SectionHeader
-                            title="By Decade"
-                            description="Travel through time with your music"
+                            title={radioRu.byDecade}
+                            description={radioRu.byDecadeDescription}
                         />
                         {isLoading ? (
                             <StationGridSkeleton />
@@ -188,19 +202,14 @@ export default function RadioPage() {
                 )}
 
                 {/* Info */}
-                <div className="mt-12 p-4 rounded-lg bg-white/5 border border-white/10">
-                    <h3 className="text-sm font-semibold text-white mb-2">
-                        About Radio Stations
+                <aside className="mt-12 border-y border-line py-5">
+                    <h3 className="mb-2 text-sm font-semibold text-content">
+                        {radioRu.aboutTitle}
                     </h3>
-                    <p className="text-sm text-white/60">
-                        Radio stations are generated from your personal music
-                        library. Opening a station builds a playlist you can
-                        replay, regenerate, or extend with more tracks — Shuffle
-                        All starts playing your whole library right away. As you
-                        add more music, new genre and decade stations will
-                        automatically appear.
+                    <p className="max-w-3xl text-sm leading-6 text-content-muted">
+                        {radioRu.aboutDescription}
                     </p>
-                </div>
+                </aside>
             </div>
         </div>
     );

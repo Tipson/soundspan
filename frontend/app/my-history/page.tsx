@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { History } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+import { AlertCircle, History, ListMusic } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { api } from "@/lib/api";
@@ -15,12 +15,12 @@ import { useToast } from "@/lib/toast-context";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { TrackList } from "@/components/track";
-import { SectionHeader } from "@/components/layout/SectionHeader";
 import type {
     TrackRowItem,
     TrackRowSlots,
     OverflowConfig,
 } from "@/components/track";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
 interface PlayHistoryTrack {
     id: string;
@@ -81,12 +81,12 @@ function toAudioTrack(track: PlayHistoryTrack) {
             track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
         artist: {
             id: artist?.id ?? undefined,
-            name: artist?.name || "Unknown Artist",
+            name: artist?.name || ru.common.unknownArtist,
             mbid: artist?.mbid,
         },
         album: {
             id: track.album?.id ?? undefined,
-            title: track.album?.title || "Unknown Album",
+            title: track.album?.title || ru.common.unknownAlbum,
             coverArt:
                 track.album?.coverArt || track.album?.coverUrl || undefined,
         },
@@ -98,10 +98,11 @@ function formatPlayedAt(isoDate: string): string {
     if (Number.isNaN(parsed)) return "";
 
     const diffMs = Date.now() - parsed;
-    if (diffMs < 60_000) return "Just now";
-    if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m ago`;
-    if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h ago`;
-    return new Date(parsed).toLocaleDateString();
+    if (diffMs < 60_000) return "только что";
+    if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)} мин. назад`;
+    if (diffMs < 86_400_000)
+        return `${Math.floor(diffMs / 3_600_000)} ч. назад`;
+    return new Date(parsed).toLocaleDateString("ru-RU");
 }
 
 function historyToRowItem(entry: PlayHistoryEntry): TrackRowItem {
@@ -118,8 +119,18 @@ function historyToRowItem(entry: PlayHistoryEntry): TrackRowItem {
         title: track.title,
         displayTitle: track.displayTitle,
         artistName:
-            track.artist?.name || track.album?.artist?.name || "Unknown Artist",
+            track.artist?.name ||
+            track.album?.artist?.name ||
+            ru.common.unknownArtist,
         duration: track.duration,
+        streamSource:
+            streamSource === "tidal" || streamSource === "youtube"
+                ? streamSource
+                : undefined,
+        tidalTrackId:
+            track.tidalTrackId ?? track.provider?.tidalTrackId ?? undefined,
+        youtubeVideoId:
+            track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
         coverArtUrl: coverArt
             ? isRemote
                 ? api.getBrowseImageUrl(coverArt)
@@ -158,7 +169,7 @@ export default function MyHistoryPage() {
                 );
             } catch (err) {
                 sharedFrontendLogger.error("Failed to load play history:", err);
-                setError("Failed to load your listening history");
+                setError("Не удалось загрузить историю прослушиваний");
             } finally {
                 setLoading(false);
             }
@@ -176,7 +187,7 @@ export default function MyHistoryPage() {
         (_entry: PlayHistoryEntry, index: number) => {
             if (audioTracks.length === 0) return;
             playTracks(audioTracks, index);
-            toast.success("Playing from history");
+            toast.success("Воспроизводим из истории");
         },
         [audioTracks, playTracks, toast],
     );
@@ -204,11 +215,11 @@ export default function MyHistoryPage() {
                                 )}
                             </div>
                         )}
-                        <p className="text-[11px] text-gray-400 truncate">
-                            {track.album?.title || "Unknown Album"}
+                        <p className="truncate text-[11px] text-content-muted">
+                            {track.album?.title || ru.common.unknownAlbum}
                         </p>
-                        <p className="text-[11px] text-gray-400 mt-1">
-                            Played {formatPlayedAt(entry.playedAt)}
+                        <p className="mt-1 text-[11px] text-content-muted">
+                            Слушали {formatPlayedAt(entry.playedAt)}
                         </p>
                     </>
                 ),
@@ -228,14 +239,23 @@ export default function MyHistoryPage() {
         return null;
     }
 
+    if (loading) {
+        return <LoadingScreen message="Загружаем историю…" />;
+    }
+
     return (
-        <div className="min-h-screen bg-surface">
-            <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-6">
+        <div
+            data-consumer-surface="history"
+            className="min-h-screen bg-surface"
+        >
+            <div className="mx-auto max-w-5xl space-y-10 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
                 <PageHeader
-                    title="My History"
-                    subtitle={`${history.length} played track${
-                        history.length !== 1 ? "s" : ""
-                    }`}
+                    title="История прослушиваний"
+                    subtitle={`${history.length} ${pluralRu(history.length, [
+                        "прослушанный трек",
+                        "прослушанных трека",
+                        "прослушанных треков",
+                    ])}`}
                     icon={History}
                     className="mb-8"
                     actions={
@@ -243,60 +263,65 @@ export default function MyHistoryPage() {
                             variant="secondary"
                             onClick={() => router.push("/queue")}
                         >
-                            Queue
+                            <ListMusic className="h-4 w-4" aria-hidden="true" />
+                            Очередь
                         </Button>
                     }
                 />
 
-                {loading && (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="w-6 h-6 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
-                    </div>
-                )}
-
-                {!loading && error && (
-                    <div className="bg-[#111] rounded-lg p-6 border border-red-500/20">
-                        <p className="text-sm text-red-300">{error}</p>
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="mt-3 text-xs text-white/60 hover:text-white"
-                        >
-                            Retry
-                        </button>
-                    </div>
-                )}
-
-                {!loading && !error && history.length === 0 && (
-                    <EmptyState
-                        icon={<History />}
-                        title="No listening history yet"
-                        description="Play something and your recent listening will appear here."
-                        action={{
-                            label: "Browse Library",
-                            onClick: () => router.push("/library"),
-                        }}
-                    />
-                )}
-
-                {!loading && !error && history.length > 0 && (
-                    <section className="bg-[#111] rounded-lg p-6">
-                        <SectionHeader
-                            title={`Recently Played (${history.length})`}
-                            size="sm"
+                {error && (
+                    <section
+                        data-consumer-state="error"
+                        className="border-y border-line"
+                    >
+                        <EmptyState
+                            icon={<AlertCircle />}
+                            title={error}
+                            description="Проверьте соединение и попробуйте загрузить историю ещё раз."
+                            action={{
+                                label: "Повторить",
+                                onClick: () => window.location.reload(),
+                                variant: "secondary",
+                            }}
                         />
+                    </section>
+                )}
 
-                        <Card>
+                {!error && history.length === 0 && (
+                    <section
+                        data-consumer-state="empty"
+                        className="border-y border-line"
+                    >
+                        <EmptyState
+                            icon={<History />}
+                            title="История пока пуста"
+                            description="Начните слушать музыку — недавние треки появятся здесь."
+                            action={{
+                                label: "Открыть коллекцию",
+                                onClick: () => router.push("/library"),
+                            }}
+                        />
+                    </section>
+                )}
+
+                {!error && history.length > 0 && (
+                    <section className="border-t border-line pt-6">
+                        <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
+                            Недавно слушали ({history.length})
+                        </h2>
+
+                        <div className="overflow-hidden border-y border-line">
                             <TrackList<PlayHistoryEntry>
                                 items={history}
                                 toRowItem={historyToRowItem}
                                 onPlay={handlePlayFromHistory}
                                 rowSlots={historyRowSlots}
                                 rowOverflow={historyRowOverflow}
-                                rowClassName="grid-cols-[1fr_auto] p-4 hover:bg-surface-hover"
+                                rowClassName="grid-cols-[minmax(0,1fr)_auto] px-3 py-4 hover:bg-surface-elevated/70 sm:px-4"
                                 preferenceMode="up-only"
-                                className="divide-y divide-surface-active"
+                                className="divide-y divide-line"
                             />
-                        </Card>
+                        </div>
                     </section>
                 )}
             </div>

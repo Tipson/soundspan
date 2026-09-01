@@ -16,23 +16,24 @@ import type {
     RowState,
 } from "@/components/track";
 import type { ReactNode } from "react";
+import { discoverRu } from "@/lib/i18n/discoverRu";
 
 const tierColors: Record<string, string> = {
-    high: "text-green-400",
-    medium: "text-yellow-400",
-    explore: "text-orange-400",
+    high: "text-success",
+    medium: "text-warning",
+    explore: "text-brand",
     wildcard: "text-ai-hover",
-    low: "text-orange-400",
+    low: "text-brand",
     wild: "text-ai-hover",
 };
 
 const tierLabels: Record<string, string> = {
-    high: "High Match",
-    medium: "Medium Match",
-    explore: "Explore",
-    wildcard: "Wild Card",
-    low: "Explore",
-    wild: "Wild Card",
+    high: discoverRu.tiers.high,
+    medium: discoverRu.tiers.medium,
+    explore: discoverRu.tiers.explore,
+    wildcard: discoverRu.tiers.wildcard,
+    low: discoverRu.tiers.explore,
+    wild: discoverRu.tiers.wildcard,
 };
 
 interface TrackListProps {
@@ -62,17 +63,16 @@ function getSourceBadge(
 
     if (!track.available) {
         if (isMatching) {
-            label = "LOADING";
+            label = discoverRu.source.loading;
             badgeClassName =
-                "bg-gray-500/20 text-gray-300 border border-gray-400/30 animate-pulse";
+                "animate-pulse border border-line-muted bg-surface-active text-content-muted motion-reduce:animate-none";
         } else {
-            label = "PREVIEW";
-            badgeClassName =
-                "bg-blue-500/20 text-blue-400 border border-blue-500/30";
+            label = discoverRu.source.preview;
+            badgeClassName = "border border-ai/30 bg-ai/10 text-ai-hover";
         }
     } else {
-        label = "Local";
-        badgeClassName = "bg-emerald-500/20 text-emerald-400";
+        label = discoverRu.source.local;
+        badgeClassName = "border border-success/25 bg-success/10 text-success";
     }
 
     return (
@@ -94,6 +94,12 @@ function toRowItem(track: DiscoverTrack): TrackRowItem {
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
+        streamSource:
+            track.streamSource === "tidal" || track.streamSource === "youtube"
+                ? track.streamSource
+                : undefined,
+        tidalTrackId: track.tidalTrackId,
+        youtubeVideoId: track.youtubeVideoId,
         coverArtUrl:
             track.coverUrl || track.albumId
                 ? api.getCoverArtUrl(track.coverUrl || track.albumId, 80)
@@ -134,10 +140,10 @@ export function TrackList({
             const sourceBadge = getSourceBadge(track, isMatching);
             return {
                 artistContent: (
-                    <p className="text-xs text-gray-400 truncate">
+                    <p className="truncate text-xs text-content-muted">
                         <Link
                             href={`/artist/${encodeURIComponent(track.artist)}`}
-                            className="hover:underline hover:text-white"
+                            className="hover:text-content hover:underline"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {track.artist}
@@ -149,13 +155,13 @@ export function TrackList({
                 ),
                 middleColumns: (
                     <>
-                        <p className="hidden md:flex items-center text-sm text-gray-400 truncate">
+                        <p className="hidden items-center truncate text-sm text-content-muted md:flex">
                             {track.album}
                         </p>
                         <div className="hidden md:flex items-center justify-center">
                             <span
                                 className={cn(
-                                    "px-2 py-0.5 rounded-full text-xs font-medium bg-white/5",
+                                    "rounded-full border border-line bg-surface-elevated px-2 py-0.5 text-xs font-medium",
                                     tierColors[track.tier],
                                 )}
                             >
@@ -185,6 +191,8 @@ export function TrackList({
                 },
                 duration: track.duration,
                 streamSource: track.streamSource,
+                tidalTrackId: track.tidalTrackId,
+                youtubeVideoId: track.youtubeVideoId,
             },
             showGoToAlbum: !!track.albumId,
         }),
@@ -206,10 +214,16 @@ export function TrackList({
                         className="grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_90px_80px] gap-4 mb-2"
                         columns={[
                             { label: "#", className: "text-center" },
-                            { label: "Title" },
-                            { label: "Album" },
-                            { label: "Match", className: "text-center" },
-                            { label: "Source", className: "text-center" },
+                            { label: discoverRu.columns.title },
+                            { label: discoverRu.columns.album },
+                            {
+                                label: discoverRu.columns.match,
+                                className: "text-center",
+                            },
+                            {
+                                label: discoverRu.columns.source,
+                                className: "text-center",
+                            },
                             { label: "" },
                         ]}
                     />

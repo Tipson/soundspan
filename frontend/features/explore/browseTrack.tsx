@@ -56,6 +56,8 @@ export function browseToRowItem(track: TidalBrowseTrack): TrackRowItem {
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
+        streamSource: "tidal",
+        tidalTrackId: track.trackId,
         coverArtUrl: track.thumbnailUrl
             ? api.getTidalBrowseImageUrl(track.thumbnailUrl)
             : null,
@@ -85,7 +87,7 @@ export function BrowseTrackList({
         (track: TidalBrowseTrack): TrackRowSlots => ({
             titleBadges: <TidalBadge />,
             middleColumns: (
-                <p className="hidden md:flex items-center text-sm text-gray-400 truncate">
+                <p className="text-content-muted hidden items-center truncate text-sm md:flex">
                     {track.album}
                 </p>
             ),
@@ -119,15 +121,15 @@ export function BrowseTrackList({
                 rowSlots={rowSlots}
                 rowOverflow={rowOverflow}
                 rowClassName="grid-cols-[28px_1fr_auto] md:grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto]"
-                accentColor="#00BFFF"
+                accentColor="var(--music-action)"
                 preferenceMode="up-only"
                 header={
                     <TrackListHeader
                         className="grid-cols-[40px_minmax(200px,2fr)_minmax(100px,1fr)_auto] gap-4 mb-2"
                         columns={[
                             { label: "#", className: "text-center" },
-                            { label: "Title" },
-                            { label: "Album" },
+                            { label: "Название" },
+                            { label: "Альбом" },
                             { label: "" },
                         ]}
                     />

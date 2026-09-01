@@ -1,5 +1,37 @@
 import type { CanonicalMediaSearchResult } from "@soundspan/media-metadata-contract";
 import { type ApiClientConstructor } from "./core";
+import type {
+    UnavailableYtMusicRecoveryRequest,
+    UnavailableYtMusicRecoveryResponse,
+} from "../audio/unavailableYtMusicRecovery";
+
+export interface YtMusicThumbnail {
+    url?: string | null;
+    width?: number | null;
+    height?: number | null;
+}
+
+export interface YtMusicArtistResponse {
+    channelId?: string | null;
+    name?: string | null;
+    description?: string | null;
+    thumbnails?: YtMusicThumbnail[] | null;
+    subscribers?: string | null;
+    songs?: Array<{
+        videoId?: string | null;
+        title?: string | null;
+        artist?: string | null;
+        album?: string | null;
+        duration?: number | string | null;
+    }> | null;
+    albums?: Array<{
+        browseId?: string | null;
+        title?: string | null;
+        year?: number | string | null;
+        type?: string | null;
+        thumbnails?: YtMusicThumbnail[] | null;
+    }> | null;
+}
 
 /** Add YouTube Music-domain operations to an API client base class. */
 export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
@@ -70,8 +102,12 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             return this.request(`/ytmusic/album/${browseId}`);
         }
 
-        async getYtMusicArtist(channelId: string): Promise<any> {
-            return this.request(`/ytmusic/artist/${channelId}`);
+        async getYtMusicArtist(
+            channelId: string,
+        ): Promise<YtMusicArtistResponse> {
+            return this.request(
+                `/ytmusic/artist/${encodeURIComponent(channelId)}`,
+            );
         }
 
         async getYtMusicSong(videoId: string): Promise<any> {
@@ -119,6 +155,20 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             return this.post(`/ytmusic/match-batch`, { tracks });
         }
 
+        /** Recover a provider identity only after the backend proves it unavailable. */
+        async recoverUnavailableYtMusicTrack(
+            input: UnavailableYtMusicRecoveryRequest,
+        ): Promise<UnavailableYtMusicRecoveryResponse> {
+            return this.request(`/ytmusic/recover-unavailable`, {
+                method: "POST",
+                body: JSON.stringify(input),
+                // Covers the bounded original probe, search, and up to three
+                // sequential alternate probes without timing out candidate 3.
+                timeoutMs: 80_000,
+                retryOnTimeout: false,
+            });
+        }
+
         /**
          * Build a stream URL for YouTube Music playback.
          * Like getStreamUrl(), this returns a synchronous URL string
@@ -130,11 +180,11 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             usePublic?: boolean,
         ): string {
             const endpoint = usePublic ? "stream-public" : "stream";
-            let url = `${this.getBaseUrl()}/api/ytmusic/${endpoint}/${videoId}`;
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            let url = `${baseUrl}/api/ytmusic/${endpoint}/${encodeURIComponent(videoId)}`;
             const params = new URLSearchParams();
             if (quality) params.set("quality", quality);
-            const token = this.getCurrentToken();
-            if (token) params.set("token", token);
             const qs = params.toString();
             if (qs) url += `?${qs}`;
             return url;

@@ -1,12 +1,27 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { createProxyMiddleware } = require("http-proxy-middleware");
+const {
+    prepareProxyAuthentication,
+    redactProxyLogValue,
+} = require("./lib/media-auth");
 
 // Time-to-first-byte budgets for backend requests, matching the retired
 // Next route-handler proxy (lib/apiProxy.ts): 20s for regular API calls,
-// 90s for the long-running import preview, both overridable via env.
+// 150s for the long-running import preview, and 125s for YouTube audio routes
+// whose provider may need the backend's full 120s preparation budget.
 const DEFAULT_PROXY_TIMEOUT_MS = 20000;
-const DEFAULT_IMPORT_PREVIEW_PROXY_TIMEOUT_MS = 90000;
+const DEFAULT_IMPORT_PREVIEW_PROXY_TIMEOUT_MS = 150000;
+const DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS = 125000;
+const DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS = 90000;
 const IMPORT_PREVIEW_PATH_PREFIX = "/api/import/preview";
+const UNAVAILABLE_RECOVERY_PATHS = new Set([
+    "/api/ytmusic/recover-unavailable",
+    "/ytmusic/recover-unavailable",
+]);
+const MEDIA_STREAM_PATH_PATTERNS = [
+    /^(?:api\/)?ytmusic\/(?:stream|stream-public)\/[^/]+$/,
+    /^(?:api\/)?youtube\/stream\/[^/]+$/,
+];
 
 function parsePositiveTimeoutMs(value) {
     const parsed = Number(value);
@@ -41,11 +56,29 @@ function isImportPreviewPath(pathname) {
     );
 }
 
+function isMediaStreamPath(pathname) {
+    const normalized = String(pathname || "")
+        .replace(/^\/+|\/+$/g, "")
+        .toLowerCase();
+    return MEDIA_STREAM_PATH_PATTERNS.some((pattern) =>
+        pattern.test(normalized),
+    );
+}
+
+function isUnavailableRecoveryPath(pathname) {
+    const normalized = String(pathname || "")
+        .replace(/\/+$/, "")
+        .toLowerCase();
+    return UNAVAILABLE_RECOVERY_PATHS.has(normalized);
+}
+
 /**
  * Resolve the time-to-first-byte budget for a proxied backend request.
  * Honors PROXY_REQUEST_TIMEOUT_MS globally and
- * PROXY_IMPORT_PREVIEW_TIMEOUT_MS for the import-preview path prefix
- * (which otherwise never drops below its 90s default).
+ * PROXY_IMPORT_PREVIEW_TIMEOUT_MS for the import-preview path prefix.
+ * YouTube audio routes never drop below 125s so the backend owns its 120s
+ * provider-preparation timeout. Unavailable-track recovery gets 90s so its
+ * bounded original/search/alternate probes can finish before the client.
  *
  * @param {string} pathname
  * @param {Record<string, string | undefined>} [env]
@@ -55,6 +88,17 @@ function resolveProxyTimeoutMs(pathname, env = process.env) {
     const globalTimeout =
         parsePositiveTimeoutMs(env.PROXY_REQUEST_TIMEOUT_MS) ??
         DEFAULT_PROXY_TIMEOUT_MS;
+
+    if (isMediaStreamPath(pathname)) {
+        return Math.max(globalTimeout, DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS);
+    }
+
+    if (isUnavailableRecoveryPath(pathname)) {
+        return Math.max(
+            globalTimeout,
+            DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS,
+        );
+    }
 
     if (!isImportPreviewPath(pathname)) {
         return globalTimeout;
@@ -89,8 +133,9 @@ function createFirstByteTimeoutProxyReqHandler({ name, logger, env }) {
         );
 
         const timer = setTimeout(() => {
+            const safeUrl = redactProxyLogValue(req?.url);
             logger.error(
-                `[${name}] ${req?.method} ${req?.url} timed out after ${timeoutMs}ms waiting for the first upstream byte`,
+                `[${name}] ${req?.method} ${safeUrl} timed out after ${timeoutMs}ms waiting for the first upstream byte`,
             );
             if (
                 res &&
@@ -145,8 +190,11 @@ function createFirstByteTimeoutProxyReqHandler({ name, logger, env }) {
  */
 function createProxyErrorHandler({ name, logger, errorMessage, errorCode }) {
     return (err, req, res) => {
-        const detail = err instanceof Error ? err.message : String(err);
-        logger.error(`[${name}] ${req?.method} ${req?.url} failed:`, detail);
+        const detail = redactProxyLogValue(
+            err instanceof Error ? err.message : String(err),
+        );
+        const safeUrl = redactProxyLogValue(req?.url);
+        logger.error(`[${name}] ${req?.method} ${safeUrl} failed:`, detail);
 
         if (res && typeof res.writeHead === "function") {
             if (!res.headersSent) {
@@ -198,6 +246,7 @@ function buildBackendProxyOptions({
               120000,
               resolveProxyTimeoutMs("/api/", activeEnv),
               resolveProxyTimeoutMs(IMPORT_PREVIEW_PATH_PREFIX, activeEnv),
+              resolveProxyTimeoutMs("/api/ytmusic/stream-public/_", activeEnv),
           )
         : 120000;
 
@@ -232,16 +281,32 @@ function buildBackendProxyOptions({
  * proxies) that streams requests to the backend and answers with the
  * structured 503 JSON contract when the backend is unreachable.
  *
- * @param {{ name: string, target: string, ws?: boolean, logger: { error: Function }, errorMessage: string, errorCode: string }} config
+ * @param {{ name: string, target: string, ws?: boolean, logger: { error: Function }, errorMessage: string, errorCode: string, promoteAuthToken?: boolean }} config
  * @returns {import("http-proxy-middleware").RequestHandler}
  */
 function createBackendProxy(config) {
-    return createProxyMiddleware(buildBackendProxyOptions(config));
+    const proxy = createProxyMiddleware(buildBackendProxyOptions(config));
+    if (!config.promoteAuthToken) {
+        return proxy;
+    }
+
+    const authenticatedProxy = (req, res, next) => {
+        prepareProxyAuthentication(req);
+        return proxy(req, res, next);
+    };
+    if (typeof proxy.upgrade === "function") {
+        authenticatedProxy.upgrade = (req, socket, head) => {
+            prepareProxyAuthentication(req);
+            return proxy.upgrade(req, socket, head);
+        };
+    }
+    return authenticatedProxy;
 }
 
 module.exports = {
     createProxyErrorHandler,
     createFirstByteTimeoutProxyReqHandler,
+    prepareProxyAuthentication,
     resolveProxyTimeoutMs,
     buildBackendProxyOptions,
     createBackendProxy,

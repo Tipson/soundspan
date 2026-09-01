@@ -4,6 +4,15 @@ import { toast } from "sonner";
 import { useDownloadContext } from "@/lib/download-context";
 import { Artist, Album } from "../types";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    artistRu,
+    formatAlbumDownloadAlreadyQueued,
+    formatAlbumDownloading,
+    formatAlbumDownloadPreparing,
+    formatArtistAlbumsQueued,
+    formatArtistDiscographyCheck,
+    formatArtistDownloadAlreadyQueued,
+} from "@/lib/i18n/musicPagesRu";
 
 /**
  * Executes useDownloadActions.
@@ -15,20 +24,18 @@ export function useDownloadActions() {
     const downloadArtist = useCallback(
         async (artist: Artist | null) => {
             if (!artist) {
-                toast.error("No artist selected");
+                toast.error(artistRu.noArtistSelected);
                 return;
             }
 
             if (!artist.mbid) {
-                toast.error("Artist MBID not available");
+                toast.error(artistRu.artistMbidUnavailable);
                 return;
             }
 
             // Check if already downloading
             if (isPendingByMbid(artist.mbid)) {
-                toast.info(
-                    `Missing albums for ${artist.name} are already being queued`,
-                );
+                toast.info(formatArtistDownloadAlreadyQueued(artist.name));
                 return;
             }
 
@@ -37,7 +44,7 @@ export function useDownloadActions() {
                 addPendingDownload("artist", artist.name, artist.mbid);
 
                 // Show immediate feedback
-                toast.loading(`Checking discography for "${artist.name}"...`, {
+                toast.loading(formatArtistDiscographyCheck(artist.name), {
                     id: `download-${artist.mbid}`,
                 });
 
@@ -45,7 +52,7 @@ export function useDownloadActions() {
                 await api.downloadArtist(artist.name, artist.mbid);
 
                 // Update the loading toast to success
-                toast.success(`Queueing missing albums for ${artist.name}`, {
+                toast.success(formatArtistAlbumsQueued(artist.name), {
                     id: `download-${artist.mbid}`,
                 });
             } catch (error: unknown) {
@@ -54,14 +61,9 @@ export function useDownloadActions() {
                 // entry — otherwise the button stays disabled until the stale
                 // sweep runs.
                 removePendingByMbid(artist.mbid);
-                toast.error(
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to download artist",
-                    {
-                        id: `download-${artist.mbid}`,
-                    },
-                );
+                toast.error(artistRu.downloadArtistFailed, {
+                    id: `download-${artist.mbid}`,
+                });
             }
         },
         [addPendingDownload, removePendingByMbid, isPendingByMbid],
@@ -76,13 +78,13 @@ export function useDownloadActions() {
             const mbid = album.rgMbid || album.mbid;
 
             if (!mbid) {
-                toast.error("Album MBID not available");
+                toast.error(artistRu.albumMbidUnavailable);
                 return;
             }
 
             // Check if already downloading
             if (isPendingByMbid(mbid)) {
-                toast.info(`${album.title} is already being downloaded`);
+                toast.info(formatAlbumDownloadAlreadyQueued(album.title));
                 return;
             }
 
@@ -95,7 +97,7 @@ export function useDownloadActions() {
                 );
 
                 // Show immediate feedback
-                toast.loading(`Preparing download: "${album.title}"...`, {
+                toast.loading(formatAlbumDownloadPreparing(album.title), {
                     id: `download-${mbid}`,
                 });
 
@@ -103,7 +105,7 @@ export function useDownloadActions() {
                 await api.downloadAlbum(artistName, album.title, mbid);
 
                 // Update the loading toast to success
-                toast.success(`Downloading ${album.title}`, {
+                toast.success(formatAlbumDownloading(album.title), {
                     id: `download-${mbid}`,
                 });
             } catch (error: unknown) {
@@ -112,14 +114,9 @@ export function useDownloadActions() {
                 // entry — otherwise the button stays disabled until the stale
                 // sweep runs.
                 removePendingByMbid(mbid);
-                toast.error(
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to download album",
-                    {
-                        id: `download-${mbid}`,
-                    },
-                );
+                toast.error(artistRu.downloadAlbumFailed, {
+                    id: `download-${mbid}`,
+                });
             }
         },
         [addPendingDownload, removePendingByMbid, isPendingByMbid],

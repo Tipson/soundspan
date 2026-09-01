@@ -6,6 +6,8 @@ import { buildOptimisticTrackPreferenceResponse } from "@/hooks/trackPreferenceO
 import { toast } from "sonner";
 import type { Album } from "../types";
 import { queryKeys } from "@/lib/queryKeys";
+import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
+import { albumRu, formatAlbumPreferenceSuccess } from "@/lib/i18n/musicPagesRu";
 
 function albumTrackIds(album: Album): string[] {
     return Array.from(
@@ -15,18 +17,6 @@ function albumTrackIds(album: Album): string[] {
                 .filter((trackId) => trackId.trim().length > 0),
         ),
     );
-}
-
-function preferenceSuccessMessage(
-    signal: TrackPreferenceSignal,
-    trackCount: number,
-): string {
-    const noun = trackCount === 1 ? "track" : "tracks";
-    if (signal === "thumbs_up")
-        return `Liked ${trackCount} ${noun} from this album`;
-    if (signal === "thumbs_down")
-        return `Disliked ${trackCount} ${noun} from this album`;
-    return `Cleared preferences for ${trackCount} album ${noun}`;
 }
 
 /** Provides album-wide preference mutation and optimistic cache updates. */
@@ -39,12 +29,10 @@ export function useAlbumPreferenceActions() {
         album: Album | null,
         signal: TrackPreferenceSignal,
     ) => {
-        if (!album) return toast.error("Album data not available");
+        if (!album) return toast.error(albumRu.dataUnavailable);
         const trackIds = albumTrackIds(album);
         if (trackIds.length === 0) {
-            return toast.info(
-                "No tracks available for album preference update",
-            );
+            return toast.info(albumRu.noTracksForPreference);
         }
         setIsApplyingAlbumPreference(true);
         try {
@@ -58,9 +46,12 @@ export function useAlbumPreferenceActions() {
             await queryClient.invalidateQueries({
                 queryKey: queryKeys.likedPlaylistAll(),
             });
-            toast.success(preferenceSuccessMessage(signal, trackIds.length));
+            publishDeviceOfflineLikedChangeForSignal(signal);
+            toast.success(
+                formatAlbumPreferenceSuccess(signal, trackIds.length),
+            );
         } catch {
-            toast.error("Failed to update album track preferences");
+            toast.error(albumRu.preferenceUpdateFailed);
         } finally {
             setIsApplyingAlbumPreference(false);
         }

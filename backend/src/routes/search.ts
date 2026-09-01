@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
+import type { CanonicalMediaSearchResult } from "@soundspan/media-metadata-contract";
 import { logger } from "../utils/logger";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../utils/db";
@@ -12,8 +13,106 @@ import axios from "axios";
 import { redisClient } from "../utils/redis";
 import { z } from "zod";
 import { LIBRARY_ORIGIN_VALUES } from "../utils/librarySorting";
+import {
+    ytMusicService,
+    type YtMusicCatalogAlbumResult,
+    type YtMusicCatalogArtistResult,
+} from "../services/youtubeMusic";
+import { searchYtMusicDiscoveryCatalog } from "../services/ytMusicDiscoveryCatalog";
+import { getSystemSettings } from "../utils/systemSettings";
+import { ytMusicSearchLimiter } from "../middleware/rateLimiter";
+import {
+    normalizeArtistName as normalizeCanonicalArtistName,
+    normalizeForExactKey,
+} from "../utils/artistNormalization";
 
 const router = Router();
+
+interface DiscoverTrackResult {
+    type: "track";
+    id?: string;
+    name: string;
+    artist?: string;
+    album?: string | null;
+    image?: string | null;
+    providerTrackId?: string;
+    streamSource?: "youtube";
+    youtubeVideoId?: string;
+    duration?: number | null;
+    [key: string]: unknown;
+}
+
+interface DiscoverAlbumResult {
+    type: "album";
+    id: string;
+    browseId: string;
+    name: string;
+    artist: string;
+    image: string | null;
+    year: string | null;
+    provider: "ytmusic";
+}
+
+interface DiscoverArtistResult {
+    type: "music";
+    id: string;
+    name: string;
+    image: string | null;
+    provider: "ytmusic";
+    youtubeChannelId: string;
+}
+
+interface DiscoverYtMusicCatalogResult {
+    tracks: DiscoverTrackResult[];
+    albums: DiscoverAlbumResult[];
+    artists: DiscoverArtistResult[];
+    failedFilters: Array<"songs" | "albums" | "artists">;
+}
+
+function isDiscoverYtMusicCatalogResult(
+    value: unknown,
+): value is DiscoverYtMusicCatalogResult {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return false;
+    }
+    const record = value as Record<string, unknown>;
+    return (
+        Array.isArray(record.tracks) &&
+        Array.isArray(record.albums) &&
+        Array.isArray(record.artists) &&
+        Array.isArray(record.failedFilters)
+    );
+}
+
+const LONG_FORM_TRACK_SECONDS = 20 * 60;
+const VIDEO_STYLE_TITLE_PATTERN =
+    /\b(?:full album|full concert|live\s*stream|official live video)\b/i;
+const YT_MUSIC_DISCOVERY_TIMEOUT_MS = 8_000;
+const DISCOVERY_SOURCE_DEADLINE_MS = 9_000;
+const DISCOVERY_CORRECTION_DEADLINE_MS = 1_500;
+
+function withDiscoveryDeadline<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    label: string,
+): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error(`${label} exceeded ${timeoutMs}ms deadline`));
+        }, timeoutMs);
+        promise.then(resolve, reject).finally(() => clearTimeout(timeout));
+    });
+}
+
+const discoverMusicSearchLimiter: RequestHandler = (req, res, next) => {
+    const requestedType =
+        typeof req.query.type === "string" ? req.query.type : "music";
+    if (requestedType !== "music" && requestedType !== "all") {
+        next();
+        return;
+    }
+    ytMusicSearchLimiter(req, res, next);
+};
 
 const searchQuerySchema = z.object({
     q: z.string().max(500).default(""),
@@ -38,7 +137,7 @@ const searchQuerySchema = z.object({
 });
 
 function normalizeDiscoverArtistName(value: unknown): string {
-    return typeof value === "string" ? value.trim().toLowerCase() : "";
+    return typeof value === "string" ? normalizeCanonicalArtistName(value) : "";
 }
 
 function normalizeDiscoverArtistTags(value: unknown): string[] {
@@ -49,6 +148,303 @@ function normalizeDiscoverArtistTags(value: unknown): string[] {
     return value
         .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
         .filter((tag): tag is string => tag.length > 0);
+}
+
+function normalizeDiscoverTrackIdentity(value: unknown): string {
+    return typeof value === "string" ? normalizeForExactKey(value) : "";
+}
+
+function discoverTrackIdentity(track: DiscoverTrackResult): string | null {
+    const artist = normalizeDiscoverTrackIdentity(track.artist);
+    const title = normalizeDiscoverTrackIdentity(track.name);
+    return artist && title ? `${artist}::${title}` : null;
+}
+
+function discoverTrackAlbumsMatch(
+    first: DiscoverTrackResult,
+    second: DiscoverTrackResult,
+): boolean {
+    const firstAlbum = normalizeDiscoverTrackIdentity(first.album);
+    const secondAlbum = normalizeDiscoverTrackIdentity(second.album);
+    return !firstAlbum || !secondAlbum || firstAlbum === secondAlbum;
+}
+
+function mapYtMusicDiscoverTrack(
+    result: CanonicalMediaSearchResult,
+): DiscoverTrackResult | null {
+    const providerTrackId = result.providerTrackId.trim();
+    const title = result.title.trim();
+    const artist = result.artistName.trim();
+    if (
+        result.provider !== "ytmusic" ||
+        result.source !== "youtube" ||
+        !providerTrackId ||
+        !title ||
+        !artist
+    ) {
+        return null;
+    }
+
+    return {
+        type: "track",
+        id: providerTrackId,
+        name: title,
+        artist,
+        album: result.albumTitle,
+        image: result.thumbnailUrl,
+        providerTrackId,
+        streamSource: "youtube",
+        youtubeVideoId: providerTrackId,
+        duration: result.durationSec,
+    };
+}
+
+function mapYtMusicDiscoverAlbum(
+    result: YtMusicCatalogAlbumResult,
+): DiscoverAlbumResult {
+    return {
+        type: "album",
+        id: result.browseId,
+        browseId: result.browseId,
+        name: result.title,
+        artist: result.artistName,
+        image: result.thumbnailUrl,
+        year: result.year,
+        provider: "ytmusic",
+    };
+}
+
+function mapYtMusicDiscoverArtist(
+    result: YtMusicCatalogArtistResult,
+): DiscoverArtistResult {
+    return {
+        type: "music",
+        id: result.channelId,
+        name: result.name,
+        image: result.thumbnailUrl,
+        provider: "ytmusic",
+        youtubeChannelId: result.channelId,
+    };
+}
+
+async function searchYtMusicDiscoverCatalog(
+    query: string,
+    limit: number,
+): Promise<DiscoverYtMusicCatalogResult> {
+    const response = await searchYtMusicDiscoveryCatalog(
+        ytMusicService,
+        "__public__",
+        query,
+        limit,
+        { timeoutMs: YT_MUSIC_DISCOVERY_TIMEOUT_MS, maxRetries: 0 },
+    );
+
+    const tracks = response.tracks
+        .slice(0, limit)
+        .map(mapYtMusicDiscoverTrack)
+        .filter((track): track is DiscoverTrackResult => track !== null);
+    const seenBrowseIds = new Set<string>();
+    const albums = response.albums.flatMap((result) => {
+        if (
+            result.mediaType !== "album" ||
+            seenBrowseIds.has(result.browseId)
+        ) {
+            return [];
+        }
+        seenBrowseIds.add(result.browseId);
+        return [mapYtMusicDiscoverAlbum(result)];
+    });
+    const seenChannelIds = new Set<string>();
+    const artists = response.artists.flatMap((result) => {
+        if (
+            result.mediaType !== "artist" ||
+            seenChannelIds.has(result.channelId)
+        ) {
+            return [];
+        }
+        seenChannelIds.add(result.channelId);
+        return [mapYtMusicDiscoverArtist(result)];
+    });
+
+    return {
+        tracks,
+        albums,
+        artists,
+        failedFilters: response.failedFilters,
+    };
+}
+
+function mergeDiscoverArtists(
+    metadataArtists: any[],
+    ytMusicArtists: DiscoverArtistResult[],
+): any[] {
+    const merged: any[] = [];
+    const indexByName = new Map<string, number>();
+    for (const artist of metadataArtists) {
+        const name = normalizeDiscoverArtistName(artist?.name);
+        const existingIndex = name ? indexByName.get(name) : undefined;
+        if (existingIndex !== undefined) {
+            const existing = merged[existingIndex];
+            merged[existingIndex] = {
+                ...artist,
+                ...existing,
+                image: existing.image || artist?.image,
+                mbid: existing.mbid || artist?.mbid,
+            };
+            continue;
+        }
+        if (name) {
+            indexByName.set(name, merged.length);
+        }
+        merged.push(artist);
+    }
+
+    for (const providerArtist of ytMusicArtists) {
+        const name = normalizeDiscoverArtistName(providerArtist.name);
+        const existingIndex = name ? indexByName.get(name) : undefined;
+        if (existingIndex !== undefined) {
+            const existing = merged[existingIndex];
+            merged[existingIndex] = {
+                ...existing,
+                image: existing.image || providerArtist.image,
+                provider: "ytmusic",
+                youtubeChannelId: providerArtist.youtubeChannelId,
+            };
+            continue;
+        }
+        if (name) {
+            indexByName.set(name, merged.length);
+        }
+        merged.push(providerArtist);
+    }
+
+    return merged;
+}
+
+function rankDiscoverTracks(
+    tracks: DiscoverTrackResult[],
+    query: string,
+): DiscoverTrackResult[] {
+    const queryKey = normalizeDiscoverTrackIdentity(query);
+    return tracks
+        .map((track, index) => {
+            const artistKey = normalizeDiscoverTrackIdentity(track.artist);
+            const titleKey = normalizeDiscoverTrackIdentity(track.name);
+            const exactMatch =
+                !!queryKey && (artistKey === queryKey || titleKey === queryKey);
+            const containsQuery =
+                !!queryKey &&
+                (artistKey.includes(queryKey) || titleKey.includes(queryKey));
+            const likelyLongForm =
+                (typeof track.duration === "number" &&
+                    track.duration >= LONG_FORM_TRACK_SECONDS) ||
+                VIDEO_STYLE_TITLE_PATTERN.test(track.name);
+            const directlyPlayable = Boolean(track.youtubeVideoId);
+            return {
+                track,
+                index,
+                likelyLongForm,
+                exactMatch,
+                containsQuery,
+                directlyPlayable,
+            };
+        })
+        .sort(
+            (first, second) =>
+                Number(first.likelyLongForm) - Number(second.likelyLongForm) ||
+                Number(second.exactMatch) - Number(first.exactMatch) ||
+                Number(second.containsQuery) - Number(first.containsQuery) ||
+                Number(second.directlyPlayable) -
+                    Number(first.directlyPlayable) ||
+                first.index - second.index,
+        )
+        .map(({ track }) => track);
+}
+
+function mergeDiscoverTracks(
+    lastFmTracks: DiscoverTrackResult[],
+    ytMusicTracks: DiscoverTrackResult[],
+): DiscoverTrackResult[] {
+    const merged: DiscoverTrackResult[] = [];
+    const indexesByIdentity = new Map<string, number[]>();
+    const seenProviderIds = new Set<string>();
+
+    for (const track of lastFmTracks) {
+        const identity = discoverTrackIdentity(track);
+        const existingIndex = identity
+            ? indexesByIdentity
+                  .get(identity)
+                  ?.find((index) =>
+                      discoverTrackAlbumsMatch(merged[index], track),
+                  )
+            : undefined;
+        if (existingIndex !== undefined) {
+            const existing = merged[existingIndex];
+            merged[existingIndex] = {
+                ...track,
+                ...existing,
+                image: existing.image || track.image,
+                album: existing.album || track.album,
+            };
+            continue;
+        }
+
+        if (identity) {
+            const indexes = indexesByIdentity.get(identity) || [];
+            indexes.push(merged.length);
+            indexesByIdentity.set(identity, indexes);
+        }
+        if (typeof track.youtubeVideoId === "string") {
+            seenProviderIds.add(track.youtubeVideoId);
+        }
+        merged.push(track);
+    }
+
+    for (const ytTrack of ytMusicTracks) {
+        const providerId = ytTrack.youtubeVideoId;
+        if (
+            typeof providerId !== "string" ||
+            !providerId ||
+            seenProviderIds.has(providerId)
+        ) {
+            continue;
+        }
+        seenProviderIds.add(providerId);
+
+        const identity = discoverTrackIdentity(ytTrack);
+        const existingIndex = identity
+            ? indexesByIdentity
+                  .get(identity)
+                  ?.find((index) =>
+                      discoverTrackAlbumsMatch(merged[index], ytTrack),
+                  )
+            : undefined;
+        if (existingIndex !== undefined) {
+            const existing = merged[existingIndex];
+            if (existing.youtubeVideoId) {
+                continue;
+            }
+            merged[existingIndex] = {
+                ...existing,
+                album: existing.album || ytTrack.album,
+                image: existing.image || ytTrack.image,
+                providerTrackId: ytTrack.providerTrackId,
+                streamSource: "youtube",
+                youtubeVideoId: providerId,
+                duration: ytTrack.duration,
+            };
+            continue;
+        }
+
+        if (identity) {
+            const indexes = indexesByIdentity.get(identity) || [];
+            indexes.push(merged.length);
+            indexesByIdentity.set(identity, indexes);
+        }
+        merged.push(ytTrack);
+    }
+
+    return merged;
 }
 
 async function getLocalSimilarArtistsFromGraph(
@@ -148,13 +544,30 @@ async function filterLibraryArtistsFromDiscoverResults(
         return artists;
     }
 
+    const candidateNormalizedNames = Array.from(
+        new Set(
+            candidateNames.map(normalizeDiscoverArtistName).filter(Boolean),
+        ),
+    );
+
     const libraryArtists = await prisma.artist.findMany({
         where: {
-            OR: candidateNames.map((name) => ({
-                name: { equals: name, mode: "insensitive" },
-            })),
+            OR: [
+                ...candidateNames.map((name) => ({
+                    name: { equals: name, mode: "insensitive" as const },
+                })),
+                ...(candidateNormalizedNames.length > 0
+                    ? [
+                          {
+                              normalizedName: {
+                                  in: candidateNormalizedNames,
+                              },
+                          },
+                      ]
+                    : []),
+            ],
         },
-        select: { name: true },
+        select: { name: true, normalizedName: true },
     });
 
     if (libraryArtists.length === 0) {
@@ -163,12 +576,17 @@ async function filterLibraryArtistsFromDiscoverResults(
 
     const libraryArtistNames = new Set(
         libraryArtists.map((artist) =>
-            normalizeDiscoverArtistName(artist.name),
+            artist.normalizedName
+                ? normalizeDiscoverArtistName(artist.normalizedName)
+                : normalizeDiscoverArtistName(artist.name),
         ),
     );
 
     return artists.filter(
         (artist) =>
+            (artist?.provider === "ytmusic" &&
+                typeof artist?.youtubeChannelId === "string" &&
+                artist.youtubeChannelId.trim().length > 0) ||
             !libraryArtistNames.has(normalizeDiscoverArtistName(artist?.name)),
     );
 }
@@ -178,6 +596,7 @@ function transformSearchResults(serviceResults: SearchResults) {
         artists: serviceResults.artists,
         albums: serviceResults.albums.map((album) => ({
             id: album.id,
+            rgMbid: album.rgMbid,
             title: album.title,
             artistId: album.artistId,
             year: album.year,
@@ -431,6 +850,7 @@ router.get("/genres", async (req, res) => {
  * /api/search/discover:
  *   get:
  *     summary: Search for new content to discover (not in your library)
+ *     description: Searches Last.fm metadata and the enabled public YouTube Music catalog, merging exact provider identities into playable track results.
  *     tags: [Search]
  *     security:
  *       - apiKeyAuth: []
@@ -453,8 +873,8 @@ router.get("/genres", async (req, res) => {
  *         schema:
  *           type: integer
  *           default: 20
- *           maximum: 50
- *         description: Maximum number of results
+ *           maximum: 500
+ *         description: Maximum requested provider prefix; filtered YouTube Music search follows upstream continuations up to this bound
  *     responses:
  *       200:
  *         description: Discovery search results with optional alias info
@@ -480,7 +900,7 @@ router.get("/genres", async (req, res) => {
  *       401:
  *         description: Not authenticated
  */
-router.get("/discover", async (req, res) => {
+router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
     try {
         const { q = "", type = "music", limit = "20" } = req.query;
 
@@ -488,14 +908,36 @@ router.get("/discover", async (req, res) => {
         const parsedLimit = parseInt(limit as string, 10);
         const searchLimit = Number.isNaN(parsedLimit)
             ? 20
-            : Math.min(Math.max(parsedLimit, 1), 50);
+            : Math.min(Math.max(parsedLimit, 1), 500);
 
         if (!query) {
             return res.json({ results: [], aliasInfo: null });
         }
 
+        let ytMusicEnabled = false;
+        let lastFmEnabled = false;
+        if (type === "music" || type === "all") {
+            try {
+                const settings = await getSystemSettings();
+                ytMusicEnabled = Boolean(settings?.ytMusicEnabled);
+            } catch (settingsError) {
+                logger.warn(
+                    "[SEARCH DISCOVER] YouTube Music settings check failed:",
+                    settingsError,
+                );
+            }
+            try {
+                lastFmEnabled = await lastFmService.isConfigured();
+            } catch (lastFmSettingsError) {
+                logger.warn(
+                    "[SEARCH DISCOVER] Last.fm settings check failed:",
+                    lastFmSettingsError,
+                );
+            }
+        }
+
         // Cache TTL: 15 min (900s) -- external API data rarely changes
-        const cacheKey = `search:discover:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
+        const cacheKey = `search:discover:v8:yt${ytMusicEnabled ? "1" : "0"}:lf${lastFmEnabled ? "1" : "0"}:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
@@ -518,10 +960,13 @@ router.get("/discover", async (req, res) => {
             mbid?: string;
         } | null = null;
 
-        if (type === "music" || type === "all") {
+        if ((type === "music" || type === "all") && lastFmEnabled) {
             try {
-                const correction =
-                    await lastFmService.getArtistCorrection(query);
+                const correction = await withDiscoveryDeadline(
+                    lastFmService.getArtistCorrection(query),
+                    DISCOVERY_CORRECTION_DEADLINE_MS,
+                    "Last.fm correction",
+                );
                 if (correction?.corrected) {
                     searchQuery = correction.canonicalName;
                     aliasInfo = {
@@ -545,14 +990,28 @@ router.get("/discover", async (req, res) => {
         const promiseMap: Record<string, Promise<any>> = {};
 
         if (type === "music" || type === "all") {
-            promiseMap.artists = lastFmService.searchArtists(
-                searchQuery,
-                searchLimit,
-            );
-            promiseMap.tracks = lastFmService.searchTracks(
-                searchQuery,
-                searchLimit,
-            );
+            if (lastFmEnabled) {
+                promiseMap.artists = withDiscoveryDeadline(
+                    lastFmService.searchArtists(
+                        searchQuery,
+                        Math.min(searchLimit, 50),
+                    ),
+                    DISCOVERY_SOURCE_DEADLINE_MS,
+                    "Last.fm artist search",
+                );
+                promiseMap.tracks = withDiscoveryDeadline(
+                    lastFmService.searchTracks(searchQuery, searchLimit),
+                    DISCOVERY_SOURCE_DEADLINE_MS,
+                    "Last.fm track search",
+                );
+            }
+            if (ytMusicEnabled) {
+                promiseMap.ytMusicCatalog = withDiscoveryDeadline(
+                    searchYtMusicDiscoverCatalog(searchQuery, searchLimit),
+                    DISCOVERY_SOURCE_DEADLINE_MS,
+                    "YouTube Music discovery batch",
+                );
+            }
         }
 
         if (type === "podcasts" || type === "all") {
@@ -588,11 +1047,13 @@ router.get("/discover", async (req, res) => {
             keys.map((k) => promiseMap[k]),
         );
         const resolved: Record<string, any[]> = {};
+        let externalSearchFailed = false;
         keys.forEach((k, i) => {
             const result = settled[i];
             if (result.status === "fulfilled") {
                 resolved[k] = result.value;
             } else {
+                externalSearchFailed = true;
                 logger.error(
                     `[SEARCH DISCOVER] ${k} search failed:`,
                     result.reason,
@@ -601,33 +1062,84 @@ router.get("/discover", async (req, res) => {
             }
         });
 
-        if (resolved.artists) {
+        const ytMusicCatalog = isDiscoverYtMusicCatalogResult(
+            resolved.ytMusicCatalog,
+        )
+            ? resolved.ytMusicCatalog
+            : undefined;
+        const ytMusicTracks = ytMusicCatalog?.tracks ?? [];
+        const ytMusicAlbums = ytMusicCatalog?.albums ?? [];
+        const ytMusicArtists = ytMusicCatalog?.artists ?? [];
+        if (ytMusicCatalog?.failedFilters.length) {
+            externalSearchFailed = true;
+            logger.warn(
+                `[SEARCH DISCOVER] YouTube Music batch returned partial categories: ${ytMusicCatalog.failedFilters.join(", ")}`,
+            );
+        }
+
+        if (resolved.artists || ytMusicArtists.length > 0) {
+            const mergedArtists = mergeDiscoverArtists(
+                resolved.artists || [],
+                ytMusicArtists,
+            );
             logger.debug(
-                `[SEARCH DISCOVER] Found ${resolved.artists.length} artist results`,
+                `[SEARCH DISCOVER] Found ${mergedArtists.length} merged artist results`,
             );
             const filteredArtists =
-                await filterLibraryArtistsFromDiscoverResults(resolved.artists);
+                await filterLibraryArtistsFromDiscoverResults(mergedArtists);
             logger.debug(
                 `[SEARCH DISCOVER] Filtered to ${filteredArtists.length} new artists not already in library`,
             );
             results.push(...filteredArtists);
         }
-        if (resolved.tracks) {
-            logger.debug(
-                `[SEARCH DISCOVER] Found ${resolved.tracks.length} track results`,
+        if (resolved.tracks || ytMusicTracks.length > 0) {
+            const mergedTracks = mergeDiscoverTracks(
+                resolved.tracks || [],
+                ytMusicTracks,
             );
-            results.push(...resolved.tracks);
+            logger.debug(
+                `[SEARCH DISCOVER] Found ${mergedTracks.length} merged track results`,
+            );
+            results.push(...rankDiscoverTracks(mergedTracks, searchQuery));
+        }
+        if (ytMusicAlbums.length > 0) {
+            results.push(...ytMusicAlbums);
         }
         if (resolved.podcasts) {
             results.push(...resolved.podcasts);
         }
 
-        const payload = { results, aliasInfo };
+        // ytmusicapi's filtered search follows provider continuations until
+        // the requested limit. A full prefix is the only honest signal that a
+        // larger prefix may exist; a short prefix means the provider exhausted
+        // what it can expose. Omit pagination metadata when there is no next
+        // request so older cached payloads remain compatible.
+        const canRequestMoreTracks =
+            (type === "music" || type === "all") &&
+            searchLimit < 500 &&
+            (ytMusicTracks.length >= searchLimit ||
+                (resolved.tracks?.length ?? 0) >= searchLimit);
+        const payload = {
+            results,
+            aliasInfo,
+            ...(canRequestMoreTracks
+                ? {
+                      pageInfo: {
+                          requestedLimit: searchLimit,
+                          canRequestMoreTracks: true,
+                      },
+                  }
+                : {}),
+        };
 
-        try {
-            await redisClient.setEx(cacheKey, 900, JSON.stringify(payload));
-        } catch (err) {
-            logger.warn("[SEARCH DISCOVER] Redis write error:", err);
+        // A partial response is useful for this request, but caching it would
+        // hide the missing catalog source for the full 15-minute TTL.
+        if (!externalSearchFailed) {
+            try {
+                await redisClient.setEx(cacheKey, 900, JSON.stringify(payload));
+            } catch (err) {
+                logger.warn("[SEARCH DISCOVER] Redis write error:", err);
+            }
         }
 
         res.json(payload);

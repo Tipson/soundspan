@@ -14,6 +14,7 @@ import { ContinueListening } from "@/features/podcast/components/ContinueListeni
 import { EpisodeList } from "@/features/podcast/components/EpisodeList";
 import { PreviewEpisodes } from "@/features/podcast/components/PreviewEpisodes";
 import { SimilarPodcasts } from "@/features/podcast/components/SimilarPodcasts";
+import { podcastRu } from "@/lib/i18n/podcastRu";
 
 /**
  * Renders the PodcastDetailPage component.
@@ -64,7 +65,7 @@ export default function PodcastDetailPage() {
     if (!podcast && !previewData) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <p className="text-gray-400">Podcast not found</p>
+                <p className="text-gray-400">{podcastRu.detail.notFound}</p>
             </div>
         );
     }

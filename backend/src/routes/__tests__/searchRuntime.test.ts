@@ -37,12 +37,28 @@ jest.mock("../../utils/redis", () => ({
 
 jest.mock("../../services/lastfm", () => ({
     lastFmService: {
+        isConfigured: jest.fn(),
         getArtistCorrection: jest.fn(),
         searchArtists: jest.fn(),
         searchTracks: jest.fn(),
         getSimilarArtists: jest.fn(),
         enrichSimilarArtists: jest.fn(),
     },
+}));
+
+jest.mock("../../services/youtubeMusic", () => ({
+    ytMusicService: {
+        searchCanonical: jest.fn(),
+        searchCatalog: jest.fn(),
+    },
+}));
+
+jest.mock("../../services/ytMusicDiscoveryCatalog", () => ({
+    searchYtMusicDiscoveryCatalog: jest.fn(),
+}));
+
+jest.mock("../../utils/systemSettings", () => ({
+    getSystemSettings: jest.fn(),
 }));
 
 jest.mock("axios", () => ({
@@ -65,7 +81,10 @@ import router from "../search";
 import { prisma } from "../../utils/db";
 import { redisClient } from "../../utils/redis";
 import { lastFmService } from "../../services/lastfm";
+import { ytMusicService } from "../../services/youtubeMusic";
+import { searchYtMusicDiscoveryCatalog } from "../../services/ytMusicDiscoveryCatalog";
 import { searchService } from "../../services/search";
+import { getSystemSettings } from "../../utils/systemSettings";
 
 const mockArtistFindMany = prisma.artist.findMany as jest.Mock;
 const mockArtistFindFirst = prisma.artist.findFirst as jest.Mock;
@@ -74,8 +93,13 @@ const mockGenreFindMany = prisma.genre.findMany as jest.Mock;
 const mockRedisGet = redisClient.get as jest.Mock;
 const mockRedisSetEx = redisClient.setEx as jest.Mock;
 const mockGetArtistCorrection = lastFmService.getArtistCorrection as jest.Mock;
+const mockIsLastFmConfigured = lastFmService.isConfigured as jest.Mock;
 const mockSearchArtists = lastFmService.searchArtists as jest.Mock;
 const mockSearchTracks = lastFmService.searchTracks as jest.Mock;
+const mockYtMusicSearch = ytMusicService.searchCanonical as jest.Mock;
+const mockYtMusicCatalogSearch = ytMusicService.searchCatalog as jest.Mock;
+const mockYtMusicDiscoverySearch = searchYtMusicDiscoveryCatalog as jest.Mock;
+const mockGetSystemSettings = getSystemSettings as jest.Mock;
 const mockGetSimilarArtists = lastFmService.getSimilarArtists as jest.Mock;
 const mockEnrichSimilarArtists =
     lastFmService.enrichSimilarArtists as jest.Mock;
@@ -124,8 +148,56 @@ describe("search route runtime behavior", () => {
         mockSimilarArtistFindMany.mockResolvedValue([]);
         mockGenreFindMany.mockResolvedValue([]);
         mockGetArtistCorrection.mockResolvedValue(null);
+        mockIsLastFmConfigured.mockResolvedValue(true);
         mockSearchArtists.mockResolvedValue([]);
         mockSearchTracks.mockResolvedValue([]);
+        mockYtMusicSearch.mockResolvedValue({
+            query: "",
+            filter: "songs",
+            total: 0,
+            results: [],
+        });
+        mockYtMusicCatalogSearch.mockImplementation(
+            async (
+                _userId: string,
+                query: string,
+                filter: "albums" | "artists",
+            ) => ({ query, filter, total: 0, results: [] }),
+        );
+        mockYtMusicDiscoverySearch.mockImplementation(
+            async (
+                _transport: unknown,
+                userId: string,
+                query: string,
+                limit: number,
+                options: { timeoutMs: number; maxRetries: number },
+            ) => {
+                const [tracks, albums, artists] = await Promise.all([
+                    mockYtMusicSearch(userId, query, "songs", limit, options),
+                    mockYtMusicCatalogSearch(
+                        userId,
+                        query,
+                        "albums",
+                        limit,
+                        options,
+                    ),
+                    mockYtMusicCatalogSearch(
+                        userId,
+                        query,
+                        "artists",
+                        limit,
+                        options,
+                    ),
+                ]);
+                return {
+                    tracks: tracks.results,
+                    albums: albums.results,
+                    artists: artists.results,
+                    failedFilters: [],
+                };
+            },
+        );
+        mockGetSystemSettings.mockResolvedValue({ ytMusicEnabled: true });
         mockGetSimilarArtists.mockResolvedValue([]);
         mockEnrichSimilarArtists.mockResolvedValue([]);
         mockSearchAll.mockResolvedValue({
@@ -172,6 +244,7 @@ describe("search route runtime behavior", () => {
             albums: [
                 {
                     id: "album-1",
+                    rgMbid: "release-group-kid-a",
                     title: "Kid A",
                     artistId: "artist-1",
                     artistName: "Radiohead",
@@ -226,6 +299,7 @@ describe("search route runtime behavior", () => {
                 albums: [
                     expect.objectContaining({
                         id: "album-1",
+                        rgMbid: "release-group-kid-a",
                         title: "Kid A",
                         artist: expect.objectContaining({
                             id: "artist-1",
@@ -479,6 +553,7 @@ describe("search route runtime behavior", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual(cached);
         expect(mockSearchArtists).not.toHaveBeenCalled();
+        expect(mockYtMusicSearch).not.toHaveBeenCalled();
         expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 
@@ -524,7 +599,14 @@ describe("search route runtime behavior", () => {
         await discoverHandler(req, res);
 
         expect(mockSearchArtists).toHaveBeenCalledWith("Radiohead", 50);
-        expect(mockSearchTracks).toHaveBeenCalledWith("Radiohead", 50);
+        expect(mockSearchTracks).toHaveBeenCalledWith("Radiohead", 60);
+        expect(mockYtMusicSearch).toHaveBeenCalledWith(
+            "__public__",
+            "Radiohead",
+            "songs",
+            60,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
         expect(mockAxiosGet).toHaveBeenCalledWith(
             "https://itunes.apple.com/search",
             expect.objectContaining({
@@ -532,7 +614,7 @@ describe("search route runtime behavior", () => {
                     term: "rh",
                     media: "podcast",
                     entity: "podcast",
-                    limit: 50,
+                    limit: 60,
                 },
                 timeout: 5000,
             }),
@@ -556,10 +638,736 @@ describe("search route runtime behavior", () => {
             ]),
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
-            "search:discover:all:rh:50",
+            "search:discover:v8:yt1:lf1:all:rh:60",
             900,
             expect.any(String),
         );
+    });
+
+    it("merges exact YouTube Music identities into Last.fm tracks and deduplicates provider results", async () => {
+        mockSearchTracks.mockResolvedValueOnce([
+            {
+                type: "track",
+                id: "lastfm-paranoid-android",
+                name: "Paranoid-Android",
+                artist: "Rádïóhead",
+                album: "OK Computer",
+                listeners: 123,
+                image: null,
+            },
+            {
+                type: "track",
+                id: "lastfm-paranoid-duplicate",
+                name: "Paranoid Android",
+                artist: "Radiohead",
+                album: "OK Computer",
+                image: null,
+            },
+        ]);
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "radiohead",
+            filter: "songs",
+            total: 4,
+            results: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "video-paranoid",
+                    title: "  paranoid android  ",
+                    artistName: "RADIOHEAD",
+                    albumTitle: "OK Computer",
+                    durationSec: 387,
+                    thumbnailUrl: "paranoid.jpg",
+                    raw: {},
+                },
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "video-paranoid-live",
+                    title: "Paranoid Android",
+                    artistName: "Radiohead",
+                    albumTitle: "I Might Be Wrong: Live Recordings",
+                    durationSec: 401,
+                    thumbnailUrl: "paranoid-live.jpg",
+                    raw: {},
+                },
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "video-karma",
+                    title: "Karma Police",
+                    artistName: "Radiohead",
+                    albumTitle: "OK Computer",
+                    durationSec: 264,
+                    thumbnailUrl: "karma.jpg",
+                    raw: {},
+                },
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "video-karma",
+                    title: "Karma Police (duplicate provider row)",
+                    artistName: "Radiohead",
+                    albumTitle: null,
+                    durationSec: 264,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+            ],
+        });
+
+        const req = {
+            query: { q: "radiohead", type: "music", limit: "20" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual([
+            {
+                type: "track",
+                id: "lastfm-paranoid-android",
+                name: "Paranoid-Android",
+                artist: "Rádïóhead",
+                album: "OK Computer",
+                listeners: 123,
+                image: "paranoid.jpg",
+                providerTrackId: "video-paranoid",
+                streamSource: "youtube",
+                youtubeVideoId: "video-paranoid",
+                duration: 387,
+            },
+            {
+                type: "track",
+                id: "video-paranoid-live",
+                name: "Paranoid Android",
+                artist: "Radiohead",
+                album: "I Might Be Wrong: Live Recordings",
+                image: "paranoid-live.jpg",
+                providerTrackId: "video-paranoid-live",
+                streamSource: "youtube",
+                youtubeVideoId: "video-paranoid-live",
+                duration: 401,
+            },
+            {
+                type: "track",
+                id: "video-karma",
+                name: "Karma Police",
+                artist: "Radiohead",
+                album: "OK Computer",
+                image: "karma.jpg",
+                providerTrackId: "video-karma",
+                streamSource: "youtube",
+                youtubeVideoId: "video-karma",
+                duration: 264,
+            },
+        ]);
+    });
+
+    it("returns directly playable YouTube Music tracks when Last.fm has no catalog results", async () => {
+        mockSearchTracks.mockResolvedValueOnce([]);
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "rare song",
+            filter: "songs",
+            total: 1,
+            results: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "rare-video-id",
+                    title: "Rare Song",
+                    artistName: "Rare Artist",
+                    albumTitle: null,
+                    durationSec: null,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+            ],
+        });
+
+        const req = {
+            query: { q: "rare song", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual([
+            expect.objectContaining({
+                type: "track",
+                id: "rare-video-id",
+                providerTrackId: "rare-video-id",
+                youtubeVideoId: "rare-video-id",
+                streamSource: "youtube",
+            }),
+        ]);
+    });
+
+    it("skips unconfigured Last.fm and caches the complete YouTube Music catalog result", async () => {
+        mockIsLastFmConfigured.mockResolvedValueOnce(false);
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "linkin park",
+            filter: "songs",
+            total: 1,
+            results: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "numb-video",
+                    title: "Numb",
+                    artistName: "Linkin Park",
+                    albumTitle: "Meteora",
+                    durationSec: 185,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+            ],
+        });
+        const res = createRes();
+
+        await discoverHandler(
+            {
+                query: { q: "linkin park", type: "music", limit: "20" },
+            } as any,
+            res,
+        );
+
+        expect(mockGetArtistCorrection).not.toHaveBeenCalled();
+        expect(mockSearchArtists).not.toHaveBeenCalled();
+        expect(mockSearchTracks).not.toHaveBeenCalled();
+        expect(res.body.results).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    youtubeVideoId: "numb-video",
+                    name: "Numb",
+                }),
+            ]),
+        );
+        expect(mockRedisSetEx).toHaveBeenCalledWith(
+            "search:discover:v8:yt1:lf0:music:linkin park:20",
+            900,
+            expect.any(String),
+        );
+    });
+
+    it("returns generic YouTube Music tracks, albums, and artists without duplicate artist rows", async () => {
+        mockSearchArtists.mockResolvedValueOnce([
+            {
+                type: "music",
+                id: "lastfm-massive-attack",
+                mbid: "mbid-massive-attack",
+                name: "Massive Attack",
+                image: null,
+            },
+        ]);
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "massive attack",
+            filter: "songs",
+            total: 1,
+            results: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "teardrop-video",
+                    title: "Teardrop",
+                    artistName: "Massive Attack",
+                    albumTitle: "Mezzanine",
+                    durationSec: 331,
+                    thumbnailUrl: "https://img/teardrop.jpg",
+                    raw: {},
+                },
+            ],
+        });
+        mockYtMusicCatalogSearch.mockImplementation(
+            async (
+                _userId: string,
+                query: string,
+                filter: "albums" | "artists",
+            ) => {
+                if (filter === "albums") {
+                    return {
+                        query,
+                        filter,
+                        total: 2,
+                        results: [
+                            {
+                                mediaType: "album",
+                                provider: "ytmusic",
+                                browseId: "MPREb_mezzanine",
+                                title: "Mezzanine",
+                                artistName: "Massive Attack",
+                                year: "1998",
+                                thumbnailUrl: "https://img/mezzanine.jpg",
+                                raw: {},
+                            },
+                            {
+                                mediaType: "album",
+                                provider: "ytmusic",
+                                browseId: "MPREb_mezzanine",
+                                title: "Mezzanine duplicate",
+                                artistName: "Massive Attack",
+                                year: "1998",
+                                thumbnailUrl: null,
+                                raw: {},
+                            },
+                        ],
+                    };
+                }
+                return {
+                    query,
+                    filter,
+                    total: 2,
+                    results: [
+                        {
+                            mediaType: "artist",
+                            provider: "ytmusic",
+                            channelId: "UCmassiveattack",
+                            name: "Massive Attack",
+                            thumbnailUrl: "https://img/massive-attack.jpg",
+                            raw: {},
+                        },
+                        {
+                            mediaType: "artist",
+                            provider: "ytmusic",
+                            channelId: "UCmassiveattackremix",
+                            name: "Massive Attack Remix",
+                            thumbnailUrl: null,
+                            raw: {},
+                        },
+                    ],
+                };
+            },
+        );
+
+        const req = {
+            query: { q: "massive attack", type: "music", limit: "20" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(mockYtMusicSearch).toHaveBeenCalledWith(
+            "__public__",
+            "massive attack",
+            "songs",
+            20,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(mockYtMusicCatalogSearch).toHaveBeenCalledWith(
+            "__public__",
+            "massive attack",
+            "albums",
+            20,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(mockYtMusicCatalogSearch).toHaveBeenCalledWith(
+            "__public__",
+            "massive attack",
+            "artists",
+            20,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(res.body.results).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: "track",
+                    name: "Teardrop",
+                    youtubeVideoId: "teardrop-video",
+                }),
+                {
+                    type: "album",
+                    id: "MPREb_mezzanine",
+                    browseId: "MPREb_mezzanine",
+                    name: "Mezzanine",
+                    artist: "Massive Attack",
+                    image: "https://img/mezzanine.jpg",
+                    year: "1998",
+                    provider: "ytmusic",
+                },
+                {
+                    type: "music",
+                    id: "lastfm-massive-attack",
+                    mbid: "mbid-massive-attack",
+                    name: "Massive Attack",
+                    image: "https://img/massive-attack.jpg",
+                    provider: "ytmusic",
+                    youtubeChannelId: "UCmassiveattack",
+                },
+                {
+                    type: "music",
+                    id: "UCmassiveattackremix",
+                    name: "Massive Attack Remix",
+                    image: null,
+                    provider: "ytmusic",
+                    youtubeChannelId: "UCmassiveattackremix",
+                },
+            ]),
+        );
+        expect(
+            res.body.results.filter(
+                (result: { type: string; name: string }) =>
+                    result.type === "music" && result.name === "Massive Attack",
+            ),
+        ).toHaveLength(1);
+        expect(
+            res.body.results.filter(
+                (result: { type: string }) => result.type === "album",
+            ),
+        ).toHaveLength(1);
+    });
+
+    it("merges Last.fm and YouTube Music artist spellings that differ only by diacritics", async () => {
+        mockSearchArtists.mockResolvedValueOnce([
+            {
+                type: "music",
+                id: "lastfm-bjork",
+                mbid: "mbid-bjork",
+                name: "Björk",
+                image: null,
+            },
+            {
+                type: "music",
+                id: "lastfm-bjork-duplicate",
+                name: "Bjork",
+                image: null,
+            },
+        ]);
+        mockYtMusicCatalogSearch.mockImplementation(
+            async (
+                _userId: string,
+                query: string,
+                filter: "albums" | "artists",
+            ) => ({
+                query,
+                filter,
+                total: filter === "artists" ? 1 : 0,
+                results:
+                    filter === "artists"
+                        ? [
+                              {
+                                  mediaType: "artist",
+                                  provider: "ytmusic",
+                                  channelId: "UCbjork",
+                                  name: "Bjork",
+                                  thumbnailUrl: "https://img/bjork.jpg",
+                                  raw: {},
+                              },
+                          ]
+                        : [],
+            }),
+        );
+
+        const req = {
+            query: { q: "bjork", type: "music", limit: "20" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(
+            res.body.results.filter(
+                (result: { type: string; name: string }) =>
+                    result.type === "music" &&
+                    result.name
+                        .normalize("NFD")
+                        .replace(/[\u0300-\u036f]/g, "")
+                        .toLowerCase() === "bjork",
+            ),
+        ).toEqual([
+            {
+                type: "music",
+                id: "lastfm-bjork",
+                mbid: "mbid-bjork",
+                name: "Björk",
+                image: "https://img/bjork.jpg",
+                provider: "ytmusic",
+                youtubeChannelId: "UCbjork",
+            },
+        ]);
+    });
+
+    it("retains a YouTube Music artist identity when a local artist has the same normalized name", async () => {
+        mockArtistFindMany.mockResolvedValueOnce([
+            { name: "Björk", normalizedName: "bjork" },
+        ]);
+        mockYtMusicCatalogSearch.mockImplementation(
+            async (
+                _userId: string,
+                query: string,
+                filter: "albums" | "artists",
+            ) => ({
+                query,
+                filter,
+                total: filter === "artists" ? 1 : 0,
+                results:
+                    filter === "artists"
+                        ? [
+                              {
+                                  mediaType: "artist",
+                                  provider: "ytmusic",
+                                  channelId: "UCbjork",
+                                  name: "Bjork",
+                                  thumbnailUrl: "https://img/bjork.jpg",
+                                  raw: {},
+                              },
+                          ]
+                        : [],
+            }),
+        );
+
+        const req = {
+            query: { q: "bjork", type: "music", limit: "20" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(mockArtistFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: {
+                    OR: expect.arrayContaining([
+                        { normalizedName: { in: ["bjork"] } },
+                    ]),
+                },
+            }),
+        );
+        expect(
+            res.body.results.filter(
+                (result: { type: string }) => result.type === "music",
+            ),
+        ).toEqual([
+            {
+                type: "music",
+                id: "UCbjork",
+                name: "Bjork",
+                image: "https://img/bjork.jpg",
+                provider: "ytmusic",
+                youtubeChannelId: "UCbjork",
+            },
+        ]);
+    });
+
+    it("returns ready metadata when a YouTube Music source exceeds the discovery deadline", async () => {
+        jest.useFakeTimers();
+        mockSearchTracks.mockResolvedValueOnce([
+            {
+                type: "track",
+                id: "lastfm-ready",
+                name: "Ready Track",
+                artist: "Ready Artist",
+            },
+        ]);
+        mockYtMusicSearch.mockImplementationOnce(
+            () => new Promise(() => undefined),
+        );
+
+        const req = {
+            query: { q: "ready artist", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+        const responsePromise = discoverHandler(req, res);
+
+        await jest.advanceTimersByTimeAsync(9_000);
+        await responsePromise;
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: "lastfm-ready" }),
+            ]),
+        );
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+        jest.useRealTimers();
+    });
+
+    it("ranks concise artist matches ahead of long-form video-style rows", async () => {
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "linkin park",
+            filter: "songs",
+            total: 2,
+            results: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "long-video",
+                    title: "LINKIN PARK: Full Album",
+                    artistName: "Uploader Channel",
+                    albumTitle: null,
+                    durationSec: 4_200,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "numb-video",
+                    title: "Numb",
+                    artistName: "Linkin Park",
+                    albumTitle: "Meteora",
+                    durationSec: 185,
+                    thumbnailUrl: null,
+                    raw: {},
+                },
+            ],
+        });
+
+        const req = {
+            query: { q: "linkin park", type: "music", limit: "50" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(mockYtMusicSearch).toHaveBeenCalledWith(
+            "__public__",
+            "linkin park",
+            "songs",
+            50,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(
+            res.body.results
+                .filter((result: { type: string }) => result.type === "track")
+                .map((result: { name: string }) => result.name),
+        ).toEqual(["Numb", "LINKIN PARK: Full Album"]);
+    });
+
+    it("requests a provider continuation prefix beyond fifty and advertises only a proven next step", async () => {
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "linkin park",
+            filter: "songs",
+            total: 100,
+            results: Array.from({ length: 100 }, (_, index) => ({
+                source: "youtube",
+                provider: "ytmusic",
+                providerTrackId: `video-${index}`,
+                title: `Track ${index}`,
+                artistName: "Linkin Park",
+                albumTitle: null,
+                durationSec: 180,
+                thumbnailUrl: null,
+                raw: {},
+            })),
+        });
+
+        const res = createRes();
+        await discoverHandler(
+            {
+                query: { q: "linkin park", type: "music", limit: "100" },
+            } as any,
+            res,
+        );
+
+        expect(mockYtMusicSearch).toHaveBeenCalledWith(
+            "__public__",
+            "linkin park",
+            "songs",
+            100,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(
+            res.body.results.filter(
+                (result: { type: string }) => result.type === "track",
+            ),
+        ).toHaveLength(100);
+        expect(res.body.pageInfo).toEqual({
+            requestedLimit: 100,
+            canRequestMoreTracks: true,
+        });
+    });
+
+    it("does not query YouTube Music when the integration is disabled", async () => {
+        mockGetSystemSettings.mockResolvedValueOnce({
+            ytMusicEnabled: false,
+        });
+        mockIsLastFmConfigured.mockResolvedValueOnce(false);
+        mockRedisGet.mockImplementationOnce(async (key: string) =>
+            key.includes(":yt1:lf1:")
+                ? JSON.stringify({
+                      results: [
+                          {
+                              type: "track",
+                              id: "stale-video",
+                              name: "Stale enabled result",
+                              streamSource: "youtube",
+                              youtubeVideoId: "stale-video",
+                          },
+                      ],
+                      aliasInfo: null,
+                  })
+                : null,
+        );
+
+        const req = {
+            query: { q: "radiohead", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(mockYtMusicSearch).not.toHaveBeenCalled();
+        expect(mockRedisGet).toHaveBeenCalledWith(
+            "search:discover:v8:yt0:lf0:music:radiohead:5",
+        );
+        expect(res.body.results).toEqual([]);
+    });
+
+    it("preserves Last.fm results when the YouTube Music settings check fails", async () => {
+        mockGetSystemSettings.mockRejectedValueOnce(
+            new Error("settings unavailable"),
+        );
+        mockSearchTracks.mockResolvedValueOnce([
+            {
+                type: "track",
+                id: "lastfm-only",
+                name: "Last.fm Result",
+                artist: "Metadata Artist",
+            },
+        ]);
+
+        const req = {
+            query: { q: "metadata", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(mockYtMusicSearch).not.toHaveBeenCalled();
+        expect(res.body.results).toEqual([
+            expect.objectContaining({ id: "lastfm-only" }),
+        ]);
+    });
+
+    it("preserves Last.fm results when the public YouTube Music search fails", async () => {
+        mockSearchTracks.mockResolvedValueOnce([
+            {
+                type: "track",
+                id: "lastfm-fallback",
+                name: "Metadata Fallback",
+                artist: "Metadata Artist",
+            },
+        ]);
+        mockYtMusicSearch.mockRejectedValueOnce(
+            new Error("sidecar unavailable"),
+        );
+
+        const req = {
+            query: { q: "metadata", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+
+        await discoverHandler(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual([
+            expect.objectContaining({ id: "lastfm-fallback" }),
+        ]);
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 
     it("handles discover partial failures and redis write errors", async () => {
@@ -587,6 +1395,7 @@ describe("search route runtime behavior", () => {
             results: [{ type: "track", id: "track-2", name: "Song B" }],
             aliasInfo: null,
         });
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
     });
 
     it("skips library lookup when discovered artists have no usable names", async () => {

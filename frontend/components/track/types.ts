@@ -11,6 +11,11 @@ export interface TrackRowItem {
     displayTitle?: string | null;
     artistName: string;
     duration: number;
+    /** Provider identity used to resolve a device download without an overflow menu. */
+    streamSource?: "local" | "tidal" | "youtube";
+    tidalTrackId?: number;
+    youtubeVideoId?: string;
+    youtubeAudioFormat?: "mp4" | "webm";
     /** Fully-resolved cover art URL. Null = placeholder. */
     coverArtUrl: string | null;
     /** False retains the row while disabling playback (for example, an offline peer). */

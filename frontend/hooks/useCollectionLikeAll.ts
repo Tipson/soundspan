@@ -6,6 +6,12 @@ import { buildOptimisticTrackPreferenceResponse } from "@/hooks/trackPreferenceO
 import { toast } from "sonner";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { queryKeys } from "@/lib/queryKeys";
+import { publishDeviceOfflineLikedChangeForSignal } from "@/features/device-offline/likedAutomation";
+import {
+    formatCollectionLikedRu,
+    formatCollectionPreferencesClearedRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
 
 export interface LikeableTrack {
     id: string;
@@ -120,23 +126,18 @@ export function useCollectionLikeAll(tracks: LikeableTrack[]) {
             queryClient.invalidateQueries({
                 queryKey: queryKeys.likedPlaylistAll(),
             });
+            publishDeviceOfflineLikedChangeForSignal(nextSignal);
 
             if (nextSignal === "thumbs_up") {
-                toast.success(
-                    trackIds.length === 1
-                        ? "Liked 1 track"
-                        : `Liked ${trackIds.length} tracks`,
-                );
+                toast.success(formatCollectionLikedRu(trackIds.length));
             } else {
                 toast.success(
-                    trackIds.length === 1
-                        ? "Cleared preference for 1 track"
-                        : `Cleared preferences for ${trackIds.length} tracks`,
+                    formatCollectionPreferencesClearedRu(trackIds.length),
                 );
             }
         } catch (error) {
             sharedFrontendLogger.error("Failed to toggle like all:", error);
-            toast.error("Failed to update track preferences");
+            toast.error(libraryOperationsRu.requests.actionFailed);
             // Rollback: restore previous cache values then refetch
             for (const trackId of trackIds) {
                 const prev = previousValues.get(trackId);

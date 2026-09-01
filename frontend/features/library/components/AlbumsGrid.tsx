@@ -63,78 +63,83 @@ const AlbumCardItem = memo(
             [album.coverArt],
         );
 
+        const albumHref = `/album/${album.id}`;
+        const playLabel = `Воспроизвести альбом «${album.title}»`;
+        const deleteLabel = `Удалить альбом «${album.title}»`;
+
         return (
-            <Link
-                href={`/album/${album.id}`}
-                prefetch={false}
-                data-tv-card
-                data-tv-card-index={index}
-                tabIndex={0}
-                className="group"
-            >
-                <div
-                    className="p-3 rounded-md cursor-pointer hover:bg-white/5 transition-colors"
-                    style={{ transform: "translateZ(0)" }}
-                >
-                    <div className="relative aspect-square mb-3">
-                        <div
-                            className="w-full h-full bg-surface-highlight rounded-md flex items-center justify-center overflow-hidden"
-                            style={{ contain: "content" }}
-                        >
-                            {coverArtUrl ? (
-                                <CachedImage
-                                    src={coverArtUrl}
-                                    alt={album.title}
-                                    fill
-                                    className="object-cover group-hover:scale-105 transition-transform"
-                                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-                                />
-                            ) : (
-                                <Disc3 className="w-10 h-10 text-gray-400" />
-                            )}
-                        </div>
-                        {/* Play button */}
-                        {!hidePlayButtons &&
-                            (album.source !== "federated" ||
-                                album.peer?.online === true) && (
-                                <button
-                                    onClick={handlePlay}
-                                    className="absolute bottom-1 right-1 w-10 h-10 rounded-full bg-brand-hover flex items-center justify-center shadow-xl opacity-0 pointer-events-none sm:pointer-events-auto group-hover:opacity-100 transition-opacity"
-                                >
-                                    {showPlaySpinner ? (
-                                        <Loader2 className="w-4 h-4 animate-spin text-black" />
-                                    ) : (
-                                        <Play className="w-4 h-4 fill-current ml-0.5 text-black" />
-                                    )}
-                                </button>
-                            )}
-                        {/* Delete button */}
-                        {canDelete && album.source !== "federated" && (
+            <article className="group min-w-0">
+                <div className="relative mb-3 aspect-square">
+                    <Link
+                        href={albumHref}
+                        prefetch={false}
+                        data-tv-card
+                        data-tv-card-index={index}
+                        className="flex h-full w-full items-center justify-center overflow-hidden rounded-xl bg-surface-highlight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        style={{ contain: "content" }}
+                    >
+                        {coverArtUrl ? (
+                            <CachedImage
+                                src={coverArtUrl}
+                                alt={album.title}
+                                fill
+                                className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
+                                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+                            />
+                        ) : (
+                            <Disc3 className="h-10 w-10 text-content-muted" />
+                        )}
+                    </Link>
+                    {!hidePlayButtons &&
+                        (album.source !== "federated" ||
+                            album.peer?.online === true) && (
                             <button
-                                onClick={handleDelete}
-                                className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-opacity"
-                                title="Delete album"
+                                type="button"
+                                onClick={handlePlay}
+                                aria-label={playLabel}
+                                title={playLabel}
+                                className="absolute bottom-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-brand-hover text-black shadow-xl transition-[opacity,transform] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                             >
-                                <Trash2 className="w-3.5 h-3.5 text-white" />
+                                {showPlaySpinner ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Play className="ml-0.5 h-4 w-4 fill-current" />
+                                )}
                             </button>
                         )}
-                    </div>
-                    <h3 className="text-sm font-semibold text-white truncate">
+                    {canDelete && album.source !== "federated" && (
+                        <button
+                            type="button"
+                            onClick={handleDelete}
+                            aria-label={deleteLabel}
+                            title={deleteLabel}
+                            className="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/65 text-white shadow-lg transition-[opacity,background-color] hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 motion-reduce:transition-none sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                        >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                    )}
+                </div>
+                <Link
+                    href={albumHref}
+                    prefetch={false}
+                    className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                >
+                    <h3 className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-content">
                         {album.title}
                     </h3>
-                    <div className="mt-0.5 flex items-center gap-2">
-                        <p className="min-w-0 flex-1 truncate text-xs text-gray-400">
-                            {album.artist?.name}
-                        </p>
-                        {album.source === "federated" && album.peer && (
-                            <PeerBadge
-                                peerName={album.peer.name}
-                                online={album.peer.online}
-                            />
-                        )}
-                    </div>
+                </Link>
+                <div className="mt-0.5 flex items-center gap-2">
+                    <p className="min-w-0 flex-1 truncate text-xs text-content-muted">
+                        {album.artist?.name}
+                    </p>
+                    {album.source === "federated" && album.peer && (
+                        <PeerBadge
+                            peerName={album.peer.name}
+                            online={album.peer.online}
+                        />
+                    )}
                 </div>
-            </Link>
+            </article>
         );
     },
     (prevProps, nextProps) => {
@@ -162,8 +167,8 @@ const AlbumsGrid = memo(function AlbumsGrid({
         return (
             <EmptyState
                 icon={<Disc3 className="w-12 h-12" />}
-                title="No albums yet"
-                description="Your library is empty. Sync your music to get started."
+                title="Альбомов пока нет"
+                description="В коллекции пока нет альбомов. Добавьте или сохраните музыку, чтобы начать."
             />
         );
     }

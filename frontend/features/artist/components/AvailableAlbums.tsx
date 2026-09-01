@@ -7,7 +7,8 @@ import { PlayableCard } from "@/components/ui/PlayableCard";
 import { Disc3 } from "lucide-react";
 import { api } from "@/lib/api";
 import { PeerBadge } from "@/components/ui/PeerBadge";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { isSingleOrEpRelease } from "../artistView";
+import { ru } from "@/lib/i18n/ru";
 
 /** Request-flow controls threaded into the album grids for non-admins. */
 export interface AlbumRequestControls {
@@ -213,7 +214,7 @@ function AlbumGrid({
     requestControls,
 }: Omit<AvailableAlbumsProps, "artistName">) {
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {albums.map((album, index) => (
                 <LazyAlbumCard
                     key={album.id}
@@ -251,19 +252,17 @@ export function AvailableAlbums({
     }
 
     // Separate studio albums from EPs/Singles/Demos
-    const studioAlbums = albums.filter(
-        (album) => album.type?.toLowerCase() === "album",
-    );
-    const epsAndSingles = albums.filter(
-        (album) => album.type?.toLowerCase() !== "album",
-    );
+    const studioAlbums = albums.filter((album) => !isSingleOrEpRelease(album));
+    const epsAndSingles = albums.filter(isSingleOrEpRelease);
 
     return (
         <>
             {/* Studio Albums Section */}
             {studioAlbums.length > 0 && (
                 <section>
-                    <SectionHeader title="Albums Available" size="sm" />
+                    <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                        {ru.catalog.availableAlbums}
+                    </h2>
                     <div data-tv-section="available-albums">
                         <AlbumGrid
                             albums={studioAlbums}
@@ -282,7 +281,9 @@ export function AvailableAlbums({
             {/* EPs, Singles & Demos Section */}
             {epsAndSingles.length > 0 && (
                 <section>
-                    <SectionHeader title="Singles and EPs" size="sm" />
+                    <h2 className="mb-5 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                        {ru.catalog.singles}
+                    </h2>
                     <div data-tv-section="available-eps-singles">
                         <AlbumGrid
                             albums={epsAndSingles}

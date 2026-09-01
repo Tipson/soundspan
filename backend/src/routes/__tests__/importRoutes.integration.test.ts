@@ -39,9 +39,11 @@ jest.mock("../../services/playlistImportService", () => ({
 jest.mock("../../services/importJobStore", () => ({
     importJobStore: {
         createJob: jest.fn(),
+        claimJob: jest.fn(),
         getJob: jest.fn(),
         listJobsForUser: jest.fn(),
         findActiveJobForSource: jest.fn(),
+        requestCancellation: jest.fn(),
         updateJob: jest.fn(),
     },
 }));
@@ -68,12 +70,13 @@ describe("import routes integration", () => {
         playlistImportService.previewM3UImport as jest.Mock;
     const mockImportPlaylist =
         playlistImportService.importPlaylist as jest.Mock;
-    const mockCreateJob = importJobStore.createJob as jest.Mock;
+    const mockClaimJob = importJobStore.claimJob as jest.Mock;
     const mockGetJob = importJobStore.getJob as jest.Mock;
     const mockListJobsForUser = importJobStore.listJobsForUser as jest.Mock;
     const mockFindActiveJobForSource =
         importJobStore.findActiveJobForSource as jest.Mock;
-    const mockUpdateJob = importJobStore.updateJob as jest.Mock;
+    const mockRequestCancellation =
+        importJobStore.requestCancellation as jest.Mock;
     const mockEnqueueImportJob = genericImportJobRunner.enqueue as jest.Mock;
 
     beforeEach(() => {
@@ -134,8 +137,7 @@ describe("import routes integration", () => {
             source: "spotify",
             id: "37i9dQZF1DX4JAvHpjipBk",
         });
-        mockFindActiveJobForSource.mockResolvedValueOnce(null);
-        mockCreateJob.mockResolvedValueOnce({
+        const createdJob = {
             id: "job-new",
             userId: "user-1",
             sourceType: "spotify",
@@ -159,6 +161,10 @@ describe("import routes integration", () => {
             error: null,
             createdAt: "2026-03-14T17:00:00.000Z",
             updatedAt: "2026-03-14T17:00:00.000Z",
+        };
+        mockClaimJob.mockResolvedValueOnce({
+            created: true,
+            job: createdJob,
         });
 
         const url = "https://open.spotify.com/playlist/37i9dQZF1DX4JAvHpjipBk";
@@ -176,11 +182,7 @@ describe("import routes integration", () => {
                 status: "pending",
             }),
         });
-        expect(mockFindActiveJobForSource).toHaveBeenCalledWith(
-            "user-1",
-            "spotify:37i9dQZF1DX4JAvHpjipBk",
-        );
-        expect(mockCreateJob).toHaveBeenCalledWith({
+        expect(mockClaimJob).toHaveBeenCalledWith({
             userId: "user-1",
             sourceType: "spotify",
             sourceId: "37i9dQZF1DX4JAvHpjipBk",
@@ -211,7 +213,10 @@ describe("import routes integration", () => {
             source: "spotify",
             id: "37i9dQZF1DX4JAvHpjipBk",
         });
-        mockFindActiveJobForSource.mockResolvedValueOnce(existingJob);
+        mockClaimJob.mockResolvedValueOnce({
+            created: false,
+            job: existingJob,
+        });
 
         const res = await request(app)
             .post("/api/import/jobs")
@@ -225,8 +230,7 @@ describe("import routes integration", () => {
             deduped: true,
             job: existingJob,
         });
-        expect(mockCreateJob).not.toHaveBeenCalled();
-        expect(mockEnqueueImportJob).not.toHaveBeenCalled();
+        expect(mockEnqueueImportJob).toHaveBeenCalledWith("job-existing");
     });
 
     it("reconnects to an active generic import job by URL", async () => {
@@ -302,15 +306,13 @@ describe("import routes integration", () => {
     });
 
     it("cancels an active generic import job for the owning user", async () => {
-        mockGetJob.mockResolvedValueOnce({
-            id: "job-1",
-            userId: "user-1",
-            status: "resolving",
-        });
-        mockUpdateJob.mockResolvedValueOnce({
-            id: "job-1",
-            userId: "user-1",
-            status: "cancelling",
+        mockRequestCancellation.mockResolvedValueOnce({
+            outcome: "updated",
+            job: {
+                id: "job-1",
+                userId: "user-1",
+                status: "cancelling",
+            },
         });
 
         const res = await request(app)
@@ -321,10 +323,25 @@ describe("import routes integration", () => {
         expect(res.body).toEqual({
             job: { id: "job-1", userId: "user-1", status: "cancelling" },
         });
-        expect(mockUpdateJob).toHaveBeenCalledWith("job-1", {
-            status: "cancelling",
-            error: "Cancelled by user",
+        expect(mockRequestCancellation).toHaveBeenCalledWith("job-1", "user-1");
+    });
+
+    it("returns 409 when completion wins the cancellation race", async () => {
+        mockRequestCancellation.mockResolvedValueOnce({
+            outcome: "conflict",
+            job: {
+                id: "job-1",
+                userId: "user-1",
+                status: "completed",
+            },
         });
+
+        const res = await request(app)
+            .post("/api/import/jobs/job-1/cancel")
+            .set(AUTH_HEADER, AUTH_VALUE);
+
+        expect(res.status).toBe(409);
+        expect(res.body).toEqual({ error: "Import job already completed" });
     });
 
     it("rejects execute when previewData is missing", async () => {

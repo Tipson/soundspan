@@ -18,6 +18,7 @@
 
 import { useCallback, useReducer } from "react";
 import { toast } from "sonner";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import type { Track } from "@/lib/audio-state-context";
 import type { MapTrack } from "./types";
 import { mapTrackToTrack } from "./journeyTracks";
@@ -114,7 +115,7 @@ function routeDotClick(
     }
     if (mods.ctrlOrMeta) {
         if (context.state.mode === "journey") {
-            toast("Close the journey (Esc) to start blending");
+            toast(vibeMapRu.save.closeJourneyFirst);
         } else {
             context.addIngredient(id);
         }

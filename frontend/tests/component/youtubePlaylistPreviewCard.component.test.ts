@@ -55,12 +55,12 @@ function render(
     );
 }
 
-test("renders title, track count, entries, and a Download all button", () => {
+test("renders title, Russian track count, entries, and a download-all button", () => {
     const html = render({});
     assert.match(html, /Late Night Mix/);
     assert.match(html, /Book Club Radio/);
-    assert.match(html, /3 tracks/);
-    assert.match(html, /Download all \(3\)/);
+    assert.match(html, /3 трека/);
+    assert.match(html, /Скачать всё \(3\)/);
     assert.match(html, /Track One/);
     assert.match(html, /Track Three/);
 });
@@ -75,20 +75,20 @@ test("collapses entries beyond the preview window into +N more", () => {
     const html = render({
         playlistInfo: { ...PLAYLIST, count: 8, totalCount: 8, entries },
     });
-    assert.match(html, /\+3 more/);
+    assert.match(html, /\+3 трека/);
 });
 
 test("shows a truncation note when the source has more than returned", () => {
     const html = render({
         playlistInfo: { ...PLAYLIST, truncated: true, totalCount: 500 },
     });
-    assert.match(html, /Showing first 3 of 500 tracks/);
+    assert.match(html, /Показаны первые 3 из 500 треков/);
 });
 
 test("renders the loading skeleton", () => {
     const html = render({ isLoading: true, playlistInfo: null });
     assert.match(html, /animate-pulse/);
-    assert.doesNotMatch(html, /Download all/);
+    assert.doesNotMatch(html, /Скачать всё/);
 });
 
 test("renders the error message", () => {
@@ -105,7 +105,7 @@ test("hides the download affordances for non-admin users but keeps the preview",
     assert.match(html, /Late Night Mix/);
     assert.match(html, /Track One/);
     // Downloads are admin-only.
-    assert.doesNotMatch(html, /Download all/);
+    assert.doesNotMatch(html, /Скачать всё/);
 });
 
 test("hides progress and Cancel for non-admin users even while downloading", () => {
@@ -122,7 +122,7 @@ test("hides progress and Cancel for non-admin users even while downloading", () 
             done: false,
         },
     });
-    assert.doesNotMatch(html, /Cancel/);
+    assert.doesNotMatch(html, /Отменить/);
     assert.doesNotMatch(html, /width:33%/);
 });
 
@@ -140,6 +140,6 @@ test("while downloading, shows aggregate progress and a Cancel control", () => {
         },
     });
     assert.match(html, /1\/3/);
-    assert.match(html, /Cancel/);
+    assert.match(html, /Отменить/);
     assert.match(html, /width:33%/);
 });

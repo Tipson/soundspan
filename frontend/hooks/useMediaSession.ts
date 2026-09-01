@@ -7,6 +7,8 @@ import { usePlaybackProgress } from "@/lib/audio-playback-context";
 import { useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { ru } from "@/lib/i18n/ru";
+import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 
 /**
  * Media Session API integration for OS-level media controls
@@ -27,6 +29,9 @@ export function useMediaSession() {
     const { currentTime } = usePlaybackProgress();
     const { pause, resume, next, previous, seek, skipForward, skipBackward } =
         useAudioControls();
+    const hasActiveMedia = Boolean(
+        currentTrack || currentAudiobook || currentPodcast,
+    );
 
     // Track if this device has initiated playback locally
     // Prevents cross-device media session interference from state sync
@@ -41,10 +46,10 @@ export function useMediaSession() {
 
     // Reset flag when all media is cleared
     useEffect(() => {
-        if (!currentTrack && !currentAudiobook && !currentPodcast) {
+        if (!hasActiveMedia) {
             hasPlayedLocallyRef.current = false;
         }
-    }, [currentTrack, currentAudiobook, currentPodcast]);
+    }, [hasActiveMedia]);
 
     // Convert relative URLs to absolute (required for iOS)
     const getAbsoluteUrl = useCallback((url: string): string => {
@@ -70,8 +75,9 @@ export function useMediaSession() {
 
         // Only set metadata if this device has initiated playback
         // Prevents cross-device interference from state sync
-        if (!hasPlayedLocallyRef.current) {
+        if (!hasActiveMedia || !hasPlayedLocallyRef.current) {
             navigator.mediaSession.metadata = null;
+            navigator.mediaSession.playbackState = "none";
             return;
         }
 
@@ -85,8 +91,8 @@ export function useMediaSession() {
 
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: currentTrack.title,
-                artist: currentTrack.artist?.name || "Unknown Artist",
-                album: currentTrack.album?.title || "Unknown Album",
+                artist: currentTrack.artist?.name || ru.common.unknownArtist,
+                album: currentTrack.album?.title || ru.common.unknownAlbum,
                 artwork: coverUrl
                     ? [
                           { src: coverUrl, sizes: "96x96", type: "image/jpeg" },
@@ -129,8 +135,8 @@ export function useMediaSession() {
                 title: currentAudiobook.title,
                 artist: currentAudiobook.author,
                 album: currentAudiobook.narrator
-                    ? `Narrated by ${currentAudiobook.narrator}`
-                    : "Audiobook",
+                    ? `Читает: ${currentAudiobook.narrator}`
+                    : "Аудиокнига",
                 artwork: coverUrl
                     ? [
                           { src: coverUrl, sizes: "96x96", type: "image/jpeg" },
@@ -172,7 +178,7 @@ export function useMediaSession() {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: currentPodcast.title,
                 artist: currentPodcast.podcastTitle,
-                album: "Podcast",
+                album: "Подкаст",
                 artwork: coverUrl
                     ? [
                           { src: coverUrl, sizes: "96x96", type: "image/jpeg" },
@@ -217,6 +223,7 @@ export function useMediaSession() {
         currentPodcast,
         playbackType,
         isPlaying,
+        hasActiveMedia,
         getAbsoluteUrl,
     ]);
 
@@ -225,16 +232,24 @@ export function useMediaSession() {
 
         // Only register handlers if this device has initiated playback
         // Prevents cross-device interference from state sync
-        if (!hasPlayedLocallyRef.current) {
+        if (!hasActiveMedia || !hasPlayedLocallyRef.current) {
             return;
         }
 
         // Register action handlers
         navigator.mediaSession.setActionHandler("play", () => {
+            // iOS may throttle React effects while the PWA is backgrounded.
+            // Drive the native element inside the lock-screen gesture before
+            // synchronizing declarative playback state, otherwise WebKit can
+            // advance the Media Session clock without audible output.
+            audioEngine.play();
             resume();
         });
 
         navigator.mediaSession.setActionHandler("pause", () => {
+            // Keep pause equally immediate so the same background session
+            // cannot leave a short sample playing while React is suspended.
+            audioEngine.pause();
             pause();
         });
 
@@ -311,11 +326,9 @@ export function useMediaSession() {
         seek,
         skipForward,
         skipBackward,
-        currentTime,
+        isPlaying,
         playbackType,
-        currentTrack,
-        currentAudiobook,
-        currentPodcast,
+        hasActiveMedia,
     ]);
 
     // Update position state for scrubbing on lock screen
@@ -328,20 +341,42 @@ export function useMediaSession() {
             currentAudiobook?.duration ||
             currentPodcast?.duration;
 
-        if (duration && currentTime !== undefined) {
+        if (
+            !hasActiveMedia ||
+            !hasPlayedLocallyRef.current ||
+            !duration ||
+            currentTime === undefined
+        ) {
             try {
-                navigator.mediaSession.setPositionState({
-                    duration,
-                    playbackRate: 1,
-                    position: Math.min(currentTime, duration),
-                });
+                navigator.mediaSession.setPositionState();
             } catch (error) {
-                // Some browsers may not support position state
                 sharedFrontendLogger.warn(
-                    "[MediaSession] Failed to set position state:",
+                    "[MediaSession] Failed to clear position state:",
                     error,
                 );
             }
+            return;
         }
-    }, [currentTime, currentTrack, currentAudiobook, currentPodcast]);
+
+        try {
+            navigator.mediaSession.setPositionState({
+                duration,
+                playbackRate: 1,
+                position: Math.min(currentTime, duration),
+            });
+        } catch (error) {
+            // Some browsers may not support position state
+            sharedFrontendLogger.warn(
+                "[MediaSession] Failed to set position state:",
+                error,
+            );
+        }
+    }, [
+        currentTime,
+        currentTrack,
+        currentAudiobook,
+        currentPodcast,
+        isPlaying,
+        hasActiveMedia,
+    ]);
 }

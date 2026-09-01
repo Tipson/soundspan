@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { usePlaylistsQuery } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,28 +17,29 @@ import {
     Heart,
     Download,
     ListMusic,
+    Plus,
 } from "lucide-react";
 import { usePeerPlaylists } from "@/features/social/hooks/usePeerPlaylists";
 import type { PeerPlaylistSummary } from "@/lib/api/peerPlaylists";
 import { useFeatures } from "@/lib/features-context";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import { peerPlaylistHref } from "@/lib/unifiedPlaylists";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { api } from "@/lib/api";
 import { cn } from "@/utils/cn";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CoverMosaic } from "@/components/ui/CoverMosaic";
-import { FilterPills } from "@/components/ui/FilterPills";
 import {
     createMosaicCandidates,
     selectMosaicCovers,
 } from "@/utils/mosaicCoverSelection";
 import { useLikedPlaylistQuery } from "@/hooks/useQueries";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-
-// soundspan brand blue for play buttons
-const BRAND_PLAY = "#60a5fa";
+import { pluralRu, ru } from "@/lib/i18n/ru";
+import { CreatePlaylistDialog } from "@/features/playlist/components/CreatePlaylistDialog";
+import { shouldOpenCreatePlaylist } from "@/features/playlist/createPlaylistRoute";
 
 interface PlaylistItem {
     id: string;
@@ -96,7 +97,7 @@ function PlaylistMosaic({
                         greyed && "opacity-50",
                     )}
                 >
-                    <Music className="w-10 h-10 text-gray-400" />
+                    <Music className="h-10 w-10 text-content-muted" />
                 </div>
             }
         />
@@ -133,10 +134,13 @@ function PlaylistCard({
     };
 
     return (
-        <Link href={`/playlist/${playlist.id}`}>
+        <Link
+            href={`/playlist/${playlist.id}`}
+            className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+        >
             <div
                 className={cn(
-                    "group cursor-pointer p-3 rounded-md transition-colors hover:bg-white/5",
+                    "group cursor-pointer rounded-xl p-1.5 transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 motion-reduce:transform-none motion-reduce:transition-none sm:p-2",
                     isHiddenView && "opacity-60 hover:opacity-100",
                 )}
                 data-tv-card
@@ -144,7 +148,7 @@ function PlaylistCard({
                 tabIndex={0}
             >
                 {/* Cover Image */}
-                <div className="relative aspect-square mb-3 rounded-md overflow-hidden bg-surface-highlight shadow-lg">
+                <div className="relative mb-3 aspect-square overflow-hidden rounded-xl bg-surface-highlight shadow-lg shadow-black/20">
                     <PlaylistMosaic
                         items={playlist.items}
                         greyed={isHiddenView}
@@ -156,18 +160,23 @@ function PlaylistCard({
                             onClick={handleToggleHide}
                             disabled={isHiding}
                             className={cn(
-                                "absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center",
-                                "bg-black/60  transition-all duration-200",
-                                "opacity-0 group-hover:opacity-100",
+                                "absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full",
+                                "bg-surface-overlay/90 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
+                                "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100",
                                 playlist.isHidden
-                                    ? "text-green-400"
-                                    : "text-gray-400",
+                                    ? "text-success"
+                                    : "text-content-muted",
                                 isHiding && "opacity-50 cursor-not-allowed",
                             )}
                             title={
                                 playlist.isHidden
-                                    ? "Show playlist"
-                                    : "Hide playlist"
+                                    ? "Показывать плейлист"
+                                    : "Скрыть плейлист"
+                            }
+                            aria-label={
+                                playlist.isHidden
+                                    ? "Показывать плейлист"
+                                    : "Скрыть плейлист"
                             }
                         >
                             {playlist.isHidden ? (
@@ -180,25 +189,26 @@ function PlaylistCard({
 
                     {/* Play button overlay */}
                     <button
+                        data-playlist-play-overlay
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             triggerPlayFeedback();
                             onPlay(playlist.id);
                         }}
-                        style={{ backgroundColor: BRAND_PLAY }}
                         className={cn(
-                            "absolute bottom-2 right-2 w-10 h-10 rounded-full flex items-center justify-center",
-                            "shadow-lg shadow-black/40 transition-all duration-200",
-                            "hover:scale-105 hover:brightness-110",
-                            "opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0",
+                            "absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-brand/80 text-surface backdrop-blur-md",
+                            "shadow-lg shadow-black/40 transition-[opacity,transform,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none",
+                            "hover:scale-105 hover:bg-brand/90",
+                            "opacity-100 sm:translate-y-2 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100 sm:focus-visible:translate-y-0 sm:focus-visible:opacity-100",
                         )}
-                        title="Play playlist"
+                        title="Воспроизвести плейлист"
+                        aria-label={`Воспроизвести плейлист ${playlist.name}`}
                     >
                         {showPlaySpinner ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-black" />
+                            <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
                         ) : (
-                            <Play className="w-4 h-4 fill-current ml-0.5 text-black" />
+                            <Play className="ml-0.5 h-4 w-4 fill-current" />
                         )}
                     </button>
                 </div>
@@ -207,19 +217,23 @@ function PlaylistCard({
                 <h3
                     className={cn(
                         "text-sm font-semibold truncate",
-                        isHiddenView ? "text-gray-400" : "text-white",
+                        isHiddenView ? "text-content-muted" : "text-content",
                     )}
                 >
                     {playlist.name}
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">
+                <p className="mt-0.5 truncate text-xs text-content-muted">
                     {isShared && playlist.user?.username ? (
-                        <span className="text-gray-400">
-                            By {playlist.user.username} ·{" "}
+                        <span className="text-content-muted">
+                            Автор: {playlist.user.username} ·{" "}
                         </span>
                     ) : null}
                     {playlist.trackCount || 0}{" "}
-                    {playlist.trackCount === 1 ? "song" : "songs"}
+                    {pluralRu(playlist.trackCount || 0, [
+                        "трек",
+                        "трека",
+                        "треков",
+                    ])}
                 </p>
             </div>
         </Link>
@@ -238,15 +252,18 @@ function PeerPlaylistCard({
     index: number;
 }) {
     return (
-        <Link href={peerPlaylistHref(playlist.peer.id, playlist.remoteId)}>
+        <Link
+            href={peerPlaylistHref(playlist.peer.id, playlist.remoteId)}
+            className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+        >
             <div
-                className="group cursor-pointer p-3 rounded-md transition-colors hover:bg-white/5"
+                className="group cursor-pointer rounded-xl p-1.5 transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
                 data-tv-card
                 data-tv-card-index={index}
                 tabIndex={0}
             >
-                <div className="relative aspect-square mb-3 rounded-md overflow-hidden shadow-lg bg-gradient-to-br from-surface-highlight to-surface-elevated flex items-center justify-center">
-                    <ListMusic className="w-10 h-10 text-gray-400" />
+                <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-linear-to-br from-surface-highlight to-surface-elevated shadow-lg shadow-black/20">
+                    <ListMusic className="h-10 w-10 text-content-muted" />
                     <div className="absolute top-2 left-2">
                         <PeerBadge
                             peerName={playlist.peer.name}
@@ -254,12 +271,12 @@ function PeerPlaylistCard({
                         />
                     </div>
                 </div>
-                <h3 className="text-sm font-semibold truncate text-white">
+                <h3 className="truncate text-sm font-semibold text-content">
                     {playlist.name}
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">
-                    By {playlist.owner.displayName} · {playlist.trackCount}{" "}
-                    {playlist.trackCount === 1 ? "song" : "songs"}
+                <p className="mt-0.5 truncate text-xs text-content-muted">
+                    Автор: {playlist.owner.displayName} · {playlist.trackCount}{" "}
+                    {pluralRu(playlist.trackCount, ["трек", "трека", "треков"])}
                 </p>
             </div>
         </Link>
@@ -267,12 +284,15 @@ function PeerPlaylistCard({
 }
 
 export default function PlaylistsPage() {
-    useRouter();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     useAuth();
     const { playTracks } = useAudioControls();
     const queryClient = useQueryClient();
     const [showHiddenTab, setShowHiddenTab] = useState(false);
     const [origin, setOrigin] = useState<PlaylistOrigin>("all");
+    const [isCreateDialogOpenManually, setIsCreateDialogOpenManually] =
+        useState(false);
     const likedQuery = useLikedPlaylistQuery(1);
     const likedTotal = likedQuery.data?.total ?? 0;
     const { federation } = useFeatures();
@@ -280,6 +300,9 @@ export default function PlaylistsPage() {
 
     // Use React Query hook for playlists
     const { data: playlists = [], isLoading } = usePlaylistsQuery();
+    const isCreateDialogOpen =
+        isCreateDialogOpenManually ||
+        shouldOpenCreatePlaylist(searchParams.get("create"));
 
     // Separate visible and hidden playlists
     const { visiblePlaylists, hiddenPlaylists } = useMemo(() => {
@@ -328,11 +351,14 @@ export default function PlaylistsPage() {
                             title: item.track.title,
                             artist: {
                                 name:
-                                    item.track.album?.artist?.name || "Unknown",
+                                    item.track.album?.artist?.name ||
+                                    ru.common.unknownArtist,
                                 id: item.track.album?.artist?.id,
                             },
                             album: {
-                                title: item.track.album?.title || "Unknown",
+                                title:
+                                    item.track.album?.title ||
+                                    ru.common.unknownAlbum,
                                 coverArt: item.track.album?.coverArt,
                                 id: item.track.album?.id,
                             },
@@ -365,11 +391,7 @@ export default function PlaylistsPage() {
     };
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message="Загружаем плейлисты…" />;
     }
 
     // A stored "peers" origin degrades to "all" if federation is off so the
@@ -395,55 +417,75 @@ export default function PlaylistsPage() {
         !showHiddenTab && effectiveOrigin !== "peers" && likedTotal > 0;
 
     return (
-        <div className="min-h-screen relative">
-            {/* Quick gradient fade - yellow to purple */}
-            <div className="absolute inset-0 pointer-events-none">
-                <div
-                    className="absolute inset-0 bg-gradient-to-b from-brand/15 via-blue-900/10 to-transparent"
-                    style={{ height: "35vh" }}
-                />
-                <div
-                    className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-brand/8 via-transparent to-transparent"
-                    style={{ height: "25vh" }}
-                />
-            </div>
-
-            {/* Header */}
-            <div className="relative px-4 md:px-8 py-6">
+        <div
+            data-consumer-surface="playlists"
+            className="min-h-screen bg-surface"
+        >
+            <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
                 <PageHeader
-                    title="Playlists"
-                    subtitle={`${subtitleCount} ${
-                        subtitleCount === 1 ? "playlist" : "playlists"
-                    }`}
+                    title="Плейлисты"
+                    subtitle={`${subtitleCount} ${pluralRu(subtitleCount, [
+                        "плейлист",
+                        "плейлиста",
+                        "плейлистов",
+                    ])}`}
                     icon={Music}
                     className="mb-4"
                     actions={
-                        <>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setIsCreateDialogOpenManually(true)
+                                }
+                                className="flex min-h-11 items-center gap-2 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            >
+                                <Plus className="h-4 w-4" aria-hidden="true" />
+                                Создать плейлист
+                            </button>
                             {federation && !showHiddenTab && (
-                                <FilterPills
-                                    options={[
-                                        { value: "all", label: "All" },
-                                        { value: "local", label: "Local" },
-                                        { value: "peers", label: "Peers" },
-                                    ]}
-                                    value={effectiveOrigin}
-                                    onChange={setOrigin}
-                                    size="segmented"
-                                    aria-label="Playlist source"
-                                />
+                                <div
+                                    role="group"
+                                    aria-label="Источник плейлистов"
+                                    className="flex flex-wrap items-center gap-1 rounded-xl border border-line bg-surface-elevated p-1"
+                                >
+                                    {(
+                                        [
+                                            ["all", "Все"],
+                                            ["local", "Мои"],
+                                            ["peers", "Друзья"],
+                                        ] as const
+                                    ).map(([value, label]) => (
+                                        <button
+                                            key={value}
+                                            onClick={() => setOrigin(value)}
+                                            aria-pressed={
+                                                effectiveOrigin === value
+                                            }
+                                            className={cn(
+                                                "min-h-11 rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
+                                                effectiveOrigin === value
+                                                    ? "bg-brand text-surface"
+                                                    : "text-content-muted hover:bg-surface-hover hover:text-content",
+                                            )}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
                             )}
                             <Link
                                 href="/import"
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all"
+                                className="flex min-h-11 items-center gap-1.5 rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm font-semibold text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             >
                                 <Download className="w-3.5 h-3.5" />
-                                Import
+                                Импортировать
                             </Link>
                             <Link
                                 href="/explore"
-                                className="px-4 py-2 rounded-full text-sm font-medium bg-brand text-black hover:brightness-110 transition-all"
+                                className="flex min-h-11 items-center rounded-xl border border-line bg-surface-elevated px-4 py-2 text-sm font-semibold text-content transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             >
-                                Explore Playlists
+                                Найти плейлисты
                             </Link>
 
                             {hiddenPlaylists.length > 0 && (
@@ -452,30 +494,26 @@ export default function PlaylistsPage() {
                                         setShowHiddenTab(!showHiddenTab)
                                     }
                                     className={cn(
-                                        "px-4 py-2 rounded-full text-sm font-medium transition-all",
+                                        "min-h-11 rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
                                         showHiddenTab
-                                            ? "bg-white/10 text-white"
-                                            : "bg-transparent text-gray-400 hover:text-white hover:bg-white/5",
+                                            ? "bg-surface-hover text-content"
+                                            : "text-content-muted hover:bg-surface-elevated hover:text-content",
                                     )}
                                 >
                                     {showHiddenTab
-                                        ? "Show All"
-                                        : `Hidden (${hiddenPlaylists.length})`}
+                                        ? "Показать все"
+                                        : `Скрытые (${hiddenPlaylists.length})`}
                                 </button>
                             )}
-                        </>
+                        </div>
                     }
                 />
-            </div>
-
-            {/* Content */}
-            <div className="relative px-4 pb-24">
                 {/* Hidden playlists notice */}
                 {showHiddenTab && (
-                    <div className="mx-2 mb-4 px-4 py-3 bg-white/5 rounded-lg">
-                        <p className="text-sm text-gray-400">
-                            Hidden playlists won&apos;t appear in your library.
-                            Hover and click the eye icon to restore.
+                    <div className="mb-6 border-y border-line px-1 py-4">
+                        <p className="text-sm leading-6 text-content-muted">
+                            Скрытые плейлисты не отображаются в коллекции.
+                            Нажмите значок глаза, чтобы вернуть плейлист.
                         </p>
                     </div>
                 )}
@@ -483,26 +521,33 @@ export default function PlaylistsPage() {
                 {totalShown > 0 || showLikedCard ? (
                     <div
                         data-tv-section="playlists"
-                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2"
+                        className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7"
                     >
                         {/* Pinned: My Liked */}
                         {showLikedCard && (
-                            <Link href="/playlist/my-liked">
+                            <Link
+                                href="/playlist/my-liked"
+                                className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                            >
                                 <div
-                                    className="group cursor-pointer p-3 rounded-md transition-colors hover:bg-white/5"
+                                    className="group cursor-pointer rounded-xl p-1.5 transition duration-200 hover:-translate-y-0.5 hover:bg-surface-elevated/60 motion-reduce:transform-none motion-reduce:transition-none sm:p-2"
                                     data-tv-card
                                     data-tv-card-index={0}
                                     tabIndex={0}
                                 >
-                                    <div className="relative aspect-square mb-3 rounded-md overflow-hidden shadow-lg bg-gradient-to-br from-brand to-[#1d4ed8] flex items-center justify-center">
-                                        <Heart className="w-12 h-12 text-white fill-white/80" />
+                                    <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-linear-to-br from-brand to-brand-dark shadow-lg shadow-black/20">
+                                        <Heart className="h-12 w-12 fill-current text-content" />
                                     </div>
-                                    <h3 className="text-sm font-semibold truncate text-white">
-                                        My Liked
+                                    <h3 className="truncate text-sm font-semibold text-content">
+                                        Любимые треки
                                     </h3>
-                                    <p className="text-xs text-gray-400 mt-0.5 truncate">
+                                    <p className="mt-0.5 truncate text-xs text-content-muted">
                                         {likedTotal}{" "}
-                                        {likedTotal === 1 ? "song" : "songs"}
+                                        {pluralRu(likedTotal, [
+                                            "трек",
+                                            "трека",
+                                            "треков",
+                                        ])}
                                     </p>
                                 </div>
                             </Link>
@@ -532,35 +577,53 @@ export default function PlaylistsPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                            <Music className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <h2 className="text-lg font-semibold text-white mb-1">
-                            {showHiddenTab
-                                ? "No hidden playlists"
-                                : effectiveOrigin === "peers"
-                                  ? "No peer playlists"
-                                  : "No playlists yet"}
-                        </h2>
-                        <p className="text-sm text-gray-400 max-w-sm">
-                            {showHiddenTab
-                                ? "You haven't hidden any playlists"
-                                : effectiveOrigin === "peers"
-                                  ? "Your peers haven't shared any public playlists, or they're unreachable right now"
-                                  : "Create your first playlist by adding songs from albums or artists"}
-                        </p>
-                        {!showHiddenTab && effectiveOrigin !== "peers" && (
-                            <Link
-                                href="/explore"
-                                className="mt-6 px-5 py-2.5 rounded-full text-sm font-medium bg-brand text-black hover:brightness-110 transition-all"
-                            >
-                                Explore Playlists
-                            </Link>
-                        )}
-                    </div>
+                    <section
+                        data-consumer-state="empty"
+                        className="border-y border-line"
+                    >
+                        <EmptyState
+                            icon={<Music />}
+                            title={
+                                showHiddenTab
+                                    ? "Скрытых плейлистов нет"
+                                    : effectiveOrigin === "peers"
+                                      ? "У друзей нет доступных плейлистов"
+                                      : "Плейлистов пока нет"
+                            }
+                            description={
+                                showHiddenTab
+                                    ? "Вы ещё не скрывали плейлисты"
+                                    : effectiveOrigin === "peers"
+                                      ? "Друзья ещё не поделились плейлистами или сейчас недоступны"
+                                      : "Создайте первый плейлист, добавив треки из альбома или со страницы исполнителя"
+                            }
+                            action={
+                                !showHiddenTab && effectiveOrigin !== "peers"
+                                    ? {
+                                          label: "Создать плейлист",
+                                          onClick: () =>
+                                              setIsCreateDialogOpenManually(
+                                                  true,
+                                              ),
+                                      }
+                                    : undefined
+                            }
+                        />
+                    </section>
                 )}
             </div>
+            <CreatePlaylistDialog
+                isOpen={isCreateDialogOpen}
+                onClose={() => {
+                    setIsCreateDialogOpenManually(false);
+                    if (shouldOpenCreatePlaylist(searchParams.get("create"))) {
+                        router.replace("/playlists", { scroll: false });
+                    }
+                }}
+                onCreated={(playlist) =>
+                    router.push(`/playlist/${encodeURIComponent(playlist.id)}`)
+                }
+            />
         </div>
     );
 }

@@ -56,11 +56,11 @@ export function WithYouTube<TBase extends ApiClientConstructor>(Base: TBase) {
          * Used by the player to set the audio source.
          */
         getYouTubeStreamUrl(videoId: string, quality?: string): string {
-            let url = `${this.getBaseUrl()}/api/youtube/stream/${videoId}`;
+            const baseUrl =
+                typeof window === "undefined" ? this.getBaseUrl() : "";
+            let url = `${baseUrl}/api/youtube/stream/${encodeURIComponent(videoId)}`;
             const params = new URLSearchParams();
             if (quality) params.set("quality", quality);
-            const token = this.getCurrentToken();
-            if (token) params.set("token", token);
             const qs = params.toString();
             if (qs) url += `?${qs}`;
             return url;

@@ -16,6 +16,7 @@ import { cn } from "@/utils/cn";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { CachedImage } from "./CachedImage";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
+import { ru } from "@/lib/i18n/ru";
 
 // soundspan brand blue for all on-page play buttons
 const BRAND_PLAY = "#60a5fa";
@@ -98,7 +99,7 @@ const PlayableCard = memo(function PlayableCard({
                         />
                     ) : (
                         placeholderIcon || (
-                            <div className="w-12 h-12 bg-[#3e3e3e] rounded-full" />
+                            <div className="h-12 w-12 rounded-full bg-surface-active" />
                         )
                     )}
                     <div className="absolute inset-0 bg-gradient-to-b from-black/0 to-black/30 opacity-0 group-hover:opacity-100 pointer-events-none" />
@@ -139,7 +140,7 @@ const PlayableCard = memo(function PlayableCard({
                     {badge === "owned" && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-500/20 border border-green-500/30 rounded-full text-xs font-medium text-green-400">
                             <Check className="w-3 h-3" />
-                            Owned
+                            {ru.catalog.owned}
                         </span>
                     )}
                     {badge === "download" && (
@@ -165,8 +166,8 @@ const PlayableCard = memo(function PlayableCard({
                                 )}
                                 title={
                                     isDownloading
-                                        ? "Downloading..."
-                                        : "Download Album"
+                                        ? ru.downloads.downloading
+                                        : ru.catalog.downloadAlbum
                                 }
                             >
                                 <Download
@@ -175,7 +176,9 @@ const PlayableCard = memo(function PlayableCard({
                                         isDownloading && "animate-pulse",
                                     )}
                                 />
-                                {isDownloading ? "Downloading..." : "Download"}
+                                {isDownloading
+                                    ? ru.downloads.downloading
+                                    : ru.common.download}
                             </button>
                             {onSearch && (
                                 <button
@@ -197,10 +200,10 @@ const PlayableCard = memo(function PlayableCard({
                                             ? "bg-gray-500/20 border border-gray-500/30 text-gray-400 cursor-not-allowed"
                                             : "bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 hover:border-yellow-500/50 text-yellow-400 hover:text-yellow-300",
                                     )}
-                                    title="Search and select release"
+                                    title={ru.catalog.searchRelease}
                                 >
                                     <Search className="w-3 h-3" />
-                                    Search
+                                    {ru.search.title}
                                 </button>
                             )}
                         </span>
@@ -227,8 +230,8 @@ const PlayableCard = memo(function PlayableCard({
                             )}
                             title={
                                 isRequesting
-                                    ? "Requesting..."
-                                    : "Ask an admin to add this album"
+                                    ? ru.catalog.requesting
+                                    : ru.catalog.requestAlbum
                             }
                         >
                             <Send
@@ -237,16 +240,18 @@ const PlayableCard = memo(function PlayableCard({
                                     isRequesting && "animate-pulse",
                                 )}
                             />
-                            {isRequesting ? "Requesting..." : "Request"}
+                            {isRequesting
+                                ? ru.catalog.requesting
+                                : ru.catalog.request}
                         </button>
                     )}
                     {badge === "requested" && (
                         <span
                             className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand/10 border border-brand/20 rounded-full text-xs font-medium text-brand/80"
-                            title="You already have an open request for this album"
+                            title={ru.catalog.requestExists}
                         >
                             <Check className="w-3 h-3" />
-                            Requested
+                            {ru.catalog.requested}
                         </span>
                     )}
                     {typeof badge !== "string" && badge}

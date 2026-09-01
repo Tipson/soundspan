@@ -52,6 +52,7 @@ describe("workers runtime behavior", () => {
         const albumDownloadQueue = createQueueMock();
         const artistExpansionQueue = createQueueMock();
         const scrobbleQueue = createQueueMock();
+        const remoteAnalysisQueue = createQueueMock();
 
         const logger = {
             debug: jest.fn(),
@@ -107,6 +108,12 @@ describe("workers runtime behavior", () => {
         );
         const processArtistDownloadExpansion = jest.fn(async () => undefined);
         const processScrobble = jest.fn(async () => "submitted");
+        const processRemoteAnalysis = jest.fn(async () => ({
+            status: "queued",
+        }));
+        const recoverExpiredRemoteAnalysisAssets = jest.fn(async () => 0);
+        const startRemoteAnalysisAssetRecovery = jest.fn();
+        const stopRemoteAnalysisAssetRecovery = jest.fn(async () => undefined);
         const finalizeAlbumDownloadQueueFailure = jest.fn(
             async () => undefined,
         );
@@ -223,7 +230,22 @@ describe("workers runtime behavior", () => {
             albumDownloadQueue,
             artistExpansionQueue,
             scrobbleQueue,
+            remoteAnalysisQueue,
         }));
+        jest.doMock(
+            "../../services/recommendations/remoteAnalysisHotSet",
+            () => ({
+                processRemoteAnalysis,
+                recoverExpiredRemoteAnalysisAssets,
+            }),
+        );
+        jest.doMock(
+            "../../services/recommendations/remoteAnalysisRecovery",
+            () => ({
+                startRemoteAnalysisAssetRecovery,
+                stopRemoteAnalysisAssetRecovery,
+            }),
+        );
         jest.doMock("../federationJobs", () => ({
             registerFederationProcessors,
             registerFederationSchedules,
@@ -324,6 +346,10 @@ describe("workers runtime behavior", () => {
                 vibeEmbedConcurrency: 1,
                 underJest: true,
                 workers: { schedulerClaimSkipWarnThreshold: 3 },
+                recommendations: {
+                    remoteAnalysisEnabled: false,
+                    remoteAnalysisConcurrency: 1,
+                },
                 features: {
                     audioAnalysis: true,
                     discovery: true,
@@ -385,6 +411,7 @@ describe("workers runtime behavior", () => {
             albumDownloadQueue,
             artistExpansionQueue,
             scrobbleQueue,
+            remoteAnalysisQueue,
             logger,
             startUnifiedEnrichmentWorker,
             stopUnifiedEnrichmentWorker,
@@ -404,6 +431,10 @@ describe("workers runtime behavior", () => {
             requeueAlbumDownloadAfterContention,
             processArtistDownloadExpansion,
             processScrobble,
+            processRemoteAnalysis,
+            recoverExpiredRemoteAnalysisAssets,
+            startRemoteAnalysisAssetRecovery,
+            stopRemoteAnalysisAssetRecovery,
             finalizeAlbumDownloadQueueFailure,
             recoverUnqueuedAlbumDownloads,
             recoverUnqueuedArtistDownloadExpansions,
@@ -913,10 +944,8 @@ describe("workers runtime behavior", () => {
             errors: [],
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         loadWorkers();
         await flushPromises();
-
         const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
             (call) => call[0] === "*",
         )?.[1];

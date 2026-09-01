@@ -82,6 +82,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/discoverTrackPayload.ts` | Shared discovery track response mapping; not a router                                               |
 | `backend/src/routes/downloads.ts`          | `/api/downloads`                                                                                      |
 | `backend/src/routes/enrichment.ts`         | `/api/enrichment`                                                                                     |
+| `backend/src/routes/enrichmentMusicBrainzArtistSearch.ts` | MusicBrainz artist-autocomplete handler mounted by `enrichment.ts`; not a router                 |
 | `backend/src/routes/federation.ts`         | `/api/federation/v1`                                                                                  |
 | `backend/src/routes/federationAdmin.ts`    | `/api/federation/admin` (peer lifecycle, consumer linking, and sync enqueue)                          |
 | `backend/src/routes/homepage.ts`           | `/api/homepage`                                                                                       |
@@ -96,6 +97,8 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/offline.ts`            | `/api/offline`                                                                                        |
 | `backend/src/routes/onboarding.ts`         | `/api/onboarding`                                                                                     |
 | `backend/src/routes/openapiSupplement.ts`  | (doc-only: @openapi coverage for index.ts health/readiness and /api/docs.json endpoints; not mounted) |
+| `backend/src/routes/personalized.ts`       | `/api/personalized`                                                                                   |
+| `backend/src/routes/playerRelated.ts`      | `/api/player/related` (account-scoped hybrid recommendations with provider fallback)                 |
 | `backend/src/routes/playbackState.ts`      | `/api/playback-state`                                                                                 |
 | `backend/src/routes/playlistImport.ts`     | `/api/import`                                                                                         |
 | `backend/src/routes/playlists.ts`          | `/api/playlists`                                                                                      |
@@ -117,6 +120,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/system.ts`             | `/api/system`                                                                                         |
 | `backend/src/routes/systemSettings.ts`     | `/api/system-settings`                                                                                |
 | `backend/src/routes/systemSettingsFederationSchema.ts` | Federation settings schema helper; not a router                                        |
+| `backend/src/routes/tasteProfile.ts`       | `/api/taste-profile` (account-scoped taste onboarding and later profile editing)                         |
 | `backend/src/routes/tidalStreaming.ts`     | `/api/tidal-streaming`                                                                                |
 | `backend/src/routes/trackMappings.ts`      | `/api/track-mappings`                                                                                 |
 | `backend/src/routes/vibe.ts`               | `/api/vibe`                                                                                           |
@@ -124,6 +128,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/webhooks.ts`           | `/api/webhooks`                                                                                       |
 | `backend/src/routes/youtube.ts`            | `/api/youtube`                                                                                        |
 | `backend/src/routes/youtubeMusic.ts`       | `/api/ytmusic`                                                                                        |
+| `backend/src/routes/youtubeMusicUnavailableRecovery.ts` | Unavailable-track recovery sub-router under `/api/ytmusic`                              |
 
 ### Library Submodules
 
@@ -136,6 +141,7 @@ composed from these order-dependent domain and helper modules:
 | `backend/src/routes/library/albums.ts`                     | Album browse, preference, and deletion routes                 |
 | `backend/src/routes/library/artistCounts.ts`               | Artist-count status and backfill routes                       |
 | `backend/src/routes/library/artistPageMatching.ts`         | Artist-page matching helper; not a router                     |
+| `backend/src/routes/library/artistTracks.ts`               | Paginated full artist-track browse route                      |
 | `backend/src/routes/library/artists.ts`                    | Artist list, detail, and deletion routes                      |
 | `backend/src/routes/library/coverArt.ts`                   | Library cover-art delivery routes                             |
 | `backend/src/routes/library/federationStreamPeer.ts`       | Federated stream-peer resolution helper                       |
@@ -147,6 +153,7 @@ composed from these order-dependent domain and helper modules:
 | `backend/src/routes/library/radio.ts`                      | Library radio generation routes                               |
 | `backend/src/routes/library/radioPlaylists.ts`             | Persisted generated-radio playlist mutation routes            |
 | `backend/src/routes/library/remoteTracks.ts`               | Remote-track preference routes                                |
+| `backend/src/routes/library/savedMusicEntities.ts`         | Account-scoped saved album and artist collection routes       |
 | `backend/src/routes/library/trackAudioInfo.ts`             | Track audio-information helper                                |
 | `backend/src/routes/library/tracks.ts`                     | Track browse, detail, preference, stream, and deletion routes |
 

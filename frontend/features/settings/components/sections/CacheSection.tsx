@@ -28,6 +28,12 @@ import {
 import { EnrichmentFailuresModal } from "@/components/EnrichmentFailuresModal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { queryKeys } from "@/lib/queryKeys";
+import {
+    cacheRu,
+    formatBackgroundAnalysisLabel,
+    formatEnrichmentState,
+    formatFetchSpeed,
+} from "@/lib/i18n/cacheRu";
 
 const logger = createFrontendLogger("Settings.CacheSection");
 
@@ -78,10 +84,7 @@ function backgroundAnalysisLabel(progress: {
     const vibeBusy =
         progress.clapEmbeddings.pending + progress.clapEmbeddings.processing >
         0;
-    if (audioBusy && vibeBusy)
-        return "Audio analysis & vibe embeddings running";
-    if (vibeBusy) return "Vibe embeddings running";
-    return "Audio analysis running";
+    return formatBackgroundAnalysisLabel({ audioBusy, vibeBusy });
 }
 
 // Enrichment stage component
@@ -143,7 +146,7 @@ function EnrichmentStage({
                     </span>
                     {isBackground && !isComplete && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">
-                            background
+                            {cacheRu.background}
                         </span>
                     )}
                 </div>
@@ -168,11 +171,13 @@ function EnrichmentStage({
                     </span>
                     {processing > 0 && (
                         <span className="text-brand">
-                            {processing} processing
+                            {processing} {cacheRu.processing}
                         </span>
                     )}
                     {failed > 0 && (
-                        <span className="text-error">{failed} failed</span>
+                        <span className="text-error">
+                            {cacheRu.failed}: {failed}
+                        </span>
                     )}
                 </div>
             </div>
@@ -231,8 +236,13 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
     // Check URL hash for auto-opening failures modal
     useEffect(() => {
         if (window.location.hash === "#enrichment-failures") {
-            setShowFailuresModal(true);
+            const timeoutId = window.setTimeout(
+                () => setShowFailuresModal(true),
+                0,
+            );
+            return () => window.clearTimeout(timeoutId);
         }
+        return undefined;
     }, []);
 
     // Fetch enrichment progress
@@ -336,9 +346,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 workers: newWorkers,
                 cpuCores: workersConfig?.cpuCores || 4,
                 recommended: workersConfig?.recommended || 2,
-                description: `Using ${newWorkers} of ${
+                description: `Используется ${newWorkers} из ${
                     workersConfig?.cpuCores || 4
-                } available CPU cores`,
+                } доступных ядер процессора`,
             });
 
             return { previousWorkers };
@@ -412,7 +422,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             logger.error("Library sync and enrichment start failed", {
                 error: err,
             });
-            setError("Failed to sync");
+            setError(cacheRu.syncFailed);
             setSyncing(false); // Only stop on error
         }
     };
@@ -429,7 +439,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refetchProgress();
         } catch (err) {
             logger.error("Failed to start full enrichment", { error: err });
-            setError("Failed to start full enrichment");
+            setError(cacheRu.fullEnrichFailed);
         } finally {
             setReEnriching(false);
         }
@@ -451,7 +461,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             });
         } catch (err) {
             logger.error("Failed to backfill mood buckets", { error: err });
-            setError("Failed to backfill mood buckets");
+            setError(cacheRu.moodBackfillFailed);
         } finally {
             setBackfillingMoodBuckets(false);
         }
@@ -466,7 +476,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refetchProgress();
         } catch (err) {
             logger.error("Failed to reset artist enrichment", { error: err });
-            setError("Failed to reset artist enrichment");
+            setError(cacheRu.artistResetFailed);
         } finally {
             setResettingArtists(false);
         }
@@ -481,7 +491,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refetchProgress();
         } catch (err) {
             logger.error("Failed to reset mood tags", { error: err });
-            setError("Failed to reset mood tags");
+            setError(cacheRu.moodResetFailed);
         } finally {
             setResettingMoodTags(false);
         }
@@ -496,7 +506,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refetchProgress();
         } catch (err) {
             logger.error("Failed to reset audio analysis", { error: err });
-            setError("Failed to reset audio analysis");
+            setError(cacheRu.audioResetFailed);
         } finally {
             setResettingAudio(false);
         }
@@ -511,7 +521,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refetchProgress();
         } catch (err) {
             logger.error("Failed to reset vibe embeddings", { error: err });
-            setError("Failed to reset vibe embeddings");
+            setError(cacheRu.vibeResetFailed);
         } finally {
             setResettingVibe(false);
         }
@@ -524,7 +534,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             await api.clearAllCaches();
             refreshNotifications();
         } catch {
-            setError("Failed to clear caches");
+            setError(cacheRu.clearCachesFailed);
         } finally {
             setClearingCaches(false);
         }
@@ -540,7 +550,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refreshNotifications();
         } catch (err) {
             logger.error("Failed to clean up stale jobs", { error: err });
-            setError("Failed to cleanup stale jobs");
+            setError(cacheRu.cleanupFailed);
         } finally {
             setCleaningStaleJobs(false);
         }
@@ -556,7 +566,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refetchProgress();
         } catch (err) {
             logger.error("Failed to retry analysis", { error: err });
-            setError("Failed to retry analysis");
+            setError(cacheRu.retryAnalysisFailed);
         } finally {
             setRetryingFailed(false);
         }
@@ -570,7 +580,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             });
         } catch (err) {
             logger.error("Failed to pause enrichment", { error: err });
-            setError("Failed to pause enrichment");
+            setError(cacheRu.pauseFailed);
         }
     };
 
@@ -582,7 +592,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             });
         } catch (err) {
             logger.error("Failed to resume enrichment", { error: err });
-            setError("Failed to resume enrichment");
+            setError(cacheRu.resumeFailed);
         }
     };
 
@@ -597,7 +607,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             });
         } catch (err) {
             logger.error("Failed to stop enrichment", { error: err });
-            setError("Failed to stop enrichment");
+            setError(cacheRu.stopFailed);
         }
     };
 
@@ -618,32 +628,32 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
     return (
         <>
-            <SettingsSection id="cache" title="Cache & Automation">
+            <SettingsSection id="cache" title={cacheRu.sectionTitle}>
                 {/* Enrichment Progress */}
                 {isProgressPending ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin text-white/40" />
                         <span className="text-sm text-white/40">
-                            Loading enrichment status...
+                            {cacheRu.loadingStatus}
                         </span>
                     </div>
                 ) : isProgressError && !enrichmentProgress ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-red-500/20 flex items-center justify-between">
                         <span className="text-sm text-error">
-                            Failed to load enrichment status
+                            {cacheRu.loadStatusFailed}
                         </span>
                         <button
                             onClick={() => refetchProgress()}
                             className="px-3 py-1 text-xs bg-white/10 text-white/70 rounded-full hover:bg-white/15 transition-colors"
                         >
-                            Retry
+                            {cacheRu.retry}
                         </button>
                     </div>
                 ) : enrichmentProgress ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-medium text-white">
-                                Library Enrichment
+                                {cacheRu.libraryEnrichment}
                             </h3>
                             {enrichmentProgress.coreComplete &&
                                 !enrichmentProgress.isFullyComplete && (
@@ -657,7 +667,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             {enrichmentProgress.isFullyComplete && (
                                 <span className="text-xs text-success flex items-center gap-1">
                                     <CheckCircle className="w-3 h-3" />
-                                    Complete
+                                    {cacheRu.complete}
                                 </span>
                             )}
                         </div>
@@ -668,8 +678,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 <div className="flex-1">
                                     <EnrichmentStage
                                         icon={User}
-                                        label="Artist Metadata"
-                                        description="Bios, images, and similar artists from Last.fm"
+                                        label={cacheRu.artistLabel}
+                                        description={cacheRu.artistDescription}
                                         completed={
                                             enrichmentProgress.artists.completed
                                         }
@@ -684,7 +694,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 </div>
                                 <button
                                     onClick={handleResetArtists}
-                                    title="Reset artist metadata for the whole library and fetch it again in the background."
+                                    title={cacheRu.artistResetTitle}
                                     disabled={
                                         resettingArtists ||
                                         syncing ||
@@ -695,8 +705,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                 >
                                     {resettingArtists
-                                        ? "Resetting..."
-                                        : "Re-run"}
+                                        ? cacheRu.resetting
+                                        : cacheRu.rerun}
                                 </button>
                             </div>
 
@@ -705,8 +715,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 <div className="flex-1">
                                     <EnrichmentStage
                                         icon={Heart}
-                                        label="Mood Tags"
-                                        description="Vibes and mood data from Last.fm"
+                                        label={cacheRu.moodLabel}
+                                        description={cacheRu.moodDescription}
                                         completed={
                                             enrichmentProgress.trackTags
                                                 .enriched
@@ -722,7 +732,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 </div>
                                 <button
                                     onClick={handleResetMoodTags}
-                                    title="Clear all mood tags and fetch them again in the background."
+                                    title={cacheRu.moodResetTitle}
                                     disabled={
                                         resettingMoodTags ||
                                         syncing ||
@@ -733,8 +743,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                 >
                                     {resettingMoodTags
-                                        ? "Resetting..."
-                                        : "Re-run"}
+                                        ? cacheRu.resetting
+                                        : cacheRu.rerun}
                                 </button>
                             </div>
 
@@ -744,8 +754,10 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     <div className="flex-1">
                                         <EnrichmentStage
                                             icon={Activity}
-                                            label="Audio Analysis"
-                                            description="BPM, key, energy, and danceability from audio files"
+                                            label={cacheRu.audioLabel}
+                                            description={
+                                                cacheRu.audioDescription
+                                            }
                                             completed={
                                                 enrichmentProgress.audioAnalysis
                                                     .completed
@@ -771,7 +783,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     </div>
                                     <button
                                         onClick={handleResetAudioAnalysis}
-                                        title="Reset audio analysis for every track and re-run it in the background. Can take a long time on large libraries."
+                                        title={cacheRu.audioResetTitle}
                                         disabled={
                                             resettingAudio ||
                                             syncing ||
@@ -782,22 +794,20 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                     >
                                         {resettingAudio
-                                            ? "Resetting..."
-                                            : "Re-run"}
+                                            ? cacheRu.resetting
+                                            : cacheRu.rerun}
                                     </button>
                                 </div>
                             ) : !featuresLoading ? (
                                 <div className="opacity-50 py-2">
                                     <h4 className="text-sm font-medium text-gray-300">
-                                        Audio Analysis
+                                        {cacheRu.audioLabel}
                                     </h4>
                                     <p className="text-sm text-gray-400">
-                                        Analyzer not detected right now
+                                        {cacheRu.analyzerUnavailable}
                                     </p>
                                     <p className="text-xs text-gray-400 mt-1">
-                                        If services just started, wait about 60
-                                        seconds and refresh. In lite mode, this
-                                        is expected.
+                                        {cacheRu.analyzerUnavailableHint}
                                     </p>
                                 </div>
                             ) : null}
@@ -809,8 +819,10 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         {enrichmentProgress.clapEmbeddings && (
                                             <EnrichmentStage
                                                 icon={Waves}
-                                                label="Vibe Embeddings"
-                                                description="CLAP audio embeddings for similarity search"
+                                                label={cacheRu.vibeLabel}
+                                                description={
+                                                    cacheRu.vibeDescription
+                                                }
                                                 completed={
                                                     enrichmentProgress
                                                         .clapEmbeddings
@@ -840,24 +852,26 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             role="status"
                                             className="mt-1 text-xs text-white/50"
                                         >
-                                            Provider{" "}
+                                            {cacheRu.provider}{" "}
                                             {!vibe.provider.fresh
-                                                ? "status stale"
+                                                ? cacheRu.providerStale
                                                 : vibe.provider.reachable
-                                                  ? "reachable"
-                                                  : "unreachable"}
+                                                  ? cacheRu.providerReachable
+                                                  : cacheRu.providerUnreachable}
                                         </p>
                                         {vibe.migration && (
                                             <div
                                                 role="status"
-                                                aria-label="Vibe embedding migration"
+                                                aria-label={
+                                                    cacheRu.migrationAria
+                                                }
                                                 className="mt-2 rounded-lg border border-white/10 bg-white/5 p-3"
                                             >
                                                 <p className="text-xs font-medium text-white/80">
-                                                    Embedding migration
+                                                    {cacheRu.migrationTitle}
                                                 </p>
                                                 <p className="mt-1 text-[11px] text-white/50">
-                                                    Target space family:{" "}
+                                                    {cacheRu.targetSpaceFamily}{" "}
                                                     {vibe.migration.family}
                                                 </p>
                                                 {migrationCoverage ? (
@@ -874,11 +888,11 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                             {
                                                                 migrationCoverage.embedded
                                                             }{" "}
-                                                            embedded ·{" "}
+                                                            {cacheRu.embedded} ·{" "}
                                                             {
                                                                 migrationCoverage.pending
                                                             }{" "}
-                                                            pending ·{" "}
+                                                            {cacheRu.pending} ·{" "}
                                                             <span
                                                                 className={
                                                                     migrationCoverage.failed >
@@ -888,19 +902,23 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                                 }
                                                             >
                                                                 {
-                                                                    migrationCoverage.failed
+                                                                    cacheRu.migrationFailed
                                                                 }{" "}
-                                                                failed
+                                                                {
+                                                                    migrationCoverage.failed
+                                                                }
                                                             </span>
                                                         </p>
                                                     </>
                                                 ) : (
                                                     <p className="mt-2 text-[11px] text-white/40">
-                                                        Awaiting coverage sample
+                                                        {
+                                                            cacheRu.awaitingCoverage
+                                                        }
                                                     </p>
                                                 )}
                                                 <p className="mt-1 text-[10px] text-white/40">
-                                                    Cutover threshold:{" "}
+                                                    {cacheRu.cutoverThreshold}{" "}
                                                     {Math.round(
                                                         vibe.migration
                                                             .cutoverThreshold *
@@ -913,7 +931,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     </div>
                                     <button
                                         onClick={handleResetVibeEmbeddings}
-                                        title="Rebuild vibe embeddings for every track in the background. Can take hours on large libraries."
+                                        title={cacheRu.vibeResetTitle}
                                         disabled={
                                             resettingVibe ||
                                             syncing ||
@@ -924,22 +942,20 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 hover:bg-white/10 hover:text-white/80 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
                                     >
                                         {resettingVibe
-                                            ? "Resetting..."
-                                            : "Re-run"}
+                                            ? cacheRu.resetting
+                                            : cacheRu.rerun}
                                     </button>
                                 </div>
                             ) : !featuresLoading ? (
                                 <div className="opacity-50 py-2">
                                     <h4 className="text-sm font-medium text-gray-300">
-                                        Vibe Similarity
+                                        {cacheRu.vibeSimilarity}
                                     </h4>
                                     <p className="text-sm text-gray-400">
-                                        Analyzer not detected right now
+                                        {cacheRu.analyzerUnavailable}
                                     </p>
                                     <p className="text-xs text-gray-400 mt-1">
-                                        If services just started, wait about 60
-                                        seconds and refresh. In lite mode, this
-                                        is expected.
+                                        {cacheRu.analyzerUnavailableHint}
                                     </p>
                                 </div>
                             ) : null}
@@ -956,11 +972,13 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         reEnriching ||
                                         isEnrichmentActive
                                     }
-                                    title="Enrich only items that are new or missing data. Safe to run any time; usually finishes quickly."
+                                    title={cacheRu.syncTitle}
                                     className="px-3 py-1.5 text-xs bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                                 >
-                                    {syncing ? "Syncing..." : "Sync New"}
+                                    {syncing
+                                        ? cacheRu.syncing
+                                        : cacheRu.syncNew}
                                 </button>
                                 <button
                                     onClick={() => setShowReEnrichConfirm(true)}
@@ -969,13 +987,13 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         reEnriching ||
                                         isEnrichmentActive
                                     }
-                                    title="Re-run metadata enrichment for the entire library in the background. Can take hours on large libraries."
+                                    title={cacheRu.fullEnrichTitle}
                                     className="px-3 py-1.5 text-xs bg-white text-black font-medium rounded-full
                                     hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                                 >
                                     {reEnriching
-                                        ? "Starting..."
-                                        : "Re-enrich All"}
+                                        ? cacheRu.starting
+                                        : cacheRu.fullEnrich}
                                 </button>
 
                                 {/* Control Actions */}
@@ -989,7 +1007,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 hover:opacity-85 transition-opacity"
                                             >
                                                 <Pause className="w-3 h-3" />
-                                                Pause
+                                                {cacheRu.pause}
                                             </button>
                                         ) : (
                                             <button
@@ -998,7 +1016,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 hover:opacity-85 transition-opacity"
                                             >
                                                 <Play className="w-3 h-3" />
-                                                Resume
+                                                {cacheRu.resume}
                                             </button>
                                         )}
                                         <button
@@ -1007,7 +1025,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             hover:opacity-85 transition-opacity"
                                         >
                                             <StopCircle className="w-3 h-3" />
-                                            Stop
+                                            {cacheRu.stop}
                                         </button>
                                     </>
                                 )}
@@ -1022,7 +1040,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         hover:bg-error/30 transition-colors ml-auto"
                                     >
                                         <AlertTriangle className="w-3 h-3" />
-                                        View Failures ({totalFailures})
+                                        {cacheRu.viewFailures} ({totalFailures})
                                     </button>
                                 )}
                             </div>
@@ -1046,7 +1064,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         }
                                         className="h-3.5 w-3.5 rounded border-white/30 bg-transparent accent-brand disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
-                                    Backfill mood buckets after full enrich
+                                    {cacheRu.moodBackfillAfterFull}
                                 </label>
                                 {!featuresLoading && vibeEmbeddings && (
                                     <label className="inline-flex items-center gap-2 px-3 py-1.5 text-xs text-white/70 bg-white/5 rounded-full border border-white/10">
@@ -1067,7 +1085,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             }
                                             className="h-3.5 w-3.5 rounded border-white/30 bg-transparent accent-brand disabled:opacity-50 disabled:cursor-not-allowed"
                                         />
-                                        Rebuild CLAP embeddings
+                                        {cacheRu.rebuildClap}
                                     </label>
                                 )}
                             </div>
@@ -1091,18 +1109,13 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             <StopCircle className="w-3 h-3 text-error animate-pulse" />
                                         )}
                                         <span className="text-white/70">
-                                            {enrichmentState.status ===
-                                                "running" &&
-                                                `Processing ${enrichmentState.currentPhase}...`}
-                                            {enrichmentState.status ===
-                                                "paused" && "Enrichment paused"}
-                                            {enrichmentState.status ===
-                                                "stopping" &&
-                                                `Stopping... finishing ${
+                                            {formatEnrichmentState({
+                                                status: enrichmentState.status,
+                                                phase: enrichmentState.currentPhase,
+                                                currentItem:
                                                     enrichmentState.stoppingInfo
-                                                        ?.currentItem ||
-                                                    "current item"
-                                                }`}
+                                                        ?.currentItem,
+                                            })}
                                         </span>
                                     </div>
                                     {enrichmentState.status === "running" &&
@@ -1110,7 +1123,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             "artists" &&
                                         enrichmentState.artists?.current && (
                                             <div className="mt-1 text-white/50 truncate">
-                                                Current:{" "}
+                                                {cacheRu.current}{" "}
                                                 {
                                                     enrichmentState.artists
                                                         .current
@@ -1122,7 +1135,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             "tracks" &&
                                         enrichmentState.tracks?.current && (
                                             <div className="mt-1 text-white/50 truncate">
-                                                Current:{" "}
+                                                {cacheRu.current}{" "}
                                                 {enrichmentState.tracks.current}
                                             </div>
                                         )}
@@ -1133,8 +1146,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
                 {/* Cache Sizes */}
                 <SettingsRow
-                    label="User cache size"
-                    description="Maximum storage for offline content"
+                    label={cacheRu.userCacheSize}
+                    description={cacheRu.userCacheDescription}
                 >
                     <div className="flex items-center gap-3">
                         <input
@@ -1159,8 +1172,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 </SettingsRow>
 
                 <SettingsRow
-                    label="Transcode cache size"
-                    description="Server restart required for changes"
+                    label={cacheRu.transcodeCacheSize}
+                    description={cacheRu.restartRequired}
                 >
                     <div className="flex items-center gap-3">
                         <input
@@ -1187,8 +1200,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
                 {/* Automation */}
                 <SettingsRow
-                    label="Auto sync library"
-                    description="Automatically sync library changes"
+                    label={cacheRu.autoSync}
+                    description={cacheRu.autoSyncDescription}
                     htmlFor="auto-sync"
                 >
                     <SettingsToggle
@@ -1199,8 +1212,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 </SettingsRow>
 
                 <SettingsRow
-                    label="Auto enrich metadata"
-                    description="Automatically enrich metadata for new content"
+                    label={cacheRu.autoEnrich}
+                    description={cacheRu.autoEnrichDescription}
                     htmlFor="auto-enrich"
                 >
                     <SettingsToggle
@@ -1215,8 +1228,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 {/* Enrichment Speed Control */}
                 {settings.autoEnrichMetadata && (
                     <SettingsRow
-                        label="Metadata Fetch Speed"
-                        description="Parallel Last.fm/MusicBrainz requests for artist bios and mood tags. Higher = faster but may trigger rate limits."
+                        label={cacheRu.fetchSpeed}
+                        description={cacheRu.fetchSpeedDescription}
                     >
                         <div className="flex items-center gap-3">
                             <input
@@ -1237,20 +1250,12 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             <div className="flex flex-col items-end gap-0.5">
                                 {isConcurrencyLoading ? (
                                     <span className="text-sm text-white/50 w-24 text-right">
-                                        Loading...
+                                        {cacheRu.loading}
                                     </span>
                                 ) : (
                                     <>
                                         <span className="text-sm text-white w-24 text-right">
-                                            {enrichmentSpeed === 1
-                                                ? "Conservative"
-                                                : enrichmentSpeed === 2
-                                                  ? "Moderate"
-                                                  : enrichmentSpeed === 3
-                                                    ? "Balanced"
-                                                    : enrichmentSpeed === 4
-                                                      ? "Fast"
-                                                      : "Maximum"}
+                                            {formatFetchSpeed(enrichmentSpeed)}
                                         </span>
                                         {concurrencyConfig && (
                                             <span className="text-xs text-white/50 w-24 text-right">
@@ -1258,7 +1263,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 {
                                                     concurrencyConfig.artistsPerMin
                                                 }{" "}
-                                                artists/min
+                                                {cacheRu.artistsPerMinute}
                                             </span>
                                         )}
                                     </>
@@ -1273,8 +1278,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     !featuresLoading &&
                     musicCNN && (
                         <SettingsRow
-                            label="Audio Analysis Workers"
-                            description="CPU workers for Essentia ML analysis (BPM, key, mood, energy). Lower values reduce CPU usage on older systems."
+                            label={cacheRu.workerLabel}
+                            description={cacheRu.workerDescription}
                         >
                             <div className="flex items-center gap-3">
                                 <input
@@ -1299,18 +1304,18 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 <div className="flex flex-col items-end gap-0.5">
                                     {isWorkersLoading ? (
                                         <span className="text-sm text-white/50 w-24 text-right">
-                                            Loading...
+                                            {cacheRu.loading}
                                         </span>
                                     ) : (
                                         <>
                                             <span className="text-sm text-white w-24 text-right">
                                                 {workersConfig?.workers ?? 2}{" "}
-                                                workers
+                                                {cacheRu.workers}
                                             </span>
                                             {workersConfig && (
                                                 <span className="text-xs text-white/50 w-24 text-right">
                                                     {workersConfig.cpuCores}{" "}
-                                                    cores available
+                                                    {cacheRu.coresAvailable}
                                                 </span>
                                             )}
                                         </>
@@ -1328,7 +1333,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         className="px-4 py-1.5 text-sm bg-white text-black font-medium rounded-full w-fit
                         hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                     >
-                        {clearingCaches ? "Clearing..." : "Clear All Caches"}
+                        {clearingCaches
+                            ? cacheRu.clearing
+                            : cacheRu.clearAllCaches}
                     </button>
                     <button
                         onClick={handleCleanupStaleJobs}
@@ -1337,8 +1344,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                     >
                         {cleaningStaleJobs
-                            ? "Cleaning..."
-                            : "Cleanup Stale Jobs"}
+                            ? cacheRu.cleaning
+                            : cacheRu.cleanupStaleJobs}
                     </button>
                     {failedAnalysisCount > 0 && (
                         <button
@@ -1348,8 +1355,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                         >
                             {retryingFailed
-                                ? "Retrying..."
-                                : `Retry Failed Analysis (${failedAnalysisCount})`}
+                                ? cacheRu.retrying
+                                : `${cacheRu.retryFailedAnalysis} (${failedAnalysisCount})`}
                         </button>
                     )}
                     <button
@@ -1359,36 +1366,38 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-transform"
                     >
                         {backfillingMoodBuckets
-                            ? "Backfilling..."
-                            : "Backfill Mood Buckets"}
+                            ? cacheRu.backfilling
+                            : cacheRu.backfillMoodBuckets}
                     </button>
                     {retryResult && (
                         <p className="text-sm text-success">
-                            Reset {retryResult.reset} failed tracks to pending
+                            {cacheRu.retryResult} {retryResult.reset}
                         </p>
                     )}
                     {moodBucketBackfillResult && (
                         <p className="text-sm text-success">
-                            Mood bucket backfill complete: processed{" "}
-                            {moodBucketBackfillResult.processed}, assigned{" "}
+                            {cacheRu.moodBackfillComplete} {cacheRu.processed}{" "}
+                            {moodBucketBackfillResult.processed},{" "}
+                            {cacheRu.assigned}{" "}
                             {moodBucketBackfillResult.assigned}
                         </p>
                     )}
                     {cleanupResult && cleanupResult.totalCleaned > 0 && (
                         <p className="text-sm text-success">
-                            Cleaned:{" "}
+                            {cacheRu.cleaned}{" "}
                             {cleanupResult.cleaned.discoveryBatches.cleaned}{" "}
-                            batches,{" "}
+                            {cacheRu.batches},{" "}
                             {cleanupResult.cleaned.downloadJobs.cleaned}{" "}
-                            downloads,{" "}
+                            {cacheRu.downloads},{" "}
                             {cleanupResult.cleaned.spotifyImportJobs.cleaned}{" "}
-                            imports, {cleanupResult.cleaned.bullQueues.cleaned}{" "}
-                            queue jobs
+                            {cacheRu.imports},{" "}
+                            {cleanupResult.cleaned.bullQueues.cleaned}{" "}
+                            {cacheRu.queueJobs}
                         </p>
                     )}
                     {cleanupResult && cleanupResult.totalCleaned === 0 && (
                         <p className="text-sm text-white/50">
-                            No stale jobs found
+                            {cacheRu.noStaleJobs}
                         </p>
                     )}
                     {error && <p className="text-sm text-error">{error}</p>}
@@ -1404,9 +1413,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 isOpen={showReEnrichConfirm}
                 onClose={() => setShowReEnrichConfirm(false)}
                 onConfirm={() => void handleFullEnrichment()}
-                title="Re-enrich the entire library?"
-                message="This re-runs metadata enrichment for every artist and track in the background, plus vibe embeddings and mood buckets if their checkboxes are enabled below. On large libraries this can take hours. Playback keeps working while it runs."
-                confirmText="Re-enrich All"
+                title={cacheRu.confirmTitle}
+                message={cacheRu.confirmMessage}
+                confirmText={cacheRu.fullEnrich}
                 variant="warning"
             />
         </>

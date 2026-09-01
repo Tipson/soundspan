@@ -15,6 +15,7 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol, cast
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from mutagen.flac import FLAC
@@ -76,8 +77,8 @@ PROXY_AUDIO_FORMAT_SELECTORS = {
 # raises "Requested format is not available" (surfacing as a 502 on
 # /yt/info). "android_vr" and "android_music" still serve the DASH audio
 # formats anonymously; listing both lets yt-dlp fall through if one breaks.
-# NOTE: this is the regular-YouTube client. The authenticated
-# music.youtube.com stream path keeps its own ["android_music"] context.
+# NOTE: this is the regular-YouTube client. The music.youtube.com stream
+# paths manage their independently verified client set in ytmusic_stream.py.
 YT_PLAYER_CLIENTS = ["android_vr", "android_music"]
 
 
@@ -299,24 +300,55 @@ def _stamp_audio_tags(filepath: str, tags: dict[str, str], logger: _WarningLogge
     _safe_remove(tmp_path)
 
 
-_VIDEO_ID_PATTERNS = [
-    r"(?:youtube\.com|m\.youtube\.com)/watch\?.*?v=([a-zA-Z0-9_-]{11})",
-    r"youtu\.be/([a-zA-Z0-9_-]{11})",
-    r"youtube\.com/embed/([a-zA-Z0-9_-]{11})",
-    r"youtube\.com/v/([a-zA-Z0-9_-]{11})",
-    r"youtube\.com/shorts/([a-zA-Z0-9_-]{11})",
-]
+_VIDEO_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
+_YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com"}
+_YOUTUBE_MUSIC_HOST = "music.youtube.com"
+_YOUTUBE_SHORT_HOST = "youtu.be"
+
+
+def _parse_youtube_url(value: str) -> Any | None:
+    """Parse only HTTP(S) URLs whose hostname is an exact YouTube host."""
+    text = value.strip()
+    if "://" not in text and text.lower().startswith(
+        ("youtube.com/", "www.youtube.com/", "m.youtube.com/", "music.youtube.com/", "youtu.be/")
+    ):
+        text = f"https://{text}"
+    try:
+        parsed = urlparse(text)
+    except ValueError:
+        return None
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    try:
+        hostname = parsed.hostname
+        _ = parsed.port
+    except ValueError:
+        return None
+    if hostname not in _YOUTUBE_HOSTS | {_YOUTUBE_MUSIC_HOST, _YOUTUBE_SHORT_HOST}:
+        return None
+    return parsed
 
 
 def _match_video_id(url: str) -> str | None:
     """Return the 11-char video ID for a single-video URL/bare ID, else None."""
-    for pattern in _VIDEO_ID_PATTERNS:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
     stripped = url.strip()
-    if re.fullmatch(r"[a-zA-Z0-9_-]{11}", stripped):
+    if _VIDEO_ID_RE.fullmatch(stripped):
         return stripped
+
+    parsed = _parse_youtube_url(stripped)
+    if parsed is None:
+        return None
+    path_parts = [part for part in parsed.path.split("/") if part]
+    candidate: str | None = None
+    if parsed.hostname == _YOUTUBE_SHORT_HOST and path_parts:
+        candidate = path_parts[0]
+    elif parsed.hostname in _YOUTUBE_HOSTS | {_YOUTUBE_MUSIC_HOST}:
+        if parsed.path == "/watch":
+            candidate = (parse_qs(parsed.query).get("v") or [None])[0]
+        elif len(path_parts) >= 2 and path_parts[0] in {"embed", "v", "shorts"}:
+            candidate = path_parts[1]
+    if isinstance(candidate, str) and _VIDEO_ID_RE.fullmatch(candidate):
+        return candidate
     return None
 
 
@@ -333,13 +365,11 @@ def extract_video_id(url: str) -> str:
     return video_id
 
 
-# Playlist / channel URL patterns for bulk-download classification. A
-# "list=" query param identifies a playlist (or, when RD*-prefixed, an
-# auto-generated radio/mix that cannot be enumerated as a static set).
-_LIST_PARAM_RE = re.compile(r"[?&]list=([A-Za-z0-9_-]+)")
-_CHANNEL_HANDLE_RE = re.compile(r"youtube\.com/(@[A-Za-z0-9_.\-]+)")
-_CHANNEL_ID_RE = re.compile(r"youtube\.com/channel/(UC[A-Za-z0-9_\-]+)")
-_CHANNEL_LEGACY_RE = re.compile(r"youtube\.com/(c|user)/([A-Za-z0-9_.\-]+)")
+# Playlist / channel token allowlists for bulk-download classification.
+_LIST_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+_CHANNEL_HANDLE_RE = re.compile(r"@[A-Za-z0-9_.-]+")
+_CHANNEL_ID_RE = re.compile(r"UC[A-Za-z0-9_-]+")
+_CHANNEL_LEGACY_NAME_RE = re.compile(r"[A-Za-z0-9_.-]+")
 
 
 def classify_youtube_url(url: str) -> dict[str, Any]:
@@ -360,19 +390,19 @@ def classify_youtube_url(url: str) -> dict[str, Any]:
     "download all". Channels normalize to their /videos uploads tab.
     """
     text = (url or "").strip()
-    if not text or "music.youtube.com" in text.lower():
+    if not text:
         return {"kind": "unknown"}
 
     # Bare 11-char video ID.
-    if re.fullmatch(r"[a-zA-Z0-9_-]{11}", text):
+    if _VIDEO_ID_RE.fullmatch(text):
         return {"kind": "video", "video_id": text}
 
-    if "youtube.com/" not in text and "youtu.be/" not in text:
+    parsed = _parse_youtube_url(text)
+    if parsed is None or parsed.hostname == _YOUTUBE_MUSIC_HOST:
         return {"kind": "unknown"}
 
-    list_match = _LIST_PARAM_RE.search(text)
-    if list_match:
-        list_id = list_match.group(1)
+    list_id = (parse_qs(parsed.query).get("list") or [None])[0]
+    if isinstance(list_id, str) and _LIST_ID_RE.fullmatch(list_id):
         if list_id.startswith("RD"):
             return {
                 "kind": "mix",
@@ -389,23 +419,31 @@ def classify_youtube_url(url: str) -> dict[str, Any]:
     if video_id:
         return {"kind": "video", "video_id": video_id}
 
-    handle = _CHANNEL_HANDLE_RE.search(text)
-    if handle:
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if path_parts and _CHANNEL_HANDLE_RE.fullmatch(path_parts[0]):
+        handle = path_parts[0]
         return {
             "kind": "channel",
-            "channel": handle.group(1),
-            "enumerate_url": f"https://www.youtube.com/{handle.group(1)}/videos",
+            "channel": handle,
+            "enumerate_url": f"https://www.youtube.com/{handle}/videos",
         }
-    ucid = _CHANNEL_ID_RE.search(text)
-    if ucid:
+    if (
+        len(path_parts) >= 2
+        and path_parts[0] == "channel"
+        and _CHANNEL_ID_RE.fullmatch(path_parts[1])
+    ):
+        channel_id = path_parts[1]
         return {
             "kind": "channel",
-            "channel": ucid.group(1),
-            "enumerate_url": (f"https://www.youtube.com/channel/{ucid.group(1)}/videos"),
+            "channel": channel_id,
+            "enumerate_url": f"https://www.youtube.com/channel/{channel_id}/videos",
         }
-    legacy = _CHANNEL_LEGACY_RE.search(text)
-    if legacy:
-        prefix, name = legacy.group(1), legacy.group(2)
+    if (
+        len(path_parts) >= 2
+        and path_parts[0] in {"c", "user"}
+        and _CHANNEL_LEGACY_NAME_RE.fullmatch(path_parts[1])
+    ):
+        prefix, name = path_parts[0], path_parts[1]
         return {
             "kind": "channel",
             "channel": name,

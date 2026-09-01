@@ -2,12 +2,10 @@
 
 import {
     AlertCircle,
-    Disc3,
     Download,
     FileJson,
     FileText,
     ListMusic,
-    Loader2,
     Music,
     Pause,
     Play,
@@ -17,10 +15,23 @@ import {
     VolumeX,
 } from "lucide-react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { api } from "@/lib/api";
+import {
+    MusicDetailActionDock,
+    MusicDetailHero,
+    MusicDetailTrackSurface,
+} from "@/components/music-detail";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import {
+    formatShareCount,
+    formatShareOwner,
+    shareRu,
+} from "@/lib/i18n/utilityPagesRu";
 
 interface AlbumTrackResource {
     id: string;
@@ -151,6 +162,56 @@ function sanitizeFilename(value: string): string {
     return value.replace(/[\\/:*?"<>|]/g, "_").trim() || "playlist";
 }
 
+function buildPlayableTrackQueue(
+    data: ShareResponse,
+    getCoverUrl: (rawUrl: string | null | undefined) => string | null,
+): PlayableTrack[] {
+    if (data.resourceType === "album") {
+        const album = data.resource as AlbumResource;
+        const coverUrl = getCoverUrl(album.coverUrl || album.coverArt);
+        return album.tracks.map((track) => ({
+            id: track.id,
+            title: track.title,
+            artist: album.artist.name,
+            coverUrl,
+            duration: track.duration,
+        }));
+    }
+
+    if (data.resourceType === "playlist") {
+        const playlist = data.resource as PlaylistResource;
+        return [...playlist.items]
+            .sort((a, b) => a.sort - b.sort)
+            .filter(
+                (
+                    item,
+                ): item is PlaylistItemResource & {
+                    track: NonNullable<PlaylistItemResource["track"]>;
+                } => item.track !== null,
+            )
+            .map((item) => ({
+                id: item.track.id,
+                title: item.track.title,
+                artist: item.track.album.artist.name,
+                coverUrl: getCoverUrl(
+                    item.track.album.coverUrl || item.track.album.coverArt,
+                ),
+                duration: item.track.duration,
+            }));
+    }
+
+    const track = data.resource as TrackResource;
+    return [
+        {
+            id: track.id,
+            title: track.title,
+            artist: track.album.artist.name,
+            coverUrl: getCoverUrl(track.album.coverUrl || track.album.coverArt),
+            duration: track.duration,
+        },
+    ];
+}
+
 /** Renders the SharePage component. */
 export default function SharePage() {
     const params = useParams<{ token: string | string[] }>();
@@ -197,68 +258,10 @@ export default function SharePage() {
         [token],
     );
 
-    const playlistSortedItems = useMemo(() => {
-        if (!data || data.resourceType !== "playlist") {
-            return [] as PlaylistItemResource[];
-        }
-        const playlist = data.resource as PlaylistResource;
-        return [...playlist.items].sort((a, b) => a.sort - b.sort);
-    }, [data]);
-
-    const playlistFilteredItems = useMemo(
-        () =>
-            playlistSortedItems.filter(
-                (
-                    item,
-                ): item is PlaylistItemResource & {
-                    track: NonNullable<PlaylistItemResource["track"]>;
-                } => item.track !== null,
-            ),
-        [playlistSortedItems],
+    const trackQueue = useMemo(
+        () => (data ? buildPlayableTrackQueue(data, getCoverUrl) : []),
+        [data, getCoverUrl],
     );
-
-    const trackQueue = useMemo<PlayableTrack[]>(() => {
-        if (!data) {
-            return [];
-        }
-
-        if (data.resourceType === "album") {
-            const album = data.resource as AlbumResource;
-            const coverUrl = getCoverUrl(album.coverUrl || album.coverArt);
-            return album.tracks.map((track) => ({
-                id: track.id,
-                title: track.title,
-                artist: album.artist.name,
-                coverUrl,
-                duration: track.duration,
-            }));
-        }
-
-        if (data.resourceType === "playlist") {
-            return playlistFilteredItems.map((item) => ({
-                id: item.track.id,
-                title: item.track.title,
-                artist: item.track.album.artist.name,
-                coverUrl: getCoverUrl(
-                    item.track.album.coverUrl || item.track.album.coverArt,
-                ),
-                duration: item.track.duration,
-            }));
-        }
-
-        const track = data.resource as TrackResource;
-        return [
-            {
-                id: track.id,
-                title: track.title,
-                artist: track.album.artist.name,
-                coverUrl: getCoverUrl(
-                    track.album.coverUrl || track.album.coverArt,
-                ),
-                duration: track.duration,
-            },
-        ];
-    }, [data, getCoverUrl, playlistFilteredItems]);
 
     const currentTrackIndex = useMemo(
         () => trackQueue.findIndex((track) => track.id === currentTrack?.id),
@@ -351,26 +354,6 @@ export default function SharePage() {
         [],
     );
 
-    const [showVolumePopup, setShowVolumePopup] = useState(false);
-    const volumePopupRef = useRef<HTMLDivElement>(null);
-    const volumeHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-        null,
-    );
-
-    const handleVolumeMouseEnter = useCallback(() => {
-        if (volumeHoverTimeoutRef.current) {
-            clearTimeout(volumeHoverTimeoutRef.current);
-            volumeHoverTimeoutRef.current = null;
-        }
-        setShowVolumePopup(true);
-    }, []);
-
-    const handleVolumeMouseLeave = useCallback(() => {
-        volumeHoverTimeoutRef.current = setTimeout(() => {
-            setShowVolumePopup(false);
-        }, 300);
-    }, []);
-
     const toggleMute = useCallback(() => {
         setIsMuted((previous) => !previous);
     }, []);
@@ -394,12 +377,25 @@ export default function SharePage() {
                     token,
                 )) as ShareResponse;
                 if (!cancelled) {
+                    const nextQueue = buildPlayableTrackQueue(
+                        json,
+                        getCoverUrl,
+                    );
+                    const firstTrack = nextQueue[0] ?? null;
                     setData(json);
+                    setCurrentTrack(firstTrack);
+                    setIsPlaying(false);
+                    setProgress(0);
+                    setDuration(firstTrack?.duration ?? 0);
                 }
             } catch {
                 if (!cancelled) {
                     setError(true);
                     setData(null);
+                    setCurrentTrack(null);
+                    setIsPlaying(false);
+                    setProgress(0);
+                    setDuration(0);
                 }
             } finally {
                 if (!cancelled) {
@@ -413,7 +409,7 @@ export default function SharePage() {
         return () => {
             cancelled = true;
         };
-    }, [token]);
+    }, [getCoverUrl, token]);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -433,372 +429,366 @@ export default function SharePage() {
         audio.muted = isMuted;
     }, [isMuted, volume]);
 
-    useEffect(() => {
-        if (!trackQueue.length) {
-            setCurrentTrack(null);
-            setIsPlaying(false);
-            setProgress(0);
-            setDuration(0);
-            return;
-        }
-
-        if (
-            currentTrack &&
-            trackQueue.some((track) => track.id === currentTrack.id)
-        ) {
-            return;
-        }
-
-        setCurrentTrack(null);
-        setIsPlaying(false);
-        setProgress(0);
-        setDuration(0);
-    }, [currentTrack, trackQueue]);
-
-    useEffect(() => {
-        if (trackQueue.length > 0 && currentTrack === null) {
-            const first = trackQueue[0];
-            setCurrentTrack(first);
-            setDuration(first.duration);
-        }
-    }, [trackQueue, currentTrack]);
-
     if (loading) {
-        return (
-            <main className="flex min-h-screen items-center justify-center bg-surface px-4 text-white">
-                <div className="flex items-center gap-3 text-gray-300">
-                    <Loader2 className="h-5 w-5 animate-spin text-brand" />
-                    <span>Loading shared link...</span>
-                </div>
-            </main>
-        );
+        return <LoadingScreen message={shareRu.loading} />;
     }
 
     if (error || !data) {
         return (
-            <main className="flex min-h-screen items-center justify-center bg-surface px-4 text-white">
-                <div className="w-full max-w-2xl rounded-xl border border-line bg-[#111111]/60 p-8 text-center">
-                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10">
-                        <AlertCircle className="h-7 w-7 text-red-400" />
-                    </div>
-                    <h1 className="text-2xl font-semibold">
-                        Link not found or expired
-                    </h1>
-                    <p className="mt-2 text-sm text-gray-400">
-                        This share link is invalid, expired, or no longer
-                        available.
-                    </p>
-                    <p className="mt-8 text-xs text-gray-400">soundspan™</p>
-                </div>
+            <main
+                role="alert"
+                className="flex min-h-screen items-center justify-center bg-surface px-4"
+            >
+                <EmptyState
+                    icon={
+                        <AlertCircle className="h-7 w-7" aria-hidden="true" />
+                    }
+                    title={shareRu.unavailableTitle}
+                    description={shareRu.unavailableDescription}
+                />
             </main>
         );
     }
 
-    const leftPanelCoverUrl: string | null =
-        currentTrack?.coverUrl ??
-        (() => {
-            if (data.resourceType === "album") {
-                return getCoverUrl(
-                    (data.resource as AlbumResource).coverUrl ||
-                        (data.resource as AlbumResource).coverArt,
-                );
-            }
-            if (data.resourceType === "track") {
-                return getCoverUrl(
-                    (data.resource as TrackResource).album.coverUrl ||
-                        (data.resource as TrackResource).album.coverArt,
-                );
-            }
-            const firstTrack = trackQueue[0];
-            return firstTrack?.coverUrl ?? null;
-        })();
-
-    const leftPanelTitle =
-        currentTrack?.title ??
-        (data.resourceType === "album"
-            ? (data.resource as AlbumResource).title
+    const albumResource =
+        data.resourceType === "album" ? (data.resource as AlbumResource) : null;
+    const trackResource =
+        data.resourceType === "track" ? (data.resource as TrackResource) : null;
+    const playlistResource =
+        data.resourceType === "playlist"
+            ? (data.resource as PlaylistResource)
+            : null;
+    const resourceTitle =
+        albumResource?.title ||
+        trackResource?.title ||
+        playlistResource?.name ||
+        "Музыка";
+    const resourceSubtitle =
+        albumResource?.artist.name ||
+        trackResource?.album.artist.name ||
+        formatShareOwner(playlistResource?.user?.username);
+    const resourceCoverUrl = albumResource
+        ? getCoverUrl(albumResource.coverUrl || albumResource.coverArt)
+        : trackResource
+          ? getCoverUrl(
+                trackResource.album.coverUrl || trackResource.album.coverArt,
+            )
+          : (trackQueue[0]?.coverUrl ?? null);
+    const resourceEyebrow =
+        data.resourceType === "album"
+            ? shareRu.sharedAlbum
             : data.resourceType === "track"
-              ? (data.resource as TrackResource).title
-              : (data.resource as PlaylistResource).name);
-
-    const leftPanelSubtitle =
-        currentTrack?.artist ??
-        (data.resourceType === "album"
-            ? (data.resource as AlbumResource).artist.name
-            : data.resourceType === "track"
-              ? (data.resource as TrackResource).album.artist.name
-              : `by ${(data.resource as PlaylistResource).user?.username ?? "Unknown user"}`);
-
+              ? shareRu.sharedTrack
+              : shareRu.sharedPlaylist;
+    const totalDuration = trackQueue.reduce(
+        (sum, track) => sum + track.duration,
+        0,
+    );
     const progressPercent =
         duration > 0 ? Math.min(100, (progress / duration) * 100) : 0;
 
     return (
         <>
-            <main className="h-screen overflow-hidden bg-gradient-to-b from-[#1a1a2e] via-[#121218] to-[#000000] text-white">
-                <div className="flex h-full flex-col md:flex-row">
-                    <div className="flex flex-col items-center justify-center overflow-y-auto px-8 py-12 md:h-full md:w-1/2 md:pl-12 md:pr-6">
-                        {data.resourceType === "track" ? (
-                            <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-brand-hover/30 bg-brand-hover/10 px-2.5 py-1 text-xs uppercase tracking-widest text-brand-hover">
-                                <Disc3 className="h-3 w-3" />
-                                Shared Track
+            <main className="min-h-screen bg-surface pb-40 text-content">
+                <MusicDetailHero
+                    eyebrow={resourceEyebrow}
+                    title={resourceTitle}
+                    artworkShape="square"
+                    backgroundImage={resourceCoverUrl}
+                    description={
+                        <p>
+                            {data.resourceType === "playlist"
+                                ? resourceSubtitle
+                                : data.resourceType === "track"
+                                  ? trackResource?.album.title
+                                  : "Открытая ссылка Soundspan"}
+                        </p>
+                    }
+                    metadata={
+                        <>
+                            <span>
+                                {formatShareCount(
+                                    trackQueue.length,
+                                    data.resourceType === "playlist"
+                                        ? "playlist"
+                                        : "tracks",
+                                )}
                             </span>
-                        ) : data.resourceType === "album" ? (
-                            <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-brand-hover/30 bg-brand-hover/10 px-2.5 py-1 text-xs uppercase tracking-widest text-brand-hover">
-                                <Disc3 className="h-3 w-3" />
-                                Shared Album
-                            </span>
+                            {totalDuration > 0 && (
+                                <>
+                                    <span aria-hidden="true">•</span>
+                                    <span>{formatTime(totalDuration)}</span>
+                                </>
+                            )}
+                        </>
+                    }
+                    artwork={
+                        resourceCoverUrl ? (
+                            <Image
+                                src={resourceCoverUrl}
+                                alt={shareRu.coverAlt}
+                                fill
+                                sizes="(max-width: 640px) 176px, 224px"
+                                className="object-cover"
+                                unoptimized
+                            />
                         ) : (
-                            <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-brand-hover/30 bg-brand-hover/10 px-2.5 py-1 text-xs uppercase tracking-widest text-brand-hover">
-                                <ListMusic className="h-3 w-3" />
-                                Shared Playlist
-                            </span>
-                        )}
+                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand/20 via-ai/10 to-surface-highlight">
+                                <Music
+                                    className="h-16 w-16 text-content-muted"
+                                    aria-hidden="true"
+                                />
+                            </div>
+                        )
+                    }
+                    actions={
+                        <MusicDetailActionDock
+                            label={resourceTitle + ": действия"}
+                        >
+                            <div
+                                data-detail-action-tier="primary"
+                                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                            >
+                                <button
+                                    type="button"
+                                    onClick={handlePrev}
+                                    disabled={!hasPrev && progress <= 3}
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+                                    aria-label={shareRu.previous}
+                                    title={shareRu.previous}
+                                >
+                                    <SkipBack className="h-5 w-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handlePlayPause}
+                                    disabled={!currentTrack}
+                                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none sm:flex-none"
+                                    aria-label={
+                                        isPlaying ? shareRu.pause : shareRu.play
+                                    }
+                                >
+                                    {isPlaying ? (
+                                        <Pause className="h-5 w-5 fill-current" />
+                                    ) : (
+                                        <Play className="ml-0.5 h-5 w-5 fill-current" />
+                                    )}
+                                    <span>
+                                        {isPlaying
+                                            ? shareRu.pause
+                                            : shareRu.play}
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleNext}
+                                    disabled={!hasNext}
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+                                    aria-label={shareRu.next}
+                                    title={shareRu.next}
+                                >
+                                    <SkipForward className="h-5 w-5" />
+                                </button>
+                            </div>
 
-                        <div className="relative mx-auto mb-6 w-full max-w-[min(92vw,52vh)] md:max-w-[min(40vw,calc(100vh-20rem))]">
-                            <div className="absolute inset-0 rounded-2xl blur-2xl opacity-50 bg-gradient-to-br from-brand-hover/20 via-transparent to-brand/20" />
-                            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-gradient-to-br from-[#2a2a2a] to-surface-hover shadow-2xl">
-                                {leftPanelCoverUrl ? (
-                                    <img
-                                        src={leftPanelCoverUrl}
-                                        alt="Cover art"
-                                        className="h-full w-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="flex h-full w-full items-center justify-center">
-                                        <Music className="h-24 w-24 text-gray-400" />
-                                    </div>
+                            <div
+                                data-detail-action-tier="secondary"
+                                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                            >
+                                {(data.resourceType === "album" ||
+                                    data.resourceType === "playlist") && (
+                                    <a
+                                        href={getZipUrl()}
+                                        download="soundspan-share.zip"
+                                        className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                        <span>{shareRu.downloadAll}</span>
+                                    </a>
+                                )}
+                                {trackResource && (
+                                    <a
+                                        href={getDownloadUrl(trackResource.id)}
+                                        download
+                                        className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                        <span>{shareRu.download}</span>
+                                    </a>
+                                )}
+                                {playlistResource && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                downloadBlob(
+                                                    buildJsonExport(
+                                                        playlistResource.name,
+                                                        trackQueue,
+                                                    ),
+                                                    sanitizeFilename(
+                                                        playlistResource.name,
+                                                    ) + ".json",
+                                                    "application/json",
+                                                )
+                                            }
+                                            className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                        >
+                                            <FileJson className="h-4 w-4" />
+                                            <span>JSON</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                downloadBlob(
+                                                    buildM3uExport(
+                                                        playlistResource.name,
+                                                        trackQueue,
+                                                    ),
+                                                    sanitizeFilename(
+                                                        playlistResource.name,
+                                                    ) + ".m3u",
+                                                    "audio/x-mpegurl",
+                                                )
+                                            }
+                                            className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                        >
+                                            <FileText className="h-4 w-4" />
+                                            <span>M3U</span>
+                                        </button>
+                                    </>
                                 )}
                             </div>
-                        </div>
+                        </MusicDetailActionDock>
+                    }
+                />
 
-                        <h1 className="text-xl font-bold text-white text-center truncate max-w-full">
-                            {leftPanelTitle}
-                        </h1>
-                        <p className="mt-1 text-base text-gray-400 text-center truncate max-w-full">
-                            {leftPanelSubtitle}
-                        </p>
-                        {!currentTrack && data.resourceType === "album" && (
-                            <p className="mt-1 text-sm text-gray-400 text-center">
-                                {trackQueue.length} tracks
-                            </p>
-                        )}
-                        {!currentTrack && data.resourceType === "playlist" && (
-                            <>
-                                <p className="mt-1 text-sm text-gray-400 text-center">
-                                    {trackQueue.length} items
-                                </p>
-                                <p className="mt-0.5 text-sm text-gray-400 text-center">
-                                    by{" "}
-                                    {(data.resource as PlaylistResource).user
-                                        ?.username ?? "Unknown user"}
-                                </p>
-                            </>
-                        )}
-                        {!currentTrack && data.resourceType === "track" && (
-                            <p className="mt-0.5 text-sm text-gray-400 text-center">
-                                {(data.resource as TrackResource).album.title}
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="flex flex-col px-4 py-4 md:h-full md:w-1/2 md:px-0 md:py-8 md:pl-4 md:pr-8">
-                        <div className="flex h-full flex-col overflow-hidden">
-                            <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                    <ListMusic className="h-4 w-4 text-brand-hover" />
-                                    <h2 className="text-sm font-semibold text-white">
-                                        Up Next
-                                    </h2>
-                                    <span className="text-xs text-gray-400">
-                                        {trackQueue.length}{" "}
-                                        {data.resourceType === "playlist"
-                                            ? "items"
-                                            : "tracks"}
-                                    </span>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {(data.resourceType === "album" ||
-                                        data.resourceType === "playlist") && (
-                                        <a
-                                            href={getZipUrl()}
-                                            download="soundspan-share.zip"
-                                            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                                        >
-                                            <Download className="h-3.5 w-3.5" />
-                                            Download All
-                                        </a>
-                                    )}
-                                    {data.resourceType === "track" && (
-                                        <a
-                                            href={getDownloadUrl(
-                                                (data.resource as TrackResource)
-                                                    .id,
-                                            )}
-                                            download
-                                            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                                        >
-                                            <Download className="h-3.5 w-3.5" />
-                                            Download
-                                        </a>
-                                    )}
-                                    {data.resourceType === "playlist" && (
-                                        <>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    downloadBlob(
-                                                        buildJsonExport(
-                                                            (
-                                                                data.resource as PlaylistResource
-                                                            ).name,
-                                                            trackQueue,
-                                                        ),
-                                                        `${sanitizeFilename((data.resource as PlaylistResource).name)}.json`,
-                                                        "application/json",
-                                                    )
-                                                }
-                                                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                                            >
-                                                <FileJson className="h-3.5 w-3.5" />
-                                                JSON
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    downloadBlob(
-                                                        buildM3uExport(
-                                                            (
-                                                                data.resource as PlaylistResource
-                                                            ).name,
-                                                            trackQueue,
-                                                        ),
-                                                        `${sanitizeFilename((data.resource as PlaylistResource).name)}.m3u`,
-                                                        "audio/x-mpegurl",
-                                                    )
-                                                }
-                                                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
-                                            >
-                                                <FileText className="h-3.5 w-3.5" />
-                                                M3U
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 pb-28">
+                <section className="mx-auto max-w-[1800px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+                    {trackQueue.length > 0 ? (
+                        <MusicDetailTrackSurface
+                            label={resourceTitle + ": треки"}
+                        >
+                            <div
+                                role="list"
+                                aria-label={shareRu.upNext}
+                                className="divide-y divide-white/[0.06]"
+                            >
                                 {trackQueue.map((track, index) => {
-                                    const isCurrentTrack =
+                                    const isCurrent =
                                         currentTrack?.id === track.id;
                                     return (
                                         <div
                                             key={track.id}
+                                            role="listitem"
                                             className={cn(
-                                                "mb-1.5 flex items-center gap-2 rounded-md px-2 py-2 transition-colors cursor-pointer",
-                                                isCurrentTrack
-                                                    ? "bg-brand-hover/10"
-                                                    : "hover:bg-white/[0.06]",
+                                                "group flex min-w-0 items-center gap-2 rounded-[14px] px-1 py-1.5 transition-colors hover:bg-white/[0.05] motion-reduce:transition-none sm:px-2",
+                                                isCurrent && "bg-brand/[0.08]",
                                             )}
                                         >
                                             <button
                                                 type="button"
+                                                aria-label={
+                                                    "Воспроизвести «" +
+                                                    track.title +
+                                                    "»"
+                                                }
                                                 onClick={() => playTrack(track)}
-                                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                                className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-xl px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                                             >
                                                 <span
                                                     className={cn(
-                                                        "w-5 flex-shrink-0 text-center text-[11px] tabular-nums",
-                                                        isCurrentTrack
-                                                            ? "text-brand-hover"
-                                                            : "text-gray-400",
+                                                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs tabular-nums",
+                                                        isCurrent
+                                                            ? "bg-brand/15 text-brand-light"
+                                                            : "text-content-muted",
                                                     )}
                                                 >
-                                                    {index + 1}
+                                                    {isCurrent && isPlaying ? (
+                                                        <Pause className="h-4 w-4" />
+                                                    ) : (
+                                                        index + 1
+                                                    )}
                                                 </span>
-
-                                                <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded bg-surface-hover">
+                                                <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-surface-highlight">
                                                     {track.coverUrl ? (
-                                                        <img
+                                                        <Image
                                                             src={track.coverUrl}
-                                                            alt={track.title}
-                                                            className="h-full w-full object-cover"
+                                                            alt=""
+                                                            fill
+                                                            sizes="44px"
+                                                            className="object-cover"
+                                                            unoptimized
                                                         />
                                                     ) : (
-                                                        <div className="flex h-full w-full items-center justify-center">
-                                                            <Music className="h-4 w-4 text-gray-400" />
-                                                        </div>
+                                                        <span className="flex h-full w-full items-center justify-center">
+                                                            <Music className="h-4 w-4 text-content-muted" />
+                                                        </span>
                                                     )}
-                                                </div>
-
-                                                <div className="min-w-0 flex-1">
-                                                    <p
+                                                </span>
+                                                <span className="min-w-0 flex-1">
+                                                    <span
                                                         className={cn(
-                                                            "min-w-0 truncate text-sm",
-                                                            isCurrentTrack
-                                                                ? "text-brand-hover"
-                                                                : "text-white",
+                                                            "block truncate text-sm font-medium",
+                                                            isCurrent
+                                                                ? "text-brand-light"
+                                                                : "text-content",
                                                         )}
                                                     >
                                                         {track.title}
-                                                    </p>
-                                                    <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                                                        <p className="min-w-0 truncate text-xs text-gray-400">
-                                                            {track.artist}
-                                                        </p>
-                                                        {isCurrentTrack && (
-                                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-hover/40 bg-brand-hover/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-hover">
-                                                                <span className="inline-flex items-end gap-0.5">
-                                                                    <span className="h-2 w-0.5 animate-bounce rounded-full bg-brand-hover [animation-delay:-0.2s]" />
-                                                                    <span className="h-2.5 w-0.5 animate-bounce rounded-full bg-brand-hover" />
-                                                                    <span className="h-1.5 w-0.5 animate-bounce rounded-full bg-brand-hover [animation-delay:-0.35s]" />
-                                                                </span>
-                                                                Playing
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <span
-                                                    className={cn(
-                                                        "text-[11px] tabular-nums",
-                                                        isCurrentTrack
-                                                            ? "text-brand-hover"
-                                                            : "text-gray-400",
-                                                    )}
-                                                >
+                                                    </span>
+                                                    <span className="block truncate text-xs text-content-muted">
+                                                        {track.artist}
+                                                    </span>
+                                                </span>
+                                                <span className="hidden shrink-0 text-xs tabular-nums text-content-muted sm:inline">
                                                     {formatTime(track.duration)}
                                                 </span>
                                             </button>
-
                                             <a
                                                 href={getDownloadUrl(track.id)}
                                                 download
-                                                className="ml-1 flex-shrink-0 p-1 text-gray-400 transition-colors hover:text-white"
-                                                onClick={(e) =>
-                                                    e.stopPropagation()
+                                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-content-muted transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                                onClick={(event) =>
+                                                    event.stopPropagation()
                                                 }
-                                                title="Download track"
+                                                title={shareRu.downloadTrack}
+                                                aria-label={
+                                                    shareRu.downloadTrack +
+                                                    ": " +
+                                                    track.title
+                                                }
                                             >
-                                                <Download className="h-3.5 w-3.5" />
+                                                <Download className="h-4 w-4" />
                                             </a>
                                         </div>
                                     );
                                 })}
                             </div>
-                            <p className="flex-shrink-0 py-3 text-center text-xs text-gray-400">
-                                soundspan™
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                        </MusicDetailTrackSurface>
+                    ) : (
+                        <EmptyState
+                            icon={
+                                <ListMusic
+                                    className="h-7 w-7"
+                                    aria-hidden="true"
+                                />
+                            }
+                            title="В общей ссылке нет треков"
+                            description="Владелец пока не добавил доступную музыку."
+                        />
+                    )}
+                    <p className="pt-8 text-center text-xs text-content-muted">
+                        soundspan™
+                    </p>
+                </section>
             </main>
 
             {currentTrack ? (
-                <div className="fixed inset-x-0 bottom-0 z-50 h-24 border-t border-white/[0.08] bg-black">
-                    <div className="absolute inset-x-0 top-0 h-1 bg-white/20">
+                <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.08] bg-black/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+                    <div className="absolute inset-x-0 top-0 h-1 bg-white/15">
                         <div
-                            className="h-full bg-white/70 transition-none"
-                            style={{ width: `${progressPercent}%` }}
+                            className="h-full bg-brand-light transition-none"
+                            style={{ width: progressPercent + "%" }}
                         />
                         <input
                             type="range"
@@ -815,148 +805,122 @@ export default function SharePage() {
                                 audio.currentTime = seekTime;
                                 setProgress(seekTime);
                             }}
-                            aria-label="Playback progress"
-                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                            aria-label={shareRu.playbackProgress}
+                            className="absolute -top-5 h-11 w-full cursor-pointer opacity-0"
                         />
                     </div>
 
-                    <div className="pointer-events-none absolute left-0 right-0 top-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-                    <div className="grid h-full grid-cols-[1fr_auto_1fr] items-center px-6 pt-1">
-                        <div className="flex min-w-0 items-center gap-3 mr-4">
-                            <div className="relative h-14 w-14 shrink-0">
-                                <div className="relative h-full w-full overflow-hidden rounded-lg bg-gradient-to-br from-[#2a2a2a] to-surface-hover shadow-lg flex items-center justify-center">
-                                    {currentTrack.coverUrl ? (
-                                        <img
-                                            src={currentTrack.coverUrl}
-                                            alt={currentTrack.title}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    ) : (
-                                        <Music className="h-6 w-6 text-gray-400" />
-                                    )}
-                                </div>
+                    <div className="flex h-20 items-center justify-center gap-2 px-3 pt-1 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-5">
+                        <div className="hidden min-w-0 items-center gap-3 sm:flex">
+                            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-highlight">
+                                {currentTrack.coverUrl ? (
+                                    <Image
+                                        src={currentTrack.coverUrl}
+                                        alt=""
+                                        fill
+                                        sizes="48px"
+                                        className="object-cover"
+                                        unoptimized
+                                    />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center">
+                                        <Music className="h-5 w-5 text-content-muted" />
+                                    </div>
+                                )}
                             </div>
-                            <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-white">
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-content">
                                     {currentTrack.title}
                                 </p>
-                                <p className="truncate text-xs text-gray-400">
+                                <p className="truncate text-xs text-content-muted">
                                     {currentTrack.artist}
                                 </p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-6">
+                        <div className="flex items-center justify-center gap-1 sm:gap-2">
                             <button
                                 type="button"
                                 onClick={handlePrev}
                                 disabled={!hasPrev && progress <= 3}
-                                className="text-gray-400 transition-all duration-200 hover:scale-110 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
-                                title="Previous"
+                                className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none"
+                                title={shareRu.previous}
+                                aria-label={shareRu.previous}
                             >
-                                <SkipBack className="h-6 w-6" />
+                                <SkipBack className="h-5 w-5" />
                             </button>
                             <button
                                 type="button"
                                 onClick={handlePlayPause}
-                                className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-lg shadow-white/20 transition-all duration-200 hover:scale-110 hover:shadow-white/30"
-                                title={isPlaying ? "Pause" : "Play"}
+                                className="flex h-12 w-12 items-center justify-center rounded-full bg-content text-black shadow-lg transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                title={isPlaying ? shareRu.pause : shareRu.play}
+                                aria-label={
+                                    isPlaying ? shareRu.pause : shareRu.play
+                                }
                             >
                                 {isPlaying ? (
-                                    <Pause className="h-6 w-6" />
+                                    <Pause className="h-5 w-5 fill-current" />
                                 ) : (
-                                    <Play className="h-6 w-6 ml-0.5" />
+                                    <Play className="ml-0.5 h-5 w-5 fill-current" />
                                 )}
                             </button>
                             <button
                                 type="button"
                                 onClick={handleNext}
                                 disabled={!hasNext}
-                                className="text-gray-400 transition-all duration-200 hover:scale-110 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
-                                title="Next"
+                                className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none"
+                                title={shareRu.next}
+                                aria-label={shareRu.next}
                             >
-                                <SkipForward className="h-6 w-6" />
+                                <SkipForward className="h-5 w-5" />
                             </button>
-                        </div>
-
-                        <div className="flex items-center justify-end ml-4 gap-4">
-                            <span className="whitespace-nowrap text-sm font-medium tabular-nums text-gray-300">
-                                {formatTime(progress)}
-                                {" / "}
-                                {formatTime(duration || currentTrack.duration)}
-                            </span>
-
-                            <div
-                                className="relative z-10 flex items-center justify-center"
-                                onMouseEnter={handleVolumeMouseEnter}
-                                onMouseLeave={handleVolumeMouseLeave}
-                            >
+                            <div className="group/volume relative flex items-center justify-center">
                                 <button
                                     type="button"
                                     onClick={toggleMute}
-                                    className="flex h-8 w-8 items-center justify-center text-gray-400 transition-all duration-200 hover:scale-110 hover:text-white"
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                     aria-label={
                                         isMuted || volume === 0
-                                            ? "Unmute"
-                                            : "Mute"
+                                            ? shareRu.unmute
+                                            : shareRu.mute
                                     }
                                     title={
                                         isMuted || volume === 0
-                                            ? "Unmute"
-                                            : "Mute"
+                                            ? shareRu.unmute
+                                            : shareRu.mute
                                     }
                                 >
                                     {isMuted || volume === 0 ? (
-                                        <VolumeX className="h-[18px] w-[18px]" />
+                                        <VolumeX className="h-5 w-5" />
                                     ) : (
-                                        <Volume2 className="h-[18px] w-[18px]" />
+                                        <Volume2 className="h-5 w-5" />
                                     )}
                                 </button>
-
-                                <div
-                                    ref={volumePopupRef}
-                                    className={cn(
-                                        "absolute bottom-full left-1/2 mb-2 -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-surface-hover px-1.5 py-3 shadow-xl transition-all duration-200",
-                                        showVolumePopup
-                                            ? "pointer-events-auto scale-100 opacity-100"
-                                            : "pointer-events-none scale-95 opacity-0",
-                                    )}
-                                >
-                                    <div className="flex h-28 flex-col items-center gap-3">
-                                        <div className="relative flex h-full w-3 items-center justify-center overflow-hidden">
-                                            <input
-                                                type="range"
-                                                min="0"
-                                                max="100"
-                                                value={
-                                                    isMuted
-                                                        ? 0
-                                                        : Math.round(
-                                                              volume * 100,
-                                                          )
-                                                }
-                                                onChange={handleVolumeChange}
-                                                aria-label="Volume"
-                                                aria-valuemin={0}
-                                                aria-valuemax={100}
-                                                aria-valuenow={Math.round(
-                                                    volume * 100,
-                                                )}
-                                                style={{
-                                                    background: `linear-gradient(to right, #fff ${isMuted ? 0 : volume * 100}%, rgba(255,255,255,0.15) ${isMuted ? 0 : volume * 100}%)`,
-                                                }}
-                                                className="absolute h-1 w-24 -rotate-90 cursor-pointer appearance-none rounded-full [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-white/30"
-                                            />
-                                        </div>
-                                        <span className="mt-0.5 text-[10px] tabular-nums text-gray-400">
-                                            {Math.round(
-                                                isMuted ? 0 : volume * 100,
-                                            )}
-                                        </span>
-                                    </div>
+                                <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 scale-95 rounded-xl border border-white/10 bg-surface-raised p-3 opacity-0 shadow-xl transition-all group-hover/volume:pointer-events-auto group-hover/volume:scale-100 group-hover/volume:opacity-100 group-focus-within/volume:pointer-events-auto group-focus-within/volume:scale-100 group-focus-within/volume:opacity-100 motion-reduce:transition-none">
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={
+                                            isMuted
+                                                ? 0
+                                                : Math.round(volume * 100)
+                                        }
+                                        onChange={handleVolumeChange}
+                                        aria-label={shareRu.volume}
+                                        aria-valuemin={0}
+                                        aria-valuemax={100}
+                                        aria-valuenow={Math.round(volume * 100)}
+                                        className="h-11 w-28 cursor-pointer accent-brand"
+                                    />
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="hidden justify-end text-sm tabular-nums text-content-muted sm:flex">
+                            {formatTime(progress)}
+                            {" / "}
+                            {formatTime(duration || currentTrack.duration)}
                         </div>
                     </div>
                 </div>
@@ -975,7 +939,7 @@ export default function SharePage() {
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
             >
-                <track kind="captions" srcLang="en" label="Music" />
+                <track kind="captions" srcLang="en" label="Музыка" />
             </audio>
         </>
     );

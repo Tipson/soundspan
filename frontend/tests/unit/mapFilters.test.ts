@@ -155,8 +155,8 @@ test("FILTERABLE_MOODS includes the backend's neutral fallback alongside every n
     assert.equal(FILTERABLE_MOODS.length, Object.keys(MOOD_COLORS).length + 1);
 });
 
-test("neutral mood label renders capitalised 'Neutral'", () => {
-    assert.equal(moodLabel(NEUTRAL_MOOD), "Neutral");
+test("neutral mood label is localized", () => {
+    assert.equal(moodLabel(NEUTRAL_MOOD), "Нейтральное");
 });
 
 test("neutral mood falls back to the shared gray dot color", () => {

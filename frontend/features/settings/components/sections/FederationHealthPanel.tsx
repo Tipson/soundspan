@@ -7,6 +7,12 @@ import type {
     FederationHealthState,
     FederationPeerHealth,
 } from "@/lib/api/federation";
+import {
+    adminManagementRu,
+    federationHealthStateLabel,
+    federationPeerErrorDetail,
+    formatFederationFreshness,
+} from "@/lib/i18n/adminManagementRu";
 
 const stateTone: Record<FederationHealthState, string> = {
     green: "bg-green-500/15 text-green-300",
@@ -16,55 +22,20 @@ const stateTone: Record<FederationHealthState, string> = {
 };
 const MAX_HEALTH_PEERS = 500;
 
-function formatFreshness(value: string | null, now: Date): string {
-    if (!value) return "Never synced";
-    const timestamp = new Date(value).getTime();
-    if (!Number.isFinite(timestamp)) return "Sync time unknown";
-    const seconds = Math.max(
-        0,
-        Math.floor((now.getTime() - timestamp) / 1_000),
-    );
-    if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3_600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86_400) return `${Math.floor(seconds / 3_600)}h ago`;
-    return `${Math.floor(seconds / 86_400)}d ago`;
-}
-
 function leaseUsage(peer: FederationPeerHealth): string {
     return peer.maxConcurrentStreams === null
-        ? `${peer.activeStreamLeases} active streams`
-        : `${peer.activeStreamLeases} / ${peer.maxConcurrentStreams} active streams`;
-}
-
-const errorClassLabels: Record<
-    NonNullable<FederationPeerHealth["lastErrorClass"]>,
-    string
-> = {
-    unreachable: "Unreachable",
-    tls: "TLS validation failed",
-    unauthorized: "Authentication rejected",
-    peer_invalid: "Invalid peer response",
-};
-
-function lastErrorDetail(peer: FederationPeerHealth): string {
-    const classLabel = peer.lastErrorClass
-        ? `${errorClassLabels[peer.lastErrorClass]} — `
-        : "";
-    if (!peer.lastError) return classLabel.replace(/ — $/, "");
-    if (!peer.lastErrorAt) return `${classLabel}${peer.lastError}`;
-    const timestamp = new Date(peer.lastErrorAt);
-    if (!Number.isFinite(timestamp.getTime())) {
-        return `${classLabel}${peer.lastError}`;
-    }
-    return `${classLabel}${timestamp.toLocaleString()}: ${peer.lastError}`;
+        ? `${adminManagementRu.federation.health.activeStreams}: ${peer.activeStreamLeases}`
+        : `${adminManagementRu.federation.health.activeStreams}: ${peer.activeStreamLeases} из ${peer.maxConcurrentStreams}`;
 }
 
 function embeddingStateLabel(
     outcome: FederationPeerHealth["lastEmbeddingOutcome"],
 ): string | null {
-    if (outcome === "active") return "Embeddings: federating";
+    if (outcome === "active") {
+        return adminManagementRu.federation.health.embeddingsActive;
+    }
     if (outcome === "skipped_mismatch") {
-        return "Embeddings: not federating — embedding space mismatch (peer needs upgrade)";
+        return adminManagementRu.federation.health.embeddingsMismatch;
     }
     return null;
 }
@@ -74,7 +45,7 @@ function HealthStateChip({ state }: { state: FederationHealthState }) {
         <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${stateTone[state]}`}
         >
-            {state.toUpperCase()}
+            {federationHealthStateLabel(state)}
         </span>
     );
 }
@@ -86,11 +57,22 @@ function CatalogSummary({
 }) {
     return (
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400">
-            <span>{catalog.artist} artists</span>
-            <span>{catalog.album} albums</span>
-            <span>{catalog.track} tracks</span>
-            <span>{catalog.audiobook} audiobooks</span>
-            <span>{catalog.podcast} podcasts</span>
+            <span>
+                {catalog.artist} {adminManagementRu.federation.health.artists}
+            </span>
+            <span>
+                {catalog.album} {adminManagementRu.federation.health.albums}
+            </span>
+            <span>
+                {catalog.track} {adminManagementRu.federation.health.tracks}
+            </span>
+            <span>
+                {catalog.audiobook}{" "}
+                {adminManagementRu.federation.health.audiobooks}
+            </span>
+            <span>
+                {catalog.podcast} {adminManagementRu.federation.health.podcasts}
+            </span>
         </div>
     );
 }
@@ -113,23 +95,25 @@ function FederationHealthCard({
                     </h4>
                     <p className="mt-0.5 text-xs text-gray-500">
                         {peer.direction === "BOTH"
-                            ? "Sharing and consuming"
+                            ? adminManagementRu.federation.health
+                                  .sharingAndConsuming
                             : peer.direction === "HOST"
-                              ? "Sharing to them"
-                              : "Consuming from them"}
+                              ? adminManagementRu.federation.health.sharingOnly
+                              : adminManagementRu.federation.health
+                                    .consumingOnly}
                     </p>
                 </div>
                 <HealthStateChip state={peer.health} />
             </div>
             <div className="mt-3 space-y-2">
                 <p className="text-xs text-gray-300">
-                    Synced{" "}
+                    {adminManagementRu.federation.health.sync}:{" "}
                     {consumesCatalog
-                        ? formatFreshness(peer.lastSyncSuccessAt, now)
-                        : "n/a"}
+                        ? formatFederationFreshness(peer.lastSyncSuccessAt, now)
+                        : adminManagementRu.federation.health.notApplicable}
                     {consumesCatalog &&
                         peer.lastSyncDurationMs !== null &&
-                        ` in ${(peer.lastSyncDurationMs / 1_000).toFixed(1)}s`}
+                        ` · ${adminManagementRu.federation.health.duration} ${(peer.lastSyncDurationMs / 1_000).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} с`}
                 </p>
                 {consumesCatalog && <CatalogSummary catalog={peer.catalog} />}
                 {hostsStreams && (
@@ -144,7 +128,7 @@ function FederationHealthCard({
                 {peer.lastError && (
                     <div className="flex items-start gap-2 rounded-md bg-amber-500/10 p-2 text-xs text-amber-200">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span>{lastErrorDetail(peer)}</span>
+                        <span>{federationPeerErrorDetail(peer)}</span>
                     </div>
                 )}
             </div>
@@ -163,7 +147,7 @@ export function FederationHealthCards({
     if (peers.length === 0) {
         return (
             <p className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-center text-sm text-gray-400">
-                No federation peer health data.
+                {adminManagementRu.federation.health.empty}
             </p>
         );
     }
@@ -191,7 +175,7 @@ function HealthPanelHeader({
                     id="federation-health-title"
                     className="text-sm font-medium text-white"
                 >
-                    Peer health
+                    {adminManagementRu.federation.health.title}
                 </h3>
             </div>
             <button
@@ -199,7 +183,7 @@ function HealthPanelHeader({
                 onClick={onRefresh}
                 disabled={loading}
                 className="rounded-full border border-white/15 p-1.5 text-gray-300 disabled:opacity-50"
-                aria-label="Refresh federation peer health"
+                aria-label={adminManagementRu.federation.health.refresh}
             >
                 <RefreshCw
                     className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
@@ -219,12 +203,8 @@ export function FederationHealthPanel() {
         setError(null);
         try {
             setPeers((await api.getFederationPeerHealth()).peers);
-        } catch (caught: unknown) {
-            setError(
-                caught instanceof Error
-                    ? caught.message
-                    : "Health request failed",
-            );
+        } catch {
+            setError(adminManagementRu.federation.health.requestFailed);
         } finally {
             setLoading(false);
         }
@@ -238,13 +218,9 @@ export function FederationHealthPanel() {
                 setError(null);
                 setLoading(false);
             },
-            (cause: unknown) => {
+            () => {
                 if (!active) return;
-                setError(
-                    cause instanceof Error
-                        ? cause.message
-                        : "Health request failed",
-                );
+                setError(adminManagementRu.federation.health.requestFailed);
                 setLoading(false);
             },
         );
@@ -267,7 +243,9 @@ export function FederationHealthPanel() {
                 </p>
             )}
             {loading ? (
-                <p className="text-sm text-gray-400">Loading peer health…</p>
+                <p className="text-sm text-gray-400">
+                    {adminManagementRu.federation.health.loading}
+                </p>
             ) : (
                 <FederationHealthCards peers={peers} />
             )}

@@ -1,654 +1,230 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useAudioControls } from "@/lib/audio-controls-context";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { ControlSelect } from "@/components/ui/ControlSelect";
-import { FilterPills } from "@/components/ui/FilterPills";
-import { Tab, DeleteDialogState } from "@/features/library/types";
-import {
-    useLibraryArtistsQuery,
-    useLibraryAlbumsQuery,
-    useLibraryTracksQuery,
-    LibraryFilter,
-    LibraryOrigin,
-    SortOption,
-} from "@/hooks/useQueries";
-import { useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { useLibraryActions } from "@/features/library/hooks/useLibraryActions";
+import Link from "next/link";
+import { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, Heart } from "lucide-react";
+import { useLikedPlaylistQuery, usePlaylistsQuery } from "@/hooks/useQueries";
+import { DownloadsList } from "@/features/device-offline/components/DownloadsList";
 import { LibraryHeader } from "@/features/library/components/LibraryHeader";
-import { LibraryTabs } from "@/features/library/components/LibraryTabs";
-import { ArtistsGrid } from "@/features/library/components/ArtistsGrid";
-import { AlbumsGrid } from "@/features/library/components/AlbumsGrid";
-import { TracksList } from "@/features/library/components/TracksList";
-import { Shuffle, ListFilter } from "lucide-react";
-import { useListenTogether } from "@/lib/listen-together-context";
-import { useAuth } from "@/lib/auth-context";
-import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { useFeatures } from "@/lib/features-context";
-import { queryKeys } from "@/lib/queryKeys";
+import {
+    LibraryTabs,
+    type LibraryTab,
+} from "@/features/library/components/LibraryTabs";
+import { PersonalPlaylistGrid } from "@/features/library/components/PersonalPlaylistGrid";
+import { SavedMusicGrid } from "@/features/library/components/SavedMusicGrid";
+import { useSavedMusicEntities } from "@/features/library/hooks/useSavedMusic";
+import type {
+    PersonalPlaylist,
+    PersonalPlaylistItem,
+} from "@/features/library/types";
+import { pluralRu, ru } from "@/lib/i18n/ru";
 
-/**
- * Renders the LibraryPage component.
- */
+const LIBRARY_TABS = new Set<LibraryTab>(["playlists", "albums", "artists"]);
+
+function activeLibraryTab(value: string | null): LibraryTab {
+    return value && LIBRARY_TABS.has(value as LibraryTab)
+        ? (value as LibraryTab)
+        : "playlists";
+}
+
+function isPlaylistItem(value: unknown): value is PersonalPlaylistItem {
+    return Boolean(
+        value &&
+        typeof value === "object" &&
+        "id" in value &&
+        typeof value.id === "string",
+    );
+}
+
+function toPersonalPlaylist(value: unknown): PersonalPlaylist | null {
+    if (
+        !value ||
+        typeof value !== "object" ||
+        !("id" in value) ||
+        !("name" in value) ||
+        typeof value.id !== "string" ||
+        typeof value.name !== "string"
+    ) {
+        return null;
+    }
+
+    const record = value as Record<string, unknown>;
+    return {
+        id: value.id,
+        name: value.name,
+        trackCount:
+            typeof record.trackCount === "number"
+                ? record.trackCount
+                : undefined,
+        items: Array.isArray(record.items)
+            ? record.items.filter(isPlaylistItem)
+            : undefined,
+        isOwner:
+            typeof record.isOwner === "boolean" ? record.isOwner : undefined,
+        isHidden:
+            typeof record.isHidden === "boolean" ? record.isHidden : undefined,
+    };
+}
+
+function SectionHeading({
+    id,
+    title,
+    description,
+}: {
+    id?: string;
+    title: string;
+    description: string;
+}) {
+    return (
+        <div className="mb-4">
+            <h2
+                id={id}
+                className="text-xl font-black tracking-tight text-content sm:text-2xl"
+            >
+                {title}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm leading-5 text-content-muted">
+                {description}
+            </p>
+        </div>
+    );
+}
+
+/** Personal, account-scoped music collection rather than a server-file browser. */
 export default function LibraryPage() {
-    const router = useRouter();
     const searchParams = useSearchParams();
-    const { playTracks, playNow } = useAudioControls();
-    const { isInGroup } = useListenTogether();
-    const { user } = useAuth();
-    const { federation } = useFeatures();
-    const isAdmin = user?.role === "admin";
-    const [canDeleteFromLibrary, setCanDeleteFromLibrary] = useState(false);
+    const activeTab = activeLibraryTab(searchParams.get("tab"));
+    const albumCollection = useSavedMusicEntities("album");
+    const artistCollection = useSavedMusicEntities("artist");
+    const playlistsQuery = usePlaylistsQuery();
+    const likedQuery = useLikedPlaylistQuery(1);
 
-    // Get active tab from URL params, default to "artists"
-    const validTabs: Tab[] = ["artists", "albums", "tracks"];
-    const tabParam = searchParams.get("tab");
-    const activeTab: Tab = validTabs.includes(tabParam as Tab)
-        ? (tabParam as Tab)
-        : "artists";
-
-    // Read page from URL params
-    const urlPage = parseInt(searchParams.get("page") || "1", 10);
-
-    // Filter state (owned = your library, discovery = discovery weekly artists)
-    const [filter, setFilter] = useState<LibraryFilter>("owned");
-    const [origin, setOrigin] = useState<LibraryOrigin>("all");
-
-    // Sort and pagination state
-    const [sortBy, setSortBy] = useState<SortOption>("name");
-    const [itemsPerPage, setItemsPerPage] = useState<number>(40);
-    const [currentPage, setCurrentPage] = useState(urlPage);
-    const [showFilters, setShowFilters] = useState(false);
-
-    // Track previous page to detect pagination changes
-    const prevPageRef = useRef(currentPage);
-
-    // Sync currentPage with URL changes (browser back/forward)
-    useEffect(() => {
-        setCurrentPage(urlPage);
-    }, [urlPage]);
-
-    // Resolve library delete policy for the current user.
-    useEffect(() => {
-        let cancelled = false;
-
-        if (!isAdmin) {
-            setCanDeleteFromLibrary(false);
-            return () => {
-                cancelled = true;
-            };
-        }
-
-        const loadDeletePolicy = async () => {
-            try {
-                const policy = await api.getLibraryDeletePolicy();
-                if (!cancelled) {
-                    setCanDeleteFromLibrary(Boolean(policy.canDelete));
-                }
-            } catch {
-                if (!cancelled) {
-                    setCanDeleteFromLibrary(false);
-                }
-            }
-        };
-
-        loadDeletePolicy();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [isAdmin]);
-
-    const queryClient = useQueryClient();
-
-    // Use React Query hooks for cached data fetching
-    // Only fetch data for active tab to prevent unnecessary API calls
-    const artistsQuery = useLibraryArtistsQuery({
-        filter,
-        sortBy,
-        limit: itemsPerPage,
-        page: currentPage,
-        enabled: activeTab === "artists",
-        origin,
-    });
-
-    const albumsQuery = useLibraryAlbumsQuery({
-        filter,
-        sortBy,
-        limit: itemsPerPage,
-        page: currentPage,
-        enabled: activeTab === "albums",
-        origin,
-    });
-
-    const tracksQuery = useLibraryTracksQuery({
-        sortBy,
-        limit: itemsPerPage,
-        page: currentPage,
-        enabled: activeTab === "tracks",
-        origin,
-    });
-
-    // Get data based on active tab
-    const artists = useMemo(
+    const playlists = useMemo(
         () =>
-            activeTab === "artists" ? (artistsQuery.data?.artists ?? []) : [],
-        [activeTab, artistsQuery.data?.artists],
+            (playlistsQuery.data ?? [])
+                .map(toPersonalPlaylist)
+                .filter(
+                    (playlist): playlist is PersonalPlaylist =>
+                        playlist !== null &&
+                        playlist.isOwner !== false &&
+                        playlist.isHidden !== true,
+                ),
+        [playlistsQuery.data],
     );
-
-    const albums = useMemo(
-        () => (activeTab === "albums" ? (albumsQuery.data?.albums ?? []) : []),
-        [activeTab, albumsQuery.data?.albums],
-    );
-    const tracks = useMemo(
-        () => (activeTab === "tracks" ? (tracksQuery.data?.tracks ?? []) : []),
-        [activeTab, tracksQuery.data?.tracks],
-    );
-
-    // Loading state based on active tab
-    const isLoading =
-        (activeTab === "artists" && artistsQuery.isLoading) ||
-        (activeTab === "albums" && albumsQuery.isLoading) ||
-        (activeTab === "tracks" && tracksQuery.isLoading);
-
-    // Scroll to top when page changes (after data loads)
-    useEffect(() => {
-        if (prevPageRef.current !== currentPage) {
-            prevPageRef.current = currentPage;
-            // Scroll the main content container, not the window
-            const mainContent = document.getElementById("main-content");
-            if (mainContent) {
-                mainContent.scrollTo({ top: 0, behavior: "instant" });
-            }
-        }
-    }, [currentPage]);
-
-    // Pagination from active query
-    const pagination = useMemo(() => {
-        // Get the total from the query data
-        const total =
-            activeTab === "artists"
-                ? (artistsQuery.data?.total ?? 0)
-                : activeTab === "albums"
-                  ? (albumsQuery.data?.total ?? 0)
-                  : (tracksQuery.data?.total ?? 0);
-
-        return {
-            total,
-            offset: 0,
-            limit: itemsPerPage,
-            totalPages: Math.ceil(total / itemsPerPage),
-            currentPage,
-            itemsPerPage,
-        };
-    }, [
-        activeTab,
-        artistsQuery.data,
-        albumsQuery.data,
-        tracksQuery.data,
-        itemsPerPage,
-        currentPage,
-    ]);
-
-    // Reload data function using React Query invalidation
-    const reloadData = useCallback(async () => {
-        if (activeTab === "artists") {
-            await queryClient.invalidateQueries({
-                queryKey: queryKeys.libraryArtistsAll(),
-            });
-        } else if (activeTab === "albums") {
-            await queryClient.invalidateQueries({
-                queryKey: queryKeys.libraryAlbumsAll(),
-            });
-        } else {
-            await queryClient.invalidateQueries({
-                queryKey: queryKeys.libraryTracksAll(),
-            });
-        }
-    }, [activeTab, queryClient]);
-
-    const { playArtist, playAlbum, deleteArtist, deleteAlbum, deleteTrack } =
-        useLibraryActions();
-
-    // Reset page and filter when tab changes
-    useEffect(() => {
-        setCurrentPage(1);
-        // Reset filter to 'owned' when switching to tracks tab (which doesn't support filter)
-        if (activeTab === "tracks") {
-            setFilter("owned");
-        }
-    }, [activeTab]);
-
-    // Reset page when filter or sort changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [filter, origin, sortBy, itemsPerPage]);
-
-    // Get total items and pages from pagination
-    const totalItems = pagination.total;
-    const totalPages = pagination.totalPages;
-
-    // Delete confirmation dialog state
-    const [deleteConfirm, setDeleteConfirm] = useState<DeleteDialogState>({
-        isOpen: false,
-        type: "track",
-        id: "",
-        title: "",
-    });
-
-    // Change tab function
-    const changeTab = useCallback(
-        (tab: Tab) => {
-            router.push(`/library?tab=${tab}`, { scroll: false });
-        },
-        [router],
-    );
-
-    // Update page with URL state - scroll handled by useEffect on currentPage change
-    const updatePage = useCallback(
-        (page: number) => {
-            const params = new URLSearchParams();
-            params.set("tab", activeTab);
-            params.set("page", String(page));
-            router.push(`/library?${params.toString()}`, { scroll: false });
-        },
-        [activeTab, router],
-    );
-
-    // Helper to convert library Track to audio context Track format
-    const formatTracksForAudio = useCallback((libraryTracks: typeof tracks) => {
-        return libraryTracks.map((track) => ({
-            id: track.id,
-            title: track.title,
-            duration: track.duration,
-            artist: {
-                id: track.album?.artist?.id,
-                name: track.album?.artist?.name || "Unknown Artist",
-            },
-            album: {
-                id: track.album?.id,
-                title: track.album?.title || "Unknown Album",
-                coverArt: track.album?.coverArt,
-            },
-            source: track.source,
-            peer: track.peer,
-        }));
-    }, []);
-
-    // Wrapper for playTracks that converts track format
-    // When startIndex is provided, it's a single track click — use playNow
-    const handlePlayTracks = useCallback(
-        (libraryTracks: typeof tracks, startIndex?: number) => {
-            if (
-                startIndex !== undefined &&
-                startIndex >= 0 &&
-                startIndex < libraryTracks.length
-            ) {
-                const formattedTrack = formatTracksForAudio([
-                    libraryTracks[startIndex],
-                ])[0];
-                playNow(formattedTrack);
-                return;
-            }
-            const formattedTracks = formatTracksForAudio(libraryTracks);
-            playTracks(formattedTracks);
-        },
-        [formatTracksForAudio, playTracks, playNow],
-    );
-
-    // Shuffle entire library - uses server-side shuffle for large libraries
-    const handleShuffleLibrary = useCallback(async () => {
-        try {
-            // Use server-side shuffle endpoint for better performance with large libraries
-            const { tracks: shuffledTracks } = await api.getShuffledTracks(500);
-
-            if (shuffledTracks.length === 0) {
-                return;
-            }
-
-            const formattedTracks = formatTracksForAudio(shuffledTracks);
-            playTracks(formattedTracks, 0);
-        } catch (error) {
-            sharedFrontendLogger.error("Failed to shuffle library:", error);
-        }
-    }, [formatTracksForAudio, playTracks]);
-
-    // Handle delete confirmation
-    const handleDelete = useCallback(async () => {
-        if (!canDeleteFromLibrary) {
-            setDeleteConfirm({
-                isOpen: false,
-                type: "track",
-                id: "",
-                title: "",
-            });
-            return;
-        }
-
-        try {
-            switch (deleteConfirm.type) {
-                case "artist":
-                    await deleteArtist(deleteConfirm.id);
-                    break;
-                case "album":
-                    await deleteAlbum(deleteConfirm.id);
-                    break;
-                case "track":
-                    await deleteTrack(deleteConfirm.id);
-                    break;
-            }
-
-            // Reload data and close dialog - the item disappearing is feedback enough
-            await reloadData();
-            setDeleteConfirm({
-                isOpen: false,
-                type: "track",
-                id: "",
-                title: "",
-            });
-        } catch (error) {
-            sharedFrontendLogger.error(
-                `Failed to delete ${deleteConfirm.type}:`,
-                error,
-            );
-            // Keep dialog open on error so user can retry
-        }
-    }, [
-        canDeleteFromLibrary,
-        deleteConfirm,
-        deleteArtist,
-        deleteAlbum,
-        deleteTrack,
-        reloadData,
-    ]);
-
-    // Memoize delete handlers to prevent grid re-renders
-    const handleDeleteArtist = useCallback(
-        (id: string, name: string) => {
-            if (!canDeleteFromLibrary) return;
-            setDeleteConfirm({
-                isOpen: true,
-                type: "artist",
-                id,
-                title: name,
-            });
-        },
-        [canDeleteFromLibrary],
-    );
-
-    const handleDeleteAlbum = useCallback(
-        (id: string, title: string) => {
-            if (!canDeleteFromLibrary) return;
-            setDeleteConfirm({
-                isOpen: true,
-                type: "album",
-                id,
-                title,
-            });
-        },
-        [canDeleteFromLibrary],
-    );
-
-    const handleDeleteTrack = useCallback(
-        (id: string, title: string) => {
-            if (!canDeleteFromLibrary) return;
-            setDeleteConfirm({
-                isOpen: true,
-                type: "track",
-                id,
-                title,
-            });
-        },
-        [canDeleteFromLibrary],
-    );
+    const likedTotal = likedQuery.data?.total ?? 0;
 
     return (
-        <div className="min-h-screen relative">
+        <div className="relative min-h-screen bg-surface">
             <LibraryHeader />
 
-            <div className="relative px-2 md:px-8 pb-24">
-                {/* Tabs and Controls Row */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-                    <LibraryTabs
-                        activeTab={activeTab}
-                        onTabChange={changeTab}
-                    />
+            <main className="relative mx-auto max-w-[1800px] space-y-8 px-4 pt-8 sm:space-y-10 sm:px-6 sm:pt-10 lg:px-8">
+                <LibraryTabs activeTab={activeTab} />
 
-                    {federation && (
-                        <div
-                            className="flex items-center gap-1"
-                            aria-label="Library source"
+                {activeTab === "playlists" && (
+                    <section
+                        data-library-view="playlists"
+                        aria-labelledby="playlist-library-title"
+                    >
+                        <SectionHeading
+                            id="playlist-library-title"
+                            title={ru.library.playlists}
+                            description="Любимые треки, ваши плейлисты и музыка, сохранённая на этом устройстве"
+                        />
+                        <Link
+                            href="/playlist/my-liked"
+                            className="group flex min-h-20 items-center gap-4 border-y border-white/[0.08] py-3 transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
-                            {(["all", "local", "peers"] as const).map(
-                                (value) => (
-                                    <button
-                                        key={value}
-                                        type="button"
-                                        onClick={() => setOrigin(value)}
-                                        className={`rounded-full px-3 py-1.5 text-sm font-medium capitalize transition-all ${
-                                            origin === value
-                                                ? "bg-brand text-black"
-                                                : "bg-white/10 text-white hover:bg-white/15"
-                                        }`}
-                                    >
-                                        {value === "all"
-                                            ? "All"
-                                            : value === "local"
-                                              ? "Local"
-                                              : "Peers"}
-                                    </button>
-                                ),
-                            )}
-                        </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                        {/* Shuffle Button */}
-                        <button
-                            onClick={handleShuffleLibrary}
-                            className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-hover hover:bg-brand text-black transition-all hover:scale-105"
-                            title="Shuffle Library"
-                        >
-                            <Shuffle className="w-4 h-4" />
-                        </button>
-
-                        {/* Filter Toggle */}
-                        <button
-                            onClick={() => setShowFilters(!showFilters)}
-                            className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${
-                                showFilters
-                                    ? "bg-white/20 text-white"
-                                    : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
-                            }`}
-                            title="Show Filters"
-                        >
-                            <ListFilter className="w-4 h-4" />
-                        </button>
-
-                        {/* Item Count */}
-                        <span className="text-sm text-gray-400 ml-2">
-                            {totalItems.toLocaleString()}{" "}
-                            {activeTab === "artists"
-                                ? "artists"
-                                : activeTab === "albums"
-                                  ? "albums"
-                                  : "songs"}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Expandable Filters Row */}
-                {showFilters && (
-                    <div className="flex flex-wrap items-center gap-2 mb-6 pb-4 border-b border-white/5">
-                        {/* Filter Toggle (Owned / Discovery / All) - Only show for artists and albums */}
-                        {(activeTab === "artists" ||
-                            activeTab === "albums") && (
-                            <FilterPills<LibraryFilter>
-                                aria-label="Filter library"
-                                size="sm"
-                                options={[
-                                    {
-                                        value: "owned",
-                                        label: "Owned",
-                                        activeClassName: "bg-brand text-black",
-                                    },
-                                    {
-                                        value: "discovery",
-                                        label: "Discovery",
-                                        activeClassName: "bg-ai text-white",
-                                    },
-                                    {
-                                        value: "all",
-                                        label: "All",
-                                        activeClassName:
-                                            "bg-white/20 text-white",
-                                    },
-                                ]}
-                                value={filter}
-                                onChange={setFilter}
+                            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand/15 text-brand-light">
+                                <Heart
+                                    className="h-5 w-5 fill-current"
+                                    aria-hidden="true"
+                                />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                                <span className="block text-base font-bold text-content">
+                                    Любимые треки
+                                </span>
+                                <span className="mt-1 block text-sm text-content-muted">
+                                    {likedTotal}{" "}
+                                    {pluralRu(likedTotal, [
+                                        "трек",
+                                        "трека",
+                                        "треков",
+                                    ])}
+                                    {" · "}Открыть полный список
+                                </span>
+                            </span>
+                            <ArrowRight
+                                className="h-5 w-5 shrink-0 text-content-muted transition-transform group-hover:translate-x-1 motion-reduce:transition-none"
+                                aria-hidden="true"
                             />
-                        )}
+                        </Link>
 
-                        {/* Sort Dropdown */}
-                        <ControlSelect
-                            value={sortBy}
-                            onChange={(e) =>
-                                setSortBy(e.target.value as SortOption)
-                            }
-                        >
-                            <option value="name">Name (A-Z)</option>
-                            <option value="name-desc">Name (Z-A)</option>
-                            {activeTab === "albums" && (
-                                <option value="recent">Year (Newest)</option>
-                            )}
-                            {activeTab === "artists" && (
-                                <option value="tracks">Most Tracks</option>
-                            )}
-                        </ControlSelect>
+                        <div className="mt-8">
+                            <h3 className="mb-4 text-base font-bold text-content sm:text-lg">
+                                Ваши плейлисты
+                            </h3>
+                            <PersonalPlaylistGrid
+                                playlists={playlists}
+                                isLoading={playlistsQuery.isLoading}
+                                isError={playlistsQuery.isError}
+                                onRetry={() => void playlistsQuery.refetch()}
+                            />
+                        </div>
 
-                        {/* Items per page */}
-                        <ControlSelect
-                            value={itemsPerPage}
-                            onChange={(e) =>
-                                setItemsPerPage(Number(e.target.value))
-                            }
-                        >
-                            <option value={24}>24 per page</option>
-                            <option value={40}>40 per page</option>
-                            <option value={80}>80 per page</option>
-                            <option value={200}>200 per page</option>
-                        </ControlSelect>
-                    </div>
-                )}
-
-                {activeTab === "artists" && (
-                    <ArtistsGrid
-                        artists={artists}
-                        isLoading={isLoading}
-                        onPlay={playArtist}
-                        onDelete={handleDeleteArtist}
-                        canDelete={canDeleteFromLibrary}
-                        hidePlayButtons={isInGroup}
-                    />
+                        <div className="mt-10 border-t border-white/[0.08] pt-8">
+                            <SectionHeading
+                                title={ru.library.deviceDownloads}
+                                description="Офлайн-музыка хранится обычными файлами на телефоне или компьютере. Доступ к папке относится к этому профилю браузера; очистка данных сайта не удаляет файлы и не затрагивает другие устройства."
+                            />
+                            <DownloadsList />
+                        </div>
+                    </section>
                 )}
 
                 {activeTab === "albums" && (
-                    <AlbumsGrid
-                        albums={albums}
-                        isLoading={isLoading}
-                        onPlay={playAlbum}
-                        onDelete={handleDeleteAlbum}
-                        canDelete={canDeleteFromLibrary}
-                        hidePlayButtons={isInGroup}
-                    />
-                )}
-
-                {activeTab === "tracks" && (
-                    <TracksList
-                        tracks={tracks}
-                        isLoading={isLoading}
-                        onPlay={handlePlayTracks}
-                        onDelete={handleDeleteTrack}
-                        canDelete={canDeleteFromLibrary}
-                    />
-                )}
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-2 mt-8 pt-4 border-t border-white/5">
-                        <button
-                            onClick={() => updatePage(1)}
-                            disabled={currentPage === 1 || isLoading}
-                            className="px-3 py-1.5 text-xs text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            First
-                        </button>
-                        <button
-                            onClick={() =>
-                                updatePage(Math.max(1, currentPage - 1))
+                    <section>
+                        <SectionHeading
+                            title={ru.library.savedAlbums}
+                            description="Сохранённые альбомы. Загрузки выбираются отдельно на каждом устройстве."
+                        />
+                        <SavedMusicGrid
+                            type="album"
+                            items={albumCollection.items}
+                            isLoading={albumCollection.isLoading}
+                            isError={albumCollection.isError}
+                            hasMore={albumCollection.hasNextPage}
+                            isLoadingMore={albumCollection.isFetchingNextPage}
+                            onLoadMore={() =>
+                                void albumCollection.fetchNextPage()
                             }
-                            disabled={currentPage === 1 || isLoading}
-                            className="px-3 py-1.5 text-xs text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Prev
-                        </button>
-                        <span className="px-4 py-1.5 text-xs text-white">
-                            {currentPage} / {totalPages}
-                        </span>
-                        <button
-                            onClick={() =>
-                                updatePage(
-                                    Math.min(totalPages, currentPage + 1),
-                                )
-                            }
-                            disabled={currentPage === totalPages || isLoading}
-                            className="px-3 py-1.5 text-xs text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Next
-                        </button>
-                        <button
-                            onClick={() => updatePage(totalPages)}
-                            disabled={currentPage === totalPages || isLoading}
-                            className="px-3 py-1.5 text-xs text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Last
-                        </button>
-                    </div>
+                            onRetry={() => void albumCollection.refetch()}
+                        />
+                    </section>
                 )}
 
-                <ConfirmDialog
-                    isOpen={deleteConfirm.isOpen}
-                    onClose={() =>
-                        setDeleteConfirm({
-                            isOpen: false,
-                            type: "track",
-                            id: "",
-                            title: "",
-                        })
-                    }
-                    onConfirm={handleDelete}
-                    title={`Delete ${
-                        deleteConfirm.type === "artist"
-                            ? "Artist"
-                            : deleteConfirm.type === "album"
-                              ? "Album"
-                              : "Track"
-                    }?`}
-                    message={
-                        deleteConfirm.type === "track"
-                            ? `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete the file from your system.`
-                            : deleteConfirm.type === "album"
-                              ? `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete all tracks and files from your system.`
-                              : `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete all albums, tracks, and files from your system.`
-                    }
-                    confirmText="Delete"
-                    cancelText="Cancel"
-                    variant="danger"
-                />
-            </div>
+                {activeTab === "artists" && (
+                    <section>
+                        <SectionHeading
+                            title={ru.library.savedArtists}
+                            description="Сохранённые исполнители из музыкального каталога"
+                        />
+                        <SavedMusicGrid
+                            type="artist"
+                            items={artistCollection.items}
+                            isLoading={artistCollection.isLoading}
+                            isError={artistCollection.isError}
+                            hasMore={artistCollection.hasNextPage}
+                            isLoadingMore={artistCollection.isFetchingNextPage}
+                            onLoadMore={() =>
+                                void artistCollection.fetchNextPage()
+                            }
+                            onRetry={() => void artistCollection.refetch()}
+                        />
+                    </section>
+                )}
+            </main>
         </div>
     );
 }

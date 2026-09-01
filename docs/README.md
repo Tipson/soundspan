@@ -16,6 +16,7 @@ This index is the central navigation page for all project documentation under `d
 1. Deploy and validate base app via [`DEPLOYMENT.md`](DEPLOYMENT.md)
 2. Configure secrets and service URLs via [`CONFIGURATION_AND_SECURITY.md`](CONFIGURATION_AND_SECURITY.md)
 3. Enable integrations using [`INTEGRATIONS.md`](INTEGRATIONS.md)
+4. Operate or evaluate personalized ranking via [`HYBRID_RECOMMENDATIONS.md`](HYBRID_RECOMMENDATIONS.md)
 
 ### Kubernetes users
 
@@ -53,6 +54,7 @@ This index is the central navigation page for all project documentation under `d
 | [`ENVIRONMENT_VARIABLES.md`](ENVIRONMENT_VARIABLES.md)                                         | Operators/admins         | Complete env var reference by container with defaults and status labels                                                                         |
 | [`INTEGRATIONS.md`](INTEGRATIONS.md)                                                           | Operators/admins         | Setup guides for Lidarr, Audiobookshelf, Soulseek, YouTube Music, TIDAL, and OpenSubsonic                                                       |
 | [`ADVANCED_ANALYSIS_AND_GPU.md`](ADVANCED_ANALYSIS_AND_GPU.md)                                 | Power users/operators    | DCLAP vibe provider details and optional MusiCNN GPU acceleration                                                                               |
+| [`HYBRID_RECOMMENDATIONS.md`](HYBRID_RECOMMENDATIONS.md)                                       | Operators/maintainers    | Hybrid recommendation modes, canonical remote analysis, observability, and the shadow-to-active gate                                            |
 | [`KUBERNETES.md`](KUBERNETES.md)                                                               | Kubernetes operators     | Helm and manual Kubernetes deployment guidance                                                                                                  |
 | [`REVERSE_PROXY_AND_TUNNELS.md`](REVERSE_PROXY_AND_TUNNELS.md)                                 | Operators/network admins | Reverse proxy and Cloudflare Tunnel routing guidance                                                                                            |
 | [`MIGRATING_FROM_LIDIFY.md`](MIGRATING_FROM_LIDIFY.md)                                         | Operators/maintainers    | Step-by-step migration runbook for moving a Lidify deployment to soundspan                                                                      |
@@ -64,6 +66,7 @@ This index is the central navigation page for all project documentation under `d
 | Document                                                                         | Audience                 | Purpose                                                                                                                                        |
 | -------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md)                                             | Contributors/agents      | Service topology, request flows, service communication map                                                                                     |
+| [`HYBRID_RECOMMENDATIONS.md`](HYBRID_RECOMMENDATIONS.md)                         | Contributors/operators   | Unified ranking boundary, canonical feature store, remote hot-set lifecycle, and evaluation workflow                                           |
 | [`DATA_MODEL.md`](DATA_MODEL.md)                                                 | Contributors/agents      | Entity relationships (mermaid ERD), classification, resolution chains                                                                          |
 | [`TEST_MATRIX.md`](TEST_MATRIX.md)                                               | Contributors/agents      | Domain-to-test-file mapping for fast targeted verification                                                                                     |
 | [`matrix.md`](matrix.md)                                                         | Contributors/agents      | Playback-surface button availability matrix, plus enforced hard caps, pagination defaults, and UI display limits, each with file:line pointers |

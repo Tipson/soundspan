@@ -50,7 +50,7 @@ describe("workers/queues", () => {
             "rediss://user:pass@cache.example:6381/2",
         );
 
-        expect(bullCtor).toHaveBeenCalledTimes(12);
+        expect(bullCtor).toHaveBeenCalledTimes(13);
         const firstCallArgs = bullCtor.mock.calls[0];
         const firstQueueOptions = firstCallArgs[1];
 
@@ -65,7 +65,7 @@ describe("workers/queues", () => {
                 tls: {},
             }),
         );
-        expect(queuesModule.queues).toHaveLength(12);
+        expect(queuesModule.queues).toHaveLength(13);
         expect(bullCtor.mock.calls.map((call) => call[0])).toEqual([
             "library-scan",
             "discover-weekly",
@@ -79,6 +79,7 @@ describe("workers/queues", () => {
             "album-download",
             "worker-artist-expansion",
             "scrobble-forwarding",
+            "remote-analysis-hot-set",
         ]);
         expect(logger.debug).toHaveBeenCalledWith(
             expect.stringContaining("Redis config resolved"),
@@ -135,6 +136,24 @@ describe("workers/queues", () => {
             backoff: { type: "exponential", delay: 5_000 },
             removeOnComplete: 100,
             removeOnFail: 200,
+        });
+    });
+
+    it("gives remote analysis a bounded retry and long audio-processing lock", () => {
+        const { bullCtor } = loadQueues("redis://cache.example:6379/0");
+        const remoteCall = bullCtor.mock.calls.find(
+            (call: any[]) => call[0] === "remote-analysis-hot-set",
+        );
+
+        expect(remoteCall).toBeDefined();
+        expect(remoteCall![1].settings).toEqual(
+            expect.objectContaining({ lockDuration: 300_000 }),
+        );
+        expect(remoteCall![1].defaultJobOptions).toEqual({
+            attempts: 2,
+            backoff: { type: "exponential", delay: 30_000 },
+            removeOnComplete: true,
+            removeOnFail: true,
         });
     });
 

@@ -7,9 +7,14 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Literal, cast
 
 from fastapi import HTTPException, Query
-from ytmusic_client import _get_public_ytmusic, _run_ytmusic_with_auth_retry
+from ytmusic_client import (
+    _run_public_ytmusic,
+    _run_public_ytmusic_with_retry,
+    _run_ytmusic_with_auth_retry,
+)
 from ytmusic_runtime import JsonObject, _sanitized_http_error, app, log
 from ytmusic_stream import BROWSE_TIMEOUT, _browse_public_bounded, _validate_video_id
+from ytmusicapi import YTMusic
 from ytmusicapi.exceptions import YTMusicServerError
 
 from services.common.sidecar_runtime_utils import env_int
@@ -406,11 +411,71 @@ def _format_album_response(browse_id: str, album: JsonObject) -> JsonObject:
     }
 
 
+def _get_album_with_resolved_browse_id(yt: YTMusic, browse_id: str) -> tuple[str, JsonObject]:
+    """Resolve a TV album-playlist identity before using native album browse."""
+    resolved_browse_id = browse_id.strip()
+    if resolved_browse_id.startswith("VLOLAK5uy_"):
+        resolved = yt.get_album_browse_id(resolved_browse_id[2:])
+        if not isinstance(resolved, str) or not resolved.startswith("MPRE"):
+            raise ValueError("Unable to find canonical album browse identity")
+        resolved_browse_id = resolved
+
+    album = yt.get_album(resolved_browse_id)
+    return resolved_browse_id, album
+
+
 async def get_public_album_metadata(browse_id: str) -> JsonObject:
     """Fetch and normalize an album through the public browse client."""
-    yt = _get_public_ytmusic("native")
-    album = await _browse_public_bounded(yt.get_album, browse_id)
-    return _format_album_response(browse_id, album)
+    resolved_browse_id, album = await _browse_public_bounded(
+        _run_public_ytmusic,
+        "native",
+        lambda yt: _get_album_with_resolved_browse_id(yt, browse_id),
+    )
+    return _format_album_response(resolved_browse_id, album)
+
+
+def _get_artist_with_complete_releases(yt: YTMusic, channel_id: str) -> JsonObject:
+    """Expand every provider album and single continuation for one artist."""
+    artist = yt.get_artist(channel_id)
+    for group_name in ("albums", "singles"):
+        raw_group = artist.get(group_name)
+        if not isinstance(raw_group, dict):
+            continue
+        group = cast(JsonObject, raw_group)
+        preview = [
+            cast(JsonObject, release)
+            for release in group.get("results", [])
+            if isinstance(release, dict)
+        ]
+        browse_id = group.get("browseId")
+        params = group.get("params")
+        expanded = preview
+        if isinstance(browse_id, str) and isinstance(params, str) and params:
+            try:
+                provider_releases = yt.get_artist_albums(browse_id, params, limit=None)
+                expanded = [release for release in provider_releases if isinstance(release, dict)]
+            except Exception as error:
+                # The preview still provides useful releases when a provider
+                # continuation expires or one category becomes unavailable.
+                log.warning(
+                    "Artist %s %s continuation failed; retaining preview: %s",
+                    channel_id,
+                    group_name,
+                    type(error).__name__,
+                )
+
+        seen: set[str] = set()
+        merged: list[JsonObject] = []
+        for release in [*preview, *expanded]:
+            identity = str(
+                release.get("browseId") or f"{release.get('title', '')}\0{release.get('year', '')}"
+            )
+            if not identity or identity in seen:
+                continue
+            seen.add(identity)
+            merged.append(release)
+        group["results"] = merged
+    return artist
 
 
 @app.get("/album/{browse_id}")
@@ -422,13 +487,13 @@ async def get_album(browse_id: str, user_id: str = Query(...)) -> JsonObject:
     try:
         if user_id == "__public__":
             return await get_public_album_metadata(browse_id)
-        album = await asyncio.to_thread(
+        resolved_browse_id, album = await asyncio.to_thread(
             _run_ytmusic_with_auth_retry,
             user_id,
             operation=f"get_album({browse_id})",
-            func=lambda yt: yt.get_album(browse_id),
+            func=lambda yt: _get_album_with_resolved_browse_id(yt, browse_id),
         )
-        return _format_album_response(browse_id, album)
+        return _format_album_response(resolved_browse_id, album)
     except HTTPException:
         raise
     except Exception as e:
@@ -443,14 +508,17 @@ async def get_artist(channel_id: str, user_id: str = Query(...)) -> JsonObject:
     """
     try:
         if user_id == "__public__":
-            yt = _get_public_ytmusic("native")
-            artist = await _browse_public_bounded(yt.get_artist, channel_id)
+            artist = await _browse_public_bounded(
+                _run_public_ytmusic,
+                "native",
+                lambda yt: _get_artist_with_complete_releases(yt, channel_id),
+            )
         else:
             artist = await asyncio.to_thread(
                 _run_ytmusic_with_auth_retry,
                 user_id,
                 operation=f"get_artist({channel_id})",
-                func=lambda yt: yt.get_artist(channel_id),
+                func=lambda yt: _get_artist_with_complete_releases(yt, channel_id),
             )
 
         songs = []
@@ -467,16 +535,17 @@ async def get_artist(channel_id: str, user_id: str = Query(...)) -> JsonObject:
             )
 
         albums = []
-        for a in (artist.get("albums", {}).get("results", []))[:20]:
-            albums.append(
-                {
-                    "browseId": a.get("browseId"),
-                    "title": a.get("title"),
-                    "year": a.get("year"),
-                    "type": a.get("type", "Album"),
-                    "thumbnails": a.get("thumbnails", []),
-                }
-            )
+        for release_group, fallback_type in (("albums", "Album"), ("singles", "Single")):
+            for a in artist.get(release_group, {}).get("results", []):
+                albums.append(
+                    {
+                        "browseId": a.get("browseId"),
+                        "title": a.get("title"),
+                        "year": a.get("year"),
+                        "type": a.get("type") or fallback_type,
+                        "thumbnails": a.get("thumbnails", []),
+                    }
+                )
 
         thumbnails = artist.get("thumbnails", [])
         return {
@@ -505,8 +574,14 @@ async def get_song(video_id: str, user_id: str = Query(...)) -> JsonObject:
     video_id = _validate_video_id(video_id)
     try:
         if user_id == "__public__":
-            yt = _get_public_ytmusic("native")
-            song = await _browse_public_bounded(yt.get_song, video_id)
+            song = await _browse_public_bounded(
+                lambda: _run_public_ytmusic_with_retry(
+                    "native",
+                    "song metadata browse",
+                    lambda yt: yt.get_song(video_id),
+                    retry_timeouts=False,
+                )
+            )
         else:
             song = await asyncio.to_thread(
                 _run_ytmusic_with_auth_retry,

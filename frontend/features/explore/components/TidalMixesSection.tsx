@@ -4,7 +4,7 @@
  * Shows a carousel of personal TIDAL mixes using HorizontalCarousel.
  */
 
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import { SectionHeader } from "@/features/home/components/SectionHeader";
 import { TidalBadge } from "@/components/ui/TidalBadge";
 import {
     HorizontalCarousel,
@@ -26,7 +26,7 @@ export function TidalMixesSection({ mixes }: TidalMixesSectionProps) {
 
     return (
         <section>
-            <SectionHeader title="TIDAL Mixes" badge={<TidalBadge />} />
+            <SectionHeader title="Миксы TIDAL" badge={<TidalBadge />} />
             <HorizontalCarousel gap="lg">
                 {mixes.map((mix) => (
                     <CarouselItem key={mix.mixId}>

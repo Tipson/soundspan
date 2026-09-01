@@ -4,6 +4,8 @@
  * Kept free of React/DOM so pure logic modules and unit tests can import it.
  */
 
+import { vibeMoodLabel } from "@/lib/i18n/vibeMapRu";
+
 /** A single projected track as returned by `GET /api/vibe/map` (`api.getVibeMap`). */
 export interface MapTrack {
     id: string;
@@ -85,8 +87,7 @@ export const FILTERABLE_MOODS: readonly string[] = [
     NEUTRAL_MOOD,
 ];
 
-/** Human label for a mood chip ("moodHappy" -> "Happy"; "neutral" -> "Neutral"). */
+/** Human-facing Russian label for a mood chip. */
 export function moodLabel(mood: string): string {
-    if (mood === NEUTRAL_MOOD) return "Neutral";
-    return mood.replace(/^mood/, "");
+    return vibeMoodLabel(mood);
 }

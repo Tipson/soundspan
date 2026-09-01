@@ -5,13 +5,13 @@ import os
 
 from fastapi import HTTPException, Query
 from ytmusic_client import (
-    _get_public_ytmusic,
-    _get_ytmusic,
-    _oauth_file,
+    _run_public_ytmusic,
+    _run_public_ytmusic_with_retry,
     _run_ytmusic_with_auth_retry,
 )
-from ytmusic_library import _format_album_response
+from ytmusic_library import get_public_album_metadata
 from ytmusic_runtime import JsonList, JsonObject, _sanitized_http_error, app, log
+from ytmusic_stream import _browse_public_bounded
 from ytmusicapi import YTMusic
 
 # Comma-separated shelf titles excluded from /home responses.
@@ -19,18 +19,8 @@ _raw_filtered = os.getenv("YTMUSIC_HOME_FILTERED_SHELVES", "Quick picks") or ""
 YTMUSIC_HOME_FILTERED_SHELVES: set[str] = {
     s.strip().lower() for s in _raw_filtered.split(",") if s.strip()
 }
-
-
-def _get_browse_ytmusic(user_id: str | None = None) -> YTMusic:
-    """Get a YTMusic instance for browse — authenticated if user has OAuth, else public."""
-    if user_id and _oauth_file(user_id).exists():
-        try:
-            return _get_ytmusic(user_id)
-        except Exception:
-            log.warning(
-                "Failed to get authenticated YTMusic for user=%s, falling back to public", user_id
-            )
-    return _get_public_ytmusic("native")
+YTMUSIC_RADIO_REQUEST_TIMEOUT_SECONDS = 5.0
+YTMUSIC_RADIO_ENDPOINT_TIMEOUT_SECONDS = 11.0
 
 
 @app.get("/charts")
@@ -43,7 +33,9 @@ async def get_charts(country: str = "US", user_id: str | None = Query(None)) -> 
     """
     try:
         charts = await asyncio.to_thread(
-            lambda: _get_public_ytmusic("native").get_charts(country=country)
+            _run_public_ytmusic,
+            "native",
+            lambda yt: yt.get_charts(country=country),
         )
 
         result = {}
@@ -79,7 +71,10 @@ async def get_moods_and_genres(user_id: str | None = Query(None)) -> JsonList:
     """
     try:
         categories = await asyncio.to_thread(
-            lambda: _get_public_ytmusic("native").get_mood_categories()
+            _run_public_ytmusic_with_retry,
+            "native",
+            "mood categories browse",
+            lambda yt: yt.get_mood_categories(),
         )
 
         result = []
@@ -114,7 +109,14 @@ async def get_home(
     with HTTP 400.
     """
     try:
-        home = await asyncio.to_thread(lambda: _get_public_ytmusic("native").get_home(limit=limit))
+        home = await _browse_public_bounded(
+            lambda: _run_public_ytmusic_with_retry(
+                "native",
+                "home browse",
+                lambda yt: yt.get_home(limit=limit),
+                retry_timeouts=False,
+            )
+        )
 
         shelves = []
         for raw_shelf in home:
@@ -163,16 +165,122 @@ async def get_home(
                 shelves.append({"title": title, "contents": contents})
 
         return shelves
+    except HTTPException:
+        raise
     except Exception as e:
         raise _sanitized_http_error("Home fetch", e, 500, "Failed to load home") from e
+
+
+@app.get("/radio")
+async def get_radio(
+    video_id: str = Query(..., min_length=1, max_length=128),
+    limit: int = Query(25, ge=1, le=100),
+) -> JsonObject:
+    """Build a playable YouTube Music radio queue from one seed video.
+
+    Radio is a public-catalog operation. Keeping it independent from per-user
+    OAuth lets Soundspan personalize from its own likes and play history even
+    when a user has not connected a YouTube Music account.
+    """
+    normalized_video_id = video_id.strip()
+    if not normalized_video_id:
+        raise HTTPException(status_code=400, detail="video_id must be a non-empty string")
+
+    def load_radio(yt: YTMusic) -> dict[str, object]:
+        raw_payload = yt.get_watch_playlist(
+            videoId=normalized_video_id,
+            limit=limit,
+            radio=True,
+        )
+        if not isinstance(raw_payload, dict) or not isinstance(raw_payload.get("tracks"), list):
+            raise ValueError("Malformed YouTube Music radio response")
+        payload: dict[str, object] = dict(raw_payload)
+        return payload
+
+    try:
+        async with asyncio.timeout(YTMUSIC_RADIO_ENDPOINT_TIMEOUT_SECONDS):
+            radio = await asyncio.to_thread(
+                _run_public_ytmusic_with_retry,
+                "native",
+                "radio browse",
+                load_radio,
+                request_timeout_seconds=YTMUSIC_RADIO_REQUEST_TIMEOUT_SECONDS,
+                retry_timeouts=False,
+            )
+
+        raw_tracks: list[object] = list(radio["tracks"])
+        tracks = []
+        for raw_track in raw_tracks:
+            if not isinstance(raw_track, dict):
+                continue
+            raw_video_id = raw_track.get("videoId")
+            if not isinstance(raw_video_id, str) or not raw_video_id.strip():
+                continue
+
+            raw_artists = raw_track.get("artists")
+            if isinstance(raw_artists, list):
+                artists = [
+                    artist.get("name", "") if isinstance(artist, dict) else str(artist)
+                    for artist in raw_artists
+                ]
+            elif isinstance(raw_artists, str):
+                artists = [raw_artists]
+            else:
+                artists = []
+            artists = [name for name in artists if name]
+            artist_id = None
+            if isinstance(raw_artists, list):
+                artist_id = next(
+                    (
+                        str(artist.get("id") or "").strip()
+                        for artist in raw_artists
+                        if isinstance(artist, dict) and str(artist.get("id") or "").strip()
+                    ),
+                    None,
+                )
+            raw_album = raw_track.get("album") or {}
+            album = raw_album.get("name", "") if isinstance(raw_album, dict) else str(raw_album)
+            album_id = (
+                str(raw_album.get("id") or "").strip() or None
+                if isinstance(raw_album, dict)
+                else None
+            )
+            thumbnails = raw_track.get("thumbnail") or raw_track.get("thumbnails") or []
+            duration = raw_track.get("length") or raw_track.get("duration") or ""
+
+            tracks.append(
+                {
+                    "videoId": raw_video_id.strip(),
+                    "title": raw_track.get("title", ""),
+                    "artist": artists[0] if artists else "Unknown",
+                    "artists": artists,
+                    "artistId": artist_id,
+                    "album": album,
+                    "albumId": album_id,
+                    "duration": _parse_duration(str(duration)),
+                    "thumbnailUrl": _best_thumbnail(thumbnails),
+                }
+            )
+            if len(tracks) >= limit:
+                break
+
+        playlist_id = radio.get("playlistId")
+        return {
+            "playlistId": playlist_id if isinstance(playlist_id, str) else None,
+            "seedVideoId": normalized_video_id,
+            "tracks": tracks,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _sanitized_http_error("Radio fetch", e, 500, "Failed to load radio") from e
 
 
 @app.get("/browse-album/{browse_id}")
 async def get_browse_album(browse_id: str) -> JsonObject:
     """Get album details from YouTube Music (unauthenticated, public browse)."""
     try:
-        album = await asyncio.to_thread(lambda: _get_public_ytmusic("native").get_album(browse_id))
-        return _format_album_response(browse_id, album)
+        return await get_public_album_metadata(browse_id)
     except HTTPException:
         raise
     except Exception as e:
@@ -205,7 +313,9 @@ async def get_mood_playlists(
             raise HTTPException(status_code=400, detail="params must be a non-empty string")
 
         playlists = await asyncio.to_thread(
-            lambda: _fetch_mood_playlists(_get_public_ytmusic("native"), params)
+            _run_public_ytmusic,
+            "native",
+            lambda yt: _fetch_mood_playlists(yt, params),
         )
 
         result = []
@@ -269,11 +379,17 @@ async def get_playlist(
                     user_id,
                     auth_err,
                 )
-                yt = _get_public_ytmusic("native")
-                playlist = await asyncio.to_thread(yt.get_playlist, playlist_id, limit=limit)
+                playlist = await asyncio.to_thread(
+                    _run_public_ytmusic,
+                    "native",
+                    lambda yt: yt.get_playlist(playlist_id, limit=limit),
+                )
         else:
-            yt = _get_public_ytmusic("native")
-            playlist = await asyncio.to_thread(yt.get_playlist, playlist_id, limit=limit)
+            playlist = await asyncio.to_thread(
+                _run_public_ytmusic,
+                "native",
+                lambda yt: yt.get_playlist(playlist_id, limit=limit),
+            )
 
         tracks = []
         for t in playlist.get("tracks", []):

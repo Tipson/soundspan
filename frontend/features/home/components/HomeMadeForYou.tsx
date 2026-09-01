@@ -1,0 +1,339 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { RefreshCw, Zap } from "lucide-react";
+import { CoverMosaic } from "@/components/ui/CoverMosaic";
+import { api } from "@/lib/api";
+import { useFeatures } from "@/lib/features-context";
+import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
+import type { Mix, PersonalizedHomeFeed, PersonalizedTrack } from "../types";
+import { PersonalizedMixCard } from "./PersonalizedMixCard";
+import { SectionHeader } from "./SectionHeader";
+import { StaticPlaylistCard } from "./StaticPlaylistCard";
+import { pluralRu, ru } from "@/lib/i18n/ru";
+
+const MAX_PERSONAL_MIX_TRACKS = 12;
+const MAX_HOME_MADE_CARDS = 5;
+
+interface HomePersonalMix {
+    key: string;
+    title: string;
+    description: string;
+    tracks: PersonalizedTrack[];
+    tone: "violet" | "blue" | "amber";
+}
+
+interface HomeMadeForYouProps {
+    discoverWeekly: DiscoverWeeklySummary | null;
+    mixes: Mix[];
+    personalizedFeed: PersonalizedHomeFeed | null;
+    isRefreshingMixes: boolean;
+    handleRefreshMixes: () => Promise<void>;
+}
+
+function uniqueTracks(tracks: PersonalizedTrack[]): PersonalizedTrack[] {
+    const seen = new Set<string>();
+    return tracks.filter((track) => {
+        const key = track.youtubeVideoId || track.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function roundRobinTracks(
+    sources: PersonalizedTrack[][],
+    limit: number,
+): PersonalizedTrack[] {
+    const positions = sources.map(() => 0);
+    const result: PersonalizedTrack[] = [];
+    const seen = new Set<string>();
+
+    while (result.length < limit) {
+        let added = false;
+        sources.forEach((source, sourceIndex) => {
+            while (
+                positions[sourceIndex] < source.length &&
+                result.length < limit
+            ) {
+                const track = source[positions[sourceIndex]];
+                positions[sourceIndex] += 1;
+                const key = track.youtubeVideoId || track.id;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                result.push(track);
+                added = true;
+                break;
+            }
+        });
+        if (!added) break;
+    }
+
+    return result;
+}
+
+/** Builds different playable mixes from independent account signals. */
+export function buildHomePersonalMixes(
+    feed: PersonalizedHomeFeed | null,
+): HomePersonalMix[] {
+    if (!feed) return [];
+
+    const quickPicks = uniqueTracks(feed.shelves.quickPicks);
+    const discovery = uniqueTracks(feed.shelves.discovery);
+    const listenAgain = uniqueTracks(feed.shelves.listenAgain);
+    const recipes: Array<
+        Omit<HomePersonalMix, "tracks"> & {
+            candidates: PersonalizedTrack[];
+        }
+    > = [
+        {
+            key: "daily-blend",
+            title: ru.home.dailyBlend,
+            description: ru.home.dailyBlendDescription,
+            candidates: roundRobinTracks(
+                [quickPicks, discovery, listenAgain],
+                quickPicks.length + discovery.length + listenAgain.length,
+            ),
+            tone: "violet",
+        },
+        {
+            key: "fresh-finds",
+            title: ru.home.freshFinds,
+            description: ru.home.freshFindsDescription,
+            candidates: discovery,
+            tone: "blue",
+        },
+        {
+            key: "back-in-rotation",
+            title: ru.home.backInRotation,
+            description: ru.home.backInRotationDescription,
+            candidates: listenAgain,
+            tone: "amber",
+        },
+        {
+            key: "quick-picks",
+            title: ru.home.quickPicks,
+            description: ru.home.quickPicksDescription,
+            candidates: quickPicks,
+            tone: "violet",
+        },
+    ];
+
+    const uniqueAvailableTracks = uniqueTracks([
+        ...quickPicks,
+        ...discovery,
+        ...listenAgain,
+    ]);
+    if (uniqueAvailableTracks.length === 0) return [];
+
+    // Every visible collection must earn its place with at least roughly two
+    // unique tracks. When the account has fewer signals, showing fewer useful
+    // cards is more honest than repeating the same artwork and songs.
+    const visibleRecipeCount = Math.max(
+        1,
+        Math.min(recipes.length, Math.floor(uniqueAvailableTracks.length / 2)),
+    );
+    const visibleRecipes = recipes.slice(0, visibleRecipeCount);
+    const positions = visibleRecipes.map(() => 0);
+    const assigned = new Set<string>();
+    const allocated: HomePersonalMix[] = visibleRecipes.map((recipe) => ({
+        key: recipe.key,
+        title: recipe.title,
+        description: recipe.description,
+        tone: recipe.tone,
+        tracks: [],
+    }));
+
+    let assignedInRound = true;
+    while (assignedInRound) {
+        assignedInRound = false;
+        visibleRecipes.forEach((recipe, recipeIndex) => {
+            const target = allocated[recipeIndex];
+            if (target.tracks.length >= MAX_PERSONAL_MIX_TRACKS) return;
+
+            while (positions[recipeIndex] < recipe.candidates.length) {
+                const candidate = recipe.candidates[positions[recipeIndex]];
+                positions[recipeIndex] += 1;
+                const identity = candidate.youtubeVideoId || candidate.id;
+                if (assigned.has(identity)) continue;
+                assigned.add(identity);
+                target.tracks.push(candidate);
+                assignedInRound = true;
+                break;
+            }
+        });
+    }
+
+    return allocated.filter((recipe) => recipe.tracks.length > 0);
+}
+
+function GeneratedMixCard({ mix }: { mix: Mix }) {
+    const covers = useMemo(
+        () =>
+            mix.coverUrls
+                .slice(0, 4)
+                .map((url) => api.getCoverArtUrl(url, 320)),
+        [mix.coverUrls],
+    );
+
+    return (
+        <Link
+            href={`/mix/${mix.id}`}
+            className="group block min-w-0 rounded-[1.125rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface"
+        >
+            <span className="relative mb-3 block aspect-square overflow-hidden rounded-[1.125rem] bg-surface-highlight shadow-lg shadow-black/25">
+                <CoverMosaic
+                    coverUrls={covers}
+                    hoverScale
+                    imageSizes="(max-width: 640px) 70vw, 190px"
+                    showEmptyCellIcon
+                />
+                <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+            </span>
+            <span className="block truncate text-sm font-bold text-content sm:text-[0.9375rem]">
+                {mix.name}
+            </span>
+            <span className="mt-1 line-clamp-2 block text-xs leading-5 text-content-muted">
+                {mix.description}
+            </span>
+        </Link>
+    );
+}
+
+/** A bounded, account-specific row of playable personal collections. */
+export function HomeMadeForYou({
+    discoverWeekly,
+    mixes,
+    personalizedFeed,
+    isRefreshingMixes,
+    handleRefreshMixes,
+}: HomeMadeForYouProps) {
+    const { autoPlaylists } = useFeatures();
+    const [showAllMixes, setShowAllMixes] = useState(false);
+    const personalMixes = buildHomePersonalMixes(personalizedFeed);
+    const playableDiscoverWeekly =
+        discoverWeekly && discoverWeekly.totalCount > 0 ? discoverWeekly : null;
+    const playableMixes = mixes.filter((mix) => mix.trackCount > 0);
+    const availableCount =
+        personalMixes.length +
+        (playableDiscoverWeekly ? 1 : 0) +
+        playableMixes.length;
+
+    if (availableCount === 0) return null;
+
+    const visiblePersonalMixes = showAllMixes
+        ? personalMixes
+        : personalMixes.slice(0, MAX_HOME_MADE_CARDS);
+    const showDiscoverWeekly =
+        Boolean(playableDiscoverWeekly) &&
+        (showAllMixes || visiblePersonalMixes.length < MAX_HOME_MADE_CARDS);
+    const collapsedGeneratedLimit = Math.max(
+        0,
+        MAX_HOME_MADE_CARDS -
+            visiblePersonalMixes.length -
+            (showDiscoverWeekly ? 1 : 0),
+    );
+    const visibleGeneratedMixes = showAllMixes
+        ? playableMixes
+        : playableMixes.slice(0, collapsedGeneratedLimit);
+    const hasHiddenMixes = availableCount > MAX_HOME_MADE_CARDS;
+
+    return (
+        <section
+            data-home-rail="mixes"
+            data-home-mixes-surface="unified"
+            aria-label={ru.home.madeForYou}
+            className="relative isolate rounded-[1.5rem] bg-surface px-4 pb-5 pt-2 sm:px-5"
+        >
+            <SectionHeader
+                title={ru.home.madeForYou}
+                rightAction={
+                    <div className="flex items-center gap-1.5">
+                        {hasHiddenMixes && (
+                            <button
+                                type="button"
+                                aria-controls="home-all-mixes"
+                                aria-expanded={showAllMixes}
+                                onClick={() =>
+                                    setShowAllMixes((current) => !current)
+                                }
+                                className="inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            >
+                                {showAllMixes ? "Свернуть" : "Показать все"}
+                            </button>
+                        )}
+                        {autoPlaylists && (
+                            <button
+                                type="button"
+                                onClick={() => void handleRefreshMixes()}
+                                disabled={isRefreshingMixes}
+                                aria-label={
+                                    isRefreshingMixes
+                                        ? ru.home.refreshing
+                                        : ru.home.refresh
+                                }
+                                className="grid min-h-11 min-w-11 place-items-center rounded-full text-content-muted transition duration-200 hover:bg-white/[0.07] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-45 motion-reduce:transition-none"
+                            >
+                                <RefreshCw
+                                    className={`h-4 w-4 ${isRefreshingMixes ? "animate-spin motion-reduce:animate-none" : ""}`}
+                                    aria-hidden="true"
+                                />
+                            </button>
+                        )}
+                    </div>
+                }
+            />
+            <div
+                id="home-all-mixes"
+                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible"
+            >
+                {visiblePersonalMixes.map((mix, index) => (
+                    <div
+                        key={mix.key}
+                        data-home-made-card={mix.key}
+                        className="min-w-0 snap-start"
+                    >
+                        <PersonalizedMixCard
+                            title={mix.title}
+                            description={mix.description}
+                            tracks={mix.tracks}
+                            tone={mix.tone}
+                            index={index}
+                        />
+                    </div>
+                ))}
+
+                {showDiscoverWeekly && playableDiscoverWeekly && (
+                    <div
+                        data-home-made-card="discover-weekly"
+                        className="min-w-0 snap-start"
+                    >
+                        <StaticPlaylistCard
+                            href="/discover"
+                            coverUrl={playableDiscoverWeekly.coverUrl}
+                            title={ru.home.discoverWeekly}
+                            subtitle={`${playableDiscoverWeekly.totalCount} ${pluralRu(playableDiscoverWeekly.totalCount, ["трек", "трека", "треков"])} · ${ru.home.refreshedForYou}`}
+                            placeholderIcon={
+                                <Zap
+                                    className="h-11 w-11 text-brand-light"
+                                    aria-hidden="true"
+                                />
+                            }
+                        />
+                    </div>
+                )}
+
+                {visibleGeneratedMixes.map((mix) => (
+                    <div
+                        key={mix.id}
+                        data-home-made-card={mix.id}
+                        className="min-w-0 snap-start"
+                    >
+                        <GeneratedMixCard mix={mix} />
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+}

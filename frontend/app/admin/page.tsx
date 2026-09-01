@@ -8,24 +8,14 @@ import { createFrontendLogger } from "@/lib/logger";
 import { RestartModal } from "@/components/ui/RestartModal";
 import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
-import { SettingsLayout, SidebarItem } from "@/features/settings/components/ui";
+import { SettingsLayout } from "@/features/settings/components/ui";
 import { useFeatures } from "@/lib/features-context";
-
-const baseSidebarItems: SidebarItem[] = [
-    { id: "playback-sources", label: "Playback Sources" },
-    { id: "download-preferences", label: "Download Preferences" },
-    { id: "download-services", label: "Download Services" },
-    { id: "audiobookshelf", label: "Media Servers" },
-    { id: "youtube-music-admin", label: "YouTube Music" },
-    { id: "ai-services", label: "Artwork" },
-    { id: "storage", label: "Storage" },
-    { id: "library-safety", label: "Library Safety" },
-    { id: "library-health", label: "Library Health" },
-    { id: "library-insights", label: "Library Insights" },
-    { id: "cache", label: "Cache & Automation" },
-    { id: "users", label: "Users" },
-];
+import { getPersonalStreamingAdminSidebarItems } from "@/features/settings/personalStreamingAdminSections";
+import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
+import { AlertCircle } from "lucide-react";
 
 function renderSectionFallback() {
     return (
@@ -35,34 +25,10 @@ function renderSectionFallback() {
     );
 }
 
-const DownloadPreferencesSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/DownloadPreferencesSection").then(
-            (mod) => mod.DownloadPreferencesSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
 const PlaybackSourcesSection = dynamic(
     () =>
         import("@/features/settings/components/sections/PlaybackSourcesSection").then(
             (mod) => mod.PlaybackSourcesSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const DownloadServicesSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/DownloadServicesSection").then(
-            (mod) => mod.DownloadServicesSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const AudiobookshelfSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/AudiobookshelfSection").then(
-            (mod) => mod.AudiobookshelfSection,
         ),
     { loading: renderSectionFallback },
 );
@@ -83,10 +49,10 @@ const AIServicesSection = dynamic(
     { loading: renderSectionFallback },
 );
 
-const StoragePathsSection = dynamic(
+const CacheSection = dynamic(
     () =>
-        import("@/features/settings/components/sections/StoragePathsSection").then(
-            (mod) => mod.StoragePathsSection,
+        import("@/features/settings/components/sections/CacheSection").then(
+            (mod) => mod.CacheSection,
         ),
     { loading: renderSectionFallback },
 );
@@ -95,30 +61,6 @@ const LibrarySafetySection = dynamic(
     () =>
         import("@/features/settings/components/sections/LibrarySafetySection").then(
             (mod) => mod.LibrarySafetySection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const LibraryHealthSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/LibraryHealthSection").then(
-            (mod) => mod.LibraryHealthSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const LibraryInsightsSection = dynamic(
-    () =>
-        import("@/features/library-health/components/LibraryInsightsSection").then(
-            (mod) => mod.LibraryInsightsSection,
-        ),
-    { loading: renderSectionFallback },
-);
-
-const CacheSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/CacheSection").then(
-            (mod) => mod.CacheSection,
         ),
     { loading: renderSectionFallback },
 );
@@ -155,13 +97,7 @@ export default function AdminPage() {
     >({});
     const saveStatus = useInlineStatus();
     const sidebarItems = useMemo(
-        () =>
-            federation
-                ? [
-                      ...baseSidebarItems,
-                      { id: "federation", label: "Federation" },
-                  ]
-                : baseSidebarItems,
+        () => getPersonalStreamingAdminSidebarItems(federation),
         [federation],
     );
 
@@ -213,7 +149,7 @@ export default function AdminPage() {
             const changedSystemServices =
                 (await saveSystemSettings(systemSettings)) || [];
             setIsSaving(false);
-            saveStatus.setSuccess("Saved");
+            saveStatus.setSuccess(adminActivityRu.admin.saved);
             if (changedSystemServices.length > 0) {
                 setShowRestartModal(true);
             }
@@ -222,7 +158,7 @@ export default function AdminPage() {
                 error,
             });
             setIsSaving(false);
-            saveStatus.setError("Failed to save");
+            saveStatus.setError(adminActivityRu.admin.saveFailed);
         }
     }, [systemSettings, saveSystemSettings, saveStatus]);
 
@@ -239,11 +175,7 @@ export default function AdminPage() {
     );
 
     if (authLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-surface">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message={adminActivityRu.admin.loading} />;
     }
 
     if (!isAuthenticated || !isAdmin) {
@@ -251,59 +183,39 @@ export default function AdminPage() {
     }
 
     if (systemSettingsLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-surface">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen message={adminActivityRu.admin.loading} />;
     }
 
     if (systemSettingsLoadError || !systemSettings) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-surface gap-4 px-4">
-                <p className="text-red-400 text-sm text-center">
-                    Failed to load settings from the server. Settings cannot be
-                    edited until they are loaded.
-                </p>
-                <button
-                    onClick={() => loadSystemSettings()}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-full transition-colors"
-                >
-                    Retry
-                </button>
+            <div
+                data-routed-surface="admin"
+                className="min-h-screen bg-surface px-4 py-8"
+            >
+                <EmptyState
+                    icon={<AlertCircle />}
+                    title={adminActivityRu.admin.loadFailed}
+                    description="Проверьте соединение с сервером и повторите загрузку настроек."
+                    action={{
+                        label: adminActivityRu.admin.retry,
+                        onClick: () => void loadSystemSettings(),
+                        variant: "secondary",
+                    }}
+                />
             </div>
         );
     }
 
     return (
-        <>
+        <div data-routed-surface="admin" className="min-h-screen bg-surface">
             <SettingsLayout
                 sidebarItems={sidebarItems}
                 isAdmin={true}
-                title="Admin"
+                title={adminActivityRu.admin.title}
             >
                 <PlaybackSourcesSection
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
-                />
-
-                <DownloadPreferencesSection
-                    settings={systemSettings}
-                    onUpdate={updateSystemSettings}
-                />
-
-                <DownloadServicesSection
-                    settings={systemSettings}
-                    onUpdate={updateSystemSettings}
-                    onTest={handleTestService}
-                    testingServices={testingServices}
-                />
-
-                <AudiobookshelfSection
-                    settings={systemSettings}
-                    onUpdate={updateSystemSettings}
-                    onTest={handleTestService}
-                    isTesting={testingServices.audiobookshelf || false}
                 />
 
                 <YouTubeMusicAdminSection
@@ -322,23 +234,12 @@ export default function AdminPage() {
                     }
                 />
 
-                <StoragePathsSection
+                <CacheSection
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
-                    onTest={handleTestService}
-                    isTesting={false}
                 />
 
                 <LibrarySafetySection
-                    settings={systemSettings}
-                    onUpdate={updateSystemSettings}
-                />
-
-                <LibraryHealthSection />
-
-                <LibraryInsightsSection />
-
-                <CacheSection
                     settings={systemSettings}
                     onUpdate={updateSystemSettings}
                 />
@@ -353,18 +254,19 @@ export default function AdminPage() {
                 )}
 
                 {/* Save Button - Fixed at bottom */}
-                <div className="sticky bottom-0 pt-8 pb-8">
+                <div className="sticky bottom-0 border-t border-line bg-surface/95 pb-8 pt-5 backdrop-blur-sm">
                     <div className="relative">
                         <button
+                            data-admin-save="true"
                             onClick={handleSaveAll}
                             disabled={isSaving}
-                            className="w-full bg-white text-black font-semibold py-3 px-4 rounded-full
-                                hover:scale-[1.02] active:scale-[0.98] transition-transform
-                                disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                            className="min-h-12 w-full rounded-xl bg-brand px-4 py-3 font-semibold text-surface transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
                         >
-                            {isSaving ? "Saving..." : "Save"}
+                            {isSaving
+                                ? adminActivityRu.admin.saving
+                                : adminActivityRu.admin.save}
                         </button>
-                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-surface/90 backdrop-blur-sm px-3 py-0.5 rounded-full">
+                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-surface/90 px-3 py-0.5 backdrop-blur-sm">
                             <InlineStatus {...saveStatus.props} />
                         </div>
                     </div>
@@ -376,6 +278,6 @@ export default function AdminPage() {
                 onClose={() => setShowRestartModal(false)}
                 changedServices={changedServices}
             />
-        </>
+        </div>
     );
 }

@@ -15,17 +15,17 @@ export interface SourceOption {
 
 /** Display order and labels for the primary-source dropdown. */
 const SOURCE_LABELS: Array<{ value: DownloadSource; label: string }> = [
-    { value: "soulseek", label: "Soulseek (Per-track)" },
-    { value: "lidarr", label: "Lidarr (Full albums)" },
-    { value: "tidal", label: "TIDAL (Per-track / album)" },
-    { value: "youtube", label: "YouTube Music (Albums)" },
+    { value: "soulseek", label: "Soulseek (отдельные треки)" },
+    { value: "lidarr", label: "Lidarr (альбомы целиком)" },
+    { value: "tidal", label: "TIDAL (треки и альбомы)" },
+    { value: "youtube", label: "YouTube Music (альбомы)" },
 ];
 
 const FALLBACK_LABELS: Record<DownloadSource, string> = {
-    soulseek: "Try Soulseek",
-    lidarr: "Try Lidarr",
-    tidal: "Try TIDAL",
-    youtube: "Try YouTube Music",
+    soulseek: "Попробовать Soulseek",
+    lidarr: "Попробовать Lidarr",
+    tidal: "Попробовать TIDAL",
+    youtube: "Попробовать YouTube Music",
 };
 
 type SourceSettings = Pick<
@@ -93,7 +93,7 @@ export function getSourceOptions(
         ({ value, label }) => ({ value, label }),
     );
     if (options.length === 0) {
-        return [{ value: "soulseek", label: "Soulseek (Per-track)" }];
+        return [{ value: "soulseek", label: "Soulseek (отдельные треки)" }];
     }
     return options;
 }
@@ -106,7 +106,7 @@ export function getFallbackOptions(
     configured: ConfiguredSources,
     downloadSource: DownloadSource | undefined,
 ): SourceOption[] {
-    const options: SourceOption[] = [{ value: "none", label: "Skip" }];
+    const options: SourceOption[] = [{ value: "none", label: "Пропустить" }];
     for (const { value } of SOURCE_LABELS) {
         if (downloadSource !== value && configured[value]) {
             options.push({ value, label: FALLBACK_LABELS[value] });

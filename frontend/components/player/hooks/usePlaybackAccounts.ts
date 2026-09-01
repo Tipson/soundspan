@@ -3,6 +3,12 @@ import { api } from "@/lib/api";
 import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
 import { AUTO_MATCH_VIBE_RETRY_COOLDOWN_MS } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import type {
+    VibeModeStartOptions,
+    VibeModeStartResult,
+    VibeQueueMutationKind,
+} from "@/lib/audio-controls-types";
+import type { AutoMatchVibeRequestResult } from "../autoMatchVibePlayback";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 
 /** Keeps the YouTube Music authentication snapshot current. */
@@ -40,8 +46,15 @@ export function useYtMusicAuth(
 
 interface UseAutoMatchVibeOptions {
     refs: PlaybackOrchestratorRefs;
-    startVibeMode: () => Promise<{ success: boolean; trackCount: number }>;
+    startVibeMode: (
+        options?: VibeModeStartOptions,
+    ) => Promise<VibeModeStartResult>;
 }
+
+const NO_AUTO_MATCH_VIBE_RESULT: AutoMatchVibeRequestResult = {
+    didExtendQueue: false,
+    queueMutation: null,
+};
 
 /** Returns the existing deduplicated automatic Vibe request callback. */
 export function useAutoMatchVibe({
@@ -58,17 +71,19 @@ export function useAutoMatchVibe({
         (
             seedTrackId: string | null,
             options?: { force?: boolean },
-        ): Promise<boolean> => {
-            if (!seedTrackId) return Promise.resolve(false);
+        ): Promise<AutoMatchVibeRequestResult> => {
+            if (!seedTrackId) {
+                return Promise.resolve(NO_AUTO_MATCH_VIBE_RESULT);
+            }
             if (getListenTogetherSessionSnapshot()?.groupId) {
-                return Promise.resolve(false);
+                return Promise.resolve(NO_AUTO_MATCH_VIBE_RESULT);
             }
 
             if (autoMatchVibePromiseRef.current) {
                 if (autoMatchVibeTrackIdRef.current === seedTrackId) {
                     return autoMatchVibePromiseRef.current;
                 }
-                return Promise.resolve(false);
+                return Promise.resolve(NO_AUTO_MATCH_VIBE_RESULT);
             }
 
             const now = Date.now();
@@ -78,20 +93,41 @@ export function useAutoMatchVibe({
                 now - autoMatchVibeLastAttemptAtRef.current <
                     AUTO_MATCH_VIBE_RETRY_COOLDOWN_MS
             ) {
-                return Promise.resolve(false);
+                return Promise.resolve(NO_AUTO_MATCH_VIBE_RESULT);
             }
 
             autoMatchVibeTrackIdRef.current = seedTrackId;
             autoMatchVibeLastAttemptAtRef.current = now;
 
-            const request = startVibeMode()
-                .then((result) => result.success && result.trackCount > 0)
+            const queueCommitToken = {};
+            let committedQueueMutation: VibeQueueMutationKind | null = null;
+            const request = startVibeMode({
+                queueCommitToken,
+                onLocalQueueCommit: (commit) => {
+                    if (commit.token === queueCommitToken) {
+                        committedQueueMutation = commit.mutation;
+                    }
+                },
+            })
+                .then((result): AutoMatchVibeRequestResult => {
+                    if (
+                        !result.success ||
+                        result.trackCount <= 0 ||
+                        committedQueueMutation === null
+                    ) {
+                        return NO_AUTO_MATCH_VIBE_RESULT;
+                    }
+                    return {
+                        didExtendQueue: true,
+                        queueMutation: committedQueueMutation,
+                    };
+                })
                 .catch((error) => {
                     sharedFrontendLogger.error(
                         "[AudioPlaybackOrchestrator] Auto Match Vibe request failed:",
                         error,
                     );
-                    return false;
+                    return NO_AUTO_MATCH_VIBE_RESULT;
                 })
                 .finally(() => {
                     autoMatchVibePromiseRef.current = null;

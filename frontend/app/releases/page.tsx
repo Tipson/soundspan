@@ -11,11 +11,14 @@ import {
     CheckCircle2,
     Loader2,
     Send,
+    RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useDownloadContext } from "@/lib/download-context";
 import {
     openRequestRgMbids,
@@ -27,8 +30,17 @@ import { api } from "@/lib/api";
 import Link from "next/link";
 import Image from "next/image";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { formatRelativeDate } from "@/utils/formatTime";
-import { SectionHeader } from "@/components/layout/SectionHeader";
+import {
+    formatDownloadingReleaseRu,
+    formatDownloadStartedRu,
+    formatReleaseCalendarDateRu,
+    formatReleaseRadarSummaryRu,
+    formatReleaseRequestedRu,
+    formatRelativeReleaseDateRu,
+    formatRequestingReleaseRu,
+    libraryOperationsRu,
+} from "@/lib/i18n/libraryOperationsRu";
+import { userFacingError } from "@/lib/i18n/ru";
 
 interface ReleaseItem {
     id: number | string;
@@ -70,6 +82,7 @@ export default function ReleasesPage() {
     const fetchReleases = async () => {
         try {
             setLoading(true);
+            setError(null);
             const json = await api.request<ReleaseRadarData>(
                 "/releases/radar?daysBack=30&daysAhead=90",
                 { timeoutMs: 20_000 },
@@ -77,7 +90,7 @@ export default function ReleasesPage() {
             setData(json);
         } catch (err: unknown) {
             setError(
-                err instanceof Error ? err.message : "Failed to fetch releases",
+                userFacingError(err, libraryOperationsRu.releases.loadFailed),
             );
         } finally {
             setLoading(false);
@@ -93,7 +106,7 @@ export default function ReleasesPage() {
         try {
             setDownloadingId(release.id);
             if (downloadsEnabled) {
-                toast.loading(`Downloading ${release.title}...`, {
+                toast.loading(formatDownloadingReleaseRu(release.title), {
                     id: toastId,
                 });
                 await api.downloadAlbum(
@@ -101,13 +114,15 @@ export default function ReleasesPage() {
                     release.title,
                     release.albumMbid,
                 );
-                toast.success(`Download started for ${release.title}`, {
+                toast.success(formatDownloadStartedRu(release.title), {
                     id: toastId,
                 });
                 await fetchReleases();
                 return;
             }
-            toast.loading(`Requesting ${release.title}...`, { id: toastId });
+            toast.loading(formatRequestingReleaseRu(release.title), {
+                id: toastId,
+            });
             await createRequest.mutateAsync({
                 artistName: release.artistName,
                 albumTitle: release.title,
@@ -116,14 +131,13 @@ export default function ReleasesPage() {
                     ? { artistMbid: release.artistMbid }
                     : {}),
             });
-            toast.success(
-                `Requested ${release.title} — an admin will review it`,
-                { id: toastId },
-            );
+            toast.success(formatReleaseRequestedRu(release.title), {
+                id: toastId,
+            });
         } catch (err) {
             sharedFrontendLogger.error("Release acquisition failed:", err);
             toast.error(
-                err instanceof Error ? err.message : "Something went wrong",
+                userFacingError(err, libraryOperationsRu.releases.actionFailed),
                 { id: toastId },
             );
         } finally {
@@ -131,150 +145,203 @@ export default function ReleasesPage() {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <GradientSpinner size="md" />
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen text-white/60">
-                <Music2 className="w-12 h-12 mb-4 opacity-40" />
-                <p>Failed to load releases</p>
-                <p className="text-sm">{error}</p>
-            </div>
-        );
-    }
-
     return (
-        <div className="min-h-screen pb-32">
-            {/* Hero Section */}
-            <div className="relative h-64 md:h-80 overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/20 via-orange-600/10 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent" />
+        <main
+            data-utility-page="releases"
+            className="min-h-screen px-4 py-6 md:px-8"
+        >
+            <div className="mx-auto w-full max-w-7xl">
+                <PageHeader
+                    title={libraryOperationsRu.releases.heading}
+                    subtitle={
+                        data
+                            ? formatReleaseRadarSummaryRu(
+                                  data.monitoredArtistCount || 0,
+                                  data.upcoming.length || 0,
+                                  data.recent.length || 0,
+                              )
+                            : "Следите за новинками исполнителей из вашей коллекции."
+                    }
+                    icon={Calendar}
+                    badge={
+                        <span className="rounded-full border border-line bg-surface-elevated px-3 py-1 text-xs font-semibold text-content-muted">
+                            {libraryOperationsRu.releases.title}
+                        </span>
+                    }
+                />
 
-                <div className="relative h-full flex flex-col justify-end p-6 md:p-8">
-                    <PageHeader
-                        title="New & Upcoming"
-                        subtitle={`${data?.monitoredArtistCount || 0} monitored artists • ${
-                            data?.upcoming.length || 0
-                        } upcoming • ${data?.recent.length || 0} recent releases`}
-                        icon={Calendar}
-                        iconClassName="text-amber-400"
-                        badge={
-                            <span className="text-amber-400 text-sm font-medium uppercase tracking-wider">
-                                Release Radar
-                            </span>
-                        }
-                        className="mb-0"
-                    />
-                </div>
-            </div>
-
-            <div className="px-4 md:px-8 space-y-10">
-                {/* Upcoming Releases */}
-                {data?.upcoming && data.upcoming.length > 0 && (
-                    <section>
-                        <SectionHeader
-                            title={
-                                <span className="flex items-center gap-3">
-                                    <Clock className="w-5 h-5 text-amber-400" />
-                                    Coming Soon
-                                    <span className="text-white/40 text-sm font-normal">
+                {loading ? (
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-3xl border border-line bg-surface-elevated text-content-muted"
+                    >
+                        <GradientSpinner size="md" />
+                        <p className="text-sm font-medium">Загружаем релизы…</p>
+                    </div>
+                ) : error ? (
+                    <div
+                        role="alert"
+                        className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-error/25 bg-error/5 px-5 py-12 text-center"
+                    >
+                        <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-error/10 text-error">
+                            <Music2 className="size-7" aria-hidden="true" />
+                        </span>
+                        <h2 className="text-lg font-semibold text-content">
+                            {libraryOperationsRu.releases.loadFailed}
+                        </h2>
+                        <p className="mt-2 max-w-md text-sm leading-6 text-content-muted">
+                            {error}
+                        </p>
+                        <Button
+                            variant="secondary"
+                            className="mt-5"
+                            onClick={() => void fetchReleases()}
+                        >
+                            <RefreshCw className="size-4" aria-hidden="true" />
+                            Повторить
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="space-y-10">
+                        {/* Upcoming Releases */}
+                        {data?.upcoming && data.upcoming.length > 0 && (
+                            <section aria-labelledby="upcoming-releases-heading">
+                                <div className="mb-5 flex items-center gap-3">
+                                    <span className="flex size-10 items-center justify-center rounded-xl bg-warning/10 text-warning">
+                                        <Clock
+                                            className="size-5"
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                    <h2
+                                        id="upcoming-releases-heading"
+                                        className="text-xl font-semibold text-content"
+                                    >
+                                        {
+                                            libraryOperationsRu.releases
+                                                .comingSoon
+                                        }
+                                    </h2>
+                                    <span className="text-sm tabular-nums text-content-muted">
                                         ({data.upcoming.length})
                                     </span>
-                                </span>
-                            }
-                        />
+                                </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                            {data.upcoming.map((release) => (
-                                <ReleaseCard
-                                    key={`${release.albumMbid}-${release.id}`}
-                                    release={release}
-                                    formatDate={formatRelativeDate}
-                                    onAcquire={handleAcquire}
-                                    isDownloading={downloadingId === release.id}
-                                    mode={
-                                        downloadsEnabled
-                                            ? "download"
-                                            : requestsEnabled
-                                              ? "request"
-                                              : "none"
-                                    }
-                                    isRequested={requestedRgMbids.has(
-                                        release.albumMbid.toLowerCase(),
-                                    )}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
+                                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-4 sm:gap-5">
+                                    {data.upcoming.map((release) => (
+                                        <ReleaseCard
+                                            key={`${release.albumMbid}-${release.id}`}
+                                            release={release}
+                                            formatDate={
+                                                formatRelativeReleaseDateRu
+                                            }
+                                            onAcquire={handleAcquire}
+                                            isDownloading={
+                                                downloadingId === release.id
+                                            }
+                                            mode={
+                                                downloadsEnabled
+                                                    ? "download"
+                                                    : requestsEnabled
+                                                      ? "request"
+                                                      : "none"
+                                            }
+                                            isRequested={requestedRgMbids.has(
+                                                release.albumMbid.toLowerCase(),
+                                            )}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
 
-                {/* Recently Released */}
-                {data?.recent && data.recent.length > 0 && (
-                    <section>
-                        <SectionHeader
-                            title={
-                                <span className="flex items-center gap-3">
-                                    <Disc className="w-5 h-5 text-emerald-400" />
-                                    Just Dropped
-                                    <span className="text-white/40 text-sm font-normal">
+                        {/* Recently Released */}
+                        {data?.recent && data.recent.length > 0 && (
+                            <section aria-labelledby="recent-releases-heading">
+                                <div className="mb-5 flex items-center gap-3">
+                                    <span className="flex size-10 items-center justify-center rounded-xl bg-success/10 text-success">
+                                        <Disc
+                                            className="size-5"
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                    <h2
+                                        id="recent-releases-heading"
+                                        className="text-xl font-semibold text-content"
+                                    >
+                                        {
+                                            libraryOperationsRu.releases
+                                                .justDropped
+                                        }
+                                    </h2>
+                                    <span className="text-sm tabular-nums text-content-muted">
                                         ({data.recent.length})
                                     </span>
-                                </span>
-                            }
-                        />
+                                </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                            {data.recent.map((release) => (
-                                <ReleaseCard
-                                    key={`${release.albumMbid}-${release.id}`}
-                                    release={release}
-                                    formatDate={formatRelativeDate}
-                                    onAcquire={handleAcquire}
-                                    isDownloading={downloadingId === release.id}
-                                    mode={
-                                        downloadsEnabled
-                                            ? "download"
-                                            : requestsEnabled
-                                              ? "request"
-                                              : "none"
+                                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-4 sm:gap-5">
+                                    {data.recent.map((release) => (
+                                        <ReleaseCard
+                                            key={`${release.albumMbid}-${release.id}`}
+                                            release={release}
+                                            formatDate={
+                                                formatRelativeReleaseDateRu
+                                            }
+                                            onAcquire={handleAcquire}
+                                            isDownloading={
+                                                downloadingId === release.id
+                                            }
+                                            mode={
+                                                downloadsEnabled
+                                                    ? "download"
+                                                    : requestsEnabled
+                                                      ? "request"
+                                                      : "none"
+                                            }
+                                            isRequested={requestedRgMbids.has(
+                                                release.albumMbid.toLowerCase(),
+                                            )}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Empty State */}
+                        {!data?.upcoming?.length && !data?.recent?.length && (
+                            <EmptyState
+                                icon={
+                                    <Calendar
+                                        className="size-7"
+                                        aria-hidden="true"
+                                    />
+                                }
+                                title={libraryOperationsRu.releases.emptyTitle}
+                                description={
+                                    libraryOperationsRu.releases
+                                        .emptyDescription
+                                }
+                            >
+                                <Link
+                                    href="/settings"
+                                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-surface transition-colors hover:bg-brand-hover"
+                                >
+                                    {
+                                        libraryOperationsRu.releases
+                                            .configureLidarr
                                     }
-                                    isRequested={requestedRgMbids.has(
-                                        release.albumMbid.toLowerCase(),
-                                    )}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {/* Empty State */}
-                {!data?.upcoming?.length && !data?.recent?.length && (
-                    <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <Calendar className="w-16 h-16 text-white/20 mb-6" />
-                        <h3 className="text-xl font-medium text-white mb-2">
-                            No releases found
-                        </h3>
-                        <p className="text-white/50 max-w-md mb-6">
-                            Add artists to Lidarr and enable monitoring to see
-                            their upcoming and recent releases here.
-                        </p>
-                        <Link
-                            href="/settings"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors"
-                        >
-                            Configure Lidarr
-                            <ArrowRight className="w-4 h-4" />
-                        </Link>
+                                    <ArrowRight
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                </Link>
+                            </EmptyState>
+                        )}
                     </div>
                 )}
             </div>
-        </div>
+        </main>
     );
 }
 
@@ -297,40 +364,40 @@ function ReleaseCard({
     const hasIt = release.inLibrary;
 
     return (
-        <div className="group relative">
+        <article className="group relative min-w-0">
             {/* Cover Art */}
-            <div className="aspect-square rounded-lg overflow-hidden bg-white/5 mb-3 relative">
+            <div className="relative mb-3 aspect-square overflow-hidden rounded-2xl border border-line bg-surface-elevated">
                 {release.coverUrl ? (
                     <Image
                         src={release.coverUrl}
                         alt={release.title}
                         fill
                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="object-cover transition-transform duration-300 motion-reduce:transition-none sm:group-hover:scale-[1.03]"
                         unoptimized
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                        <Disc className="w-12 h-12 text-white/20" />
+                    <div className="flex h-full w-full items-center justify-center">
+                        <Disc className="size-12 text-content-disabled" />
                     </div>
                 )}
 
                 {/* Status Badge */}
                 <div
                     className={cn(
-                        "absolute top-2 left-2 px-2 py-1 rounded text-xs font-medium",
+                        "absolute left-2 top-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold backdrop-blur-md",
                         isUpcoming
-                            ? "bg-amber-500/90 text-black"
+                            ? "border-warning/30 bg-surface/85 text-warning"
                             : hasIt
-                              ? "bg-emerald-500/90 text-black"
-                              : "bg-white/20 text-white",
+                              ? "border-success/30 bg-surface/85 text-success"
+                              : "border-line bg-surface/85 text-content",
                     )}
                 >
                     {isUpcoming
                         ? formatDate(release.releaseDate)
                         : hasIt
-                          ? "In Library"
-                          : "Available"}
+                          ? libraryOperationsRu.releases.inLibrary
+                          : libraryOperationsRu.releases.available}
                 </div>
 
                 {/* Acquire Overlay: admins download, everyone else requests */}
@@ -340,25 +407,33 @@ function ReleaseCard({
                         disabled={isDownloading || isRequested}
                         title={
                             isRequested
-                                ? "Already requested"
+                                ? libraryOperationsRu.releases.alreadyRequested
                                 : mode === "download"
-                                  ? "Download this release"
-                                  : "Request this release"
+                                  ? libraryOperationsRu.releases.downloadRelease
+                                  : libraryOperationsRu.releases.requestRelease
+                        }
+                        aria-label={
+                            isRequested
+                                ? libraryOperationsRu.releases.alreadyRequested
+                                : mode === "download"
+                                  ? libraryOperationsRu.releases.downloadRelease
+                                  : libraryOperationsRu.releases.requestRelease
                         }
                         className={cn(
-                            "absolute inset-0 flex items-center justify-center",
-                            "bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity",
-                            (isDownloading || isRequested) && "opacity-100",
+                            "absolute bottom-2 right-2 flex size-11 items-center justify-center rounded-full border border-line bg-surface/90 text-content shadow-lg backdrop-blur-md transition-[color,background-color,opacity,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-hover disabled:cursor-not-allowed",
+                            "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
+                            (isDownloading || isRequested) &&
+                                "opacity-100 sm:opacity-100",
                         )}
                     >
                         {isDownloading ? (
-                            <Loader2 className="w-8 h-8 text-white animate-spin" />
+                            <Loader2 className="size-5 animate-spin motion-reduce:animate-none" />
                         ) : isRequested ? (
-                            <CheckCircle2 className="w-8 h-8 text-white" />
+                            <CheckCircle2 className="size-5 text-success" />
                         ) : mode === "download" ? (
-                            <Download className="w-8 h-8 text-white" />
+                            <Download className="size-5" />
                         ) : (
-                            <Send className="w-8 h-8 text-white" />
+                            <Send className="size-5" />
                         )}
                     </button>
                 )}
@@ -366,7 +441,7 @@ function ReleaseCard({
                 {/* In Library Indicator */}
                 {hasIt && (
                     <div className="absolute bottom-2 right-2">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                        <CheckCircle2 className="size-5 text-success" />
                     </div>
                 )}
             </div>
@@ -374,30 +449,23 @@ function ReleaseCard({
             {/* Info */}
             <div className="space-y-1">
                 <h3
-                    className="text-sm font-medium text-white truncate"
+                    className="truncate text-sm font-semibold text-content"
                     title={release.title}
                 >
                     {release.title}
                 </h3>
                 <p
-                    className="text-xs text-white/50 truncate"
+                    className="truncate text-xs text-content-muted"
                     title={release.artistName}
                 >
                     {release.artistName}
                 </p>
                 {isUpcoming && (
-                    <p className="text-xs text-amber-400/80">
-                        {new Date(release.releaseDate).toLocaleDateString(
-                            "en-US",
-                            {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                            },
-                        )}
+                    <p className="text-xs font-medium text-warning">
+                        {formatReleaseCalendarDateRu(release.releaseDate)}
                     </p>
                 )}
             </div>
-        </div>
+        </article>
     );
 }

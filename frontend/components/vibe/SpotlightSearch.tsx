@@ -15,6 +15,7 @@ import {
 } from "react";
 import { Loader2, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { vibeMapRu } from "@/lib/i18n/vibeMapRu";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { searchMapTracks } from "./mapSearch";
 import type { MapTrack } from "./types";
@@ -84,7 +85,7 @@ function useRemoteSearch(
                 }
             } catch {
                 if (token === tokenRef.current)
-                    setError("Search failed — try again");
+                    setError(vibeMapRu.spotlight.searchFailed);
             } finally {
                 if (token === tokenRef.current) {
                     setLoading(false);
@@ -227,8 +228,8 @@ function CollapsedSearch({
             <button
                 type="button"
                 onClick={open}
-                title="Spotlight a vibe"
-                aria-label="Spotlight a vibe"
+                title={vibeMapRu.spotlight.title}
+                aria-label={vibeMapRu.spotlight.title}
                 aria-expanded={false}
                 className="pointer-events-auto flex items-center justify-center w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg text-gray-200 hover:bg-black/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
             >
@@ -259,7 +260,7 @@ function DropdownOption({
                     onClick={() => pick(index)}
                     className={`w-full text-left px-3 py-2 text-sm text-indigo-300 transition-colors ${active ? "bg-white/10" : "hover:bg-white/5"}`}
                 >
-                    Search this as a vibe →
+                    {vibeMapRu.spotlight.searchAsVibe}
                 </button>
             </li>
         );
@@ -270,7 +271,7 @@ function DropdownOption({
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => pick(index)}
-                aria-label={`${row.track.title} by ${row.track.artist}`}
+                aria-label={`${row.track.title} — ${row.track.artist}`}
                 className={`w-full flex items-center gap-2 text-left px-3 py-2 transition-colors ${active ? "bg-white/10" : "hover:bg-white/5"}`}
             >
                 <span
@@ -305,7 +306,7 @@ function SearchDropdown({
         <ul
             id="spotlight-listbox"
             role="listbox"
-            aria-label="Track and artist matches"
+            aria-label={vibeMapRu.spotlight.matches}
             className="mt-1.5 w-[min(80vw,320px)] max-h-80 overflow-y-auto rounded-xl bg-black/60 backdrop-blur-md border border-white/10 shadow-lg py-1"
         >
             {rows.map((row, index) => (
@@ -351,8 +352,8 @@ function SearchForm({
                     onFocus={() => controller.setFocused(true)}
                     onBlur={() => controller.setFocused(false)}
                     onKeyDown={controller.keyDown}
-                    placeholder="Search tracks, artists, or a vibe…"
-                    aria-label="Spotlight a vibe"
+                    placeholder={vibeMapRu.spotlight.placeholder}
+                    aria-label={vibeMapRu.spotlight.title}
                     role="combobox"
                     aria-autocomplete="list"
                     aria-expanded={controller.show}
@@ -368,8 +369,8 @@ function SearchForm({
                     <button
                         type="button"
                         onClick={controller.clear}
-                        title="Clear (Esc)"
-                        aria-label="Clear spotlight"
+                        title={vibeMapRu.spotlight.clear}
+                        aria-label={vibeMapRu.spotlight.clearAria}
                         className="absolute right-2 flex items-center justify-center w-7 h-7 rounded-full text-gray-400 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60"
                     >
                         {remote.loading ? (
@@ -382,7 +383,7 @@ function SearchForm({
             </div>
             {remote.warming && (
                 <p className="mt-1 px-3 text-xs text-gray-400">
-                    warming up the model…
+                    {vibeMapRu.spotlight.warming}
                 </p>
             )}
             {remote.error && (

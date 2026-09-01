@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
+import { ru } from "@/lib/i18n/ru";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Sidebar } from "./Sidebar";
@@ -11,7 +12,6 @@ import { UniversalPlayer } from "../player/UniversalPlayer";
 import { MediaControlsHandler } from "../player/MediaControlsHandler";
 import { PlayerModeWrapper } from "../player/PlayerModeWrapper";
 import { ActivityPanel } from "./ActivityPanel";
-import { GalaxyBackground } from "../ui/GalaxyBackground";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { PWAInstallPrompt } from "../PWAInstallPrompt";
 import { PullToRefresh } from "../ui/PullToRefresh";
@@ -20,6 +20,7 @@ import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useIsTV } from "@/lib/tv-utils";
 import { useActivityPanel } from "@/hooks/useActivityPanel";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
+import { TasteProfileOnboardingGate } from "@/features/taste-profile";
 
 const publicPaths = ["/login", "/register", "/onboarding", "/sync"];
 const publicPrefixes = ["/share/"];
@@ -28,7 +29,7 @@ const publicPrefixes = ["/share/"];
  * Renders the AuthenticatedLayout component.
  */
 export function AuthenticatedLayout({ children }: { children: ReactNode }) {
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, user } = useAuth();
     const pathname = usePathname();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
@@ -75,10 +76,10 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
     // Show loading state only on protected pages
     if (!isPublicPage && isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-black">
+            <div className="min-h-dvh flex items-center justify-center bg-black">
                 <div className="flex flex-col items-center gap-4">
                     <GradientSpinner size="lg" />
-                    <p className="text-white/60 text-sm">Loading...</p>
+                    <p className="text-white/60 text-sm">{ru.common.loading}</p>
                 </div>
             </div>
         );
@@ -91,6 +92,10 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
 
     // On protected pages, show appropriate layout based on device
     if (isAuthenticated) {
+        const tasteProfileGate = user?.id ? (
+            <TasteProfileOnboardingGate key={user.id} accountId={user.id} />
+        ) : null;
+
         // Android TV Layout - Optimized for 10-foot UI
         if (isTV) {
             return (
@@ -99,8 +104,9 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         href="#main-content"
                         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                        Skip to main content
+                        {ru.nav.skipToMainContent}
                     </a>
+                    {tasteProfileGate}
                     <MediaControlsHandler />
                     <TVLayout>{children}</TVLayout>
                 </PlayerModeWrapper>
@@ -115,11 +121,20 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         href="#main-content"
                         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                        Skip to main content
+                        {ru.nav.skipToMainContent}
                     </a>
-                    <div className="h-screen bg-black overflow-hidden flex flex-col">
+                    {tasteProfileGate}
+                    <div
+                        data-shell-frame="mobile"
+                        data-shell-direction="spectral-stage"
+                        className="mobile-shell-frame h-dvh overflow-hidden"
+                        style={{ paddingBottom: 0 }}
+                    >
                         <MediaControlsHandler />
-                        <TopBar isActivityPanelOpen={activityPanel.isOpen} />
+                        <TopBar
+                            isActivityPanelOpen={activityPanel.isOpen}
+                            onActivityPanelToggle={activityPanel.toggle}
+                        />
 
                         {/* Sidebar - renders MobileSidebar for hamburger menu */}
                         <Sidebar />
@@ -132,23 +147,25 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                             onTabChange={activityPanel.setActiveTab}
                         />
 
-                        {/* Main content area with rounded corners */}
                         <PullToRefresh>
                             <main
                                 id="main-content"
                                 tabIndex={-1}
                                 data-app-scroll-container
-                                className="flex-1 bg-gradient-to-b from-surface-hover via-black to-black mx-2 mb-2 rounded-lg overflow-y-auto relative focus:outline-none"
-                                style={{
-                                    marginTop:
-                                        "calc(58px + env(safe-area-inset-top, 0px))",
-                                    marginBottom:
-                                        "calc(56px + env(safe-area-inset-bottom, 0px) + 8px)",
-                                }}
+                                data-shell-surface="content"
+                                data-shell-canvas="open"
+                                className="mobile-app-stage relative overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60"
                             >
-                                <GalaxyBackground />
-                                {/* Padding at bottom for mini player floating above */}
-                                <div className="pb-24">{children}</div>
+                                <div
+                                    data-shell-bottom-inset-owner="content"
+                                    className="mobile-stage-content"
+                                    style={{
+                                        paddingBottom:
+                                            "calc(var(--app-mini-player-height) + var(--app-bottom-nav-height) + var(--safe-area-bottom) + 12px)",
+                                    }}
+                                >
+                                    {children}
+                                </div>
                             </main>
                         </PullToRefresh>
 
@@ -170,25 +187,42 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     href="#main-content"
                     className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                    Skip to main content
+                    {ru.nav.skipToMainContent}
                 </a>
+                {tasteProfileGate}
                 <div
-                    className="h-screen bg-black overflow-hidden flex flex-col"
-                    style={{ paddingTop: "64px" }}
+                    data-shell-frame="desktop"
+                    data-shell-direction="spectral-stage"
+                    className="desktop-shell-frame h-dvh overflow-hidden"
                 >
                     <MediaControlsHandler />
-                    <TopBar isActivityPanelOpen={activityPanel.isOpen} />
-                    <div className="flex-1 flex gap-2 p-2 pt-0 overflow-hidden">
+                    <div
+                        data-shell-workspace="desktop"
+                        className="desktop-shell-workspace flex min-h-0 flex-1 overflow-hidden"
+                    >
                         <Sidebar />
-                        <main
-                            id="main-content"
-                            tabIndex={-1}
-                            data-app-scroll-container
-                            className="flex-1 bg-gradient-to-b from-surface-hover via-black to-black rounded-lg overflow-y-auto relative focus:outline-none"
+                        <div
+                            data-shell-main-column="desktop"
+                            className="desktop-shell-main-column flex min-w-0 flex-1 flex-col overflow-hidden"
                         >
-                            <GalaxyBackground />
-                            {children}
-                        </main>
+                            <TopBar
+                                isActivityPanelOpen={activityPanel.isOpen}
+                                onActivityPanelToggle={activityPanel.toggle}
+                            />
+                            <main
+                                id="main-content"
+                                tabIndex={-1}
+                                data-app-scroll-container
+                                data-shell-scroll-mode={
+                                    pathname === "/vibe" ? "locked" : "page"
+                                }
+                                data-shell-surface="content"
+                                data-shell-canvas="open"
+                                className={`desktop-content-stage relative min-h-0 min-w-0 flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 ${pathname === "/vibe" ? "overflow-hidden" : "overflow-y-auto"}`}
+                            >
+                                {children}
+                            </main>
+                        </div>
                         <ActivityPanel
                             isOpen={activityPanel.isOpen}
                             onToggle={activityPanel.toggle}
@@ -205,10 +239,10 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
 
     // If not authenticated on a protected page, auth context will redirect
     return (
-        <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="min-h-dvh flex items-center justify-center bg-black">
             <div className="flex flex-col items-center gap-4">
                 <GradientSpinner size="lg" />
-                <p className="text-white/60 text-sm">Redirecting...</p>
+                <p className="text-white/60 text-sm">{ru.nav.redirecting}</p>
             </div>
         </div>
     );
