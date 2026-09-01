@@ -226,15 +226,16 @@ RUN echo "=== Migrations copied ===" && ls -la prisma/migrations/ && echo "=== E
 # Prefer IPv4 in this deployment: its IPv6 route is present in DNS but has no
 # usable egress. Without this, npm can intermittently stall on registry reads.
 ENV NODE_OPTIONS=--dns-result-order=ipv4first \
-    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRIES=10 \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000 \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
-    NPM_CONFIG_FETCH_TIMEOUT=60000
+    NPM_CONFIG_FETCH_TIMEOUT=300000 \
+    NPM_CONFIG_MAXSOCKETS=4
 RUN --mount=type=cache,id=soundspan-npm,target=/root/.npm,sharing=locked \
     --mount=type=cache,id=soundspan-prisma,target=/root/.cache/prisma,sharing=locked \
     --mount=from=official_artifacts,source=/root/.cache/prisma,target=/official/prisma-cache,ro \
     cp -a /official/prisma-cache/. /root/.cache/prisma/ && \
-    npm ci
+    npm ci --prefer-offline
 RUN --mount=type=cache,id=soundspan-prisma,target=/root/.cache/prisma,sharing=locked \
     npx prisma generate
 
