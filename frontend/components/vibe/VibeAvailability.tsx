@@ -226,6 +226,12 @@ function selectWaveTracks(
     );
 }
 
+// A Wave retune can fan out into several provider radio requests and a fresh
+// stream extraction. Keep rapid successive Apply actions latest-wins before
+// any provider work starts instead of turning UI experimentation into a
+// playback-failure cascade.
+const RETUNE_REQUEST_DEBOUNCE_MS = 300;
+
 /** Online-first personal radio with explicit direction and feedback controls. */
 export function VibeProviderFallback() {
     const { user } = useAuth();
@@ -235,15 +241,21 @@ export function VibeProviderFallback() {
     const [activeMood, setActiveMood] = useState<PersonalizedHomeMood | null>(
         null,
     );
+    const [requestedMode, setRequestedMode] =
+        useState<SupportedPersonalizedMode>("for-you");
+    const [requestedMood, setRequestedMood] =
+        useState<PersonalizedHomeMood | null>(null);
     const [isTuneOpen, setIsTuneOpen] = useState(false);
     const [retuneNotice, setRetuneNotice] = useState<
         "updated" | "kept" | "saved" | null
     >(null);
     const tuneButtonRef = useRef<HTMLButtonElement>(null);
     const readWaveSelectionOwnerRef = useRef<string | null>(null);
+    const retuneGenerationRef = useRef(0);
     const [pendingRetune, setPendingRetune] = useState<{
         mode: WaveFeedMode;
         mood: WaveMood | null;
+        generation: number;
     } | null>(null);
     const { advanceQueue, pause, play, playTracks } = useAudioControls();
     const { isPlaying } = usePlaybackStatus();
@@ -263,8 +275,9 @@ export function VibeProviderFallback() {
     const { data, isLoading, isError, refetch } = usePersonalizedHomeFeed(
         12,
         true,
-        activeMode,
-        activeMood,
+        requestedMode,
+        requestedMood,
+        "wave",
     );
 
     useEffect(() => {
@@ -282,7 +295,17 @@ export function VibeProviderFallback() {
             const shouldRetuneActiveWave =
                 vibeMode &&
                 (selection.mode !== waveMode || selection.mood !== waveMood);
-            setPendingRetune(shouldRetuneActiveWave ? selection : null);
+            if (shouldRetuneActiveWave) {
+                retuneGenerationRef.current += 1;
+                setPendingRetune({
+                    ...selection,
+                    generation: retuneGenerationRef.current,
+                });
+            } else {
+                setPendingRetune(null);
+                setRequestedMode(selection.mode);
+                setRequestedMood(selection.mood);
+            }
             setActiveMode(selection.mode);
             setActiveMood(selection.mood);
             if (!shouldRetuneActiveWave) {
@@ -294,9 +317,19 @@ export function VibeProviderFallback() {
             mounted = false;
         };
     }, [ownerId, setWaveMode, setWaveMood, vibeMode, waveMode, waveMood]);
+    useEffect(() => {
+        if (!pendingRetune) return;
+        const generation = pendingRetune.generation;
+        const timeout = window.setTimeout(() => {
+            if (retuneGenerationRef.current !== generation) return;
+            setRequestedMode(pendingRetune.mode);
+            setRequestedMood(pendingRetune.mood);
+        }, RETUNE_REQUEST_DEBOUNCE_MS);
+        return () => window.clearTimeout(timeout);
+    }, [pendingRetune]);
     const tracks = useMemo(
-        () => selectWaveTracks(data?.shelves, activeMode),
-        [activeMode, data?.shelves],
+        () => selectWaveTracks(data?.shelves, requestedMode),
+        [data?.shelves, requestedMode],
     );
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
 
@@ -307,8 +340,9 @@ export function VibeProviderFallback() {
             return;
         }
         if (
-            pendingRetune.mode !== activeMode ||
-            pendingRetune.mood !== activeMood ||
+            pendingRetune.generation !== retuneGenerationRef.current ||
+            pendingRetune.mode !== requestedMode ||
+            pendingRetune.mood !== requestedMood ||
             isLoading
         ) {
             return;
@@ -353,14 +387,14 @@ export function VibeProviderFallback() {
         setWaveMood(pendingRetune.mood);
         queueMicrotask(() => setRetuneNotice("updated"));
     }, [
-        activeMode,
-        activeMood,
         currentTrack?.id,
         isError,
         isLoading,
         playTracks,
         pendingRetune,
         queue,
+        requestedMode,
+        requestedMood,
         setIsShuffle,
         setShuffleIndices,
         setVibeMode,
@@ -508,7 +542,18 @@ export function VibeProviderFallback() {
                 shouldRetune &&
                 pendingRetune?.mode === mode &&
                 pendingRetune.mood === mood;
-            setPendingRetune(shouldRetune ? { mode, mood } : null);
+            if (shouldRetune) {
+                retuneGenerationRef.current += 1;
+                setPendingRetune({
+                    mode,
+                    mood,
+                    generation: retuneGenerationRef.current,
+                });
+            } else {
+                setPendingRetune(null);
+                setRequestedMode(mode);
+                setRequestedMood(mood);
+            }
             if (shouldRetune) setRetuneNotice(null);
             else if (!vibeMode) setRetuneNotice("saved");
             else setRetuneNotice(null);

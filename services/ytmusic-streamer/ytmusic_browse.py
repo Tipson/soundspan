@@ -228,8 +228,23 @@ async def get_radio(
             else:
                 artists = []
             artists = [name for name in artists if name]
+            artist_id = None
+            if isinstance(raw_artists, list):
+                artist_id = next(
+                    (
+                        str(artist.get("id") or "").strip()
+                        for artist in raw_artists
+                        if isinstance(artist, dict) and str(artist.get("id") or "").strip()
+                    ),
+                    None,
+                )
             raw_album = raw_track.get("album") or {}
             album = raw_album.get("name", "") if isinstance(raw_album, dict) else str(raw_album)
+            album_id = (
+                str(raw_album.get("id") or "").strip() or None
+                if isinstance(raw_album, dict)
+                else None
+            )
             thumbnails = raw_track.get("thumbnail") or raw_track.get("thumbnails") or []
             duration = raw_track.get("length") or raw_track.get("duration") or ""
 
@@ -239,7 +254,9 @@ async def get_radio(
                     "title": raw_track.get("title", ""),
                     "artist": artists[0] if artists else "Unknown",
                     "artists": artists,
+                    "artistId": artist_id,
                     "album": album,
+                    "albumId": album_id,
                     "duration": _parse_duration(str(duration)),
                     "thumbnailUrl": _best_thumbnail(thumbnails),
                 }

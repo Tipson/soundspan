@@ -171,6 +171,19 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/playlistTrackResolution.ts` | Core |
 | `backend/src/services/personalizedCatalog.ts` | Account-scoped online Wave signals, direction policies, and independent mood/context ranking |
 | `backend/src/services/tasteProfile.ts` | Account-scoped taste onboarding, bounded playable YouTube seed resolution, and onboarding eligibility |
+| `backend/src/services/recommendations/recommendationService.ts` | Unified Home, Wave, Made For You, and Similar Tracks recommendation facade |
+| `backend/src/services/recommendations/recommendationRuntime.ts` | Production composition of playable candidate adapters, canonical feature/exposure stores, and hot-set scheduling |
+| `backend/src/services/recommendations/engine.ts` | Baseline, shadow, and active experiment semantics plus canonical resolution and supervised persistence |
+| `backend/src/services/recommendations/rankerV2.ts` | Multi-centroid account taste, mood/audio scoring, repeat cooldown, MMR, caps, and deterministic exploration |
+| `backend/src/services/recommendations/canonicalIdentity.ts` | Global MBID, ISRC, fingerprint, and bounded metadata/duration identity resolution |
+| `backend/src/services/recommendations/featureStore.ts` | Canonical DCLAP/Essentia enrichment and account-scoped taste/dislike reads |
+| `backend/src/services/recommendations/exposureStore.ts` | Persisted generation/exposure attribution and cross-session repeat history |
+| `backend/src/services/recommendations/listenBrainzAdapter.ts` | Optional cached, total-deadline-bounded, circuit-broken CF/LB Radio candidate adapter |
+| `backend/src/services/recommendations/moodEmbedding.ts` | Cached 750 ms DCLAP text-mood signal with active-space validation and scalar fallback |
+| `backend/src/services/recommendations/remoteAnalysisHotSet.ts` | Bounded canonical remote-analysis admission, durable spool leases, budget, and expiry cleanup |
+| `backend/src/services/recommendations/remoteAnalysisRecovery.ts` | Single-flight startup and periodic TTL enforcement for remote-analysis assets |
+| `backend/src/services/recommendations/shadowEvaluation.ts` | Read-only baseline-vs-hybrid engagement, playability, repeat, diversity, and latency evaluator |
+| `backend/src/services/youtubeMusicRetry.ts` | Abort-aware bounded YouTube Music retry and backoff shared by browse and stream calls |
 | `backend/src/services/playbackTrace.ts` | Playback telemetry |
 | `backend/src/services/podcastCache.ts` | Core |
 | `backend/src/services/podcastDownload.ts` | Core |
@@ -250,6 +263,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/vibeVocabularyGenerator.ts` | Testable provider-backed vocabulary artifact generation |
 | `backend/src/services/wikidata.ts` | Core |
 | `backend/src/services/workerEventLoopMonitor.ts` | Core |
+| `backend/src/workers/remoteAnalysisWorker.ts` | Optional remote-analysis queue registration, processor events, and recovery lifecycle |
 | `backend/src/services/youtubeDownload.ts` | Core |
 | `backend/src/services/youtubeMusic.ts` | Core |
 

@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from types import ModuleType
 
 import acoustid_backfill
+import canonical_analysis
 import pytest
 from acoustid_backfill import AcoustIDBackfill
 from fingerprint_persistence import persist_fingerprint
@@ -132,6 +133,79 @@ def _drop_test_schema(schema_name: str) -> None:
         connection.close()
 
 
+def _seed_canonical_analysis_lease(schema_name: str) -> None:
+    """Create one durable canonical lease for concurrent-claim verification."""
+    assert TEST_DATABASE_URL is not None
+    connection = psycopg2.connect(TEST_DATABASE_URL, connect_timeout=5)
+    connection.autocommit = True
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                sql.SQL(
+                    """
+                    CREATE TABLE {}."CanonicalRecording" (
+                        id TEXT PRIMARY KEY,
+                        "analysisStatus" TEXT NOT NULL DEFAULT 'pending',
+                        "analysisError" TEXT,
+                        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    CREATE TABLE {}."AnalysisAssetLease" (
+                        id TEXT PRIMARY KEY,
+                        "canonicalRecordingId" TEXT NOT NULL,
+                        "spoolRef" TEXT NOT NULL UNIQUE,
+                        status TEXT NOT NULL,
+                        "expiresAt" TIMESTAMPTZ NOT NULL,
+                        error TEXT,
+                        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                ).format(sql.Identifier(schema_name), sql.Identifier(schema_name))
+            )
+            cursor.execute(
+                sql.SQL(
+                    """
+                    INSERT INTO {}."CanonicalRecording" (id)
+                    VALUES ('canonical-lease');
+                    INSERT INTO {}."AnalysisAssetLease"
+                        (id, "canonicalRecordingId", "spoolRef", status, "expiresAt")
+                    VALUES (
+                        'lease-1',
+                        'canonical-lease',
+                        '.soundspan-analysis-spool/lease.audio',
+                        'queued_essentia',
+                        NOW() + INTERVAL '2 hours'
+                    )
+                    """
+                ).format(sql.Identifier(schema_name), sql.Identifier(schema_name))
+            )
+    finally:
+        connection.close()
+
+
+def _claim_canonical_lease(
+    module: ModuleType,
+    schema_name: str,
+    start_barrier: threading.Barrier,
+) -> bool:
+    """Attempt one lease claim on an independent PostgreSQL transaction."""
+    database = _configure_database(module, schema_name)
+    try:
+        start_barrier.wait(timeout=5)
+        job = canonical_analysis._validate_job(
+            {
+                "canonicalRecordingId": "canonical-lease",
+                "leaseId": "lease-1",
+                "filePath": ".soundspan-analysis-spool/lease.audio",
+                "deleteAfter": True,
+            }
+        )
+        assert job is not None
+        return canonical_analysis._mark_started(database, job)
+    finally:
+        database.close()
+
+
 def _configure_database(module: ModuleType, schema_name: str):
     """Connect one analyzer database manager to the isolated test schema."""
     assert TEST_DATABASE_URL is not None
@@ -177,6 +251,127 @@ def test_reconciliation_claims_are_disjoint_across_transactions(
         assert sorted(first_claim + second_claim) == sorted(expected_ids)
         assert len(first_claim + second_claim) == len(set(first_claim + second_claim))
     finally:
+        _drop_test_schema(schema_name)
+
+
+def test_canonical_lease_is_claimed_by_exactly_one_analyzer(
+    loaded_analyzer: ModuleType,
+) -> None:
+    """Prove the durable Essentia hand-off has one cleanup owner across replicas."""
+    schema_name = f"canonical_claim_{uuid.uuid4().hex}"
+    _create_test_schema(schema_name)
+    _seed_canonical_analysis_lease(schema_name)
+    start_barrier = threading.Barrier(2)
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            claims = [
+                executor.submit(
+                    _claim_canonical_lease,
+                    loaded_analyzer,
+                    schema_name,
+                    start_barrier,
+                )
+                for _ in range(2)
+            ]
+            outcomes = [claim.result(timeout=10) for claim in claims]
+
+        assert sorted(outcomes) == [False, True]
+        database = _configure_database(loaded_analyzer, schema_name)
+        try:
+            cursor = database.get_cursor()
+            cursor.execute(
+                'SELECT status, "expiresAt" > NOW() AS live '
+                'FROM "AnalysisAssetLease" WHERE id = %s',
+                ("lease-1",),
+            )
+            assert cursor.fetchone() == {"status": "processing", "live": True}
+            database.commit()
+            cursor.close()
+        finally:
+            database.close()
+    finally:
+        _drop_test_schema(schema_name)
+
+
+@pytest.mark.parametrize("settlement", ["completed", "failed", "retryable"])
+def test_revoked_canonical_lease_fences_stale_settlement(
+    loaded_analyzer: ModuleType,
+    settlement: str,
+) -> None:
+    """Reject every terminal write after recovery has revoked lease ownership."""
+    schema_name = f"canonical_fence_{uuid.uuid4().hex}"
+    _create_test_schema(schema_name)
+    _seed_canonical_analysis_lease(schema_name)
+    database = _configure_database(loaded_analyzer, schema_name)
+    job = canonical_analysis._validate_job(
+        {
+            "canonicalRecordingId": "canonical-lease",
+            "leaseId": "lease-1",
+            "filePath": ".soundspan-analysis-spool/lease.audio",
+            "deleteAfter": True,
+        }
+    )
+    assert job is not None
+
+    try:
+        assert canonical_analysis._mark_started(database, job) is True
+        cursor = database.get_cursor()
+        cursor.execute(
+            'UPDATE "AnalysisAssetLease" '
+            "SET status = 'expired', \"expiresAt\" = NOW() - INTERVAL '1 second' "
+            "WHERE id = %s",
+            ("lease-1",),
+        )
+        cursor.execute(
+            'UPDATE "CanonicalRecording" '
+            "SET \"analysisStatus\" = 'pending', \"analysisError\" = 'lease revoked' "
+            "WHERE id = %s",
+            ("canonical-lease",),
+        )
+        database.commit()
+        cursor.close()
+
+        if settlement == "completed":
+            persisted = canonical_analysis._persist_completed(
+                database,
+                job,
+                {},
+                "essentia-test",
+            )
+        elif settlement == "failed":
+            persisted = canonical_analysis._persist_failed(
+                database,
+                job,
+                "stale failure",
+                "essentia-test",
+            )
+        else:
+            persisted = canonical_analysis._persist_retryable(
+                database,
+                job,
+                "stale retry",
+            )
+
+        assert persisted is False
+        cursor = database.get_cursor()
+        cursor.execute(
+            'SELECT status FROM "AnalysisAssetLease" WHERE id = %s',
+            ("lease-1",),
+        )
+        assert cursor.fetchone() == {"status": "expired"}
+        cursor.execute(
+            'SELECT "analysisStatus", "analysisError" FROM "CanonicalRecording" WHERE id = %s',
+            ("canonical-lease",),
+        )
+        assert cursor.fetchone() == {
+            "analysisStatus": "pending",
+            "analysisError": "lease revoked",
+        }
+        database.commit()
+        cursor.close()
+    finally:
+        database.close()
         _drop_test_schema(schema_name)
 
 

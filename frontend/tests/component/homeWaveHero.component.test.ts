@@ -153,8 +153,7 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.equal(calls.images.length, 2);
     assert.ok(
         calls.images.every(
-            (props) =>
-                props.priority === true && props.loading === undefined,
+            (props) => props.priority === true && props.loading === undefined,
         ),
     );
 

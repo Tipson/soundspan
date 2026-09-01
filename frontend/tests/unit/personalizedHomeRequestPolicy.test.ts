@@ -16,12 +16,13 @@ test("personalized home has one outer request budget and no multiplying retries"
 
 test("personalized home request and cache key preserve the ranking mode", () => {
     assert.equal(
-        buildPersonalizedHomeFeedUrl(24, "new"),
-        "/personalized/home?limit=24&mode=new",
+        buildPersonalizedHomeFeedUrl(24, "new", null, "home", "tab-1"),
+        "/personalized/home?limit=24&mode=new&surface=home&sessionId=tab-1",
     );
     assert.deepEqual(queryKeys.personalizedHome(24, "new"), [
         "home",
         "personalized",
+        "home",
         24,
         "new",
     ]);
@@ -33,12 +34,13 @@ test("personalized home request and cache key preserve the ranking mode", () => 
 
 test("personalized home request and cache key preserve an independent Wave mood", () => {
     assert.equal(
-        buildPersonalizedHomeFeedUrl(24, "new", "focus"),
-        "/personalized/home?limit=24&mode=new&mood=focus",
+        buildPersonalizedHomeFeedUrl(24, "new", "focus", "wave", "tab-1"),
+        "/personalized/home?limit=24&mode=new&surface=wave&sessionId=tab-1&mood=focus",
     );
-    assert.deepEqual(queryKeys.personalizedHome(24, "new", "focus"), [
+    assert.deepEqual(queryKeys.personalizedHome(24, "new", "focus", "wave"), [
         "home",
         "personalized",
+        "wave",
         24,
         "new",
         "focus",
@@ -46,5 +48,12 @@ test("personalized home request and cache key preserve an independent Wave mood"
     assert.notDeepEqual(
         queryKeys.personalizedHome(24, "new", "focus"),
         queryKeys.personalizedHome(24, "new", "workout"),
+    );
+});
+
+test("personalized cache separates Home and Wave exposure surfaces", () => {
+    assert.notDeepEqual(
+        queryKeys.personalizedHome(12, "for-you", null, "home"),
+        queryKeys.personalizedHome(12, "for-you", null, "wave"),
     );
 });

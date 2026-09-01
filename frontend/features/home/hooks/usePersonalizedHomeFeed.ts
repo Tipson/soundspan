@@ -5,7 +5,9 @@ import type {
     PersonalizedHomeFeed,
     PersonalizedHomeMode,
     PersonalizedHomeMood,
+    PersonalizedRecommendationSurface,
 } from "../types";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
 import {
     PERSONALIZED_HOME_QUERY_RETRY,
     PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
@@ -22,10 +24,14 @@ export function buildPersonalizedHomeFeedUrl(
     limit: number,
     mode: PersonalizedHomeMode,
     mood: PersonalizedHomeMood | null = null,
+    surface: PersonalizedRecommendationSurface = "home",
+    sessionId = getRecommendationSessionId(),
 ): string {
     const params = new URLSearchParams({
         limit: String(limit),
         mode,
+        surface,
+        sessionId,
     });
     if (mood) params.set("mood", mood);
     return `/personalized/home?${params.toString()}`;
@@ -37,12 +43,13 @@ export function usePersonalizedHomeFeed(
     enabled = true,
     mode: PersonalizedHomeMode = "for-you",
     mood: PersonalizedHomeMood | null = null,
+    surface: PersonalizedRecommendationSurface = "home",
 ) {
     return useQuery({
-        queryKey: queryKeys.personalizedHome(limit, mode, mood),
+        queryKey: queryKeys.personalizedHome(limit, mode, mood, surface),
         queryFn: ({ signal }) =>
             api.request<PersonalizedHomeFeed>(
-                buildPersonalizedHomeFeedUrl(limit, mode, mood),
+                buildPersonalizedHomeFeedUrl(limit, mode, mood, surface),
                 {
                     method: "GET",
                     signal,

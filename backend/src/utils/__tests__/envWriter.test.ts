@@ -1,3 +1,5 @@
+import path from "node:path";
+
 const mockReadFileSync = jest.fn();
 const mockWriteFileSync = jest.fn();
 const mockChmodSync = jest.fn();
@@ -108,14 +110,21 @@ describe("envWriter", () => {
 
         expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
         const tempPath = String(mockWriteFileSync.mock.calls[0][0]);
-        expect(tempPath).toEqual(expect.stringContaining("/srv/.env.tmp-"));
+        expect(tempPath).toEqual(
+            expect.stringContaining(
+                `${path.resolve("/srv")}${path.sep}.env.tmp-`,
+            ),
+        );
         expect(mockWriteFileSync).toHaveBeenCalledWith(
             tempPath,
             expect.any(String),
             { encoding: "utf-8", mode: 0o600 },
         );
         expect(mockChmodSync).toHaveBeenCalledWith(tempPath, 0o600);
-        expect(mockRenameSync).toHaveBeenCalledWith(tempPath, "/srv/.env");
+        expect(mockRenameSync).toHaveBeenCalledWith(
+            tempPath,
+            path.resolve("/srv/.env"),
+        );
         cwdSpy.mockRestore();
     });
 
@@ -244,6 +253,32 @@ describe("envWriter", () => {
         const written = String(mockWriteFileSync.mock.calls[0][1]);
         expect(written).toContain(
             "# Last.fm\nLASTFM_API_KEY=lastfm-api-key\nLASTFM_SHARED_SECRET=lastfm-shared-secret",
+        );
+        expect(written).not.toContain("# Other Variables");
+    });
+
+    it("groups hybrid recommendation controls in one category", async () => {
+        process.env.ENV_FILE_PATH = "/tmp/soundspan.env";
+        mockReadFileSync.mockImplementation(() => {
+            throw createFsError("ENOENT");
+        });
+
+        await writeEnvFile({
+            RECOMMENDATION_ENGINE_MODE: "shadow",
+            REMOTE_ANALYSIS_ENABLED: "false",
+            REMOTE_ANALYSIS_DAILY_BUDGET: "100",
+            REMOTE_ANALYSIS_CONCURRENCY: "1",
+        });
+
+        const written = String(mockWriteFileSync.mock.calls[0][1]);
+        expect(written).toContain(
+            [
+                "# Recommendations & Remote Analysis",
+                "RECOMMENDATION_ENGINE_MODE=shadow",
+                "REMOTE_ANALYSIS_ENABLED=false",
+                "REMOTE_ANALYSIS_DAILY_BUDGET=100",
+                "REMOTE_ANALYSIS_CONCURRENCY=1",
+            ].join("\n"),
         );
         expect(written).not.toContain("# Other Variables");
     });

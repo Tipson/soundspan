@@ -26,6 +26,7 @@ export interface RelatedArtist {
     name: string;
     mbid?: string;
     image?: string;
+    providerId?: string;
 }
 
 export interface RelatedAlbum {
@@ -33,4 +34,5 @@ export interface RelatedAlbum {
     title: string;
     year?: number;
     coverArt?: string | null;
+    provider?: "youtube" | "tidal" | "library";
 }

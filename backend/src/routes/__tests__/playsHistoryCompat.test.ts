@@ -55,6 +55,12 @@ jest.mock("../../services/scrobbleForwarder", () => ({
     forwardScrobbleIsolated: jest.fn(),
 }));
 
+jest.mock("../../services/recommendations/exposureStore", () => ({
+    recommendationExposureStore: {
+        attributePlayback: jest.fn().mockResolvedValue(undefined),
+    },
+}));
+
 import router from "../plays";
 import { prisma } from "../../utils/db";
 import { resolveRemoteTrackMetadataForRequest } from "../../services/remoteTrackMetadataResolver";

@@ -75,6 +75,11 @@ export interface PopularArtist {
 /** Direction policy for one account's personalized Wave. */
 export type PersonalizedHomeMode = "for-you" | "new" | "familiar";
 
+export type PersonalizedRecommendationSurface =
+    | "home"
+    | "wave"
+    | "made-for-you";
+
 /** Mood or listening context applied independently from Wave direction. */
 export type PersonalizedHomeMood =
     | "calm"
@@ -119,4 +124,6 @@ export interface PersonalizedHomeFeed {
         | null;
     seedCount: number;
     nextCursor?: number;
+    generationId?: string;
+    degradedSources?: string[];
 }

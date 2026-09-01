@@ -804,6 +804,18 @@ config:
     requests: true
     # -- Scoped peer credentials and read-only host federation API.
     federation: false
+  # -- Hybrid recommendation and bounded remote-analysis controls. Null leaves
+  #    the variable absent so the application default applies and global.env or
+  #    workload envFrom can supply it without being shadowed by the chart.
+  recommendations:
+    # -- Recommendation ranker: baseline, shadow, or active.
+    engineMode: null
+    # -- Admit remote provider tracks to the asynchronous analysis hot set.
+    remoteAnalysisEnabled: null
+    # -- Maximum new canonical recordings admitted per UTC day (1..10000).
+    remoteAnalysisDailyBudget: null
+    # -- Concurrent remote-analysis queue processors (1 or 2).
+    remoteAnalysisConcurrency: null
   # -- Enables Socket.IO Redis adapter for Listen Together cross-pod fanout.
   #    Keep true for multi-replica backend API deployments.
   listenTogetherRedisAdapterEnabled: true

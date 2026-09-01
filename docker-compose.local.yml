@@ -65,8 +65,9 @@ services:
             AUDIO_REDIS_SOCKET_TIMEOUT: ${AUDIO_REDIS_SOCKET_TIMEOUT:-15}
             MODEL_IDLE_TIMEOUT: 60
         volumes:
-            # Host music path; override MUSIC_PATH in your shell/.env as needed.
-            - "${MUSIC_PATH:-./music}:/music:ro"
+            # Host music path; remote canonical analysis deletes only its owned
+            # contained spool files after persistence.
+            - "${MUSIC_PATH:-./music}:/music"
         depends_on:
             postgres-local:
                 condition: service_healthy

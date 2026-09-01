@@ -4,6 +4,7 @@ const mockPrisma = {
     likedRemoteTrack: { findMany: jest.fn() },
     playlistItem: { findMany: jest.fn() },
     dislikedEntity: { findMany: jest.fn() },
+    scrobbleConnection: { findUnique: jest.fn() },
     userSettings: { findUnique: jest.fn() },
 };
 
@@ -316,6 +317,7 @@ describe("PersonalizedCatalogService", () => {
             reason: "insufficient_signals",
             seedCount: 0,
             nextCursor: 1,
+            degradedSources: [],
         });
     });
 
@@ -418,6 +420,7 @@ describe("PersonalizedCatalogService", () => {
             },
         });
         mockPrisma.dislikedEntity.findMany.mockResolvedValue([]);
+        mockPrisma.scrobbleConnection.findUnique.mockResolvedValue(null);
         mockDefaultGetRadio.mockResolvedValue({
             playlistId: null,
             seedVideoId: "isolated-signal",
@@ -985,8 +988,9 @@ describe("PersonalizedCatalogService", () => {
         expect(result.shelves.discovery.map((track) => track.id)).toEqual([
             "yt:youtube-candidate",
         ]);
-        expect(result.degraded).toBe(false);
-        expect(result.reason).toBeNull();
+        expect(result.degraded).toBe(true);
+        expect(result.reason).toBe("provider_partial_failure");
+        expect(result.degradedSources).toEqual(["listenbrainz"]);
     });
 
     it("blends playable optional ListenBrainz candidates into provider discovery", async () => {

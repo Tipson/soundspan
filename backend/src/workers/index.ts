@@ -120,6 +120,10 @@ import {
     type SchedulerMetricJob,
     type SchedulerTimeoutOperation,
 } from "../metrics/schedulerMetrics";
+import {
+    startRemoteAnalysisWorker,
+    stopRemoteAnalysisWorker,
+} from "./remoteAnalysisWorker";
 
 const log = logger.child("WorkerScheduler");
 const queueProcessorLog = log.child("QueueProcessor");
@@ -1374,6 +1378,7 @@ export function startWorkers(): void {
     registerMediaQueueEvents();
     registerImportQueueEvents();
     registerSchedulerQueueEvents();
+    startRemoteAnalysisWorker(recordQueueProcessorEvent);
     log.debug("Worker processors registered and event handlers attached");
     startWorkerSchedules();
     workersStarted = true;
@@ -1384,6 +1389,8 @@ export function startWorkers(): void {
  */
 export async function shutdownWorkers(): Promise<void> {
     log.debug("Shutting down workers...");
+
+    await stopRemoteAnalysisWorker();
 
     // Stop unified enrichment worker
     await stopUnifiedEnrichmentWorker();
@@ -1425,7 +1432,6 @@ export async function shutdownWorkers(): Promise<void> {
     albumDownloadQueue.removeAllListeners();
     artistExpansionQueue.removeAllListeners();
     scrobbleQueue.removeAllListeners();
-
     // Close all queues gracefully
     await Promise.all([
         discoverQueue.close(),

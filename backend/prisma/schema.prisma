@@ -69,6 +69,8 @@ model User {
   federationPlaylistFollows FederationPlaylistFollow[]
   scrobbleConnections       ScrobbleConnection[]
   savedMusicEntities        SavedMusicEntity[]
+  recommendationGenerations RecommendationGeneration[]
+  recommendationExposures   RecommendationExposure[]
 }
 
 model UserSettings {
@@ -514,20 +516,20 @@ model Track {
 }
 
 model TrackFingerprint {
-  trackId           String    @id
-  fingerprint       String    @db.Text
-  duration          Int
-  fingerprintedAt   DateTime  @default(now()) @db.Timestamptz
-  lookupStatus      String    @default("pending")
-  lookupStartedAt   DateTime? @db.Timestamptz
-  lookupRetryCount  Int       @default(0)
-  lookupError       String?
-  recordingMbid     String?
-  releaseGroupMbid  String?
-  score             Float?
-  lookedUpAt        DateTime? @db.Timestamptz
-  updatedAt         DateTime  @updatedAt @db.Timestamptz
-  track             Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  trackId          String    @id
+  fingerprint      String    @db.Text
+  duration         Int
+  fingerprintedAt  DateTime  @default(now()) @db.Timestamptz
+  lookupStatus     String    @default("pending")
+  lookupStartedAt  DateTime? @db.Timestamptz
+  lookupRetryCount Int       @default(0)
+  lookupError      String?
+  recordingMbid    String?
+  releaseGroupMbid String?
+  score            Float?
+  lookedUpAt       DateTime? @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @db.Timestamptz
+  track            Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
 
   @@index([lookupStatus, lookupRetryCount, fingerprintedAt])
   @@index([recordingMbid])
@@ -1490,18 +1492,19 @@ model TrackLyrics {
 }
 
 model EmbeddingSpace {
-  id             String               @id @default(cuid())
-  family         String
-  checkpointHash String               @map("checkpoint_hash")
-  dim            Int
-  preprocessing  Json
-  status         EmbeddingSpaceStatus
-  hadVectors     Boolean              @default(false) @map("had_vectors")
-  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz
-  lastSeenAt     DateTime             @default(now()) @map("last_seen_at") @db.Timestamptz
-  retiredAt      DateTime?            @map("retired_at") @db.Timestamptz
-  cleaningAt     DateTime?            @map("cleaning_at") @db.Timestamptz
-  embeddings     TrackEmbedding[]
+  id                  String                        @id @default(cuid())
+  family              String
+  checkpointHash      String                        @map("checkpoint_hash")
+  dim                 Int
+  preprocessing       Json
+  status              EmbeddingSpaceStatus
+  hadVectors          Boolean                       @default(false) @map("had_vectors")
+  createdAt           DateTime                      @default(now()) @map("created_at") @db.Timestamptz
+  lastSeenAt          DateTime                      @default(now()) @map("last_seen_at") @db.Timestamptz
+  retiredAt           DateTime?                     @map("retired_at") @db.Timestamptz
+  cleaningAt          DateTime?                     @map("cleaning_at") @db.Timestamptz
+  embeddings          TrackEmbedding[]
+  canonicalEmbeddings CanonicalRecordingEmbedding[]
 
   @@unique([family, checkpointHash])
   @@index([status])
@@ -1569,25 +1572,158 @@ model TrackYtMusic {
 }
 
 model TrackMapping {
-  id             String        @id @default(cuid())
+  id                   String              @id @default(cuid())
   /// Active-row linkage uniqueness is enforced in SQL migrations:
   /// - stale=false rows are unique by (trackId, trackTidalId, trackYtMusicId)
   /// - at least one linkage key must be present
-  trackId        String?
-  trackTidalId   String?
-  trackYtMusicId String?
-  confidence     Float
-  source         String // "gap-fill" | "isrc" | "import-match" | "manual" | "federation"
-  stale          Boolean       @default(false)
-  staleAt        DateTime?
-  createdAt      DateTime      @default(now())
-  track          Track?        @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  trackTidal     TrackTidal?   @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
-  trackYtMusic   TrackYtMusic? @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  trackId              String?
+  trackTidalId         String?
+  trackYtMusicId       String?
+  canonicalRecordingId String?
+  confidence           Float
+  source               String // "gap-fill" | "isrc" | "import-match" | "manual" | "federation"
+  stale                Boolean             @default(false)
+  staleAt              DateTime?
+  createdAt            DateTime            @default(now())
+  track                Track?              @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  trackTidal           TrackTidal?         @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
+  trackYtMusic         TrackYtMusic?       @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  canonicalRecording   CanonicalRecording? @relation(fields: [canonicalRecordingId], references: [id], onDelete: SetNull)
 
   @@index([trackId])
   @@index([trackTidalId])
   @@index([trackYtMusicId])
+  @@index([canonicalRecordingId])
   @@index([stale])
   @@index([stale, staleAt])
+}
+
+/// Provider-neutral identity and shared analysis for one recording. Account
+/// behavior never lives here; all users reuse these immutable audio features.
+model CanonicalRecording {
+  id                  String                        @id @default(cuid())
+  canonicalKey        String                        @unique
+  recordingMbid       String?                       @unique
+  isrc                String?
+  fingerprint         String?
+  title               String
+  artist              String
+  duration            Int
+  bpm                 Float?
+  key                 String?
+  energy              Float?
+  loudness            Float?
+  valence             Float?
+  danceability        Float?
+  arousal             Float?
+  instrumentalness    Float?
+  acousticness        Float?
+  speechiness         Float?
+  moodTags            String[]
+  essentiaGenres      String[]
+  analysisStatus      String                        @default("pending")
+  analysisVersion     String?
+  analyzedAt          DateTime?
+  analysisError       String?
+  embeddingStatus     String                        @default("pending")
+  embeddingVersion    String?
+  embeddingAnalyzedAt DateTime?
+  embeddingError      String?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  mappings            TrackMapping[]
+  embeddings          CanonicalRecordingEmbedding[]
+  analysisLeases      AnalysisAssetLease[]
+  exposures           RecommendationExposure[]
+
+  @@index([isrc])
+  @@index([fingerprint])
+  @@index([analysisStatus, updatedAt])
+  @@index([embeddingStatus, embeddingAnalyzedAt])
+}
+
+model CanonicalRecordingEmbedding {
+  canonicalRecordingId String                     @map("canonical_recording_id")
+  spaceId              String                     @map("space_id")
+  embedding            Unsupported("vector(512)")
+  analyzedAt           DateTime                   @default(now()) @map("analyzed_at") @db.Timestamptz
+  canonicalRecording   CanonicalRecording         @relation(fields: [canonicalRecordingId], references: [id], onDelete: Cascade)
+  space                EmbeddingSpace             @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+
+  @@id([canonicalRecordingId, spaceId])
+  @@index([spaceId])
+  @@map("canonical_recording_embeddings")
+}
+
+/// One recommendation computation, including shadow generations that were
+/// measured but not served to the account.
+model RecommendationGeneration {
+  id              String                   @id @default(cuid())
+  userId          String
+  sessionId       String
+  surface         String
+  direction       String
+  mood            String?
+  cursor          Int                      @default(0)
+  algorithm       String
+  served          Boolean                  @default(true)
+  degradedSources String[]
+  latencyMs       Int
+  createdAt       DateTime                 @default(now())
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exposures       RecommendationExposure[]
+
+  @@index([userId, createdAt])
+  @@index([algorithm, served, createdAt])
+}
+
+/// Account-scoped impression history used for attribution and persistent
+/// one/seven-day repeat control.
+model RecommendationExposure {
+  id                   String                   @id @default(cuid())
+  generationId         String
+  userId               String
+  canonicalRecordingId String?
+  canonicalKey         String
+  artistKey            String
+  provider             String
+  providerTrackId      String
+  source               String
+  position             Int
+  score                Float?
+  exposedAt            DateTime                 @default(now())
+  playedAt             DateTime?
+  listenedSeconds      Float?
+  completionRatio      Float?
+  outcome              String?
+  generation           RecommendationGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  user                 User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canonicalRecording   CanonicalRecording?      @relation(fields: [canonicalRecordingId], references: [id], onDelete: SetNull)
+
+  @@unique([generationId, provider, providerTrackId])
+  @@index([userId, exposedAt])
+  @@index([userId, canonicalKey, exposedAt])
+  @@index([userId, artistKey, exposedAt])
+  @@index([userId, provider, providerTrackId, exposedAt])
+}
+
+/// Temporary ownership of one remote audio asset. The spool file itself is
+/// always deleted; the row remains as bounded recovery/audit state.
+model AnalysisAssetLease {
+  id                   String             @id @default(cuid())
+  canonicalRecordingId String
+  provider             String
+  providerTrackId      String
+  spoolRef             String             @unique
+  status               String             @default("pending")
+  expiresAt            DateTime
+  error                String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  canonicalRecording   CanonicalRecording @relation(fields: [canonicalRecordingId], references: [id], onDelete: Cascade)
+  // A partial unique index for active statuses is created in SQL migration;
+  // Prisma schema syntax cannot express a predicate index.
+
+  @@index([status, expiresAt])
+  @@index([canonicalRecordingId, createdAt])
 }

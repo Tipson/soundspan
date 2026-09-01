@@ -100,6 +100,8 @@ test("builds a bounded continuation request with cursor and recent provider excl
     assert.equal(url.searchParams.get("cursor"), "7");
     assert.equal(url.searchParams.get("mode"), "new");
     assert.equal(url.searchParams.get("mood"), "focus");
+    assert.equal(url.searchParams.get("surface"), "wave");
+    assert.ok(url.searchParams.get("sessionId"));
     const excluded = url.searchParams.get("exclude")?.split(",") ?? [];
     assert.equal(excluded.length, 80);
     assert.equal(excluded[0], "video-10");

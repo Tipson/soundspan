@@ -122,10 +122,11 @@ export const queryKeys = {
             | "favorites"
             | "forgotten"
             | null = null,
+        surface: "home" | "wave" | "made-for-you" = "home",
     ) =>
         mood
-            ? (["home", "personalized", limit, mode, mood] as const)
-            : (["home", "personalized", limit, mode] as const),
+            ? (["home", "personalized", surface, limit, mode, mood] as const)
+            : (["home", "personalized", surface, limit, mode] as const),
     tasteProfile: (accountId: string) =>
         ["taste-profile", accountId.trim()] as const,
 
@@ -208,6 +209,8 @@ export const queryKeys = {
     podcastPeers: () => ["podcasts", "peers"] as const,
 
     // Player overlay related-content
+    playerRelated: (trackId: string | undefined) =>
+        ["player-related", trackId] as const,
     playerRelatedTracks: (trackId: string | undefined) =>
         ["player-related-tracks", trackId] as const,
     playerRelatedArtists: (

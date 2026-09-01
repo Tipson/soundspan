@@ -8,6 +8,7 @@ import {
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { parseStoredTasteProfile } from "./tasteProfile";
+import { listenBrainzRecommendationAdapter } from "./recommendations/listenBrainzAdapter";
 
 const SIGNAL_READ_LIMIT = 100;
 const MAX_RADIO_SEEDS = 3;
@@ -93,12 +94,19 @@ export interface PersonalizedCatalogDependencies {
         userId: string,
         limit: number,
         cursor: number,
-    ) => Promise<UnifiedTrackYtMusicRecord[]>;
+    ) => Promise<
+        UnifiedTrackYtMusicRecord[] | PersonalizedExternalCandidateBatch
+    >;
     getScenarioCandidates: (
         userId: string,
         mood: PersonalizedWaveMood,
         limit: number,
     ) => Promise<unknown[]>;
+}
+
+export interface PersonalizedExternalCandidateBatch {
+    candidates: UnifiedTrackYtMusicRecord[];
+    degradedSources: string[];
 }
 
 /** Bounded continuation context supplied by one provider-radio session. */
@@ -152,10 +160,25 @@ export interface PersonalizedHomeFeed {
         | null;
     seedCount: number;
     nextCursor: number;
+    degradedSources?: string[];
 }
 
 type TrackLike = Partial<UnifiedTrackYtMusicRecord> &
     Partial<YtMusicRadioTrack>;
+
+function normalizeExternalCandidateBatch(
+    value: UnifiedTrackYtMusicRecord[] | PersonalizedExternalCandidateBatch,
+): PersonalizedExternalCandidateBatch {
+    if (Array.isArray(value)) {
+        return { candidates: value, degradedSources: [] };
+    }
+    return {
+        candidates: Array.isArray(value?.candidates) ? value.candidates : [],
+        degradedSources: Array.isArray(value?.degradedSources)
+            ? [...new Set(value.degradedSources.filter(Boolean))]
+            : [],
+    };
+}
 
 function nonBlank(value: unknown): string | null {
     if (typeof value !== "string") return null;
@@ -362,7 +385,9 @@ function playbackSignalScore(signal: PersonalizedPlaybackSignal): number {
     if (signal.outcome === "skipped") {
         return ratio <= 0.2 || listenedSeconds < 30 ? -8 : -2;
     }
-    if (signal.outcome === "failed") return -0.25;
+    // Provider/network failures are availability telemetry, never evidence of
+    // dislike. Penalizing them made transient YouTube failures distort taste.
+    if (signal.outcome === "failed") return 0;
     if (signal.outcome === "completed" || ratio >= 0.85) return 6;
     if (
         signal.outcome === "meaningful" ||
@@ -889,14 +914,17 @@ export class PersonalizedCatalogService {
                     cursor,
                 ),
             )
-            .then((candidates) => (Array.isArray(candidates) ? candidates : []))
+            .then(normalizeExternalCandidateBatch)
             .catch((error: unknown) => {
                 log.warn(
                     "Optional ListenBrainz recommendations are unavailable",
                     { userId },
                     error,
                 );
-                return [];
+                return {
+                    candidates: [],
+                    degradedSources: ["listenbrainz"],
+                } satisfies PersonalizedExternalCandidateBatch;
             });
         const requestedMood = options.mood;
         const scenarioCandidatesPromise = requestedMood
@@ -908,25 +936,34 @@ export class PersonalizedCatalogService {
                           radioResultLimit(limit),
                       ),
                   )
-                  .then((candidates) =>
-                      Array.isArray(candidates) ? candidates : [],
-                  )
+                  .then((candidates) => ({
+                      candidates: Array.isArray(candidates) ? candidates : [],
+                      degradedSources: [],
+                  }))
                   .catch((error: unknown) => {
                       log.warn(
                           "Optional Wave mood search is unavailable",
                           { userId, mood: requestedMood },
                           error,
                       );
-                      return [];
+                      return {
+                          candidates: [],
+                          degradedSources: ["mood-search"],
+                      };
                   })
-            : Promise.resolve([]);
+            : Promise.resolve({ candidates: [], degradedSources: [] });
 
         if (seedVideoIds.length === 0) {
-            const [listenBrainzCandidates, scenarioCandidates] =
-                await Promise.all([
-                    listenBrainzCandidatesPromise,
-                    scenarioCandidatesPromise,
-                ]);
+            const [listenBrainzBatch, scenarioBatch] = await Promise.all([
+                listenBrainzCandidatesPromise,
+                scenarioCandidatesPromise,
+            ]);
+            const listenBrainzCandidates = listenBrainzBatch.candidates;
+            const scenarioCandidates = scenarioBatch.candidates;
+            const degradedSources = [
+                ...listenBrainzBatch.degradedSources,
+                ...scenarioBatch.degradedSources,
+            ];
             const externalDislikes =
                 await this.dependencies.loadDislikedEntityIds(
                     userId,
@@ -952,15 +989,23 @@ export class PersonalizedCatalogService {
             );
             return {
                 shelves: { listenAgain, quickPicks, discovery },
-                degraded: false,
-                reason: discovery.length > 0 ? null : "insufficient_signals",
+                degraded: degradedSources.length > 0,
+                reason:
+                    degradedSources.length > 0
+                        ? discovery.length > 0
+                            ? "provider_partial_failure"
+                            : "provider_unavailable"
+                        : discovery.length > 0
+                          ? null
+                          : "insufficient_signals",
                 seedCount: 0,
                 nextCursor,
+                degradedSources,
             };
         }
 
         const requestedRadioLimit = radioResultLimit(limit);
-        const [radioResults, listenBrainzCandidates, scenarioCandidates] =
+        const [radioResults, listenBrainzBatch, scenarioBatch] =
             await Promise.all([
                 Promise.allSettled(
                     seedVideoIds.map(async (seedVideoId) => {
@@ -1002,6 +1047,8 @@ export class PersonalizedCatalogService {
                 listenBrainzCandidatesPromise,
                 scenarioCandidatesPromise,
             ]);
+        const listenBrainzCandidates = listenBrainzBatch.candidates;
+        const scenarioCandidates = scenarioBatch.candidates;
         const failedRadioCount = radioResults.filter(
             (result) => result.status === "rejected",
         ).length;
@@ -1079,12 +1126,19 @@ export class PersonalizedCatalogService {
             limit,
         );
 
+        const degradedSources = [
+            ...(failedRadioCount > 0 ? ["youtube-radio"] : []),
+            ...listenBrainzBatch.degradedSources,
+            ...scenarioBatch.degradedSources,
+        ];
+        const hasProviderResult =
+            discovery.length > 0 || successfulRadioQueues.length > 0;
         const reason =
-            failedRadioCount === 0
+            degradedSources.length === 0
                 ? null
-                : failedRadioCount === radioResults.length
-                  ? "provider_unavailable"
-                  : "provider_partial_failure";
+                : hasProviderResult
+                  ? "provider_partial_failure"
+                  : "provider_unavailable";
 
         return {
             shelves: {
@@ -1092,10 +1146,11 @@ export class PersonalizedCatalogService {
                 quickPicks: finalQuickPicks,
                 discovery,
             },
-            degraded: failedRadioCount > 0,
+            degraded: degradedSources.length > 0,
             reason,
             seedCount: seedVideoIds.length,
             nextCursor,
+            degradedSources,
         };
     }
 }
@@ -1106,10 +1161,31 @@ export const personalizedCatalogService = new PersonalizedCatalogService({
     loadDislikedEntityIds: loadDislikedEntityIdsFromPrisma,
     getRadio: (seedVideoId, limit) =>
         ytMusicService.getRadio(seedVideoId, limit),
-    // The optional provider seam deliberately defaults to no candidates. The
-    // existing ListenBrainz connection continues to receive scrobbles, while
-    // Wave remains independent from its experimental recommendation API.
-    getListenBrainzCandidates: async () => [],
+    getListenBrainzCandidates: async (userId, limit, cursor) => {
+        const batch = await listenBrainzRecommendationAdapter.getCandidateBatch(
+            userId,
+            limit,
+            cursor,
+        );
+        return {
+            candidates: batch.candidates.flatMap((candidate) => {
+                const videoId = candidate.provider.youtubeVideoId;
+                if (!videoId) return [];
+                return [
+                    {
+                        id: candidate.id,
+                        videoId,
+                        title: candidate.title,
+                        artist: candidate.artist.name,
+                        album: candidate.album.title,
+                        duration: candidate.duration,
+                        thumbnailUrl: candidate.album.coverArt,
+                    },
+                ];
+            }),
+            degradedSources: batch.degradedSources,
+        };
+    },
     getScenarioCandidates: async (userId, mood, limit) => {
         const query = SCENARIO_SEARCH_QUERY[mood];
         if (!query) return [];

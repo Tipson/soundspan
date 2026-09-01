@@ -224,6 +224,16 @@ backend-worker writes and consumes audio:clap:queue in Redis
 backend text vibe query
   → backend POSTs text to vibe-provider-dclap
   → backend queries TrackEmbedding rows in the provider's registered space
+
+served/shadow recommendation hot set (optional)
+  → backend-worker downloads a bounded provider stream into the owned hidden spool
+  → DCLAP writes CanonicalRecordingEmbedding when available
+  → scalar and embedding completion remain independently retryable
+  → PostgreSQL AnalysisAssetLease is the durable Essentia hand-off
+  → a partial unique index admits one active lease per canonical recording
+  → one audio-analyzer replica atomically claims and writes CanonicalRecording scalar features
+  → lease fencing rejects late settlement after TTL recovery
+  → temporary audio is removed after persistence, failure, or periodically enforced lease expiry
 ```
 
 The MusiCNN analyzer remains an independent worker and writes mood/feature
@@ -244,6 +254,13 @@ service-layer embedding reads (`trackEmbeddings.ts`) and reports library-relativ
 distance calibration from a bounded sample (`vibeCalibration.ts`). Calibration
 results use the existing Redis cache; these services add no new runtime process
 or network boundary.
+
+Hybrid recommendations use a separate global `CanonicalRecording` feature
+store so one provider recording is analyzed once and reused by every account.
+Personal taste, generations, and exposures remain user-scoped. Live requests
+never wait for remote analysis; missing features redistribute ranker weights.
+The complete engine modes, spool ownership contract, and activation gate are
+documented in [`HYBRID_RECOMMENDATIONS.md`](HYBRID_RECOMMENDATIONS.md).
 
 ### Enrichment Pipeline
 
@@ -276,6 +293,7 @@ For small deployments, `all` is fine. For scale-out, run separate `api` and `wor
 | ---------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `album-download`       | backend-worker | Durable Bull queue with two attempts and exponential backoff. One processor per worker plus a renewable Redis claim serializes provider dispatch across replicas; claim contention is re-enqueued with a delay. |
 | `scrobble-forwarding`  | backend-worker | Durable, per-user-rate-limited Bull queue for Last.fm and ListenBrainz. Four processors consume secret-free jobs with three bounded attempts; invalid credentials disable only the exact connection that failed. |
+| `remote-analysis-hot-set` | backend-worker | Optional, globally canonical-deduplicated lane with two bounded attempts, an atomic daily Redis budget, concurrency 1-2, a 64 MiB asset ceiling, durable PostgreSQL hand-off, and single-flight periodic lease-expiry recovery. It hands owned temporary files to DCLAP/Essentia and never blocks recommendation delivery. |
 
 Scheduled and serialized worker operations share
 `utils/schedulerClaim.ts`. The primitive acquires Redis `NX`/expiry leases with

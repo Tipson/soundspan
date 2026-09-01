@@ -7,6 +7,7 @@ import type {
     SavedMoodMixResponse,
 } from "../api";
 import { type ApiClientConstructor, type ApiData } from "./core";
+import { getRecommendationSessionId } from "../recommendationSession";
 
 /** Add recommendation-domain operations to an API client base class. */
 export function WithRecommendations<TBase extends ApiClientConstructor>(
@@ -47,6 +48,27 @@ export function WithRecommendations<TBase extends ApiClientConstructor>(
             return this.request<{ recommendations: ApiData[] }>(
                 `/recommendations/tracks?${params.toString()}`,
             );
+        }
+
+        async getPlayerRelated(
+            seedTrackId: string,
+            limit = 12,
+            artist?: string,
+            title?: string,
+        ) {
+            const params = new URLSearchParams({
+                seedTrackId,
+                limit: String(limit),
+                sessionId: getRecommendationSessionId(),
+            });
+            if (artist) params.set("artist", artist);
+            if (title) params.set("title", title);
+            return this.request<{
+                tracks: ApiData[];
+                artists: ApiData[];
+                albums: ApiData[];
+                degradedSources: string[];
+            }>(`/player/related?${params.toString()}`);
         }
 
         // Programmatic Mixes

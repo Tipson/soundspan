@@ -82,14 +82,18 @@ export function ArtistHero({
     const metadata = (
         <>
             {artist.listeners && artist.listeners > 0 && (
-                <span>{artist.listeners.toLocaleString("ru-RU")} {ru.catalog.listeners}</span>
+                <span>
+                    {artist.listeners.toLocaleString("ru-RU")}{" "}
+                    {ru.catalog.listeners}
+                </span>
             )}
             {artist.listeners && artist.listeners > 0 && albums.length > 0 && (
                 <span aria-hidden="true">•</span>
             )}
             {albums.length > 0 && (
                 <span>
-                    {albums.length} {pluralRu(albums.length, ["альбом", "альбома", "альбомов"])}
+                    {albums.length}{" "}
+                    {pluralRu(albums.length, ["альбом", "альбома", "альбомов"])}
                 </span>
             )}
             {ownedAlbums.length > 0 && (

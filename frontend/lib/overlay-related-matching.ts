@@ -13,6 +13,9 @@ export interface RelatedTrackLike {
     inLibrary?: boolean;
     matchConfidence?: number;
     duration?: number;
+    streamSource?: "tidal" | "youtube";
+    tidalTrackId?: number;
+    youtubeVideoId?: string;
     album?: {
         title?: string;
         artist?: { name?: string };
@@ -88,6 +91,12 @@ export function selectTracksNeedingStreamMatch<T extends RelatedTrackLike>(
 ): T[] {
     return tracks.filter((track) => {
         if (track.inLibrary) return false;
+        if (
+            (track.streamSource === "youtube" && track.youtubeVideoId) ||
+            (track.streamSource === "tidal" && track.tidalTrackId)
+        ) {
+            return false;
+        }
         const hasArtist = !!(track.artist || track.album?.artist?.name);
         if (!track.title || !hasArtist) return false;
         return !existingMatches[getRelatedTrackKey(track)];

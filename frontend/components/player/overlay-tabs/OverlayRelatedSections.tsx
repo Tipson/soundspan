@@ -260,7 +260,11 @@ export function MoreFromArtistGrid({
             {albums.slice(0, 6).map((album) => (
                 <Link
                     key={album.id}
-                    href={`/album/${album.id}`}
+                    href={
+                        album.provider === "youtube"
+                            ? `/explore/yt-playlist/${encodeURIComponent(album.id)}?type=album`
+                            : `/album/${album.id}`
+                    }
                     onClick={onNavigate}
                     className="group p-1.5 transition-colors hover:bg-white/[0.06]"
                 >

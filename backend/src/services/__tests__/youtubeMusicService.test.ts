@@ -39,6 +39,7 @@ describe("youtubeMusic service", () => {
         jest.useRealTimers();
         mockConfig.internalApiSecret = undefined;
         (ytMusicService as any).loadAvailability.clear();
+        (ytMusicService as any).radioLoaders.clear();
     });
 
     describe("internal-secret header (F31)", () => {
@@ -487,6 +488,23 @@ describe("youtubeMusic service", () => {
             headers: { Range: "bytes=0-512" },
             responseType: "stream",
             timeout: 120000,
+        });
+
+        const controller = new AbortController();
+        mockClient.get.mockResolvedValueOnce({ data: { pipe: jest.fn() } });
+        await ytMusicService.getStreamProxy(
+            "u1",
+            "vid-3",
+            "medium",
+            undefined,
+            { signal: controller.signal, timeoutMs: 15_000 },
+        );
+        expect(mockClient.get).toHaveBeenLastCalledWith("/proxy/vid-3", {
+            params: { user_id: "u1", quality: "medium" },
+            headers: {},
+            responseType: "stream",
+            timeout: 15_000,
+            signal: controller.signal,
         });
 
         mockClient.get
@@ -1424,6 +1442,37 @@ describe("youtubeMusic service", () => {
         );
     });
 
+    it("propagates cancellation into track matching and stops fallback searches", async () => {
+        const controller = new AbortController();
+        const searchSpy = jest
+            .spyOn(ytMusicService, "search")
+            .mockImplementationOnce(async (...args) => {
+                expect(args[4]).toEqual(
+                    expect.objectContaining({
+                        signal: controller.signal,
+                        maxRetries: 0,
+                    }),
+                );
+                controller.abort();
+                const error = new Error("cancelled");
+                error.name = "AbortError";
+                throw error;
+            });
+
+        await expect(
+            ytMusicService.findMatchForTrack(
+                "u1",
+                "Artist",
+                "Song",
+                "Album",
+                undefined,
+                undefined,
+                { signal: controller.signal, maxRetries: 0 },
+            ),
+        ).rejects.toThrow("cancelled");
+        expect(searchSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("loads a bounded public radio queue for a seed video", async () => {
         mockClient.get.mockResolvedValueOnce({
             data: {
@@ -1442,5 +1491,52 @@ describe("youtubeMusic service", () => {
             params: { video_id: "seed-1", limit: 24 },
             timeout: 13_000,
         });
+    });
+
+    it("coalesces and briefly caches identical public radio requests", async () => {
+        const radio = {
+            playlistId: "RDseed",
+            seedVideoId: "seed-cache",
+            tracks: [{ videoId: "related-1", title: "Related" }],
+        };
+        mockClient.get.mockResolvedValue({ data: radio });
+
+        await expect(
+            Promise.all([
+                ytMusicService.getRadio("seed-cache", 20),
+                ytMusicService.getRadio("seed-cache", 20),
+                ytMusicService.getRadio("seed-cache", 20),
+            ]),
+        ).resolves.toEqual([radio, radio, radio]);
+        await expect(
+            ytMusicService.getRadio("seed-cache", 20),
+        ).resolves.toEqual(radio);
+
+        expect(mockClient.get).toHaveBeenCalledTimes(1);
+
+        await ytMusicService.getRadio("seed-cache", 21);
+        expect(mockClient.get).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not cache rejected public radio fills", async () => {
+        mockClient.get
+            .mockRejectedValueOnce(new Error("radio unavailable"))
+            .mockResolvedValueOnce({
+                data: {
+                    playlistId: "RDrecovered",
+                    seedVideoId: "seed-retry",
+                    tracks: [],
+                },
+            });
+
+        await expect(ytMusicService.getRadio("seed-retry", 20)).rejects.toThrow(
+            "radio unavailable",
+        );
+        await expect(
+            ytMusicService.getRadio("seed-retry", 20),
+        ).resolves.toEqual(
+            expect.objectContaining({ playlistId: "RDrecovered" }),
+        );
+        expect(mockClient.get).toHaveBeenCalledTimes(2);
     });
 });

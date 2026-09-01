@@ -66,6 +66,32 @@ test("stream matching skips library rows, unidentified rows, and matched rows", 
     );
 });
 
+test("provider-playable related rows do not trigger a second catalog match", () => {
+    const missing = selectTracksNeedingStreamMatch(
+        [
+            {
+                title: "YouTube ready",
+                artist: "A",
+                streamSource: "youtube" as const,
+                youtubeVideoId: "video-1",
+            },
+            {
+                title: "TIDAL ready",
+                artist: "B",
+                streamSource: "tidal" as const,
+                tidalTrackId: 42,
+            },
+            { title: "Needs match", artist: "C" },
+        ],
+        {},
+    );
+
+    assert.deepEqual(
+        missing.map((track) => track.title),
+        ["Needs match"],
+    );
+});
+
 test("stream-match queries prefer the row artist and carry album context", () => {
     assert.deepEqual(
         buildStreamMatchQuery({

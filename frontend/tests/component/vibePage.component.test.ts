@@ -21,6 +21,7 @@ const state = {
     personalizedMood: null as string | null,
     listenTogetherActive: false,
     playedTrackIds: [] as string[],
+    playTracksCallCount: 0,
     playedAsVibeQueue: false,
     isShuffle: true,
     shuffleIndices: [2, 1, 0] as number[],
@@ -179,6 +180,7 @@ mock.module("@/lib/audio-controls-context", {
                 _startIndex?: number,
                 isVibeQueue?: boolean,
             ) => {
+                state.playTracksCallCount += 1;
                 state.playedTrackIds = tracks.map((track) => track.id);
                 state.playedAsVibeQueue = isVibeQueue === true;
             },
@@ -360,6 +362,7 @@ beforeEach(() => {
     state.personalizedMood = null;
     state.listenTogetherActive = false;
     state.playedTrackIds = [];
+    state.playTracksCallCount = 0;
     state.playedAsVibeQueue = false;
     state.isShuffle = true;
     state.shuffleIndices = [2, 1, 0];
@@ -407,6 +410,13 @@ async function mountPage(): Promise<MountedPage> {
 async function unmountPage({ container, root }: MountedPage): Promise<void> {
     await React.act(async () => root.unmount());
     container.remove();
+}
+
+async function settleWaveRetune(): Promise<void> {
+    await React.act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 340));
+        await Promise.resolve();
+    });
 }
 
 function findButton(
@@ -990,6 +1000,7 @@ test("Tune after Play replaces the Wave queue and immediately starts the new dir
         applyNew.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    await settleWaveRetune();
 
     assert.equal(state.personalizedMode, "new");
     assert.equal(state.waveMode, "new");
@@ -1037,6 +1048,7 @@ test("retuning an active Wave skips the current track, starts the newly ranked q
         apply.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    await settleWaveRetune();
 
     assert.deepEqual(state.playedTrackIds, ["yt:calm-1"]);
     assert.equal(state.playedAsVibeQueue, true);
@@ -1046,6 +1058,54 @@ test("retuning an active Wave skips the current track, starts the newly ranked q
         mounted.container.querySelector('[role="status"]')?.textContent ?? "",
         /Волна обновлена/i,
     );
+
+    await unmountPage(mounted);
+});
+
+test("rapid Wave retunes apply only the latest selection and start one replacement queue", async () => {
+    const mounted = await mountPage();
+    const playWave = findButton(mounted.container, "Включить мою волну");
+    assert.ok(playWave);
+    await React.act(async () => playWave.click());
+    state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
+    state.personalizedFeedResolver = (_mode, mood) => ({
+        ...createPersonalizedFeed(),
+        shelves: {
+            quickPicks: [
+                {
+                    id: `yt:${mood || "any"}-pick`,
+                    title: `${mood || "any"} pick`,
+                },
+            ],
+            discovery: [],
+            listenAgain: [],
+        },
+    });
+    const callsBeforeRetune = state.playTracksCallCount;
+
+    for (const moodLabel of ["Спокойное", "Бодрое", "Для концентрации"]) {
+        const tune = findButton(mounted.container, "Настроить");
+        assert.ok(tune);
+        await React.act(async () => tune.click());
+        const dialog =
+            mounted.container.querySelector<HTMLElement>('[role="dialog"]');
+        assert.ok(dialog);
+        const mood = findButtonByLabel(dialog, moodLabel);
+        assert.ok(mood);
+        await React.act(async () => mood.click());
+        const apply = findButton(dialog, "Обновить волну");
+        assert.ok(apply);
+        await React.act(async () => {
+            apply.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        });
+    }
+
+    await settleWaveRetune();
+
+    assert.equal(state.playTracksCallCount - callsBeforeRetune, 1);
+    assert.deepEqual(state.playedTrackIds, ["yt:focus-pick"]);
+    assert.equal(state.waveMood, "focus");
 
     await unmountPage(mounted);
 });
@@ -1074,6 +1134,7 @@ test("applying unchanged settings to an active Wave does not skip or rebuild pla
         apply.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    await settleWaveRetune();
 
     assert.deepEqual(state.playedTrackIds, originalPlayedIds);
     assert.deepEqual(state.vibeQueueIds, originalVibeQueueIds);
@@ -1111,6 +1172,7 @@ test("retuning Wave during Listen Together saves the choice without mutating the
         apply.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    await settleWaveRetune();
 
     assert.equal(state.personalizedMode, "new");
     assert.equal(state.waveMode, "for-you");
@@ -1163,6 +1225,7 @@ test("a failed active-Wave retune keeps the existing upcoming queue", async (t) 
         apply.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    await settleWaveRetune();
 
     assert.deepEqual(state.upcomingQueueCalls, []);
     assert.deepEqual(state.vibeQueueIds, previousQueueIds);

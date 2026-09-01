@@ -232,6 +232,27 @@ const vibeEmbedConcurrencyEnvSchema = z
     })
     .optional();
 
+const recommendationEngineModeEnvSchema = z
+    .enum(["baseline", "shadow", "active"])
+    .optional();
+const remoteAnalysisDailyBudgetEnvSchema = z
+    .string()
+    .regex(/^[1-9]\d*$/, {
+        message:
+            "REMOTE_ANALYSIS_DAILY_BUDGET must be an integer from 1 through 10000",
+    })
+    .refine((value) => Number(value) <= 10_000, {
+        message:
+            "REMOTE_ANALYSIS_DAILY_BUDGET must be an integer from 1 through 10000",
+    })
+    .optional();
+const remoteAnalysisConcurrencyEnvSchema = z
+    .string()
+    .regex(/^[12]$/, {
+        message: "REMOTE_ANALYSIS_CONCURRENCY must be 1 or 2",
+    })
+    .optional();
+
 const loudnessBackfillBatchSizeEnvSchema = z
     .string()
     .regex(/^-?\d+$/, {
@@ -486,6 +507,10 @@ const envSchema = z
         INTERNAL_API_SECRET: z.string().optional(),
         VIBE_PROVIDER_URL: vibeProviderUrlEnvSchema,
         VIBE_EMBED_CONCURRENCY: vibeEmbedConcurrencyEnvSchema,
+        RECOMMENDATION_ENGINE_MODE: recommendationEngineModeEnvSchema,
+        REMOTE_ANALYSIS_ENABLED: booleanEnvSchema,
+        REMOTE_ANALYSIS_DAILY_BUDGET: remoteAnalysisDailyBudgetEnvSchema,
+        REMOTE_ANALYSIS_CONCURRENCY: remoteAnalysisConcurrencyEnvSchema,
         LOUDNESS_BACKFILL_BATCH_SIZE: loudnessBackfillBatchSizeEnvSchema,
         VIBE_MAP_WORKER_MEMORY_MB: vibeMapWorkerMemoryMbEnvSchema,
         VIBE_SPACE_CUTOVER_THRESHOLD: vibeSpaceCutoverThresholdEnvSchema,
@@ -666,6 +691,22 @@ export const config = {
     // provider-backed text search and audio embedding consumption.
     vibeProviderUrl: normalizeVibeProviderUrl(process.env.VIBE_PROVIDER_URL),
     vibeEmbedConcurrency: Number(process.env.VIBE_EMBED_CONCURRENCY ?? "1"),
+    recommendations: {
+        mode: (process.env.RECOMMENDATION_ENGINE_MODE ?? "shadow") as
+            | "baseline"
+            | "shadow"
+            | "active",
+        remoteAnalysisEnabled: parseEnvBool(
+            process.env.REMOTE_ANALYSIS_ENABLED,
+            false,
+        ),
+        remoteAnalysisDailyBudget: Number(
+            process.env.REMOTE_ANALYSIS_DAILY_BUDGET ?? "100",
+        ),
+        remoteAnalysisConcurrency: Number(
+            process.env.REMOTE_ANALYSIS_CONCURRENCY ?? "1",
+        ),
+    },
     // Heap ceiling for the UMAP projection worker thread. The map compute
     // degrades its sample size instead of crashing when this is exceeded.
     vibeMapWorkerMemoryMb: Number(

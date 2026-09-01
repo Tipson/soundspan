@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireAuthOrToken } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
-import { personalizedCatalogService } from "../services/personalizedCatalog";
+import { unifiedRecommendationService } from "../services/recommendations/recommendationRuntime";
 import { logger } from "../utils/logger";
 import { sendRouteError } from "../utils/routeErrorResponse";
 
@@ -38,6 +39,8 @@ const personalizedHomeQuerySchema = z
                 "forgotten",
             ])
             .optional(),
+        surface: z.enum(["home", "wave", "made-for-you"]).optional(),
+        sessionId: z.string().trim().min(1).max(128).optional(),
     })
     .strict();
 
@@ -249,21 +252,16 @@ async function handlePersonalizedHome(req: Request, res: Response) {
         );
     }
     const limit = parsedQuery.data.limit ?? DEFAULT_SHELF_LIMIT;
-    const hasContinuationContext =
-        parsedQuery.data.cursor !== undefined ||
-        excludeVideoIds.length > 0 ||
-        parsedQuery.data.mode !== undefined ||
-        parsedQuery.data.mood !== undefined;
-    const feed = hasContinuationContext
-        ? await personalizedCatalogService.getHomeFeed(userId, limit, {
-              ...(parsedQuery.data.cursor !== undefined
-                  ? { cursor: parsedQuery.data.cursor }
-                  : {}),
-              ...(excludeVideoIds.length > 0 ? { excludeVideoIds } : {}),
-              ...(parsedQuery.data.mode ? { mode: parsedQuery.data.mode } : {}),
-              ...(parsedQuery.data.mood ? { mood: parsedQuery.data.mood } : {}),
-          })
-        : await personalizedCatalogService.getHomeFeed(userId, limit);
+    const feed = await unifiedRecommendationService.getPersonalizedFeed({
+        userId,
+        sessionId: parsedQuery.data.sessionId ?? randomUUID(),
+        surface: parsedQuery.data.surface ?? "home",
+        limit,
+        cursor: parsedQuery.data.cursor ?? 0,
+        direction: parsedQuery.data.mode ?? "for-you",
+        mood: parsedQuery.data.mood ?? null,
+        excludeVideoIds,
+    });
     if (feed.degraded) {
         log.warn("Personalized home feed returned degraded provider results", {
             reason: feed.reason,

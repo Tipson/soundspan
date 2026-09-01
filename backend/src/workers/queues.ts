@@ -189,6 +189,21 @@ export const scrobbleQueue = new Bull("scrobble-forwarding", {
     settings: defaultQueueSettings,
 });
 
+/** Durable, globally deduplicated lane for bounded remote hot-set analysis. */
+export const remoteAnalysisQueue = new Bull("remote-analysis-hot-set", {
+    redis: redisConfig,
+    settings: {
+        ...defaultQueueSettings,
+        lockDuration: 300_000,
+    },
+    defaultJobOptions: {
+        attempts: 2,
+        backoff: { type: "exponential", delay: 30_000 },
+        removeOnComplete: true,
+        removeOnFail: true,
+    },
+});
+
 // Export all queues for monitoring
 export const queues = [
     scanQueue,
@@ -203,6 +218,7 @@ export const queues = [
     albumDownloadQueue,
     artistExpansionQueue,
     scrobbleQueue,
+    remoteAnalysisQueue,
 ];
 
 // Add error handlers to all queues to prevent unhandled exceptions

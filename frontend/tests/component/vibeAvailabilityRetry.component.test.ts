@@ -251,6 +251,10 @@ test("an active Wave retunes to a mood supplied by the Home shortcut", async () 
         await Promise.resolve();
         await Promise.resolve();
     });
+    await React.act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 340));
+        await Promise.resolve();
+    });
 
     assert.ok(feedCalls.some(([, mood]) => mood === "calm"));
     assert.deepEqual(calls.playTracks, [[[{ id: "calm-pick" }], 0, true]]);
@@ -294,6 +298,10 @@ for (const recommendationState of ["error", "empty"] as const) {
         await React.act(async () => {
             root.render(React.createElement(VibeProviderFallback));
             await Promise.resolve();
+            await Promise.resolve();
+        });
+        await React.act(async () => {
+            await new Promise((resolve) => window.setTimeout(resolve, 340));
             await Promise.resolve();
         });
 

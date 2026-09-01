@@ -18,6 +18,7 @@ import {
     forwardTrackReferenceIsolated,
 } from "../services/scrobbleForwarder";
 import { sendInternalRouteError } from "../utils/routeErrorResponse";
+import { recommendationExposureStore } from "../services/recommendations/exposureStore";
 
 const router = Router();
 
@@ -104,6 +105,38 @@ function recommendationContextData(payload: z.infer<typeof playSchema>) {
         ...(payload.playContext ? { playContext: payload.playContext } : {}),
         ...(payload.waveMode ? { waveMode: payload.waveMode } : {}),
     };
+}
+
+interface RecommendationPlaybackIdentity {
+    provider: "library" | "tidal" | "youtube";
+    providerTrackId: string;
+}
+
+async function attributeRecommendationPlayback(input: {
+    userId: string;
+    identity: RecommendationPlaybackIdentity;
+    playedAt: Date;
+    listenedSeconds: number | null;
+    completionRatio: number | null;
+    outcome: string | null;
+}): Promise<void> {
+    try {
+        await recommendationExposureStore.attributePlayback({
+            userId: input.userId,
+            ...input.identity,
+            playedAt: input.playedAt,
+            listenedSeconds: input.listenedSeconds,
+            completionRatio: input.completionRatio,
+            outcome: input.outcome,
+        });
+    } catch (error) {
+        logger.warn("Recommendation playback attribution failed", {
+            userId: input.userId,
+            provider: input.identity.provider,
+            providerTrackId: input.identity.providerTrackId,
+            error,
+        });
+    }
 }
 
 function equalProgressOutcomeFilter(
@@ -477,6 +510,18 @@ router.post("/", async (req, res) => {
                 reference: { source: "local", id: payload.trackId },
             });
 
+            await attributeRecommendationPlayback({
+                userId,
+                identity: {
+                    provider: "library",
+                    providerTrackId: payload.trackId,
+                },
+                playedAt,
+                listenedSeconds: null,
+                completionRatio: null,
+                outcome: null,
+            });
+
             return res.json(play);
         }
 
@@ -526,6 +571,17 @@ router.post("/", async (req, res) => {
                     durationSeconds: resolvedMetadata.duration,
                 },
             });
+            await attributeRecommendationPlayback({
+                userId,
+                identity: {
+                    provider: "tidal",
+                    providerTrackId: String(payload.tidalTrackId),
+                },
+                playedAt,
+                listenedSeconds: null,
+                completionRatio: null,
+                outcome: null,
+            });
             return res.json(play);
         }
 
@@ -572,6 +628,18 @@ router.post("/", async (req, res) => {
                 album: resolvedMetadata.album,
                 durationSeconds: resolvedMetadata.duration,
             },
+        });
+
+        await attributeRecommendationPlayback({
+            userId,
+            identity: {
+                provider: "youtube",
+                providerTrackId: payload.youtubeVideoId!,
+            },
+            playedAt,
+            listenedSeconds: null,
+            completionRatio: null,
+            outcome: null,
         });
 
         return res.json(play);
@@ -668,6 +736,42 @@ router.patch("/:playId/engagement", async (req, res) => {
                 return res.status(404).json({ error: "Play not found" });
             }
             return res.json({ success: true, stale: true });
+        }
+        const attributedPlay = await prisma.play.findFirst({
+            where: { id: playId.data, userId: req.user!.id },
+            select: {
+                trackId: true,
+                playedAt: true,
+                trackTidal: { select: { tidalId: true } },
+                trackYtMusic: { select: { videoId: true } },
+            },
+        });
+        const identity: RecommendationPlaybackIdentity | null = attributedPlay
+            ?.trackYtMusic?.videoId
+            ? {
+                  provider: "youtube",
+                  providerTrackId: attributedPlay.trackYtMusic.videoId,
+              }
+            : attributedPlay?.trackTidal?.tidalId
+              ? {
+                    provider: "tidal",
+                    providerTrackId: String(attributedPlay.trackTidal.tidalId),
+                }
+              : attributedPlay?.trackId
+                ? {
+                      provider: "library",
+                      providerTrackId: attributedPlay.trackId,
+                  }
+                : null;
+        if (attributedPlay && identity) {
+            await attributeRecommendationPlayback({
+                userId: req.user!.id,
+                identity,
+                playedAt: attributedPlay.playedAt,
+                listenedSeconds: engagement.data.listenedSeconds,
+                completionRatio: engagement.data.completionRatio,
+                outcome: engagement.data.outcome,
+            });
         }
         return res.json({ success: true });
     } catch (error) {

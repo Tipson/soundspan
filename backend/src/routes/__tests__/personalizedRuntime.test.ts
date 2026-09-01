@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import request from "supertest";
 
-const mockGetHomeFeed = jest.fn();
+const mockGetPersonalizedFeed = jest.fn();
 
 jest.mock("../../middleware/auth", () => ({
     requireAuthOrToken: (req: Request, res: Response, next: NextFunction) => {
@@ -13,9 +13,10 @@ jest.mock("../../middleware/auth", () => ({
     },
 }));
 
-jest.mock("../../services/personalizedCatalog", () => ({
-    personalizedCatalogService: {
-        getHomeFeed: (...args: unknown[]) => mockGetHomeFeed(...args),
+jest.mock("../../services/recommendations/recommendationRuntime", () => ({
+    unifiedRecommendationService: {
+        getPersonalizedFeed: (...args: unknown[]) =>
+            mockGetPersonalizedFeed(...args),
     },
 }));
 
@@ -39,7 +40,7 @@ const app = createRouteTestApp("/api/personalized", router);
 describe("GET /api/personalized/home", () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockGetHomeFeed.mockResolvedValue({
+        mockGetPersonalizedFeed.mockResolvedValue({
             shelves: {
                 listenAgain: [],
                 quickPicks: [],
@@ -48,6 +49,8 @@ describe("GET /api/personalized/home", () => {
             degraded: false,
             reason: "insufficient_signals",
             seedCount: 0,
+            generationId: "generation-default",
+            degradedSources: [],
         });
     });
 
@@ -55,7 +58,7 @@ describe("GET /api/personalized/home", () => {
         const response = await request(app).get("/api/personalized/home");
 
         expect(response.status).toBe(401);
-        expect(mockGetHomeFeed).not.toHaveBeenCalled();
+        expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
     });
 
     it("uses the authenticated user and default shelf limit", async () => {
@@ -90,7 +93,7 @@ describe("GET /api/personalized/home", () => {
             reason: null,
             seedCount: 1,
         };
-        mockGetHomeFeed.mockResolvedValueOnce(payload);
+        mockGetPersonalizedFeed.mockResolvedValueOnce(payload);
 
         const response = await request(app)
             .get("/api/personalized/home")
@@ -98,7 +101,16 @@ describe("GET /api/personalized/home", () => {
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual(payload);
-        expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 12);
+        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith({
+            userId: "user-1",
+            sessionId: expect.any(String),
+            surface: "home",
+            limit: 12,
+            cursor: 0,
+            direction: "for-you",
+            mood: null,
+            excludeVideoIds: [],
+        });
     });
 
     it("accepts a bounded integer limit", async () => {
@@ -107,7 +119,9 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(200);
-        expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 25);
+        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: "user-1", limit: 25 }),
+        );
     });
 
     it.each(["for-you", "new", "familiar"])(
@@ -118,9 +132,9 @@ describe("GET /api/personalized/home", () => {
                 .set("x-test-auth", "ok");
 
             expect(response.status).toBe(200);
-            expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 12, {
-                mode,
-            });
+            expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+                expect.objectContaining({ direction: mode }),
+            );
         },
     );
 
@@ -137,10 +151,9 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(200);
-        expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 12, {
-            mode: "new",
-            mood,
-        });
+        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect.objectContaining({ direction: "new", mood }),
+        );
     });
 
     it("forwards a bounded continuation cursor and canonical provider exclusions", async () => {
@@ -151,11 +164,34 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(200);
-        expect(mockGetHomeFeed).toHaveBeenCalledWith("user-1", 25, {
-            cursor: 7,
-            excludeVideoIds: ["first", "second"],
-        });
+        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: "user-1",
+                limit: 25,
+                cursor: 7,
+                excludeVideoIds: ["first", "second"],
+            }),
+        );
     });
+
+    it.each(["home", "wave", "made-for-you"])(
+        "forwards the %s surface and stable client session",
+        async (surface) => {
+            const response = await request(app)
+                .get(
+                    `/api/personalized/home?surface=${surface}&sessionId=tab-session-1`,
+                )
+                .set("x-test-auth", "ok");
+
+            expect(response.status).toBe(200);
+            expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    surface,
+                    sessionId: "tab-session-1",
+                }),
+            );
+        },
+    );
 
     it.each([
         "cursor=-1",
@@ -163,6 +199,8 @@ describe("GET /api/personalized/home", () => {
         "exclude=bad%20id",
         "mode=random",
         "mood=random",
+        "surface=search",
+        "sessionId=%20",
         `exclude=${Array.from({ length: 81 }, (_, index) => `id-${index}`).join(
             "%2C",
         )}`,
@@ -172,7 +210,7 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(400);
-        expect(mockGetHomeFeed).not.toHaveBeenCalled();
+        expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
     });
 
     it.each(["0", "26", "1.5", "many"])(
@@ -187,7 +225,7 @@ describe("GET /api/personalized/home", () => {
                 error: "Invalid personalized home feed query",
                 code: "INVALID_QUERY",
             });
-            expect(mockGetHomeFeed).not.toHaveBeenCalled();
+            expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
         },
     );
 });

@@ -43,6 +43,7 @@ import enrichmentRoutes from "./routes/enrichment";
 import metadataRoutes from "./routes/metadata";
 import homepageRoutes from "./routes/homepage";
 import personalizedRoutes from "./routes/personalized";
+import playerRelatedRoutes from "./routes/playerRelated";
 import tasteProfileRoutes from "./routes/tasteProfile";
 import deviceLinkRoutes from "./routes/deviceLink";
 import notificationsRoutes from "./routes/notifications";
@@ -267,6 +268,7 @@ app.use("/api/offline", apiLimiter, offlineRoutes);
 app.use("/api/playlists", apiLimiter, playlistsRoutes);
 app.use("/api/share-links", shareLinkLimiter, shareLinkRoutes);
 app.use("/api/search", apiLimiter, searchRoutes);
+app.use("/api/player/related", apiLimiter, playerRelatedRoutes);
 // Feature-gated routers are required lazily so disabled subsystems skip their
 // module side effects entirely; disabled prefixes stay rate limited and
 // return a clean 404 payload.

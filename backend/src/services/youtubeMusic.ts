@@ -1,34 +1,30 @@
-/**
- * YouTube Music Service
- *
- * Communicates with the ytmusic-streamer FastAPI sidecar over HTTP.
- * Provides search, browse, library, authentication, and stream-proxying
- * capabilities. Audio is streamed through the sidecar (never saved to disk).
- *
- * All methods accept a `userId` parameter — the sidecar uses per-user
- * OAuth credentials so each soundspan user connects their own YouTube Music
- * account independently.
- */
-
 import axios, { AxiosInstance } from "axios";
 import http from "node:http";
 import https from "node:https";
 import { config } from "../config";
 import { logger } from "../utils/logger";
 import type { CanonicalMediaSearchResult } from "@soundspan/media-metadata-contract";
-import { cachedSingleflight } from "../utils/singleflight";
+import {
+    cachedSingleflight,
+    type CachedSingleflight,
+} from "../utils/singleflight";
 import {
     findPlayableYtMusicAlternate,
     type YtMusicPlayableAlternate,
     type YtMusicPlayableAlternateInput,
 } from "./ytMusicPlayableAlternate";
+import { retryYtMusicRequest as retryWithBackoff } from "./youtubeMusicRetry";
 export type {
     YtMusicPlayableAlternate,
     YtMusicPlayableAlternateInput,
 } from "./ytMusicPlayableAlternate";
 
 // ── Sidecar URL ────────────────────────────────────────────────────
-const YTMUSIC_STREAMER_URL = config.ytmusicStreamer.url;
+// Some consumers import the provider transitively while supplying a narrow
+// test/runtime config facade. Real startup validation still owns this value;
+// keep module evaluation side-effect free for consumers that never call it.
+const YTMUSIC_STREAMER_URL =
+    config.ytmusicStreamer?.url ?? "http://ytmusic-streamer:8585";
 const SIDECAR_AGENT_OPTIONS = {
     keepAlive: true,
     maxSockets: 64,
@@ -37,6 +33,8 @@ const SIDECAR_AGENT_OPTIONS = {
 const SIDE_CAR_HTTP_AGENT = new http.Agent(SIDECAR_AGENT_OPTIONS);
 const SIDE_CAR_HTTPS_AGENT = new https.Agent(SIDECAR_AGENT_OPTIONS);
 const AVAILABILITY_CACHE_TTL_MS = 10_000;
+const RADIO_CACHE_TTL_MS = 30_000;
+const RADIO_CACHE_MAX_KEYS = 256;
 // The sidecar's default YTMUSIC_BROWSE_TIMEOUT is 30 seconds. Leave margin so
 // its sanitized 503/504 response reaches the backend before Axios times out.
 const LIBRARY_PLAYLISTS_TIMEOUT_MS = 35_000;
@@ -78,6 +76,7 @@ export interface YtMusicCanonicalSearchResponse {
 export interface YtMusicSearchOptions {
     timeoutMs?: number;
     maxRetries?: number;
+    signal?: AbortSignal;
 }
 
 /** Per-request transport policy for sidecar stream probes. */
@@ -172,7 +171,9 @@ export interface YtMusicRadioTrack {
     title: string;
     artist: string;
     artists: string[];
+    artistId?: string | null;
     album: string;
+    albumId?: string | null;
     duration: number;
     thumbnailUrl: string | null;
 }
@@ -410,54 +411,11 @@ export function toCatalogArtistResultItem(
 
 // ── Service ────────────────────────────────────────────────────────
 
-/**
- * Retry a function with exponential backoff for transient errors.
- * Retries on HTTP 429 (rate limited) and 5xx (server errors).
- */
-async function retryWithBackoff<T>(
-    fn: () => Promise<T>,
-    label: string,
-    maxRetries = 3,
-    baseDelayMs = 1000,
-): Promise<T> {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-            return await fn();
-        } catch (err: any) {
-            const status = err?.response?.status;
-            const isRetryable =
-                status === 429 ||
-                (status >= 500 && status < 600) ||
-                err?.code === "ECONNRESET" ||
-                err?.code === "ETIMEDOUT";
-
-            if (!isRetryable || attempt === maxRetries) {
-                throw err;
-            }
-
-            // Use Retry-After header if available (YouTube sends it on 429)
-            const retryAfter = err?.response?.headers?.["retry-after"];
-            let delayMs: number;
-            if (retryAfter) {
-                delayMs = parseInt(retryAfter, 10) * 1000 || baseDelayMs;
-            } else {
-                // Exponential backoff with jitter: base * 2^attempt ± 25%
-                delayMs = baseDelayMs * Math.pow(2, attempt);
-                delayMs += delayMs * (Math.random() * 0.5 - 0.25);
-            }
-
-            logger.warn(
-                `[YTMusic] ${label} failed (status=${status}, attempt=${attempt + 1}/${maxRetries}), ` +
-                    `retrying in ${Math.round(delayMs)}ms`,
-            );
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-    }
-    // TypeScript: unreachable, but satisfies the compiler
-    throw new Error(`[YTMusic] ${label}: exhausted retries`);
-}
-
 class YouTubeMusicService {
+    private readonly radioLoaders = new Map<
+        string,
+        CachedSingleflight<YtMusicRadioQueue>
+    >();
     private client: AxiosInstance;
     private readonly loadAvailability = cachedSingleflight(async () => {
         try {
@@ -619,6 +577,7 @@ class YouTubeMusicService {
                     ...(options.timeoutMs
                         ? { timeout: options.timeoutMs }
                         : {}),
+                    ...(options.signal ? { signal: options.signal } : {}),
                 };
                 const res = await this.client.post(
                     "/search",
@@ -629,6 +588,8 @@ class YouTubeMusicService {
             },
             `search(${query})`,
             options.maxRetries ?? 3,
+            1000,
+            options.signal,
         );
     }
 
@@ -777,6 +738,7 @@ class YouTubeMusicService {
         videoId: string,
         quality?: string,
         rangeHeader?: string,
+        options: { signal?: AbortSignal; timeoutMs?: number } = {},
     ) {
         const params: Record<string, string> = { user_id: userId };
         if (quality) params.quality = quality;
@@ -788,7 +750,8 @@ class YouTubeMusicService {
             params,
             headers,
             responseType: "stream",
-            timeout: 120_000, // Longer timeout for streaming
+            timeout: options.timeoutMs ?? 120_000,
+            ...(options.signal ? { signal: options.signal } : {}),
         });
     }
 
@@ -1257,6 +1220,7 @@ class YouTubeMusicService {
         albumTitle?: string,
         duration?: number,
         isrc?: string,
+        options: YtMusicSearchOptions = {},
     ): Promise<{ videoId: string; title: string; duration: number } | null> {
         const cleanArtist = this.sanitizeQuery(artist);
         const cleanTitle = this.sanitizeQuery(title);
@@ -1271,7 +1235,13 @@ class YouTubeMusicService {
 
         // --- Attempt 1: filtered search (songs only) ---
         try {
-            const result = await this.search(userId, shortQuery, "songs");
+            const result = await this.search(
+                userId,
+                shortQuery,
+                "songs",
+                undefined,
+                options,
+            );
             if (result.results?.length) {
                 const match = this.selectBestCandidate(
                     sourceTrack,
@@ -1279,19 +1249,27 @@ class YouTubeMusicService {
                 );
                 if (match) return this.toMatchResult(match, title);
             }
-        } catch {
+        } catch (error) {
+            if (options.signal?.aborted) throw error;
             // Filtered search failed (HTTP 400) — fall through
         }
 
         // --- Attempt 2: unfiltered search, pick first song ---
         try {
-            const result = await this.search(userId, shortQuery);
+            const result = await this.search(
+                userId,
+                shortQuery,
+                undefined,
+                undefined,
+                options,
+            );
             const song = this.selectBestCandidate(
                 sourceTrack,
                 result.results || [],
             );
             if (song) return this.toMatchResult(song, title);
-        } catch {
+        } catch (error) {
+            if (options.signal?.aborted) throw error;
             // Unfiltered search also failed — fall through
         }
 
@@ -1300,13 +1278,20 @@ class YouTubeMusicService {
             const cleanAlbum = this.sanitizeQuery(albumTitle);
             const longQuery = `${cleanArtist} ${cleanTitle} ${cleanAlbum}`;
             try {
-                const result = await this.search(userId, longQuery);
+                const result = await this.search(
+                    userId,
+                    longQuery,
+                    undefined,
+                    undefined,
+                    options,
+                );
                 const song = this.selectBestCandidate(
                     { ...sourceTrack, albumTitle: cleanAlbum },
                     result.results || [],
                 );
                 if (song) return this.toMatchResult(song, title);
             } catch (err) {
+                if (options.signal?.aborted) throw err;
                 logger.warn(
                     `[YTMusic] All search attempts failed for "${artist} - ${title}":`,
                     err,
@@ -1404,11 +1389,29 @@ class YouTubeMusicService {
         videoId: string,
         limit: number = 25,
     ): Promise<YtMusicRadioQueue> {
-        const { data } = await this.client.get("/radio", {
-            params: { video_id: videoId, limit },
-            timeout: 13_000,
-        });
-        return data;
+        const normalizedVideoId = videoId.trim();
+        const boundedLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+        const cacheKey = `${normalizedVideoId}:${boundedLimit}`;
+        let loader = this.radioLoaders.get(cacheKey);
+        if (!loader) {
+            loader = cachedSingleflight(async () => {
+                const { data } = await this.client.get("/radio", {
+                    params: {
+                        video_id: normalizedVideoId,
+                        limit: boundedLimit,
+                    },
+                    timeout: 13_000,
+                });
+                return data;
+            }, RADIO_CACHE_TTL_MS);
+            if (this.radioLoaders.size >= RADIO_CACHE_MAX_KEYS) {
+                const oldestKey = this.radioLoaders.keys().next().value;
+                if (oldestKey !== undefined)
+                    this.radioLoaders.delete(oldestKey);
+            }
+            this.radioLoaders.set(cacheKey, loader);
+        }
+        return loader();
     }
 
     async getMoodPlaylists(

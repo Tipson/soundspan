@@ -101,7 +101,14 @@ export function AlbumHero({
             {album.trackCount && album.trackCount > 0 && (
                 <>
                     <span aria-hidden="true">•</span>
-                    <span>{album.trackCount} {pluralRu(album.trackCount, ["трек", "трека", "треков"])}</span>
+                    <span>
+                        {album.trackCount}{" "}
+                        {pluralRu(album.trackCount, [
+                            "трек",
+                            "трека",
+                            "треков",
+                        ])}
+                    </span>
                 </>
             )}
             {totalDuration && (

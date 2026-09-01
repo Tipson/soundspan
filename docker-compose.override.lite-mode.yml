@@ -37,7 +37,9 @@ services:
   backend:
     environment:
       VIBE_PROVIDER_URL: ""
+      REMOTE_ANALYSIS_ENABLED: "false"
 
   backend-worker:
     environment:
       VIBE_PROVIDER_URL: ""
+      REMOTE_ANALYSIS_ENABLED: "false"

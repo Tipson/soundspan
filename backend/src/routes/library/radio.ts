@@ -1229,15 +1229,15 @@ export async function handleGetRadio(req: Request, res: Response) {
                     `[Radio:playlist] Seeding from playlist ${radioValue}: ${seedTrackIds.length} local tracks`,
                 );
             }
-
             if (seedTrackIds.length === 0) {
                 if (radioValue === MY_LIKED_PLAYLIST_ID)
                     return res.json({ tracks: [] });
-                return res.json({
-                    tracks: await buildRemotePlaylistRadio(radioValue, limitNum),
-                });
+                const tracks = await buildRemotePlaylistRadio(
+                    radioValue,
+                    limitNum,
+                );
+                return res.json({ tracks });
             }
-
             const playlistResult = await buildMultiTrackRadio(
                 seedTrackIds,
                 seedTrackIds,

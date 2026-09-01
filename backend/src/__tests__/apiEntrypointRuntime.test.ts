@@ -806,6 +806,10 @@ describe("api entrypoint runtime behavior", () => {
                 "api-limiter",
                 route("../routes/personalized"),
             ],
+            "/api/player/related": [
+                "api-limiter",
+                route("../routes/playerRelated"),
+            ],
             "/api/taste-profile": [
                 "api-limiter",
                 route("../routes/tasteProfile"),

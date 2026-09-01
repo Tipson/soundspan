@@ -156,20 +156,27 @@ Spotify's public web responses.
 
 ## Personalized recommendations
 
-My Wave is designed to work without a separate recommendation service. The
-YouTube Music sidecar supplies playable candidates from the online catalog,
-then soundspan ranks them per user using explicit likes and dislikes, playlist
-membership, recent repeats, completed or meaningful listens, early skips,
-provider order, and artist diversity. The For you, New, and Familiar modes are
-deterministic ranking policies over the same bounded candidate pipeline; a
-failure in one provider seed degrades the page instead of disabling playback.
+Home, My Wave, Made For You, and Similar Tracks cross one Hybrid v2 service
+boundary. The YouTube Music sidecar supplies the primary playable catalog, then
+soundspan applies account-scoped likes/dislikes, playlists, meaningful listens,
+early skips, persistent repeat cooldowns, mood/direction, canonical dedupe, and
+artist/album diversity. Optional canonical DCLAP and Essentia features improve
+content similarity without becoming a playback dependency.
 
-ListenBrainz remains an optional scrobble destination. The current release does
-not put a ListenBrainz recommendation request in the live My Wave path, so an
-account, token, outage, or identity mismatch there cannot break Home or Vibe.
-The catalog boundary includes an isolated optional-candidate seam for a future
-reader once that API contract is dependable; local soundspan feedback remains
-the final ranking authority.
+A connected ListenBrainz account may contribute collaborative-filter MBIDs and
+LB Radio tag candidates. The adapter is timeout-bounded, cached, circuit-broken,
+and failure-isolated; partial failures are returned as `degradedSources` while
+YouTube Music fallback remains playable. Soundspan feedback stays the final
+ranking authority, and technical playback failures are not treated as negative
+taste.
+
+The safe default `RECOMMENDATION_ENGINE_MODE=shadow` serves baseline-v1 while
+persisting a paired hybrid-v2 result. Operators should keep it there until the
+read-only evaluator proves a measurable win. Remote provider audio analysis is
+separately opt-in, bounded by daily budget/concurrency, and keeps only canonical
+features after deleting its temporary spool asset. See
+[`HYBRID_RECOMMENDATIONS.md`](HYBRID_RECOMMENDATIONS.md) for lifecycle, metrics,
+CLI, and activation criteria.
 
 ## Track Mapping and Playlist Import APIs
 

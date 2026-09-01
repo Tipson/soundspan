@@ -19,7 +19,13 @@ for _root in _POTENTIAL_PROJECT_ROOTS:
         break
 
 from acoustid_worker import AcoustIDLookupWorker
+from analysis_worker_runtime import abort_process_pool, process_mixed_analysis_batch
 from audio_paths import resolve_music_path
+from canonical_analysis import (
+    load_queued_canonical_analysis_jobs,
+    partition_canonical_analysis_jobs,
+    process_canonical_analysis_jobs,
+)
 from fingerprint_persistence import persist_fingerprint
 from fingerprinting import compute_fingerprint
 from loudness import (
@@ -1412,6 +1418,9 @@ class AnalysisWorker:
             pass
         logger.info("Worker pool shut down (will restart when work arrives)")
 
+    def _abort_process_pool(self) -> None:
+        abort_process_pool(self)
+
     def _recreate_pool(self):
         """
         Safely terminate the broken pool and create a new one.
@@ -1841,43 +1850,23 @@ class AnalysisWorker:
             logger.info("Worker stopped")
 
     def process_batch_parallel(self) -> bool:
-        """Process a batch of pending tracks in parallel.
-
-        Uses BRPOP to wait for the first job (blocking, zero CPU),
-        then drains remaining queued jobs up to BATCH_SIZE.
-
-        Returns:
-            True if there was work to process, False if BRPOP timed out
-        """
-        result = self.redis.brpop(ANALYSIS_QUEUE, timeout=BRPOP_TIMEOUT)
-
-        if result is None:
-            return False
-
-        _, first_job_data = result
-        first_job = json.loads(first_job_data)
-        queued_jobs = [first_job]
-
-        while len(queued_jobs) < BATCH_SIZE:
-            job_data = self.redis.lpop(ANALYSIS_QUEUE)
-            if not job_data:
-                break
-            job = json.loads(job_data)
-            queued_jobs.append(job)
-
-        normal_jobs, loudness_jobs = partition_analysis_jobs(queued_jobs)
-        if normal_jobs:
-            self._process_tracks_parallel(normal_jobs)
-        process_loudness_backfill_jobs(
-            loudness_jobs,
-            database=self.db,
-            release_reservations=self._release_queue_reservations,
+        return process_mixed_analysis_batch(
+            self,
+            batch_size=BATCH_SIZE,
+            analysis_queue=ANALYSIS_QUEUE,
+            brpop_timeout=BRPOP_TIMEOUT,
+            analyze=_analyze_track_in_process,
             resolve_path=_resolve_music_path,
+            analysis_version=ESSENTIA_VERSION,
+            batch_timeout_seconds=BATCH_ANALYSIS_TIMEOUT_SECONDS,
+            loudness_timeout_seconds=LOUDNESS_MEASURE_TIMEOUT_SECONDS,
             max_file_size_mb=MAX_FILE_SIZE_MB,
-            timeout_seconds=LOUDNESS_MEASURE_TIMEOUT_SECONDS,
-            bookkeeping=self.loudness_backfill_bookkeeping,
+            load_queued_canonical_jobs=load_queued_canonical_analysis_jobs,
+            partition_canonical_jobs=partition_canonical_analysis_jobs,
+            process_canonical_jobs=process_canonical_analysis_jobs,
+            partition_legacy_jobs=partition_analysis_jobs,
+            process_loudness_jobs=process_loudness_backfill_jobs,
         )
-        return True
 
     def _claim_tracks_for_processing(
         self,

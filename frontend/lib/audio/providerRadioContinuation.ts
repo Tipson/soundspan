@@ -4,6 +4,7 @@ import type {
     PersonalizedTrack,
 } from "@/features/home/types";
 import type { Track, WaveMode } from "@/lib/audio-state-context";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
 
 interface ProviderQueueEntry {
     id: string;
@@ -50,6 +51,8 @@ export function buildProviderRadioContinuationPath(
         limit: String(Math.max(1, Math.min(25, Math.floor(limit)))),
         cursor: String(Math.max(0, Math.floor(cursor))),
         mode,
+        surface: "wave",
+        sessionId: getRecommendationSessionId(),
     });
     if (mood) params.set("mood", mood);
     if (excludedVideoIds.length > 0) {

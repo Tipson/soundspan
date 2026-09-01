@@ -7,6 +7,7 @@ const AUTH_VALUE = "ok";
 const mockLoggerError = jest.fn();
 const mockForwardTrackReferenceIsolated = jest.fn();
 const mockForwardScrobbleIsolated = jest.fn();
+const mockAttributePlayback = jest.fn();
 
 const prisma = {
     track: {
@@ -65,6 +66,13 @@ jest.mock("../../services/scrobbleForwarder", () => ({
     forwardScrobbleIsolated: mockForwardScrobbleIsolated,
 }));
 
+jest.mock("../../services/recommendations/exposureStore", () => ({
+    recommendationExposureStore: {
+        attributePlayback: (...args: unknown[]) =>
+            mockAttributePlayback(...args),
+    },
+}));
+
 import { prisma as prismaClient } from "../../utils/db";
 import router from "../plays";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
@@ -94,6 +102,7 @@ describe("plays routes integration", () => {
         mockPlayFindMany.mockResolvedValue([]);
         mockPlayCount.mockResolvedValue(0);
         mockPlayDeleteMany.mockResolvedValue({ count: 0 });
+        mockAttributePlayback.mockResolvedValue(undefined);
     });
 
     it("requires auth for all mounted plays routes", async () => {
@@ -183,9 +192,24 @@ describe("plays routes integration", () => {
                 waveMode: "new",
             },
         });
+        expect(mockAttributePlayback).toHaveBeenCalledWith({
+            userId: "user-1",
+            provider: "library",
+            providerTrackId: "track-1",
+            playedAt: expect.any(Date),
+            listenedSeconds: null,
+            completionRatio: null,
+            outcome: null,
+        });
     });
 
     it("PATCH /api/plays/:id/engagement records a user-owned outcome", async () => {
+        mockPlayFindFirst.mockResolvedValueOnce({
+            trackId: null,
+            playedAt: new Date("2026-09-01T10:00:00Z"),
+            trackTidal: null,
+            trackYtMusic: { videoId: "video-1" },
+        });
         const res = await request(app)
             .patch("/api/plays/play-1/engagement")
             .set(AUTH_HEADER, AUTH_VALUE)
@@ -222,6 +246,15 @@ describe("plays routes integration", () => {
                 outcome: "completed",
                 engagementUpdatedAt: expect.any(Date),
             },
+        });
+        expect(mockAttributePlayback).toHaveBeenCalledWith({
+            userId: "user-1",
+            provider: "youtube",
+            providerTrackId: "video-1",
+            playedAt: new Date("2026-09-01T10:00:00Z"),
+            listenedSeconds: 178.5,
+            completionRatio: 0.99,
+            outcome: "completed",
         });
     });
 
