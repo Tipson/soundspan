@@ -488,9 +488,7 @@ test("adaptive provider refresh replaces the stale tail after the latest active 
         setVibeSourceFeatures: () => undefined,
         setVibeQueueIds: () => undefined,
         setQueue: (
-            value:
-                | typeof queue
-                | ((previous: typeof queue) => typeof queue),
+            value: typeof queue | ((previous: typeof queue) => typeof queue),
         ) => {
             committed.queue =
                 typeof value === "function" ? value(queue) : value;

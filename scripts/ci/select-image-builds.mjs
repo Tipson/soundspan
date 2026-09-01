@@ -139,7 +139,8 @@ export function selectImageBuilds({ scope = "changed", changedPaths = [] }) {
     const selected = new Set();
     if (scope !== "changed") {
         const scopedIds = groups[scope];
-        if (!scopedIds) throw new Error(`Unsupported image build scope: ${scope}`);
+        if (!scopedIds)
+            throw new Error(`Unsupported image build scope: ${scope}`);
         scopedIds.forEach((id) => selected.add(id));
     } else if (changedPaths.length === 0) {
         groups.all.forEach((id) => selected.add(id));
@@ -161,12 +162,17 @@ function cliArgument(name) {
     return index === -1 ? undefined : process.argv[index + 1];
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+    process.argv[1] &&
+    import.meta.url === pathToFileURL(process.argv[1]).href
+) {
     const scope = cliArgument("scope") ?? "changed";
     const pathsFile = cliArgument("paths-file");
     const changedPaths = (pathsFile ? fs.readFileSync(pathsFile, "utf8") : "")
         .split(/\r?\n/)
         .map((path) => path.trim())
         .filter(Boolean);
-    process.stdout.write(JSON.stringify(selectImageBuilds({ scope, changedPaths })));
+    process.stdout.write(
+        JSON.stringify(selectImageBuilds({ scope, changedPaths })),
+    );
 }

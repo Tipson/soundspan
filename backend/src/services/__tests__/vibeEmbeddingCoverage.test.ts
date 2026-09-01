@@ -152,4 +152,89 @@ describe("vibe embedding coverage refresh", () => {
             collector: "vibe_embedding_coverage",
         });
     });
+
+    it("resolves the active target and treats every non-failed status as pending", async () => {
+        mockGetTargetSpaceId.mockResolvedValue("resolved-space");
+        mockTrackCount.mockResolvedValueOnce(2);
+        mockTrackGroupBy.mockResolvedValueOnce([
+            { vibeAnalysisStatus: "pending", _count: 3 },
+            { vibeAnalysisStatus: "processing", _count: 4 },
+        ]);
+
+        await expect(loadVibeEmbeddingCoverage()).resolves.toEqual({
+            embedded: 2,
+            pending: 7,
+            failed: 0,
+        });
+        expect(mockGetTargetSpaceId).toHaveBeenCalledTimes(1);
+        expect(mockTrackCount).toHaveBeenCalledWith({
+            where: expect.objectContaining({
+                embeddings: { some: { spaceId: "resolved-space" } },
+            }),
+        });
+    });
+
+    it("reports an empty registered space and rejects an unknown one", async () => {
+        mockEmbeddingFindFirst.mockResolvedValueOnce(null);
+        mockSpaceFindUnique.mockResolvedValueOnce({ hadVectors: false });
+
+        await expect(loadVibeSpaceVectorState("space-empty")).resolves.toEqual({
+            hasVectors: false,
+            hadVectors: false,
+        });
+
+        mockEmbeddingFindFirst.mockResolvedValueOnce(null);
+        mockSpaceFindUnique.mockResolvedValueOnce(null);
+        await expect(loadVibeSpaceVectorState("space-missing")).rejects.toThrow(
+            "Embedding space space-missing is not registered",
+        );
+    });
+
+    it.each([
+        [{ code: "57014" }],
+        [
+            {
+                meta: {
+                    driverAdapterError: { cause: { code: "57014" } },
+                },
+            },
+        ],
+    ])("recognizes nested PostgreSQL timeout shapes", async (timeoutError) => {
+        mockTrackCount.mockResolvedValueOnce(0);
+        mockTrackGroupBy.mockResolvedValueOnce([]);
+        mockTransaction.mockRejectedValueOnce(timeoutError);
+
+        await expect(
+            refreshVibeEmbeddingCoverage("target-space"),
+        ).resolves.toBeNull();
+        expect(mockCollectionErrorInc).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([null, "failure", { code: "P2010" }, { meta: null }])(
+        "rethrows non-timeout collection failures",
+        async (error) => {
+            mockTrackCount.mockResolvedValueOnce(0);
+            mockTrackGroupBy.mockResolvedValueOnce([]);
+            mockTransaction.mockRejectedValueOnce(error);
+
+            await expect(
+                refreshVibeEmbeddingCoverage("target-space"),
+            ).rejects.toBe(error);
+            expect(mockCollectionErrorInc).not.toHaveBeenCalled();
+        },
+    );
+
+    it("publishes a successful refresh and returns the new sample", async () => {
+        mockTrackCount.mockResolvedValueOnce(6);
+        mockTrackGroupBy.mockResolvedValueOnce([]);
+
+        await expect(
+            refreshVibeEmbeddingCoverage("target-space"),
+        ).resolves.toEqual({ embedded: 6, pending: 0, failed: 0 });
+        expect(mockSetCoverage).toHaveBeenCalledWith({
+            embedded: 6,
+            pending: 0,
+            failed: 0,
+        });
+    });
 });

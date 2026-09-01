@@ -1089,7 +1089,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 vibeMode: state.vibeMode,
                 isProviderTrack: Boolean(
                     state.currentTrack &&
-                        isProviderRadioTrack(state.currentTrack),
+                    isProviderRadioTrack(state.currentTrack),
                 ),
                 listenedSeconds: playbackState.currentTime,
                 durationSeconds: state.currentTrack?.duration ?? 0,
@@ -1120,9 +1120,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         currentPlayback.setIsPlaying(true);
                     },
                 }).finally(() => {
-                    if (
-                        adaptiveWaveRefreshTokenRef.current === refreshToken
-                    ) {
+                    if (adaptiveWaveRefreshTokenRef.current === refreshToken) {
                         adaptiveWaveRefreshTokenRef.current = null;
                     }
                 });

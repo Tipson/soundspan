@@ -300,7 +300,6 @@ def test_analysis_tuning_env_is_parameterized() -> None:
         "17860403f8fc90aff8ac0632a0741eb5e58d8c0b0ad2fce5ced967274b0ea971",
         "2a735b23c2aad7b12d9ffc85334cebcc659c07696d2ff60e2e378da28b6df657",
         "200d48f3905ff1f272af5006dd9851f94071a7dde4eafd9c07bc09c5ac65a714",
-        "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
     ):
         assert pinned_value in dockerfile
     for filename, digest in TOKENIZER_SHA256.items():

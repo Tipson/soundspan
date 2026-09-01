@@ -33,9 +33,7 @@ test("shared contract changes build all core images", () => {
     assert.deepEqual(
         ids(
             selectImageBuilds({
-                changedPaths: [
-                    "packages/media-metadata-contract/src/index.ts",
-                ],
+                changedPaths: ["packages/media-metadata-contract/src/index.ts"],
             }),
         ),
         ["backend", "backend-worker", "frontend"],
@@ -63,7 +61,10 @@ test("manual groups are deterministic and AIO is retired from CI", () => {
         "audio-analyzer",
         "vibe-provider-dclap",
     ]);
-    assert.equal(ids(selectImageBuilds({ scope: "all" })).includes("aio"), false);
+    assert.equal(
+        ids(selectImageBuilds({ scope: "all" })).includes("aio"),
+        false,
+    );
 });
 
 test("an empty changed-path set fails safe by building every split image", () => {

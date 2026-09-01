@@ -169,4 +169,148 @@ describe("recommendation exposure store", () => {
         ).resolves.toBeUndefined();
         expect(updateExposure).toHaveBeenCalledTimes(1);
     });
+
+    it("normalizes every supported provider and omits unplayable recommendations", async () => {
+        const createGeneration = jest.fn().mockResolvedValue({ id: "gen-all" });
+        const metrics = {
+            recordExposures: jest.fn(),
+            recordPlaybackOutcome: jest.fn(),
+        };
+        const store = new RecommendationExposureStore(
+            {
+                createGeneration,
+                loadRecentExposures: jest.fn(),
+                findAttributableExposure: jest.fn(),
+                updateExposure: jest.fn(),
+            },
+            metrics,
+        );
+        const tidal = {
+            ...track,
+            id: "tidal:42",
+            canonicalRecordingId: undefined,
+            source: "tidal" as const,
+            streamSource: "tidal" as const,
+            provider: { tidalTrackId: 42, youtubeVideoId: null },
+            artist: { id: null, name: "  ARTIST   NAME  " },
+            candidateSources: [],
+        };
+        const library = {
+            ...track,
+            id: "library-track",
+            source: "library" as const,
+            streamSource: "library" as const,
+            provider: { tidalTrackId: null, youtubeVideoId: null },
+        };
+        const unplayable = {
+            ...track,
+            id: "unplayable",
+            source: "youtube" as const,
+            provider: { tidalTrackId: null, youtubeVideoId: null },
+            youtubeVideoId: undefined,
+        };
+
+        await store.record({
+            userId: "alice",
+            sessionId: "session-all",
+            surface: "home",
+            direction: "new",
+            mood: "energetic",
+            cursor: 4,
+            algorithm: "hybrid-v2",
+            served: false,
+            degradedSources: [],
+            latencyMs: 12,
+            recommendations: [
+                { track: tidal, score: 0.9 },
+                { track: library, score: 0.8 },
+                { track: unplayable, score: 0.1 },
+            ],
+        });
+
+        expect(createGeneration).toHaveBeenCalledWith(
+            expect.objectContaining({
+                exposures: [
+                    expect.objectContaining({
+                        canonicalRecordingId: null,
+                        provider: "tidal",
+                        providerTrackId: "42",
+                        artistKey: "artist name",
+                        source: "unknown",
+                    }),
+                    expect.objectContaining({
+                        provider: "library",
+                        providerTrackId: "library-track",
+                    }),
+                ],
+            }),
+        );
+        expect(metrics.recordExposures).toHaveBeenCalledWith({
+            surface: "home",
+            algorithm: "hybrid-v2",
+            served: false,
+            count: 2,
+        });
+    });
+
+    it("does not attribute playback when no served exposure is found", async () => {
+        const findAttributableExposure = jest.fn().mockResolvedValue(null);
+        const updateExposure = jest.fn();
+        const metrics = {
+            recordExposures: jest.fn(),
+            recordPlaybackOutcome: jest.fn(),
+        };
+        const store = new RecommendationExposureStore(
+            {
+                createGeneration: jest.fn(),
+                loadRecentExposures: jest.fn(),
+                findAttributableExposure,
+                updateExposure,
+            },
+            metrics,
+        );
+
+        await store.attributePlayback({
+            userId: "alice",
+            provider: "youtube",
+            providerTrackId: "missing",
+            playedAt: new Date("2026-09-01T12:00:00.000Z"),
+            listenedSeconds: null,
+            completionRatio: null,
+            outcome: null,
+        });
+
+        expect(updateExposure).not.toHaveBeenCalled();
+        expect(metrics.recordPlaybackOutcome).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["failed", 1, 500, 0],
+        ["skipped", null, 60, -1],
+        ["skipped", 0.8, 5, -1],
+        ["skipped", 0.8, 60, 0],
+        ["completed", null, null, 1],
+        [null, 0.9, 10, 1],
+        ["meaningful", null, null, 0.5],
+        [null, 0.4, 300, 0.5],
+        [null, null, null, 0],
+    ])(
+        "assigns explicit taste weight for %s/%s/%s",
+        (outcome, completionRatio, listenedSeconds, expected) => {
+            const store = new RecommendationExposureStore({
+                createGeneration: jest.fn(),
+                loadRecentExposures: jest.fn(),
+                findAttributableExposure: jest.fn(),
+                updateExposure: jest.fn(),
+            });
+
+            expect(
+                store.tasteDeltaForOutcome(
+                    outcome,
+                    completionRatio,
+                    listenedSeconds,
+                ),
+            ).toBe(expected);
+        },
+    );
 });

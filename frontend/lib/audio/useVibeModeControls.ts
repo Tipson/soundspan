@@ -121,7 +121,7 @@ export function useVibeModeControls({
                         currentContext.waveMood === requestContext.waveMood &&
                         Boolean(
                             currentContext.track &&
-                                isProviderRadioTrack(currentContext.track),
+                            isProviderRadioTrack(currentContext.track),
                         )
                     );
                 }
