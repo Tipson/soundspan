@@ -169,7 +169,7 @@ export function HomeListeningDashboard({
                             Недавно слушали
                         </h2>
                     </div>
-                    <div role="list" className="grid gap-1.5">
+                    <div role="list" className="grid min-w-0 gap-1.5">
                         {recent.map((track, recentIndex) => {
                             const queueIndex = continuationCount + recentIndex;
                             return (
@@ -177,12 +177,13 @@ export function HomeListeningDashboard({
                                     key={trackKey(track)}
                                     role="listitem"
                                     data-track-id={track.id}
+                                    className="min-w-0"
                                 >
                                     <button
                                         type="button"
                                         onClick={() => playAt(queueIndex)}
                                         aria-label={`Воспроизвести «${track.title}», исполнитель ${track.artist.name}`}
-                                        className="group flex min-h-14 w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
+                                        className="group flex min-h-14 w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-xl px-2 py-1.5 text-left transition hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none"
                                     >
                                         <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-white/[0.055]">
                                             {coverUrl(track, 120) ? (

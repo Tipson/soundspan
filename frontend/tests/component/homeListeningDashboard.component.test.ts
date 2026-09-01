@@ -116,6 +116,16 @@ test("listening dashboard splits one unique queue into continuation cards and re
     assert.equal(state.played.length, 1);
     assert.equal(state.played[0].index, 4);
     assert.equal(state.played[0].tracks.length, 6);
+    assert.ok(
+        recentTrack.classList.contains("min-w-0") &&
+            recentTrack.classList.contains("max-w-full") &&
+            recentTrack.classList.contains("overflow-hidden"),
+        "long recent-track titles must stay inside the fixed dashboard column",
+    );
+    assert.ok(
+        recentTrack.querySelector("span.min-w-0.flex-1 .truncate"),
+        "recent-track text must ellipsize without moving the play control",
+    );
 
     const continuationGrid = mounted.container.querySelector<HTMLElement>(
         '[data-home-region="continue-listening"] [role="list"]',
