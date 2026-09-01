@@ -17,6 +17,13 @@ test("library rows key on id; external rows on normalized artist and title", () 
     assert.equal(
         getRelatedTrackKey({
             title: "Song",
+            artist: { id: "artist-1", name: "Legacy Artist" },
+        }),
+        "ext:legacy artist::song",
+    );
+    assert.equal(
+        getRelatedTrackKey({
+            title: "Song",
             album: { artist: { name: "Album Artist" } },
         }),
         "ext:album artist::song",
@@ -106,6 +113,13 @@ test("stream-match queries prefer the row artist and carry album context", () =>
             albumTitle: "Album",
             duration: 200,
         },
+    );
+    assert.equal(
+        buildStreamMatchQuery({
+            title: "Song",
+            artist: { id: "artist-1", name: "Legacy Artist" },
+        }).artist,
+        "Legacy Artist",
     );
     assert.equal(
         buildStreamMatchQuery({

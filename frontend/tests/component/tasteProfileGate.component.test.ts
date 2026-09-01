@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, beforeEach, mock, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { createRoot } from "react-dom/client";
 
@@ -46,27 +47,30 @@ test("the gate opens only when the authenticated account explicitly needs onboar
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+
+    const renderGate = (accountId: string) =>
+        React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            React.createElement(TasteProfileOnboardingGate, { accountId }),
+        );
 
     await React.act(async () => {
-        root.render(
-            React.createElement(TasteProfileOnboardingGate, {
-                accountId: "account-a",
-            }),
-        );
+        root.render(renderGate("account-a"));
     });
     assert.equal(container.querySelector('[role="dialog"]'), null);
 
     needsOnboarding = true;
     await React.act(async () => {
-        root.render(
-            React.createElement(TasteProfileOnboardingGate, {
-                accountId: "account-b",
-            }),
-        );
+        root.render(renderGate("account-b"));
     });
     assert.ok(container.querySelector('[role="dialog"]'));
     assert.deepEqual(accountCalls, ["account-a", "account-b"]);
 
     await React.act(async () => root.unmount());
     container.remove();
+    queryClient.clear();
 });

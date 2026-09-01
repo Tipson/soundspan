@@ -242,6 +242,22 @@ export const lyricsMutationLimiter = rateLimit({
     ...trustProxyValidation,
 });
 
+// Canonical artist autocomplete is cheap for a cache hit but every distinct
+// miss occupies MusicBrainz's global one-request-per-second queue. Scope this
+// budget to the authenticated account so shared household IPs do not interfere.
+export const musicBrainzArtistSearchLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 20,
+    message: "Too many artist searches. Please wait and try again.",
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.user?.id ?? "unresolved-account",
+    ...createRedisRateLimitOptions("musicbrainz-artist-search", {
+        fallback: "memory",
+    }),
+    ...trustProxyValidation,
+});
+
 // ── YouTube Music rate limiters ────────────────────────────────────
 // These exist to throttle requests to YouTube's APIs, which are more
 // sensitive to abuse than our own endpoints.  The sidecar also has its

@@ -1,5 +1,7 @@
 import cors from "cors";
 import express, { type Request, type Response } from "express";
+import { Prisma } from "@prisma/client";
+import path from "node:path";
 import request from "supertest";
 import { isOriginAllowed } from "../../utils/cors";
 
@@ -191,6 +193,14 @@ function createMockStream() {
         },
     };
     return stream;
+}
+
+function createPrismaForeignKeyError(constraint?: string) {
+    return new Prisma.PrismaClientKnownRequestError("constraint", {
+        code: "P2003",
+        clientVersion: "test",
+        ...(constraint ? { meta: { constraint } } : {}),
+    });
 }
 
 describe("audiobooks advanced runtime", () => {
@@ -603,17 +613,23 @@ describe("audiobooks advanced runtime", () => {
     });
 
     it("serves local cover paths and fallback disk covers", async () => {
+        const coverDir = path.resolve(
+            mockConfig.music.musicPath,
+            "cover-cache",
+            "audiobooks",
+        );
+        const firstCoverPath = path.join(coverDir, "book-1.jpg");
+        const secondCoverPath = path.join(coverDir, "book-2.jpg");
         prisma.audiobook.findUnique
             .mockResolvedValueOnce({
-                localCoverPath: "/music/cover-cache/audiobooks/book-1.jpg",
+                localCoverPath: firstCoverPath,
                 coverUrl: null,
             })
             .mockResolvedValueOnce({ localCoverPath: null, coverUrl: null });
 
         fsExistsSync.mockImplementation(
             (targetPath: string) =>
-                targetPath === "/music/cover-cache/audiobooks/book-1.jpg" ||
-                targetPath === "/music/cover-cache/audiobooks/book-2.jpg",
+                targetPath === firstCoverPath || targetPath === secondCoverPath,
         );
 
         const localRes = createRes();
@@ -628,7 +644,7 @@ describe("audiobooks advanced runtime", () => {
         expect(localRes.sentFilePath).toBe("book-1.jpg");
         expect(localRes.sentFileOptions).toEqual({
             dotfiles: "ignore",
-            root: "/music/cover-cache/audiobooks",
+            root: coverDir,
         });
         expect(localRes.headers["Cache-Control"]).toBe(
             "public, max-age=31536000, immutable",
@@ -643,7 +659,7 @@ describe("audiobooks advanced runtime", () => {
         expect(prisma.audiobook.update).toHaveBeenCalledWith({
             where: { id: "book-2" },
             data: {
-                localCoverPath: "/music/cover-cache/audiobooks/book-2.jpg",
+                localCoverPath: secondCoverPath,
             },
         });
         expect(fallbackRes.sentFilePath).toBe("book-2.jpg");
@@ -1316,6 +1332,52 @@ describe("audiobooks advanced runtime", () => {
         await progressHandler(
             {
                 params: { id: "book-4" },
+                body: { currentTime: 10, duration: 100 },
+                user: { id: "u1", username: "user1" },
+            } as any,
+            errorRes,
+        );
+
+        expect(errorRes.statusCode).toBe(500);
+        expect(errorRes.body).toEqual({
+            error: "Failed to update progress",
+        });
+    });
+
+    it("maps only a named audiobook progress foreign key violation to 404", async () => {
+        prisma.audiobook.findUnique.mockResolvedValue({
+            title: "Cached Title",
+            author: "Cached Author",
+            coverUrl: null,
+            duration: 360,
+            libraryId: "lib-1",
+            localCoverPath: null,
+        });
+        prisma.audiobookProgress.upsert
+            .mockRejectedValueOnce(
+                createPrismaForeignKeyError(
+                    "AudiobookProgress_audiobookshelfId_fkey",
+                ),
+            )
+            .mockRejectedValueOnce(createPrismaForeignKeyError());
+
+        const missingRes = createRes();
+        await progressHandler(
+            {
+                params: { id: "deleted-book" },
+                body: { currentTime: 10, duration: 100 },
+                user: { id: "u1", username: "user1" },
+            } as any,
+            missingRes,
+        );
+
+        expect(missingRes.statusCode).toBe(404);
+        expect(missingRes.body).toEqual({ error: "Audiobook not found" });
+
+        const errorRes = createRes();
+        await progressHandler(
+            {
+                params: { id: "book-write-error" },
                 body: { currentTime: 10, duration: 100 },
                 user: { id: "u1", username: "user1" },
             } as any,

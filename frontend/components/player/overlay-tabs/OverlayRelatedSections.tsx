@@ -11,6 +11,7 @@ import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackPreferenceButtons } from "../TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import {
+    getRelatedTrackArtistName,
     getRelatedTrackKey,
     type RelatedStreamMatch,
 } from "@/lib/overlay-related-matching";
@@ -160,11 +161,8 @@ export function SimilarSongsList({
                                 {track.title}
                             </p>
                             <p className="truncate text-xs text-gray-400">
-                                {track.inLibrary
-                                    ? track.album?.artist?.name ||
-                                      track.artist ||
-                                      ru.common.unknownArtist
-                                    : track.artist || ru.common.unknownArtist}
+                                {getRelatedTrackArtistName(track) ||
+                                    ru.common.unknownArtist}
                             </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">

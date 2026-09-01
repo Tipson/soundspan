@@ -42,6 +42,25 @@ def test_claim_tracks_keeps_only_rows_returned_by_database(loaded_analyzer: Modu
     assert database.cursor.closed is True
 
 
+def test_claim_tracks_discards_queue_rows_without_a_local_path(
+    loaded_analyzer: ModuleType,
+) -> None:
+    """Fail closed if a stale producer payload names metadata-only catalog rows."""
+    tracks = [
+        ("track-local", "/music/local.flac"),
+        ("track-catalog", None),
+    ]
+    database = FakeDatabaseConnection([[{"id": "track-local"}, {"id": "track-catalog"}]])
+    worker = _build_worker(loaded_analyzer, database)
+
+    claimed = worker._claim_tracks_for_processing(tracks)
+
+    assert claimed == [("track-local", "/music/local.flac")]
+    sql, params = database.cursor.executions[0]
+    assert '"filePath" IS NOT NULL' in sql
+    assert params == (["track-local"],)
+
+
 def test_claim_tracks_rolls_back_database_errors(loaded_analyzer: ModuleType) -> None:
     """Return no work and roll back when the claim update fails."""
     database = FakeDatabaseConnection(fail_on_execute=1)
@@ -87,6 +106,29 @@ def test_reconciliation_processes_pending_tracks_without_redis_handoff(
         "audio:analysis:queue:reserved:track-a",
         "audio:analysis:queue:reserved:track-b",
     ]
+
+
+def test_reconciliation_skips_metadata_only_rows_without_a_local_path(
+    loaded_analyzer: ModuleType,
+) -> None:
+    """Never claim or process provider catalog metadata as local audio."""
+    tracks = [
+        {"id": "track-local", "filePath": "/music/local.flac"},
+        {"id": "track-catalog", "filePath": None},
+        {"id": "track-empty-path", "filePath": ""},
+    ]
+    database = FakeDatabaseConnection([tracks, [{"id": "track-local"}, {"id": "track-catalog"}]])
+    worker = _build_worker(loaded_analyzer, database)
+    processed: list[list[tuple[str, str]]] = []
+    worker._process_claimed_tracks_parallel = lambda batch: processed.append(batch)
+
+    found_work = worker._run_db_reconciliation()
+
+    assert found_work is True
+    _select_sql, _select_params = database.cursor.executions[0]
+    _claim_sql, claim_params = database.cursor.executions[1]
+    assert claim_params == (["track-local"],)
+    assert processed == [[("track-local", "/music/local.flac")]]
 
 
 def test_reconciliation_closes_empty_read_transaction(loaded_analyzer: ModuleType) -> None:

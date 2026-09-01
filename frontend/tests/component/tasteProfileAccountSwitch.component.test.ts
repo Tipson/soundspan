@@ -107,6 +107,9 @@ test("a write started by one account cannot populate the next account's cache", 
     await flushReact();
     assert.match(container.textContent ?? "", /Рок/);
 
+    const personalizedKey = queryKeys.personalizedHome(24);
+    queryClient.setQueryData(personalizedKey, { marker: "stale-profile" });
+
     let createPromise!: Promise<TasteProfileState>;
     await React.act(async () => {
         createPromise = currentHook!.create({
@@ -144,6 +147,11 @@ test("a write started by one account cannot populate the next account's cache", 
             queryKeys.tasteProfile("account-b"),
         )?.profile?.genres[0],
         "Инди",
+    );
+    assert.equal(
+        queryClient.getQueryState(personalizedKey)?.isInvalidated,
+        true,
+        "saving a profile should invalidate recommendations without assuming two accounts must receive different tracks",
     );
 
     await React.act(async () => root.unmount());

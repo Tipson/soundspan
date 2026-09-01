@@ -3,7 +3,7 @@
 export interface RelatedTrack {
     id?: string;
     title: string;
-    artist?: string;
+    artist?: string | { id?: string; name?: string; mbid?: string };
     similarity?: number;
     inLibrary?: boolean;
     matchConfidence?: number;

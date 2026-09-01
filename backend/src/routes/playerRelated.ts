@@ -32,7 +32,7 @@ function relatedTrack(track: RecommendationCandidate, similarity: number) {
     return {
         id: track.id,
         title: track.title,
-        artist: track.artist,
+        artist: track.artist.name,
         similarity,
         inLibrary: false,
         matchConfidence: 100,

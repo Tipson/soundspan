@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import type { Track } from "@/lib/audio-state-context";
 import {
     buildStreamMatchQuery,
+    getRelatedTrackArtistName,
     getRelatedTrackKey,
     partitionTidalBatchMatches,
     selectTracksNeedingStreamMatch,
@@ -253,7 +254,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
                     streamSource: "tidal",
                     tidalTrackId: track.tidalTrackId,
                     title: track.title,
-                    artist: track.artist,
+                    artist: getRelatedTrackArtistName(track),
                     duration: track.duration,
                 };
             }
@@ -336,9 +337,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
     const playRelatedTrack = useCallback(
         async (track: RelatedTrack) => {
             const artistName =
-                track.album?.artist?.name ||
-                track.artist ||
-                ru.common.unknownArtist;
+                getRelatedTrackArtistName(track) || ru.common.unknownArtist;
 
             if (track.inLibrary && track.id) {
                 playTrack(buildLibraryPlaybackTrack(track, artistName));

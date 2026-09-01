@@ -7,6 +7,7 @@ import {
     replaceTasteProfile,
     skipTasteProfile,
 } from "../../features/taste-profile/api";
+import { api } from "../../lib/api";
 
 const state = {
     profile: null,
@@ -45,6 +46,7 @@ test("taste profile API uses GET and account-scoped POST/PUT payloads", async ()
         });
         await skipTasteProfile("create");
         await skipTasteProfile("replace");
+        await api.searchMusicBrainzArtists("Björk & Arca");
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -83,6 +85,15 @@ test("taste profile API uses GET and account-scoped POST/PUT payloads", async ()
                 method: "PUT",
                 body: { skip: true },
             },
+            {
+                path: "/api/enrichment/search/musicbrainz/artists",
+                method: "GET",
+                body: undefined,
+            },
         ],
+    );
+    assert.equal(
+        new URL(calls.at(-1)!.url).searchParams.get("q"),
+        "Björk & Arca",
     );
 });

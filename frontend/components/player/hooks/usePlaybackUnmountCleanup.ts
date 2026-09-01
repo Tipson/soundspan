@@ -22,6 +22,7 @@ export function usePlaybackUnmountCleanup({
         cancelledLoadPlayIdRef,
         progressSaveIntervalRef,
         loadTimeoutRef,
+        pendingManualProviderLoadRef,
         loadListenerRef,
         loadErrorListenerRef,
         cachePollingLoadListenerRef,
@@ -43,6 +44,10 @@ export function usePlaybackUnmountCleanup({
             if (loadTimeoutRef.current) {
                 clearTimeout(loadTimeoutRef.current);
                 loadTimeoutRef.current = null;
+            }
+            if (pendingManualProviderLoadRef.current) {
+                clearTimeout(pendingManualProviderLoadRef.current.timeout);
+                pendingManualProviderLoadRef.current = null;
             }
             clearPendingTrackErrorSkip();
             clearStartupPlaybackRecovery();

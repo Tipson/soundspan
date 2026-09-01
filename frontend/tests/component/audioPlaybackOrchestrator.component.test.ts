@@ -20,6 +20,7 @@ import {
 } from "../../features/device-offline/playbackResolver";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
 import {
+    DeviceAudioVaultError,
     installDeviceAudioVaultFactory,
     type DeviceAudioPlayResult,
     type DeviceAudioVault,
@@ -1714,6 +1715,57 @@ test("preparing a verified legacy copy keeps its media identity without shadowin
     assert.equal(engine.loadCalls.length, 1);
 });
 
+test("rapid manual YouTube selections start only the latest remote stream", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const tracks = Array.from({ length: 6 }, (_, index) =>
+        makeTrack(`rapid-youtube-${index + 1}`, {
+            streamSource: "youtube",
+            youtubeVideoId: `rapidvideo0${index + 1}`,
+        }),
+    );
+    audioState.currentTrack = tracks[0];
+    audioState.queue = tracks;
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(
+        engine.preloadCalls.length,
+        0,
+        "network YouTube preloads must not bypass the latest manual selection gate",
+    );
+
+    for (const [index, intervalMs] of [250, 500, 750, 1000].entries()) {
+        writePlaybackReplacementIntent(tracks[index].id);
+        selectTrack(tracks, index + 1);
+        await flushAsync();
+        t.mock.timers.tick(intervalMs);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 1);
+        assert.equal(engine.preloadCalls.length, 0);
+    }
+
+    writePlaybackReplacementIntent(tracks[4].id);
+    selectTrack(tracks, 5);
+    await flushAsync();
+
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(engine.preloadCalls.length, 0);
+    t.mock.timers.tick(1249);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(engine.preloadCalls.length, 0);
+    t.mock.timers.tick(1);
+    await flushAsync();
+
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "https://stream.test/yt/rapidvideo06",
+    );
+});
+
 test("a late device-file lease cannot load a retired track and every acquired URL is released", async (t) => {
     const firstTrack = makeTrack("yt:first-file", {
         streamSource: "youtube",
@@ -1859,6 +1911,10 @@ test("next-track preload acquires and releases its own managed device-file lease
         streamSource: "youtube",
         youtubeVideoId: "preloaded-file",
     });
+    const followingNetworkTrack = makeTrack("yt:following-network", {
+        streamSource: "youtube",
+        youtubeVideoId: "following-network",
+    });
     const nextRef = "fsa1:user:preload" as DeviceAudioVaultRef;
     let releases = 0;
     const session = {
@@ -1885,7 +1941,7 @@ test("next-track preload acquires and releases its own managed device-file lease
         managedReadyRecord("user-1", "preload-key", nextTrack, nextRef),
     ]);
     audioState.currentTrack = currentTrack;
-    audioState.queue = [currentTrack, nextTrack];
+    audioState.queue = [currentTrack, nextTrack, followingNetworkTrack];
     playbackState.isPlaying = true;
 
     renderOrchestrator();
@@ -1894,8 +1950,163 @@ test("next-track preload acquires and releases its own managed device-file lease
     assert.deepEqual(engine.preloadCalls, [
         { url: "blob:https://soundspan.test/preload", format: "mp4" },
     ]);
-    hookRuntime.unmount();
+    assert.equal(releases, 0);
+
+    audioState.currentTrack = nextTrack;
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync();
+
+    assert.equal(engine.preloadCalls.length, 1);
     assert.equal(releases, 1);
+});
+
+test("stale downloaded metadata cannot reopen a network YouTube preload", async () => {
+    const currentTrack = makeTrack("current-before-stale-copy");
+    const staleTrack = makeTrack("yt:stale-copy", {
+        streamSource: "youtube",
+        youtubeVideoId: "stale-copy",
+    });
+    const staleRecord = managedReadyRecord(
+        "user-1",
+        "stale-copy-key",
+        staleTrack,
+        "fsa1:user:stale-copy" as DeviceAudioVaultRef,
+    );
+    delete staleRecord.mediaRef;
+    setDeviceOfflineRuntimeState("user-1", [staleRecord]);
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, staleTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+
+    assert.equal(engine.preloadCalls.length, 0);
+});
+
+test("a recoverable device-file error cannot reopen a network YouTube preload", async (t) => {
+    const currentTrack = makeTrack("current-before-unavailable-copy");
+    const unavailableTrack = makeTrack("yt:unavailable-copy", {
+        streamSource: "youtube",
+        youtubeVideoId: "unavailable-copy",
+    });
+    const unavailableRef = "fsa1:user:unavailable-copy" as DeviceAudioVaultRef;
+    const session = {
+        ownerId: "user-1",
+        authGeneration: 0,
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: async () => {
+            throw new DeviceAudioVaultError(
+                "permission_required",
+                "Directory permission is no longer available",
+                "user-action",
+            );
+        },
+    } as unknown as DeviceAudioVaultSession;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async ({ authGeneration }) => ({
+            ...session,
+            authGeneration,
+        })),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord(
+            "user-1",
+            "unavailable-copy-key",
+            unavailableTrack,
+            unavailableRef,
+        ),
+    ]);
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, unavailableTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+
+    assert.equal(engine.preloadCalls.length, 0);
+});
+
+test("a late resolved preload cannot replace a newer managed device copy", async (t) => {
+    const currentTrack = makeTrack("current-before-preload-race");
+    const firstTrack = makeTrack("yt:first-preload-race", {
+        streamSource: "youtube",
+        youtubeVideoId: "first-preload-race",
+    });
+    const secondTrack = makeTrack("yt:second-preload-race", {
+        streamSource: "youtube",
+        youtubeVideoId: "second-preload-race",
+    });
+    const firstRef = "fsa1:user:first-preload-race" as DeviceAudioVaultRef;
+    const secondRef = "fsa1:user:second-preload-race" as DeviceAudioVaultRef;
+    const firstAccess = deferred<DeviceAudioPlayResult>();
+    const session = {
+        ownerId: "user-1",
+        authGeneration: 0,
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: (input: { ref: DeviceAudioVaultRef }) =>
+            input.ref === firstRef
+                ? firstAccess.promise
+                : Promise.resolve({
+                      kind: "play" as const,
+                      url: "blob:https://soundspan.test/second-preload-race",
+                      release: () => undefined,
+                  }),
+    } as unknown as DeviceAudioVaultSession;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async ({ authGeneration }) => ({
+            ...session,
+            authGeneration,
+        })),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord(
+            "user-1",
+            "first-preload-race-key",
+            firstTrack,
+            firstRef,
+        ),
+        managedReadyRecord(
+            "user-1",
+            "second-preload-race-key",
+            secondTrack,
+            secondRef,
+        ),
+    ]);
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, firstTrack, secondTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    firstAccess.resolve({
+        kind: "play",
+        url: "blob:https://soundspan.test/first-preload-race",
+        release: () => undefined,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    audioState.currentTrack = firstTrack;
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync();
+
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "blob:https://soundspan.test/second-preload-race",
+            format: "mp4",
+        },
+    ]);
 });
 
 test("offline playback failure pauses once without cascading through the queue", async (t) => {
@@ -2910,8 +3121,14 @@ test("natural queue advance preserves autoplay intent across load-before-play or
     enableWindowMetrics();
     mirrorMachineIntentToPlaybackState = true;
     playbackState.isPlaying = true;
-    const firstTrack = makeTrack("advance-intent-1");
-    const nextTrack = makeTrack("advance-intent-2");
+    const firstTrack = makeTrack("advance-intent-1", {
+        streamSource: "youtube",
+        youtubeVideoId: "advance-intent-video-1",
+    });
+    const nextTrack = makeTrack("advance-intent-2", {
+        streamSource: "youtube",
+        youtubeVideoId: "advance-intent-video-2",
+    });
     audioState.currentTrack = firstTrack;
     audioState.queue = [firstTrack, nextTrack];
 
@@ -2921,9 +3138,17 @@ test("natural queue advance preserves autoplay intent across load-before-play or
     engine.emit("play");
     await flushAsync();
     assert.equal(playbackMachine.state, "PLAYING");
+    assert.equal(engine.preloadCalls.length, 0);
 
     engine.emit("end");
+    await flushAsync();
     assert.equal(controlCalls.next, 1);
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "https://stream.test/yt/advance-intent-video-2",
+            format: "mp4",
+        },
+    ]);
 
     audioState.currentTrack = nextTrack;
     audioState.currentIndex = 1;

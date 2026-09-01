@@ -139,6 +139,7 @@ describe("workers runtime behavior", () => {
                 synced: 0,
                 failed: 0,
                 skipped: 0,
+                deleted: 0,
                 errors: [] as string[],
             })),
         };
@@ -923,6 +924,41 @@ describe("workers runtime behavior", () => {
             1,
         );
         expect(mocks.audiobookCacheService.syncAll).not.toHaveBeenCalled();
+        expect(mocks.logger.debug).not.toHaveBeenCalledWith(
+            expect.stringContaining("Audiobook auto-sync complete:"),
+        );
+    });
+
+    it("logs deletion-only audiobook sync summaries for repeat jobs", async () => {
+        process.env = { ...originalEnv };
+        const mocks = setupWorkerModuleMocks();
+        (mocks.getSystemSettings as jest.Mock).mockResolvedValue({
+            audiobookshelfEnabled: true,
+            audiobookshelfUrl: "http://abs.local",
+        });
+        mocks.audiobookCacheService.syncMissing.mockResolvedValueOnce({
+            synced: 0,
+            failed: 0,
+            skipped: 4,
+            deleted: 2,
+            errors: [],
+        });
+
+        loadWorkers();
+        await flushPromises();
+        const schedulerHandler = mocks.schedulerQueue.process.mock.calls.find(
+            (call) => call[0] === "*",
+        )?.[1];
+
+        await schedulerHandler({
+            id: "audiobook-sync-deletion-only",
+            name: "audiobook-auto-sync-startup",
+            data: { mode: "repeat" },
+        });
+
+        expect(mocks.logger.debug).toHaveBeenCalledWith(
+            "Audiobook auto-sync complete: 0 new, 4 already cached or skipped, 2 deleted, 0 failed",
+        );
     });
 
     it("resolves repeat audiobook sync failures and warns", async () => {
@@ -1426,6 +1462,7 @@ describe("workers runtime behavior", () => {
             synced: 4,
             failed: 0,
             skipped: 0,
+            deleted: 0,
             errors: [],
         });
         mocks.isBackfillNeeded.mockResolvedValue(true);
@@ -1699,6 +1736,7 @@ describe("workers runtime behavior", () => {
             synced: 1,
             failed: 0,
             skipped: 3,
+            deleted: 2,
             errors: [],
         });
 
@@ -1721,7 +1759,7 @@ describe("workers runtime behavior", () => {
             1,
         );
         expect(mocks.logger.debug).toHaveBeenCalledWith(
-            "Audiobook auto-sync complete: 1 new, 3 already cached, 0 failed",
+            "Audiobook auto-sync complete: 1 new, 3 already cached or skipped, 2 deleted, 0 failed",
         );
     });
 
@@ -2489,6 +2527,7 @@ describe("workers runtime behavior", () => {
                 synced: number;
                 failed: number;
                 skipped: number;
+                deleted: number;
                 errors: string[];
             }>((_resolve, reject) =>
                 queueMicrotask(() =>

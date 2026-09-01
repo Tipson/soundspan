@@ -43,6 +43,7 @@ import {
     CURRENT_TIME_KEY,
     CURRENT_TIME_TRACK_ID_KEY,
     FORMAT_TO_CODEC,
+    MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS,
     STARTUP_AUDIBLE_THRESHOLD_SEC,
     TRACK_END_WATCHDOG_BOUNDARY_SEC,
     UNEXPECTED_PAUSE_RECOVERY_DEBOUNCE_MS,
@@ -123,6 +124,7 @@ export const AudioPlaybackOrchestrator = memo(
             desiredLoadPlayRef,
             cancelledLoadPlayIdRef,
             loadTimeoutRef,
+            pendingManualProviderLoadRef,
             loadTimeoutRetryCountRef,
             seekReloadListenerRef,
             seekReloadInProgressRef,
@@ -552,7 +554,9 @@ export const AudioPlaybackOrchestrator = memo(
                                 repeatMode,
                             );
                             if (nextTrack) {
-                                preloadNextTrack(nextTrack);
+                                preloadNextTrack(nextTrack, {
+                                    allowNetworkYouTube: true,
+                                });
                             }
                         }
 
@@ -875,6 +879,10 @@ export const AudioPlaybackOrchestrator = memo(
                     clearTimeout(loadTimeoutRef.current);
                     loadTimeoutRef.current = null;
                 }
+                if (pendingManualProviderLoadRef.current) {
+                    clearTimeout(pendingManualProviderLoadRef.current.timeout);
+                    pendingManualProviderLoadRef.current = null;
+                }
                 loadTimeoutRetryCountRef.current = 0;
                 activeEngineTrackIdRef.current = null;
                 audioEngine.stop();
@@ -889,6 +897,10 @@ export const AudioPlaybackOrchestrator = memo(
             const previousMediaId = lastTrackIdRef.current;
             if (currentMediaId !== previousMediaId) {
                 trackEndWatchdogRef.current?.clear();
+                if (pendingManualProviderLoadRef.current) {
+                    clearTimeout(pendingManualProviderLoadRef.current.timeout);
+                    pendingManualProviderLoadRef.current = null;
+                }
             }
 
             if (currentMediaId === previousMediaId) {
@@ -1414,6 +1426,40 @@ export const AudioPlaybackOrchestrator = memo(
                     startLoadAttempt();
                 };
 
+                const startTrackAudioEngineLoad = (
+                    resolvedStreamUrl: string,
+                ): void => {
+                    const shouldCoalesceManualYouTubeSelection =
+                        advanceOrigin?.origin === "manual" &&
+                        currentTrack?.streamSource === "youtube" &&
+                        !resolvedStreamUrl.startsWith("blob:") &&
+                        !resolvedStreamUrl.startsWith("/__offline/audio/");
+                    if (!shouldCoalesceManualYouTubeSelection) {
+                        startAudioEngineLoad(resolvedStreamUrl);
+                        return;
+                    }
+
+                    const timeout = setTimeout(() => {
+                        if (
+                            pendingManualProviderLoadRef.current?.loadId !==
+                            thisLoadId
+                        ) {
+                            return;
+                        }
+                        pendingManualProviderLoadRef.current = null;
+                        if (
+                            loadIdRef.current === thisLoadId &&
+                            isLoadingRef.current
+                        ) {
+                            startAudioEngineLoad(resolvedStreamUrl);
+                        }
+                    }, MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS);
+                    pendingManualProviderLoadRef.current = {
+                        loadId: thisLoadId,
+                        timeout,
+                    };
+                };
+
                 if (playbackType === "track" && currentTrack) {
                     H.startTrackPlaybackSourceLease({
                         controller: playbackSourceLeaseController,
@@ -1422,7 +1468,7 @@ export const AudioPlaybackOrchestrator = memo(
                         isCurrent: () =>
                             loadIdRef.current === thisLoadId &&
                             isLoadingRef.current,
-                        onReady: startAudioEngineLoad,
+                        onReady: startTrackAudioEngineLoad,
                         onError: (error) => {
                             isLoadingRef.current = false;
                             activeEngineTrackIdRef.current = null;

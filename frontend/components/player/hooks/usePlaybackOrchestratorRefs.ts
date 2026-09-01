@@ -60,6 +60,10 @@ export function usePlaybackOrchestratorRefs({
     const seekCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const cacheStatusPollingRef = useRef<NodeJS.Timeout | null>(null);
     const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const pendingManualProviderLoadRef = useRef<{
+        loadId: number;
+        timeout: NodeJS.Timeout;
+    } | null>(null);
     const loadTimeoutRetryCountRef = useRef<number>(0);
     const seekReloadListenerRef = useRef<(() => void) | null>(null);
     const seekReloadInProgressRef = useRef<boolean>(false);
@@ -222,6 +226,7 @@ export function usePlaybackOrchestratorRefs({
         seekCheckTimeoutRef,
         cacheStatusPollingRef,
         loadTimeoutRef,
+        pendingManualProviderLoadRef,
         loadTimeoutRetryCountRef,
         seekReloadListenerRef,
         seekReloadInProgressRef,

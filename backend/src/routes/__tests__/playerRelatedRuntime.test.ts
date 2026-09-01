@@ -99,6 +99,7 @@ describe("player related route", () => {
         expect(res.body.tracks).toEqual([
             expect.objectContaining({
                 id: "yt:related-video",
+                artist: "Related Artist",
                 youtubeVideoId: "related-video",
                 streamSource: "youtube",
             }),

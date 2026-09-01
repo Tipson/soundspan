@@ -43,6 +43,9 @@
 :root {
     /* soundspan Design System - Dark Theme Only */
 
+    /* Render native widgets (selects, date pickers, scrollbars) for the dark UI. */
+    color-scheme: dark;
+
     /* Soundspan music foundation */
     --music-canvas: #090909;
     --music-stage: #121214;

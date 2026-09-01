@@ -316,6 +316,14 @@ describe("unified enrichment runtime behavior", () => {
         );
         expect(embeddingCountCall?.[0].join(" ")).toContain("te.space_id =");
         expect(embeddingCountCall?.slice(1)).toContain("space-active");
+        const eligibleAudioCountCall = (
+            prisma.$queryRaw as jest.Mock
+        ).mock.calls.find(([query]) =>
+            query.join(" ").includes('FROM "Track"'),
+        );
+        expect(eligibleAudioCountCall?.[0].join(" ")).toContain(
+            '"filePath" <>',
+        );
 
         await expect(enrichment.resetArtistsOnly()).resolves.toEqual({
             count: 3,
@@ -727,6 +735,56 @@ describe("unified enrichment runtime behavior", () => {
         expect(queueRedisPrimary.eval).toHaveBeenCalledTimes(2);
         expect(prisma.track.update).not.toHaveBeenCalled();
         expect(queued).toBe(2);
+    });
+
+    it("never admits metadata-only catalog tracks to local audio analysis", async () => {
+        const { prisma, queueRedisPrimary } = setupUnifiedEnrichmentMocks();
+        (prisma.track.findMany as jest.Mock)
+            .mockResolvedValueOnce([{ id: "track-local" }])
+            .mockResolvedValueOnce([
+                {
+                    id: "track-local",
+                    filePath: "/music/local.flac",
+                    title: "Local",
+                    duration: 120,
+                },
+                {
+                    id: "track-catalog",
+                    filePath: null,
+                    title: "Catalog metadata",
+                    duration: 140,
+                },
+                {
+                    id: "track-empty-path",
+                    filePath: "",
+                    title: "Missing local path",
+                    duration: 160,
+                },
+            ]);
+
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const enrichment = require("../unifiedEnrichment");
+        const queued = await enrichment.reRunAudioAnalysisOnly();
+
+        expect(queued).toBe(1);
+        expect(queueRedisPrimary.rpush).toHaveBeenCalledTimes(1);
+        expect(
+            JSON.parse(queueRedisPrimary.rpush.mock.calls[0][1] as string),
+        ).toEqual({
+            trackId: "track-local",
+            filePath: "/music/local.flac",
+            duration: 120,
+        });
+        expect(prisma.track.findMany).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    analysisStatus: "pending",
+                    filePath: { not: null },
+                    NOT: { filePath: "" },
+                }),
+            }),
+        );
     });
 
     it("stops audio admission when the bounded queue is full", async () => {

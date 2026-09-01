@@ -184,6 +184,22 @@ describe("enrichment MusicBrainz lookup compatibility", () => {
         expect(mockSearchArtist).not.toHaveBeenCalled();
     });
 
+    it("returns 400 before provider work for artist queries over 80 characters", async () => {
+        const req = {
+            query: { q: `B${"j".repeat(80)}` },
+            user: { id: "user-1" },
+        } as any;
+        const res = createRes();
+
+        await searchArtistsHandler(req, res);
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body).toEqual({
+            error: "Query must be at most 80 characters",
+        });
+        expect(mockSearchArtist).not.toHaveBeenCalled();
+    });
+
     it("maps artist lookup responses to UI contract fields", async () => {
         mockSearchArtist.mockResolvedValue([
             {

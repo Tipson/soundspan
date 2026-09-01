@@ -18,6 +18,11 @@ export const UNEXPECTED_PAUSE_RECOVERY_DEBOUNCE_MS = 600;
 export const UNEXPECTED_PAUSE_RECOVERY_MIN_SILENCE_MS = 1200;
 export const UNEXPECTED_PAUSE_RECOVERY_MAX_BUFFERED_AHEAD_SEC = 1.0;
 export const AUDIO_LOAD_RETRY_DELAY_MS = 350;
+// Coalesce rapid manual YouTube selections before the browser opens a remote
+// request. The sidecar intentionally finishes an accepted spool even after a
+// client disconnects, so starting every intermediate selection can saturate
+// its bounded queue and starve the track the listener actually chose.
+export const MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS = 1_250;
 export const TRACK_ERROR_SKIP_DELAY_MS = 1200;
 export const TRANSIENT_TRACK_ERROR_RECOVERY_DELAY_MS = 450;
 export const TRANSIENT_TRACK_ERROR_RECOVERY_WINDOW_MS = 15_000;

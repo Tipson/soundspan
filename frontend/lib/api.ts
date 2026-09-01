@@ -26,6 +26,7 @@ export type {
 import { WithListenGroups } from "./api/listenGroups";
 import { WithMedia } from "./api/media";
 import { WithMetadata } from "./api/metadata";
+export type { MusicBrainzArtistSearchResult } from "./api/metadata";
 import { WithNotifications } from "./api/notifications";
 import { WithPlaylists } from "./api/playlists";
 import { WithPodcasts } from "./api/podcasts";

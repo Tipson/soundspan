@@ -13,6 +13,7 @@ type RateLimitOptions = {
     skip?: (req: { path: string }) => boolean;
     keyGenerator?: (req: {
         ip: string;
+        user?: { id: string };
         federationPeer?: { id: string };
     }) => string;
     handler?: (
@@ -75,7 +76,7 @@ describe("rateLimiter middleware config", () => {
     it("creates each limiter with the documented window and max values", async () => {
         const mod = await loadRateLimiterModule();
 
-        expect(mockRateLimit).toHaveBeenCalledTimes(18);
+        expect(mockRateLimit).toHaveBeenCalledTimes(19);
         expect(mod.apiLimiter).toBeDefined();
         expect(mod.adminSurfaceLimiter).toBeDefined();
         expect(mod.shareLinkLimiter).toBeDefined();
@@ -90,6 +91,7 @@ describe("rateLimiter middleware config", () => {
         expect(mod.downloadLimiter).toBeDefined();
         expect(mod.lyricsLimiter).toBeDefined();
         expect(mod.lyricsMutationLimiter).toBeDefined();
+        expect(mod.musicBrainzArtistSearchLimiter).toBeDefined();
         expect(mod.ytMusicSearchLimiter).toBeDefined();
         expect(mod.ytMusicStreamLimiter).toBeDefined();
         expect(mod.webhookLimiter).toBeDefined();
@@ -110,10 +112,11 @@ describe("rateLimiter middleware config", () => {
             { index: 11, windowMs: 60_000, max: 100 },
             { index: 12, windowMs: 60_000, max: 120 },
             { index: 13, windowMs: 900_000, max: 20 },
-            { index: 14, windowMs: 60_000, max: 30 },
-            { index: 15, windowMs: 60_000, max: 20 },
-            { index: 16, windowMs: 60_000, max: 60 },
-            { index: 17, windowMs: 60_000, max: 1000 },
+            { index: 14, windowMs: 60_000, max: 20 },
+            { index: 15, windowMs: 60_000, max: 30 },
+            { index: 16, windowMs: 60_000, max: 20 },
+            { index: 17, windowMs: 60_000, max: 60 },
+            { index: 18, windowMs: 60_000, max: 1000 },
         ];
 
         for (const config of expectedConfigs) {
@@ -138,8 +141,9 @@ describe("rateLimiter middleware config", () => {
         ["oidc-flow", 6],
         ["cover-art-surface", 9],
         ["streaming-surface", 10],
-        ["webhook", 16],
-        ["federation-peer", 17],
+        ["musicbrainz-artist-search", 14],
+        ["webhook", 17],
+        ["federation-peer", 18],
     ])("uses the namespaced shared store for %s", async (name, index) => {
         await loadRateLimiterModule();
 
@@ -153,6 +157,7 @@ describe("rateLimiter middleware config", () => {
         "oidc-flow",
         "cover-art-surface",
         "streaming-surface",
+        "musicbrainz-artist-search",
         "webhook",
     ])("uses the memory fallback for the %s credential guard", async (name) => {
         await loadRateLimiterModule();
@@ -179,8 +184,8 @@ describe("rateLimiter middleware config", () => {
         ["download", 11],
         ["lyrics lookup", 12],
         ["lyrics mutation", 13],
-        ["YouTube Music search", 14],
-        ["YouTube Music stream", 15],
+        ["YouTube Music search", 15],
+        ["YouTube Music stream", 16],
     ])("keeps the %s limiter in memory", async (_name, index) => {
         await loadRateLimiterModule();
 
@@ -189,12 +194,22 @@ describe("rateLimiter middleware config", () => {
 
     it("keys authenticated federation limits by peer identity", async () => {
         await loadRateLimiterModule();
-        const keyGenerator = getOptions(17).keyGenerator!;
+        const keyGenerator = getOptions(18).keyGenerator!;
 
         expect(
             keyGenerator({ ip: "10.0.0.1", federationPeer: { id: "peer-1" } }),
         ).toBe("peer-1");
         expect(keyGenerator({ ip: "10.0.0.1" })).toBe("unresolved-peer");
+    });
+
+    it("keys MusicBrainz artist search limits by authenticated account", async () => {
+        await loadRateLimiterModule();
+        const keyGenerator = getOptions(14).keyGenerator!;
+
+        expect(
+            keyGenerator({ ip: "10.0.0.1", user: { id: "account-1" } }),
+        ).toBe("account-1");
+        expect(keyGenerator({ ip: "10.0.0.1" })).toBe("unresolved-account");
     });
 
     it("uses standard headers, disables legacy headers, and disables trustProxy validation for all limiters", async () => {

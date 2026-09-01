@@ -81,6 +81,8 @@ export const queryKeys = {
         ["search", "discover", query, type, limit] as const,
     discoverSimilar: (artist: string, mbid: string, limit: number) =>
         ["search", "discover", "similar", artist, mbid, limit] as const,
+    musicBrainzArtistSearch: (query: string) =>
+        ["search", "musicbrainz", "artists", query.trim()] as const,
 
     // Playlists
     playlists: () => ["playlists"] as const,

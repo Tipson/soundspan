@@ -37,6 +37,7 @@ import { prisma } from "../utils/db";
 import { config } from "../config";
 import { sendFeatureDisabled } from "../utils/featureGate";
 import { parseBoundedInt } from "../utils/queryParams";
+import { musicBrainzArtistSearchLimiter } from "../middleware/rateLimiter";
 import {
     sendInternalRouteError,
     sendRouteError,
@@ -61,6 +62,7 @@ import {
 } from "../services/metadata/albumEnrichmentFields";
 const router = Router();
 router.use(requireAuth);
+router.use("/search/musicbrainz/artists", musicBrainzArtistSearchLimiter);
 const MBID_FORMAT_EXAMPLE = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
 const MBID_UUID_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -941,6 +943,7 @@ router.post(
  *         schema:
  *           type: string
  *           minLength: 2
+ *           maxLength: 80
  *         description: Artist name search query
  *     responses:
  *       200:
@@ -959,11 +962,18 @@ router.get(
     "/search/musicbrainz/artists",
     asyncHandler(async (req, res) => {
         try {
-            const query = String(req.query.q || "").trim();
+            const query = String(req.query.q || "")
+                .trim()
+                .normalize("NFC");
             if (query.length < 2) {
                 return res
                     .status(400)
                     .json({ error: "Query must be at least 2 characters" });
+            }
+            if (query.length > 80) {
+                return res
+                    .status(400)
+                    .json({ error: "Query must be at most 80 characters" });
             }
 
             const results = await musicBrainzService.searchArtist(query, 10);

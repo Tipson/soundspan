@@ -71,7 +71,7 @@ def _create_test_schema(schema_name: str) -> list[str]:
                     """
                     CREATE TABLE {}."Track" (
                         id TEXT PRIMARY KEY,
-                        "filePath" TEXT NOT NULL,
+                        "filePath" TEXT,
                         "analysisStatus" TEXT NOT NULL DEFAULT 'pending',
                         "analysisRetryCount" INTEGER NOT NULL DEFAULT 0,
                         "fileModified" TIMESTAMP NOT NULL,
@@ -89,6 +89,8 @@ def _create_test_schema(schema_name: str) -> list[str]:
                     """
                 ).format(sql.Identifier(schema_name)),
                 [
+                    ("catalog-track", None, 0),
+                    ("empty-path-track", "", 0),
                     ("claim-track-a", "/music/a.flac", 1),
                     ("claim-track-b", "/music/b.flac", 2),
                     ("claim-track-c", "/music/c.flac", 3),
@@ -251,6 +253,41 @@ def test_reconciliation_claims_are_disjoint_across_transactions(
         assert sorted(first_claim + second_claim) == sorted(expected_ids)
         assert len(first_claim + second_claim) == len(set(first_claim + second_claim))
     finally:
+        _drop_test_schema(schema_name)
+
+
+def test_redis_claim_rejects_database_row_without_local_path(
+    loaded_analyzer: ModuleType,
+) -> None:
+    """Fence a stale non-null queue payload when the database path is null."""
+    schema_name = f"redis_path_claim_{uuid.uuid4().hex}"
+    _create_test_schema(schema_name)
+    database = _configure_database(loaded_analyzer, schema_name)
+    worker = object.__new__(loaded_analyzer.AnalysisWorker)
+    worker.db = database
+
+    try:
+        claimed = worker._claim_tracks_for_processing(
+            [
+                ("catalog-track", "/stale/catalog.webm"),
+                ("claim-track-a", "/music/a.flac"),
+            ]
+        )
+
+        assert claimed == [("claim-track-a", "/music/a.flac")]
+        cursor = database.get_cursor()
+        cursor.execute(
+            'SELECT id, "analysisStatus" FROM "Track" WHERE id IN (%s, %s) ORDER BY id',
+            ("catalog-track", "claim-track-a"),
+        )
+        assert cursor.fetchall() == [
+            {"id": "catalog-track", "analysisStatus": "pending"},
+            {"id": "claim-track-a", "analysisStatus": "processing"},
+        ]
+        database.commit()
+        cursor.close()
+    finally:
+        database.close()
         _drop_test_schema(schema_name)
 
 

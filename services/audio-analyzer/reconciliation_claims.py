@@ -9,6 +9,8 @@ _SELECT_RECONCILIATION_TRACKS_SQL = """
     SELECT id, "filePath"
     FROM "Track"
     WHERE "analysisStatus" = 'pending'
+    AND "filePath" IS NOT NULL
+    AND "filePath" <> ''
     AND COALESCE("analysisRetryCount", 0) < %s
     ORDER BY "fileModified" DESC
     LIMIT %s
@@ -41,7 +43,11 @@ def claim_reconciliation_tracks(
 ) -> list[tuple[str, str]]:
     """Lock and claim one bounded pending batch in the current transaction."""
     cursor.execute(_SELECT_RECONCILIATION_TRACKS_SQL, (max_retries, batch_size))
-    tracks = cursor.fetchall()
+    tracks = [
+        track
+        for track in cursor.fetchall()
+        if isinstance(track.get("filePath"), str) and track["filePath"]
+    ]
     if not tracks:
         return []
 

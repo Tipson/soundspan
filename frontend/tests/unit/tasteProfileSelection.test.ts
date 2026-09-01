@@ -7,6 +7,7 @@ import {
     normalizeTasteLabels,
     validateTasteProfileSelection,
 } from "../../features/taste-profile/model";
+import { suggestArtistsForGenres } from "../../features/taste-profile/suggestions";
 import { queryKeys } from "../../lib/queryKeys";
 
 test("taste labels are trimmed and de-duplicated without losing their display spelling", () => {
@@ -74,4 +75,18 @@ test("taste profile query keys keep account caches isolated", () => {
         queryKeys.tasteProfile("account-a"),
         queryKeys.tasteProfile("account-b"),
     );
+});
+
+test("artist suggestions follow the selected genres instead of staying a static rock set", () => {
+    const suggestions = suggestArtistsForGenres([
+        "Хип-хоп",
+        "Поп",
+        "Электроника",
+    ]);
+
+    assert.ok(suggestions.includes("Kendrick Lamar"));
+    assert.ok(suggestions.includes("Dua Lipa"));
+    assert.ok(suggestions.includes("Daft Punk"));
+    assert.equal(suggestions.includes("Rammstein"), false);
+    assert.equal(suggestions.includes("Bring Me The Horizon"), false);
 });

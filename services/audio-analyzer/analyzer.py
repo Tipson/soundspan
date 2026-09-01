@@ -1882,7 +1882,7 @@ class AnalysisWorker:
         self,
         tracks: list[tuple[str, str]],
     ) -> list[tuple[str, str]]:
-        """Mark eligible tracks as processing and discard stale queue entries."""
+        tracks = [track for track in tracks if isinstance(track[1], str) and bool(track[1])]
         cursor = self.db.get_cursor()
         try:
             track_ids = [t[0] for t in tracks]
@@ -1894,13 +1894,14 @@ class AnalysisWorker:
                     "updatedAt" = NOW()
                 WHERE id = ANY(%s)
                 AND "analysisStatus" = 'pending'
+                AND "filePath" IS NOT NULL
+                AND "filePath" <> ''
                 RETURNING id
             """,
                 (track_ids,),
             )
             valid_ids = {row["id"] for row in cursor.fetchall()}
             self.db.commit()
-
             if len(valid_ids) < len(tracks):
                 skipped_non_pending = len(tracks) - len(valid_ids)
                 logger.info(

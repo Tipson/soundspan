@@ -1,9 +1,10 @@
-import { useCallback, useEffect, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import type { Podcast, Track } from "@/lib/audio-state-context";
 import type { QueueItem } from "@/lib/queue-item";
 import { api } from "@/lib/api";
 import {
     acquireDeviceOfflinePlaybackSource,
+    hasDeviceOfflinePlaybackCopy,
     resolveDeviceOfflineMediaIdentity,
 } from "@/features/device-offline/playbackResolver";
 import { getNextTrackInfo } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
@@ -26,6 +27,14 @@ interface UseNextTrackPreloadOptions {
 }
 
 type PreloadableTrack = NonNullable<ReturnType<typeof getNextTrackInfo>>;
+type PreloadTrackOptions = {
+    /** Natural end may retain the iOS audio session with one provider preload. */
+    allowNetworkYouTube?: boolean;
+};
+
+function isVerifiedDevicePlaybackUrl(url: string): boolean {
+    return url.startsWith("blob:") || url.includes("/__offline/audio/");
+}
 
 /** Preloads the next music queue item without changing playback state. */
 export function useNextTrackPreload({
@@ -40,13 +49,40 @@ export function useNextTrackPreload({
     repeatMode,
     lastPreloadedTrackIdRef,
     ytMusicAuthenticatedRef,
-}: UseNextTrackPreloadOptions): (track: PreloadableTrack) => void {
+}: UseNextTrackPreloadOptions): (
+    track: PreloadableTrack,
+    options?: PreloadTrackOptions,
+) => void {
     const leaseController = usePlaybackSourceLeaseController();
+    const preloadRequestIdRef = useRef(0);
     const preloadTrack = useCallback(
-        (nextTrack: PreloadableTrack): void => {
+        (
+            nextTrack: PreloadableTrack,
+            options: PreloadTrackOptions = {},
+        ): void => {
             const preloadIdentity =
                 resolveDeviceOfflineMediaIdentity(nextTrack);
             if (preloadIdentity === lastPreloadedTrackIdRef.current) return;
+            const requestId = ++preloadRequestIdRef.current;
+            const isCurrentRequest = () =>
+                preloadRequestIdRef.current === requestId &&
+                lastPreloadedTrackIdRef.current === preloadIdentity;
+
+            // A YouTube Music preload starts a real sidecar spool job. Rapid
+            // manual selections used to bypass the current-track debounce here
+            // and could fill the bounded provider queue with tracks the listener
+            // had already skipped. Keep gapless preload for verified device
+            // copies, while the actual network track is loaded only after it
+            // becomes the selected queue item.
+            if (
+                nextTrack.streamSource === "youtube" &&
+                !hasDeviceOfflinePlaybackCopy(nextTrack) &&
+                !options.allowNetworkYouTube
+            ) {
+                leaseController.release();
+                lastPreloadedTrackIdRef.current = null;
+                return;
+            }
 
             let streamUrl: string;
             let format: string | undefined = "mp3";
@@ -92,18 +128,28 @@ export function useNextTrackPreload({
                             streamUrl,
                             signal,
                         ),
-                    () => lastPreloadedTrackIdRef.current === preloadIdentity,
+                    isCurrentRequest,
                 )
                 .then(
                     (resolvedUrl) => {
-                        if (resolvedUrl) {
-                            audioEngine.preload(resolvedUrl, format);
+                        if (!isCurrentRequest()) return;
+                        if (!resolvedUrl) {
+                            lastPreloadedTrackIdRef.current = null;
+                            return;
                         }
+                        if (
+                            nextTrack.streamSource === "youtube" &&
+                            !options.allowNetworkYouTube &&
+                            !isVerifiedDevicePlaybackUrl(resolvedUrl)
+                        ) {
+                            leaseController.release();
+                            lastPreloadedTrackIdRef.current = null;
+                            return;
+                        }
+                        audioEngine.preload(resolvedUrl, format);
                     },
                     () => {
-                        if (
-                            lastPreloadedTrackIdRef.current === preloadIdentity
-                        ) {
+                        if (isCurrentRequest()) {
                             lastPreloadedTrackIdRef.current = null;
                         }
                     },
@@ -124,6 +170,7 @@ export function useNextTrackPreload({
                   ? Boolean(currentPodcast)
                   : false;
         if (!hasActiveQueueMedia || !isPlaying) {
+            preloadRequestIdRef.current += 1;
             leaseController.release();
             lastPreloadedTrackIdRef.current = null;
             return;
@@ -138,6 +185,7 @@ export function useNextTrackPreload({
         );
 
         if (!nextTrack) {
+            preloadRequestIdRef.current += 1;
             leaseController.release();
             lastPreloadedTrackIdRef.current = null;
             return;

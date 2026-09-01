@@ -51,6 +51,30 @@ Anything not listed: drop-in.
 
 ---
 
+## Unreleased
+
+**Heads-up, no action needed:** the scheduled Audiobookshelf sync (every few
+minutes) now also removes audiobooks that were deleted in Audiobookshelf,
+including their cached covers and listening progress. Before this change, that
+cleanup only happened when an admin pressed the manual sync button. Removals
+fail closed: a book is only removed after it is absent from two complete,
+verified library listings taken several minutes apart, so an unreachable
+Audiobookshelf server or a partial listing does not cause deletions. If you
+deleted books in Audiobookshelf long ago and they are still showing in
+soundspan, expect them to disappear within about fifteen minutes of upgrading.
+One exception: books synced by very old soundspan versions that never recorded
+a source library are never removed automatically and are only flagged in the
+logs; running the manual sync once refreshes their library record so future
+cleanup can reach them.
+
+Also in this release, a database migration ties audiobook listening progress
+and playback state to their audiobook rows. It runs automatically at startup
+and removes any orphaned progress entries left behind by earlier book
+removals, so stale "Continue Listening" items from long-deleted books
+disappear after the upgrade. No action is needed.
+
+---
+
 ## 2.6.0: scrobbling, AcoustID, and database changes
 
 Most installs need no action: pull, restart, and the database migrations
