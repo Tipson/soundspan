@@ -7,6 +7,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import numpy as np
 import pytest
 from audio_paths import resolve_music_path
 
@@ -18,10 +19,17 @@ class RecordingAnalyzer:
 
     def __init__(self) -> None:
         self.paths: list[str] = []
+        self.decoded_audio: list[np.ndarray | None] = []
 
-    def analyze(self, file_path: str) -> dict[str, Any]:
+    def analyze(
+        self,
+        file_path: str,
+        *,
+        decoded_audio: np.ndarray | None = None,
+    ) -> dict[str, Any]:
         """Record the resolved path and return a successful result."""
         self.paths.append(file_path)
+        self.decoded_audio.append(decoded_audio)
         return {"bpm": 120.0}
 
 
@@ -153,4 +161,73 @@ def test_queued_in_library_path_is_analyzed(
     )
 
     assert analyzer.paths == [str(track_path.resolve())]
+    assert analyzer.decoded_audio == [None]
     assert result == ("track-1", "artist/track.flac", {"bpm": 120.0})
+
+
+def test_owned_remote_audio_is_decoded_before_analyzer(
+    loaded_analyzer: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Route only the generated canonical-spool form around Essentia MonoLoader."""
+    music_root = tmp_path / "music"
+    queued_path = ".soundspan-analysis-spool/123e4567-e89b-12d3-a456-426614174000.audio"
+    track_path = music_root / queued_path
+    track_path.parent.mkdir(parents=True)
+    track_path.touch()
+    decoded_audio = np.ones(44_100, dtype=np.float32)
+    decode_calls: list[tuple[str, int, float]] = []
+
+    def decode(
+        file_path: str,
+        *,
+        max_duration: int,
+        timeout_seconds: float,
+    ) -> np.ndarray:
+        decode_calls.append((file_path, max_duration, timeout_seconds))
+        return decoded_audio
+
+    monkeypatch.setattr(loaded_analyzer.remote_audio_decode, "decode_remote_audio", decode)
+    analyzer, result = _analyze_queued_path(
+        loaded_analyzer,
+        monkeypatch,
+        music_root,
+        queued_path,
+    )
+
+    assert decode_calls == [(str(track_path.resolve()), 90, 120.0)]
+    assert analyzer.paths == [str(track_path.resolve())]
+    assert analyzer.decoded_audio == [decoded_audio]
+    assert result == ("track-1", queued_path, {"bpm": 120.0})
+
+
+def test_owned_remote_memory_error_stays_nonempty_through_process_boundary(
+    loaded_analyzer: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Never turn an empty MemoryError message into a successful canonical result."""
+    music_root = tmp_path / "music"
+    queued_path = ".soundspan-analysis-spool/123e4567-e89b-12d3-a456-426614174000.audio"
+    track_path = music_root / queued_path
+    track_path.parent.mkdir(parents=True)
+    track_path.touch()
+
+    def fail_decode(*_args: object, **_kwargs: object) -> np.ndarray:
+        raise MemoryError()
+
+    monkeypatch.setattr(loaded_analyzer.remote_audio_decode, "decode_remote_audio", fail_decode)
+    analyzer, result = _analyze_queued_path(
+        loaded_analyzer,
+        monkeypatch,
+        music_root,
+        queued_path,
+    )
+
+    assert analyzer.paths == []
+    assert result == (
+        "track-1",
+        queued_path,
+        {"_error": "Remote audio decode failed unexpectedly", "_permanent": True},
+    )

@@ -530,9 +530,11 @@ def _settle_completed_future(
         )
         return 0, 0, 1, int(not cleanup_succeeded)
 
-    analysis_error = features.get("_error")
-    if analysis_error:
-        persisted = _persist_failed(database, job, str(analysis_error), analysis_version)
+    if "_error" in features:
+        analysis_error = str(features.get("_error") or "").strip()
+        if not analysis_error:
+            analysis_error = "Canonical audio analysis failed"
+        persisted = _persist_failed(database, job, analysis_error, analysis_version)
         if not persisted:
             cleanup_succeeded = _release_retryable_asset(
                 database,

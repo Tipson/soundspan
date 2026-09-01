@@ -18,6 +18,7 @@ for _root in _POTENTIAL_PROJECT_ROOTS:
             sys.path.insert(0, _root)
         break
 
+import remote_audio_decode
 from acoustid_worker import AcoustIDLookupWorker
 from analysis_worker_runtime import abort_process_pool, process_mixed_analysis_batch
 from audio_paths import resolve_music_path
@@ -555,7 +556,7 @@ class AudioAnalyzer:
             logger.warning(f"Audio validation error for {file_path}: {e}")
             return (True, None)
 
-    def analyze(self, file_path: str) -> dict[str, Any]:
+    def analyze(self, file_path: str, *, decoded_audio: np.ndarray | None = None) -> dict[str, Any]:
         """
         Analyze audio file and extract all features.
 
@@ -603,15 +604,17 @@ class AudioAnalyzer:
             result["_error"] = "Essentia library not installed"
             return result
 
-        MAX_ANALYZE_SECONDS = env_int("MAX_ANALYZE_SECONDS", 90)
-        audio_44k = None
-        try:
-            audio_44k = self.load_audio(file_path, max_duration=MAX_ANALYZE_SECONDS)
-        except MemoryError:
-            logger.error(f"MemoryError: Could not load audio for {file_path}")
-            result["_error"] = "MemoryError: audio file too large"
-            return result
+        audio_44k = decoded_audio
         if audio_44k is None:
+            max_analyze_seconds = env_int("MAX_ANALYZE_SECONDS", 90)
+            try:
+                audio_44k = self.load_audio(file_path, max_duration=max_analyze_seconds)
+            except MemoryError:
+                logger.error(f"MemoryError: Could not load audio for {file_path}")
+                result["_error"] = "MemoryError: audio file too large"
+                return result
+        if audio_44k is None:
+            result["_error"] = "Audio decoder returned no samples"
             return result
 
         # Validate audio before analysis
@@ -1199,8 +1202,15 @@ def _analyze_track_in_process(args: tuple[str, str]) -> tuple[str, str, dict[str
                     },
                 )
 
-        # Run analysis
-        features = _process_analyzer.analyze(full_path)
+        if _process_analyzer is None:
+            raise RuntimeError("Analyzer process is not initialized")
+        features = remote_audio_decode.analyze_audio_reference(
+            _process_analyzer,
+            file_path,
+            full_path,
+            max_duration=env_int("MAX_ANALYZE_SECONDS", 90),
+            batch_timeout_seconds=BATCH_ANALYSIS_TIMEOUT_SECONDS,
+        )
         return (track_id, file_path, features)
 
     except UnicodeDecodeError as e:

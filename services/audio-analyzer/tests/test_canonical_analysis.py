@@ -227,6 +227,44 @@ def test_final_analysis_failure_marks_rows_and_deletes_temporary_file(tmp_path: 
     assert failed_params == ("essentia-test", "unsupported codec", "canonical-1")
 
 
+def test_empty_analysis_error_fails_closed_and_deletes_temporary_file(tmp_path: Path) -> None:
+    """Treat the presence of an empty `_error` as failure, never completion."""
+    spool = tmp_path / "remote.m4a"
+    spool.write_bytes(b"audio")
+    database = FakeDatabaseConnection(
+        [
+            [{"id": "canonical-1"}],
+            [{"id": "lease-1"}],
+            [{"id": "lease-1"}],
+            [{"id": "canonical-1"}],
+        ]
+    )
+
+    summary = canonical_analysis.process_canonical_analysis_jobs(
+        [_job(".soundspan-analysis-spool/remote.m4a")],
+        database=database,
+        executor=_ImmediateExecutor({"_error": ""}),
+        analyze=lambda _args: None,
+        resolve_path=lambda _path: str(spool),
+        analysis_version="essentia-test",
+        timeout_seconds=30,
+    )
+
+    assert summary.completed == 0
+    assert summary.failed == 1
+    assert spool.exists() is False
+    lease_sql, lease_params = database.cursor.executions[2]
+    assert "status = 'failed'" in lease_sql
+    assert lease_params[0] == "Canonical audio analysis failed"
+    failed_sql, failed_params = database.cursor.executions[3]
+    assert "\"analysisStatus\" = 'failed'" in failed_sql
+    assert failed_params == (
+        "essentia-test",
+        "Canonical audio analysis failed",
+        "canonical-1",
+    )
+
+
 def test_delete_after_rejects_non_spool_library_file(tmp_path: Path) -> None:
     """Never delete an ordinary library file even when a forged job asks for it."""
     library_track = tmp_path / "Artist" / "song.flac"
