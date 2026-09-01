@@ -147,17 +147,17 @@ def _seed_canonical_analysis_lease(schema_name: str) -> None:
                         id TEXT PRIMARY KEY,
                         "analysisStatus" TEXT NOT NULL DEFAULT 'pending',
                         "analysisError" TEXT,
-                        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
                     );
                     CREATE TABLE {}."AnalysisAssetLease" (
                         id TEXT PRIMARY KEY,
                         "canonicalRecordingId" TEXT NOT NULL,
                         "spoolRef" TEXT NOT NULL UNIQUE,
                         status TEXT NOT NULL,
-                        "expiresAt" TIMESTAMPTZ NOT NULL,
+                        "expiresAt" TIMESTAMP NOT NULL,
                         error TEXT,
-                        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+                        "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
                     )
                     """
                 ).format(sql.Identifier(schema_name), sql.Identifier(schema_name))
@@ -174,7 +174,7 @@ def _seed_canonical_analysis_lease(schema_name: str) -> None:
                         'canonical-lease',
                         '.soundspan-analysis-spool/lease.audio',
                         'queued_essentia',
-                        NOW() + INTERVAL '2 hours'
+                        (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '2 hours'
                     )
                     """
                 ).format(sql.Identifier(schema_name), sql.Identifier(schema_name))

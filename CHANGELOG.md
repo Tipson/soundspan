@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Essentia analyzer now pins every PostgreSQL session to UTC, so lease expiry comparisons remain aligned with Prisma's UTC-naive timestamps even when the database server uses a regional timezone; valid remote-analysis jobs are claimed instead of being misclassified as expired.
 - Remote YouTube Music hot-set analysis now opens canonical audio through the provider-safe public stream context instead of an account-scoped context that can return 401 for users without provider OAuth. Failures also record a bounded processing stage and safe upstream classification without persisting credentials, request headers, or raw transport configuration.
 - Rapid Wave retunes are latest-wins: a successful changed direction or mood replaces the active queue and starts its first newly ranked track, while an unchanged setting does not restart playback and a failed/empty retune preserves the current queue. Provider-radio calls are request-coalesced and briefly cached, and repeated Similar Tracks reads use the unified playable fallback instead of leaving the overlay permanently empty.
 - YouTube Music artwork now uses reliable wide thumbnails without embedded letterbox bars, and artwork play controls use a translucent hover/focus treatment on pointer devices.
