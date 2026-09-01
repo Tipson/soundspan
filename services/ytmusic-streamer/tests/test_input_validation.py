@@ -3,12 +3,35 @@
 from __future__ import annotations
 
 import types
+from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 
 VALID_ID = "dQw4w9WgXcQ"
+
+
+def test_credential_paths_are_confined_to_the_data_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Credential filenames accept backend IDs but cannot escape the data root."""
+    import ytmusic_client
+
+    monkeypatch.setattr(ytmusic_client, "DATA_PATH", tmp_path)
+
+    assert (
+        ytmusic_client._oauth_file("safe-user_1") == (tmp_path / "oauth_safe-user_1.json").resolve()
+    )
+    assert (
+        ytmusic_client._client_creds_file("safe-user_1")
+        == (tmp_path / "client_creds_safe-user_1.json").resolve()
+    )
+
+    for unsafe_user_id in ("../outside", "user/name", "user%2Fname", "user.name"):
+        with pytest.raises(HTTPException, match="Invalid user_id"):
+            ytmusic_client._oauth_file(unsafe_user_id)
 
 
 @pytest.fixture()

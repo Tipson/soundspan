@@ -518,6 +518,42 @@ describe("youtubeMusic service", () => {
         ).resolves.toEqual([{ id: "a1" }]);
     });
 
+    it("rejects provider identifiers that could escape a sidecar path", async () => {
+        const unsafeIdentifiers = [
+            "https://attacker.example/steal",
+            "//attacker.example/steal",
+            "../admin",
+            "%2f%2fattacker.example",
+            "album?redirect=https://attacker.example",
+        ];
+
+        for (const identifier of unsafeIdentifiers) {
+            await expect(
+                ytMusicService.getAlbum("u1", identifier),
+            ).rejects.toThrow(TypeError);
+            await expect(
+                ytMusicService.getArtist("u1", identifier),
+            ).rejects.toThrow(TypeError);
+            await expect(
+                ytMusicService.getSong("u1", identifier),
+            ).rejects.toThrow(TypeError);
+            await expect(
+                ytMusicService.getStreamInfo("u1", identifier),
+            ).rejects.toThrow(TypeError);
+            await expect(
+                ytMusicService.getStreamProxy("u1", identifier),
+            ).rejects.toThrow(TypeError);
+            await expect(
+                ytMusicService.getBrowsePlaylist(identifier),
+            ).rejects.toThrow(TypeError);
+            await expect(
+                ytMusicService.getBrowseAlbum(identifier),
+            ).rejects.toThrow(TypeError);
+        }
+
+        expect(mockClient.get).not.toHaveBeenCalled();
+    });
+
     it("runs batch search and album matching with second-pass fallback", async () => {
         const searchBatchSpy = jest.spyOn(ytMusicService, "searchBatch");
         searchBatchSpy

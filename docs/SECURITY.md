@@ -20,6 +20,14 @@ compile --upgrade-package`; if the resolver can select a compatible fixed
 release, remove the corresponding advisory ID in the same change. New IDs are
 never added automatically.
 
+`CVE-2026-12570` is accepted only for these two TensorFlow 2.15 lanes. The
+advisory requires loading an attacker-controlled `.keras` archive, while the
+analyzer loads repository-pinned Essentia TensorFlow graph assets and exposes
+no model-upload or model-path input. TensorFlow 2.15.1 pins `keras>=2.15,<2.16`,
+so the fixed Keras 3 line cannot be selected without migrating and regression
+testing the complete analyzer stack. Remove this exception with that migration,
+or sooner if an upstream Keras 2 backport becomes available.
+
 ## npm dependency overrides
 
 The backend dependency graph receives the `uuid` `^8.3.2` range through Bull 4

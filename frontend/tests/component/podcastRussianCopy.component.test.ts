@@ -47,6 +47,8 @@ test("podcast detail components render Russian product copy", async () => {
         React.createElement(PodcastHero, {
             title: "Syntax",
             author: "Wes Bos",
+            description:
+                "<scr<script>ipt>alert('nested')</scr<script>ipt><p>Описание подкаста</p>",
             heroImage: null,
             colors: null,
             episodeCount: 2,
@@ -56,6 +58,9 @@ test("podcast detail components render Russian product copy", async () => {
     assert.match(hero, />Подкаст</);
     assert.match(hero, /2 выпуска/);
     assert.match(hero, /1 в процессе/);
+    assert.match(hero, /alert\(&#x27;nested&#x27;\)Описание подкаста/);
+    assert.doesNotMatch(hero, /(?:&lt;|<)script/i);
+    assert.doesNotMatch(hero, /ipt&gt;/i);
 
     const actions = renderToStaticMarkup(
         React.createElement(PodcastActionBar, {

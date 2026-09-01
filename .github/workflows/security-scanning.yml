@@ -220,6 +220,7 @@ jobs:
               --ignore-vuln CVE-2026-12481
               --ignore-vuln CVE-2026-12482
               --ignore-vuln CVE-2026-12484
+              --ignore-vuln CVE-2026-12570
               --ignore-vuln CVE-2026-9335
               --ignore-vuln PYSEC-2025-121
               --ignore-vuln PYSEC-2025-76
@@ -247,6 +248,7 @@ jobs:
               --ignore-vuln CVE-2026-12481
               --ignore-vuln CVE-2026-12482
               --ignore-vuln CVE-2026-12484
+              --ignore-vuln CVE-2026-12570
               --ignore-vuln CVE-2026-9335
               --ignore-vuln PYSEC-2025-121
               --ignore-vuln PYSEC-2025-76

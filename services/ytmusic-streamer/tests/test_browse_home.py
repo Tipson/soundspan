@@ -476,16 +476,14 @@ class TestYTMusicLocaleParams:
 
         fake_oauth = json.dumps({"access_token": "fake", "token_type": "Bearer"})
 
-        # Simulate no client_creds file — scope __truediv__ to DATA_PATH only
+        # Simulate no client_creds file without replacing the validated path root.
         creds_path = MagicMock()
         creds_path.exists.return_value = False
-        mock_data_path = MagicMock()
-        mock_data_path.__truediv__ = MagicMock(return_value=creds_path)
 
         with (
             patch("app.YTMusic") as MockYTMusic,
             patch("app._oauth_file") as mock_oauth_file,
-            patch("app.DATA_PATH", mock_data_path),
+            patch("app._client_creds_file", return_value=creds_path),
         ):
             MockYTMusic.return_value = MagicMock()
 

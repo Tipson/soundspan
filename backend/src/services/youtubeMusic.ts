@@ -38,6 +38,15 @@ const RADIO_CACHE_MAX_KEYS = 256;
 // The sidecar's default YTMUSIC_BROWSE_TIMEOUT is 30 seconds. Leave margin so
 // its sanitized 503/504 response reaches the backend before Axios times out.
 const LIBRARY_PLAYLISTS_TIMEOUT_MS = 35_000;
+const PROVIDER_PATH_SEGMENT_RE = /^[A-Za-z0-9_-]{1,256}$/;
+
+function encodeProviderPathSegment(value: string, field: string): string {
+    const normalized = value.trim();
+    if (!PROVIDER_PATH_SEGMENT_RE.test(normalized)) {
+        throw new TypeError(`Invalid YouTube Music ${field}`);
+    }
+    return encodeURIComponent(normalized);
+}
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -679,21 +688,24 @@ class YouTubeMusicService {
     // ── Browse ─────────────────────────────────────────────────────
 
     async getAlbum(userId: string, browseId: string): Promise<YtMusicAlbum> {
-        const res = await this.client.get(`/album/${browseId}`, {
+        const encodedId = encodeProviderPathSegment(browseId, "album id");
+        const res = await this.client.get(`/album/${encodedId}`, {
             params: { user_id: userId },
         });
         return res.data;
     }
 
     async getArtist(userId: string, channelId: string): Promise<YtMusicArtist> {
-        const res = await this.client.get(`/artist/${channelId}`, {
+        const encodedId = encodeProviderPathSegment(channelId, "artist id");
+        const res = await this.client.get(`/artist/${encodedId}`, {
             params: { user_id: userId },
         });
         return res.data;
     }
 
     async getSong(userId: string, videoId: string): Promise<YtMusicSong> {
-        const res = await this.client.get(`/song/${videoId}`, {
+        const encodedId = encodeProviderPathSegment(videoId, "video id");
+        const res = await this.client.get(`/song/${encodedId}`, {
             params: { user_id: userId },
         });
         return res.data;
@@ -712,11 +724,12 @@ class YouTubeMusicService {
         quality?: string,
         options: YtMusicStreamInfoOptions = {},
     ): Promise<YtMusicStreamInfo> {
+        const encodedId = encodeProviderPathSegment(videoId, "video id");
         return retryWithBackoff(
             async () => {
                 const params: Record<string, string> = { user_id: userId };
                 if (quality) params.quality = quality;
-                const res = await this.client.get(`/stream/${videoId}`, {
+                const res = await this.client.get(`/stream/${encodedId}`, {
                     params,
                     ...(options.timeoutMs
                         ? { timeout: options.timeoutMs }
@@ -740,13 +753,14 @@ class YouTubeMusicService {
         rangeHeader?: string,
         options: { signal?: AbortSignal; timeoutMs?: number } = {},
     ) {
+        const encodedId = encodeProviderPathSegment(videoId, "video id");
         const params: Record<string, string> = { user_id: userId };
         if (quality) params.quality = quality;
 
         const headers: Record<string, string> = {};
         if (rangeHeader) headers["Range"] = rangeHeader;
 
-        return this.client.get(`/proxy/${videoId}`, {
+        return this.client.get(`/proxy/${encodedId}`, {
             params,
             headers,
             responseType: "stream",
@@ -1452,7 +1466,8 @@ class YouTubeMusicService {
             thumbnailUrl: string | null;
         }>;
     }> {
-        const { data } = await this.client.get(`/playlist/${playlistId}`, {
+        const encodedId = encodeProviderPathSegment(playlistId, "playlist id");
+        const { data } = await this.client.get(`/playlist/${encodedId}`, {
             params: { limit, ...(userId ? { user_id: userId } : {}) },
             timeout: 15_000,
         });
@@ -1486,7 +1501,8 @@ class YouTubeMusicService {
         }>;
         description: string | null;
     }> {
-        const { data } = await this.client.get(`/browse-album/${browseId}`, {
+        const encodedId = encodeProviderPathSegment(browseId, "album id");
+        const { data } = await this.client.get(`/browse-album/${encodedId}`, {
             timeout: 15_000,
         });
         return data;

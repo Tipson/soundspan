@@ -22,6 +22,21 @@ interface PodcastHeroProps {
     children?: ReactNode;
 }
 
+function podcastDescriptionText(description: string): string {
+    let tagDepth = 0;
+    let text = "";
+    for (const character of description) {
+        if (character === "<") {
+            tagDepth += 1;
+        } else if (character === ">") {
+            tagDepth = Math.max(0, tagDepth - 1);
+        } else if (tagDepth === 0) {
+            text += character;
+        }
+    }
+    return text.slice(0, 150);
+}
+
 /**
  * Renders the PodcastHero component.
  */
@@ -107,9 +122,7 @@ export function PodcastHero({
                         {/* Description - truncated */}
                         {description && (
                             <p className="text-sm text-white/60 line-clamp-2 max-w-3xl mb-2 hidden md:block">
-                                {description
-                                    .replace(/<[^>]*>/g, "")
-                                    .substring(0, 150)}
+                                {podcastDescriptionText(description)}
                                 ...
                             </p>
                         )}

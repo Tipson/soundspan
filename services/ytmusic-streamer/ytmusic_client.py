@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -85,14 +86,25 @@ def _unlink_if_exists(path: Path) -> None:
 
 def _oauth_file(user_id: str) -> Path:
     """Return the OAuth JSON path for a given user."""
-    validate_user_id(user_id)
-    return DATA_PATH / f"oauth_{user_id}.json"
+    return _credential_file("oauth", user_id)
 
 
 def _client_creds_file(user_id: str) -> Path:
     """Return the OAuth client-credentials JSON path for a given user."""
+    return _credential_file("client_creds", user_id)
+
+
+def _credential_file(prefix: Literal["oauth", "client_creds"], user_id: str) -> Path:
+    """Build one credential path from a validated token contained by DATA_PATH."""
     validate_user_id(user_id)
-    return DATA_PATH / f"client_creds_{user_id}.json"
+    safe_user_id = re.sub(r"[^A-Za-z0-9_-]", "", user_id)[:64]
+    if safe_user_id != user_id:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+    data_root = DATA_PATH.resolve()
+    candidate = (data_root / f"{prefix}_{safe_user_id}.json").resolve()
+    if candidate.parent != data_root:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+    return candidate
 
 
 def _clear_user_search_fallback(user_id: str) -> None:
