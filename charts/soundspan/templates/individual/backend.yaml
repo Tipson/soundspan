@@ -150,6 +150,8 @@ spec:
             "LOG_LEVEL" true
             "DOCS_PUBLIC" true
             "RECOMMENDATION_ENGINE_MODE" true
+            "RECOMMENDATION_HYBRID_ROLLOUT_PERCENT" true
+            "RECOMMENDATION_EXPLORATION_PERCENT" true
             "REMOTE_ANALYSIS_ENABLED" true
             "REMOTE_ANALYSIS_DAILY_BUDGET" true
             "REMOTE_ANALYSIS_CONCURRENCY" true
@@ -526,6 +528,20 @@ spec:
             {{- else if not (kindIs "invalid" .Values.config.recommendations.engineMode) }}
             - name: RECOMMENDATION_ENGINE_MODE
               value: {{ .Values.config.recommendations.engineMode | quote }}
+            {{- end }}
+            {{- if hasKey $backendEnv "RECOMMENDATION_HYBRID_ROLLOUT_PERCENT" }}
+            - name: RECOMMENDATION_HYBRID_ROLLOUT_PERCENT
+              value: {{ index $backendEnv "RECOMMENDATION_HYBRID_ROLLOUT_PERCENT" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.recommendations.hybridRolloutPercent) }}
+            - name: RECOMMENDATION_HYBRID_ROLLOUT_PERCENT
+              value: {{ .Values.config.recommendations.hybridRolloutPercent | quote }}
+            {{- end }}
+            {{- if hasKey $backendEnv "RECOMMENDATION_EXPLORATION_PERCENT" }}
+            - name: RECOMMENDATION_EXPLORATION_PERCENT
+              value: {{ index $backendEnv "RECOMMENDATION_EXPLORATION_PERCENT" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.recommendations.explorationPercent) }}
+            - name: RECOMMENDATION_EXPLORATION_PERCENT
+              value: {{ .Values.config.recommendations.explorationPercent | quote }}
             {{- end }}
             {{- if hasKey $backendEnv "REMOTE_ANALYSIS_ENABLED" }}
             - name: REMOTE_ANALYSIS_ENABLED

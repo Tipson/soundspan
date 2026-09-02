@@ -29,18 +29,6 @@ function normalizedText(value: string): string {
     return value
         .normalize("NFKC")
         .replace(/[‘’`′ʼ]/g, "'")
-        .replace(
-            /\s*\([^)]*(remaster|version|edition|mix|live)[^)]*\)\s*/giu,
-            " ",
-        )
-        .replace(
-            /\s*\[[^\]]*(remaster|version|edition|mix|live)[^\]]*\]\s*/giu,
-            " ",
-        )
-        .replace(
-            /\s*-\s*(\d{4}\s+)?(remaster(ed)?|deluxe|bonus|single|radio edit|remix|acoustic|live|version|edition|mix).*$/iu,
-            "",
-        )
         .toLocaleLowerCase("en-US")
         .replace(/[^\p{L}\p{N}]+/gu, " ")
         .trim()

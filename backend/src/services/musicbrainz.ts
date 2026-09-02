@@ -9,6 +9,7 @@ import {
 import { BRAND_USER_AGENT } from "../config/brand";
 import { isValidMbid } from "../utils/musicIds";
 import { asPlainObject, isPlainObject } from "../utils/plainObject";
+import { parseRecordingMbidFromIsrcLookup } from "./musicbrainzIdentity";
 
 export { isValidMbid } from "../utils/musicIds";
 
@@ -270,6 +271,24 @@ class MusicBrainzService {
         }
 
         return data;
+    }
+
+    /** Resolve an ISRC only when MusicBrainz returns one unambiguous recording. */
+    async lookupRecordingMbidByIsrc(isrc: string): Promise<string | null> {
+        const normalized = isrc.replace(/[^a-z0-9]/giu, "").toUpperCase();
+        if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(normalized)) return null;
+        return this.cachedRequest(
+            `mb:isrc:${normalized}`,
+            async () => {
+                const response = await this.client.get(
+                    `/isrc/${encodeURIComponent(normalized)}`,
+                    { params: { fmt: "json" } },
+                );
+                return parseRecordingMbidFromIsrcLookup(response.data);
+            },
+            2592000,
+            null,
+        );
     }
 
     async searchArtist(query: string, limit = 10) {

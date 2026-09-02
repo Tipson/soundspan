@@ -30,6 +30,7 @@ def _features() -> dict[str, Any]:
         "speechiness": 0.04,
         "moodTags": ["energetic"],
         "essentiaGenres": ["rock"],
+        "fingerprint": {"fingerprint": "chromaprint-value", "duration": 247},
     }
 
 
@@ -181,6 +182,10 @@ def test_success_persists_canonical_features_and_deletes_spool_after_commit(
     completed_sql, completed_params = database.cursor.executions[3]
     assert 'UPDATE "CanonicalRecording"' in completed_sql
     assert "\"analysisStatus\" = 'completed'" in completed_sql
+    assert "fingerprint = COALESCE" in completed_sql
+    assert '"identityLookupStatus" = CASE' in completed_sql
+    assert '"identityLookupRetryCount" = CASE' in completed_sql
+    assert "chromaprint-value" in completed_params
     assert completed_params[-1] == "canonical-1"
 
 

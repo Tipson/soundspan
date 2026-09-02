@@ -199,6 +199,26 @@ function baseScore(
     if (vector && moodVector && vector.length === moodVector.length) {
         score += cosine(vector, moodVector) * 0.9;
     }
+    const sessionPositive = options.sessionPositiveEmbedding
+        ? normalizeVector(options.sessionPositiveEmbedding)
+        : null;
+    if (vector && sessionPositive && vector.length === sessionPositive.length) {
+        score += cosine(vector, sessionPositive) * 1.8;
+    }
+    const sessionNegative = options.sessionNegativeEmbedding
+        ? normalizeVector(options.sessionNegativeEmbedding)
+        : null;
+    if (vector && sessionNegative && vector.length === sessionNegative.length) {
+        score -= Math.max(0, cosine(vector, sessionNegative)) * 0.9;
+    }
+    if (vector && (options.contextCentroids?.length ?? 0) > 0) {
+        score +=
+            Math.max(
+                ...options.contextCentroids!.map((center) =>
+                    cosine(vector, center),
+                ),
+            ) * 0.45;
+    }
     const exposureAge = latestExposureAge(
         candidate.canonicalKey,
         options.exposures,
@@ -227,6 +247,10 @@ export interface RankRecommendationOptions {
     positiveCentroids: readonly (readonly number[])[];
     negativeCentroids: readonly (readonly number[])[];
     moodEmbedding?: readonly number[] | null;
+    sessionPositiveEmbedding?: readonly number[] | null;
+    sessionNegativeEmbedding?: readonly number[] | null;
+    contextCentroids?: readonly (readonly number[])[];
+    explorationRate?: number;
 }
 
 /**
@@ -241,8 +265,148 @@ export function rankRecommendationCandidates(
     const shouldBackfillRecent =
         fresh.length === 0 ||
         (options.perLaneLimit !== undefined && fresh.length < options.limit);
-    if (!shouldBackfillRecent) return fresh;
-    return rankRecommendationCandidatePool(candidates, options, false, fresh);
+    const ranked = !shouldBackfillRecent
+        ? fresh
+        : rankRecommendationCandidatePool(candidates, options, false, fresh);
+    return applyExplorationQuota(ranked, candidates, options);
+}
+
+function isExplorationCandidate(candidate: RecommendationCandidate): boolean {
+    return (
+        candidate.lane === "discovery" &&
+        (candidate.accountAffinity ?? 0) <= 0.25
+    );
+}
+
+function applyExplorationQuota(
+    selected: ScoredRecommendation[],
+    candidates: readonly RecommendationCandidate[],
+    options: RankRecommendationOptions,
+): ScoredRecommendation[] {
+    const rate = Math.max(0, Math.min(0.3, options.explorationRate ?? 0));
+    const target = Math.min(selected.length, Math.round(options.limit * rate));
+    const selectedIds = new Set(
+        selected.map(({ track }) => track.canonicalKey),
+    );
+    let count = selected.filter(({ track }) =>
+        isExplorationCandidate(track),
+    ).length;
+    if (count >= target) return selected;
+    const explorerByCanonical = new Map<string, RecommendationCandidate>();
+    for (const candidate of candidates) {
+        if (
+            !isExplorationCandidate(candidate) ||
+            selectedIds.has(candidate.canonicalKey) ||
+            options.dislikedCanonicalKeys.has(candidate.canonicalKey) ||
+            latestExposureAge(
+                candidate.canonicalKey,
+                options.exposures,
+                options.now,
+            ) !== null
+        ) {
+            continue;
+        }
+        const existing = explorerByCanonical.get(candidate.canonicalKey);
+        if (!existing || candidate.providerPrior > existing.providerPrior) {
+            explorerByCanonical.set(candidate.canonicalKey, candidate);
+        }
+    }
+    const explorers = [...explorerByCanonical.values()]
+        .map((track) => ({
+            track: {
+                ...track,
+                candidateSources: Array.from(
+                    new Set([...track.candidateSources, "exploration"]),
+                ),
+            },
+            score: baseScore(track, options),
+        }))
+        .sort(
+            (left, right) =>
+                right.score - left.score ||
+                stableUnitInterval(
+                    `${options.sessionId}:${left.track.canonicalKey}`,
+                ) -
+                    stableUnitInterval(
+                        `${options.sessionId}:${right.track.canonicalKey}`,
+                    ),
+        );
+    const result = [...selected];
+    const artistCounts = new Map<string, number>();
+    const albumCounts = new Map<string, number>();
+    const laneCounts = new Map<string, number>();
+    const keys = (track: RecommendationCandidate) => {
+        const artist = track.artist.name.trim().toLocaleLowerCase();
+        return {
+            artist,
+            album: `${artist}:${track.album.title.trim().toLocaleLowerCase()}`,
+            lane: track.lane ?? "",
+        };
+    };
+    const adjustCounts = (track: RecommendationCandidate, delta: 1 | -1) => {
+        const key = keys(track);
+        artistCounts.set(
+            key.artist,
+            (artistCounts.get(key.artist) ?? 0) + delta,
+        );
+        albumCounts.set(key.album, (albumCounts.get(key.album) ?? 0) + delta);
+        if (key.lane) {
+            laneCounts.set(key.lane, (laneCounts.get(key.lane) ?? 0) + delta);
+        }
+    };
+    result.forEach(({ track }) => adjustCounts(track, 1));
+    const laneLimit =
+        options.perLaneLimit === undefined
+            ? null
+            : Math.max(0, Math.floor(options.perLaneLimit));
+    while (count < target && explorers.length > 0) {
+        let explorerIndex = -1;
+        let replacementIndex = -1;
+        for (
+            let candidateIndex = 0;
+            candidateIndex < explorers.length;
+            candidateIndex += 1
+        ) {
+            const explorer = explorers[candidateIndex].track;
+            const explorerKeys = keys(explorer);
+            for (let index = result.length - 1; index >= 0; index -= 1) {
+                const replaced = result[index].track;
+                if (isExplorationCandidate(replaced)) continue;
+                const replacedKeys = keys(replaced);
+                const projectedArtist =
+                    (artistCounts.get(explorerKeys.artist) ?? 0) -
+                    (replacedKeys.artist === explorerKeys.artist ? 1 : 0) +
+                    1;
+                const projectedAlbum =
+                    (albumCounts.get(explorerKeys.album) ?? 0) -
+                    (replacedKeys.album === explorerKeys.album ? 1 : 0) +
+                    1;
+                const projectedLane = explorerKeys.lane
+                    ? (laneCounts.get(explorerKeys.lane) ?? 0) -
+                      (replacedKeys.lane === explorerKeys.lane ? 1 : 0) +
+                      1
+                    : 0;
+                if (
+                    projectedArtist > MAX_TRACKS_PER_ARTIST ||
+                    projectedAlbum > MAX_TRACKS_PER_ALBUM ||
+                    (laneLimit !== null && projectedLane > laneLimit)
+                ) {
+                    continue;
+                }
+                explorerIndex = candidateIndex;
+                replacementIndex = index;
+                break;
+            }
+            if (replacementIndex >= 0) break;
+        }
+        if (replacementIndex < 0) break;
+        const [explorer] = explorers.splice(explorerIndex, 1);
+        adjustCounts(result[replacementIndex].track, -1);
+        result[replacementIndex] = explorer;
+        adjustCounts(explorer.track, 1);
+        count += 1;
+    }
+    return result;
 }
 
 function rankRecommendationCandidatePool(

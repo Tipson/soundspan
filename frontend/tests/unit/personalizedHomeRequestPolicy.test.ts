@@ -57,3 +57,18 @@ test("personalized cache separates Home and Wave exposure surfaces", () => {
         queryKeys.personalizedHome(12, "for-you", null, "wave"),
     );
 });
+
+test("personalized home request carries coarse client context", () => {
+    const url = new URL(
+        buildPersonalizedHomeFeedUrl(12, "for-you", null, "home", "tab-1", {
+            localHour: 21,
+            timezoneOffsetMinutes: 180,
+            deviceClass: "mobile",
+        }),
+        "https://soundspan.test",
+    );
+
+    assert.equal(url.searchParams.get("localHour"), "21");
+    assert.equal(url.searchParams.get("timezoneOffsetMinutes"), "180");
+    assert.equal(url.searchParams.get("deviceClass"), "mobile");
+});

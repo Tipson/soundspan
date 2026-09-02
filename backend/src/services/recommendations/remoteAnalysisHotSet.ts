@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { Transform, type Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type Bull from "bull";
+import type { Prisma } from "@prisma/client";
 import { config } from "../../config";
 import { prisma } from "../../utils/db";
 import { sanitizeEnrichmentErrorSummary } from "../../utils/enrichmentErrorSummary";
@@ -13,10 +14,14 @@ import { logger } from "../../utils/logger";
 import { redisClient } from "../../utils/redis";
 import type { ScheduleRecommendationHotSetInput } from "./engine";
 import type { RecommendationCandidate } from "./types";
+import { canonicalIdentityResolver } from "./canonicalIdentity";
+import { onlineIdentityEnricher } from "./onlineIdentityEnrichment";
 
 const log = logger.child("RemoteAnalysisHotSet");
 const SPOOL_DIRECTORY = ".soundspan-analysis-spool";
-const MAX_HOT_SET_CANDIDATES = 12;
+const MAX_HOT_SET_CANDIDATES = 48;
+const MAX_HOT_SET_PER_SIGNAL = 20;
+const MAX_REPEAT_SIGNAL_PLAYS = 500;
 const MAX_REMOTE_ASSET_BYTES = 64 * 1024 * 1024;
 const REMOTE_ASSET_DOWNLOAD_DEADLINE_MS = 15 * 60 * 1_000;
 const LEASE_TTL_MS = 2 * 60 * 60 * 1_000;
@@ -96,6 +101,16 @@ interface RemoteAnalysisHotSetDependencies {
         canonicalRecordingIds: string[],
     ) => Promise<ReadonlySet<string>>;
     enqueue: (job: RemoteAnalysisJob, jobId: string) => Promise<void>;
+    loadAccountCandidates?: (
+        userId: string,
+    ) => Promise<RecommendationCandidate[]>;
+    enrichIdentities?: (
+        userId: string,
+        candidates: RecommendationCandidate[],
+    ) => Promise<void>;
+    resolveCanonicalIdentities?: (
+        candidates: RecommendationCandidate[],
+    ) => Promise<RecommendationCandidate[]>;
 }
 
 function remoteIdentity(candidate: RecommendationCandidate): {
@@ -125,6 +140,44 @@ export class RemoteAnalysisHotSetScheduler {
 
     async schedule(input: ScheduleRecommendationHotSetInput): Promise<void> {
         if (!this.dependencies.enabled) return;
+        let accountCandidates: RecommendationCandidate[] = [];
+        if (this.dependencies.loadAccountCandidates) {
+            try {
+                accountCandidates =
+                    await this.dependencies.loadAccountCandidates(input.userId);
+            } catch (error) {
+                log.warn("Account hot-set loading failed", {
+                    userId: input.userId,
+                    error,
+                });
+            }
+        }
+        let prioritizedCandidates = [
+            ...accountCandidates,
+            ...input.candidates,
+        ].slice(0, MAX_HOT_SET_CANDIDATES);
+        try {
+            await this.dependencies.enrichIdentities?.(
+                input.userId,
+                prioritizedCandidates,
+            );
+        } catch (error) {
+            log.warn("Hot-set identity enrichment degraded", {
+                userId: input.userId,
+                error,
+            });
+        }
+        try {
+            prioritizedCandidates =
+                (await this.dependencies.resolveCanonicalIdentities?.(
+                    prioritizedCandidates,
+                )) ?? prioritizedCandidates;
+        } catch (error) {
+            log.warn("Hot-set canonical identity refresh degraded", {
+                userId: input.userId,
+                error,
+            });
+        }
         const unique = new Map<
             string,
             {
@@ -132,7 +185,7 @@ export class RemoteAnalysisHotSetScheduler {
                 identity: NonNullable<ReturnType<typeof remoteIdentity>>;
             }
         >();
-        for (const candidate of input.candidates) {
+        for (const candidate of prioritizedCandidates) {
             const canonicalRecordingId = candidate.canonicalRecordingId;
             const identity = remoteIdentity(candidate);
             if (!canonicalRecordingId || !identity) continue;
@@ -163,6 +216,330 @@ export class RemoteAnalysisHotSetScheduler {
             ),
         );
     }
+}
+
+type HotSetMapping = {
+    canonicalRecordingId: string | null;
+    trackYtMusic: {
+        id: string;
+        videoId: string;
+        title: string;
+        artist: string;
+        album: string;
+        duration: number;
+        thumbnailUrl: string | null;
+    } | null;
+    trackTidal: {
+        id: string;
+        tidalId: number;
+        title: string;
+        artist: string;
+        album: string;
+        duration: number;
+        isrc: string | null;
+    } | null;
+};
+
+function hotSetCandidate(
+    mapping: HotSetMapping,
+    signal: string,
+): RecommendationCandidate | null {
+    const canonicalRecordingId = mapping.canonicalRecordingId;
+    if (!canonicalRecordingId) return null;
+    if (mapping.trackYtMusic) {
+        const track = mapping.trackYtMusic;
+        return {
+            id: `yt:${track.videoId}`,
+            canonicalKey: `canonical:${canonicalRecordingId}`,
+            canonicalRecordingId,
+            title: track.title,
+            duration: track.duration,
+            artist: { id: null, name: track.artist },
+            album: {
+                id: null,
+                title: track.album,
+                coverArt: track.thumbnailUrl,
+            },
+            source: "youtube",
+            provider: { tidalTrackId: null, youtubeVideoId: track.videoId },
+            streamSource: "youtube",
+            youtubeVideoId: track.videoId,
+            candidateSources: [signal],
+            providerPrior: 1,
+        };
+    }
+    if (mapping.trackTidal) {
+        const track = mapping.trackTidal;
+        return {
+            id: `tidal:${track.tidalId}`,
+            canonicalKey: `canonical:${canonicalRecordingId}`,
+            canonicalRecordingId,
+            isrc: track.isrc,
+            title: track.title,
+            duration: track.duration,
+            artist: { id: null, name: track.artist },
+            album: { id: null, title: track.album, coverArt: null },
+            source: "tidal",
+            provider: { tidalTrackId: track.tidalId, youtubeVideoId: null },
+            streamSource: "tidal",
+            tidalTrackId: track.tidalId,
+            candidateSources: [signal],
+            providerPrior: 1,
+        };
+    }
+    return null;
+}
+
+/** Load a bounded online-first analysis set from durable account signals. */
+export async function loadAccountHotSetCandidates(
+    userId: string,
+): Promise<RecommendationCandidate[]> {
+    const signalQueries: Array<{
+        source: string;
+        where: Prisma.TrackMappingWhereInput;
+    }> = [
+        {
+            source: "hot-liked",
+            where: {
+                OR: [
+                    { trackYtMusic: { is: { likedBy: { some: { userId } } } } },
+                    { trackTidal: { is: { likedBy: { some: { userId } } } } },
+                ],
+            },
+        },
+        {
+            source: "hot-wave-seed",
+            where: {
+                OR: [
+                    {
+                        trackYtMusic: {
+                            is: {
+                                plays: {
+                                    some: { userId, playContext: "wave" },
+                                },
+                            },
+                        },
+                    },
+                    {
+                        trackTidal: {
+                            is: {
+                                plays: {
+                                    some: { userId, playContext: "wave" },
+                                },
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            source: "hot-completed",
+            where: {
+                OR: [
+                    {
+                        trackYtMusic: {
+                            is: {
+                                plays: {
+                                    some: {
+                                        userId,
+                                        OR: [
+                                            { outcome: "completed" },
+                                            { completionRatio: { gte: 0.85 } },
+                                        ],
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    {
+                        trackTidal: {
+                            is: {
+                                plays: {
+                                    some: {
+                                        userId,
+                                        OR: [
+                                            { outcome: "completed" },
+                                            { completionRatio: { gte: 0.85 } },
+                                        ],
+                                    },
+                                },
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            source: "hot-playlist",
+            where: {
+                OR: [
+                    {
+                        trackYtMusic: {
+                            is: {
+                                playlistItems: {
+                                    some: { playlist: { userId } },
+                                },
+                            },
+                        },
+                    },
+                    {
+                        trackTidal: {
+                            is: {
+                                playlistItems: {
+                                    some: { playlist: { userId } },
+                                },
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+    ];
+    const batches = await Promise.all(
+        signalQueries.map(async ({ source, where }) => ({
+            source,
+            rows: await prisma.trackMapping.findMany({
+                where: {
+                    stale: false,
+                    canonicalRecordingId: { not: null },
+                    ...where,
+                },
+                orderBy: { createdAt: "desc" },
+                take: MAX_HOT_SET_PER_SIGNAL,
+                select: {
+                    canonicalRecordingId: true,
+                    trackYtMusic: {
+                        select: {
+                            id: true,
+                            videoId: true,
+                            title: true,
+                            artist: true,
+                            album: true,
+                            duration: true,
+                            thumbnailUrl: true,
+                        },
+                    },
+                    trackTidal: {
+                        select: {
+                            id: true,
+                            tidalId: true,
+                            title: true,
+                            artist: true,
+                            album: true,
+                            duration: true,
+                            isrc: true,
+                        },
+                    },
+                },
+            }),
+        })),
+    );
+    const repeatedRows = await loadRepeatedHotSetMappings(userId);
+    batches.push({ source: "hot-repeated", rows: repeatedRows });
+    const unique = new Map<string, RecommendationCandidate>();
+    for (const batch of batches) {
+        for (const row of batch.rows) {
+            const candidate = hotSetCandidate(row, batch.source);
+            if (!candidate?.canonicalRecordingId) continue;
+            if (!unique.has(candidate.canonicalRecordingId)) {
+                unique.set(candidate.canonicalRecordingId, candidate);
+            }
+            if (unique.size >= MAX_HOT_SET_CANDIDATES)
+                return [...unique.values()];
+        }
+    }
+    return [...unique.values()];
+}
+
+async function loadRepeatedHotSetMappings(
+    userId: string,
+): Promise<HotSetMapping[]> {
+    const plays = await prisma.play.findMany({
+        where: {
+            userId,
+            OR: [
+                { trackYtMusicId: { not: null } },
+                { trackTidalId: { not: null } },
+            ],
+        },
+        orderBy: { playedAt: "desc" },
+        take: MAX_REPEAT_SIGNAL_PLAYS,
+        select: { trackYtMusicId: true, trackTidalId: true },
+    });
+    const counts = new Map<string, number>();
+    for (const play of plays) {
+        const identity = play.trackYtMusicId
+            ? `youtube:${play.trackYtMusicId}`
+            : play.trackTidalId
+              ? `tidal:${play.trackTidalId}`
+              : null;
+        if (identity) counts.set(identity, (counts.get(identity) ?? 0) + 1);
+    }
+    const repeated = [...counts.entries()]
+        .filter(([, count]) => count >= 2)
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, MAX_HOT_SET_PER_SIGNAL)
+        .map(([identity]) => identity);
+    const youtubeIds = repeated
+        .filter((identity) => identity.startsWith("youtube:"))
+        .map((identity) => identity.slice("youtube:".length));
+    const tidalIds = repeated
+        .filter((identity) => identity.startsWith("tidal:"))
+        .map((identity) => identity.slice("tidal:".length));
+    if (youtubeIds.length === 0 && tidalIds.length === 0) return [];
+    const rows = await prisma.trackMapping.findMany({
+        where: {
+            stale: false,
+            canonicalRecordingId: { not: null },
+            OR: [
+                ...(youtubeIds.length > 0
+                    ? [{ trackYtMusicId: { in: youtubeIds } }]
+                    : []),
+                ...(tidalIds.length > 0
+                    ? [{ trackTidalId: { in: tidalIds } }]
+                    : []),
+            ],
+        },
+        take: MAX_HOT_SET_PER_SIGNAL,
+        select: {
+            canonicalRecordingId: true,
+            trackYtMusic: {
+                select: {
+                    id: true,
+                    videoId: true,
+                    title: true,
+                    artist: true,
+                    album: true,
+                    duration: true,
+                    thumbnailUrl: true,
+                },
+            },
+            trackTidal: {
+                select: {
+                    id: true,
+                    tidalId: true,
+                    title: true,
+                    artist: true,
+                    album: true,
+                    duration: true,
+                    isrc: true,
+                },
+            },
+        },
+    });
+    const rank = new Map(repeated.map((identity, index) => [identity, index]));
+    return rows.sort((left, right) => {
+        const leftKey = left.trackYtMusic
+            ? `youtube:${left.trackYtMusic.id}`
+            : `tidal:${left.trackTidal?.id ?? ""}`;
+        const rightKey = right.trackYtMusic
+            ? `youtube:${right.trackYtMusic.id}`
+            : `tidal:${right.trackTidal?.id ?? ""}`;
+        return (
+            (rank.get(leftKey) ?? repeated.length) -
+            (rank.get(rightKey) ?? repeated.length)
+        );
+    });
 }
 
 /** Resolve only hidden-spool references; never accepts arbitrary music paths. */
@@ -432,6 +809,29 @@ export const remoteAnalysisHotSetScheduler = new RemoteAnalysisHotSetScheduler({
         config.features.audioAnalysis,
     loadCoveredCanonicalIds: loadRemoteAnalysisCoveredCanonicalIds,
     enqueue: enqueueRemoteAnalysis,
+    loadAccountCandidates: loadAccountHotSetCandidates,
+    enrichIdentities: (userId, candidates) =>
+        onlineIdentityEnricher.enrich(userId, candidates),
+    resolveCanonicalIdentities: (candidates) =>
+        Promise.all(
+            candidates.map(async (candidate) => {
+                try {
+                    const canonical =
+                        await canonicalIdentityResolver.resolve(candidate);
+                    return {
+                        ...candidate,
+                        canonicalRecordingId: canonical.id,
+                        canonicalKey: canonical.canonicalKey,
+                    };
+                } catch (error) {
+                    log.warn("Hot-set canonical identity refresh failed", {
+                        candidateId: candidate.id,
+                        error,
+                    });
+                    return candidate;
+                }
+            }),
+        ),
 });
 
 async function removeSpoolFile(spoolRef: string): Promise<void> {

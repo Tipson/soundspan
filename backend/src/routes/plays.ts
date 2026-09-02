@@ -59,6 +59,13 @@ const playSchema = z
         thumbnailUrl: z.string().trim().min(1).optional(),
         playContext: playContextSchema.optional(),
         waveMode: waveModeSchema.optional(),
+        recommendationGenerationId: z
+            .string()
+            .trim()
+            .min(1)
+            .max(128)
+            .optional(),
+        recommendationSessionId: z.string().trim().min(1).max(128).optional(),
     })
     .superRefine((data, ctx) => {
         const providedIdentifiers = [
@@ -100,10 +107,29 @@ const playEngagementSchema = z
     })
     .strict();
 
-function recommendationContextData(payload: z.infer<typeof playSchema>) {
+async function recommendationContextData(
+    userId: string,
+    payload: z.infer<typeof playSchema>,
+) {
+    const ownedGeneration = payload.recommendationGenerationId
+        ? await prisma.recommendationGeneration.findFirst({
+              where: {
+                  id: payload.recommendationGenerationId,
+                  userId,
+                  served: true,
+              },
+              select: { id: true },
+          })
+        : null;
     return {
         ...(payload.playContext ? { playContext: payload.playContext } : {}),
         ...(payload.waveMode ? { waveMode: payload.waveMode } : {}),
+        ...(ownedGeneration
+            ? { recommendationGenerationId: ownedGeneration.id }
+            : {}),
+        ...(payload.recommendationSessionId
+            ? { recommendationSessionId: payload.recommendationSessionId }
+            : {}),
     };
 }
 
@@ -119,6 +145,7 @@ async function attributeRecommendationPlayback(input: {
     listenedSeconds: number | null;
     completionRatio: number | null;
     outcome: string | null;
+    generationId?: string | null;
 }): Promise<void> {
     try {
         await recommendationExposureStore.attributePlayback({
@@ -128,6 +155,7 @@ async function attributeRecommendationPlayback(input: {
             listenedSeconds: input.listenedSeconds,
             completionRatio: input.completionRatio,
             outcome: input.outcome,
+            generationId: input.generationId,
         });
     } catch (error) {
         logger.warn("Recommendation playback attribution failed", {
@@ -480,6 +508,10 @@ router.post("/", async (req, res) => {
     try {
         const userId = req.user!.id;
         const payload = playSchema.parse(req.body);
+        const recommendationContext = await recommendationContextData(
+            userId,
+            payload,
+        );
 
         if (payload.trackId) {
             // Verify local track exists
@@ -498,7 +530,7 @@ router.post("/", async (req, res) => {
                     trackId: payload.trackId,
                     source: "LIBRARY",
                     playedAt,
-                    ...recommendationContextData(payload),
+                    ...recommendationContext,
                 },
             });
 
@@ -520,6 +552,7 @@ router.post("/", async (req, res) => {
                 listenedSeconds: null,
                 completionRatio: null,
                 outcome: null,
+                generationId: recommendationContext.recommendationGenerationId,
             });
 
             return res.json(play);
@@ -556,7 +589,7 @@ router.post("/", async (req, res) => {
                     trackTidalId: ensured.id,
                     source: "TIDAL",
                     playedAt,
-                    ...recommendationContextData(payload),
+                    ...recommendationContext,
                 },
             });
             forwardScrobbleIsolated({
@@ -581,6 +614,7 @@ router.post("/", async (req, res) => {
                 listenedSeconds: null,
                 completionRatio: null,
                 outcome: null,
+                generationId: recommendationContext.recommendationGenerationId,
             });
             return res.json(play);
         }
@@ -613,7 +647,7 @@ router.post("/", async (req, res) => {
                 trackYtMusicId: ensured.id,
                 source: "YOUTUBE_MUSIC",
                 playedAt,
-                ...recommendationContextData(payload),
+                ...recommendationContext,
             },
         });
 
@@ -640,6 +674,7 @@ router.post("/", async (req, res) => {
             listenedSeconds: null,
             completionRatio: null,
             outcome: null,
+            generationId: recommendationContext.recommendationGenerationId,
         });
 
         return res.json(play);
@@ -744,6 +779,7 @@ router.patch("/:playId/engagement", async (req, res) => {
                 playedAt: true,
                 trackTidal: { select: { tidalId: true } },
                 trackYtMusic: { select: { videoId: true } },
+                recommendationGenerationId: true,
             },
         });
         const identity: RecommendationPlaybackIdentity | null = attributedPlay
@@ -771,6 +807,7 @@ router.patch("/:playId/engagement", async (req, res) => {
                 listenedSeconds: engagement.data.listenedSeconds,
                 completionRatio: engagement.data.completionRatio,
                 outcome: engagement.data.outcome,
+                generationId: attributedPlay.recommendationGenerationId,
             });
         }
         return res.json({ success: true });

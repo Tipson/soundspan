@@ -12,6 +12,7 @@ export interface RecommendationEvaluationExposureSample {
     canonicalKey: string;
     artistKey: string;
     exposedAt: Date;
+    viewedAt?: Date | null;
     playedAt: Date | null;
     listenedSeconds: number | null;
     completionRatio: number | null;
@@ -38,6 +39,45 @@ export interface RecommendationShadowEvaluationRepository {
         since: Date,
         until: Date,
     ): Promise<RecommendationEvaluationGenerationSample[]>;
+    loadDataQuality?(
+        since: Date,
+        until: Date,
+    ): Promise<RecommendationDataQualitySample>;
+}
+
+/** Raw catalog and experiment counts used to report recommendation readiness. */
+export interface RecommendationDataQualitySample {
+    canonicalRecordingCount: number;
+    isrcCount: number;
+    recordingMbidCount: number;
+    fingerprintCount: number;
+    scalarAnalysisCount: number;
+    embeddingCount: number;
+    viewedImpressionCount: number;
+    participatingAccountCount: number;
+}
+
+/** Identity, audio-analysis, and live-experiment coverage for one report. */
+export interface RecommendationDataQualityEvaluation {
+    canonicalRecordingCount: number;
+    identity: {
+        isrcCount: number;
+        isrcCoverageRate: number;
+        recordingMbidCount: number;
+        recordingMbidCoverageRate: number;
+        fingerprintCount: number;
+        fingerprintCoverageRate: number;
+    };
+    analysis: {
+        scalarAnalysisCount: number;
+        scalarAnalysisCoverageRate: number;
+        embeddingCount: number;
+        embeddingCoverageRate: number;
+    };
+    experiment: {
+        viewedImpressionCount: number;
+        participatingAccountCount: number;
+    };
 }
 
 export interface RecommendationEngagementEvaluation {
@@ -106,6 +146,47 @@ export interface RecommendationShadowEvaluationReport {
         meanJaccardOverlap: number;
         meanBaselineCoverage: number;
     };
+    dataQuality: RecommendationDataQualityEvaluation | null;
+}
+
+function coverageRate(count: number, total: number): number {
+    return total === 0 ? 0 : count / total;
+}
+
+function evaluateDataQuality(
+    sample: RecommendationDataQualitySample,
+): RecommendationDataQualityEvaluation {
+    const total = sample.canonicalRecordingCount;
+    return {
+        canonicalRecordingCount: total,
+        identity: {
+            isrcCount: sample.isrcCount,
+            isrcCoverageRate: coverageRate(sample.isrcCount, total),
+            recordingMbidCount: sample.recordingMbidCount,
+            recordingMbidCoverageRate: coverageRate(
+                sample.recordingMbidCount,
+                total,
+            ),
+            fingerprintCount: sample.fingerprintCount,
+            fingerprintCoverageRate: coverageRate(
+                sample.fingerprintCount,
+                total,
+            ),
+        },
+        analysis: {
+            scalarAnalysisCount: sample.scalarAnalysisCount,
+            scalarAnalysisCoverageRate: coverageRate(
+                sample.scalarAnalysisCount,
+                total,
+            ),
+            embeddingCount: sample.embeddingCount,
+            embeddingCoverageRate: coverageRate(sample.embeddingCount, total),
+        },
+        experiment: {
+            viewedImpressionCount: sample.viewedImpressionCount,
+            participatingAccountCount: sample.participatingAccountCount,
+        },
+    };
 }
 
 function mean(values: readonly number[]): number {
@@ -140,6 +221,12 @@ function isAttributed(
         exposure.completionRatio !== null ||
         typeof exposure.listenedSeconds === "number",
     );
+}
+
+function isViewed(exposure: RecommendationEvaluationExposureSample): boolean {
+    // Undefined keeps compatibility with historical fixtures/rows predating
+    // explicit impressions. Prisma runtime rows always return Date or null.
+    return exposure.viewedAt === undefined || exposure.viewedAt !== null;
 }
 
 function isCompleted(
@@ -241,7 +328,9 @@ function artistEvaluation(
 
 function exposureTimestamp(row: EvaluationExposureRow): number {
     return (
-        row.exposure.exposedAt?.getTime() ?? row.generation.createdAt.getTime()
+        row.exposure.viewedAt?.getTime() ??
+        row.exposure.exposedAt?.getTime() ??
+        row.generation.createdAt.getTime()
     );
 }
 
@@ -255,7 +344,7 @@ function repeatEvaluation(
     >();
     for (const row of exposureRows(
         allGenerations.filter((generation) => generation.served),
-    )) {
+    ).filter(({ exposure }) => isViewed(exposure))) {
         const key = `${row.generation.userId}\u0000${row.exposure.canonicalKey}`;
         const current = servedHistory.get(key) ?? [];
         current.push({
@@ -334,7 +423,8 @@ function aggregateAlgorithm(
     );
     const servedExposures = generations
         .filter((generation) => generation.served)
-        .flatMap((generation) => generation.exposures);
+        .flatMap((generation) => generation.exposures)
+        .filter(isViewed);
     const attributed = servedExposures.filter(isAttributed);
     const completionRatios = servedExposures.flatMap((exposure) =>
         exposure.completionRatio === null ? [] : [exposure.completionRatio],
@@ -361,7 +451,9 @@ function aggregateAlgorithm(
                           ? null
                           : mean(completionRatios),
               };
-    const rows = exposureRows(generations);
+    const rows = exposureRows(generations).filter(
+        ({ generation, exposure }) => !generation.served || isViewed(exposure),
+    );
     return {
         generationCount: generations.length,
         servedGenerationCount: generations.filter(
@@ -498,6 +590,14 @@ export class RecommendationShadowEvaluationService {
         const hybrid = reportGenerations.filter(
             (generation) => generation.algorithm === "hybrid-v2",
         );
+        const dataQuality = this.repository.loadDataQuality
+            ? evaluateDataQuality(
+                  await this.repository.loadDataQuality(
+                      window.since,
+                      window.until,
+                  ),
+              )
+            : null;
         return {
             window: { since: window.since, until: window.until },
             algorithms: {
@@ -505,6 +605,7 @@ export class RecommendationShadowEvaluationService {
                 hybrid: aggregateAlgorithm(hybrid, generations),
             },
             pairedShadow: evaluatePairs(baseline, hybrid),
+            dataQuality,
         };
     }
 }
@@ -532,6 +633,7 @@ export const recommendationShadowEvaluation =
                             canonicalKey: true,
                             artistKey: true,
                             exposedAt: true,
+                            viewedAt: true,
                             playedAt: true,
                             listenedSeconds: true,
                             completionRatio: true,
@@ -540,4 +642,51 @@ export const recommendationShadowEvaluation =
                     },
                 },
             }),
+        loadDataQuality: async (since, until) => {
+            const [
+                canonicalRecordingCount,
+                isrcCount,
+                recordingMbidCount,
+                fingerprintCount,
+                scalarAnalysisCount,
+                embeddingCount,
+                viewedImpressionCount,
+                participatingAccounts,
+            ] = await Promise.all([
+                prisma.canonicalRecording.count(),
+                prisma.canonicalRecording.count({
+                    where: { isrc: { not: null } },
+                }),
+                prisma.canonicalRecording.count({
+                    where: { recordingMbid: { not: null } },
+                }),
+                prisma.canonicalRecording.count({
+                    where: { fingerprint: { not: null } },
+                }),
+                prisma.canonicalRecording.count({
+                    where: { analysisStatus: "completed" },
+                }),
+                prisma.canonicalRecording.count({
+                    where: { embeddings: { some: {} } },
+                }),
+                prisma.recommendationExposure.count({
+                    where: { viewedAt: { gte: since, lt: until } },
+                }),
+                prisma.recommendationExposure.findMany({
+                    where: { viewedAt: { gte: since, lt: until } },
+                    distinct: ["userId"],
+                    select: { userId: true },
+                }),
+            ]);
+            return {
+                canonicalRecordingCount,
+                isrcCount,
+                recordingMbidCount,
+                fingerprintCount,
+                scalarAnalysisCount,
+                embeddingCount,
+                viewedImpressionCount,
+                participatingAccountCount: participatingAccounts.length,
+            };
+        },
     });

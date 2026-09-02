@@ -6,7 +6,8 @@ import threading
 from collections.abc import Callable
 from typing import Protocol
 
-from acoustid_backfill import AcoustIDBackfill, Database
+from acoustid_backfill import Database
+from canonical_acoustid_backfill import CombinedAcoustIDBackfill
 
 from services.common.logging_utils import configure_service_logger
 
@@ -51,7 +52,7 @@ class AcoustIDLookupWorker:
         api_key: str,
         *,
         database_factory: DatabaseFactory = _create_database,
-        backfill_factory: BackfillFactory = AcoustIDBackfill,
+        backfill_factory: BackfillFactory = CombinedAcoustIDBackfill,
         cadence_seconds: float = DEFAULT_LOOKUP_CADENCE_SECONDS,
     ) -> None:
         self._database_url = database_url

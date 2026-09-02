@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { logger } from "../../utils/logger";
 import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
@@ -29,6 +30,10 @@ export interface CanonicalRecommendationIdentity {
 export interface RecommendationTasteContext {
     positiveCentroids: readonly (readonly number[])[];
     negativeCentroids: readonly (readonly number[])[];
+    sessionPositiveEmbedding?: readonly number[] | null;
+    sessionNegativeEmbedding?: readonly number[] | null;
+    sessionSignalCount?: number;
+    contextCentroids?: readonly (readonly number[])[];
     moodEmbedding?: readonly number[] | null;
     degradedSources?: readonly string[];
 }
@@ -44,6 +49,7 @@ export interface RecordEngineGenerationInput {
     served: boolean;
     degradedSources: string[];
     latencyMs: number;
+    context?: Record<string, unknown>;
     recommendations: ScoredRecommendation[];
 }
 
@@ -56,6 +62,8 @@ export interface ScheduleRecommendationHotSetInput {
 
 export interface RecommendationEngineDependencies {
     mode: RecommendationEngineMode;
+    hybridRolloutPercent: number;
+    explorationRate: number;
     loadCandidates: (
         request: RecommendRequest,
     ) => Promise<RecommendationCandidateBatch>;
@@ -77,6 +85,31 @@ export interface RecommendationEngineDependencies {
     recordGeneration: (input: RecordEngineGenerationInput) => Promise<string>;
     scheduleHotSet: (input: ScheduleRecommendationHotSetInput) => Promise<void>;
     now: () => Date;
+}
+
+function rolloutBucket(userId: string): number {
+    const digest = createHash("sha256")
+        .update(`soundspan:hybrid-v2:${userId}`)
+        .digest();
+    return digest.readUInt32BE(0) / 0x1_0000_0000;
+}
+
+function requestContext(request: RecommendRequest): Record<string, unknown> {
+    const localHour = request.context?.localHour;
+    const timeBucket =
+        localHour === undefined
+            ? undefined
+            : localHour < 6
+              ? "night"
+              : localHour < 12
+                ? "morning"
+                : localHour < 18
+                  ? "afternoon"
+                  : "evening";
+    return {
+        ...request.context,
+        ...(timeBucket ? { timeBucket } : {}),
+    };
 }
 
 export interface RecommendationEngineMetricsRecorder {
@@ -278,7 +311,13 @@ export class RecommendationEngine {
                 exposures: hybridContext.exposures,
                 positiveCentroids: hybridContext.taste.positiveCentroids,
                 negativeCentroids: hybridContext.taste.negativeCentroids,
+                sessionPositiveEmbedding:
+                    hybridContext.taste.sessionPositiveEmbedding,
+                sessionNegativeEmbedding:
+                    hybridContext.taste.sessionNegativeEmbedding,
+                contextCentroids: hybridContext.taste.contextCentroids,
                 moodEmbedding: hybridContext.taste.moodEmbedding,
+                explorationRate: this.dependencies.explorationRate,
             },
         );
 
@@ -315,18 +354,42 @@ export class RecommendationEngine {
             };
         }
 
+        const normalizedRolloutPercent = Math.max(
+            0,
+            Math.min(100, this.dependencies.hybridRolloutPercent),
+        );
+        const servesHybrid =
+            rolloutBucket(request.userId) * 100 < normalizedRolloutPercent;
+        const servedAlgorithm = servesHybrid ? "hybrid-v2" : "baseline-v1";
+        const servedRecommendations = servesHybrid ? hybrid : baseline;
         const generationId = await this.recordGeneration({
             request,
             cursor,
-            algorithm: "hybrid-v2",
+            algorithm: servedAlgorithm,
             served: true,
             degradedSources,
-            recommendations: hybrid,
+            recommendations: servedRecommendations,
             startedAt,
         });
+        if (normalizedRolloutPercent < 100) {
+            superviseBackground(
+                "paired rollout generation persistence",
+                { userId: request.userId, sessionId: request.sessionId },
+                () =>
+                    this.recordGeneration({
+                        request,
+                        cursor,
+                        algorithm: servesHybrid ? "baseline-v1" : "hybrid-v2",
+                        served: false,
+                        degradedSources,
+                        recommendations: servesHybrid ? baseline : hybrid,
+                        startedAt,
+                    }),
+            );
+        }
         this.scheduleHotSet(request, hybrid);
         return {
-            tracks: hybrid.map(({ track }) => track),
+            tracks: servedRecommendations.map(({ track }) => track),
             nextCursor: loaded.nextCursor,
             generationId,
             degradedSources,
@@ -432,6 +495,7 @@ export class RecommendationEngine {
             served: input.served,
             degradedSources: [...input.degradedSources],
             latencyMs,
+            context: requestContext(input.request),
             recommendations: input.recommendations,
         });
         try {

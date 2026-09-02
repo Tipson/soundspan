@@ -248,6 +248,8 @@ describe("config module", () => {
     it("uses safe hybrid recommendation and remote-analysis defaults", async () => {
         const { config } = await loadConfigModule({
             RECOMMENDATION_ENGINE_MODE: undefined,
+            RECOMMENDATION_HYBRID_ROLLOUT_PERCENT: undefined,
+            RECOMMENDATION_EXPLORATION_PERCENT: undefined,
             REMOTE_ANALYSIS_ENABLED: undefined,
             REMOTE_ANALYSIS_DAILY_BUDGET: undefined,
             REMOTE_ANALYSIS_CONCURRENCY: undefined,
@@ -255,6 +257,8 @@ describe("config module", () => {
 
         expect(config.recommendations).toEqual({
             mode: "shadow",
+            hybridRolloutPercent: 0,
+            explorationRate: 0.1,
             remoteAnalysisEnabled: false,
             remoteAnalysisDailyBudget: 100,
             remoteAnalysisConcurrency: 1,
@@ -264,6 +268,8 @@ describe("config module", () => {
     it("parses explicit hybrid recommendation controls", async () => {
         const { config } = await loadConfigModule({
             RECOMMENDATION_ENGINE_MODE: "active",
+            RECOMMENDATION_HYBRID_ROLLOUT_PERCENT: "25",
+            RECOMMENDATION_EXPLORATION_PERCENT: "15",
             REMOTE_ANALYSIS_ENABLED: "true",
             REMOTE_ANALYSIS_DAILY_BUDGET: "250",
             REMOTE_ANALYSIS_CONCURRENCY: "2",
@@ -271,6 +277,8 @@ describe("config module", () => {
 
         expect(config.recommendations).toEqual({
             mode: "active",
+            hybridRolloutPercent: 25,
+            explorationRate: 0.15,
             remoteAnalysisEnabled: true,
             remoteAnalysisDailyBudget: 250,
             remoteAnalysisConcurrency: 2,
@@ -279,6 +287,10 @@ describe("config module", () => {
 
     it.each([
         ["RECOMMENDATION_ENGINE_MODE", "experimental"],
+        ["RECOMMENDATION_HYBRID_ROLLOUT_PERCENT", "101"],
+        ["RECOMMENDATION_HYBRID_ROLLOUT_PERCENT", "-1"],
+        ["RECOMMENDATION_EXPLORATION_PERCENT", "31"],
+        ["RECOMMENDATION_EXPLORATION_PERCENT", "-1"],
         ["REMOTE_ANALYSIS_ENABLED", "yes"],
         ["REMOTE_ANALYSIS_DAILY_BUDGET", "0"],
         ["REMOTE_ANALYSIS_DAILY_BUDGET", "10001"],

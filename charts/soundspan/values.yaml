@@ -810,6 +810,10 @@ config:
   recommendations:
     # -- Recommendation ranker: baseline, shadow, or active.
     engineMode: null
+    # -- Stable percentage of accounts served by Hybrid v2 in active mode (0..100).
+    hybridRolloutPercent: null
+    # -- Percentage of ranked slots reserved for unfamiliar discovery (0..30).
+    explorationPercent: null
     # -- Admit remote provider tracks to the asynchronous analysis hot set.
     remoteAnalysisEnabled: null
     # -- Maximum new canonical recordings admitted per UTC day (1..10000).

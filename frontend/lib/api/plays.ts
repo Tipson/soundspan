@@ -18,6 +18,8 @@ export type PlayWaveMode = "for-you" | "new" | "familiar";
 export interface PlayRecommendationContext {
     playContext?: PlayContext;
     waveMode?: PlayWaveMode;
+    recommendationGenerationId?: string;
+    recommendationSessionId?: string;
 }
 
 /** Typed payload accepted by the play-history endpoint. */

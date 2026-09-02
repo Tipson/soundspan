@@ -118,7 +118,7 @@ describe("default canonical identity persistence", () => {
         expect(mockCanonicalUpsert).toHaveBeenCalledWith(
             expect.objectContaining({
                 create: expect.objectContaining({
-                    canonicalKey: "meta:artist:song:0",
+                    canonicalKey: "meta:artist:song deluxe edition:0",
                     duration: 0,
                 }),
             }),
@@ -262,11 +262,11 @@ describe("default canonical identity persistence", () => {
                     duration: 184,
                 }),
             ),
-        ).toBe("meta:artist s name:song:183");
+        ).toBe("meta:artist s name:song 2024 remastered:183");
         expect(
             buildCanonicalRecordingKey(
                 candidate("library", { title: "Song (Live)", duration: -10 }),
             ),
-        ).toBe("meta:artist:song:0");
+        ).toBe("meta:artist:song live:0");
     });
 });

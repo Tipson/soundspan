@@ -2,6 +2,7 @@ const mockQueryRaw = jest.fn();
 const mockDislikedFindMany = jest.fn();
 const mockMappingFindMany = jest.fn();
 const mockMappingFindFirst = jest.fn();
+const mockPlayFindMany = jest.fn();
 
 jest.mock("../../../utils/db", () => ({
     prisma: {
@@ -11,6 +12,7 @@ jest.mock("../../../utils/db", () => ({
             findMany: mockMappingFindMany,
             findFirst: mockMappingFindFirst,
         },
+        play: { findMany: mockPlayFindMany },
     },
 }));
 
@@ -56,6 +58,7 @@ describe("default recommendation feature-store persistence", () => {
         mockDislikedFindMany.mockReset();
         mockMappingFindMany.mockReset();
         mockMappingFindFirst.mockReset();
+        mockPlayFindMany.mockReset();
     });
 
     it("returns untouched candidates when canonical identities are absent", async () => {
@@ -167,6 +170,48 @@ describe("default recommendation feature-store persistence", () => {
         expect(result.positiveCentroids.length).toBeGreaterThan(0);
         expect(result.negativeCentroids.length).toBeGreaterThan(0);
         expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it("builds the fast session profile from session-tagged plays", async () => {
+        mockQueryRaw
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([rawFeature("canonical-session", "[1,0]")]);
+        mockPlayFindMany.mockResolvedValue([
+            {
+                trackId: null,
+                trackTidalId: null,
+                trackYtMusicId: "youtube-row-1",
+                playedAt: new Date("2026-09-01T11:59:00Z"),
+                outcome: "completed",
+                completionRatio: 1,
+                listenedSeconds: 180,
+            },
+        ]);
+        mockMappingFindMany.mockResolvedValue([
+            {
+                trackId: null,
+                trackTidalId: null,
+                trackYtMusicId: "youtube-row-1",
+                canonicalRecordingId: "canonical-session",
+            },
+        ]);
+
+        const result = await recommendationFeatureStore.loadTasteContext(
+            "alice",
+            { sessionId: "session-a" },
+        );
+
+        expect(mockPlayFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: {
+                    userId: "alice",
+                    recommendationSessionId: "session-a",
+                },
+                take: 30,
+            }),
+        );
+        expect(result.sessionSignalCount).toBe(1);
+        expect(result.sessionPositiveEmbedding).toEqual([1, 0]);
     });
 
     it("returns no canonical dislikes without negative feedback", async () => {

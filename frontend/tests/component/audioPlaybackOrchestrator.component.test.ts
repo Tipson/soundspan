@@ -3583,10 +3583,23 @@ test("remote Wave completion sends one contextual engagement update", async () =
     await flushAsync(12);
 
     assert.equal(apiCalls.logPlay.length, 1);
-    assert.deepEqual(apiCalls.logPlay[0]?.context, {
-        playContext: "wave",
-        waveMode: "new",
-    });
+    const loggedContext = apiCalls.logPlay[0]?.context;
+    const recommendationSessionId = loggedContext?.recommendationSessionId;
+    assert.ok(typeof recommendationSessionId === "string");
+    assert.match(
+        recommendationSessionId,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    assert.deepEqual(
+        {
+            playContext: loggedContext?.playContext,
+            waveMode: loggedContext?.waveMode,
+        },
+        {
+            playContext: "wave",
+            waveMode: "new",
+        },
+    );
     assert.deepEqual(apiCalls.updatePlayEngagement, [
         {
             playId: "play-1",

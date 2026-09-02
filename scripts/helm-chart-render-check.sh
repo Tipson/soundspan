@@ -266,6 +266,8 @@ for deployment_name in "$RELEASE_NAME" "${RELEASE_NAME}-backend" "${RELEASE_NAME
   fi
   for env_name in \
     RECOMMENDATION_ENGINE_MODE \
+    RECOMMENDATION_HYBRID_ROLLOUT_PERCENT \
+    RECOMMENDATION_EXPLORATION_PERCENT \
     REMOTE_ANALYSIS_ENABLED \
     REMOTE_ANALYSIS_DAILY_BUDGET \
     REMOTE_ANALYSIS_CONCURRENCY; do
@@ -276,6 +278,8 @@ done
 echo "[CHECK] render hybrid recommendation controls across AIO and individual workloads"
 helm template "$RELEASE_NAME" "$CHART_PATH" \
   --set-string config.recommendations.engineMode=active \
+  --set config.recommendations.hybridRolloutPercent=25 \
+  --set config.recommendations.explorationPercent=10 \
   --set config.recommendations.remoteAnalysisEnabled=true \
   --set config.recommendations.remoteAnalysisDailyBudget=250 \
   --set config.recommendations.remoteAnalysisConcurrency=2 \
@@ -285,6 +289,8 @@ helm template "$RELEASE_NAME" "$CHART_PATH" \
   --set backendWorker.enabled=true \
   --set audioAnalyzer.enabled=true \
   --set-string config.recommendations.engineMode=active \
+  --set config.recommendations.hybridRolloutPercent=25 \
+  --set config.recommendations.explorationPercent=10 \
   --set config.recommendations.remoteAnalysisEnabled=true \
   --set config.recommendations.remoteAnalysisDailyBudget=250 \
   --set config.recommendations.remoteAnalysisConcurrency=2 \
@@ -296,6 +302,8 @@ for deployment_name in "$RELEASE_NAME" "${RELEASE_NAME}-backend" "${RELEASE_NAME
     manifest_file="$tmp_recommendations_individual"
   fi
   assert_deployment_env_value "$deployment_name" "RECOMMENDATION_ENGINE_MODE" "active" "$manifest_file"
+  assert_deployment_env_value "$deployment_name" "RECOMMENDATION_HYBRID_ROLLOUT_PERCENT" "25" "$manifest_file"
+  assert_deployment_env_value "$deployment_name" "RECOMMENDATION_EXPLORATION_PERCENT" "10" "$manifest_file"
   assert_deployment_env_value "$deployment_name" "REMOTE_ANALYSIS_ENABLED" "true" "$manifest_file"
   assert_deployment_env_value "$deployment_name" "REMOTE_ANALYSIS_DAILY_BUDGET" "250" "$manifest_file"
   assert_deployment_env_value "$deployment_name" "REMOTE_ANALYSIS_CONCURRENCY" "2" "$manifest_file"

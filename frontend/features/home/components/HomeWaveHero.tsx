@@ -15,6 +15,9 @@ import type {
     PersonalizedTrack,
 } from "../types";
 import { ru } from "@/lib/i18n/ru";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
+import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
+import { recommendationTrackKey } from "../recommendationIdentity";
 
 interface HomeWaveHeroProps {
     personalizedFeed: PersonalizedHomeFeed | null;
@@ -46,7 +49,7 @@ function balancedUniqueTracks(
             while (positions[sourceIndex] < source.length) {
                 const track = source[positions[sourceIndex]];
                 positions[sourceIndex] += 1;
-                const key = track.youtubeVideoId || track.id;
+                const key = recommendationTrackKey(track);
                 if (seen.has(key)) continue;
                 seen.add(key);
                 result.push(track);
@@ -79,10 +82,28 @@ export function HomeWaveHero({
             balancedUniqueTracks(personalizedFeed?.shelves, waveMode, waveMood),
         [personalizedFeed?.shelves, waveMode, waveMood],
     );
-    const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
+    const generationId = personalizedFeed?.generationId;
+    const queue = useMemo(
+        () =>
+            tracks.map((track) =>
+                toProviderPlaybackTrack(track, {
+                    generationId,
+                    sessionId: getRecommendationSessionId(),
+                }),
+            ),
+        [generationId, tracks],
+    );
     const focusTrack = useMemo(
         () => tracks.find((track) => track.album.coverArt) ?? tracks[0] ?? null,
         [tracks],
+    );
+    const visibleTracks = useMemo(
+        () => (focusTrack ? [focusTrack] : []),
+        [focusTrack],
+    );
+    const impressionRef = useRecommendationImpressions(
+        generationId,
+        visibleTracks,
     );
     const focusCoverUrl = focusTrack?.album.coverArt
         ? api.getCoverArtUrl(focusTrack.album.coverArt, 720)
@@ -115,6 +136,10 @@ export function HomeWaveHero({
 
     return (
         <section
+            ref={impressionRef}
+            data-recommendation-track-key={
+                focusTrack ? recommendationTrackKey(focusTrack) : undefined
+            }
             data-home-wave-layout="editorial-wave"
             aria-labelledby="home-wave-title"
             className="group relative isolate min-h-[16.25rem] overflow-hidden rounded-[1.75rem] border border-white/[0.08] bg-surface-raised shadow-[0_28px_90px_rgba(0,0,0,0.26)] lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none"

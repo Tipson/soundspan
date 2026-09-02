@@ -12,6 +12,7 @@ import { PersonalizedMixCard } from "./PersonalizedMixCard";
 import { SectionHeader } from "./SectionHeader";
 import { StaticPlaylistCard } from "./StaticPlaylistCard";
 import { pluralRu, ru } from "@/lib/i18n/ru";
+import { recommendationTrackKey } from "../recommendationIdentity";
 
 const MAX_PERSONAL_MIX_TRACKS = 12;
 const MAX_HOME_MADE_CARDS = 5;
@@ -35,7 +36,7 @@ interface HomeMadeForYouProps {
 function uniqueTracks(tracks: PersonalizedTrack[]): PersonalizedTrack[] {
     const seen = new Set<string>();
     return tracks.filter((track) => {
-        const key = track.youtubeVideoId || track.id;
+        const key = recommendationTrackKey(track);
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -59,7 +60,7 @@ function roundRobinTracks(
             ) {
                 const track = source[positions[sourceIndex]];
                 positions[sourceIndex] += 1;
-                const key = track.youtubeVideoId || track.id;
+                const key = recommendationTrackKey(track);
                 if (seen.has(key)) continue;
                 seen.add(key);
                 result.push(track);
@@ -155,7 +156,7 @@ export function buildHomePersonalMixes(
             while (positions[recipeIndex] < recipe.candidates.length) {
                 const candidate = recipe.candidates[positions[recipeIndex]];
                 positions[recipeIndex] += 1;
-                const identity = candidate.youtubeVideoId || candidate.id;
+                const identity = recommendationTrackKey(candidate);
                 if (assigned.has(identity)) continue;
                 assigned.add(identity);
                 target.tracks.push(candidate);
@@ -300,6 +301,7 @@ export function HomeMadeForYou({
                             tracks={mix.tracks}
                             tone={mix.tone}
                             index={index}
+                            generationId={personalizedFeed?.generationId}
                         />
                     </div>
                 ))}

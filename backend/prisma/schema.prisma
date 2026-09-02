@@ -659,29 +659,34 @@ model TranscodedFile {
 }
 
 model Play {
-  id                  String        @id @default(cuid())
-  userId              String
-  trackId             String?
-  trackTidalId        String?
-  trackYtMusicId      String?
-  playedAt            DateTime      @default(now())
-  source              ListenSource  @default(LIBRARY)
-  listenedSeconds     Float?
-  completionRatio     Float?
-  outcome             String?
-  playContext         String?
-  waveMode            String?
-  engagementUpdatedAt DateTime?
-  track               Track?        @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  trackTidal          TrackTidal?   @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
-  trackYtMusic        TrackYtMusic? @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
-  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                         String                    @id @default(cuid())
+  userId                     String
+  trackId                    String?
+  trackTidalId               String?
+  trackYtMusicId             String?
+  playedAt                   DateTime                  @default(now())
+  source                     ListenSource              @default(LIBRARY)
+  listenedSeconds            Float?
+  completionRatio            Float?
+  outcome                    String?
+  playContext                String?
+  waveMode                   String?
+  engagementUpdatedAt        DateTime?
+  recommendationGenerationId String?
+  recommendationSessionId    String?
+  track                      Track?                    @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  trackTidal                 TrackTidal?               @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
+  trackYtMusic               TrackYtMusic?             @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  user                       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recommendationGeneration   RecommendationGeneration? @relation(fields: [recommendationGenerationId], references: [id], onDelete: SetNull)
 
   @@index([userId, playedAt])
   @@index([trackId])
   @@index([trackTidalId])
   @@index([trackYtMusicId])
   @@index([source])
+  @@index([recommendationGenerationId])
+  @@index([userId, recommendationSessionId, playedAt])
 }
 
 model Playlist {
@@ -1607,43 +1612,51 @@ model TrackMapping {
 /// Provider-neutral identity and shared analysis for one recording. Account
 /// behavior never lives here; all users reuse these immutable audio features.
 model CanonicalRecording {
-  id                  String                        @id @default(cuid())
-  canonicalKey        String                        @unique
-  recordingMbid       String?                       @unique
-  isrc                String?
-  fingerprint         String?
-  title               String
-  artist              String
-  duration            Int
-  bpm                 Float?
-  key                 String?
-  energy              Float?
-  loudness            Float?
-  valence             Float?
-  danceability        Float?
-  arousal             Float?
-  instrumentalness    Float?
-  acousticness        Float?
-  speechiness         Float?
-  moodTags            String[]
-  essentiaGenres      String[]
-  analysisStatus      String                        @default("pending")
-  analysisVersion     String?
-  analyzedAt          DateTime?
-  analysisError       String?
-  embeddingStatus     String                        @default("pending")
-  embeddingVersion    String?
-  embeddingAnalyzedAt DateTime?
-  embeddingError      String?
-  createdAt           DateTime                      @default(now())
-  updatedAt           DateTime                      @updatedAt
-  mappings            TrackMapping[]
-  embeddings          CanonicalRecordingEmbedding[]
-  analysisLeases      AnalysisAssetLease[]
-  exposures           RecommendationExposure[]
+  id                       String                        @id @default(cuid())
+  canonicalKey             String                        @unique
+  recordingMbid            String?                       @unique
+  isrc                     String?
+  fingerprint              String?
+  identitySource           String                        @default("metadata")
+  identityConfidence       Float                         @default(0.5)
+  identityVersion          Int                           @default(1)
+  identityLookupStatus     String                        @default("pending")
+  identityLookupRetryCount Int                           @default(0)
+  identityLookupError      String?
+  identityLookupUpdatedAt  DateTime?
+  title                    String
+  artist                   String
+  duration                 Int
+  bpm                      Float?
+  key                      String?
+  energy                   Float?
+  loudness                 Float?
+  valence                  Float?
+  danceability             Float?
+  arousal                  Float?
+  instrumentalness         Float?
+  acousticness             Float?
+  speechiness              Float?
+  moodTags                 String[]
+  essentiaGenres           String[]
+  analysisStatus           String                        @default("pending")
+  analysisVersion          String?
+  analyzedAt               DateTime?
+  analysisError            String?
+  embeddingStatus          String                        @default("pending")
+  embeddingVersion         String?
+  embeddingAnalyzedAt      DateTime?
+  embeddingError           String?
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+  mappings                 TrackMapping[]
+  embeddings               CanonicalRecordingEmbedding[]
+  analysisLeases           AnalysisAssetLease[]
+  exposures                RecommendationExposure[]
 
   @@index([isrc])
-  @@index([fingerprint])
+  @@index([fingerprint], type: Hash)
+  @@index([identityLookupStatus, identityLookupUpdatedAt])
   @@index([analysisStatus, updatedAt])
   @@index([embeddingStatus, embeddingAnalyzedAt])
 }
@@ -1675,9 +1688,11 @@ model RecommendationGeneration {
   served          Boolean                  @default(true)
   degradedSources String[]
   latencyMs       Int
+  context         Json?
   createdAt       DateTime                 @default(now())
   user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   exposures       RecommendationExposure[]
+  plays           Play[]
 
   @@index([userId, createdAt])
   @@index([algorithm, served, createdAt])
@@ -1698,6 +1713,7 @@ model RecommendationExposure {
   position             Int
   score                Float?
   exposedAt            DateTime                 @default(now())
+  viewedAt             DateTime?
   playedAt             DateTime?
   listenedSeconds      Float?
   completionRatio      Float?
@@ -1708,6 +1724,7 @@ model RecommendationExposure {
 
   @@unique([generationId, provider, providerTrackId])
   @@index([userId, exposedAt])
+  @@index([userId, viewedAt])
   @@index([userId, canonicalKey, exposedAt])
   @@index([userId, artistKey, exposedAt])
   @@index([userId, provider, providerTrackId, exposedAt])

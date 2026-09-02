@@ -338,4 +338,128 @@ describe("recommendation ranker v2", () => {
             "yt:opposed",
         ]);
     });
+
+    it("reacts strongly to the latest session profile", () => {
+        const aligned = candidate("aligned", "artist-a", {
+            embedding: [1, 0],
+            providerPrior: 0.5,
+        });
+        const staleTaste = candidate("stale", "artist-b", {
+            embedding: [0, 1],
+            providerPrior: 1.5,
+        });
+        const ranked = rankRecommendationCandidates([staleTaste, aligned], {
+            now,
+            limit: 2,
+            sessionId: "session-fast-profile",
+            direction: "for-you",
+            mood: null,
+            dislikedCanonicalKeys: new Set(),
+            exposures: [],
+            positiveCentroids: [],
+            negativeCentroids: [],
+            sessionPositiveEmbedding: [1, 0],
+        });
+
+        expect(ranked[0].track.id).toBe("yt:aligned");
+    });
+
+    it("reserves an explicit bounded slot for unfamiliar discovery", () => {
+        const familiar = Array.from({ length: 5 }, (_, index) =>
+            candidate(`familiar-${index}`, `artist-${index}`, {
+                providerPrior: 10 - index,
+                accountAffinity: 1,
+                lane: "quickPicks",
+            }),
+        );
+        const explorer = candidate("explore", "new-artist", {
+            providerPrior: 0.01,
+            accountAffinity: 0,
+            lane: "discovery",
+        });
+        const ranked = rankRecommendationCandidates([...familiar, explorer], {
+            now,
+            limit: 4,
+            sessionId: "session-explicit-exploration",
+            direction: "for-you",
+            mood: null,
+            dislikedCanonicalKeys: new Set(),
+            exposures: [],
+            positiveCentroids: [],
+            negativeCentroids: [],
+            explorationRate: 0.25,
+        });
+
+        expect(ranked).toHaveLength(4);
+        const explored = ranked.find(
+            (entry) => entry.track.id === "yt:explore",
+        );
+        expect(explored).toBeDefined();
+        expect(explored?.track.candidateSources).toContain("exploration");
+    });
+
+    it("keeps exploration canonically unique and within artist caps", () => {
+        const familiar = Array.from({ length: 6 }, (_, index) =>
+            candidate(`familiar-${index}`, `artist-${index}`, {
+                providerPrior: 10 - index,
+                accountAffinity: 1,
+                lane: "quickPicks",
+            }),
+        );
+        const blockedArtist = [
+            candidate("known-a", "blocked-artist", {
+                providerPrior: 20,
+                accountAffinity: 1,
+                lane: "quickPicks",
+            }),
+            candidate("known-b", "blocked-artist", {
+                providerPrior: 19,
+                accountAffinity: 1,
+                lane: "quickPicks",
+            }),
+        ];
+        const duplicateExplorer = candidate("duplicate", "blocked-artist", {
+            providerPrior: 0.2,
+            accountAffinity: 0,
+            lane: "discovery",
+        });
+        const allowedExplorer = candidate("allowed", "new-artist", {
+            providerPrior: 0.1,
+            accountAffinity: 0,
+            lane: "discovery",
+        });
+        const ranked = rankRecommendationCandidates(
+            [
+                ...blockedArtist,
+                ...familiar,
+                duplicateExplorer,
+                { ...duplicateExplorer },
+                allowedExplorer,
+            ],
+            {
+                now,
+                limit: 8,
+                sessionId: "session-safe-exploration",
+                direction: "for-you",
+                mood: null,
+                dislikedCanonicalKeys: new Set(),
+                exposures: [],
+                positiveCentroids: [],
+                negativeCentroids: [],
+                explorationRate: 0.3,
+            },
+        );
+
+        expect(
+            ranked.filter(
+                (entry) => entry.track.artist.name === "blocked-artist",
+            ),
+        ).toHaveLength(2);
+        expect(
+            new Set(ranked.map((entry) => entry.track.canonicalKey)).size,
+        ).toBe(ranked.length);
+        expect(ranked.some((entry) => entry.track.id === "yt:allowed")).toBe(
+            true,
+        );
+    });
 });

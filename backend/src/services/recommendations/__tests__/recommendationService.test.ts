@@ -7,6 +7,8 @@ describe("unified recommendation compatibility facade", () => {
         const scheduleHotSet = jest.fn().mockResolvedValue(undefined);
         const service = new UnifiedRecommendationService({
             mode: "baseline",
+            hybridRolloutPercent: 0,
+            explorationRate: 0,
             loadPersonalizedFeed: jest.fn().mockResolvedValue({
                 shelves: {
                     listenAgain: [track("again")],
@@ -103,6 +105,8 @@ describe("unified recommendation compatibility facade", () => {
         );
         const service = new UnifiedRecommendationService({
             mode: "active",
+            hybridRolloutPercent: 100,
+            explorationRate: 0,
             loadPersonalizedFeed,
             resolveCanonical: jest.fn(async (candidate) => ({
                 id: `canonical-${candidate.youtubeVideoId}`,
@@ -180,6 +184,8 @@ describe("unified recommendation compatibility facade", () => {
         );
         const service = new UnifiedRecommendationService({
             mode: "active",
+            hybridRolloutPercent: 100,
+            explorationRate: 0,
             loadPersonalizedFeed: jest.fn(async () => ({
                 shelves: {
                     listenAgain: Array.from({ length: 13 }, (_, index) =>

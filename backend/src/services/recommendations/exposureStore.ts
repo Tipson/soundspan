@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/db";
 import {
     recordRecommendationExposures,
@@ -39,6 +40,7 @@ interface GenerationCreateInput {
     served: boolean;
     degradedSources: string[];
     latencyMs: number;
+    context?: Record<string, unknown>;
     exposures: ExposureCreateInput[];
 }
 
@@ -50,6 +52,17 @@ interface PlaybackAttributionInput {
     listenedSeconds: number | null;
     completionRatio: number | null;
     outcome: string | null;
+    generationId?: string | null;
+}
+
+type ExposureOutcomeUpdate = Pick<
+    PlaybackAttributionInput,
+    "playedAt" | "listenedSeconds" | "completionRatio" | "outcome"
+>;
+
+interface ViewedTrackIdentity {
+    provider: string;
+    providerTrackId: string;
 }
 
 interface ExposureStoreDependencies {
@@ -65,13 +78,23 @@ interface ExposureStoreDependencies {
         since: Date,
         playedAt: Date,
     ) => Promise<{ id: string } | null>;
-    updateExposure: (
-        id: string,
-        data: Omit<
-            PlaybackAttributionInput,
-            "userId" | "provider" | "providerTrackId"
-        >,
+    findDirectExposure?: (
+        userId: string,
+        generationId: string,
+        provider: string,
+        providerTrackId: string,
+    ) => Promise<{ id: string } | null>;
+    markViewedExposures?: (
+        userId: string,
+        generationId: string,
+        viewedAt: Date,
+        tracks: ViewedTrackIdentity[],
+    ) => Promise<number>;
+    markExposureViewedIfMissing?: (
+        exposureId: string,
+        viewedAt: Date,
     ) => Promise<void>;
+    updateExposure: (id: string, data: ExposureOutcomeUpdate) => Promise<void>;
 }
 
 export interface RecommendationExposureMetricsRecorder {
@@ -95,6 +118,7 @@ export interface RecordRecommendationGenerationInput {
     served: boolean;
     degradedSources: string[];
     latencyMs: number;
+    context?: Record<string, unknown>;
     recommendations: ScoredRecommendation[];
 }
 
@@ -180,6 +204,7 @@ export class RecommendationExposureStore {
             served: input.served,
             degradedSources: input.degradedSources,
             latencyMs: input.latencyMs,
+            context: input.context,
             exposures,
         });
         try {
@@ -200,14 +225,29 @@ export class RecommendationExposureStore {
     }
 
     async attributePlayback(input: PlaybackAttributionInput): Promise<void> {
-        const exposure = await this.dependencies.findAttributableExposure(
-            input.userId,
-            input.provider,
-            input.providerTrackId,
-            new Date(input.playedAt.getTime() - SEVEN_DAYS_MS),
+        const directExposure =
+            input.generationId && this.dependencies.findDirectExposure
+                ? await this.dependencies.findDirectExposure(
+                      input.userId,
+                      input.generationId,
+                      input.provider,
+                      input.providerTrackId,
+                  )
+                : null;
+        const exposure =
+            directExposure ??
+            (await this.dependencies.findAttributableExposure(
+                input.userId,
+                input.provider,
+                input.providerTrackId,
+                new Date(input.playedAt.getTime() - SEVEN_DAYS_MS),
+                input.playedAt,
+            ));
+        if (!exposure) return;
+        await this.dependencies.markExposureViewedIfMissing?.(
+            exposure.id,
             input.playedAt,
         );
-        if (!exposure) return;
         await this.dependencies.updateExposure(exposure.id, {
             playedAt: input.playedAt,
             listenedSeconds: input.listenedSeconds,
@@ -223,6 +263,26 @@ export class RecommendationExposureStore {
                 error,
             });
         }
+    }
+
+    async markViewed(input: {
+        userId: string;
+        generationId: string;
+        viewedAt: Date;
+        tracks: ViewedTrackIdentity[];
+    }): Promise<number> {
+        if (
+            !this.dependencies.markViewedExposures ||
+            input.tracks.length === 0
+        ) {
+            return 0;
+        }
+        return this.dependencies.markViewedExposures(
+            input.userId,
+            input.generationId,
+            input.viewedAt,
+            input.tracks,
+        );
     }
 
     /** Explicit taste semantics shared by ranker training and metrics. */
@@ -262,19 +322,38 @@ export const recommendationExposureStore = new RecommendationExposureStore({
                 served: input.served,
                 degradedSources: input.degradedSources,
                 latencyMs: input.latencyMs,
+                context: input.context as Prisma.InputJsonObject | undefined,
                 exposures: { create: input.exposures },
             },
             select: { id: true },
         }),
     loadRecentExposures: (userId, since) =>
-        prisma.recommendationExposure.findMany({
+        prisma.recommendationExposure
+            .findMany({
+                where: {
+                    userId,
+                    viewedAt: { gte: since },
+                    generation: { served: true },
+                },
+                orderBy: { viewedAt: "desc" },
+                select: { canonicalKey: true, viewedAt: true },
+            })
+            .then((rows) =>
+                rows.map((row) => ({
+                    canonicalKey: row.canonicalKey,
+                    exposedAt: row.viewedAt!,
+                })),
+            ),
+    findDirectExposure: (userId, generationId, provider, providerTrackId) =>
+        prisma.recommendationExposure.findFirst({
             where: {
                 userId,
-                exposedAt: { gte: since },
-                generation: { served: true },
+                generationId,
+                provider,
+                providerTrackId,
+                generation: { served: true, userId },
             },
-            orderBy: { exposedAt: "desc" },
-            select: { canonicalKey: true, exposedAt: true },
+            select: { id: true },
         }),
     findAttributableExposure: (
         userId,
@@ -288,12 +367,34 @@ export const recommendationExposureStore = new RecommendationExposureStore({
                 userId,
                 provider,
                 providerTrackId,
-                exposedAt: { gte: since, lte: playedAt },
+                viewedAt: { gte: since, lte: playedAt },
                 generation: { served: true },
             },
-            orderBy: { exposedAt: "desc" },
+            orderBy: { viewedAt: "desc" },
             select: { id: true },
         }),
+    markViewedExposures: async (userId, generationId, viewedAt, tracks) => {
+        const result = await prisma.recommendationExposure.updateMany({
+            where: {
+                userId,
+                generationId,
+                viewedAt: null,
+                generation: { served: true, userId },
+                OR: tracks.map((track) => ({
+                    provider: track.provider,
+                    providerTrackId: track.providerTrackId,
+                })),
+            },
+            data: { viewedAt },
+        });
+        return result.count;
+    },
+    markExposureViewedIfMissing: async (exposureId, viewedAt) => {
+        await prisma.recommendationExposure.updateMany({
+            where: { id: exposureId, viewedAt: null },
+            data: { viewedAt },
+        });
+    },
     updateExposure: async (id, data) => {
         await prisma.recommendationExposure.update({
             where: { id },

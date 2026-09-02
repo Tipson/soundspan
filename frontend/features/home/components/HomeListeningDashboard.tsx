@@ -8,14 +8,18 @@ import { useAudioControls } from "@/lib/audio-controls-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { api } from "@/lib/api";
 import type { PersonalizedTrack } from "../types";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
+import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
+import { recommendationTrackKey } from "../recommendationIdentity";
 
 interface HomeListeningDashboardProps {
     tracks: PersonalizedTrack[];
+    generationId?: string;
     children?: ReactNode;
 }
 
 function trackKey(track: PersonalizedTrack): string {
-    return track.youtubeVideoId || track.provider.youtubeVideoId || track.id;
+    return recommendationTrackKey(track);
 }
 
 function coverUrl(track: PersonalizedTrack, size: number): string | null {
@@ -42,6 +46,7 @@ function ArtworkFallback({ title }: { title: string }) {
  */
 export function HomeListeningDashboard({
     tracks,
+    generationId,
     children,
 }: HomeListeningDashboardProps) {
     const { playTracks } = useAudioControls();
@@ -55,8 +60,18 @@ export function HomeListeningDashboard({
         });
     }, [tracks]);
     const queue = useMemo(
-        () => uniqueTracks.map(toProviderPlaybackTrack),
-        [uniqueTracks],
+        () =>
+            uniqueTracks.map((track) =>
+                toProviderPlaybackTrack(track, {
+                    generationId,
+                    sessionId: getRecommendationSessionId(),
+                }),
+            ),
+        [generationId, uniqueTracks],
+    );
+    const impressionRef = useRecommendationImpressions(
+        generationId,
+        uniqueTracks,
     );
     const continuationCount =
         uniqueTracks.length > 4
@@ -77,6 +92,7 @@ export function HomeListeningDashboard({
 
     return (
         <div
+            ref={impressionRef}
             data-home-region="listening-dashboard"
             className="relative z-10 grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_18rem]"
         >
@@ -103,6 +119,7 @@ export function HomeListeningDashboard({
                                 key={trackKey(track)}
                                 role="listitem"
                                 data-track-id={track.id}
+                                data-recommendation-track-key={trackKey(track)}
                                 className="group min-w-0 snap-start"
                             >
                                 <button
@@ -177,6 +194,9 @@ export function HomeListeningDashboard({
                                     key={trackKey(track)}
                                     role="listitem"
                                     data-track-id={track.id}
+                                    data-recommendation-track-key={trackKey(
+                                        track,
+                                    )}
                                     className="min-w-0"
                                 >
                                     <button

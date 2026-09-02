@@ -111,6 +111,14 @@ export function resolvePlaybackRecommendationContext(
     return {};
 }
 
+/** Keep direct generation lineage, otherwise join the current browser-tab session. */
+export function resolvePlaybackRecommendationSessionId(
+    trackSessionId: string | null | undefined,
+    tabSessionId: string,
+): string {
+    return trackSessionId?.trim() || tabSessionId;
+}
+
 /**
  * Tracks one remote play at a time and emits exactly one final engagement.
  * Finalization remains pending until the create-play response supplies its id.

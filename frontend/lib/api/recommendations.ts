@@ -14,6 +14,22 @@ export function WithRecommendations<TBase extends ApiClientConstructor>(
     Base: TBase,
 ) {
     abstract class RecommendationsApi extends Base {
+        async reportRecommendationImpressions(
+            generationId: string,
+            tracks: Array<{
+                provider: "youtube" | "tidal" | "library";
+                providerTrackId: string;
+            }>,
+        ): Promise<{ recorded: number }> {
+            return this.request<{ recorded: number }>(
+                "/personalized/impressions",
+                {
+                    method: "POST",
+                    body: JSON.stringify({ generationId, tracks }),
+                },
+            );
+        }
+
         // Recommendations
         async getRecommendationsForYou(limit = 10) {
             return this.request<{ artists: ApiData[] }>(

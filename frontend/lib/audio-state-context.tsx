@@ -137,6 +137,10 @@ export interface Track {
     streamSource?: RemoteMediaSource;
     tidalTrackId?: number;
     youtubeVideoId?: string;
+    /** Direct lineage to the server generation that supplied this track. */
+    recommendationGenerationId?: string;
+    /** Browser-tab recommendation session used for fast session adaptation. */
+    recommendationSessionId?: string;
     /** Owning playlist item used for compare-and-swap provider recovery. */
     playlistItemId?: string;
     /** Materialized YouTube Music row currently attached to that item. */
