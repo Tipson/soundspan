@@ -624,6 +624,14 @@ describe("youtubeMusic service", () => {
         expect(fallbackQueries).toEqual([
             { query: "Artist Two Track Two Album Two", limit: 8 },
         ]);
+        expect(searchBatchSpy.mock.calls[0]?.[2]).toEqual({
+            timeoutMs: 150_000,
+            maxRetries: 0,
+        });
+        expect(searchBatchSpy.mock.calls[1]?.[2]).toEqual({
+            timeoutMs: 150_000,
+            maxRetries: 0,
+        });
     });
 
     it("falls back to individual matching when batch search fails", async () => {
@@ -649,6 +657,46 @@ describe("youtubeMusic service", () => {
             null,
         ]);
         expect(findMatchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("bounds individual fallback matching to the sidecar search capacity", async () => {
+        const searchBatchSpy = jest
+            .spyOn(ytMusicService, "searchBatch")
+            .mockRejectedValue(new Error("batch failed"));
+        let active = 0;
+        let maxActive = 0;
+        const findMatchSpy = jest
+            .spyOn(ytMusicService, "findMatchForTrack")
+            .mockImplementation(async () => {
+                active += 1;
+                maxActive = Math.max(maxActive, active);
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                active -= 1;
+                return null;
+            });
+
+        const [firstResult, secondResult] = await Promise.all([
+            ytMusicService.findMatchesForAlbum(
+                "u1",
+                Array.from({ length: 4 }, (_, index) => ({
+                    artist: `First Artist ${index}`,
+                    title: `First Track ${index}`,
+                })),
+            ),
+            ytMusicService.findMatchesForAlbum(
+                "u2",
+                Array.from({ length: 4 }, (_, index) => ({
+                    artist: `Second Artist ${index}`,
+                    title: `Second Track ${index}`,
+                })),
+            ),
+        ]);
+
+        expect(firstResult).toEqual(Array(4).fill(null));
+        expect(secondResult).toEqual(Array(4).fill(null));
+        expect(maxActive).toBe(3);
+        findMatchSpy.mockRestore();
+        searchBatchSpy.mockRestore();
     });
 
     it("uses tiered matching logic for single-track fallback searches", async () => {
