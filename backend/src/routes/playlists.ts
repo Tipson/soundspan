@@ -38,7 +38,7 @@ const router = Router();
 const PLAYLISTS_MAX_LIMIT = 1000;
 const PLAYLISTS_DEFAULT_LIMIT = 500;
 const PLAYLIST_PREVIEW_ITEMS = 12;
-const PLAYLIST_DETAIL_MAX_ITEMS = 1000;
+const PLAYLIST_DETAIL_MAX_ITEMS = 5000;
 const PLAYLIST_DETAIL_QUERY_ITEMS = PLAYLIST_DETAIL_MAX_ITEMS + 1;
 const pendingRetryPath = "/:id/pending/:trackId/retry";
 
@@ -917,7 +917,7 @@ router.post("/", async (req, res) => {
  *         description: Playlist ID
  *     responses:
  *       200:
- *         description: Playlist details with merged items capped at 1000 combined track and pending items
+ *         description: Playlist details with merged items capped at 5000 combined track and pending items
  *         content:
  *           application/json:
  *             schema:
@@ -931,19 +931,19 @@ router.post("/", async (req, res) => {
  *                   description: Count of removed local tracks; omitted when zero
  *                 truncated:
  *                   type: boolean
- *                   description: True when the playlist contains more than 1000 combined items and this response was capped
+ *                   description: True when the playlist contains more than 5000 combined items and this response was capped
  *                 items:
  *                   type: array
- *                   maxItems: 1000
+ *                   maxItems: 5000
  *                   description: Resolved track items included in the bounded detail response
  *                 pendingTracks:
  *                   type: array
- *                   maxItems: 1000
+ *                   maxItems: 5000
  *                   description: Pending items included in the bounded detail response
  *                 mergedItems:
  *                   type: array
- *                   maxItems: 1000
- *                   description: The first 1000 combined track and pending items in playlist sort order
+ *                   maxItems: 5000
+ *                   description: The first 5000 combined track and pending items in playlist sort order
  *       403:
  *         description: Access denied
  *       404:

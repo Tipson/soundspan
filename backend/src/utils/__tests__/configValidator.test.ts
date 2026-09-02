@@ -16,6 +16,7 @@ type LoadOptions = {
     execOutput?: string;
     execError?: string;
     execErrorCode?: string;
+    execErrorStdout?: string;
 };
 
 type ValidatorModule = {
@@ -88,6 +89,7 @@ describe("validateMusicConfig", () => {
             if (options.execError) {
                 throw Object.assign(new Error(options.execError), {
                     code: options.execErrorCode,
+                    stdout: options.execErrorStdout,
                 });
             }
             return options.execOutput ?? "ffmpeg version 7.0";
@@ -362,6 +364,34 @@ describe("validateMusicConfig", () => {
 
         await expect(validateMusicConfig()).rejects.toThrow(
             "Unable to execute FFmpeg at /usr/bin/ffmpeg",
+        );
+    });
+
+    it("accepts a supported version printed before ffmpeg teardown times out", async () => {
+        const { validateMusicConfig } = loadValidator({
+            env: { MUSIC_PATH: "/env/music" },
+            existingPaths: ["/env/music"],
+            execError: "spawnSync /usr/bin/ffmpeg ETIMEDOUT",
+            execErrorCode: "ETIMEDOUT",
+            execErrorStdout: "ffmpeg version 5.1.9\nconfiguration",
+        });
+
+        await expect(validateMusicConfig()).resolves.toEqual(
+            expect.objectContaining({ musicPath: "/env/music" }),
+        );
+    });
+
+    it("still rejects an unsupported version printed before teardown times out", async () => {
+        const { validateMusicConfig } = loadValidator({
+            env: { MUSIC_PATH: "/env/music" },
+            existingPaths: ["/env/music"],
+            execError: "spawnSync /usr/bin/ffmpeg ETIMEDOUT",
+            execErrorCode: "ETIMEDOUT",
+            execErrorStdout: "ffmpeg version 4.3.9\nconfiguration",
+        });
+
+        await expect(validateMusicConfig()).rejects.toThrow(
+            "FFmpeg 4.3 is unsupported",
         );
     });
 

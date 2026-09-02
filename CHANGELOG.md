@@ -56,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Backend startup accepts a supported FFmpeg version that was fully printed before a teardown timeout, preventing a valid Debian FFmpeg build from trapping the API in a restart loop after deployment.
+- YouTube Music spool jobs now prefer faster progressive audio, retain a bounded low-resolution combined-stream fallback when audio-only formats temporarily disappear, and stop obsolete downloads after the last listener disconnects so rapid skips do not starve the selected track.
+- Playlist detail responses now include up to 5,000 ordered items instead of silently stopping at 1,000, so large imported playlists such as a 1,294-track collection remain fully visible while the shared track list keeps its bounded rendering behavior.
 - Background playlist imports preserve duplicate source occurrences, resume their durable per-position snapshot after API or worker restarts, reject stale resolution attempts, never restore positions removed by the listener, and keep already published matches when cancellation or a later provider batch fails.
 - Large provider imports give bounded YouTube Music search batches enough time to drain the sidecar's shared capacity, avoid retrying an entire timed-out batch, and cap individual fallback searches at the sidecar's three available slots instead of flooding it with `503` responses.
 - Complete Spotify imports now fall back to the public web-player pagination channel when the legacy REST endpoint is quota-limited, while still rejecting empty, truncated, inconsistent, or oversized page sequences instead of saving a partial playlist.

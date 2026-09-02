@@ -181,6 +181,8 @@ def stream_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[A
     import ytmusic_stream
 
     ytmusic_stream._spool_tasks.clear()
+    ytmusic_stream._spool_cancel_events.clear()
+    ytmusic_stream._spool_waiters.clear()
     ytmusic_stream._spool_pending_jobs = 0
     ytmusic_stream._provider_challenge_cooldown_until = 0.0
     monkeypatch.setattr(ytmusic_stream, "YTMUSIC_SPOOL_DIR", tmp_path)
@@ -190,6 +192,8 @@ def stream_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[A
         yield ytmusic_stream
     finally:
         ytmusic_stream._spool_tasks.clear()
+        ytmusic_stream._spool_cancel_events.clear()
+        ytmusic_stream._spool_waiters.clear()
         ytmusic_stream._spool_pending_jobs = 0
         ytmusic_stream._provider_challenge_cooldown_until = 0.0
         executor.shutdown()
@@ -384,7 +388,158 @@ def test_spool_formats_prefer_audio_that_fits_the_per_track_budget(
     assert "abr<=256" in selector
     assert "filesize_approx<67108865" in selector
     assert "filesize<67108865" in selector
-    assert selector.endswith("/wa")
+    assert "/wa/" in selector
+    assert "b[height<=360]" in selector
+
+
+def test_music_extraction_keeps_a_low_resolution_combined_fallback(
+    stream_module: Any,
+) -> None:
+    options = stream_module._build_ytmusic_stream_options("HIGH")
+
+    assert options["format"].endswith("/b[height<=360]/b")
+    assert options["extractor_args"]["youtube"]["player_client"] == ["default"]
+
+
+def test_spool_progress_hook_stops_an_abandoned_download(
+    stream_module: Any,
+) -> None:
+    cancelled = threading.Event()
+    hook = stream_module._build_spool_progress_hook(
+        time.monotonic(),
+        cancelled,
+    )
+    cancelled.set()
+
+    with pytest.raises(stream_module._SpoolDownloadCancelled):
+        hook({"downloaded_bytes": 1024})
+
+
+@pytest.mark.anyio
+async def test_last_disconnected_waiter_cancels_abandoned_spool(
+    stream_module: Any,
+) -> None:
+    key = f"{VIDEO_ID}:{QUALITY}"
+    cancel_event = threading.Event()
+    stream_module._spool_cancel_events[key] = cancel_event
+    pending: asyncio.Future[tuple[str, str]] = asyncio.get_running_loop().create_future()
+
+    class DisconnectedRequest:
+        async def is_disconnected(self) -> bool:
+            return True
+
+    with pytest.raises(HTTPException) as raised:
+        await stream_module._await_spool_task_for_request(
+            key,
+            pending,
+            DisconnectedRequest(),
+        )
+
+    assert raised.value.status_code == 499
+    assert cancel_event.is_set()
+    assert stream_module._spool_waiters == {}
+    pending.cancel()
+
+
+@pytest.mark.anyio
+async def test_new_waiter_revives_spool_before_worker_observes_cancellation(
+    stream_module: Any,
+) -> None:
+    key = f"{VIDEO_ID}:{QUALITY}"
+    cancel_event = threading.Event()
+    cancel_event.set()
+    stream_module._spool_cancel_events[key] = cancel_event
+    completed: asyncio.Future[tuple[str, str]] = asyncio.get_running_loop().create_future()
+    completed.set_result(("track.m4a", "audio/mp4"))
+
+    class ConnectedRequest:
+        async def is_disconnected(self) -> bool:
+            return False
+
+    result = await stream_module._await_spool_task_for_request(
+        key,
+        completed,
+        ConnectedRequest(),
+    )
+
+    assert result == ("track.m4a", "audio/mp4")
+    assert not cancel_event.is_set()
+    assert stream_module._spool_waiters == {}
+
+
+@pytest.mark.anyio
+async def test_one_disconnected_waiter_does_not_cancel_shared_spool(
+    stream_module: Any,
+) -> None:
+    key = f"{VIDEO_ID}:{QUALITY}"
+    cancel_event = threading.Event()
+    stream_module._spool_cancel_events[key] = cancel_event
+    pending: asyncio.Future[tuple[str, str]] = asyncio.get_running_loop().create_future()
+
+    class ConnectedRequest:
+        async def is_disconnected(self) -> bool:
+            return False
+
+    class DisconnectedRequest:
+        async def is_disconnected(self) -> bool:
+            return True
+
+    connected = asyncio.create_task(
+        stream_module._await_spool_task_for_request(
+            key,
+            pending,
+            ConnectedRequest(),
+        ),
+    )
+    await asyncio.sleep(0)
+
+    with pytest.raises(HTTPException) as raised:
+        await stream_module._await_spool_task_for_request(
+            key,
+            pending,
+            DisconnectedRequest(),
+        )
+
+    assert raised.value.status_code == 499
+    assert stream_module._spool_waiters == {key: 1}
+    assert not cancel_event.is_set()
+
+    pending.set_result(("track.m4a", "audio/mp4"))
+    assert await connected == ("track.m4a", "audio/mp4")
+    assert stream_module._spool_waiters == {}
+
+
+@pytest.mark.anyio
+async def test_cancelled_request_cleans_up_its_waiter_task(
+    stream_module: Any,
+) -> None:
+    key = f"{VIDEO_ID}:{QUALITY}"
+    cancel_event = threading.Event()
+    stream_module._spool_cancel_events[key] = cancel_event
+    pending: asyncio.Future[tuple[str, str]] = asyncio.get_running_loop().create_future()
+
+    class ConnectedRequest:
+        async def is_disconnected(self) -> bool:
+            return False
+
+    request_task = asyncio.create_task(
+        stream_module._await_spool_task_for_request(
+            key,
+            pending,
+            ConnectedRequest(),
+        ),
+    )
+    await asyncio.sleep(0)
+
+    request_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await request_task
+
+    assert not pending.cancelled()
+    assert not pending.done()
+    assert cancel_event.is_set()
+    assert stream_module._spool_waiters == {}
+    pending.cancel()
 
 
 def test_provider_challenge_maps_to_retryable_503_and_arms_cooldown(
