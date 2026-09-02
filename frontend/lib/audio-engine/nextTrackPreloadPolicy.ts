@@ -23,20 +23,21 @@ export interface NextTrackPreloadDecision {
     reason: string;
 }
 
-export const NETWORK_PRELOAD_LEAD_SECONDS = 20;
+/** Audible progress required before starting one speculative provider spool. */
+export const NETWORK_PRELOAD_STABLE_PROGRESS_SECONDS = 1;
 
 export interface NetworkNextTrackPreloadInput {
     nextStreamSource: string | null | undefined;
     currentTimeSec: number;
-    durationSec: number;
     isPlaying: boolean;
     isLoading: boolean;
 }
 
 /**
- * Starts one network-backed YouTube preload near natural track end. Keeping
- * this window bounded hides a cold provider start without creating work for
- * every queue item a listener rapidly skips past.
+ * Starts one network-backed YouTube preload as soon as the current source has
+ * produced stable audible progress. At that point its own provider spool has
+ * completed, so the bounded sidecar can prepare the next queue item without
+ * delaying startup of the track the listener actually selected.
  */
 export function resolveNetworkNextTrackPreloadDecision(
     input: NetworkNextTrackPreloadInput,
@@ -47,19 +48,13 @@ export function resolveNetworkNextTrackPreloadDecision(
     if (!input.isPlaying || input.isLoading) {
         return { shouldPreload: false, reason: "inactive_playback" };
     }
-    if (
-        !Number.isFinite(input.currentTimeSec) ||
-        !Number.isFinite(input.durationSec) ||
-        input.currentTimeSec < 0 ||
-        input.durationSec <= 0
-    ) {
+    if (!Number.isFinite(input.currentTimeSec) || input.currentTimeSec < 0) {
         return { shouldPreload: false, reason: "invalid_timing" };
     }
-    const remainingSec = input.durationSec - input.currentTimeSec;
-    if (remainingSec < 0 || remainingSec > NETWORK_PRELOAD_LEAD_SECONDS) {
-        return { shouldPreload: false, reason: "too_early" };
+    if (input.currentTimeSec < NETWORK_PRELOAD_STABLE_PROGRESS_SECONDS) {
+        return { shouldPreload: false, reason: "playback_not_stable" };
     }
-    return { shouldPreload: true, reason: "network_lead_window" };
+    return { shouldPreload: true, reason: "stable_playback" };
 }
 
 /**

@@ -1766,6 +1766,42 @@ test("rapid manual YouTube selections start only the latest remote stream", asyn
     );
 });
 
+test("stable YouTube playback prepares the next queue item without waiting for track end", async () => {
+    const currentTrack = makeTrack("early-preload-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "earlyload01",
+    });
+    const nextTrack = makeTrack("early-preload-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "earlyload02",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 240 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 0.9 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 0);
+
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "https://stream.test/yt/earlyload02",
+            format: "mp4",
+        },
+    ]);
+
+    engine.emit("timeupdate", { timeSec: 30 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+});
+
 test("a late device-file lease cannot load a retired track and every acquired URL is released", async (t) => {
     const firstTrack = makeTrack("yt:first-file", {
         streamSource: "youtube",

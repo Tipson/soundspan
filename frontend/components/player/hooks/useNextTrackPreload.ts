@@ -29,12 +29,11 @@ interface UseNextTrackPreloadOptions {
 
 type PreloadableTrack = NonNullable<ReturnType<typeof getNextTrackInfo>>;
 type PreloadTrackOptions = {
-    /** Natural end may retain the iOS audio session with one provider preload. */
+    /** Stable playback or natural end may prepare one network provider item. */
     allowNetworkYouTube?: boolean;
 };
 type NetworkPreloadTiming = {
     currentTimeSec: number;
-    durationSec: number;
     isLoading: boolean;
 };
 interface NextTrackPreloadController {
@@ -78,12 +77,10 @@ export function useNextTrackPreload({
                 preloadRequestIdRef.current === requestId &&
                 lastPreloadedTrackIdRef.current === preloadIdentity;
 
-            // A YouTube Music preload starts a real sidecar spool job. Rapid
-            // manual selections used to bypass the current-track debounce here
-            // and could fill the bounded provider queue with tracks the listener
-            // had already skipped. Keep gapless preload for verified device
-            // copies, while the actual network track is loaded only after it
-            // becomes the selected queue item.
+            // A YouTube Music preload starts a real sidecar spool job. The
+            // default effect remains device-only; the timing policy opts one
+            // network item in after current playback is confirmed, and the end
+            // handler may do the same as an iOS audio-session fallback.
             if (
                 nextTrack.streamSource === "youtube" &&
                 !hasDeviceOfflinePlaybackCopy(nextTrack) &&
@@ -182,7 +179,6 @@ export function useNextTrackPreload({
                 resolveNetworkNextTrackPreloadDecision({
                     nextStreamSource: nextTrack.streamSource,
                     currentTimeSec: timing.currentTimeSec,
-                    durationSec: timing.durationSec,
                     isPlaying: audioEngine.isPlaying(),
                     isLoading: timing.isLoading,
                 }).shouldPreload

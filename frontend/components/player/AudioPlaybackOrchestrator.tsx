@@ -331,7 +331,6 @@ export const AudioPlaybackOrchestrator = memo(
                     const durationSec = audioEngine.getDuration();
                     preloadNetworkWhenDue({
                         currentTimeSec: currentTimeValue,
-                        durationSec,
                         isLoading: isLoadingRef.current,
                     });
                     const isEndAdjacent =
