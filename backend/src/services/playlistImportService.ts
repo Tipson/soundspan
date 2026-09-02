@@ -933,58 +933,65 @@ class PlaylistImportService {
             batches,
             MATCH_BATCH_CONCURRENCY,
             async (batch) => {
+                let newlyResolved: ResolvedTrack[] = [];
                 try {
-                    const matches = await ytMusicService.findMatchesForAlbum(
-                        "__public__",
-                        batch.map(({ track }) =>
-                            this.toProviderMatchInput(track),
-                        ),
-                    );
-                    const matchedTracks = batch.flatMap((item, index) => {
-                        const match = matches[index];
-                        return match ? [{ ...item, match }] : [];
-                    });
-                    const ytRows = await mapWithConcurrency(
-                        matchedTracks,
-                        UPSERT_CONCURRENCY,
-                        async ({ track, match, index }) => {
-                            try {
-                                const row =
-                                    await trackMappingService.upsertTrackYtMusic(
-                                        {
-                                            videoId: match.videoId,
-                                            title: match.title,
-                                            artist: track.artist,
-                                            album: track.album || "",
-                                            duration: match.duration,
-                                        },
+                    try {
+                        const matches =
+                            await ytMusicService.findMatchesForAlbum(
+                                "__public__",
+                                batch.map(({ track }) =>
+                                    this.toProviderMatchInput(track),
+                                ),
+                            );
+                        const matchedTracks = batch.flatMap((item, index) => {
+                            const match = matches[index];
+                            return match ? [{ ...item, match }] : [];
+                        });
+                        const ytRows = await mapWithConcurrency(
+                            matchedTracks,
+                            UPSERT_CONCURRENCY,
+                            async ({ track, match, index }) => {
+                                try {
+                                    const row =
+                                        await trackMappingService.upsertTrackYtMusic(
+                                            {
+                                                videoId: match.videoId,
+                                                title: match.title,
+                                                artist: track.artist,
+                                                album: track.album || "",
+                                                duration: match.duration,
+                                            },
+                                        );
+                                    return { index, trackYtMusicId: row.id };
+                                } catch (err) {
+                                    log.warn(
+                                        "YT Music upsert failed during import:",
+                                        err,
                                     );
-                                return { index, trackYtMusicId: row.id };
-                            } catch (err) {
-                                log.warn(
-                                    "YT Music upsert failed during import:",
-                                    err,
-                                );
-                                return null;
-                            }
-                        },
-                    );
-                    const newlyResolved = ytRows.flatMap((ytRow) => {
-                        if (!ytRow) return [];
-                        const current = resolved[ytRow.index];
-                        resolved[ytRow.index] = {
-                            ...current,
-                            trackYtMusicId: ytRow.trackYtMusicId,
-                            source: "youtube",
-                            confidence: 85,
-                        };
-                        return [resolved[ytRow.index]];
-                    });
+                                    return null;
+                                }
+                            },
+                        );
+                        newlyResolved = ytRows.flatMap((ytRow) => {
+                            if (!ytRow) return [];
+                            const current = resolved[ytRow.index];
+                            resolved[ytRow.index] = {
+                                ...current,
+                                trackYtMusicId: ytRow.trackYtMusicId,
+                                source: "youtube",
+                                confidence: 85,
+                            };
+                            return [resolved[ytRow.index]];
+                        });
+                    } catch (err) {
+                        log.warn(
+                            "YT Music batch match failed during import:",
+                            err,
+                        );
+                    }
                     if (newlyResolved.length > 0) {
                         await onResolved?.(newlyResolved);
                     }
-                } catch (err) {
-                    log.warn("YT Music batch match failed during import:", err);
                 } finally {
                     completed += batch.length;
                     await onProgress?.({
@@ -1011,58 +1018,66 @@ class PlaylistImportService {
             batches,
             MATCH_BATCH_CONCURRENCY,
             async (batch) => {
+                let newlyResolved: ResolvedTrack[] = [];
                 try {
-                    const matches =
-                        await tidalStreamingService.findMatchesForAlbum(
-                            userId,
-                            batch.map(({ track }) =>
-                                this.toProviderMatchInput(track),
-                            ),
+                    try {
+                        const matches =
+                            await tidalStreamingService.findMatchesForAlbum(
+                                userId,
+                                batch.map(({ track }) =>
+                                    this.toProviderMatchInput(track),
+                                ),
+                            );
+                        const matchedTracks = batch.flatMap((item, index) => {
+                            const match = matches[index];
+                            return match ? [{ ...item, match }] : [];
+                        });
+                        const tidalRows = await mapWithConcurrency(
+                            matchedTracks,
+                            UPSERT_CONCURRENCY,
+                            async ({ track, match, index }) => {
+                                try {
+                                    const row =
+                                        await trackMappingService.upsertTrackTidal(
+                                            {
+                                                tidalId: match.id,
+                                                title: match.title,
+                                                artist: match.artist,
+                                                album: track.album || "",
+                                                duration: match.duration,
+                                                isrc: match.isrc,
+                                            },
+                                        );
+                                    return { index, trackTidalId: row.id };
+                                } catch (err) {
+                                    log.warn(
+                                        "Tidal upsert failed during import:",
+                                        err,
+                                    );
+                                    return null;
+                                }
+                            },
                         );
-                    const matchedTracks = batch.flatMap((item, index) => {
-                        const match = matches[index];
-                        return match ? [{ ...item, match }] : [];
-                    });
-                    const tidalRows = await mapWithConcurrency(
-                        matchedTracks,
-                        UPSERT_CONCURRENCY,
-                        async ({ track, match, index }) => {
-                            try {
-                                const row =
-                                    await trackMappingService.upsertTrackTidal({
-                                        tidalId: match.id,
-                                        title: match.title,
-                                        artist: match.artist,
-                                        album: track.album || "",
-                                        duration: match.duration,
-                                        isrc: match.isrc,
-                                    });
-                                return { index, trackTidalId: row.id };
-                            } catch (err) {
-                                log.warn(
-                                    "Tidal upsert failed during import:",
-                                    err,
-                                );
-                                return null;
-                            }
-                        },
-                    );
-                    const newlyResolved = tidalRows.flatMap((tidalRow) => {
-                        if (!tidalRow) return [];
-                        const current = resolved[tidalRow.index];
-                        resolved[tidalRow.index] = {
-                            ...current,
-                            trackTidalId: tidalRow.trackTidalId,
-                            source: "tidal",
-                            confidence: 85,
-                        };
-                        return [resolved[tidalRow.index]];
-                    });
+                        newlyResolved = tidalRows.flatMap((tidalRow) => {
+                            if (!tidalRow) return [];
+                            const current = resolved[tidalRow.index];
+                            resolved[tidalRow.index] = {
+                                ...current,
+                                trackTidalId: tidalRow.trackTidalId,
+                                source: "tidal",
+                                confidence: 85,
+                            };
+                            return [resolved[tidalRow.index]];
+                        });
+                    } catch (err) {
+                        log.warn(
+                            "Tidal batch match failed during import:",
+                            err,
+                        );
+                    }
                     if (newlyResolved.length > 0) {
                         await onResolved?.(newlyResolved);
                     }
-                } catch (err) {
-                    log.warn("Tidal batch match failed during import:", err);
                 } finally {
                     completed += batch.length;
                     await onProgress?.({

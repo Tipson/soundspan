@@ -1377,6 +1377,47 @@ describe("PlaylistImportService", () => {
             await previewPromise;
         });
 
+        it("propagates persistence callback failures instead of treating them as YouTube provider failures", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "sp_persistence_failure",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValue({
+                name: "Persistence Failure",
+                tracks: [
+                    {
+                        title: "Song",
+                        artist: "Artist",
+                        album: "Album",
+                        durationMs: 180000,
+                        isrc: null,
+                    },
+                ],
+            });
+            mockYtMusicService.findMatchesForAlbum.mockResolvedValue([
+                { videoId: "yt-persist", title: "Song", duration: 180 },
+            ]);
+            mockTrackMappingService.upsertTrackYtMusic.mockResolvedValue({
+                id: "yt-row-persist",
+            });
+
+            await expect(
+                playlistImportService.previewImport(
+                    "user_1",
+                    "https://open.spotify.com/playlist/sp_persistence_failure",
+                    {
+                        onResolved: async () => {
+                            throw new Error("persist failed");
+                        },
+                    },
+                ),
+            ).rejects.toThrow("persist failed");
+            expect(mockLogger.warn).not.toHaveBeenCalledWith(
+                "YT Music batch match failed during import:",
+                expect.anything(),
+            );
+        });
+
         it("batch-resolves unresolved tracks through Tidal after YT misses", async () => {
             mockSpotifyService.parseUrl.mockReturnValue({
                 type: "playlist",
@@ -1451,6 +1492,59 @@ describe("PlaylistImportService", () => {
             ]);
             expect(result.summary.tidal).toBe(1);
             expect(result.summary.unresolved).toBe(1);
+        });
+
+        it("propagates persistence callback failures from Tidal resolution", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "sp_tidal_persistence_failure",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValue({
+                name: "Tidal Persistence Failure",
+                tracks: [
+                    {
+                        title: "Tidal Song",
+                        artist: "Tidal Artist",
+                        album: "Tidal Album",
+                        durationMs: 180000,
+                        isrc: null,
+                    },
+                ],
+            });
+            mockPrisma.userSettings.findUnique.mockResolvedValue({
+                tidalOAuthJson: "encrypted",
+            });
+            mockTidalStreamingService.findMatchesForAlbum.mockResolvedValue([
+                {
+                    id: 123,
+                    title: "Tidal Song",
+                    artist: "Tidal Artist",
+                    duration: 180,
+                    isrc: "ISRC123",
+                },
+            ]);
+            mockTrackMappingService.upsertTrackTidal.mockResolvedValue({
+                id: "tidal-row-persist",
+            });
+
+            await expect(
+                playlistImportService.previewImport(
+                    "user_1",
+                    "https://open.spotify.com/playlist/sp_tidal_persistence_failure",
+                    {
+                        onResolved: async () => {
+                            throw new Error("persist failed");
+                        },
+                    },
+                ),
+            ).rejects.toThrow("persist failed");
+            expect(mockLogger.warn).not.toHaveBeenCalledWith(
+                "Tidal batch match failed during import:",
+                expect.anything(),
+            );
+            expect(
+                mockYtMusicService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
         });
 
         it("skips Tidal matching when session restore fails and falls back to YouTube", async () => {
