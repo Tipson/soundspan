@@ -46,6 +46,10 @@ export interface StoredImportJob {
     summary: ImportJobSummary;
     resolvedTracks: Prisma.JsonValue | null;
     createdPlaylistId: string | null;
+    resolutionStartedAt: Date | null;
+    resolutionProcessed: number;
+    resolutionAttempt: number;
+    estimatedRemainingSeconds: number | null;
     error: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -77,6 +81,9 @@ export interface UpdateImportJobInput {
     summary?: ImportJobSummary;
     resolvedTracks?: Prisma.InputJsonValue | null;
     createdPlaylistId?: string | null;
+    resolutionStartedAt?: Date | null;
+    resolutionProcessed?: number;
+    resolutionAttempt?: number;
     error?: string | null;
 }
 
@@ -92,6 +99,12 @@ export interface ClaimImportJobResult {
  * Outcome of an ownership-scoped, conditional cancellation request.
  */
 export type RequestImportJobCancellationResult =
+    | { outcome: "updated"; job: StoredImportJob }
+    | { outcome: "not_found" | "forbidden"; job: null }
+    | { outcome: "conflict"; job: StoredImportJob };
+
+/** Outcome of an ownership-scoped retry for unresolved playlist positions. */
+export type RequestImportJobRetryResult =
     | { outcome: "updated"; job: StoredImportJob }
     | { outcome: "not_found" | "forbidden"; job: null }
     | { outcome: "conflict"; job: StoredImportJob };
@@ -146,6 +159,15 @@ function buildJobUpdateData(input: UpdateImportJobInput) {
         ...(input.createdPlaylistId !== undefined
             ? { createdPlaylistId: input.createdPlaylistId }
             : {}),
+        ...(input.resolutionStartedAt !== undefined
+            ? { resolutionStartedAt: input.resolutionStartedAt }
+            : {}),
+        ...(input.resolutionProcessed !== undefined
+            ? { resolutionProcessed: input.resolutionProcessed }
+            : {}),
+        ...(input.resolutionAttempt !== undefined
+            ? { resolutionAttempt: input.resolutionAttempt }
+            : {}),
         ...(input.error !== undefined ? { error: input.error } : {}),
     };
 }
@@ -178,6 +200,9 @@ type ImportJobPersistenceRecord = {
     summary: Prisma.JsonValue;
     resolvedTracks: Prisma.JsonValue | null;
     createdPlaylistId: string | null;
+    resolutionStartedAt: Date | null;
+    resolutionProcessed: number;
+    resolutionAttempt: number;
     error: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -186,10 +211,35 @@ type ImportJobPersistenceRecord = {
 function toStoredImportJob(
     record: ImportJobPersistenceRecord,
 ): StoredImportJob {
+    const rawSummary = record.summary as unknown;
+    const summary: ImportJobSummary =
+        rawSummary && typeof rawSummary === "object"
+            ? (rawSummary as ImportJobSummary)
+            : {
+                  total: 0,
+                  local: 0,
+                  youtube: 0,
+                  tidal: 0,
+                  unresolved: 0,
+              };
+    const startedAt = record.resolutionStartedAt ?? null;
+    const processed = record.resolutionProcessed ?? 0;
+    const remaining = Math.max(0, summary.total - processed);
+    const elapsedSeconds = startedAt
+        ? Math.max(1, (Date.now() - startedAt.getTime()) / 1000)
+        : 0;
+    const estimatedRemainingSeconds =
+        startedAt && processed > 0 && remaining > 0
+            ? Math.ceil(remaining / (processed / elapsedSeconds))
+            : null;
     return {
         ...record,
         status: record.status as ImportJobLifecycleStatus,
-        summary: record.summary as unknown as ImportJobSummary,
+        summary,
+        resolutionStartedAt: startedAt,
+        resolutionProcessed: processed,
+        resolutionAttempt: record.resolutionAttempt ?? 0,
+        estimatedRemainingSeconds,
     };
 }
 
@@ -509,6 +559,91 @@ class ImportJobStore {
                 return { outcome: "forbidden", job: null };
             }
             return { outcome: "conflict", job: stored };
+        });
+    }
+
+    /**
+     * Reopens a settled owned job when its visible playlist still has
+     * unresolved source positions.
+     */
+    async requestResolutionRetry(
+        jobId: string,
+        userId: string,
+    ): Promise<RequestImportJobRetryResult> {
+        return prisma.$transaction(async (transaction) => {
+            const current = await transaction.importJob.findUnique({
+                where: { id: jobId },
+            });
+            if (!current) {
+                return { outcome: "not_found", job: null };
+            }
+            const stored = toStoredImportJob(
+                current as unknown as ImportJobPersistenceRecord,
+            );
+            if (stored.userId !== userId) {
+                return { outcome: "forbidden", job: null };
+            }
+            const canRetry =
+                (stored.status === "completed" ||
+                    stored.status === "cancelled" ||
+                    stored.status === "failed") &&
+                stored.createdPlaylistId !== null &&
+                Array.isArray(stored.resolvedTracks) &&
+                stored.summary.unresolved > 0;
+            if (!canRetry) {
+                return { outcome: "conflict", job: stored };
+            }
+
+            const resolvedCount = Math.max(
+                0,
+                stored.summary.total - stored.summary.unresolved,
+            );
+            const transition = await transaction.importJob.updateMany({
+                where: {
+                    id: jobId,
+                    userId,
+                    status: { in: ["completed", "cancelled", "failed"] },
+                    createdPlaylistId: { not: null },
+                },
+                data: {
+                    status: "resolving",
+                    progress: 40,
+                    // A retry resumes a partially processed snapshot. Leave ETA
+                    // unavailable rather than treating earlier work as if it
+                    // happened instantly in this attempt.
+                    resolutionStartedAt: null,
+                    resolutionProcessed: resolvedCount,
+                    resolutionAttempt: { increment: 1 },
+                    error: null,
+                },
+            });
+            if (transition.count === 0) {
+                const winner = await transaction.importJob.findUnique({
+                    where: { id: jobId },
+                });
+                if (!winner) {
+                    return { outcome: "not_found", job: null };
+                }
+                return {
+                    outcome: "conflict",
+                    job: toStoredImportJob(
+                        winner as unknown as ImportJobPersistenceRecord,
+                    ),
+                };
+            }
+
+            const updated = await transaction.importJob.findUnique({
+                where: { id: jobId },
+            });
+            if (!updated) {
+                throw new Error("Import job disappeared during retry");
+            }
+            return {
+                outcome: "updated",
+                job: toStoredImportJob(
+                    updated as unknown as ImportJobPersistenceRecord,
+                ),
+            };
         });
     }
 

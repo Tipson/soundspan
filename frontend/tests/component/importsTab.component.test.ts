@@ -10,6 +10,7 @@ GlobalRegistrator.register();
 
 let jobsResponse: Array<Record<string, unknown>> = [];
 let listCalls = 0;
+let retryCalls: string[] = [];
 let pushedRoutes: string[] = [];
 let listImportJobsImpl = async () => ({ jobs: jobsResponse });
 
@@ -21,6 +22,10 @@ mock.module("@/lib/api", {
                 return listImportJobsImpl();
             },
             cancelImportJob: async () => ({}),
+            retryImportJob: async (jobId: string) => {
+                retryCalls.push(jobId);
+                return { job: jobsResponse[0] };
+            },
         },
     },
 });
@@ -58,9 +63,114 @@ after(() => {
 beforeEach(() => {
     jobsResponse = [];
     listCalls = 0;
+    retryCalls = [];
     pushedRoutes = [];
     listImportJobsImpl = async () => ({ jobs: jobsResponse });
     document.body.replaceChildren();
+});
+
+test("shows the playlist immediately while unresolved tracks continue in the background", async () => {
+    jobsResponse = [
+        {
+            id: "job-progressive",
+            sourceType: "spotify",
+            playlistName: "Large Playlist",
+            requestedPlaylistName: null,
+            status: "resolving",
+            progress: 56,
+            summary: {
+                total: 1400,
+                local: 100,
+                youtube: 900,
+                tidal: 0,
+                unresolved: 400,
+            },
+            createdPlaylistId: "playlist-progressive",
+            resolutionStartedAt: "2026-09-02T12:00:00.000Z",
+            resolutionProcessed: 1000,
+            resolutionAttempt: 1,
+            estimatedRemainingSeconds: 420,
+            error: null,
+            createdAt: "2026-09-02T11:59:45.000Z",
+        },
+    ];
+    const { ImportsTab } = await import("../../components/activity/ImportsTab");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+        await React.act(async () => {
+            root.render(React.createElement(ImportsTab));
+        });
+        await flushAsync();
+
+        assert.match(container.textContent ?? "", /1000 готово/);
+        assert.match(container.textContent ?? "", /400 ищем/);
+        assert.match(container.textContent ?? "", /Осталось примерно 7 мин/);
+        const viewPlaylistButton = [
+            ...container.querySelectorAll("button"),
+        ].find((button) => button.textContent?.includes("Открыть плейлист"));
+        assert.ok(viewPlaylistButton);
+
+        await React.act(async () => viewPlaylistButton.click());
+        assert.deepEqual(pushedRoutes, ["/playlist/playlist-progressive"]);
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});
+
+test("retries only unresolved tracks for a completed import", async () => {
+    jobsResponse = [
+        {
+            id: "job-retry",
+            sourceType: "spotify",
+            playlistName: "Partial Playlist",
+            requestedPlaylistName: null,
+            status: "completed",
+            progress: 100,
+            summary: {
+                total: 10,
+                local: 2,
+                youtube: 6,
+                tidal: 0,
+                unresolved: 2,
+            },
+            createdPlaylistId: "playlist-retry",
+            resolutionStartedAt: "2026-09-02T12:00:00.000Z",
+            resolutionProcessed: 10,
+            resolutionAttempt: 1,
+            estimatedRemainingSeconds: null,
+            error: null,
+            createdAt: "2026-09-02T11:59:45.000Z",
+        },
+    ];
+    const { ImportsTab } = await import("../../components/activity/ImportsTab");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+        await React.act(async () => {
+            root.render(React.createElement(ImportsTab));
+        });
+        await flushAsync();
+
+        const retryButton = [...container.querySelectorAll("button")].find(
+            (button) => button.textContent?.includes("Повторить поиск"),
+        );
+        assert.ok(retryButton);
+        await React.act(async () => retryButton.click());
+
+        assert.deepEqual(retryCalls, ["job-retry"]);
+        assert.equal(listCalls, 2);
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
 });
 
 async function flushAsync(): Promise<void> {

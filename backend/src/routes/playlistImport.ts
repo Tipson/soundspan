@@ -5,8 +5,10 @@ import { playlistImportService } from "../services/playlistImportService";
 import { importJobStore } from "../services/importJobStore";
 import { genericImportJobRunner } from "../services/genericImportJobRunner";
 import { logger } from "../utils/logger";
+import { sendInternalRouteError } from "../utils/routeErrorResponse";
 
 const router = Router();
+const log = logger.child("PlaylistImportRoute");
 
 const urlSchema = z.object({
     url: z.string().url(),
@@ -316,6 +318,62 @@ router.post(
         } catch (err) {
             logger.error("[Import] Job cancel failed:", err);
             res.status(500).json({ error: "Failed to cancel import job" });
+        }
+    },
+);
+
+/**
+ * @openapi
+ * /api/import/jobs/{jobId}/retry:
+ *   post:
+ *     summary: Retry unresolved positions in a settled background import
+ *     tags: [Import]
+ *     responses:
+ *       200:
+ *         description: Resolution retry started
+ *       403:
+ *         description: Not authorized to retry this job
+ *       404:
+ *         description: Import job not found
+ *       409:
+ *         description: Job has no retryable unresolved positions
+ */
+router.post(
+    "/jobs/:jobId/retry",
+    requireAuth,
+    async (req: Request<{ jobId: string }>, res: Response) => {
+        try {
+            const retry = await importJobStore.requestResolutionRetry(
+                req.params.jobId,
+                req.user!.id,
+            );
+            if (retry.outcome === "not_found") {
+                return res.status(404).json({ error: "Import job not found" });
+            }
+            if (retry.outcome === "forbidden") {
+                return res.status(403).json({
+                    error: "Not authorized to retry this import job",
+                });
+            }
+            if (retry.outcome === "conflict") {
+                return res.status(409).json({
+                    error: "Import job has no retryable unresolved positions",
+                });
+            }
+            if (!retry.job) {
+                return res.status(409).json({
+                    error: "Import job could not be retried",
+                });
+            }
+
+            genericImportJobRunner.enqueue(
+                retry.job.id,
+                retry.job.resolutionAttempt,
+            );
+            res.json({ job: retry.job });
+        } catch (err) {
+            log.error("Job retry failed", { error: err });
+            sendInternalRouteError(res, "Failed to retry import job");
         }
     },
 );

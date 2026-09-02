@@ -1128,6 +1128,59 @@ describe("PlaylistImportService", () => {
     });
 
     describe("previewImport", () => {
+        it("prepares source metadata without waiting for provider matching", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "sp_fast",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
+                name: "Fast Playlist",
+                tracks: [
+                    {
+                        title: "Source Song",
+                        artist: "Source Artist",
+                        album: "Source Album",
+                        durationMs: 201000,
+                        isrc: "FAST-ISRC",
+                    },
+                ],
+            });
+
+            const prepared = await playlistImportService.prepareImport(
+                "user_1",
+                "https://open.spotify.com/playlist/sp_fast",
+            );
+
+            expect(prepared).toEqual({
+                playlistName: "Fast Playlist",
+                resolved: [
+                    {
+                        index: 0,
+                        artist: "Source Artist",
+                        title: "Source Song",
+                        album: "Source Album",
+                        duration: 201,
+                        isrc: "FAST-ISRC",
+                        source: "unresolved",
+                        confidence: 0,
+                    },
+                ],
+                summary: {
+                    total: 1,
+                    local: 0,
+                    youtube: 0,
+                    tidal: 0,
+                    unresolved: 1,
+                },
+            });
+            expect(
+                mockYtMusicService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockTidalStreamingService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
+        });
+
         it("returns resolution summary for Spotify playlist", async () => {
             mockSpotifyService.parseUrl.mockReturnValue({
                 type: "playlist",
@@ -1268,6 +1321,60 @@ describe("PlaylistImportService", () => {
             );
             expect(result.summary.youtube).toBe(2);
             expect(result.summary.unresolved).toBe(1);
+        });
+
+        it("publishes a completed YouTube batch while a slower batch is still running", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "sp_progressive",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
+                name: "Progressive Playlist",
+                tracks: Array.from({ length: 30 }, (_, index) => ({
+                    title: `Song ${index}`,
+                    artist: `Artist ${index}`,
+                    album: "Album",
+                    durationMs: 180000,
+                    isrc: null,
+                })),
+            });
+            let releaseSlowBatch!: (value: Array<null>) => void;
+            const slowBatch = new Promise<Array<null>>((resolve) => {
+                releaseSlowBatch = resolve;
+            });
+            mockYtMusicService.findMatchesForAlbum
+                .mockResolvedValueOnce([
+                    {
+                        videoId: "yt-first",
+                        title: "Song 0",
+                        duration: 180,
+                    },
+                    ...Array.from({ length: 24 }, () => null),
+                ])
+                .mockReturnValueOnce(slowBatch);
+            mockTrackMappingService.upsertTrackYtMusic.mockResolvedValueOnce({
+                id: "yt-row-first",
+            });
+            const onResolved = jest.fn(async () => undefined);
+
+            const previewPromise = playlistImportService.previewImport(
+                "user_1",
+                "https://open.spotify.com/playlist/sp_progressive",
+                { onResolved },
+            );
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            await new Promise<void>((resolve) => setImmediate(resolve));
+
+            expect(onResolved).toHaveBeenCalledWith([
+                expect.objectContaining({
+                    index: 0,
+                    source: "youtube",
+                    trackYtMusicId: "yt-row-first",
+                }),
+            ]);
+
+            releaseSlowBatch(Array.from({ length: 5 }, () => null));
+            await previewPromise;
         });
 
         it("batch-resolves unresolved tracks through Tidal after YT misses", async () => {

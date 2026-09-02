@@ -69,6 +69,15 @@ export function WithImports<TBase extends ApiClientConstructor>(Base: TBase) {
                 },
             );
         }
+
+        async retryImportJob(jobId: string) {
+            return this.request<{ job: ImportJob }>(
+                `/import/jobs/${jobId}/retry`,
+                {
+                    method: "POST",
+                },
+            );
+        }
     }
     return ImportsApi;
 }

@@ -14,6 +14,7 @@ import {
     type PlaylistImportProgressEvent,
 } from "./playlistImportService";
 import { SpotifyPlaylistPaginationError } from "./spotifyPlaylistPagination";
+import { backgroundPlaylistImport } from "./backgroundPlaylistImport";
 
 const log = logger.child("GenericImportJobRunner");
 const RUN_JOB_NAME = "generic-import-run";
@@ -122,6 +123,13 @@ function isOptionalString(value: unknown): boolean {
     return value === undefined || typeof value === "string";
 }
 
+function isOptionalFiniteNumber(value: unknown): boolean {
+    return (
+        value === undefined ||
+        (typeof value === "number" && Number.isFinite(value) && value >= 0)
+    );
+}
+
 function parseResolvedTrackSnapshot(
     value: unknown,
 ): ImportResolvedTrack | null {
@@ -152,6 +160,10 @@ function parseResolvedTrackSnapshot(
     }
     if (
         !isOptionalString(value.album) ||
+        !isOptionalFiniteNumber(value.duration) ||
+        !isOptionalString(value.isrc) ||
+        !isOptionalString(value.videoId) ||
+        !isOptionalFiniteNumber(value.tidalId) ||
         !isOptionalString(value.trackId) ||
         !isOptionalString(value.trackTidalId) ||
         !isOptionalString(value.trackYtMusicId)
@@ -196,6 +208,16 @@ function parseResolvedTrackSnapshot(
         source: value.source as ImportResolvedTrack["source"],
         confidence: value.confidence,
         ...(typeof value.album === "string" ? { album: value.album } : {}),
+        ...(typeof value.duration === "number"
+            ? { duration: value.duration }
+            : {}),
+        ...(typeof value.isrc === "string" ? { isrc: value.isrc } : {}),
+        ...(typeof value.videoId === "string"
+            ? { videoId: value.videoId }
+            : {}),
+        ...(typeof value.tidalId === "number"
+            ? { tidalId: value.tidalId }
+            : {}),
         ...(typeof value.trackId === "string"
             ? { trackId: value.trackId }
             : {}),
@@ -206,6 +228,32 @@ function parseResolvedTrackSnapshot(
             ? { trackYtMusicId: value.trackYtMusicId }
             : {}),
     };
+}
+
+function summarizeResolvedTracks(
+    resolvedTracks: ImportResolvedTrack[],
+): ImportPreview["summary"] {
+    return {
+        total: resolvedTracks.length,
+        local: resolvedTracks.filter((track) => track.source === "local")
+            .length,
+        youtube: resolvedTracks.filter((track) => track.source === "youtube")
+            .length,
+        tidal: resolvedTracks.filter((track) => track.source === "tidal")
+            .length,
+        unresolved: resolvedTracks.filter(
+            (track) => track.source === "unresolved",
+        ).length,
+    };
+}
+
+function processedTracksFor(
+    event: PlaylistImportProgressEvent,
+    total: number,
+): number {
+    if (event.stage !== "youtube") return 0;
+    const completedBeforeYouTube = Math.max(0, total - event.total);
+    return Math.min(total, completedBeforeYouTube + event.completed);
 }
 
 function isImportSummarySnapshot(
@@ -229,6 +277,11 @@ function restoreImportPreview(job: StoredImportJob): ImportPreview {
     const resolvedTracks = parsedTracks.filter(
         (track): track is ImportResolvedTrack => track !== null,
     );
+    if (resolvedTracks.some((track, position) => track.index !== position)) {
+        throw new Error(
+            "Persisted import snapshot positions are not contiguous and ordered",
+        );
+    }
     if (!isImportSummarySnapshot(job.summary)) {
         throw new Error(
             "Persisted import snapshot contains an invalid summary",
@@ -274,13 +327,15 @@ export class GenericImportJobRunner {
     /**
      * Supervises durable queue insertion for an API-created import job.
      */
-    enqueue(jobId: string): void {
-        void this.enqueuePersistedJob(jobId).catch((error) => {
-            log.error("Failed to enqueue persisted import job", {
-                jobId,
-                error,
-            });
-        });
+    enqueue(jobId: string, resolutionAttempt = 0): void {
+        void this.enqueuePersistedJob(jobId, resolutionAttempt).catch(
+            (error) => {
+                log.error("Failed to enqueue persisted import job", {
+                    jobId,
+                    error,
+                });
+            },
+        );
     }
 
     /**
@@ -317,7 +372,7 @@ export class GenericImportJobRunner {
         const jobs = await prisma.importJob.findMany({
             where: { status: { in: [...ACTIVE_IMPORT_JOB_STATUSES] } },
             orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-            select: { id: true },
+            select: { id: true, resolutionAttempt: true },
             take: RECOVERY_BATCH_SIZE,
         });
 
@@ -329,7 +384,7 @@ export class GenericImportJobRunner {
         ) {
             const job = jobs[index];
             if (job) {
-                await this.enqueuePersistedJob(job.id);
+                await this.enqueuePersistedJob(job.id, job.resolutionAttempt);
                 recoveredCount += 1;
             }
         }
@@ -391,11 +446,18 @@ export class GenericImportJobRunner {
         log.error("Import queue exhausted recovery", { jobId, error });
     }
 
-    private async enqueuePersistedJob(jobId: string): Promise<void> {
+    private async enqueuePersistedJob(
+        jobId: string,
+        resolutionAttempt = 0,
+    ): Promise<void> {
         if (!jobId.trim()) {
             throw new Error("Generic import job id is required");
         }
-        const existingJob = await genericImportQueue.getJob(jobId);
+        const queueJobId =
+            resolutionAttempt > 1
+                ? `${jobId}:resolution:${resolutionAttempt}`
+                : jobId;
+        const existingJob = await genericImportQueue.getJob(queueJobId);
         if (existingJob) {
             const state = await existingJob.getState();
             if (state === "failed" || state === "completed") {
@@ -406,7 +468,11 @@ export class GenericImportJobRunner {
             }
             return;
         }
-        await genericImportQueue.add(RUN_JOB_NAME, { jobId }, { jobId });
+        await genericImportQueue.add(
+            RUN_JOB_NAME,
+            { jobId },
+            { jobId: queueJobId },
+        );
     }
 
     private async executeJob(jobId: string): Promise<void> {
@@ -421,6 +487,28 @@ export class GenericImportJobRunner {
             const resolved = await this.resolvePreview(jobId);
             runnableJob = resolved.job;
             preview = resolved.preview;
+        }
+        if (
+            runnableJob.status !== "creating_playlist" &&
+            runnableJob.createdPlaylistId &&
+            preview
+        ) {
+            const visiblePlaylistId = runnableJob.createdPlaylistId;
+            runnableJob = await this.transitionOrStop(jobId, ["resolving"], {
+                status: "creating_playlist",
+                progress: 99,
+                playlistName:
+                    runnableJob.requestedPlaylistName ?? preview.playlistName,
+                summary: preview.summary,
+                resolvedTracks:
+                    preview.resolved as unknown as Prisma.InputJsonValue,
+                resolutionProcessed: preview.summary.total,
+            });
+            await this.completeJob(jobId, {
+                playlistId: visiblePlaylistId,
+                summary: preview.summary,
+            });
+            return;
         }
         const execution = await this.createPlaylist(
             jobId,
@@ -441,28 +529,131 @@ export class GenericImportJobRunner {
                 progress: 20,
             },
         );
-        let persistedProgress = 20;
+        let persistedProgress = Math.max(20, job.progress ?? 0);
+        let resolutionProcessed = job.resolutionProcessed ?? 0;
+        let resolutionAttempt = job.resolutionAttempt ?? 0;
+        let visiblePlaylistId = job.createdPlaylistId;
+        let snapshot: ImportResolvedTrack[] = [];
+        let currentSummary = job.summary;
+        if (visiblePlaylistId && job.resolvedTracks) {
+            const restored = restoreImportPreview(job);
+            snapshot = restored.resolved;
+            currentSummary = restored.summary;
+        }
         let progressWrites = Promise.resolve();
+        const persistBackgroundState = (
+            newlyResolved: ImportResolvedTrack[],
+        ) => {
+            if (!visiblePlaylistId) return progressWrites;
+            const playlistId = visiblePlaylistId;
+            const persistedSnapshot = snapshot.map((track) => ({ ...track }));
+            const persistedSummary = { ...currentSummary };
+            const progress = persistedProgress;
+            const processed = resolutionProcessed;
+            progressWrites = progressWrites.then(async () => {
+                const persisted =
+                    await backgroundPlaylistImport.persistResolution({
+                        jobId,
+                        userId: job.userId,
+                        playlistId,
+                        expectedResolutionAttempt: resolutionAttempt,
+                        newlyResolved,
+                        snapshot: persistedSnapshot,
+                        summary: persistedSummary,
+                        progress,
+                        resolutionProcessed: processed,
+                    });
+                if (!persisted) {
+                    const latestJob = await importJobStore.getJob(jobId);
+                    if (latestJob?.status === "cancelling") {
+                        throw new ImportJobCancelledError();
+                    }
+                    throw new ImportJobSupersededError();
+                }
+            });
+            return progressWrites;
+        };
+        const onPrepared = async (prepared: ImportPreview) => {
+            const playlistName =
+                job.requestedPlaylistName ?? prepared.playlistName;
+            const initialized = await backgroundPlaylistImport.initialize({
+                jobId,
+                userId: job.userId,
+                playlistName,
+                tracks: prepared.resolved,
+            });
+            visiblePlaylistId = initialized.playlistId;
+            resolutionAttempt = initialized.resolutionAttempt;
+            snapshot = prepared.resolved.map((track) => ({ ...track }));
+            currentSummary = { ...prepared.summary };
+            persistedProgress = 25;
+            resolutionProcessed = 0;
+        };
+        const onResolved = async (tracks: ImportResolvedTrack[]) => {
+            const byIndex = new Map(
+                tracks.map((track) => [track.index, track] as const),
+            );
+            snapshot = snapshot.map((track) =>
+                byIndex.has(track.index)
+                    ? { ...(byIndex.get(track.index) as ImportResolvedTrack) }
+                    : track,
+            );
+            currentSummary = summarizeResolvedTracks(snapshot);
+            await persistBackgroundState(tracks);
+        };
         const onProgress = (event: PlaylistImportProgressEvent) => {
             const nextProgress = persistedProgressFor(event);
-            if (nextProgress <= persistedProgress) {
+            const nextProcessed = processedTracksFor(
+                event,
+                currentSummary.total,
+            );
+            if (
+                nextProgress <= persistedProgress &&
+                nextProcessed <= resolutionProcessed
+            ) {
                 return progressWrites;
             }
-            persistedProgress = nextProgress;
+            persistedProgress = Math.max(persistedProgress, nextProgress);
+            resolutionProcessed = Math.max(resolutionProcessed, nextProcessed);
+            if (visiblePlaylistId) {
+                return persistBackgroundState([]);
+            }
             progressWrites = progressWrites.then(async () => {
                 await this.transitionOrStop(jobId, ["resolving"], {
-                    progress: nextProgress,
+                    progress: persistedProgress,
                 });
             });
             return progressWrites;
         };
-        const preview = await playlistImportService.previewImport(
-            job.userId,
-            job.sourceUrl,
-            { onProgress },
-        );
+        const preview = visiblePlaylistId
+            ? await playlistImportService.resolvePreparedImport(
+                  job.userId,
+                  {
+                      playlistName: job.playlistName,
+                      resolved: snapshot,
+                      summary: currentSummary,
+                  },
+                  { onProgress, onResolved },
+              )
+            : await playlistImportService.previewImport(
+                  job.userId,
+                  job.sourceUrl,
+                  { onPrepared, onProgress, onResolved },
+              );
         await progressWrites;
-        return { job, preview };
+        return {
+            job: {
+                ...job,
+                status: "resolving",
+                progress: persistedProgress,
+                playlistName: job.requestedPlaylistName ?? preview.playlistName,
+                summary: preview.summary,
+                resolvedTracks: preview.resolved as unknown as Prisma.JsonValue,
+                createdPlaylistId: visiblePlaylistId,
+                resolutionProcessed,
+            },
+            preview,
+        };
     }
 
     private async createPlaylist(

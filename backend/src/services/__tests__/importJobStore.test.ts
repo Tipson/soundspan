@@ -1048,4 +1048,90 @@ describe("import job store", () => {
         expect(jobs).toHaveLength(1);
         expect(jobs[0]?.normalizedSource).toBe("deezer:123");
     });
+
+    it("reopens an owned failed import when its visible playlist has unresolved positions", async () => {
+        const { prisma } = setupImportJobStoreMocks();
+        const persistedJob = {
+            id: "job-retry",
+            userId: "user-1",
+            sourceType: "spotify",
+            sourceId: "source-1",
+            sourceUrl: "https://open.spotify.com/playlist/source-1",
+            normalizedSource: "spotify:source-1",
+            playlistName: "Retry Mix",
+            requestedPlaylistName: null,
+            status: "failed",
+            progress: 100,
+            summary: {
+                total: 10,
+                local: 0,
+                youtube: 8,
+                tidal: 0,
+                unresolved: 2,
+            },
+            resolvedTracks: [
+                {
+                    index: 9,
+                    artist: "Artist",
+                    title: "Missing",
+                    source: "unresolved",
+                    confidence: 0,
+                },
+            ],
+            createdPlaylistId: "playlist-1",
+            resolutionStartedAt: new Date("2026-03-14T18:30:00.000Z"),
+            resolutionProcessed: 10,
+            resolutionAttempt: 1,
+            error: null,
+            createdAt: new Date("2026-03-14T18:30:00.000Z"),
+            updatedAt: new Date("2026-03-14T18:31:00.000Z"),
+        };
+        (prisma.importJob.findUnique as jest.Mock).mockResolvedValue(
+            persistedJob,
+        );
+        (prisma.importJob.updateMany as jest.Mock).mockImplementation(
+            async ({ data }) => {
+                Object.assign(persistedJob, {
+                    ...data,
+                    resolutionAttempt:
+                        persistedJob.resolutionAttempt +
+                        (data.resolutionAttempt?.increment ?? 0),
+                });
+                return { count: 1 };
+            },
+        );
+
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { importJobStore } = require("../importJobStore");
+        const result = await importJobStore.requestResolutionRetry(
+            "job-retry",
+            "user-1",
+        );
+
+        expect(result.outcome).toBe("updated");
+        expect(result.job).toEqual(
+            expect.objectContaining({
+                status: "resolving",
+                progress: 40,
+                resolutionProcessed: 8,
+                resolutionAttempt: 2,
+            }),
+        );
+        expect(prisma.importJob.updateMany).toHaveBeenCalledWith({
+            where: {
+                id: "job-retry",
+                userId: "user-1",
+                status: { in: ["completed", "cancelled", "failed"] },
+                createdPlaylistId: { not: null },
+            },
+            data: expect.objectContaining({
+                status: "resolving",
+                progress: 40,
+                resolutionProcessed: 8,
+                resolutionAttempt: { increment: 1 },
+                resolutionStartedAt: null,
+                error: null,
+            }),
+        });
+    });
 });

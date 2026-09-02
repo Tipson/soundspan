@@ -670,17 +670,18 @@ export default function PlaylistDetailPage() {
             <div className="mx-auto max-w-[1800px] px-4 pt-2 sm:px-6 lg:px-8">
                 {/* Show failed/pending count if any */}
                 {playlist.pendingCount > 0 && (
-                    <div className="mb-4 flex items-center gap-2 rounded-2xl border border-red-500/30 bg-red-900/20 px-4 py-3">
-                        <AlertCircle className="w-4 h-4 text-red-400" />
-                        <span className="text-sm text-red-200">
-                            Не удалось загрузить {playlist.pendingCount}{" "}
+                    <div className="mb-4 flex items-center gap-2 rounded-2xl border border-brand/30 bg-brand/10 px-4 py-3">
+                        <AlertCircle className="h-4 w-4 text-brand-light" />
+                        <span className="text-sm text-content-body">
+                            Для {playlist.pendingCount}{" "}
                             {pluralRu(playlist.pendingCount, [
                                 "трек",
                                 "трека",
                                 "треков",
                             ])}
-                            . Soundspan импортирует их автоматически, когда они
-                            станут доступны.
+                            {
+                                " источник пока не найден. Во время импорта список обновляется автоматически; позже поиск можно повторить."
+                            }
                         </span>
                     </div>
                 )}

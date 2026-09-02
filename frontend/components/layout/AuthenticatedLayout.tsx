@@ -45,7 +45,12 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
         const handleClose = () => activityPanel.close();
         const handleSetTab = (
             e: CustomEvent<{
-                tab: "notifications" | "active" | "history" | "social";
+                tab:
+                    | "notifications"
+                    | "active"
+                    | "history"
+                    | "imports"
+                    | "social";
             }>,
         ) => {
             activityPanel.setActiveTab(e.detail.tab);

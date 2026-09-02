@@ -781,9 +781,8 @@ model PlaylistItem {
   @@index([trackYtMusicId])
 }
 
-/// @deprecated Use PlaylistItem with trackTidalId/trackYtMusicId instead.
-/// Retained for backward compatibility with legacy Spotify imports.
-/// No new rows should be written. Table will be dropped in a future migration.
+/// Durable source metadata retained while a playlist position is waiting for
+/// a playable local or remote provider identity.
 model PlaylistPendingTrack {
   id               String   @id @default(cuid())
   playlistId       String
@@ -797,7 +796,7 @@ model PlaylistPendingTrack {
   createdAt        DateTime @default(now())
   playlist         Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
 
-  @@unique([playlistId, spotifyArtist, spotifyTitle])
+  @@unique([playlistId, sort])
   @@index([playlistId])
   @@index([albumMbid])
   @@index([artistMbid])
@@ -828,7 +827,7 @@ model SpotifyImportJob {
 }
 
 model ImportJob {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   userId                String
   sourceType            String
   sourceId              String
@@ -837,14 +836,17 @@ model ImportJob {
   playlistName          String
   requestedPlaylistName String?
   status                String
-  progress              Int      @default(0)
+  progress              Int       @default(0)
   summary               Json
   resolvedTracks        Json?
   createdPlaylistId     String?
+  resolutionStartedAt   DateTime?
+  resolutionProcessed   Int       @default(0)
+  resolutionAttempt     Int       @default(0)
   error                 String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])

@@ -255,6 +255,10 @@ export interface ImportJob {
     progress: number;
     summary: PlaylistImportSummary;
     createdPlaylistId: string | null;
+    resolutionStartedAt: string | null;
+    resolutionProcessed: number;
+    resolutionAttempt: number;
+    estimatedRemainingSeconds: number | null;
     error: string | null;
     createdAt: string;
     updatedAt: string;

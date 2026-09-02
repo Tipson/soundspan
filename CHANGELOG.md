@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- URL playlist imports now publish a complete ordered playlist shell immediately after source metadata is read, hydrate playable provider matches in background batches, expose ready/searching counts and an ETA in Activity, refresh an open playlist as matches arrive, and let users retry only unresolved positions.
 - My Wave now replaces the still-unplayed prepared tail after three consecutive early manual skips, while technical playback failures do not distort that preference signal; the refreshed queue starts from the first newly ranked track without waiting for the old batch to run out.
 - iPhone lock-screen Play and Pause actions now drive the audio engine synchronously before updating application state, preventing a resumed system timer from running while the PWA remains silent in the background.
 - Taste-profile artist suggestions follow the selected genres in a balanced order, and the artist field provides debounced, cancellable MusicBrainz autocomplete so listeners save a canonical artist instead of an unchecked free-form spelling. Saving a profile invalidates the account's personalized Home data without assuming that two accounts with overlapping listening history must receive different tracks.
@@ -55,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Background playlist imports preserve duplicate source occurrences, resume their durable per-position snapshot after API or worker restarts, reject stale resolution attempts, never restore positions removed by the listener, and keep already published matches when cancellation or a later provider batch fails.
 - Large provider imports give bounded YouTube Music search batches enough time to drain the sidecar's shared capacity, avoid retrying an entire timed-out batch, and cap individual fallback searches at the sidecar's three available slots instead of flooding it with `503` responses.
 - Complete Spotify imports now fall back to the public web-player pagination channel when the legacy REST endpoint is quota-limited, while still rejecting empty, truncated, inconsistent, or oversized page sequences instead of saving a partial playlist.
 - Large Spotify playlist imports now reach the scoped egress proxy from dedicated split backend addresses, abort requests that stall before Axios' socket timeout applies, and persist provider-batch progress instead of remaining indefinitely at 20%.
