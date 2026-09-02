@@ -135,6 +135,20 @@ test("provider sidecars retain the isolated egress proxy network", () => {
     }
 });
 
+test("backend runtimes reach the scoped egress proxy from allowlisted addresses", () => {
+    const config = renderSingleHostCompose();
+
+    assert.equal(
+        config.services.backend.networks["soundspan-egress"].ipv4_address,
+        "172.30.121.12",
+    );
+    assert.equal(
+        config.services["backend-worker"].networks["soundspan-egress"]
+            .ipv4_address,
+        "172.30.121.13",
+    );
+});
+
 test("single-host split overlay keeps the library read-only for core runtimes", () => {
     const config = renderSingleHostCompose();
 

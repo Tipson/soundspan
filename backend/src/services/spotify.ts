@@ -1,4 +1,3 @@
-import axios from "axios";
 import { logger } from "../utils/logger";
 import { deezerService } from "./deezer";
 import { rateLimiter } from "./rateLimiter";
@@ -18,6 +17,7 @@ import type {
     SpotifyPlaylistPreview,
     SpotifyTrack,
 } from "./spotifyTypes";
+import { spotifyGetWithDeadline } from "./spotifyRequest";
 
 export type {
     SpotifyAlbum,
@@ -112,7 +112,7 @@ class SpotifyService {
                     `Spotify: Fetching anonymous token from ${endpoint.url}...`,
                 );
 
-                const response = await axios.get(endpoint.url, {
+                const response = await spotifyGetWithDeadline(endpoint.url, {
                     params: endpoint.params,
                     headers: {
                         "User-Agent":
@@ -310,7 +310,7 @@ class SpotifyService {
                 `Spotify Scraper: Starting album scrape for playlist ${playlistId}`,
             );
 
-            const response = await axios.get(
+            const response = await spotifyGetWithDeadline(
                 `https://open.spotify.com/playlist/${playlistId}`,
                 {
                     headers: {
@@ -564,7 +564,7 @@ class SpotifyService {
             if (albumMap.has(track.spotifyId)) continue;
 
             try {
-                const response = await axios.get(
+                const response = await spotifyGetWithDeadline(
                     `https://open.spotify.com/track/${track.spotifyId}`,
                     {
                         headers: {
@@ -753,7 +753,7 @@ class SpotifyService {
         try {
             logger.debug(`Spotify: Fetching playlist ${playlistId}...`);
 
-            const playlistResponse = await axios.get(
+            const playlistResponse = await spotifyGetWithDeadline(
                 `https://api.spotify.com/v1/playlists/${playlistId}`,
                 {
                     headers: {
@@ -977,7 +977,7 @@ class SpotifyService {
         try {
             logger.debug("Spotify: Trying embed HTML parsing...");
 
-            const response = await axios.get(
+            const response = await spotifyGetWithDeadline(
                 `https://open.spotify.com/embed/playlist/${playlistId}`,
                 {
                     headers: {
@@ -1278,7 +1278,7 @@ class SpotifyService {
                 "Spotify: Trying featured playlists via official API...",
             );
 
-            const response = await axios.get(
+            const response = await spotifyGetWithDeadline(
                 "https://api.spotify.com/v1/browse/featured-playlists",
                 {
                     headers: {
@@ -1375,7 +1375,7 @@ class SpotifyService {
                 `Spotify: Fetching playlists for category ${categoryId}...`,
             );
 
-            const response = await axios.get(
+            const response = await spotifyGetWithDeadline(
                 `https://api.spotify.com/v1/browse/categories/${categoryId}/playlists`,
                 {
                     headers: {
@@ -1425,7 +1425,7 @@ class SpotifyService {
         try {
             logger.debug(`Spotify: Searching playlists for "${query}"...`);
 
-            const response = await axios.get(
+            const response = await spotifyGetWithDeadline(
                 "https://api.spotify.com/v1/search",
                 {
                     headers: {
@@ -1473,7 +1473,7 @@ class SpotifyService {
                 const newToken = await this.getAnonymousToken();
                 if (newToken) {
                     try {
-                        const retryResponse = await axios.get(
+                        const retryResponse = await spotifyGetWithDeadline(
                             "https://api.spotify.com/v1/search",
                             {
                                 headers: {
@@ -1523,7 +1523,7 @@ class SpotifyService {
         }
 
         try {
-            const response = await axios.get(
+            const response = await spotifyGetWithDeadline(
                 "https://api.spotify.com/v1/browse/categories",
                 {
                     headers: {

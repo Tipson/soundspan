@@ -529,6 +529,7 @@ describe("generic import job runner", () => {
         expect(mockPreviewImport).toHaveBeenCalledWith(
             "user-1",
             "https://open.spotify.com/playlist/abc",
+            expect.objectContaining({ onProgress: expect.any(Function) }),
         );
         expect(mockTransitionJob).toHaveBeenNthCalledWith(
             2,
@@ -608,6 +609,77 @@ describe("generic import job runner", () => {
                 error: null,
             },
         );
+    });
+
+    it("persists bounded progress while a large preview is resolving", async () => {
+        installStatefulJob({
+            id: "job-progress",
+            userId: "user-1",
+            sourceUrl: "https://open.spotify.com/playlist/large",
+            requestedPlaylistName: null,
+            playlistName: "Large import",
+            status: "pending",
+            progress: 0,
+            summary: {
+                total: 0,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
+            resolvedTracks: null,
+        });
+        mockPreviewImport.mockImplementation(
+            async (
+                _userId: string,
+                _sourceUrl: string,
+                options: {
+                    onProgress: (event: {
+                        stage: string;
+                        completed: number;
+                        total: number;
+                    }) => Promise<void>;
+                },
+            ) => {
+                await options.onProgress({
+                    stage: "source",
+                    completed: 1_400,
+                    total: 1_400,
+                });
+                await options.onProgress({
+                    stage: "local",
+                    completed: 1_400,
+                    total: 1_400,
+                });
+                await options.onProgress({
+                    stage: "youtube",
+                    completed: 700,
+                    total: 1_400,
+                });
+                return {
+                    playlistName: "Large import",
+                    resolved: [],
+                    summary: {
+                        total: 0,
+                        local: 0,
+                        youtube: 0,
+                        tidal: 0,
+                        unresolved: 0,
+                    },
+                };
+            },
+        );
+
+        await (genericImportJobRunner as any).resolvePreview("job-progress");
+
+        expect(
+            mockTransitionJob.mock.calls.map(([, , update]) => update),
+        ).toEqual([
+            { status: "resolving", progress: 20 },
+            { progress: 25 },
+            { progress: 30 },
+            { progress: 54 },
+        ]);
     });
 
     it("reuses the job playlist identity after playlist commit but before completion persists", async () => {

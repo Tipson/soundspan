@@ -1,5 +1,5 @@
-import axios from "axios";
 import { logger } from "../utils/logger";
+import { spotifyGetWithDeadline } from "./spotifyRequest";
 import type { SpotifyPlaylist, SpotifyTrack } from "./spotifyTypes";
 
 const HTML_NAMED_ENTITIES: Readonly<Record<string, string>> = {
@@ -21,7 +21,7 @@ export async function fetchSpotifyPlaylistEmbedSession(
     playlistId: string,
 ): Promise<SpotifyPlaylistEmbedSession | null> {
     try {
-        const response = await axios.get(
+        const response = await spotifyGetWithDeadline(
             `https://open.spotify.com/embed/playlist/${playlistId}`,
             {
                 headers: {

@@ -9,7 +9,10 @@ import {
     type UpdateImportJobInput,
 } from "./importJobStore";
 import { GENERIC_IMPORT_COMMIT_RECONCILIATION_WARNING } from "./genericImportIdentity";
-import { playlistImportService } from "./playlistImportService";
+import {
+    playlistImportService,
+    type PlaylistImportProgressEvent,
+} from "./playlistImportService";
 import { SpotifyPlaylistPaginationError } from "./spotifyPlaylistPagination";
 
 const log = logger.child("GenericImportJobRunner");
@@ -62,6 +65,23 @@ function isNonRetryableImportFailure(error: unknown): boolean {
             !error.providerFailure) ||
         responseStatus(error) === 429
     );
+}
+
+function persistedProgressFor(event: PlaylistImportProgressEvent): number {
+    const fraction =
+        event.total > 0
+            ? Math.max(0, Math.min(1, event.completed / event.total))
+            : 1;
+    switch (event.stage) {
+        case "source":
+            return 25;
+        case "local":
+            return 30;
+        case "tidal":
+            return 30 + Math.round(10 * fraction);
+        case "youtube":
+            return 40 + Math.round(28 * fraction);
+    }
 }
 
 type ImportPreview = Awaited<
@@ -421,10 +441,27 @@ export class GenericImportJobRunner {
                 progress: 20,
             },
         );
+        let persistedProgress = 20;
+        let progressWrites = Promise.resolve();
+        const onProgress = (event: PlaylistImportProgressEvent) => {
+            const nextProgress = persistedProgressFor(event);
+            if (nextProgress <= persistedProgress) {
+                return progressWrites;
+            }
+            persistedProgress = nextProgress;
+            progressWrites = progressWrites.then(async () => {
+                await this.transitionOrStop(jobId, ["resolving"], {
+                    progress: nextProgress,
+                });
+            });
+            return progressWrites;
+        };
         const preview = await playlistImportService.previewImport(
             job.userId,
             job.sourceUrl,
+            { onProgress },
         );
+        await progressWrites;
         return { job, preview };
     }
 

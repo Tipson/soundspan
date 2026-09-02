@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Large Spotify playlist imports now reach the scoped egress proxy from dedicated split backend addresses, abort requests that stall before Axios' socket timeout applies, and persist provider-batch progress instead of remaining indefinitely at 20%.
 - Single-host split deployments force `BACKEND_PROCESS_ROLE=api` for the API and `BACKEND_PROCESS_ROLE=worker` for the worker, preventing duplicate schedulers and processors after an AIO cutover.
 - Split backend images now detect OpenSSL during dependency installation and embed the Debian 12 Prisma schema engine, so startup migrations do not depend on a runtime download from Prisma's CDN.
 - Split workers now resolve TIDAL and YouTube Music sidecars through Compose DNS instead of incorrectly falling back to their own loopback interface.

@@ -39,6 +39,22 @@ interface PlaylistImportOptions {
     idempotencyKey?: string;
 }
 
+export type PlaylistImportProgressStage =
+    | "source"
+    | "local"
+    | "tidal"
+    | "youtube";
+
+export interface PlaylistImportProgressEvent {
+    stage: PlaylistImportProgressStage;
+    completed: number;
+    total: number;
+}
+
+export interface PlaylistImportPreviewOptions {
+    onProgress?: (event: PlaylistImportProgressEvent) => void | Promise<void>;
+}
+
 function isPlaylistIdentityConflict(error: unknown): boolean {
     if (typeof error !== "object" || error === null) return false;
     const candidate = error as {
@@ -402,6 +418,7 @@ class PlaylistImportService {
     async previewImport(
         userId: string,
         sourceUrl: string,
+        options: PlaylistImportPreviewOptions = {},
     ): Promise<{
         playlistName: string;
         resolved: ResolvedTrack[];
@@ -421,6 +438,11 @@ class PlaylistImportService {
             parsed.id,
             userId,
         );
+        await options.onProgress?.({
+            stage: "source",
+            completed: tracks.length,
+            total: tracks.length,
+        });
 
         // Fetch local library for matching
         const localCandidates = await this.getLocalLibraryCandidates();
@@ -433,6 +455,7 @@ class PlaylistImportService {
             localCandidates,
             userId,
             hasTidalAuth,
+            options.onProgress,
         );
 
         const summary = {
@@ -751,6 +774,7 @@ class PlaylistImportService {
         localCandidates: LocalTrackCandidate[],
         userId: string,
         hasTidalAuth: boolean,
+        onProgress?: PlaylistImportPreviewOptions["onProgress"],
     ): Promise<ResolvedTrack[]> {
         const resolved: ResolvedTrack[] = tracks.map((track, index) => ({
             index,
@@ -777,6 +801,11 @@ class PlaylistImportService {
 
             unresolved.push({ index: i, track });
         }
+        await onProgress?.({
+            stage: "local",
+            completed: tracks.length,
+            total: tracks.length,
+        });
 
         // Resolve tracks that already have native provider IDs (e.g. from YT/Tidal playlist import)
         await this.resolveNativeProviderTracks(unresolved, resolved);
@@ -787,13 +816,18 @@ class PlaylistImportService {
         );
 
         if (hasTidalAuth) {
-            await this.resolveWithTidal(userId, stillUnresolved, resolved);
+            await this.resolveWithTidal(
+                userId,
+                stillUnresolved,
+                resolved,
+                onProgress,
+            );
         }
 
         const youtubeCandidates = stillUnresolved.filter(
             (item) => resolved[item.index].source === "unresolved",
         );
-        await this.resolveWithYouTube(youtubeCandidates, resolved);
+        await this.resolveWithYouTube(youtubeCandidates, resolved, onProgress);
 
         return resolved;
     }
@@ -801,10 +835,14 @@ class PlaylistImportService {
     private async resolveWithYouTube(
         unresolved: IndexedImportTrack[],
         resolved: ResolvedTrack[],
+        onProgress?: PlaylistImportPreviewOptions["onProgress"],
     ): Promise<void> {
         if (unresolved.length === 0) return;
 
-        const matchedTracks = await this.matchYouTubeInBatches(unresolved);
+        const matchedTracks = await this.matchYouTubeInBatches(
+            unresolved,
+            onProgress,
+        );
         if (matchedTracks.length === 0) return;
 
         const ytRows = await mapWithConcurrency(
@@ -843,12 +881,14 @@ class PlaylistImportService {
         userId: string,
         unresolved: IndexedImportTrack[],
         resolved: ResolvedTrack[],
+        onProgress?: PlaylistImportPreviewOptions["onProgress"],
     ): Promise<void> {
         if (unresolved.length === 0) return;
 
         const matchedTracks = await this.matchTidalInBatches(
             userId,
             unresolved,
+            onProgress,
         );
         if (matchedTracks.length === 0) return;
 
@@ -947,8 +987,10 @@ class PlaylistImportService {
 
     private async matchYouTubeInBatches(
         unresolved: IndexedImportTrack[],
+        onProgress?: PlaylistImportPreviewOptions["onProgress"],
     ): Promise<Array<IndexedImportTrack & { match: YtMatch }>> {
         const batches = chunkArray(unresolved, MATCH_BATCH_SIZE);
+        let completed = 0;
         const batchResults = await mapWithConcurrency(
             batches,
             MATCH_BATCH_CONCURRENCY,
@@ -968,6 +1010,13 @@ class PlaylistImportService {
                 } catch (err) {
                     log.warn("YT Music batch match failed during import:", err);
                     return [];
+                } finally {
+                    completed += batch.length;
+                    await onProgress?.({
+                        stage: "youtube",
+                        completed,
+                        total: unresolved.length,
+                    });
                 }
             },
         );
@@ -978,8 +1027,10 @@ class PlaylistImportService {
     private async matchTidalInBatches(
         userId: string,
         unresolved: IndexedImportTrack[],
+        onProgress?: PlaylistImportPreviewOptions["onProgress"],
     ): Promise<Array<IndexedImportTrack & { match: TidalMatch }>> {
         const batches = chunkArray(unresolved, MATCH_BATCH_SIZE);
+        let completed = 0;
         const batchResults = await mapWithConcurrency(
             batches,
             MATCH_BATCH_CONCURRENCY,
@@ -1000,6 +1051,13 @@ class PlaylistImportService {
                 } catch (err) {
                     log.warn("Tidal batch match failed during import:", err);
                     return [];
+                } finally {
+                    completed += batch.length;
+                    await onProgress?.({
+                        stage: "tidal",
+                        completed,
+                        total: unresolved.length,
+                    });
                 }
             },
         );

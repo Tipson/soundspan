@@ -1172,14 +1172,21 @@ describe("PlaylistImportService", () => {
                 id: "cy_1",
             });
 
+            const onProgress = jest.fn(async () => undefined);
             const result = await playlistImportService.previewImport(
                 "user_1",
                 "https://open.spotify.com/playlist/sp_123",
+                { onProgress },
             );
 
             expect(result.playlistName).toBe("My Playlist");
             expect(result.resolved).toHaveLength(2);
             expect(result.summary.total).toBe(2);
+            expect(onProgress.mock.calls.map(([event]) => event)).toEqual([
+                { stage: "source", completed: 2, total: 2 },
+                { stage: "local", completed: 2, total: 2 },
+                { stage: "youtube", completed: 1, total: 1 },
+            ]);
         });
 
         it("batch-resolves provider matches in a single YT call when tracks are unmatched locally", async () => {

@@ -3,11 +3,16 @@
 # The public frontend binds only to the selected host address, while API and
 # infrastructure ports remain on loopback. Core runtimes see the media library
 # read-only; remote analysis shares a dedicated writable spool mounted at the
-# same container path in every participating service.
+# same container path in every participating service. The scoped HTTP proxy
+# must allow the four fixed egress addresses assigned below (.10 through .13).
 services:
     backend:
         environment:
             BACKEND_PROCESS_ROLE: api
+        networks:
+            default: {}
+            soundspan-egress:
+                ipv4_address: ${BACKEND_EGRESS_IP:-172.30.121.12}
         ports: !override
             - "127.0.0.1:${BACKEND_PORT:-3006}:3006"
         volumes: !override
@@ -19,6 +24,10 @@ services:
     backend-worker:
         environment:
             BACKEND_PROCESS_ROLE: worker
+        networks:
+            default: {}
+            soundspan-egress:
+                ipv4_address: ${BACKEND_WORKER_EGRESS_IP:-172.30.121.13}
         volumes: !override
             - ${MUSIC_PATH:?MUSIC_PATH is required}:/music:ro
             - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool
