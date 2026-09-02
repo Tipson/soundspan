@@ -14,6 +14,19 @@ export function WithPlaylists<TBase extends ApiClientConstructor>(Base: TBase) {
             return this.request<PlaylistDetailResponse>(`/playlists/${id}`);
         }
 
+        async getPlaylistPage(
+            id: string,
+            options: { limit?: number; cursor?: string | null } = {},
+        ) {
+            const params = new URLSearchParams({
+                limit: String(options.limit ?? 100),
+            });
+            if (options.cursor) params.set("cursor", options.cursor);
+            return this.request<PlaylistDetailResponse>(
+                `/playlists/${id}?${params.toString()}`,
+            );
+        }
+
         async createPlaylist(name: string, isPublic = false) {
             return this.request<ApiData>("/playlists", {
                 method: "POST",

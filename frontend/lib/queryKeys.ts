@@ -87,6 +87,7 @@ export const queryKeys = {
     // Playlists
     playlists: () => ["playlists"] as const,
     playlist: (id: string) => ["playlist", id] as const,
+    playlistPages: (id: string) => ["playlist", id, "pages"] as const,
 
     // Discover Weekly
     discoverWeekly: () => ["discover", "weekly"] as const,

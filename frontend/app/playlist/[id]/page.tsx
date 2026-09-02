@@ -16,7 +16,7 @@ import {
 import { cn } from "@/utils/cn";
 import { shuffleArray } from "@/utils/shuffle";
 import { formatTime } from "@/utils/formatTime";
-import { usePlaylistQuery } from "@/hooks/useQueries";
+import { usePlaylistPagesQuery } from "@/hooks/useQueries";
 import {
     getUnplayableMessage,
     isLocalPlayableTrackItem,
@@ -41,10 +41,7 @@ import {
 } from "@/components/track";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/lib/toast-context";
-import {
-    movePlaylistItemToIndexInCache,
-    removePlaylistItemFromCache,
-} from "./playlistCacheUpdates";
+import { movePlaylistItemToIndexInCache } from "./playlistCacheUpdates";
 import { useDownloadContext } from "@/lib/download-context";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
@@ -75,6 +72,7 @@ import {
     buildPlaylistCoverUrls,
     buildPlaylistLikeableTracks,
 } from "./playlistViewModel";
+import { mergePlaylistDetailPages } from "@/features/playlist/lib/playlistPagination";
 
 type PlaylistItem = PlaylistDetailTrackItem;
 type PendingTrack = PlaylistPendingTrackItem;
@@ -109,6 +107,7 @@ export default function PlaylistDetailPage() {
     const [isSavingName, setIsSavingName] = useState(false);
     const renameInputRef = useRef<HTMLInputElement | null>(null);
     const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
     // Clean up preview audio on unmount
     useEffect(() => {
@@ -183,7 +182,7 @@ export default function PlaylistDetailPage() {
                 // Refresh playlist data after a delay to allow download + scan to complete
                 setTimeout(() => {
                     queryClient.invalidateQueries({
-                        queryKey: queryKeys.playlist(playlistId),
+                        queryKey: queryKeys.playlistPages(playlistId),
                     });
                 }, 10000); // 10 seconds for download + scan
             } else {
@@ -204,7 +203,7 @@ export default function PlaylistDetailPage() {
             await api.removePendingTrack(playlistId, pendingId);
             // Refresh playlist data
             queryClient.invalidateQueries({
-                queryKey: queryKeys.playlist(playlistId),
+                queryKey: queryKeys.playlistPages(playlistId),
             });
         } catch (error) {
             sharedFrontendLogger.error(
@@ -216,8 +215,40 @@ export default function PlaylistDetailPage() {
         }
     };
 
-    // Use React Query hook for playlist
-    const { data: playlist, isLoading } = usePlaylistQuery(playlistId);
+    const {
+        data: playlistPages,
+        isLoading,
+        hasNextPage,
+        isFetchingNextPage,
+        isFetchNextPageError,
+        fetchNextPage,
+    } = usePlaylistPagesQuery(playlistId);
+    const playlist = useMemo(
+        () => mergePlaylistDetailPages(playlistPages?.pages ?? []),
+        [playlistPages?.pages],
+    );
+
+    useEffect(() => {
+        const target = loadMoreRef.current;
+        if (
+            !target ||
+            !hasNextPage ||
+            isFetchingNextPage ||
+            isFetchNextPageError
+        )
+            return;
+        if (typeof IntersectionObserver === "undefined") return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    void fetchNextPage();
+                }
+            },
+            { rootMargin: "800px 0px", threshold: 0.01 },
+        );
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError]);
 
     // Check if this is a shared playlist
     const isShared = playlist?.isOwner === false;
@@ -230,13 +261,9 @@ export default function PlaylistDetailPage() {
                 isPublic: !playlist.isPublic,
             });
 
-            queryClient.setQueryData(
-                ["playlist", playlistId],
-                (old: Record<string, unknown>) => ({
-                    ...old,
-                    isPublic: !playlist.isPublic,
-                }),
-            );
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.playlistPages(playlistId),
+            });
 
             window.dispatchEvent(
                 new CustomEvent("playlist-updated", { detail: { playlistId } }),
@@ -275,31 +302,17 @@ export default function PlaylistDetailPage() {
             return;
         }
         setIsSavingName(true);
-        const previousName = playlist.name;
         try {
-            // Optimistic update
-            queryClient.setQueryData(
-                ["playlist", playlistId],
-                (old: Record<string, unknown>) => ({
-                    ...old,
-                    name: trimmed,
-                }),
-            );
             await api.updatePlaylist(playlistId, { name: trimmed });
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.playlistPages(playlistId),
+            });
             window.dispatchEvent(
                 new CustomEvent("playlist-updated", { detail: { playlistId } }),
             );
         } catch (error) {
             sharedFrontendLogger.error("Failed to rename playlist:", error);
             toast.error(ru.playlist.renameFailed);
-            // Revert optimistic update
-            queryClient.setQueryData(
-                ["playlist", playlistId],
-                (old: Record<string, unknown>) => ({
-                    ...old,
-                    name: previousName,
-                }),
-            );
         } finally {
             setIsSavingName(false);
             setIsRenaming(false);
@@ -330,14 +343,9 @@ export default function PlaylistDetailPage() {
                 await api.hidePlaylist(playlistId);
             }
 
-            // Update local state immediately
-            queryClient.setQueryData(
-                ["playlist", playlistId],
-                (old: Record<string, unknown>) => ({
-                    ...old,
-                    isHidden: !playlist.isHidden,
-                }),
-            );
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.playlistPages(playlistId),
+            });
 
             // Dispatch event to update sidebar and other components
             window.dispatchEvent(
@@ -362,6 +370,11 @@ export default function PlaylistDetailPage() {
         () => (playlist?.items as PlaylistItem[] | undefined) || [],
         [playlist?.items],
     );
+    const totalItemCount =
+        playlist?.totalItemCount ??
+        trackItems.length + (playlist?.pendingTracks?.length ?? 0);
+    const canReorder =
+        playlist?.isOwner === true && !hasNextPage && totalItemCount <= 1000;
 
     const playableTrackItems = useMemo(
         () => trackItems.filter((item) => isPlayableTrackItem(item)),
@@ -408,27 +421,8 @@ export default function PlaylistDetailPage() {
     const handleRemoveTrack = async (itemIdOrTrackId: string) => {
         try {
             await api.removeTrackFromPlaylist(playlistId, itemIdOrTrackId);
-            // Drop the row from the cached playlist immediately (the page
-            // reads through React Query, so without this the stale cache
-            // kept showing the removed track — GH #34), then refetch for
-            // authoritative state.
-            queryClient.setQueryData(
-                ["playlist", playlistId],
-                (old: Record<string, unknown> | undefined) =>
-                    removePlaylistItemFromCache(
-                        old as
-                            | {
-                                  items?: {
-                                      id: string;
-                                      trackId?: string | null;
-                                  }[];
-                              }
-                            | undefined,
-                        itemIdOrTrackId,
-                    ),
-            );
             queryClient.invalidateQueries({
-                queryKey: queryKeys.playlist(playlistId),
+                queryKey: queryKeys.playlistPages(playlistId),
             });
         } catch (error) {
             sharedFrontendLogger.error("Failed to remove track:", error);
@@ -440,28 +434,25 @@ export default function PlaylistDetailPage() {
         // Optimistic reorder in the cached payload, then persist the full
         // resulting order (the backend replaces positions wholesale) and
         // refetch for authoritative state — same shape as remove (GH #34).
-        const cached = queryClient.getQueryData<{
-            items?: { id: string; trackId?: string | null }[];
-        }>(["playlist", playlistId]);
+        const cached = { items: trackItems };
         const moved = movePlaylistItemToIndexInCache(cached, itemId, toIndex);
         if (!moved || moved === cached || !Array.isArray(moved.items)) {
             return;
         }
-        queryClient.setQueryData(["playlist", playlistId], moved);
         try {
             await api.reorderPlaylistItems(
                 playlistId,
                 moved.items.map((entry) => entry.id),
             );
             queryClient.invalidateQueries({
-                queryKey: queryKeys.playlist(playlistId),
+                queryKey: queryKeys.playlistPages(playlistId),
             });
         } catch (error) {
             sharedFrontendLogger.error("Failed to reorder playlist:", error);
             toast.error(ru.playlist.reorderFailed);
             // Restore the server's order.
             queryClient.invalidateQueries({
-                queryKey: queryKeys.playlist(playlistId),
+                queryKey: queryKeys.playlistPages(playlistId),
             });
         }
     };
@@ -610,7 +601,7 @@ export default function PlaylistDetailPage() {
                     isShared ? ru.playlist.sharedPlaylist : ru.playlist.playlist
                 }
                 ownerName={isShared ? playlist.user?.username : undefined}
-                trackCount={trackItems.length}
+                trackCount={totalItemCount}
                 durationLabel={
                     totalDuration > 0
                         ? formatPlaylistDuration(totalDuration)
@@ -827,7 +818,7 @@ export default function PlaylistDetailPage() {
                             items={trackItems}
                             getKey={(item) => item.id}
                             reorder={
-                                playlist.isOwner
+                                canReorder
                                     ? { onReorder: handleReorderByIndex }
                                     : undefined
                             }
@@ -983,62 +974,73 @@ export default function PlaylistDetailPage() {
                                         const removeMenuItem =
                                             playlist.isOwner ? (
                                                 <>
-                                                    {index > 0 && (
-                                                        <TrackMenuButton
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleMoveTrack(
-                                                                    item.id,
-                                                                    index - 1,
-                                                                );
-                                                            }}
-                                                            icon={
-                                                                <ArrowUp className="h-4 w-4" />
-                                                            }
-                                                            label={
-                                                                ru.playlist
-                                                                    .moveUp
-                                                            }
-                                                        />
-                                                    )}
-                                                    {index <
-                                                        trackItems.length -
-                                                            1 && (
-                                                        <TrackMenuButton
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleMoveTrack(
-                                                                    item.id,
-                                                                    index + 1,
-                                                                );
-                                                            }}
-                                                            icon={
-                                                                <ArrowDown className="h-4 w-4" />
-                                                            }
-                                                            label={
-                                                                ru.playlist
-                                                                    .moveDown
-                                                            }
-                                                        />
-                                                    )}
-                                                    {index > 0 && (
-                                                        <TrackMenuButton
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleMoveTrack(
-                                                                    item.id,
-                                                                    0,
-                                                                );
-                                                            }}
-                                                            icon={
-                                                                <ArrowUpToLine className="h-4 w-4" />
-                                                            }
-                                                            label={
-                                                                ru.playlist
-                                                                    .moveTop
-                                                            }
-                                                        />
-                                                    )}
+                                                    {canReorder &&
+                                                        index > 0 && (
+                                                            <TrackMenuButton
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    handleMoveTrack(
+                                                                        item.id,
+                                                                        index -
+                                                                            1,
+                                                                    );
+                                                                }}
+                                                                icon={
+                                                                    <ArrowUp className="h-4 w-4" />
+                                                                }
+                                                                label={
+                                                                    ru.playlist
+                                                                        .moveUp
+                                                                }
+                                                            />
+                                                        )}
+                                                    {canReorder &&
+                                                        index <
+                                                            trackItems.length -
+                                                                1 && (
+                                                            <TrackMenuButton
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    handleMoveTrack(
+                                                                        item.id,
+                                                                        index +
+                                                                            1,
+                                                                    );
+                                                                }}
+                                                                icon={
+                                                                    <ArrowDown className="h-4 w-4" />
+                                                                }
+                                                                label={
+                                                                    ru.playlist
+                                                                        .moveDown
+                                                                }
+                                                            />
+                                                        )}
+                                                    {canReorder &&
+                                                        index > 0 && (
+                                                            <TrackMenuButton
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    handleMoveTrack(
+                                                                        item.id,
+                                                                        0,
+                                                                    );
+                                                                }}
+                                                                icon={
+                                                                    <ArrowUpToLine className="h-4 w-4" />
+                                                                }
+                                                                label={
+                                                                    ru.playlist
+                                                                        .moveTop
+                                                                }
+                                                            />
+                                                        )}
                                                     <TrackMenuButton
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -1225,60 +1227,66 @@ export default function PlaylistDetailPage() {
                                                 )}
                                                 {canShowFallbackRemoveAction && (
                                                     <>
-                                                        {index > 0 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={(
-                                                                    e,
-                                                                ) => {
-                                                                    e.stopPropagation();
-                                                                    handleMoveTrack(
-                                                                        item.id,
-                                                                        index -
-                                                                            1,
-                                                                    );
-                                                                }}
-                                                                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                                                                title={
-                                                                    ru.playlist
-                                                                        .moveUp
-                                                                }
-                                                                aria-label={
-                                                                    ru.playlist
-                                                                        .moveUp
-                                                                }
-                                                            >
-                                                                <ArrowUp className="h-4 w-4" />
-                                                            </button>
-                                                        )}
-                                                        {index <
-                                                            trackItems.length -
-                                                                1 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={(
-                                                                    e,
-                                                                ) => {
-                                                                    e.stopPropagation();
-                                                                    handleMoveTrack(
-                                                                        item.id,
-                                                                        index +
-                                                                            1,
-                                                                    );
-                                                                }}
-                                                                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                                                                title={
-                                                                    ru.playlist
-                                                                        .moveDown
-                                                                }
-                                                                aria-label={
-                                                                    ru.playlist
-                                                                        .moveDown
-                                                                }
-                                                            >
-                                                                <ArrowDown className="h-4 w-4" />
-                                                            </button>
-                                                        )}
+                                                        {canReorder &&
+                                                            index > 0 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(
+                                                                        e,
+                                                                    ) => {
+                                                                        e.stopPropagation();
+                                                                        handleMoveTrack(
+                                                                            item.id,
+                                                                            index -
+                                                                                1,
+                                                                        );
+                                                                    }}
+                                                                    className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                                                    title={
+                                                                        ru
+                                                                            .playlist
+                                                                            .moveUp
+                                                                    }
+                                                                    aria-label={
+                                                                        ru
+                                                                            .playlist
+                                                                            .moveUp
+                                                                    }
+                                                                >
+                                                                    <ArrowUp className="h-4 w-4" />
+                                                                </button>
+                                                            )}
+                                                        {canReorder &&
+                                                            index <
+                                                                trackItems.length -
+                                                                    1 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(
+                                                                        e,
+                                                                    ) => {
+                                                                        e.stopPropagation();
+                                                                        handleMoveTrack(
+                                                                            item.id,
+                                                                            index +
+                                                                                1,
+                                                                        );
+                                                                    }}
+                                                                    className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                                                    title={
+                                                                        ru
+                                                                            .playlist
+                                                                            .moveDown
+                                                                    }
+                                                                    aria-label={
+                                                                        ru
+                                                                            .playlist
+                                                                            .moveDown
+                                                                    }
+                                                                >
+                                                                    <ArrowDown className="h-4 w-4" />
+                                                                </button>
+                                                            )}
                                                         <button
                                                             type="button"
                                                             onClick={(e) => {
@@ -1351,6 +1359,33 @@ export default function PlaylistDetailPage() {
                         <p className="text-sm text-gray-400">
                             {ru.playlist.addTracksHint}
                         </p>
+                    </div>
+                )}
+
+                {(hasNextPage || isFetchingNextPage) && (
+                    <div
+                        ref={loadMoreRef}
+                        className="flex min-h-24 items-center justify-center py-6"
+                        aria-live="polite"
+                    >
+                        {isFetchNextPageError ? (
+                            <button
+                                type="button"
+                                onClick={() => void fetchNextPage()}
+                                className="rounded-full border border-white/15 px-4 py-2 text-sm text-content-body transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                            >
+                                Не удалось загрузить ещё — повторить
+                            </button>
+                        ) : isFetchingNextPage ? (
+                            <div className="flex items-center gap-2 text-sm text-content-body">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Загружаем следующие треки…
+                            </div>
+                        ) : (
+                            <span className="sr-only">
+                                Прокрутите ниже, чтобы загрузить ещё треки
+                            </span>
+                        )}
                     </div>
                 )}
             </div>
