@@ -23,6 +23,45 @@ export interface NextTrackPreloadDecision {
     reason: string;
 }
 
+export const NETWORK_PRELOAD_LEAD_SECONDS = 20;
+
+export interface NetworkNextTrackPreloadInput {
+    nextStreamSource: string | null | undefined;
+    currentTimeSec: number;
+    durationSec: number;
+    isPlaying: boolean;
+    isLoading: boolean;
+}
+
+/**
+ * Starts one network-backed YouTube preload near natural track end. Keeping
+ * this window bounded hides a cold provider start without creating work for
+ * every queue item a listener rapidly skips past.
+ */
+export function resolveNetworkNextTrackPreloadDecision(
+    input: NetworkNextTrackPreloadInput,
+): NextTrackPreloadDecision {
+    if (input.nextStreamSource !== "youtube") {
+        return { shouldPreload: false, reason: "not_network_youtube" };
+    }
+    if (!input.isPlaying || input.isLoading) {
+        return { shouldPreload: false, reason: "inactive_playback" };
+    }
+    if (
+        !Number.isFinite(input.currentTimeSec) ||
+        !Number.isFinite(input.durationSec) ||
+        input.currentTimeSec < 0 ||
+        input.durationSec <= 0
+    ) {
+        return { shouldPreload: false, reason: "invalid_timing" };
+    }
+    const remainingSec = input.durationSec - input.currentTimeSec;
+    if (remainingSec < 0 || remainingSec > NETWORK_PRELOAD_LEAD_SECONDS) {
+        return { shouldPreload: false, reason: "too_early" };
+    }
+    return { shouldPreload: true, reason: "network_lead_window" };
+}
+
 /**
  * Determines whether the next track should be eagerly loaded
  * from the ended handler before React state transitions.

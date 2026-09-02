@@ -20,6 +20,11 @@ import { frontendLogger } from "@/lib/logger";
 import type { UnavailableYtMusicRecoveryOutcome } from "@/lib/audio/unavailableYtMusicRecovery";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import { isPlaybackFailureSupersededByManualIntent } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    getTrackProviderFailureKey,
+    providerFailureCooldown,
+} from "@/lib/audio-engine/providerFailureCooldown";
+import { classifyPlaybackError } from "@/lib/audio-engine/playbackErrorCategory";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -55,12 +60,6 @@ interface PlaybackErrorHandlerOptions {
               },
     ): boolean;
     finishFailedPlay(): void;
-}
-
-function getConfirmedProviderUnavailableFailureKey(track: Track): string {
-    const occurrenceKey = track.playlistItemId?.trim() || track.id;
-    const providerKey = track.youtubeVideoId?.trim() || track.id;
-    return `${occurrenceKey}\u0000youtube:${providerKey}`;
 }
 
 /** Build the current-render error delegate consumed by stable engine bindings. */
@@ -100,6 +99,11 @@ export function createPlaybackErrorHandler({
             currentTrack &&
             isPlaybackFailureSupersededByManualIntent(currentTrack.id)
         ) {
+            logPlaybackClientMetric("player.playback_cancelled", {
+                trackId: currentTrack.id,
+                sourceType: resolveDirectTrackSourceType(currentTrack),
+                reason: "superseded_manual_intent",
+            });
             orchestratorLogger.info(
                 "Ignored playback error from a superseded manual occurrence",
                 { trackId: currentTrack.id },
@@ -137,6 +141,7 @@ export function createPlaybackErrorHandler({
         const sourceType = currentTrack
             ? resolveDirectTrackSourceType(currentTrack)
             : "unknown";
+        const errorCategory = classifyPlaybackError(data.error);
         const providerStartupFailure = isProviderStartupFailure({
             track: currentTrack,
             code: data.code,
@@ -179,6 +184,7 @@ export function createPlaybackErrorHandler({
                 trackId: currentTrack?.id ?? null,
                 sourceType,
                 error: errorMessage,
+                errorCategory,
                 stage: "pre_recovery",
             });
             if (providerStartupFailure) {
@@ -206,6 +212,7 @@ export function createPlaybackErrorHandler({
                     trackId: currentTrack?.id ?? null,
                     sourceType,
                     error: errorMessage,
+                    errorCategory,
                     stage: "provider_startup_paused",
                 });
                 return;
@@ -240,7 +247,12 @@ export function createPlaybackErrorHandler({
             // `original_available` probe remain system failures.
             if (unavailableOutcome === "no_candidate" && currentTrack) {
                 confirmedProviderUnavailableFailureKey =
-                    getConfirmedProviderUnavailableFailureKey(currentTrack);
+                    getTrackProviderFailureKey(currentTrack);
+                if (confirmedProviderUnavailableFailureKey) {
+                    providerFailureCooldown.markUnavailable(
+                        confirmedProviderUnavailableFailureKey,
+                    );
+                }
             }
         }
 
@@ -270,6 +282,7 @@ export function createPlaybackErrorHandler({
             trackId: currentTrack?.id ?? null,
             sourceType,
             error: errorMessage,
+            errorCategory,
             stage: playbackType === "track" ? "fatal_after_recovery" : "fatal",
         });
         recoverablePlayErrorPendingRef.current = false;

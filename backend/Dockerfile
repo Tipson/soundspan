@@ -21,6 +21,15 @@ ENV NODE_OPTIONS=--dns-result-order=ipv4first \
     NPM_CONFIG_FETCH_TIMEOUT=300000 \
     NPM_CONFIG_MAXSOCKETS=4
 
+# Prisma selects its migration engine from the OpenSSL ABI detected while npm
+# installs @prisma/engines. node:bookworm-slim does not guarantee libssl is
+# present in this build stage; without it Prisma falls back to the Debian 11
+# engine and later attempts a network download when the Debian 12 runtime
+# starts. Install OpenSSL before npm ci so the image contains the Bookworm
+# (debian-openssl-3.0.x) schema engine and migrations remain fully offline.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && \
+    rm -rf /var/lib/apt/lists/*
+
 # Inject monorepo contract package into /packages so file:../packages/* links resolve.
 COPY --from=media-metadata-contract . /packages/media-metadata-contract
 

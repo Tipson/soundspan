@@ -19,6 +19,8 @@ const PLAYBACK_CLIENT_SIGNAL_EVENTS = new Set<string>([
     "player.track_end_rejected",
     "player.track_end_advanced",
     "player.playback_error",
+    "player.playback_cancelled",
+    "player.provider_cooldown_skip",
 ]);
 
 /** Stable runtime audio-engine facade shared by every orchestrator concern. */

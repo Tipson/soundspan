@@ -8,6 +8,7 @@ import {
     resolveDeviceOfflineMediaIdentity,
 } from "@/features/device-offline/playbackResolver";
 import { getNextTrackInfo } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
+import { resolveNetworkNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
 import { resolveRemoteStreamFormat } from "../audioPlaybackOrchestratorPolicy";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import { usePlaybackSourceLeaseController } from "./playbackSourceLeaseController";
@@ -31,6 +32,18 @@ type PreloadTrackOptions = {
     /** Natural end may retain the iOS audio session with one provider preload. */
     allowNetworkYouTube?: boolean;
 };
+type NetworkPreloadTiming = {
+    currentTimeSec: number;
+    durationSec: number;
+    isLoading: boolean;
+};
+interface NextTrackPreloadController {
+    preloadTrack: (
+        track: PreloadableTrack,
+        options?: PreloadTrackOptions,
+    ) => void;
+    preloadNetworkWhenDue: (timing: NetworkPreloadTiming) => void;
+}
 
 function isVerifiedDevicePlaybackUrl(url: string): boolean {
     return url.startsWith("blob:") || url.includes("/__offline/audio/");
@@ -49,10 +62,7 @@ export function useNextTrackPreload({
     repeatMode,
     lastPreloadedTrackIdRef,
     ytMusicAuthenticatedRef,
-}: UseNextTrackPreloadOptions): (
-    track: PreloadableTrack,
-    options?: PreloadTrackOptions,
-) => void {
+}: UseNextTrackPreloadOptions): NextTrackPreloadController {
     const leaseController = usePlaybackSourceLeaseController();
     const preloadRequestIdRef = useRef(0);
     const preloadTrack = useCallback(
@@ -158,6 +168,38 @@ export function useNextTrackPreload({
         [lastPreloadedTrackIdRef, leaseController, ytMusicAuthenticatedRef],
     );
 
+    const preloadNetworkWhenDue = useCallback(
+        (timing: NetworkPreloadTiming): void => {
+            const nextTrack = getNextTrackInfo(
+                queue,
+                currentIndex,
+                isShuffle,
+                shuffleIndices,
+                repeatMode,
+            );
+            if (
+                nextTrack &&
+                resolveNetworkNextTrackPreloadDecision({
+                    nextStreamSource: nextTrack.streamSource,
+                    currentTimeSec: timing.currentTimeSec,
+                    durationSec: timing.durationSec,
+                    isPlaying: audioEngine.isPlaying(),
+                    isLoading: timing.isLoading,
+                }).shouldPreload
+            ) {
+                preloadTrack(nextTrack, { allowNetworkYouTube: true });
+            }
+        },
+        [
+            queue,
+            currentIndex,
+            isShuffle,
+            shuffleIndices,
+            repeatMode,
+            preloadTrack,
+        ],
+    );
+
     // Preload next track for gapless playback (music only)
     useEffect(() => {
         // Preload while a track or podcast episode plays — but only when the
@@ -206,5 +248,5 @@ export function useNextTrackPreload({
         preloadTrack,
     ]);
 
-    return preloadTrack;
+    return { preloadTrack, preloadNetworkWhenDue };
 }

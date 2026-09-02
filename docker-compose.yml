@@ -274,6 +274,11 @@ services:
             INTERNAL_API_SECRET: "${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - generate one with: openssl rand -base64 32}"
             METRICS_TOKEN: "${METRICS_TOKEN:-}"
             METRICS_PUBLIC: ${METRICS_PUBLIC:-false}
+            # Worker jobs resolve/play provider candidates too. Container-local
+            # 127.0.0.1 defaults point back at the worker itself, so split
+            # deployments must use Compose DNS just like the API service.
+            TIDAL_SIDECAR_URL: ${TIDAL_SIDECAR_URL:-http://tidal-streamer:8585}
+            YTMUSIC_STREAMER_URL: ${YTMUSIC_STREAMER_URL:-http://ytmusic-streamer:8586}
             LASTFM_API_KEY: "${LASTFM_API_KEY:-}"
             LASTFM_SHARED_SECRET: "${LASTFM_SHARED_SECRET:-}"
             OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
@@ -430,6 +435,9 @@ services:
         environment:
             - TIDDL_PATH=/data/.tiddl
             - MUSIC_PATH=/music
+            - HTTP_PROXY=${HTTP_PROXY:-}
+            - HTTPS_PROXY=${HTTPS_PROXY:-}
+            - NO_PROXY=${NO_PROXY:-127.0.0.1,localhost,backend,postgres,redis,tidal-streamer,ytmusic-streamer}
             # Seconds to wait between each track download to avoid TIDAL rate limits (default: 3)
             - TIDAL_TRACK_DELAY=${TIDAL_TRACK_DELAY:-3}
             # Shared secret authenticating backend→sidecar calls (F31). Must match
@@ -492,6 +500,7 @@ services:
             YTMUSIC_EXTRACT_DELAY_MAX: ${YTMUSIC_EXTRACT_DELAY_MAX:-2.0}
             # Search result cache TTL in seconds (0 to disable)
             YTMUSIC_SEARCH_CACHE_TTL: ${YTMUSIC_SEARCH_CACHE_TTL:-300}
+            YTMUSIC_SEARCH_CACHE_MAX: ${YTMUSIC_SEARCH_CACHE_MAX:-1024}
             # Per-(user_id, limit, mixes_only) negative-cache TTL for upstream library-playlist HTTP 400s
             YTMUSIC_LIBRARY_ERROR_CACHE_SECONDS: ${YTMUSIC_LIBRARY_ERROR_CACHE_SECONDS:-600}
             # Search mode: auto (default), tv, native
@@ -515,6 +524,16 @@ services:
             # the backend's INTERNAL_API_SECRET or the sidecar rejects with 403.
             INTERNAL_API_SECRET: "${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - generate one with: openssl rand -base64 32}"
             YTMUSIC_SPOOL_DIR: "${YTMUSIC_SPOOL_DIR:-}"
+            HTTP_PROXY: ${HTTP_PROXY:-}
+            HTTPS_PROXY: ${HTTPS_PROXY:-}
+            NO_PROXY: ${NO_PROXY:-127.0.0.1,localhost,backend,postgres,redis,tidal-streamer,ytmusic-streamer}
+            YTMUSIC_SPOOL_CONCURRENCY: ${YTMUSIC_SPOOL_CONCURRENCY:-2}
+            YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT: ${YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:-300}
+            YTMUSIC_SPOOL_MAX_BYTES: ${YTMUSIC_SPOOL_MAX_BYTES:-268435456}
+            YTMUSIC_SPOOL_TIMEOUT: ${YTMUSIC_SPOOL_TIMEOUT:-110}
+            YTMUSIC_SPOOL_TRACK_MAX_BYTES: ${YTMUSIC_SPOOL_TRACK_MAX_BYTES:-67108864}
+            YTMUSIC_STREAM_CACHE_MAX: ${YTMUSIC_STREAM_CACHE_MAX:-1024}
+            YTMUSIC_YTDLP_SOCKET_TIMEOUT: ${YTMUSIC_YTDLP_SOCKET_TIMEOUT:-20}
         volumes:
             - ytmusic_data:/data
             # Shared with the backend (read-write) so YouTube URL downloads

@@ -281,6 +281,7 @@ describe("youtube music public stream routes integration", () => {
             "video-2",
             "norm:HIGH",
             "bytes=0-9",
+            { signal: expect.any(AbortSignal) },
         );
     });
 });
