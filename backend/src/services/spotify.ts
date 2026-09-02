@@ -11,6 +11,7 @@ import {
     fetchAllSpotifyPlaylistItems,
     SpotifyPlaylistPaginationError,
 } from "./spotifyPlaylistPagination";
+import { fetchSpotifyPlaylistViaPartnerApi } from "./spotifyPartner";
 import type {
     SpotifyAlbum,
     SpotifyPlaylist,
@@ -951,16 +952,27 @@ class SpotifyService {
 
             if (
                 error instanceof SpotifyPlaylistPaginationError &&
-                (!error.allowsAnonymousFallback || requireComplete)
+                !requireComplete &&
+                !error.allowsAnonymousFallback
             ) {
                 throw error;
             }
 
             if (requireComplete) {
-                throw new SpotifyPlaylistPaginationError(
-                    "Spotify playlist fetch failed; no partial import was created",
-                    { cause: error, providerFailure: true },
+                logger.warn(
+                    "Spotify: Public REST playlist fetch failed; trying the web-player pagination fallback",
                 );
+                try {
+                    return await fetchSpotifyPlaylistViaPartnerApi(
+                        playlistId,
+                        token,
+                    );
+                } catch (partnerError) {
+                    throw new SpotifyPlaylistPaginationError(
+                        "Spotify playlist fetch failed across public APIs; no partial import was created",
+                        { cause: partnerError, providerFailure: true },
+                    );
+                }
             }
 
             // Fallback to embed HTML parsing

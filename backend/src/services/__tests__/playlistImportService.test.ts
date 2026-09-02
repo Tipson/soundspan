@@ -83,7 +83,10 @@ jest.mock("../../utils/systemSettings", () => ({
     getSystemSettings: mockGetSystemSettings,
 }));
 
-import { playlistImportService } from "../playlistImportService";
+import {
+    playlistImportService,
+    type PlaylistImportProgressEvent,
+} from "../playlistImportService";
 
 describe("PlaylistImportService", () => {
     beforeEach(() => {
@@ -1172,7 +1175,9 @@ describe("PlaylistImportService", () => {
                 id: "cy_1",
             });
 
-            const onProgress = jest.fn(async () => undefined);
+            const onProgress = jest.fn(
+                async (_event: PlaylistImportProgressEvent) => undefined,
+            );
             const result = await playlistImportService.previewImport(
                 "user_1",
                 "https://open.spotify.com/playlist/sp_123",
