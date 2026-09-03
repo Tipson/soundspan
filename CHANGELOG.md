@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- feat(taste): browse 34 grouped genres, filter artist suggestions by genre, reveal more artists, and review or remove every selected signal before saving. Keep step actions visible on small screens and preserve canonical artist autocomplete and existing account profiles.
+- fix(settings): label local audio/CLAP counters explicitly, distinguish empty libraries from completed analysis, and disable empty local re-analysis actions. Online canonical analysis is a separate pipeline.
+
 - fix(playback): bound combined YouTube Music extraction, spooling and library downloads for the actual worker lifetime, prioritize audio over queued metadata, discard expired queued work, reuse download metadata for quality badges without another provider extraction, retry transient missing formats once, and allocate 2 GiB to the standalone streamer including its Deno children.
 
 - fix(analyzer): store long canonical Chromaprint values behind a PostgreSQL hash index so completed online analyses are persisted instead of failing the B-tree row-size limit

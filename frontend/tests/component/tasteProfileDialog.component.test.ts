@@ -33,6 +33,13 @@ function typeInto(input: HTMLInputElement, value: string): void {
     input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+async function reviewSelection(container: ParentNode) {
+    const review = findButton(container, "Дальше: проверить выбор");
+    assert.ok(review);
+    await React.act(async () => review.click());
+    assert.match(container.textContent ?? "", /Шаг 3 из 3/);
+}
+
 async function mountDialog(
     overrides: Partial<React.ComponentProps<typeof TasteProfileDialog>> = {},
 ) {
@@ -117,7 +124,7 @@ test("onboarding is a Russian accessible dialog and explains that it does not cr
     assert.ok(dialog.getAttribute("aria-describedby"));
     assert.match(dialog.textContent ?? "", /Настроим музыку под вас/);
     assert.match(dialog.textContent ?? "", /не ставит лайки автоматически/i);
-    assert.match(dialog.textContent ?? "", /Шаг 1 из 2/);
+    assert.match(dialog.textContent ?? "", /Шаг 1 из 3/);
 
     await mounted.cleanup();
 });
@@ -143,6 +150,7 @@ test("a listener can choose genres, add an artist, and save 3 real taste signals
     assert.ok(artist);
     await React.act(async () => artist.click());
 
+    await reviewSelection(mounted.container);
     const save = findButton(mounted.container, "Сохранить вкусы");
     assert.ok(save);
     assert.equal(save.disabled, false);
@@ -226,6 +234,7 @@ test("artist search selects the provider's canonical artist instead of saving ra
         assert.ok(canonicalResult);
         await React.act(async () => canonicalResult.click());
 
+        await reviewSelection(mounted.container);
         const save = findButton(mounted.container, "Сохранить вкусы");
         assert.ok(save);
         assert.equal(save.disabled, false);
@@ -475,6 +484,7 @@ test("rapid repeated save clicks start only one provider-backed write", async ()
     const next = findButton(mounted.container, "Дальше: артисты");
     assert.ok(next);
     await React.act(async () => next.click());
+    await reviewSelection(mounted.container);
     const save = findButton(mounted.container, "Сохранить вкусы");
     assert.ok(save);
 
@@ -490,4 +500,53 @@ test("rapid repeated save clicks start only one provider-backed write", async ()
         await pendingSave;
     });
     await mounted.cleanup();
+});
+
+test("genre search, artist filters, and review preserve editable saved choices", async () => {
+    const mounted = await mountDialog({
+        mode: "edit",
+        initialSelection: {
+            genres: ["Редкий сохранённый жанр", "Джаз"],
+            artists: ["Nina Simone"],
+        },
+    });
+    try {
+        const genreSearch = mounted.container.querySelector<HTMLInputElement>(
+            'input[aria-label="Найти жанр"]',
+        );
+        assert.ok(genreSearch);
+        await React.act(async () => typeInto(genreSearch, "русск"));
+        assert.ok(findButton(mounted.container, "Русский рок"));
+        assert.equal(findButton(mounted.container, "Техно"), undefined);
+        await React.act(async () =>
+            findButton(mounted.container, "Дальше: артисты")!.click(),
+        );
+        const filter = mounted.container.querySelector<HTMLSelectElement>(
+            'select[aria-label="Фильтр артистов по жанру"]',
+        );
+        assert.ok(filter);
+        await React.act(async () => {
+            filter.value = "K-pop";
+            filter.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        assert.ok(findButton(mounted.container, "BTS"));
+        assert.equal(findButton(mounted.container, "Linkin Park"), undefined);
+        await React.act(async () =>
+            findButton(mounted.container, "BTS")!.click(),
+        );
+        await reviewSelection(mounted.container);
+        const remove = mounted.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Убрать жанр: Редкий сохранённый жанр"]',
+        );
+        assert.ok(remove);
+        await React.act(async () => remove.click());
+        await React.act(async () =>
+            findButton(mounted.container, "Сохранить вкусы")!.click(),
+        );
+        assert.deepEqual(mounted.saves, [
+            { genres: ["Джаз"], artists: ["Nina Simone", "BTS"] },
+        ]);
+    } finally {
+        await mounted.cleanup();
+    }
 });

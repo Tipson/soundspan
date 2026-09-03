@@ -17,9 +17,30 @@ current `user.id`. Settings can mount `TasteProfileEditor` after its account
 section owns an explicit open/close control; no route or global layout state is
 required.
 
-Keep suggested labels real and useful without presenting them as an external
-catalog search. Manual artist entry remains available when a listener's choice
-is not among the zero-network suggestions.
+## Selection flow
+
+1. Browse 34 genres in six groups or narrow them by text search. Genre selection
+   is optional; the listener can go directly to artists.
+2. Browse a balanced mix of the chosen genres, filter to another genre without
+   implicitly selecting it, or use canonical MusicBrainz artist autocomplete.
+   The curated shelf starts with twelve artists and expands on demand; it is not
+   a live provider catalog. Selected artists remain removable across filters.
+3. Review all selected genres and artists, including saved labels outside the
+   curated catalog, before saving. Returning to earlier steps preserves choices.
+
+The existing API limits remain 3–16 total signals and at most ten of each kind.
+The footer stays visible while long genre and artist lists scroll independently.
+Suggestion browsing makes no provider calls; autocomplete remains debounced and
+cancellable, and saving uses the existing bounded seed-resolution service.
+
+The interaction reference is Yandex Music's documented genre-filtered artist
+selection, including a mixed shelf and Russian-language genre branches:
+[Yandex accessibility guide](https://inclusion.yandex.ru/tutorials/music-web),
+[preference settings](https://www.yandex.ru/support/music/ru/technical-issues/incorrect-recommendations).
+The labels and curated artist shelves are Soundspan's examples, not an exported
+Yandex taxonomy. The three-step flow is a Soundspan adaptation, not a claim about
+Yandex's exact step count. Preview playback and an infinite artist map are not
+implemented; no likes are created by this flow.
 
 ## Tests
 

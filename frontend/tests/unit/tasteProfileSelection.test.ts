@@ -7,7 +7,10 @@ import {
     normalizeTasteLabels,
     validateTasteProfileSelection,
 } from "../../features/taste-profile/model";
-import { suggestArtistsForGenres } from "../../features/taste-profile/suggestions";
+import {
+    SUGGESTED_GENRES,
+    suggestArtistsForGenres,
+} from "../../features/taste-profile/suggestions";
 import { queryKeys } from "../../lib/queryKeys";
 
 test("taste labels are trimmed and de-duplicated without losing their display spelling", () => {
@@ -89,4 +92,28 @@ test("artist suggestions follow the selected genres instead of staying a static 
     assert.ok(suggestions.includes("Daft Punk"));
     assert.equal(suggestions.includes("Rammstein"), false);
     assert.equal(suggestions.includes("Bring Me The Horizon"), false);
+});
+
+test("expanded genres have relevant shelves and mixed browsing goes beyond twelve artists", () => {
+    for (const genre of [
+        "Русский рок",
+        "Русская поп-музыка",
+        "Русский рэп",
+        "R&B",
+        "Панк",
+        "Техно",
+        "Фолк",
+        "Авторская песня",
+        "K-pop",
+    ]) {
+        assert.ok(
+            SUGGESTED_GENRES.some((label) => label === genre),
+            genre,
+        );
+        assert.ok(suggestArtistsForGenres([genre]).length >= 5, genre);
+    }
+    assert.ok(suggestArtistsForGenres(["Русский рок"]).includes("Кино"));
+    assert.ok(suggestArtistsForGenres(["K-pop"]).includes("BTS"));
+    assert.ok(suggestArtistsForGenres([], 36).length > 12);
+    assert.equal(suggestArtistsForGenres(["Unknown saved genre"]).length, 0);
 });
