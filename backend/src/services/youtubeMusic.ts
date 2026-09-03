@@ -95,6 +95,8 @@ export interface YtMusicSearchOptions {
 export interface YtMusicStreamInfoOptions {
     timeoutMs?: number;
     maxRetries?: number;
+    /** Read metadata from completed audio work without invoking yt-dlp. */
+    cachedOnly?: boolean;
 }
 
 /** A browsable YouTube Music album returned by catalog search. */
@@ -693,13 +695,7 @@ class YouTubeMusicService {
         return res.data;
     }
 
-    // ── Streaming ──────────────────────────────────────────────────
-
-    /**
-     * Get stream metadata (URL, format, quality) for a video.
-     * The URL itself is IP-locked to the sidecar — callers should
-     * use `getStreamProxy` for actual audio delivery.
-     */
+    /** Resolve metadata or read its cache; use getStreamProxy for audio. */
     async getStreamInfo(
         userId: string,
         videoId: string,
@@ -711,6 +707,7 @@ class YouTubeMusicService {
             async () => {
                 const params: Record<string, string> = { user_id: userId };
                 if (quality) params.quality = quality;
+                if (options.cachedOnly) params.cached_only = "true";
                 const res = await this.client.get(`/stream/${encodedId}`, {
                     params,
                     ...(options.timeoutMs

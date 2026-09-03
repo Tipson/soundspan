@@ -450,7 +450,7 @@ ytmusicStreamer:
     requests:
       memory: 128Mi
     limits:
-      memory: 512Mi
+      memory: 2Gi
   persistence:
     enabled: true
     size: 1Gi
@@ -496,6 +496,8 @@ ytmusicStreamer:
     # Set YTMUSIC_LOCATION when the cluster region differs from the listeners.
     YTMUSIC_LANGUAGE: "en"
     YTMUSIC_LOCATION: ""
+    # Shared stream metadata/playback extraction budget; unset uses 2.
+    YTMUSIC_YTDLP_EXTRACT_CONCURRENCY: null
     # Destination for YouTube URL downloads inside the music volume.
     # Uncomment to override the chart default ("/music/YouTube Downloads").
     # YT_DOWNLOAD_DIR: "/music/YouTube Downloads"

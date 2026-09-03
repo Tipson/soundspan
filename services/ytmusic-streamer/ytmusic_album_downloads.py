@@ -23,7 +23,12 @@ from ytmusic_downloads import TERMINAL_DOWNLOAD_STATUSES
 from ytmusic_library import get_public_album_metadata
 from ytmusic_models import YtAlbumDownloadRequest
 from ytmusic_runtime import _USER_AGENT, JsonObject, _sanitized_http_error, app, log
-from ytmusic_stream import YTDLP_SOCKET_TIMEOUT, _browse_public_bounded, _extract_pacer
+from ytmusic_stream import (
+    YTDLP_SOCKET_TIMEOUT,
+    _browse_public_bounded,
+    _extract_pacer,
+    _extraction_budget,
+)
 
 from services.common.download_identity import resolve_identity_path
 from services.common.job_registry import JobRegistry
@@ -289,7 +294,9 @@ def _extract_album_track(
     if job.get("cancel_requested"):
         raise yt_dlp.utils.DownloadCancelled("cancelled by user")
     with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=True)
+        info = _extraction_budget.run(
+            lambda: ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=True)
+        )
     if not info or not tmp_path.is_file():
         raise ValueError("Track download completed without an output file")
 

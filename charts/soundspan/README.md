@@ -323,6 +323,12 @@ the public catalog region independently of the cluster's geo-IP.
 
 #### YouTube downloads and the music volume
 
+The streamer memory limit is 2 GiB to accommodate yt-dlp and its Deno children.
+`ytmusicStreamer.env.YTMUSIC_YTDLP_EXTRACT_CONCURRENCY` defaults to `null` (the
+runtime uses `2`). It bounds combined playback and metadata extraction. Increase
+concurrency only with a measured memory budget; quality-badge reads use cached
+download metadata and do not launch additional extraction.
+
 When `ytmusicStreamer.enabled` is true, the streamer pod also mounts the
 chart's music volume at `/music` (controlled by
 `ytmusicStreamer.musicMount.enabled`, default `true`). This is required for

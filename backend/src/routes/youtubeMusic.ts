@@ -1430,6 +1430,7 @@ router.use(unavailableRecoveryRouter);
  * /api/ytmusic/stream-info-public/{videoId}:
  *   get:
  *     summary: Get stream metadata without YT Music OAuth
+ *     description: cachedOnly reads existing playback metadata without resolving a new source; unknown bitrate is zero.
  *     tags: [YouTube Music]
  *     security:
  *       - apiKeyAuth: []
@@ -1463,6 +1464,9 @@ router.get(
                 "__public__",
                 videoId,
                 quality,
+                ...(req.query.cachedOnly === "true"
+                    ? [{ cachedOnly: true, maxRetries: 0, timeoutMs: 5_000 }]
+                    : []),
             );
 
             res.json({

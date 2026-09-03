@@ -243,6 +243,14 @@ See the [`OIDC_SSO.md` topology matrix](OIDC_SSO.md#deployment-topology) for pro
 
 ## Sidecar Variables
 
+`YTMUSIC_YTDLP_EXTRACT_CONCURRENCY` (default `2`, clamped to 1–16) is the combined
+heavy-worker limit for stream metadata, playback spooling and library downloads, not a separate
+allowance for each pool. Waiting playback has priority over metadata. Slots stay
+occupied until worker threads finish, including after an HTTP timeout. The metadata
+queue admits at most eight outstanding jobs. Standalone deployments allocate 2 GiB
+to include yt-dlp's Deno child processes; raising concurrency requires load testing
+and a corresponding memory budget. `cached_only` metadata reads do not start yt-dlp.
+
 | Variable                        | Used In Container(s)                                      | Required | Default                    | What It Does                                                                                                                                                                                                                       |
 | ------------------------------- | --------------------------------------------------------- | -------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TIDDL_PATH`                    | `tidal-streamer`                                          | Optional | `/data/.tiddl`             | Sidecar data/config path for tiddl artifacts.                                                                                                                                                                                      |

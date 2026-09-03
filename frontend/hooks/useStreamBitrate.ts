@@ -68,13 +68,16 @@ function fetchYtStreamInfo(
     if (inFlight) return inFlight;
 
     const request = api
-        .getYtMusicStreamInfo(videoId)
+        .getYtMusicStreamInfo(videoId, undefined, { cachedOnly: true })
         .then((info) => {
             const normalized = {
                 abr: info.abr,
                 acodec: info.acodec,
             };
-            ytInfoCache.set(videoId, normalized);
+            // A cache miss is unknown, not a permanent zero-bitrate result.
+            if (normalized.abr > 0 || normalized.acodec) {
+                ytInfoCache.set(videoId, normalized);
+            }
             return normalized;
         })
         .finally(() => {
@@ -375,7 +378,7 @@ export function useStreamBitrate(): {
     qualityBadge: PlaybackQualityBadge | null;
 } {
     const { currentTrack, playbackType } = useAudioState();
-    const { streamProfile } = usePlaybackStatus();
+    const { streamProfile, isPlaying, isBuffering } = usePlaybackStatus();
     const [bitrate, setBitrate] = useState<number | null>(null);
     const [codec, setCodec] = useState<string | null>(null);
     const [tidalQuality, setTidalQuality] = useState<TidalStreamQuality | null>(
@@ -391,6 +394,8 @@ export function useStreamBitrate(): {
     useEffect(() => {
         if (
             playbackType !== "track" ||
+            !isPlaying ||
+            isBuffering ||
             !currentTrack ||
             currentTrack.streamSource !== "youtube" ||
             !currentTrack.youtubeVideoId
@@ -419,7 +424,7 @@ export function useStreamBitrate(): {
         return () => {
             cancelled = true;
         };
-    }, [currentTrack, playbackType]);
+    }, [currentTrack, playbackType, isPlaying, isBuffering]);
 
     // ── TIDAL stream info ──────────────────────────────────────────
     useEffect(() => {

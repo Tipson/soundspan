@@ -15,7 +15,7 @@ from yt_download import (
 )
 from ytmusic_models import YtDownloadRequest
 from ytmusic_runtime import _USER_AGENT, JsonObject, app, log
-from ytmusic_stream import YTDLP_SOCKET_TIMEOUT, _extract_pacer
+from ytmusic_stream import YTDLP_SOCKET_TIMEOUT, _extract_pacer, _extraction_budget
 
 from services.common.job_registry import JobRegistry
 from services.common.sidecar_runtime_utils import env_int
@@ -165,7 +165,7 @@ def _yt_download_sync(job: JsonObject, audio_format: str, quality: str, output_d
         return
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+        info = _extraction_budget.run(lambda: ydl.extract_info(url, download=True))
     if not info:
         raise ValueError("Download failed — no info returned")
     _complete_yt_download(job, info, audio_format, output_dir)

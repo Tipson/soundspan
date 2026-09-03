@@ -24,6 +24,7 @@ services:
       - soundspan_data:/data
     environment:
       - TZ=${TZ:-UTC}
+      - YTMUSIC_YTDLP_EXTRACT_CONCURRENCY=${YTMUSIC_YTDLP_EXTRACT_CONCURRENCY:-2}
       # AIO honors operator-supplied secrets; they take precedence and persist to /data/secrets.
       # Empty values generate and persist stable values on first boot.
       - SESSION_SECRET=${SESSION_SECRET:-}

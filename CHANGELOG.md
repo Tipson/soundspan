@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- fix(playback): bound combined YouTube Music extraction, spooling and library downloads for the actual worker lifetime, prioritize audio over queued metadata, discard expired queued work, reuse download metadata for quality badges without another provider extraction, retry transient missing formats once, and allocate 2 GiB to the standalone streamer including its Deno children.
+
 - fix(analyzer): store long canonical Chromaprint values behind a PostgreSQL hash index so completed online analyses are persisted instead of failing the B-tree row-size limit
 
 ### Added

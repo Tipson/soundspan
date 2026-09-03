@@ -171,7 +171,7 @@ PrometheusRule definitions and the API-versus-worker metric ownership map.
 | Backend Worker      | 250m                    | 2000m                 | 256Mi          | 1Gi          |
 | Frontend            | 100m                    | 1000m                 | 128Mi          | 512Mi        |
 | TIDAL Sidecar       | 100m                    | 2000m                 | 128Mi          | 512Mi        |
-| YT Music Streamer   | 100m                    | 1000m                 | 128Mi          | 512Mi        |
+| YT Music Streamer   | 100m                    | 1000m                 | 128Mi          | 2Gi          |
 | Audio Analyzer      | 500m                    | 4000m                 | 256Mi          | 1536Mi       |
 | DCLAP Vibe Provider | —                       | —                     | 1Gi            | 2560Mi       |
 | AIO (all-in-one)    | —                       | —                     | 2Gi            | 8Gi          |

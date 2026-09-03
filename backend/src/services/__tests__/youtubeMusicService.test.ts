@@ -42,6 +42,16 @@ describe("youtubeMusic service", () => {
         (ytMusicService as any).radioLoaders.clear();
     });
 
+    it("passes cache-only stream info through without extracting", async () => {
+        mockClient.get.mockResolvedValueOnce({ data: { abr: 0 } });
+        await ytMusicService.getStreamInfo("__public__", "video-id", "HIGH", {
+            cachedOnly: true,
+        });
+        expect(mockClient.get).toHaveBeenCalledWith("/stream/video-id", {
+            params: { user_id: "__public__", quality: "HIGH", cached_only: "true" },
+        });
+    });
+
     describe("internal-secret header (F31)", () => {
         it("attaches x-internal-secret to the sidecar client when configured", () => {
             mockConfig.internalApiSecret = "sek-123";
