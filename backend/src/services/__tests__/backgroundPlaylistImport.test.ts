@@ -22,6 +22,10 @@ const mockPrisma = {
 const mockTrackMappingService = {
     createMapping: jest.fn(),
 };
+const mockCanonicalIdentityResolver = {
+    resolveProviderTrack: jest.fn(),
+};
+const mockPersistImportedProviderIdentity = jest.fn();
 
 jest.mock("../../utils/db", () => ({ prisma: mockPrisma }));
 jest.mock("../../utils/logger", () => ({
@@ -35,6 +39,12 @@ jest.mock("../../utils/logger", () => ({
 }));
 jest.mock("../trackMappingService", () => ({
     trackMappingService: mockTrackMappingService,
+}));
+jest.mock("../recommendations/canonicalIdentity", () => ({
+    canonicalIdentityResolver: mockCanonicalIdentityResolver,
+}));
+jest.mock("../recommendations/durableIdentityPersistence", () => ({
+    persistImportedProviderIdentity: mockPersistImportedProviderIdentity,
 }));
 
 import { backgroundPlaylistImport } from "../backgroundPlaylistImport";
@@ -67,6 +77,10 @@ describe("background playlist import persistence", () => {
         });
         mockTrackMappingService.createMapping.mockResolvedValue({
             id: "mapping-1",
+        });
+        mockCanonicalIdentityResolver.resolveProviderTrack.mockResolvedValue({
+            id: "canonical-1",
+            canonicalKey: "isrc:USRC17607839",
         });
     });
 
@@ -232,6 +246,62 @@ describe("background playlist import persistence", () => {
             confidence: 0.85,
             source: "import-match",
         });
+    });
+
+    it("preserves a Spotify ISRC on the resolved YouTube provider mapping", async () => {
+        const resolvedTrack = {
+            index: 0,
+            artist: "Imported artist",
+            title: "Imported song",
+            album: "Imported album",
+            duration: 181,
+            isrc: "USRC17607839",
+            source: "youtube" as const,
+            confidence: 85,
+            trackYtMusicId: "yt-row-1",
+            videoId: "youtube-video-1",
+        };
+
+        await backgroundPlaylistImport.persistResolution({
+            jobId: "job-1",
+            userId: "user-1",
+            playlistId: "playlist-1",
+            expectedResolutionAttempt: 1,
+            newlyResolved: [resolvedTrack],
+            snapshot: [resolvedTrack],
+            summary: {
+                total: 1,
+                local: 0,
+                youtube: 1,
+                tidal: 0,
+                unresolved: 0,
+            },
+            progress: 100,
+            resolutionProcessed: 1,
+        });
+
+        expect(
+            mockCanonicalIdentityResolver.resolveProviderTrack,
+        ).toHaveBeenCalledWith({
+            source: "youtube",
+            providerTrackId: "youtube-video-1",
+            title: "Imported song",
+            artist: "Imported artist",
+            album: "Imported album",
+            duration: 181,
+            isrc: "USRC17607839",
+        });
+        expect(mockPersistImportedProviderIdentity).toHaveBeenCalledWith(
+            expect.objectContaining({
+                source: "youtube",
+                providerTrackId: "youtube-video-1",
+                isrc: "USRC17607839",
+            }),
+            {
+                id: "canonical-1",
+                canonicalKey: "isrc:USRC17607839",
+            },
+        );
     });
 
     it("rolls back item publication when cancellation wins the job fence", async () => {

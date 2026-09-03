@@ -44,6 +44,7 @@ const mockLoggerError = logger.error as jest.Mock;
 const VALID_ARTIST_MBID = "0383dadf-2a4e-4d10-a46a-e9e041da8eb3";
 const VALID_RELEASE_GROUP_MBID = "6b9a9e04-abd7-4666-86ba-bb220ef4c3b2";
 const VALID_RELEASE_MBID = "189002e7-3285-4e2e-92a3-7f6c30d407a2";
+const VALID_RECORDING_MBID = "b9991644-7275-44db-bc43-fff6c6b4ce69";
 
 describe("musicBrainzService", () => {
     let mockHttpGet: jest.Mock;
@@ -105,6 +106,57 @@ describe("musicBrainzService", () => {
             2592000,
             JSON.stringify(artists),
         );
+    });
+
+    it("resolves strict recording metadata and enriches it with one ISRC", async () => {
+        mockHttpGet
+            .mockResolvedValueOnce({
+                data: {
+                    recordings: [
+                        {
+                            id: VALID_RECORDING_MBID,
+                            score: 100,
+                            title: "Poker Face",
+                            length: 214_000,
+                            "artist-credit": [
+                                { artist: { name: "Lady Gaga" } },
+                            ],
+                        },
+                    ],
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    id: VALID_RECORDING_MBID,
+                    isrcs: ["USUM70824408"],
+                },
+            });
+
+        const result =
+            await musicBrainzService.lookupRecordingIdentityByMetadata({
+                title: "Poker Face (Official Music Video)",
+                artist: "Lady Gaga",
+                duration: 214,
+            });
+
+        expect(result).toEqual({
+            recordingMbid: VALID_RECORDING_MBID,
+            isrc: "USUM70824408",
+            confidence: 0.96,
+        });
+        expect(mockHttpGet).toHaveBeenNthCalledWith(1, "/recording", {
+            params: expect.objectContaining({
+                query: 'recording:"Poker Face" AND artist:"Lady Gaga"',
+                limit: 10,
+                fmt: "json",
+            }),
+        });
+        expect(mockHttpGet).toHaveBeenNthCalledWith(
+            2,
+            `/recording/${VALID_RECORDING_MBID}`,
+            { params: { inc: "isrcs", fmt: "json" } },
+        );
+        expect(mockRateLimiterExecute).toHaveBeenCalledTimes(2);
     });
 
     it("keeps free-text searches in Axios query params instead of the request path", async () => {

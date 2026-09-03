@@ -67,6 +67,10 @@ const mockTrackMappingService = {
     upsertTrackTidal: jest.fn(),
     createMapping: jest.fn(),
 };
+const mockCanonicalIdentityResolver = {
+    resolveProviderTrack: jest.fn(),
+};
+const mockPersistImportedProviderIdentity = jest.fn();
 
 jest.mock("../../utils/db", () => ({ prisma: mockPrisma }));
 jest.mock("../../utils/logger", () => ({ logger: mockLogger }));
@@ -78,6 +82,12 @@ jest.mock("../tidalStreaming", () => ({
 }));
 jest.mock("../trackMappingService", () => ({
     trackMappingService: mockTrackMappingService,
+}));
+jest.mock("../recommendations/canonicalIdentity", () => ({
+    canonicalIdentityResolver: mockCanonicalIdentityResolver,
+}));
+jest.mock("../recommendations/durableIdentityPersistence", () => ({
+    persistImportedProviderIdentity: mockPersistImportedProviderIdentity,
 }));
 jest.mock("../../utils/systemSettings", () => ({
     getSystemSettings: mockGetSystemSettings,
@@ -121,6 +131,10 @@ describe("PlaylistImportService", () => {
         mockTidalStreamingService.restoreOAuth.mockResolvedValue(true);
         mockTrackMappingService.createMapping.mockResolvedValue({
             id: "mapping_1",
+        });
+        mockCanonicalIdentityResolver.resolveProviderTrack.mockResolvedValue({
+            id: "canonical_1",
+            canonicalKey: "isrc:DUPLICATEISRC",
         });
         // Default: ID validation returns all referenced IDs as existing
         // track.findMany is also used for local library candidates (returns [])
@@ -1492,6 +1506,12 @@ describe("PlaylistImportService", () => {
             ]);
             expect(result.summary.tidal).toBe(1);
             expect(result.summary.unresolved).toBe(1);
+            expect(result.resolved[0]).toEqual(
+                expect.objectContaining({
+                    trackTidalId: "ct_123",
+                    tidalId: 123,
+                }),
+            );
         });
 
         it("propagates persistence callback failures from Tidal resolution", async () => {
@@ -1837,6 +1857,29 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
             const execution = await playlistImportService.importPlaylist(
                 "user_1",
                 preview,
+            );
+
+            expect(
+                mockCanonicalIdentityResolver.resolveProviderTrack,
+            ).toHaveBeenCalledWith({
+                source: "youtube",
+                providerTrackId: "same-video",
+                title: "Same Song",
+                artist: "Same Artist",
+                album: "Same Album",
+                duration: 180,
+                isrc: "DUPLICATE-ISRC",
+            });
+            expect(mockPersistImportedProviderIdentity).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    source: "youtube",
+                    providerTrackId: "same-video",
+                    isrc: "DUPLICATE-ISRC",
+                }),
+                {
+                    id: "canonical_1",
+                    canonicalKey: "isrc:DUPLICATEISRC",
+                },
             );
 
             expect(preview.summary).toEqual({

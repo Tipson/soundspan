@@ -3,3 +3,7 @@
 # file in a single serialized PR, where union semantics are equally safe. The
 # changelog heading lint (release tooling) guards against duplicated headings.
 CHANGELOG.md merge=union
+
+# Shell entrypoints are executed inside Linux containers even when the checkout
+# was created on Windows. CRLF makes POSIX sh fail before validation can run.
+*.sh text eol=lf

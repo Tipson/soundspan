@@ -6,6 +6,54 @@ export interface ResolvedCanonicalRecording {
     canonicalKey: string;
 }
 
+/** Minimal provider identity used outside the recommendation pipeline. */
+export interface ProviderTrackIdentity {
+    source: RecommendationCandidate["source"];
+    providerTrackId: string | number;
+    title: string;
+    artist: string;
+    album?: string;
+    duration?: number;
+    recordingMbid?: string | null;
+    isrc?: string | null;
+    fingerprint?: string | null;
+}
+
+/** Converts a provider/import identity into the internal candidate shape. */
+export function providerTrackIdentityToCandidate(
+    input: ProviderTrackIdentity,
+): RecommendationCandidate {
+    const providerTrackId = String(input.providerTrackId);
+    const tidalTrackId =
+        input.source === "tidal" ? Number(providerTrackId) : null;
+    const youtubeVideoId = input.source === "youtube" ? providerTrackId : null;
+    return {
+        id:
+            input.source === "library"
+                ? providerTrackId
+                : `${input.source}:${providerTrackId}`,
+        canonicalKey: "",
+        recordingMbid: input.recordingMbid,
+        isrc: input.isrc,
+        fingerprint: input.fingerprint,
+        title: input.title,
+        duration: Math.max(0, Math.round(input.duration ?? 0)),
+        artist: { id: null, name: input.artist },
+        album: {
+            id: null,
+            title: input.album ?? "",
+            coverArt: null,
+        },
+        source: input.source,
+        provider: { tidalTrackId, youtubeVideoId },
+        streamSource: input.source,
+        youtubeVideoId: youtubeVideoId ?? undefined,
+        tidalTrackId: tidalTrackId ?? undefined,
+        candidateSources: ["provider-identity"],
+        providerPrior: 1,
+    };
+}
+
 interface CanonicalIdentityDependencies {
     findProviderMapping: (
         provider: RecommendationCandidate["source"],
@@ -117,6 +165,16 @@ export class CanonicalIdentityResolver {
             );
         }
         return canonical;
+    }
+
+    /**
+     * Resolves imported/provider metadata without making callers construct the
+     * much wider recommendation candidate shape.
+     */
+    async resolveProviderTrack(
+        input: ProviderTrackIdentity,
+    ): Promise<ResolvedCanonicalRecording> {
+        return this.resolve(providerTrackIdentityToCandidate(input));
     }
 }
 

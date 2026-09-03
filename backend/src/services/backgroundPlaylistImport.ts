@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { buildGenericImportPlaylistMixId } from "./genericImportIdentity";
+import { canonicalIdentityResolver } from "./recommendations/canonicalIdentity";
+import { persistImportedProviderIdentity } from "./recommendations/durableIdentityPersistence";
 import type {
     PlaylistImportSummary,
     ResolvedTrack,
@@ -284,6 +286,41 @@ class BackgroundPlaylistImport {
                         confidence: track.confidence / 100,
                         source: "import-match",
                     });
+                    const providerIdentity =
+                        track.source === "youtube" && track.videoId
+                            ? {
+                                  source: "youtube" as const,
+                                  providerTrackId: track.videoId,
+                              }
+                            : track.source === "tidal" && track.tidalId
+                              ? {
+                                    source: "tidal" as const,
+                                    providerTrackId: track.tidalId,
+                                }
+                              : track.source === "local" && track.trackId
+                                ? {
+                                      source: "library" as const,
+                                      providerTrackId: track.trackId,
+                                  }
+                                : null;
+                    if (track.isrc && providerIdentity) {
+                        const providerTrack = {
+                            ...providerIdentity,
+                            title: track.title,
+                            artist: track.artist,
+                            album: track.album,
+                            duration: track.duration,
+                            isrc: track.isrc,
+                        };
+                        const canonical =
+                            await canonicalIdentityResolver.resolveProviderTrack(
+                                providerTrack,
+                            );
+                        await persistImportedProviderIdentity(
+                            providerTrack,
+                            canonical,
+                        );
+                    }
                 } catch (error) {
                     log.warn(
                         "Track mapping creation failed after import batch",

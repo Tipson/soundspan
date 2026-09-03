@@ -207,6 +207,43 @@ describe("default canonical identity persistence", () => {
         });
     });
 
+    it("accepts a narrow imported-provider identity without exposing recommendation fields", async () => {
+        mockMappingFindFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: "mapping-existing" });
+        mockCanonicalFindFirst.mockResolvedValue(null);
+
+        await canonicalIdentityResolver.resolveProviderTrack({
+            source: "youtube",
+            providerTrackId: "spotify-match-video",
+            title: "Imported song",
+            artist: "Imported artist",
+            album: "Imported album",
+            duration: 181,
+            isrc: " US-RC1-76-07839 ",
+        });
+
+        expect(mockCanonicalUpsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { canonicalKey: "isrc:USRC17607839" },
+                create: expect.objectContaining({
+                    isrc: "USRC17607839",
+                    title: "Imported song",
+                    artist: "Imported artist",
+                }),
+            }),
+        );
+        expect(mockYoutubeUpsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { videoId: "spotify-match-video" },
+            }),
+        );
+        expect(mockMappingUpdate).toHaveBeenCalledWith({
+            where: { id: "mapping-existing" },
+            data: { canonicalRecordingId: "canonical-new" },
+        });
+    });
+
     it("does not attach providers for an empty library id", async () => {
         mockCanonicalFindFirst.mockResolvedValue(null);
 

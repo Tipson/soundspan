@@ -233,7 +233,10 @@ class GlobalRateLimiter {
         if (retryAfter) {
             const parsed = parseInt(retryAfter, 10);
             if (!isNaN(parsed)) {
-                return parsed * 1000; // Convert to ms
+                // Some unhealthy upstreams emit Retry-After: 0. Respecting it
+                // literally turns bounded retries into an immediate request
+                // burst and prolongs the outage for every queued caller.
+                return Math.max(baseDelay, parsed * 1000);
             }
         }
 

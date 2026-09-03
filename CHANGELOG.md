@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Online identity enrichment no longer depends on a listener connecting TIDAL: strict MusicBrainz artist/title/version/duration matching can enrich YouTube canonical recordings directly, while Spotify-imported ISRCs are preserved on their resolved provider mappings. MusicBrainz retries also honor a non-zero backoff when an unhealthy upstream returns `Retry-After: 0`.
 - URL playlist imports now publish a complete ordered playlist shell immediately after source metadata is read, hydrate playable provider matches in background batches, expose ready/searching counts and an ETA in Activity, refresh an open playlist as matches arrive, and let users retry only unresolved positions.
 - My Wave now replaces the still-unplayed prepared tail after three consecutive early manual skips, while technical playback failures do not distort that preference signal; the refreshed queue starts from the first newly ranked track without waiting for the old batch to run out.
 - iPhone lock-screen Play and Pause actions now drive the audio engine synchronously before updating application state, preventing a resumed system timer from running while the PWA remains silent in the background.

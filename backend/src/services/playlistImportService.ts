@@ -26,6 +26,8 @@ import {
 import { parseM3U } from "./m3uParser";
 import { remoteProviderAdapters } from "./remoteProviders/adapters";
 import { buildGenericImportPlaylistMixId } from "./genericImportIdentity";
+import { canonicalIdentityResolver } from "./recommendations/canonicalIdentity";
+import { persistImportedProviderIdentity } from "./recommendations/durableIdentityPersistence";
 
 const log = logger.child("PlaylistImportService");
 const MATCH_BATCH_SIZE = 25;
@@ -702,6 +704,44 @@ class PlaylistImportService {
                         confidence: resolvedTrack.confidence / 100,
                         source: "import-match",
                     });
+                    const providerIdentity =
+                        resolvedTrack.source === "youtube" &&
+                        resolvedTrack.videoId
+                            ? {
+                                  source: "youtube" as const,
+                                  providerTrackId: resolvedTrack.videoId,
+                              }
+                            : resolvedTrack.source === "tidal" &&
+                                resolvedTrack.tidalId
+                              ? {
+                                    source: "tidal" as const,
+                                    providerTrackId: resolvedTrack.tidalId,
+                                }
+                              : resolvedTrack.source === "local" &&
+                                  resolvedTrack.trackId
+                                ? {
+                                      source: "library" as const,
+                                      providerTrackId: resolvedTrack.trackId,
+                                  }
+                                : null;
+                    if (resolvedTrack.isrc && providerIdentity) {
+                        const providerTrack = {
+                            ...providerIdentity,
+                            title: resolvedTrack.title,
+                            artist: resolvedTrack.artist,
+                            album: resolvedTrack.album,
+                            duration: resolvedTrack.duration,
+                            isrc: resolvedTrack.isrc,
+                        };
+                        const canonical =
+                            await canonicalIdentityResolver.resolveProviderTrack(
+                                providerTrack,
+                            );
+                        await persistImportedProviderIdentity(
+                            providerTrack,
+                            canonical,
+                        );
+                    }
                 } catch (err) {
                     log.warn(
                         "Track mapping creation failed after import:",
@@ -962,7 +1002,11 @@ class PlaylistImportService {
                                                 duration: match.duration,
                                             },
                                         );
-                                    return { index, trackYtMusicId: row.id };
+                                    return {
+                                        index,
+                                        trackYtMusicId: row.id,
+                                        videoId: match.videoId,
+                                    };
                                 } catch (err) {
                                     log.warn(
                                         "YT Music upsert failed during import:",
@@ -978,6 +1022,7 @@ class PlaylistImportService {
                             resolved[ytRow.index] = {
                                 ...current,
                                 trackYtMusicId: ytRow.trackYtMusicId,
+                                videoId: ytRow.videoId,
                                 source: "youtube",
                                 confidence: 85,
                             };
@@ -1048,7 +1093,11 @@ class PlaylistImportService {
                                                 isrc: match.isrc,
                                             },
                                         );
-                                    return { index, trackTidalId: row.id };
+                                    return {
+                                        index,
+                                        trackTidalId: row.id,
+                                        tidalId: match.id,
+                                    };
                                 } catch (err) {
                                     log.warn(
                                         "Tidal upsert failed during import:",
@@ -1064,6 +1113,7 @@ class PlaylistImportService {
                             resolved[tidalRow.index] = {
                                 ...current,
                                 trackTidalId: tidalRow.trackTidalId,
+                                tidalId: tidalRow.tidalId,
                                 source: "tidal",
                                 confidence: 85,
                             };

@@ -100,13 +100,17 @@ recording and registered embedding space. `TrackMapping` links provider
 identities to that shared row. The shared analysis contains no account taste or
 history.
 
-Identity enrichment is version-safe: live, remix, remaster, and other explicit
-title versions are not collapsed by metadata normalization. YouTube candidates
-can obtain a TIDAL ISRC and then an unambiguous MusicBrainz recording MBID;
-TIDAL candidates with an ISRC skip the extra catalog match. Analyzer-generated
-Chromaprint fingerprints are resolved through the rate-limited AcoustID worker.
-When a durable MBID already belongs to another canonical row, provider mappings
-move to that row while historical recommendation evidence remains intact.
+Identity enrichment is version-safe: live, remix, remaster, acoustic, demo,
+instrumental, karaoke, sped-up, and slowed versions are not collapsed by
+metadata normalization. YouTube candidates use a connected TIDAL ISRC when
+available, but TIDAL is not required: strict MusicBrainz artist, title, version,
+and duration matching supplies an MBID and an unambiguous ISRC directly.
+Spotify imports retain their source ISRC when the playable YouTube or TIDAL row
+is attached, so imported libraries seed the shared identity store without a
+second catalog lookup. Analyzer-generated Chromaprint fingerprints are resolved
+through the rate-limited AcoustID worker. When a durable identity already
+belongs to another canonical row, provider mappings move to that row while
+historical recommendation evidence remains intact.
 
 `RecommendationGeneration` and `RecommendationExposure` are account-scoped.
 They retain the served/shadow algorithm, session and surface, ordered canonical

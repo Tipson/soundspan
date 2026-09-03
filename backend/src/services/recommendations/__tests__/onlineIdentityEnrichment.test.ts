@@ -37,6 +37,7 @@ describe("online canonical identity enrichment", () => {
         const enricher = new OnlineIdentityEnricher({
             findMatches,
             lookupRecordingMbidByIsrc,
+            lookupRecordingIdentityByMetadata: jest.fn(),
             persistIdentity,
         });
         const tidalCandidate: RecommendationCandidate = {
@@ -58,6 +59,7 @@ describe("online canonical identity enrichment", () => {
             isrc: "USAAA2400001",
             recordingMbid: "b9991644-7275-44db-bc43-fff6c6b4ce69",
             confidence: 0.99,
+            source: "musicbrainz-isrc",
         });
     });
 
@@ -68,9 +70,16 @@ describe("online canonical identity enrichment", () => {
                 findFirst: jest
                     .fn()
                     .mockResolvedValue({ id: "canonical-target" }),
+                findUnique: jest.fn().mockResolvedValue({
+                    analysisStatus: "completed",
+                    embeddingStatus: "completed",
+                }),
                 update: jest.fn().mockResolvedValue({}),
             },
             trackMapping: {
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            },
+            recommendationExposure: {
                 updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
         };
@@ -113,6 +122,12 @@ describe("online canonical identity enrichment", () => {
             },
             data: { canonicalRecordingId: "canonical-target" },
         });
+        expect(
+            transaction.recommendationExposure.updateMany,
+        ).toHaveBeenCalledWith({
+            where: { canonicalRecordingId: candidate.canonicalRecordingId },
+            data: { canonicalRecordingId: "canonical-target" },
+        });
         expect(transaction.canonicalRecording.update).toHaveBeenNthCalledWith(
             1,
             expect.objectContaining({
@@ -143,6 +158,49 @@ describe("online canonical identity enrichment", () => {
         );
     });
 
+    it("defers a duplicate merge while analysis is writing the source row", async () => {
+        const transaction = {
+            $executeRaw: jest.fn().mockResolvedValue(1),
+            canonicalRecording: {
+                findFirst: jest
+                    .fn()
+                    .mockResolvedValue({ id: "canonical-target" }),
+                findUnique: jest.fn().mockResolvedValue({
+                    analysisStatus: "processing",
+                    embeddingStatus: "pending",
+                }),
+                update: jest.fn(),
+            },
+            trackMapping: { updateMany: jest.fn() },
+            recommendationExposure: { updateMany: jest.fn() },
+        };
+        (
+            prisma as unknown as {
+                $transaction: (
+                    callback: (client: typeof transaction) => Promise<unknown>,
+                ) => Promise<unknown>;
+            }
+        ).$transaction = async (callback) => callback(transaction);
+        const resolve = jest.fn();
+        (
+            canonicalIdentityResolver as unknown as { resolve: typeof resolve }
+        ).resolve = resolve;
+
+        await persistOnlineIdentity(youtubeCandidate("in-flight"), {
+            tidalTrackId: 77,
+            isrc: "USAAA2400001",
+            recordingMbid: "b9991644-7275-44db-bc43-fff6c6b4ce69",
+            confidence: 0.99,
+        });
+
+        expect(transaction.trackMapping.updateMany).not.toHaveBeenCalled();
+        expect(
+            transaction.recommendationExposure.updateMany,
+        ).not.toHaveBeenCalled();
+        expect(transaction.canonicalRecording.update).not.toHaveBeenCalled();
+        expect(resolve).not.toHaveBeenCalled();
+    });
+
     it("persists TIDAL ISRC and unambiguous MusicBrainz recording identity", async () => {
         const persistIdentity = jest.fn().mockResolvedValue(undefined);
         const enricher = new OnlineIdentityEnricher({
@@ -158,6 +216,7 @@ describe("online canonical identity enrichment", () => {
             lookupRecordingMbidByIsrc: jest
                 .fn()
                 .mockResolvedValue("b9991644-7275-44db-bc43-fff6c6b4ce69"),
+            lookupRecordingIdentityByMetadata: jest.fn(),
             persistIdentity,
         });
 
@@ -180,6 +239,9 @@ describe("online canonical identity enrichment", () => {
         const enricher = new OnlineIdentityEnricher({
             findMatches,
             lookupRecordingMbidByIsrc: jest.fn(),
+            lookupRecordingIdentityByMetadata: jest
+                .fn()
+                .mockResolvedValue(null),
             persistIdentity,
         });
 
@@ -192,5 +254,80 @@ describe("online canonical identity enrichment", () => {
             expect.objectContaining({ title: "missing" }),
         ]);
         expect(persistIdentity).not.toHaveBeenCalled();
+    });
+
+    it("falls back to strict MusicBrainz metadata when TIDAL is unavailable", async () => {
+        const persistIdentity = jest.fn().mockResolvedValue(undefined);
+        const lookupRecordingIdentityByMetadata = jest.fn().mockResolvedValue({
+            recordingMbid: "b9991644-7275-44db-bc43-fff6c6b4ce69",
+            isrc: "USUM70824408",
+            confidence: 0.96,
+        });
+        const enricher = new OnlineIdentityEnricher({
+            findMatches: jest
+                .fn()
+                .mockRejectedValue(new Error("no TIDAL auth")),
+            lookupRecordingMbidByIsrc: jest.fn(),
+            lookupRecordingIdentityByMetadata,
+            persistIdentity,
+        });
+        const candidate = youtubeCandidate("Poker Face");
+
+        await enricher.enrich("alice", [candidate]);
+
+        expect(lookupRecordingIdentityByMetadata).toHaveBeenCalledWith({
+            title: "Poker Face",
+            artist: "Artist",
+            duration: 180,
+        });
+        expect(persistIdentity).toHaveBeenCalledWith(candidate, {
+            tidalTrackId: null,
+            isrc: "USUM70824408",
+            recordingMbid: "b9991644-7275-44db-bc43-fff6c6b4ce69",
+            confidence: 0.96,
+            source: "musicbrainz-metadata",
+        });
+    });
+
+    it("persists a metadata MBID without inventing a TIDAL mapping", async () => {
+        const transaction = {
+            $executeRaw: jest.fn().mockResolvedValue(1),
+            canonicalRecording: {
+                findFirst: jest.fn().mockResolvedValue(null),
+                findUnique: jest.fn(),
+                update: jest.fn().mockResolvedValue({}),
+            },
+            trackMapping: { updateMany: jest.fn() },
+            recommendationExposure: { updateMany: jest.fn() },
+        };
+        (
+            prisma as unknown as {
+                $transaction: (
+                    callback: (client: typeof transaction) => Promise<string>,
+                ) => Promise<string>;
+            }
+        ).$transaction = async (callback) => callback(transaction);
+        const resolve = jest.fn();
+        (
+            canonicalIdentityResolver as unknown as { resolve: typeof resolve }
+        ).resolve = resolve;
+
+        await persistOnlineIdentity(youtubeCandidate("metadata-only"), {
+            tidalTrackId: null,
+            isrc: null,
+            recordingMbid: "b9991644-7275-44db-bc43-fff6c6b4ce69",
+            confidence: 0.94,
+            source: "musicbrainz-metadata",
+        });
+
+        expect(transaction.canonicalRecording.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    recordingMbid: "b9991644-7275-44db-bc43-fff6c6b4ce69",
+                    identitySource: "musicbrainz-metadata",
+                }),
+            }),
+        );
+        expect(resolve).not.toHaveBeenCalled();
     });
 });

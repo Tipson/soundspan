@@ -226,6 +226,17 @@ describe("rateLimiter", () => {
         expect(exponentialDelay).toBe(4000);
     });
 
+    it("does not hammer an unhealthy provider when Retry-After is zero", async () => {
+        const { rateLimiter } = await loadRateLimiterModule();
+        jest.spyOn(Math, "random").mockReturnValue(0);
+
+        const delay = (rateLimiter as any).calculateBackoff(0, 2000, {
+            response: { headers: { "retry-after": "0" } },
+        });
+
+        expect(delay).toBe(2000);
+    });
+
     it("detects transient failures by code, status, and message", async () => {
         const { rateLimiter } = await loadRateLimiterModule();
 
