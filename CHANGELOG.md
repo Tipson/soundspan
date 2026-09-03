@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- fix(settings): show real shared canonical audio-analysis and active-model embedding counters separately from local files, including missing coverage, failures, last-day completions and daily quota exhaustion. Dashboard reads are admin-only, cached and do not enqueue work.
+
 - feat(taste): browse 34 grouped genres, filter artist suggestions by genre, reveal more artists, and review or remove every selected signal before saving. Keep step actions visible on small screens and preserve canonical artist autocomplete and existing account profiles.
 - fix(settings): label local audio/CLAP counters explicitly, distinguish empty libraries from completed analysis, and disable empty local re-analysis actions. Online canonical analysis is a separate pipeline.
 

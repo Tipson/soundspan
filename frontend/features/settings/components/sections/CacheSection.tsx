@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { SettingsSection, SettingsRow, SettingsToggle } from "../ui";
+import { OnlineAnalysisProgress } from "./OnlineAnalysisProgress";
 import { SystemSettings } from "../../types";
 import { api } from "@/lib/api";
 import { enrichmentApi } from "@/lib/enrichmentApi";
@@ -640,6 +641,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
     return (
         <>
             <SettingsSection id="cache" title={cacheRu.sectionTitle}>
+                <OnlineAnalysisProgress />
                 {/* Enrichment Progress */}
                 {isProgressPending ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">

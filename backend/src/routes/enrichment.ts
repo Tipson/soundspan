@@ -60,8 +60,10 @@ import {
     enrichAlbumFields,
 } from "../services/metadata/albumEnrichmentFields";
 import { searchMusicBrainzArtistsHandler } from "./enrichmentMusicBrainzArtistSearch";
+import onlineAnalysisRouter from "./enrichmentOnlineAnalysis";
 const router = Router();
 router.use(requireAuth);
+router.use("/online-analysis", onlineAnalysisRouter);
 router.use("/search/musicbrainz/artists", musicBrainzArtistSearchLimiter);
 const MBID_FORMAT_EXAMPLE = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
 const MBID_UUID_REGEX =

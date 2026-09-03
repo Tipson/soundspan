@@ -184,6 +184,7 @@ export const queryKeys = {
         ["enrichment-failures", type, page] as const,
     enrichmentFailureCounts: () => ["enrichment-failure-counts"] as const,
     enrichmentProgress: () => ["enrichment-progress"] as const,
+    onlineAnalysisProgress: () => ["online-analysis-progress"] as const,
     enrichmentStatus: () => ["enrichment-status"] as const,
     enrichmentConcurrency: () => ["enrichment-concurrency"] as const,
     analysisWorkers: () => ["analysis-workers"] as const,
