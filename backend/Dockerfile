@@ -58,7 +58,9 @@ FROM deps AS build
 # Copy source and build
 COPY src ./src
 COPY tsconfig.json ./
-RUN npm run build
+RUN npm run build && \
+    mkdir -p dist/config && \
+    cp src/config/vibe-vocabulary.json dist/config/vibe-vocabulary.json
 
 # Stage 3: Prune to production dependencies for slim worker image
 FROM build AS worker-deps

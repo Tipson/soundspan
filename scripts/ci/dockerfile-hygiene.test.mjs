@@ -484,6 +484,15 @@ test("2. backend api-runtime uses compiled output without raw TypeScript", () =>
     );
 });
 
+test("2b. backend build preserves the generated vibe vocabulary", () => {
+    const dockerfile = readRepoFile("backend/Dockerfile");
+    assert.match(
+        dockerfile,
+        /cp\s+src\/config\/vibe-vocabulary\.json\s+dist\/config\/vibe-vocabulary\.json/,
+        "backend runtime stages need the generated vibe vocabulary beside compiled services",
+    );
+});
+
 test("3. frontend runtime uses the base node image UID 1000 user", () => {
     const relativePath = "frontend/Dockerfile";
     const dockerfile = readRepoFile(relativePath);
