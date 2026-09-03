@@ -63,4 +63,14 @@ outside this release.
 
 ## Publication
 
-Frontend image publication and live health verification are pending.
+verify: Linux production build passed. Only the frontend image changed in the
+fully resolved Compose configuration; backend, worker, streamers, database and
+analyzers were not recreated.
+
+Published image: `local/soundspan-frontend:taste-20260903`, revision `8fa5a65`,
+image ID `sha256:44bf6be14feccfb00c73ca2c00f3d14828210d63c256b55460e3f4a25b55098b`.
+
+verify: public `https://music.agentik007.ru/health` returned 200. The public
+versioned JavaScript assets returned 200 and contained all three checked release
+markers (expanded genre, neutral empty-local-analysis message, review-step action).
+No GitHub push was performed. The browser QA server was stopped after use.
