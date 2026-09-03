@@ -1802,6 +1802,63 @@ test("stable YouTube playback prepares the next queue item without waiting for t
     assert.equal(engine.preloadCalls.length, 1);
 });
 
+test("installed iOS PWA advances a preloaded next track before hidden source end", async (t) => {
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator",
+    );
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+            maxTouchPoints: 5,
+            standalone: true,
+            onLine: true,
+        },
+    });
+    t.after(() => {
+        if (navigatorDescriptor) {
+            Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+        } else {
+            Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+    enableWindowMetrics();
+    (
+        globalThis as unknown as {
+            window: { matchMedia: () => { matches: boolean } };
+        }
+    ).window.matchMedia = () => ({ matches: true });
+    installVisibilityDocument().dispatchVisibility("hidden");
+    runtimeEngineMode = "native";
+
+    const currentTrack = makeTrack("ios-background-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "ios-background-01",
+    });
+    const nextTrack = makeTrack("ios-background-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "ios-background-02",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 210;
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+
+    engine.emit("timeupdate", { timeSec: 209.8 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
 test("a late device-file lease cannot load a retired track and every acquired URL is released", async (t) => {
     const firstTrack = makeTrack("yt:first-file", {
         streamSource: "youtube",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Podcast, Track } from "@/lib/audio-state-context";
 import type { QueueItem } from "@/lib/queue-item";
 import { api } from "@/lib/api";
@@ -12,6 +12,8 @@ import { resolveNetworkNextTrackPreloadDecision } from "@/lib/audio-engine/nextT
 import { resolveRemoteStreamFormat } from "../audioPlaybackOrchestratorPolicy";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import { usePlaybackSourceLeaseController } from "./playbackSourceLeaseController";
+import { observeIosBackgroundTrackHandoff } from "../iosBackgroundTrackHandoffController";
+import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 
 interface UseNextTrackPreloadOptions {
     playbackType: "track" | "audiobook" | "podcast" | null;
@@ -23,8 +25,7 @@ interface UseNextTrackPreloadOptions {
     isShuffle: boolean;
     shuffleIndices: number[];
     repeatMode: "off" | "one" | "all";
-    lastPreloadedTrackIdRef: MutableRefObject<string | null>;
-    ytMusicAuthenticatedRef: MutableRefObject<boolean>;
+    refs: PlaybackOrchestratorRefs;
 }
 
 type PreloadableTrack = NonNullable<ReturnType<typeof getNextTrackInfo>>;
@@ -35,6 +36,8 @@ type PreloadTrackOptions = {
 type NetworkPreloadTiming = {
     currentTimeSec: number;
     isLoading: boolean;
+    loadedDurationSec: number;
+    liveTrackId: string | null;
 };
 interface NextTrackPreloadController {
     preloadTrack: (
@@ -59,9 +62,13 @@ export function useNextTrackPreload({
     isShuffle,
     shuffleIndices,
     repeatMode,
-    lastPreloadedTrackIdRef,
-    ytMusicAuthenticatedRef,
+    refs,
 }: UseNextTrackPreloadOptions): NextTrackPreloadController {
+    const {
+        iosBackgroundTrackHandoffRef,
+        lastPreloadedTrackIdRef,
+        ytMusicAuthenticatedRef,
+    } = refs;
     const leaseController = usePlaybackSourceLeaseController();
     const preloadRequestIdRef = useRef(0);
     const preloadTrack = useCallback(
@@ -185,6 +192,17 @@ export function useNextTrackPreload({
             ) {
                 preloadTrack(nextTrack, { allowNetworkYouTube: true });
             }
+            observeIosBackgroundTrackHandoff({
+                refs,
+                queue,
+                currentIndex,
+                isShuffle,
+                shuffleIndices,
+                repeatMode,
+                liveTrackId: timing.liveTrackId,
+                currentTimeSec: timing.currentTimeSec,
+                loadedDurationSec: timing.loadedDurationSec,
+            });
         },
         [
             queue,
@@ -193,11 +211,13 @@ export function useNextTrackPreload({
             shuffleIndices,
             repeatMode,
             preloadTrack,
+            refs,
         ],
     );
 
     // Preload next track for gapless playback (music only)
     useEffect(() => {
+        iosBackgroundTrackHandoffRef.current.reset();
         // Preload while a track or podcast episode plays — but only when the
         // NEXT queue item is a music track (getNextTrackInfo returns null for
         // episode items). Audiobooks have no queue and never preload.
@@ -239,6 +259,7 @@ export function useNextTrackPreload({
         isShuffle,
         shuffleIndices,
         repeatMode,
+        iosBackgroundTrackHandoffRef,
         leaseController,
         lastPreloadedTrackIdRef,
         preloadTrack,

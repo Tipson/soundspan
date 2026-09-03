@@ -21,6 +21,7 @@ const PLAYBACK_CLIENT_SIGNAL_EVENTS = new Set<string>([
     "player.playback_error",
     "player.playback_cancelled",
     "player.provider_cooldown_skip",
+    "player.ios_background_handoff",
 ]);
 
 /** Stable runtime audio-engine facade shared by every orchestrator concern. */

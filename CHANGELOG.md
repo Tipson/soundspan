@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Installed iOS PWAs hand off to a next track whose preload has started immediately before the current source ends while the app is backgrounded, avoiding WebKit's silent next-source state without changing Safari-tab, desktop, Android, Listen Together, or repeat-one playback.
 - Backend startup accepts a supported FFmpeg version that was fully printed before a teardown timeout, preventing a valid Debian FFmpeg build from trapping the API in a restart loop after deployment.
 - YouTube Music spool jobs now prefer faster progressive audio, retain a bounded low-resolution combined-stream fallback when audio-only formats temporarily disappear, and stop obsolete downloads after the last listener disconnects so rapid skips do not starve the selected track.
 - Playlist detail responses now include up to 5,000 ordered items instead of silently stopping at 1,000, so large imported playlists such as a 1,294-track collection remain fully visible while the shared track list keeps its bounded rendering behavior.

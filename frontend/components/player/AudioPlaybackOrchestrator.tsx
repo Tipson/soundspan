@@ -135,7 +135,7 @@ export const AudioPlaybackOrchestrator = memo(
             isSeekingRef,
             loadListenerRef,
             loadErrorListenerRef,
-            lastPreloadedTrackIdRef,
+            iosBackgroundTrackHandoffRef,
             consecutiveErrorBreakerRef,
             playbackProgressConfirmationRef,
             wasPlayingWhenHiddenRef,
@@ -262,10 +262,8 @@ export const AudioPlaybackOrchestrator = memo(
                 isShuffle,
                 shuffleIndices,
                 repeatMode,
-                lastPreloadedTrackIdRef,
-                ytMusicAuthenticatedRef,
+                refs: orchestratorRefs,
             });
-        // Refresh event behavior after every render without detaching listeners.
         useLayoutEffect(() => {
             const handleTimeUpdate = (data: {
                 timeSec: number;
@@ -332,6 +330,8 @@ export const AudioPlaybackOrchestrator = memo(
                     preloadNetworkWhenDue({
                         currentTimeSec: currentTimeValue,
                         isLoading: isLoadingRef.current,
+                        liveTrackId,
+                        loadedDurationSec: durationSec,
                     });
                     const isEndAdjacent =
                         !isLoadingRef.current &&
@@ -621,6 +621,7 @@ export const AudioPlaybackOrchestrator = memo(
 
             const handlePause = () => {
                 trackEndWatchdogRef.current?.clear();
+                iosBackgroundTrackHandoffRef.current.reset();
                 if (isLoadingRef.current) return;
                 if (seekReloadInProgressRef.current) return;
                 clearUnexpectedPauseRecoveryCheck();
@@ -836,7 +837,10 @@ export const AudioPlaybackOrchestrator = memo(
                 handleError,
                 handlePlay,
                 handlePause,
-                cleanup: clearUnexpectedPauseRecoveryCheck,
+                cleanup: () => {
+                    clearUnexpectedPauseRecoveryCheck();
+                    iosBackgroundTrackHandoffRef.current.reset();
+                },
             };
         });
         H.useAudioEngineBindings({
@@ -894,6 +898,7 @@ export const AudioPlaybackOrchestrator = memo(
                 }
                 loadTimeoutRetryCountRef.current = 0;
                 activeEngineTrackIdRef.current = null;
+                iosBackgroundTrackHandoffRef.current.reset();
                 audioEngine.stop();
                 playbackSourceLeaseController.release();
                 lastTrackIdRef.current = null;
@@ -906,6 +911,7 @@ export const AudioPlaybackOrchestrator = memo(
             const previousMediaId = lastTrackIdRef.current;
             if (currentMediaId !== previousMediaId) {
                 trackEndWatchdogRef.current?.clear();
+                iosBackgroundTrackHandoffRef.current.reset();
                 if (pendingManualProviderLoadRef.current) {
                     clearTimeout(pendingManualProviderLoadRef.current.timeout);
                     pendingManualProviderLoadRef.current = null;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    isIosStandalonePwa,
     IosStandaloneAudioContextBridge,
     shouldUseIosStandaloneAudioBridge,
     type BridgeAudioContextLike,
@@ -15,6 +16,45 @@ const ANDROID_UA =
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 const DESKTOP_CHROME_UA =
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+test("detects installed iPhone and iPadOS PWAs without matching Safari tabs or Macs", () => {
+    assert.equal(
+        isIosStandalonePwa({
+            userAgent: IPHONE_UA,
+            maxTouchPoints: 5,
+            isStandaloneDisplayMode: true,
+            isLegacyNavigatorStandalone: false,
+        }),
+        true,
+    );
+    assert.equal(
+        isIosStandalonePwa({
+            userAgent: IPADOS_DESKTOP_UA,
+            maxTouchPoints: 5,
+            isStandaloneDisplayMode: false,
+            isLegacyNavigatorStandalone: true,
+        }),
+        true,
+    );
+    assert.equal(
+        isIosStandalonePwa({
+            userAgent: IPHONE_UA,
+            maxTouchPoints: 5,
+            isStandaloneDisplayMode: false,
+            isLegacyNavigatorStandalone: false,
+        }),
+        false,
+    );
+    assert.equal(
+        isIosStandalonePwa({
+            userAgent: IPADOS_DESKTOP_UA,
+            maxTouchPoints: 0,
+            isStandaloneDisplayMode: true,
+            isLegacyNavigatorStandalone: false,
+        }),
+        false,
+    );
+});
 
 test("iOS standalone playback keeps the direct media-element path", () => {
     assert.equal(

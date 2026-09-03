@@ -26,6 +26,38 @@ export interface IosStandaloneBridgeEnvironmentInput {
     isLegacyNavigatorStandalone: boolean;
 }
 
+/** Returns whether the runtime is an installed iOS/iPadOS web app. */
+export function isIosStandalonePwa(
+    input: IosStandaloneBridgeEnvironmentInput,
+): boolean {
+    const userAgent = input.userAgent.toLowerCase();
+    const isMobileIos = /iphone|ipad|ipod/.test(userAgent);
+    const isDesktopModeIpad =
+        userAgent.includes("macintosh") && input.maxTouchPoints > 1;
+    const isStandalone =
+        input.isStandaloneDisplayMode || input.isLegacyNavigatorStandalone;
+    return (isMobileIos || isDesktopModeIpad) && isStandalone;
+}
+
+/** Reads the installed-iOS-PWA detector inputs from the browser. */
+export function detectIosStandalonePwaEnvironment(): boolean {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+        return false;
+    }
+    const standaloneNavigator = navigator as Navigator & {
+        standalone?: boolean;
+    };
+    return isIosStandalonePwa({
+        userAgent: navigator.userAgent ?? "",
+        maxTouchPoints: navigator.maxTouchPoints ?? 0,
+        isStandaloneDisplayMode:
+            typeof window.matchMedia === "function"
+                ? window.matchMedia("(display-mode: standalone)").matches
+                : false,
+        isLegacyNavigatorStandalone: standaloneNavigator.standalone === true,
+    });
+}
+
 /**
  * Returns whether production playback may route its media element through
  * Web Audio. This is deliberately false: iOS standalone PWAs need the bare

@@ -4,6 +4,7 @@ import { HeartbeatMonitor } from "@/lib/audio";
 import { createConsecutiveErrorBreaker } from "@/lib/audio-engine/consecutiveErrorBreaker";
 import { createPlaybackProgressConfirmationState } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
+import { createIosBackgroundTrackHandoff } from "@/lib/audio-engine/iosBackgroundTrackHandoff";
 import { TRACK_END_WATCHDOG_TIMEOUT_MS } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
 import {
     createTrackEndWatchdog,
@@ -80,6 +81,9 @@ export function usePlaybackOrchestratorRefs({
     const pendingSeekTimeRef = useRef<number | null>(null);
     // Preload management
     const lastPreloadedTrackIdRef = useRef<string | null>(null);
+    const iosBackgroundTrackHandoffRef = useRef(
+        createIosBackgroundTrackHandoff(),
+    );
     const pendingTrackErrorSkipRef = useRef<NodeJS.Timeout | null>(null);
     const pendingTrackErrorTrackIdRef = useRef<string | null>(null);
     const consecutiveErrorBreakerRef = useRef(createConsecutiveErrorBreaker());
@@ -238,6 +242,7 @@ export function usePlaybackOrchestratorRefs({
         seekDebounceRef,
         pendingSeekTimeRef,
         lastPreloadedTrackIdRef,
+        iosBackgroundTrackHandoffRef,
         pendingTrackErrorSkipRef,
         pendingTrackErrorTrackIdRef,
         consecutiveErrorBreakerRef,
