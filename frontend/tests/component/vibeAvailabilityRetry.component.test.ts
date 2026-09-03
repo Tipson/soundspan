@@ -224,6 +224,45 @@ test("Vibe starts its ranked queue with shuffle explicitly disabled", async () =
     container.remove();
 });
 
+test("Wave hides unrelated current and seed tracks until its own session starts", async () => {
+    audioState.currentTrack = { id: "playing-elsewhere" };
+    audioState.vibeMode = false;
+    feedResult = {
+        data: {
+            shelves: {
+                quickPicks: [{ id: "wave-seed" }],
+                discovery: [],
+                listenAgain: [],
+            },
+        },
+        isLoading: false,
+        isError: false,
+    };
+    const { VibeProviderFallback } =
+        await import("../../components/vibe/VibeAvailability");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await React.act(async () => {
+        root.render(React.createElement(VibeProviderFallback));
+        await Promise.resolve();
+    });
+
+    assert.equal(
+        container.querySelector('[data-testid="wave-now-playing-panel"]'),
+        null,
+    );
+    assert.equal(
+        container.querySelector('[data-testid="wave-next-preview"]'),
+        null,
+    );
+
+    await React.act(async () => root.unmount());
+    container.remove();
+});
+
 test("an active Wave retunes to a mood supplied by the Home shortcut", async () => {
     window.history.replaceState({}, "", "https://music.test/vibe?mood=calm");
     audioState.currentTrack = { id: "playing" };

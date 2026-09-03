@@ -518,8 +518,10 @@ select {
         transform 100ms ease-out;
 }
 
-.player-control:hover:not(:disabled) {
-    background: color-mix(in srgb, white 7%, transparent);
+@media (hover: hover) and (pointer: fine) {
+    .player-control:hover:not(:disabled) {
+        background: color-mix(in srgb, white 7%, transparent);
+    }
 }
 
 .player-control:active:not(:disabled),

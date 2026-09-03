@@ -14,7 +14,7 @@ Start-here guide for `frontend/features/library`.
 ## Personal Library Model
 
 - Library is an account-scoped hub for liked songs, user playlists, explicitly saved albums and artists, plus ordinary device-file downloads whose status and folder permission belong to the current browser profile.
-- The primary Playlists view combines liked songs, user playlists, and current-device downloads without repeating a summary block. Albums and Artists remain directly selectable views.
+- The primary Playlists view starts with playlist-style Liked and Downloaded cards, followed by user playlists. Downloaded opens a dedicated static collection instead of expanding a second track list below the playlist grid. Albums and Artists remain directly selectable views.
 - Saving an album or artist records its exact Soundspan or provider identity. It does not infer album state from liked tracks and does not download media to the server.
 - The user-facing route intentionally does not expose the server-file catalog, scan filters, or destructive media controls. Administrative server-media management remains separate.
 - Compact screens use one horizontally scrollable, active-tab-aware section rail. The editorial Library hero, section rail, and collection cards share the same quiet surface geometry as music detail pages; card titles wrap instead of clipping, and every tab view leaves room for the persistent mobile player.
@@ -25,6 +25,7 @@ Start-here guide for `frontend/features/library`.
 | --- | --- |
 | `components/LibraryHeader.tsx` | components |
 | `components/LibraryTabs.tsx` | components |
+| `components/LibraryPlaylistCard.tsx` | static liked/downloaded playlist card |
 | `components/PersonalPlaylistGrid.tsx` | user playlist cards |
 | `components/SaveMusicEntityButton.tsx` | explicit account save/remove control |
 | `components/SavedMusicGrid.tsx` | saved album and artist cards |

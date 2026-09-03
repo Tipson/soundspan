@@ -35,6 +35,7 @@ mock.module("lucide-react", {
         Shuffle: Icon,
         Eye: Icon,
         EyeOff: Icon,
+        Ellipsis: Icon,
         ListMusic: Icon,
         Music: Icon,
         Volume2: Icon,
@@ -166,6 +167,14 @@ mock.module("@/hooks/useQueries", {
         usePlaylistQuery: () => ({
             data: state.playlist,
             isLoading: state.isLoading,
+        }),
+        usePlaylistPagesQuery: () => ({
+            data: state.playlist ? { pages: [state.playlist] } : undefined,
+            isLoading: state.isLoading,
+            hasNextPage: false,
+            isFetchingNextPage: false,
+            isFetchNextPageError: false,
+            fetchNextPage: async () => undefined,
         }),
     },
 });

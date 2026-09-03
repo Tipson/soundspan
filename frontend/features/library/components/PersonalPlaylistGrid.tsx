@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ListMusic, RotateCcw, Upload } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { api } from "@/lib/api";
@@ -10,7 +11,11 @@ interface PersonalPlaylistGridProps {
     isLoading: boolean;
     isError: boolean;
     onRetry?: () => void;
+    leadingCards?: ReactNode;
 }
+
+const GRID_CLASS =
+    "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7";
 
 function playlistCovers(playlist: PersonalPlaylist): string[] {
     const seen = new Set<string>();
@@ -63,10 +68,12 @@ export function PersonalPlaylistGrid({
     isLoading,
     isError,
     onRetry,
+    leadingCards,
 }: PersonalPlaylistGridProps) {
     if (isLoading) {
         return (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+            <div className={GRID_CLASS}>
+                {leadingCards}
                 {Array.from({ length: 6 }).map((_, index) => (
                     <div key={index} className="space-y-3 p-2">
                         <div className="aspect-square animate-pulse rounded-2xl bg-white/[0.06]" />
@@ -79,26 +86,29 @@ export function PersonalPlaylistGrid({
 
     if (isError) {
         return (
-            <div
-                role="alert"
-                className="flex flex-col items-center rounded-2xl border border-warning/20 bg-warning/10 px-5 py-8 text-center text-sm text-content-body"
-            >
-                <p>{ru.library.loadPlaylistsFailed}</p>
-                {onRetry && (
-                    <button
-                        type="button"
-                        onClick={onRetry}
-                        className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
-                    >
-                        <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                        {ru.common.retry}
-                    </button>
-                )}
+            <div className={GRID_CLASS}>
+                {leadingCards}
+                <div
+                    role="alert"
+                    className="col-span-full flex flex-col items-center rounded-2xl border border-warning/20 bg-warning/10 px-5 py-8 text-center text-sm text-content-body"
+                >
+                    <p>{ru.library.loadPlaylistsFailed}</p>
+                    {onRetry && (
+                        <button
+                            type="button"
+                            onClick={onRetry}
+                            className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
+                        >
+                            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                            {ru.common.retry}
+                        </button>
+                    )}
+                </div>
             </div>
         );
     }
 
-    if (playlists.length === 0) {
+    if (playlists.length === 0 && !leadingCards) {
         return (
             <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-6 text-center">
                 <ListMusic className="mb-4 h-10 w-10 text-content-muted" />
@@ -120,7 +130,8 @@ export function PersonalPlaylistGrid({
     }
 
     return (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+        <div className={GRID_CLASS}>
+            {leadingCards}
             {playlists.map((playlist) => (
                 <Link
                     key={playlist.id}

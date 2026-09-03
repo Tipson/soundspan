@@ -194,6 +194,143 @@ test("an older failed mutation cannot overwrite a newer preference from another 
     );
 });
 
+test("a second like tap clears the optimistic like before the first request settles", async (testContext) => {
+    const [{ useTrackPreference }, { createRoot }] = await Promise.all([
+        import("../../hooks/useTrackPreference"),
+        import("react-dom/client"),
+    ]);
+    const queryClient = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+            mutations: { retry: false },
+        },
+    });
+    queryClient.setQueryData(
+        ["track-preference", TRACK_ID],
+        preferenceResponse("clear"),
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    function LikeTrigger() {
+        const preference = useTrackPreference(TRACK_ID);
+        return React.createElement(
+            "button",
+            {
+                onClick: () => {
+                    void preference.toggleLike().catch(() => undefined);
+                },
+            },
+            preference.signal,
+        );
+    }
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                QueryClientProvider,
+                { client: queryClient },
+                React.createElement(LikeTrigger),
+            ),
+        );
+    });
+    testContext.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+        queryClient.clear();
+    });
+    await flushReact();
+
+    const button = container.querySelector("button");
+    assert.ok(button);
+    await React.act(async () => button.click());
+    await flushReact();
+    assert.equal(button.textContent, "thumbs_up");
+
+    await React.act(async () => button.click());
+    await flushReact();
+    assert.deepEqual(
+        pendingPreferences.map(({ signal }) => signal),
+        ["thumbs_up", "clear"],
+    );
+    assert.equal(button.textContent, "clear");
+
+    await React.act(async () => {
+        pendingPreferences[1]?.resolve(preferenceResponse("clear"));
+        pendingPreferences[0]?.resolve(preferenceResponse("thumbs_up"));
+    });
+    await flushReact();
+    assert.equal(
+        queryClient.getQueryData<PreferenceResponse>([
+            "track-preference",
+            TRACK_ID,
+        ])?.signal,
+        "clear",
+    );
+});
+
+test("a cleared rapid dislike cannot advance playback when its older request resolves late", async (testContext) => {
+    const [{ TrackPreferenceButtons }, { createRoot }] = await Promise.all([
+        import("../../components/player/TrackPreferenceButtons"),
+        import("react-dom/client"),
+    ]);
+    const queryClient = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+            mutations: { retry: false },
+        },
+    });
+    queryClient.setQueryData(
+        ["track-preference", TRACK_ID],
+        preferenceResponse("clear"),
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    let appliedCount = 0;
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                QueryClientProvider,
+                { client: queryClient },
+                React.createElement(TrackPreferenceButtons, {
+                    trackId: TRACK_ID,
+                    mode: "down-only",
+                    onThumbsDownApplied: () => {
+                        appliedCount += 1;
+                    },
+                }),
+            ),
+        );
+    });
+    testContext.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+        queryClient.clear();
+    });
+    await flushReact();
+
+    const button = container.querySelector("button");
+    assert.ok(button);
+    await React.act(async () => button.click());
+    await flushReact();
+    await React.act(async () => button.click());
+    await flushReact();
+    assert.deepEqual(
+        pendingPreferences.map(({ signal }) => signal),
+        ["thumbs_down", "clear"],
+    );
+
+    await React.act(async () => {
+        pendingPreferences[1]?.resolve(preferenceResponse("clear"));
+        pendingPreferences[0]?.resolve(preferenceResponse("thumbs_down"));
+    });
+    await flushReact();
+    assert.equal(appliedCount, 0);
+});
+
 test("dislike toggle clears an active dislike and otherwise writes thumbs_down through the ordered mutation", async (testContext) => {
     const [{ useTrackPreference }, { createRoot }] = await Promise.all([
         import("../../hooks/useTrackPreference"),

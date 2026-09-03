@@ -218,4 +218,29 @@ with the product owner.
 The Iteration 4 candidate is verified only in the local browser and is not yet
 published. Its factual captures are listed above for owner review before release.
 
-final result: passed
+### Iteration 6 — structural QA passed, authenticated visual capture blocked
+
+- **Source visual truth:** the six reported states are
+  `C:/Users/Dartum/AppData/Local/Temp/codex-clipboard-25ccf334-7bd0-48fb-9729-d8f91606bfd9.png`,
+  `C:/Users/Dartum/AppData/Local/Temp/codex-clipboard-45127a9f-ad62-44e7-9dca-ce674dc23a0b.png`,
+  `C:/Users/Dartum/AppData/Local/Temp/codex-clipboard-812f1264-6d24-4316-91ad-b26b0f0fae49.png`,
+  `C:/Users/Dartum/AppData/Local/Temp/codex-clipboard-baf18051-7b0e-4505-8eac-d2ad66cdd3a9.png`,
+  `C:/Users/Dartum/AppData/Local/Temp/codex-clipboard-41cdd56b-0c07-410b-b866-a1290bef2866.png`,
+  and
+  `C:/Users/Dartum/AppData/Local/Temp/codex-clipboard-564a988d-5fc2-45bf-9c3c-50b20a8ec5ef.png`.
+- **Implemented state:** Library now begins with square Liked and Downloaded
+  collection cards, Downloaded owns a dedicated route state, mobile Wave omits
+  the redundant current/next panel, playlist secondary actions live in one
+  overflow group, and touch players do not retain hover chrome.
+- **Automated responsive evidence:** component contracts pin the 320–390 px
+  mobile hierarchy, touch-sized controls, overflow visibility, static-card
+  ordering, Wave visibility, pressed shuffle/repeat state, and repeatable
+  like/dislike toggles. Production build, TypeScript, ESLint, unit, and component
+  suites are the implementation evidence for this iteration.
+- **Implementation screenshot and viewport:** not captured. The affected states
+  require an authenticated account plus device-specific Android/PWA storage and
+  the product-design browser policy does not permit choosing an unapproved
+  browser on the owner's behalf. Therefore no fabricated side-by-side image is
+  recorded.
+
+final result for iteration 6: blocked on owner-browser visual comparison; code and structural QA passed
