@@ -60,6 +60,11 @@ const coverageExpectations = [
                 uncovered: "126-130",
             },
             {
+                line: 96.15,
+                branch: 95.83,
+                uncovered: "124-128",
+            },
+            {
                 line: 97.69,
                 branch: 95.83,
                 uncovered: "123-125",

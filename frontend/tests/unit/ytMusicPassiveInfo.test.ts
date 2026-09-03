@@ -9,8 +9,13 @@ test("quality badge API requests cache-only metadata", async () => {
         return { abr: 0, acodec: "" };
     });
     try {
-        await api.getYtMusicStreamInfo("dQw4w9WgXcQ", "HIGH", { cachedOnly: true });
-        assert.equal(paths[0], "/ytmusic/stream-info-public/dQw4w9WgXcQ?quality=HIGH&cachedOnly=true");
+        await api.getYtMusicStreamInfo("dQw4w9WgXcQ", "HIGH", {
+            cachedOnly: true,
+        });
+        assert.equal(
+            paths[0],
+            "/ytmusic/stream-info-public/dQw4w9WgXcQ?quality=HIGH&cachedOnly=true",
+        );
     } finally {
         stub.mock.restore();
     }

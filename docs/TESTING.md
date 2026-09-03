@@ -260,11 +260,15 @@ Quality visibility workflow:
 | Backend Typecheck / Frontend Typecheck | Configurable | Standalone TypeScript checks.                                                                                                                                                                                                                                                                                         |
 | Helm Chart Visibility                  | Configurable | Helm lint and render assertions.                                                                                                                                                                                                                                                                                      |
 | Python Quality                         | **Yes**      | Root AIO image-hardening tests, `ruff check`, `ruff format --check`, the aggregate `mypy` run, and four per-sidecar `mypy` runs that avoid top-level module collisions.                                                                                                                                               |
-| Enforcement Gates                      | **Yes**      | Route-error canonicalization and its self-test, Dockerfile hygiene, the 130-use hardcoded-hex baseline, OpenAPI route synchronization, and repository-wide Prettier checks. Local `npm run verify:gates` also runs the infrastructure/release helper tests; the CI enforcement job does not currently run that check. |
+| Enforcement Gates                      | **Yes**      | Route-error canonicalization and its self-test, the source-file-size checker self-test, Dockerfile hygiene, the 130-use hardcoded-hex baseline, OpenAPI route synchronization, and repository-wide Prettier checks. The source-file-size report itself is advisory. Local `npm run verify:gates` also runs the infrastructure/release helper tests; the CI enforcement job does not currently run that check. |
 
 The configurable visibility jobs are non-blocking by default and can be made
 blocking through repository variables. `Python Quality` and `Enforcement Gates`
 do not use `continue-on-error`; failures always fail the workflow.
+
+The source-file-size report runs inside `Enforcement Gates` with
+`continue-on-error`; it remains visible in the job summary without failing the
+job or blocking a pull request.
 
 ### Enforced ratchets
 

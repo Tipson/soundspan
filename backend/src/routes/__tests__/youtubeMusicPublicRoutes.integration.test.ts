@@ -160,7 +160,9 @@ describe("youtube music public stream routes integration", () => {
             .set(AUTH_HEADER, AUTH_VALUE);
         expect(res.status).toBe(200);
         expect(mockGetStreamInfo).toHaveBeenCalledWith(
-            "__public__", "video-1", "norm:HIGH",
+            "__public__",
+            "video-1",
+            "norm:HIGH",
             { cachedOnly: true, maxRetries: 0, timeoutMs: 5_000 },
         );
     });
