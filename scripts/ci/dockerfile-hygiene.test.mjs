@@ -417,6 +417,28 @@ function runPostgresEntrypoint(postgres, postgresPassword, executablePath) {
     const entrypoint = postgres.entrypoint.map((argument) =>
         argument.replaceAll("$$", "$"),
     );
+    if (process.platform === "win32") {
+        const fixtureEntrypoint = path
+            .join(executablePath, "docker-entrypoint.sh")
+            .replace(
+                /^([A-Za-z]):[\\/]/,
+                (_, drive) => `/mnt/${drive.toLowerCase()}/`,
+            )
+            .replaceAll("\\", "/");
+        const script = entrypoint[2]
+            .replace("exec docker-entrypoint.sh", `exec "${fixtureEntrypoint}"`)
+            .replaceAll("\r\n", "\n");
+        const quotedPassword = `'${postgresPassword.replaceAll("'", `'"'"'`)}'`;
+        return childProcess.spawnSync(
+            "bash",
+            ["-s", "--", ...(postgres.command ?? ["postgres"])],
+            {
+                encoding: "utf8",
+                env: { ...process.env, POSTGRES_PASSWORD: postgresPassword },
+                input: `export POSTGRES_PASSWORD=${quotedPassword}\n${script}`,
+            },
+        );
+    }
     return childProcess.spawnSync(
         entrypoint[0],
         [...entrypoint.slice(1), ...(postgres.command ?? ["postgres"])],

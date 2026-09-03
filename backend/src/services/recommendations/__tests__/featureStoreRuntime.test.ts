@@ -61,6 +61,10 @@ describe("default recommendation feature-store persistence", () => {
         mockPlayFindMany.mockReset();
     });
 
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
     it("returns untouched candidates when canonical identities are absent", async () => {
         const input = [candidate("one", null), candidate("two")];
 
@@ -173,6 +177,8 @@ describe("default recommendation feature-store persistence", () => {
     });
 
     it("builds the fast session profile from session-tagged plays", async () => {
+        const now = new Date("2026-09-01T12:00:00Z");
+        jest.useFakeTimers().setSystemTime(now);
         mockQueryRaw
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([rawFeature("canonical-session", "[1,0]")]);
@@ -181,7 +187,7 @@ describe("default recommendation feature-store persistence", () => {
                 trackId: null,
                 trackTidalId: null,
                 trackYtMusicId: "youtube-row-1",
-                playedAt: new Date("2026-09-01T11:59:00Z"),
+                playedAt: new Date(now.getTime() - 60_000),
                 outcome: "completed",
                 completionRatio: 1,
                 listenedSeconds: 180,

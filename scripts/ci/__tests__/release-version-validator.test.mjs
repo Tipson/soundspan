@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -26,7 +27,13 @@ const rejectedVersions = [
 ];
 
 function runValidator(version) {
-    return spawnSync(validator, [version], { encoding: "utf8" });
+    if (process.platform !== "win32") {
+        return spawnSync(validator, [version], { encoding: "utf8" });
+    }
+    return spawnSync("bash", ["-s", "--", version], {
+        encoding: "utf8",
+        input: readFileSync(validator, "utf8").replaceAll("\r\n", "\n"),
+    });
 }
 
 test("accepts the image workflow release version forms", () => {

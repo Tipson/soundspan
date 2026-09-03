@@ -85,7 +85,7 @@ function runGenerator(
         initializeGitFixture(fixtureRoot);
 
         const versionArgs = version === null ? [] : ["--version", version];
-        return spawnSync(
+        const result = spawnSync(
             process.execPath,
             [
                 generator,
@@ -100,6 +100,9 @@ function runGenerator(
                 env: sanitizedGitEnvironment(),
             },
         );
+        result.stdout = result.stdout.replaceAll("\r\n", "\n");
+        result.stderr = result.stderr.replaceAll("\r\n", "\n");
+        return result;
     } finally {
         rmSync(fixtureRoot, { recursive: true, force: true });
     }

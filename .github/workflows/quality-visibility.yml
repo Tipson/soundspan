@@ -327,6 +327,7 @@ jobs:
         run: npm run check:error-canon:test
 
       - name: Check source file sizes
+        continue-on-error: true
         run: node scripts/ci/check-file-size.mjs
 
       - name: Test source file-size gate

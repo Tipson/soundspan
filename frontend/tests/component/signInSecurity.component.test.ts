@@ -115,6 +115,19 @@ async function flushAsyncWork(): Promise<void> {
     await Promise.resolve();
 }
 
+async function waitForCondition(
+    predicate: () => boolean,
+    message: string,
+): Promise<void> {
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+        if (predicate()) return;
+        await React.act(async () => {
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        });
+    }
+    assert.fail(message);
+}
+
 async function mountSecuritySection() {
     const { SignInSecuritySection } =
         await import("../../features/settings/components/sections/SignInSecuritySection");
@@ -193,6 +206,10 @@ test("renders, links, and unlinks OIDC identities", async (t) => {
 
     await click(findButton("Подключить аккаунт Company SSO"));
     assert.equal(startOidcLink.mock.callCount(), 1);
+    await waitForCondition(
+        () => window.location.hash === "#oidc-provider",
+        "OIDC redirect was not applied",
+    );
     assert.equal(window.location.hash, "#oidc-provider");
 
     await click(findButton("Отвязать"));
@@ -239,6 +256,13 @@ test("shows the link result once and removes OIDC status parameters", async (t) 
     const harness = await mountSecuritySection();
     t.after(harness.unmount);
 
+    await waitForCondition(
+        () =>
+            (harness.container.textContent ?? "").includes(
+                "Эта учётная запись SSO уже связана с другим аккаунтом",
+            ),
+        "OIDC link error notice was not rendered",
+    );
     assert.match(
         harness.container.textContent ?? "",
         /Эта учётная запись SSO уже связана с другим аккаунтом/,
@@ -252,6 +276,13 @@ test("shows a successful link result and strips it from the URL", async (t) => {
     const harness = await mountSecuritySection();
     t.after(harness.unmount);
 
+    await waitForCondition(
+        () =>
+            (harness.container.textContent ?? "").includes(
+                "Аккаунт SSO подключён.",
+            ),
+        "OIDC link success notice was not rendered",
+    );
     assert.match(
         harness.container.textContent ?? "",
         /Аккаунт SSO подключён\./,

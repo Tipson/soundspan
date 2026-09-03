@@ -11,16 +11,24 @@ mock.module("@/lib/audio-context", {
     namedExports: {
         useAudioState: () => ({
             playbackType: "track",
-            currentTrack: { id: "yt-track", streamSource: "youtube", youtubeVideoId: "dQw4w9WgXcQ" },
+            currentTrack: {
+                id: "yt-track",
+                streamSource: "youtube",
+                youtubeVideoId: "dQw4w9WgXcQ",
+            },
         }),
         usePlaybackStatus: () => state,
     },
 });
 mock.module("@/lib/api", {
-    namedExports: { api: { getYtMusicStreamInfo: async (...args: unknown[]) => {
-        calls.push(args);
-        return { abr: 128, acodec: "AAC" };
-    } } },
+    namedExports: {
+        api: {
+            getYtMusicStreamInfo: async (...args: unknown[]) => {
+                calls.push(args);
+                return { abr: 128, acodec: "AAC" };
+            },
+        },
+    },
 });
 
 test("quality reads wait for audio and use only cached provider metadata", async () => {
@@ -34,11 +42,17 @@ test("quality reads wait for audio and use only cached provider metadata", async
     }
     try {
         await act(async () => root.render(React.createElement(Probe)));
-        assert.equal(calls.length, 0, "loading music must not start metadata work");
+        assert.equal(
+            calls.length,
+            0,
+            "loading music must not start metadata work",
+        );
         state.isPlaying = true;
         state.isBuffering = false;
         await act(async () => root.render(React.createElement(Probe)));
-        assert.deepEqual(calls, [["dQw4w9WgXcQ", undefined, { cachedOnly: true }]]);
+        assert.deepEqual(calls, [
+            ["dQw4w9WgXcQ", undefined, { cachedOnly: true }],
+        ]);
         assert.equal(container.textContent, "128");
     } finally {
         await act(async () => root.unmount());

@@ -48,7 +48,11 @@ describe("youtubeMusic service", () => {
             cachedOnly: true,
         });
         expect(mockClient.get).toHaveBeenCalledWith("/stream/video-id", {
-            params: { user_id: "__public__", quality: "HIGH", cached_only: "true" },
+            params: {
+                user_id: "__public__",
+                quality: "HIGH",
+                cached_only: "true",
+            },
         });
     });
 

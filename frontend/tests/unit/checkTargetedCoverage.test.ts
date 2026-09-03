@@ -52,6 +52,16 @@ test("targeted coverage accepts the current Node 24 source-map artifact", () => 
     assert.match(result.stdout, /targeted coverage check passed/);
 });
 
+test("targeted coverage accepts the Windows Node 24 source-map artifact", () => {
+    const result = spawnSync(process.execPath, [checkerPath], {
+        encoding: "utf8",
+        input: coverageOutput("124-128", "96.15", "95.83"),
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /targeted coverage check passed/);
+});
+
 test("targeted coverage rejects a different uncovered range", () => {
     const result = spawnSync(process.execPath, [checkerPath], {
         encoding: "utf8",
