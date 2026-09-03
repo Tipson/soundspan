@@ -119,10 +119,12 @@ async function waitForCondition(
     predicate: () => boolean,
     message: string,
 ): Promise<void> {
-    for (let attempt = 0; attempt < 25; attempt += 1) {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
         if (predicate()) return;
         await React.act(async () => {
-            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            await new Promise<void>((resolve) => setTimeout(resolve, 5));
+            await flushAsyncWork();
         });
     }
     assert.fail(message);

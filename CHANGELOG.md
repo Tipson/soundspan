@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - chore(ci): keep the source-file-size report visible but make it advisory so oversized legacy modules do not block otherwise valid pull requests.
 - fix(ci): make frontend test globs and coverage checks work on Windows, wait for asynchronous OIDC UI state, freeze the recommendation-session test clock, and normalize cross-platform release guard fixtures.
+- fix(ci): give asynchronous OIDC component effects a bounded wall-clock deadline under shared-runner load and cover every accepted and rejected HTTP-status error shape without lowering backend coverage thresholds.
 
 - feat(library): present Liked and Downloaded as the first two playlist cards, open downloads as a dedicated collection, keep mobile downloads in app-private storage so Android galleries do not index them, and preserve an explicit reconnect path for older public-folder copies.
 - fix(player): keep Wave feedback and next-pick panels hidden until a Wave session starts, move secondary playlist actions into a mobile overflow menu, remove sticky touch hover state from shuffle/repeat, and allow a second like or dislike tap while an earlier preference request is still settling.
