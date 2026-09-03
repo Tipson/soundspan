@@ -26,6 +26,8 @@ import {
 import { parseM3U } from "./m3uParser";
 import { remoteProviderAdapters } from "./remoteProviders/adapters";
 import { buildGenericImportPlaylistMixId } from "./genericImportIdentity";
+import { canonicalIdentityResolver } from "./recommendations/canonicalIdentity";
+import { persistImportedProviderIdentity } from "./recommendations/durableIdentityPersistence";
 
 const log = logger.child("PlaylistImportService");
 const MATCH_BATCH_SIZE = 25;
@@ -37,6 +39,24 @@ const IDEMPOTENT_PLAYLIST_TRANSACTION_ATTEMPTS = 2;
 
 interface PlaylistImportOptions {
     idempotencyKey?: string;
+}
+
+export type PlaylistImportProgressStage =
+    | "source"
+    | "local"
+    | "tidal"
+    | "youtube";
+
+export interface PlaylistImportProgressEvent {
+    stage: PlaylistImportProgressStage;
+    completed: number;
+    total: number;
+}
+
+export interface PlaylistImportPreviewOptions {
+    onProgress?: (event: PlaylistImportProgressEvent) => void | Promise<void>;
+    onResolved?: (tracks: ResolvedTrack[]) => void | Promise<void>;
+    onPrepared?: (prepared: PlaylistImportPreparedData) => void | Promise<void>;
 }
 
 function isPlaylistIdentityConflict(error: unknown): boolean {
@@ -131,6 +151,10 @@ export interface ResolvedTrack {
     artist: string;
     title: string;
     album?: string;
+    duration?: number;
+    isrc?: string;
+    videoId?: string;
+    tidalId?: number;
     /** Local library track ID, if matched */
     trackId?: string;
     /** TrackYtMusic record ID, if resolved */
@@ -143,20 +167,26 @@ export interface ResolvedTrack {
     confidence: number;
 }
 
+export interface PlaylistImportSummary {
+    total: number;
+    local: number;
+    youtube: number;
+    tidal: number;
+    unresolved: number;
+}
+
+export interface PlaylistImportPreparedData {
+    playlistName: string;
+    resolved: ResolvedTrack[];
+    summary: PlaylistImportSummary;
+}
+
 type SourceType = "spotify" | "deezer" | "youtube" | "tidal";
 type ProviderMatchInput = {
     artist: string;
     title: string;
     albumTitle?: string;
     duration?: number;
-    isrc?: string;
-};
-type YtMatch = { videoId: string; title: string; duration: number };
-type TidalMatch = {
-    id: number;
-    title: string;
-    artist: string;
-    duration: number;
     isrc?: string;
 };
 type IndexedImportTrack = { index: number; track: ImportTrackMeta };
@@ -397,22 +427,12 @@ class PlaylistImportService {
     }
 
     /**
-     * Preview import — resolves all tracks but doesn't create playlist.
+     * Fetches complete source metadata without waiting for provider matching.
      */
-    async previewImport(
+    async prepareImport(
         userId: string,
         sourceUrl: string,
-    ): Promise<{
-        playlistName: string;
-        resolved: ResolvedTrack[];
-        summary: {
-            total: number;
-            local: number;
-            youtube: number;
-            tidal: number;
-            unresolved: number;
-        };
-    }> {
+    ): Promise<PlaylistImportPreparedData> {
         const parsed = this.parseSourceUrl(sourceUrl);
         if (!parsed) throw new Error("Unsupported playlist URL");
 
@@ -421,6 +441,50 @@ class PlaylistImportService {
             parsed.id,
             userId,
         );
+        const resolved = tracks.map((track, index) => ({
+            index,
+            artist: track.artist,
+            title: track.title,
+            ...(track.album ? { album: track.album } : {}),
+            ...(track.duration !== undefined
+                ? { duration: track.duration }
+                : {}),
+            ...(track.isrc ? { isrc: track.isrc } : {}),
+            ...(track.videoId ? { videoId: track.videoId } : {}),
+            ...(track.tidalId !== undefined ? { tidalId: track.tidalId } : {}),
+            source: "unresolved" as const,
+            confidence: 0,
+        }));
+        return {
+            playlistName: name,
+            resolved,
+            summary: {
+                total: resolved.length,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: resolved.length,
+            },
+        };
+    }
+
+    /**
+     * Resolves a prepared source snapshot against available providers.
+     */
+    async resolvePreparedImport(
+        userId: string,
+        prepared: PlaylistImportPreparedData,
+        options: PlaylistImportPreviewOptions = {},
+    ): Promise<PlaylistImportPreparedData> {
+        const tracks: ImportTrackMeta[] = prepared.resolved.map((track) => ({
+            artist: track.artist,
+            title: track.title,
+            album: track.album,
+            duration: track.duration,
+            isrc: track.isrc,
+            videoId: track.videoId,
+            tidalId: track.tidalId,
+        }));
 
         // Fetch local library for matching
         const localCandidates = await this.getLocalLibraryCandidates();
@@ -433,6 +497,9 @@ class PlaylistImportService {
             localCandidates,
             userId,
             hasTidalAuth,
+            options.onProgress,
+            options.onResolved,
+            prepared.resolved,
         );
 
         const summary = {
@@ -444,7 +511,25 @@ class PlaylistImportService {
                 .length,
         };
 
-        return { playlistName: name, resolved, summary };
+        return { playlistName: prepared.playlistName, resolved, summary };
+    }
+
+    /**
+     * Preview import — resolves all tracks but doesn't create playlist.
+     */
+    async previewImport(
+        userId: string,
+        sourceUrl: string,
+        options: PlaylistImportPreviewOptions = {},
+    ): Promise<PlaylistImportPreparedData> {
+        const prepared = await this.prepareImport(userId, sourceUrl);
+        await options.onPrepared?.(prepared);
+        await options.onProgress?.({
+            stage: "source",
+            completed: prepared.summary.total,
+            total: prepared.summary.total,
+        });
+        return this.resolvePreparedImport(userId, prepared, options);
     }
 
     /**
@@ -619,6 +704,44 @@ class PlaylistImportService {
                         confidence: resolvedTrack.confidence / 100,
                         source: "import-match",
                     });
+                    const providerIdentity =
+                        resolvedTrack.source === "youtube" &&
+                        resolvedTrack.videoId
+                            ? {
+                                  source: "youtube" as const,
+                                  providerTrackId: resolvedTrack.videoId,
+                              }
+                            : resolvedTrack.source === "tidal" &&
+                                resolvedTrack.tidalId
+                              ? {
+                                    source: "tidal" as const,
+                                    providerTrackId: resolvedTrack.tidalId,
+                                }
+                              : resolvedTrack.source === "local" &&
+                                  resolvedTrack.trackId
+                                ? {
+                                      source: "library" as const,
+                                      providerTrackId: resolvedTrack.trackId,
+                                  }
+                                : null;
+                    if (resolvedTrack.isrc && providerIdentity) {
+                        const providerTrack = {
+                            ...providerIdentity,
+                            title: resolvedTrack.title,
+                            artist: resolvedTrack.artist,
+                            album: resolvedTrack.album,
+                            duration: resolvedTrack.duration,
+                            isrc: resolvedTrack.isrc,
+                        };
+                        const canonical =
+                            await canonicalIdentityResolver.resolveProviderTrack(
+                                providerTrack,
+                            );
+                        await persistImportedProviderIdentity(
+                            providerTrack,
+                            canonical,
+                        );
+                    }
                 } catch (err) {
                     log.warn(
                         "Track mapping creation failed after import:",
@@ -751,19 +874,32 @@ class PlaylistImportService {
         localCandidates: LocalTrackCandidate[],
         userId: string,
         hasTidalAuth: boolean,
+        onProgress?: PlaylistImportPreviewOptions["onProgress"],
+        onResolved?: PlaylistImportPreviewOptions["onResolved"],
+        initialResolved?: ResolvedTrack[],
     ): Promise<ResolvedTrack[]> {
-        const resolved: ResolvedTrack[] = tracks.map((track, index) => ({
-            index,
-            artist: track.artist,
-            title: track.title,
-            album: track.album,
-            source: "unresolved",
-            confidence: 0,
-        }));
+        const resolved: ResolvedTrack[] = initialResolved
+            ? initialResolved.map((track) => ({ ...track }))
+            : tracks.map((track, index) => ({
+                  index,
+                  artist: track.artist,
+                  title: track.title,
+                  album: track.album,
+                  duration: track.duration,
+                  isrc: track.isrc,
+                  videoId: track.videoId,
+                  tidalId: track.tidalId,
+                  source: "unresolved",
+                  confidence: 0,
+              }));
         const unresolved: IndexedImportTrack[] = [];
+        const locallyResolved: ResolvedTrack[] = [];
 
         for (let i = 0; i < tracks.length; i++) {
             const track = tracks[i];
+            if (resolved[i]?.source !== "unresolved") {
+                continue;
+            }
             const localMatch = matchTrackAgainstLibrary(track, localCandidates);
             if (localMatch && localMatch.matchConfidence >= 70) {
                 resolved[i] = {
@@ -772,14 +908,29 @@ class PlaylistImportService {
                     source: "local",
                     confidence: localMatch.matchConfidence,
                 };
+                locallyResolved.push(resolved[i]);
                 continue;
             }
 
             unresolved.push({ index: i, track });
         }
+        if (locallyResolved.length > 0) {
+            await onResolved?.(locallyResolved);
+        }
+        await onProgress?.({
+            stage: "local",
+            completed: tracks.length,
+            total: tracks.length,
+        });
 
         // Resolve tracks that already have native provider IDs (e.g. from YT/Tidal playlist import)
-        await this.resolveNativeProviderTracks(unresolved, resolved);
+        const nativeResolved = await this.resolveNativeProviderTracks(
+            unresolved,
+            resolved,
+        );
+        if (nativeResolved.length > 0) {
+            await onResolved?.(nativeResolved);
+        }
 
         // Filter down to tracks still unresolved after native resolution
         const stillUnresolved = unresolved.filter(
@@ -787,13 +938,24 @@ class PlaylistImportService {
         );
 
         if (hasTidalAuth) {
-            await this.resolveWithTidal(userId, stillUnresolved, resolved);
+            await this.resolveWithTidal(
+                userId,
+                stillUnresolved,
+                resolved,
+                onProgress,
+                onResolved,
+            );
         }
 
         const youtubeCandidates = stillUnresolved.filter(
             (item) => resolved[item.index].source === "unresolved",
         );
-        await this.resolveWithYouTube(youtubeCandidates, resolved);
+        await this.resolveWithYouTube(
+            youtubeCandidates,
+            resolved,
+            onProgress,
+            onResolved,
+        );
 
         return resolved;
     }
@@ -801,88 +963,181 @@ class PlaylistImportService {
     private async resolveWithYouTube(
         unresolved: IndexedImportTrack[],
         resolved: ResolvedTrack[],
+        onProgress?: PlaylistImportPreviewOptions["onProgress"],
+        onResolved?: PlaylistImportPreviewOptions["onResolved"],
     ): Promise<void> {
         if (unresolved.length === 0) return;
-
-        const matchedTracks = await this.matchYouTubeInBatches(unresolved);
-        if (matchedTracks.length === 0) return;
-
-        const ytRows = await mapWithConcurrency(
-            matchedTracks,
-            UPSERT_CONCURRENCY,
-            async ({ track, match, index }) => {
+        const batches = chunkArray(unresolved, MATCH_BATCH_SIZE);
+        let completed = 0;
+        await mapWithConcurrency(
+            batches,
+            MATCH_BATCH_CONCURRENCY,
+            async (batch) => {
+                let newlyResolved: ResolvedTrack[] = [];
                 try {
-                    const row = await trackMappingService.upsertTrackYtMusic({
-                        videoId: match.videoId,
-                        title: match.title,
-                        artist: track.artist,
-                        album: track.album || "",
-                        duration: match.duration,
+                    try {
+                        const matches =
+                            await ytMusicService.findMatchesForAlbum(
+                                "__public__",
+                                batch.map(({ track }) =>
+                                    this.toProviderMatchInput(track),
+                                ),
+                            );
+                        const matchedTracks = batch.flatMap((item, index) => {
+                            const match = matches[index];
+                            return match ? [{ ...item, match }] : [];
+                        });
+                        const ytRows = await mapWithConcurrency(
+                            matchedTracks,
+                            UPSERT_CONCURRENCY,
+                            async ({ track, match, index }) => {
+                                try {
+                                    const row =
+                                        await trackMappingService.upsertTrackYtMusic(
+                                            {
+                                                videoId: match.videoId,
+                                                title: match.title,
+                                                artist: track.artist,
+                                                album: track.album || "",
+                                                duration: match.duration,
+                                            },
+                                        );
+                                    return {
+                                        index,
+                                        trackYtMusicId: row.id,
+                                        videoId: match.videoId,
+                                    };
+                                } catch (err) {
+                                    log.warn(
+                                        "YT Music upsert failed during import:",
+                                        err,
+                                    );
+                                    return null;
+                                }
+                            },
+                        );
+                        newlyResolved = ytRows.flatMap((ytRow) => {
+                            if (!ytRow) return [];
+                            const current = resolved[ytRow.index];
+                            resolved[ytRow.index] = {
+                                ...current,
+                                trackYtMusicId: ytRow.trackYtMusicId,
+                                videoId: ytRow.videoId,
+                                source: "youtube",
+                                confidence: 85,
+                            };
+                            return [resolved[ytRow.index]];
+                        });
+                    } catch (err) {
+                        log.warn(
+                            "YT Music batch match failed during import:",
+                            err,
+                        );
+                    }
+                    if (newlyResolved.length > 0) {
+                        await onResolved?.(newlyResolved);
+                    }
+                } finally {
+                    completed += batch.length;
+                    await onProgress?.({
+                        stage: "youtube",
+                        completed,
+                        total: unresolved.length,
                     });
-                    return { index, trackYtMusicId: row.id };
-                } catch (err) {
-                    log.warn("YT Music upsert failed during import:", err);
-                    return null;
                 }
             },
         );
-
-        for (const ytRow of ytRows) {
-            if (!ytRow) continue;
-            const current = resolved[ytRow.index];
-            resolved[ytRow.index] = {
-                ...current,
-                trackYtMusicId: ytRow.trackYtMusicId,
-                source: "youtube",
-                confidence: 85,
-            };
-        }
     }
 
     private async resolveWithTidal(
         userId: string,
         unresolved: IndexedImportTrack[],
         resolved: ResolvedTrack[],
+        onProgress?: PlaylistImportPreviewOptions["onProgress"],
+        onResolved?: PlaylistImportPreviewOptions["onResolved"],
     ): Promise<void> {
         if (unresolved.length === 0) return;
-
-        const matchedTracks = await this.matchTidalInBatches(
-            userId,
-            unresolved,
-        );
-        if (matchedTracks.length === 0) return;
-
-        const tidalRows = await mapWithConcurrency(
-            matchedTracks,
-            UPSERT_CONCURRENCY,
-            async ({ track, match, index }) => {
+        const batches = chunkArray(unresolved, MATCH_BATCH_SIZE);
+        let completed = 0;
+        await mapWithConcurrency(
+            batches,
+            MATCH_BATCH_CONCURRENCY,
+            async (batch) => {
+                let newlyResolved: ResolvedTrack[] = [];
                 try {
-                    const row = await trackMappingService.upsertTrackTidal({
-                        tidalId: match.id,
-                        title: match.title,
-                        artist: match.artist,
-                        album: track.album || "",
-                        duration: match.duration,
-                        isrc: match.isrc,
+                    try {
+                        const matches =
+                            await tidalStreamingService.findMatchesForAlbum(
+                                userId,
+                                batch.map(({ track }) =>
+                                    this.toProviderMatchInput(track),
+                                ),
+                            );
+                        const matchedTracks = batch.flatMap((item, index) => {
+                            const match = matches[index];
+                            return match ? [{ ...item, match }] : [];
+                        });
+                        const tidalRows = await mapWithConcurrency(
+                            matchedTracks,
+                            UPSERT_CONCURRENCY,
+                            async ({ track, match, index }) => {
+                                try {
+                                    const row =
+                                        await trackMappingService.upsertTrackTidal(
+                                            {
+                                                tidalId: match.id,
+                                                title: match.title,
+                                                artist: match.artist,
+                                                album: track.album || "",
+                                                duration: match.duration,
+                                                isrc: match.isrc,
+                                            },
+                                        );
+                                    return {
+                                        index,
+                                        trackTidalId: row.id,
+                                        tidalId: match.id,
+                                    };
+                                } catch (err) {
+                                    log.warn(
+                                        "Tidal upsert failed during import:",
+                                        err,
+                                    );
+                                    return null;
+                                }
+                            },
+                        );
+                        newlyResolved = tidalRows.flatMap((tidalRow) => {
+                            if (!tidalRow) return [];
+                            const current = resolved[tidalRow.index];
+                            resolved[tidalRow.index] = {
+                                ...current,
+                                trackTidalId: tidalRow.trackTidalId,
+                                tidalId: tidalRow.tidalId,
+                                source: "tidal",
+                                confidence: 85,
+                            };
+                            return [resolved[tidalRow.index]];
+                        });
+                    } catch (err) {
+                        log.warn(
+                            "Tidal batch match failed during import:",
+                            err,
+                        );
+                    }
+                    if (newlyResolved.length > 0) {
+                        await onResolved?.(newlyResolved);
+                    }
+                } finally {
+                    completed += batch.length;
+                    await onProgress?.({
+                        stage: "tidal",
+                        completed,
+                        total: unresolved.length,
                     });
-                    return { index, trackTidalId: row.id };
-                } catch (err) {
-                    log.warn("Tidal upsert failed during import:", err);
-                    return null;
                 }
             },
         );
-
-        for (const tidalRow of tidalRows) {
-            if (!tidalRow) continue;
-            const current = resolved[tidalRow.index];
-            resolved[tidalRow.index] = {
-                ...current,
-                trackTidalId: tidalRow.trackTidalId,
-                source: "tidal",
-                confidence: 85,
-            };
-        }
     }
 
     /**
@@ -892,13 +1147,13 @@ class PlaylistImportService {
     private async resolveNativeProviderTracks(
         unresolved: IndexedImportTrack[],
         resolved: ResolvedTrack[],
-    ): Promise<void> {
+    ): Promise<ResolvedTrack[]> {
         const nativeTracks = unresolved.filter(
             (item) => !!item.track.videoId || !!item.track.tidalId,
         );
-        if (nativeTracks.length === 0) return;
+        if (nativeTracks.length === 0) return [];
 
-        await mapWithConcurrency(
+        const resolvedNative = await mapWithConcurrency(
             nativeTracks,
             UPSERT_CONCURRENCY,
             async ({ index, track }) => {
@@ -935,76 +1190,19 @@ class PlaylistImportService {
                             confidence: 100,
                         };
                     }
+                    return resolved[index];
                 } catch (err) {
                     log.warn(
                         "Native provider upsert failed during import:",
                         err,
                     );
+                    return null;
                 }
             },
         );
-    }
-
-    private async matchYouTubeInBatches(
-        unresolved: IndexedImportTrack[],
-    ): Promise<Array<IndexedImportTrack & { match: YtMatch }>> {
-        const batches = chunkArray(unresolved, MATCH_BATCH_SIZE);
-        const batchResults = await mapWithConcurrency(
-            batches,
-            MATCH_BATCH_CONCURRENCY,
-            async (batch) => {
-                try {
-                    const matches = await ytMusicService.findMatchesForAlbum(
-                        "__public__",
-                        batch.map(({ track }) =>
-                            this.toProviderMatchInput(track),
-                        ),
-                    );
-
-                    return batch.flatMap((item, index) => {
-                        const match = matches[index];
-                        return match ? [{ ...item, match }] : [];
-                    });
-                } catch (err) {
-                    log.warn("YT Music batch match failed during import:", err);
-                    return [];
-                }
-            },
+        return resolvedNative.filter(
+            (track): track is ResolvedTrack => track !== null,
         );
-
-        return batchResults.flat();
-    }
-
-    private async matchTidalInBatches(
-        userId: string,
-        unresolved: IndexedImportTrack[],
-    ): Promise<Array<IndexedImportTrack & { match: TidalMatch }>> {
-        const batches = chunkArray(unresolved, MATCH_BATCH_SIZE);
-        const batchResults = await mapWithConcurrency(
-            batches,
-            MATCH_BATCH_CONCURRENCY,
-            async (batch) => {
-                try {
-                    const matches =
-                        await tidalStreamingService.findMatchesForAlbum(
-                            userId,
-                            batch.map(({ track }) =>
-                                this.toProviderMatchInput(track),
-                            ),
-                        );
-
-                    return batch.flatMap((item, index) => {
-                        const match = matches[index];
-                        return match ? [{ ...item, match }] : [];
-                    });
-                } catch (err) {
-                    log.warn("Tidal batch match failed during import:", err);
-                    return [];
-                }
-            },
-        );
-
-        return batchResults.flat();
     }
 
     private async getLocalLibraryCandidates(): Promise<LocalTrackCandidate[]> {

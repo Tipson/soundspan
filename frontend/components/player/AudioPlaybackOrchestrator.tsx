@@ -13,6 +13,10 @@ import { api } from "@/lib/api";
 import { resolveNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
 import { restartPlaybackProgressConfirmation } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { consumePlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    getTrackProviderFailureKey,
+    providerFailureCooldown,
+} from "@/lib/audio-engine/providerFailureCooldown";
 import { resolvePlaybackOccurrenceMediaIdentity } from "@/lib/audio-engine/playbackOccurrence";
 import { resolveQueueAdvance } from "@/lib/audio/queue-advance-policy";
 import {
@@ -131,7 +135,7 @@ export const AudioPlaybackOrchestrator = memo(
             isSeekingRef,
             loadListenerRef,
             loadErrorListenerRef,
-            lastPreloadedTrackIdRef,
+            iosBackgroundTrackHandoffRef,
             consecutiveErrorBreakerRef,
             playbackProgressConfirmationRef,
             wasPlayingWhenHiddenRef,
@@ -247,20 +251,19 @@ export const AudioPlaybackOrchestrator = memo(
                 setCurrentAudiobook,
                 lastProgressSaveRef,
             });
-        const preloadNextTrack = H.useNextTrackPreload({
-            playbackType,
-            currentTrack,
-            currentPodcast,
-            isPlaying,
-            queue,
-            currentIndex,
-            isShuffle,
-            shuffleIndices,
-            repeatMode,
-            lastPreloadedTrackIdRef,
-            ytMusicAuthenticatedRef,
-        });
-        // Refresh event behavior after every render without detaching listeners.
+        const { preloadTrack: preloadNextTrack, preloadNetworkWhenDue } =
+            H.useNextTrackPreload({
+                playbackType,
+                currentTrack,
+                currentPodcast,
+                isPlaying,
+                queue,
+                currentIndex,
+                isShuffle,
+                shuffleIndices,
+                repeatMode,
+                refs: orchestratorRefs,
+            });
         useLayoutEffect(() => {
             const handleTimeUpdate = (data: {
                 timeSec: number;
@@ -324,6 +327,12 @@ export const AudioPlaybackOrchestrator = memo(
                     noteStartupProgress(liveTrackId, currentTimeValue);
 
                     const durationSec = audioEngine.getDuration();
+                    preloadNetworkWhenDue({
+                        currentTimeSec: currentTimeValue,
+                        isLoading: isLoadingRef.current,
+                        liveTrackId,
+                        loadedDurationSec: durationSec,
+                    });
                     const isEndAdjacent =
                         !isLoadingRef.current &&
                         Boolean(liveTrackId) &&
@@ -612,6 +621,7 @@ export const AudioPlaybackOrchestrator = memo(
 
             const handlePause = () => {
                 trackEndWatchdogRef.current?.clear();
+                iosBackgroundTrackHandoffRef.current.reset();
                 if (isLoadingRef.current) return;
                 if (seekReloadInProgressRef.current) return;
                 clearUnexpectedPauseRecoveryCheck();
@@ -827,7 +837,10 @@ export const AudioPlaybackOrchestrator = memo(
                 handleError,
                 handlePlay,
                 handlePause,
-                cleanup: clearUnexpectedPauseRecoveryCheck,
+                cleanup: () => {
+                    clearUnexpectedPauseRecoveryCheck();
+                    iosBackgroundTrackHandoffRef.current.reset();
+                },
             };
         });
         H.useAudioEngineBindings({
@@ -885,6 +898,7 @@ export const AudioPlaybackOrchestrator = memo(
                 }
                 loadTimeoutRetryCountRef.current = 0;
                 activeEngineTrackIdRef.current = null;
+                iosBackgroundTrackHandoffRef.current.reset();
                 audioEngine.stop();
                 playbackSourceLeaseController.release();
                 lastTrackIdRef.current = null;
@@ -897,6 +911,7 @@ export const AudioPlaybackOrchestrator = memo(
             const previousMediaId = lastTrackIdRef.current;
             if (currentMediaId !== previousMediaId) {
                 trackEndWatchdogRef.current?.clear();
+                iosBackgroundTrackHandoffRef.current.reset();
                 if (pendingManualProviderLoadRef.current) {
                     clearTimeout(pendingManualProviderLoadRef.current.timeout);
                     pendingManualProviderLoadRef.current = null;
@@ -982,6 +997,28 @@ export const AudioPlaybackOrchestrator = memo(
             const advanceOrigin = consumePlaybackAdvanceOrigin();
             if (advanceOrigin?.origin === "manual") {
                 consecutiveErrorBreakerRef.current.reset();
+            }
+            const providerFailureKey = currentTrack
+                ? getTrackProviderFailureKey(currentTrack)
+                : null;
+            if (
+                playbackType === "track" &&
+                currentTrack &&
+                advanceOrigin?.origin !== "manual" &&
+                providerFailureKey &&
+                providerFailureCooldown.isCoolingDown(providerFailureKey)
+            ) {
+                isLoadingRef.current = false;
+                setIsBuffering(false);
+                logPlaybackClientMetric("player.provider_cooldown_skip", {
+                    trackId: currentTrack.id,
+                    sourceType: resolveDirectTrackSourceType(currentTrack),
+                });
+                scheduleTrackErrorSkip(currentTrack.id, {
+                    kind: "confirmed_provider_unavailable",
+                    failureKey: providerFailureKey,
+                });
+                return;
             }
             loadTimeoutRetryCountRef.current = 0;
             markStartupStabilityWindow(

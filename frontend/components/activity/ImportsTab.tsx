@@ -84,6 +84,7 @@ export function ImportsTab() {
     const router = useRouter();
     const [jobs, setJobs] = useState<ImportJob[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
     const loadGenerationRef = useRef(0);
     const loadInFlightRef = useRef(false);
     const refreshPendingRef = useRef(false);
@@ -183,6 +184,18 @@ export function ImportsTab() {
         }
     };
 
+    const handleRetry = async (jobId: string) => {
+        setRetryingJobId(jobId);
+        try {
+            await api.retryImportJob(jobId);
+            await loadJobs();
+        } catch {
+            // The next poll keeps the durable server state authoritative.
+        } finally {
+            setRetryingJobId((current) => (current === jobId ? null : current));
+        }
+    };
+
     if (isLoading) {
         return (
             <div
@@ -216,10 +229,7 @@ export function ImportsTab() {
                     job.status === "resolving" ||
                     job.status === "creating_playlist" ||
                     job.status === "cancelling";
-                const createdPlaylistId =
-                    job.status === "completed" || job.status === "cancelled"
-                        ? job.createdPlaylistId
-                        : null;
+                const createdPlaylistId = job.createdPlaylistId;
                 const cancellationWarning =
                     job.status === "cancelled" && createdPlaylistId
                         ? job.error
@@ -259,14 +269,32 @@ export function ImportsTab() {
 
                         {job.summary && job.summary.total > 0 && (
                             <p className="text-[11px] text-gray-400 mt-1">
-                                {job.summary.local}{" "}
-                                {adminActivityRu.activity.imports.local}{" "}
+                                {job.summary.total - job.summary.unresolved}{" "}
+                                {adminActivityRu.activity.imports.ready}{" "}
                                 &middot; {job.summary.unresolved}{" "}
-                                {adminActivityRu.activity.imports.unresolved}{" "}
+                                {isActive
+                                    ? adminActivityRu.activity.imports.searching
+                                    : adminActivityRu.activity.imports
+                                          .unresolved}{" "}
                                 &middot; {job.summary.total}{" "}
                                 {adminActivityRu.activity.imports.total}
                             </p>
                         )}
+
+                        {isActive &&
+                            job.estimatedRemainingSeconds != null &&
+                            job.estimatedRemainingSeconds > 0 && (
+                                <p className="text-[11px] text-gray-400 mt-1">
+                                    {adminActivityRu.activity.imports.remaining}{" "}
+                                    {Math.max(
+                                        1,
+                                        Math.ceil(
+                                            job.estimatedRemainingSeconds / 60,
+                                        ),
+                                    )}{" "}
+                                    {adminActivityRu.activity.imports.minutes}
+                                </p>
+                            )}
 
                         <div className="flex items-center gap-2 mt-2">
                             {isActive && (
@@ -293,6 +321,21 @@ export function ImportsTab() {
                                     <ArrowRight className="w-3 h-3" />
                                 </button>
                             )}
+                            {(job.status === "completed" ||
+                                job.status === "cancelled" ||
+                                job.status === "failed") &&
+                                job.summary?.unresolved > 0 && (
+                                    <button
+                                        onClick={() => void handleRetry(job.id)}
+                                        disabled={retryingJobId === job.id}
+                                        className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors disabled:opacity-50"
+                                    >
+                                        {
+                                            adminActivityRu.activity.imports
+                                                .retryUnresolved
+                                        }
+                                    </button>
+                                )}
                             {job.status === "failed" && job.error && (
                                 <p className="text-xs text-red-400/60 truncate">
                                     {localizeImportJobMessage(

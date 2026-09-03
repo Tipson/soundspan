@@ -13,6 +13,7 @@ mock.module("lucide-react", {
         Globe: Icon,
         GlobeLock: Icon,
         Heart: Icon,
+        Ellipsis: Icon,
         ListMusic: Icon,
         Loader2: Icon,
         Pause: Icon,
@@ -38,7 +39,7 @@ mock.module(
     },
 );
 
-test("playlist detail action dock keeps primary and secondary actions touch-friendly", async () => {
+test("playlist detail action dock keeps mobile actions compact and touch-friendly", async () => {
     const { PlaylistDetailActionDock } =
         await import("@/features/playlist/components/PlaylistDetailActionDock");
     const html = renderToStaticMarkup(
@@ -90,6 +91,9 @@ test("playlist detail action dock keeps primary and secondary actions touch-frie
     assert.match(html, /data-music-detail="actions"/);
     assert.match(html, /data-detail-action-tier="primary"/);
     assert.match(html, /data-detail-action-tier="secondary"/);
+    assert.match(html, /data-playlist-actions-overflow/);
+    assert.match(html, /aria-label="Ещё действия с плейлистом"/);
+    assert.match(html, /hidden[^\"]*sm:flex/);
     assert.match(html, /data-radio-actions="true"/);
 
     for (const match of html.matchAll(/<button[^>]*>/g)) {

@@ -5,9 +5,12 @@ creates a server-side bulk-download job and it never treats a browser cache as
 the final destination for a new download.
 
 - `vault/` is the deep device-file module. The production web adapter prefers
-  the File System Access API and writes owner-scoped files below a directory
-  chosen by the user. When a browser cannot expose such a directory, it uses
-  writable Origin Private File System storage on that browser profile/device.
+  the File System Access API on desktop and writes owner-scoped files below a
+  directory chosen by the user. On Android it deliberately prefers writable
+  Origin Private File System storage even when a directory picker exists, so
+  managed audio is not exposed to gallery pickers and routine launches do not
+  depend on renewed public-folder permission. Other browsers without a usable
+  directory picker also use writable private storage when available.
   Persisted `fsa1` and `opfs1` references route back to the adapter that wrote
   them after a PWA restart, even if picker availability changes between app
   contexts.
@@ -18,9 +21,9 @@ the final destination for a new download.
   or collection action calls `requestAccess()` directly from the user's click
   before it queues work. Automatic liked-song downloads never open a picker and
   remain paused until device storage is ready.
-- Chrome and Edge on desktop, plus browsers on Android that expose
-  `showDirectoryPicker`, can select a normal device folder. Safari, Firefox,
-  iOS web apps, and other browsers without a directory picker use OPFS only
+- Chrome and Edge on desktop can select a normal device folder. Android
+  Chromium, Safari, Firefox, iOS web apps, and other browsers without a
+  directory picker use OPFS only
   when writable file streams are available. OPFS is intentionally reported as
   private per-device storage; it is not presented as a user-visible folder. A
   ready OPFS track offers an explicit **Save as file** action in Downloads. The
@@ -29,7 +32,10 @@ the final destination for a new download.
   playback. Browsers can block, rename, or prompt for that export, so Soundspan
   reports that the save action opened rather than claiming the external copy
   was persisted. Older browsers without either writable route remain
-  unsupported.
+  unsupported. Existing Android `fsa1` records remain readable through their
+  original directory adapter; Downloads exposes a separate reconnect action
+  when the browser has forgotten that older folder permission, without moving
+  new writes back into public storage.
 - `downloadManager.ts` streams each new response into the active vault,
   publishes measured-byte progress, and marks metadata ready only after the
   retained file passes integrity checks. Metadata and the owner-scoped work

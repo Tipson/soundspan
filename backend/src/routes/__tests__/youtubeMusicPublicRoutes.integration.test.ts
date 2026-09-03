@@ -153,6 +153,18 @@ describe("youtube music public stream routes integration", () => {
         expect(mockGetStreamInfo).not.toHaveBeenCalled();
     });
 
+    it("forwards passive quality reads without enabling provider retries", async () => {
+        mockGetStreamInfo.mockResolvedValueOnce({ videoId: "video-1", abr: 0 });
+        const res = await request(app)
+            .get("/api/ytmusic/stream-info-public/video-1?cachedOnly=true")
+            .set(AUTH_HEADER, AUTH_VALUE);
+        expect(res.status).toBe(200);
+        expect(mockGetStreamInfo).toHaveBeenCalledWith(
+            "__public__", "video-1", "norm:HIGH",
+            { cachedOnly: true, maxRetries: 0, timeoutMs: 5_000 },
+        );
+    });
+
     it("uses __public__ sentinel user for stream-info-public", async () => {
         mockGetStreamInfo.mockResolvedValueOnce({
             videoId: "video-1",
@@ -281,6 +293,7 @@ describe("youtube music public stream routes integration", () => {
             "video-2",
             "norm:HIGH",
             "bytes=0-9",
+            { signal: expect.any(AbortSignal) },
         );
     });
 });

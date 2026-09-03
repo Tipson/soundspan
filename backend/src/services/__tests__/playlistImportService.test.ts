@@ -67,6 +67,10 @@ const mockTrackMappingService = {
     upsertTrackTidal: jest.fn(),
     createMapping: jest.fn(),
 };
+const mockCanonicalIdentityResolver = {
+    resolveProviderTrack: jest.fn(),
+};
+const mockPersistImportedProviderIdentity = jest.fn();
 
 jest.mock("../../utils/db", () => ({ prisma: mockPrisma }));
 jest.mock("../../utils/logger", () => ({ logger: mockLogger }));
@@ -79,11 +83,20 @@ jest.mock("../tidalStreaming", () => ({
 jest.mock("../trackMappingService", () => ({
     trackMappingService: mockTrackMappingService,
 }));
+jest.mock("../recommendations/canonicalIdentity", () => ({
+    canonicalIdentityResolver: mockCanonicalIdentityResolver,
+}));
+jest.mock("../recommendations/durableIdentityPersistence", () => ({
+    persistImportedProviderIdentity: mockPersistImportedProviderIdentity,
+}));
 jest.mock("../../utils/systemSettings", () => ({
     getSystemSettings: mockGetSystemSettings,
 }));
 
-import { playlistImportService } from "../playlistImportService";
+import {
+    playlistImportService,
+    type PlaylistImportProgressEvent,
+} from "../playlistImportService";
 
 describe("PlaylistImportService", () => {
     beforeEach(() => {
@@ -118,6 +131,10 @@ describe("PlaylistImportService", () => {
         mockTidalStreamingService.restoreOAuth.mockResolvedValue(true);
         mockTrackMappingService.createMapping.mockResolvedValue({
             id: "mapping_1",
+        });
+        mockCanonicalIdentityResolver.resolveProviderTrack.mockResolvedValue({
+            id: "canonical_1",
+            canonicalKey: "isrc:DUPLICATEISRC",
         });
         // Default: ID validation returns all referenced IDs as existing
         // track.findMany is also used for local library candidates (returns [])
@@ -1125,6 +1142,59 @@ describe("PlaylistImportService", () => {
     });
 
     describe("previewImport", () => {
+        it("prepares source metadata without waiting for provider matching", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "sp_fast",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
+                name: "Fast Playlist",
+                tracks: [
+                    {
+                        title: "Source Song",
+                        artist: "Source Artist",
+                        album: "Source Album",
+                        durationMs: 201000,
+                        isrc: "FAST-ISRC",
+                    },
+                ],
+            });
+
+            const prepared = await playlistImportService.prepareImport(
+                "user_1",
+                "https://open.spotify.com/playlist/sp_fast",
+            );
+
+            expect(prepared).toEqual({
+                playlistName: "Fast Playlist",
+                resolved: [
+                    {
+                        index: 0,
+                        artist: "Source Artist",
+                        title: "Source Song",
+                        album: "Source Album",
+                        duration: 201,
+                        isrc: "FAST-ISRC",
+                        source: "unresolved",
+                        confidence: 0,
+                    },
+                ],
+                summary: {
+                    total: 1,
+                    local: 0,
+                    youtube: 0,
+                    tidal: 0,
+                    unresolved: 1,
+                },
+            });
+            expect(
+                mockYtMusicService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockTidalStreamingService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
+        });
+
         it("returns resolution summary for Spotify playlist", async () => {
             mockSpotifyService.parseUrl.mockReturnValue({
                 type: "playlist",
@@ -1172,14 +1242,23 @@ describe("PlaylistImportService", () => {
                 id: "cy_1",
             });
 
+            const onProgress = jest.fn(
+                async (_event: PlaylistImportProgressEvent) => undefined,
+            );
             const result = await playlistImportService.previewImport(
                 "user_1",
                 "https://open.spotify.com/playlist/sp_123",
+                { onProgress },
             );
 
             expect(result.playlistName).toBe("My Playlist");
             expect(result.resolved).toHaveLength(2);
             expect(result.summary.total).toBe(2);
+            expect(onProgress.mock.calls.map(([event]) => event)).toEqual([
+                { stage: "source", completed: 2, total: 2 },
+                { stage: "local", completed: 2, total: 2 },
+                { stage: "youtube", completed: 1, total: 1 },
+            ]);
         });
 
         it("batch-resolves provider matches in a single YT call when tracks are unmatched locally", async () => {
@@ -1258,6 +1337,101 @@ describe("PlaylistImportService", () => {
             expect(result.summary.unresolved).toBe(1);
         });
 
+        it("publishes a completed YouTube batch while a slower batch is still running", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "sp_progressive",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
+                name: "Progressive Playlist",
+                tracks: Array.from({ length: 30 }, (_, index) => ({
+                    title: `Song ${index}`,
+                    artist: `Artist ${index}`,
+                    album: "Album",
+                    durationMs: 180000,
+                    isrc: null,
+                })),
+            });
+            let releaseSlowBatch!: (value: Array<null>) => void;
+            const slowBatch = new Promise<Array<null>>((resolve) => {
+                releaseSlowBatch = resolve;
+            });
+            mockYtMusicService.findMatchesForAlbum
+                .mockResolvedValueOnce([
+                    {
+                        videoId: "yt-first",
+                        title: "Song 0",
+                        duration: 180,
+                    },
+                    ...Array.from({ length: 24 }, () => null),
+                ])
+                .mockReturnValueOnce(slowBatch);
+            mockTrackMappingService.upsertTrackYtMusic.mockResolvedValueOnce({
+                id: "yt-row-first",
+            });
+            const onResolved = jest.fn(async () => undefined);
+
+            const previewPromise = playlistImportService.previewImport(
+                "user_1",
+                "https://open.spotify.com/playlist/sp_progressive",
+                { onResolved },
+            );
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            await new Promise<void>((resolve) => setImmediate(resolve));
+
+            expect(onResolved).toHaveBeenCalledWith([
+                expect.objectContaining({
+                    index: 0,
+                    source: "youtube",
+                    trackYtMusicId: "yt-row-first",
+                }),
+            ]);
+
+            releaseSlowBatch(Array.from({ length: 5 }, () => null));
+            await previewPromise;
+        });
+
+        it("propagates persistence callback failures instead of treating them as YouTube provider failures", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "sp_persistence_failure",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValue({
+                name: "Persistence Failure",
+                tracks: [
+                    {
+                        title: "Song",
+                        artist: "Artist",
+                        album: "Album",
+                        durationMs: 180000,
+                        isrc: null,
+                    },
+                ],
+            });
+            mockYtMusicService.findMatchesForAlbum.mockResolvedValue([
+                { videoId: "yt-persist", title: "Song", duration: 180 },
+            ]);
+            mockTrackMappingService.upsertTrackYtMusic.mockResolvedValue({
+                id: "yt-row-persist",
+            });
+
+            await expect(
+                playlistImportService.previewImport(
+                    "user_1",
+                    "https://open.spotify.com/playlist/sp_persistence_failure",
+                    {
+                        onResolved: async () => {
+                            throw new Error("persist failed");
+                        },
+                    },
+                ),
+            ).rejects.toThrow("persist failed");
+            expect(mockLogger.warn).not.toHaveBeenCalledWith(
+                "YT Music batch match failed during import:",
+                expect.anything(),
+            );
+        });
+
         it("batch-resolves unresolved tracks through Tidal after YT misses", async () => {
             mockSpotifyService.parseUrl.mockReturnValue({
                 type: "playlist",
@@ -1332,6 +1506,65 @@ describe("PlaylistImportService", () => {
             ]);
             expect(result.summary.tidal).toBe(1);
             expect(result.summary.unresolved).toBe(1);
+            expect(result.resolved[0]).toEqual(
+                expect.objectContaining({
+                    trackTidalId: "ct_123",
+                    tidalId: 123,
+                }),
+            );
+        });
+
+        it("propagates persistence callback failures from Tidal resolution", async () => {
+            mockSpotifyService.parseUrl.mockReturnValue({
+                type: "playlist",
+                id: "sp_tidal_persistence_failure",
+            });
+            mockSpotifyService.getPlaylistForImport.mockResolvedValue({
+                name: "Tidal Persistence Failure",
+                tracks: [
+                    {
+                        title: "Tidal Song",
+                        artist: "Tidal Artist",
+                        album: "Tidal Album",
+                        durationMs: 180000,
+                        isrc: null,
+                    },
+                ],
+            });
+            mockPrisma.userSettings.findUnique.mockResolvedValue({
+                tidalOAuthJson: "encrypted",
+            });
+            mockTidalStreamingService.findMatchesForAlbum.mockResolvedValue([
+                {
+                    id: 123,
+                    title: "Tidal Song",
+                    artist: "Tidal Artist",
+                    duration: 180,
+                    isrc: "ISRC123",
+                },
+            ]);
+            mockTrackMappingService.upsertTrackTidal.mockResolvedValue({
+                id: "tidal-row-persist",
+            });
+
+            await expect(
+                playlistImportService.previewImport(
+                    "user_1",
+                    "https://open.spotify.com/playlist/sp_tidal_persistence_failure",
+                    {
+                        onResolved: async () => {
+                            throw new Error("persist failed");
+                        },
+                    },
+                ),
+            ).rejects.toThrow("persist failed");
+            expect(mockLogger.warn).not.toHaveBeenCalledWith(
+                "Tidal batch match failed during import:",
+                expect.anything(),
+            );
+            expect(
+                mockYtMusicService.findMatchesForAlbum,
+            ).not.toHaveBeenCalled();
         });
 
         it("skips Tidal matching when session restore fails and falls back to YouTube", async () => {
@@ -1624,6 +1857,29 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
             const execution = await playlistImportService.importPlaylist(
                 "user_1",
                 preview,
+            );
+
+            expect(
+                mockCanonicalIdentityResolver.resolveProviderTrack,
+            ).toHaveBeenCalledWith({
+                source: "youtube",
+                providerTrackId: "same-video",
+                title: "Same Song",
+                artist: "Same Artist",
+                album: "Same Album",
+                duration: 180,
+                isrc: "DUPLICATE-ISRC",
+            });
+            expect(mockPersistImportedProviderIdentity).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    source: "youtube",
+                    providerTrackId: "same-video",
+                    isrc: "DUPLICATE-ISRC",
+                }),
+                {
+                    id: "canonical_1",
+                    canonicalKey: "isrc:DUPLICATEISRC",
+                },
             );
 
             expect(preview.summary).toEqual({

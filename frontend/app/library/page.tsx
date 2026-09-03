@@ -1,30 +1,38 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, Heart } from "lucide-react";
+import { HardDriveDownload, Heart } from "lucide-react";
 import { useLikedPlaylistQuery, usePlaylistsQuery } from "@/hooks/useQueries";
 import { DownloadsList } from "@/features/device-offline/components/DownloadsList";
+import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
 import { LibraryHeader } from "@/features/library/components/LibraryHeader";
 import {
     LibraryTabs,
     type LibraryTab,
 } from "@/features/library/components/LibraryTabs";
 import { PersonalPlaylistGrid } from "@/features/library/components/PersonalPlaylistGrid";
+import { LibraryPlaylistCard } from "@/features/library/components/LibraryPlaylistCard";
 import { SavedMusicGrid } from "@/features/library/components/SavedMusicGrid";
 import { useSavedMusicEntities } from "@/features/library/hooks/useSavedMusic";
 import type {
     PersonalPlaylist,
     PersonalPlaylistItem,
 } from "@/features/library/types";
-import { pluralRu, ru } from "@/lib/i18n/ru";
+import { ru } from "@/lib/i18n/ru";
 
-const LIBRARY_TABS = new Set<LibraryTab>(["playlists", "albums", "artists"]);
+type LibraryView = LibraryTab | "downloads";
 
-function activeLibraryTab(value: string | null): LibraryTab {
-    return value && LIBRARY_TABS.has(value as LibraryTab)
-        ? (value as LibraryTab)
+const LIBRARY_VIEWS = new Set<LibraryView>([
+    "playlists",
+    "albums",
+    "artists",
+    "downloads",
+]);
+
+function activeLibraryView(value: string | null): LibraryView {
+    return value && LIBRARY_VIEWS.has(value as LibraryView)
+        ? (value as LibraryView)
         : "playlists";
 }
 
@@ -94,11 +102,12 @@ function SectionHeading({
 /** Personal, account-scoped music collection rather than a server-file browser. */
 export default function LibraryPage() {
     const searchParams = useSearchParams();
-    const activeTab = activeLibraryTab(searchParams.get("tab"));
+    const activeView = activeLibraryView(searchParams.get("tab"));
     const albumCollection = useSavedMusicEntities("album");
     const artistCollection = useSavedMusicEntities("artist");
     const playlistsQuery = usePlaylistsQuery();
     const likedQuery = useLikedPlaylistQuery(1);
+    const deviceOffline = useOptionalDeviceOffline();
 
     const playlists = useMemo(
         () =>
@@ -113,15 +122,28 @@ export default function LibraryPage() {
         [playlistsQuery.data],
     );
     const likedTotal = likedQuery.data?.total ?? 0;
+    const downloadedTotal = useMemo(
+        () =>
+            new Set(
+                deviceOffline?.records
+                    .filter((record) => record.status === "ready")
+                    .map((record) => record.trackIdentity) ?? [],
+            ).size,
+        [deviceOffline?.records],
+    );
 
     return (
         <div className="relative min-h-screen bg-surface">
             <LibraryHeader />
 
             <main className="relative mx-auto max-w-[1800px] space-y-8 px-4 pt-8 sm:space-y-10 sm:px-6 sm:pt-10 lg:px-8">
-                <LibraryTabs activeTab={activeTab} />
+                <LibraryTabs
+                    activeTab={
+                        activeView === "downloads" ? "playlists" : activeView
+                    }
+                />
 
-                {activeTab === "playlists" && (
+                {activeView === "playlists" && (
                     <section
                         data-library-view="playlists"
                         aria-labelledby="playlist-library-title"
@@ -131,59 +153,50 @@ export default function LibraryPage() {
                             title={ru.library.playlists}
                             description="Любимые треки, ваши плейлисты и музыка, сохранённая на этом устройстве"
                         />
-                        <Link
-                            href="/playlist/my-liked"
-                            className="group flex min-h-20 items-center gap-4 border-y border-white/[0.08] py-3 transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light motion-reduce:transition-none"
-                        >
-                            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand/15 text-brand-light">
-                                <Heart
-                                    className="h-5 w-5 fill-current"
-                                    aria-hidden="true"
-                                />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                                <span className="block text-base font-bold text-content">
-                                    Любимые треки
-                                </span>
-                                <span className="mt-1 block text-sm text-content-muted">
-                                    {likedTotal}{" "}
-                                    {pluralRu(likedTotal, [
-                                        "трек",
-                                        "трека",
-                                        "треков",
-                                    ])}
-                                    {" · "}Открыть полный список
-                                </span>
-                            </span>
-                            <ArrowRight
-                                className="h-5 w-5 shrink-0 text-content-muted transition-transform group-hover:translate-x-1 motion-reduce:transition-none"
-                                aria-hidden="true"
-                            />
-                        </Link>
-
-                        <div className="mt-8">
-                            <h3 className="mb-4 text-base font-bold text-content sm:text-lg">
-                                Ваши плейлисты
-                            </h3>
+                        <div className="mt-2">
                             <PersonalPlaylistGrid
                                 playlists={playlists}
                                 isLoading={playlistsQuery.isLoading}
                                 isError={playlistsQuery.isError}
                                 onRetry={() => void playlistsQuery.refetch()}
+                                leadingCards={
+                                    <>
+                                        <LibraryPlaylistCard
+                                            href="/playlist/my-liked"
+                                            title="Любимые треки"
+                                            trackCount={likedTotal}
+                                            icon={Heart}
+                                            accent="liked"
+                                        />
+                                        <LibraryPlaylistCard
+                                            href="/library?tab=downloads"
+                                            title="Загруженное"
+                                            trackCount={downloadedTotal}
+                                            icon={HardDriveDownload}
+                                            accent="downloaded"
+                                        />
+                                    </>
+                                }
                             />
-                        </div>
-
-                        <div className="mt-10 border-t border-white/[0.08] pt-8">
-                            <SectionHeading
-                                title={ru.library.deviceDownloads}
-                                description="Офлайн-музыка хранится обычными файлами на телефоне или компьютере. Доступ к папке относится к этому профилю браузера; очистка данных сайта не удаляет файлы и не затрагивает другие устройства."
-                            />
-                            <DownloadsList />
                         </div>
                     </section>
                 )}
 
-                {activeTab === "albums" && (
+                {activeView === "downloads" && (
+                    <section
+                        data-library-view="downloads"
+                        aria-labelledby="device-downloads-title"
+                    >
+                        <SectionHeading
+                            id="device-downloads-title"
+                            title="Загруженное"
+                            description="Музыка для офлайн-прослушивания на этом устройстве. На телефонах Soundspan хранит её в закрытом хранилище приложения; отдельный обычный файл можно сохранить вручную."
+                        />
+                        <DownloadsList />
+                    </section>
+                )}
+
+                {activeView === "albums" && (
                     <section>
                         <SectionHeading
                             title={ru.library.savedAlbums}
@@ -204,7 +217,7 @@ export default function LibraryPage() {
                     </section>
                 )}
 
-                {activeTab === "artists" && (
+                {activeView === "artists" && (
                     <section>
                         <SectionHeading
                             title={ru.library.savedArtists}

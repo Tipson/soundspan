@@ -21,6 +21,9 @@ const prisma = {
         count: jest.fn(),
         deleteMany: jest.fn(),
     },
+    recommendationGeneration: {
+        findFirst: jest.fn(),
+    },
 };
 
 jest.mock("../../middleware/auth", () => ({
@@ -87,6 +90,8 @@ describe("plays routes integration", () => {
     const mockPlayFindMany = prismaClient.play.findMany as jest.Mock;
     const mockPlayCount = prismaClient.play.count as jest.Mock;
     const mockPlayDeleteMany = prismaClient.play.deleteMany as jest.Mock;
+    const mockRecommendationGenerationFindFirst = prismaClient
+        .recommendationGeneration.findFirst as jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -102,6 +107,7 @@ describe("plays routes integration", () => {
         mockPlayFindMany.mockResolvedValue([]);
         mockPlayCount.mockResolvedValue(0);
         mockPlayDeleteMany.mockResolvedValue({ count: 0 });
+        mockRecommendationGenerationFindFirst.mockResolvedValue(null);
         mockAttributePlayback.mockResolvedValue(undefined);
     });
 
@@ -200,6 +206,54 @@ describe("plays routes integration", () => {
             listenedSeconds: null,
             completionRatio: null,
             outcome: null,
+        });
+    });
+
+    it("stores recommendation lineage only for a generation owned by the account", async () => {
+        mockRecommendationGenerationFindFirst.mockResolvedValueOnce({
+            id: "generation-owned",
+        });
+
+        await request(app)
+            .post("/api/plays")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                trackId: "track-1",
+                recommendationGenerationId: "generation-owned",
+                recommendationSessionId: "session-a",
+            });
+
+        expect(mockRecommendationGenerationFindFirst).toHaveBeenCalledWith({
+            where: {
+                id: "generation-owned",
+                userId: "user-1",
+                served: true,
+            },
+            select: { id: true },
+        });
+        expect(mockPlayCreate).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                recommendationGenerationId: "generation-owned",
+                recommendationSessionId: "session-a",
+            }),
+        });
+
+        mockPlayCreate.mockClear();
+        mockRecommendationGenerationFindFirst.mockResolvedValueOnce(null);
+
+        await request(app)
+            .post("/api/plays")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                trackId: "track-1",
+                recommendationGenerationId: "generation-foreign",
+                recommendationSessionId: "session-b",
+            });
+
+        expect(mockPlayCreate).toHaveBeenCalledWith({
+            data: expect.not.objectContaining({
+                recommendationGenerationId: "generation-foreign",
+            }),
         });
     });
 

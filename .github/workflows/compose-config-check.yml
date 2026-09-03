@@ -6,6 +6,7 @@ on:
     paths:
       - docker-compose.yml
       - docker-compose.images.yml
+      - docker-compose.single-host.yml
       - docker-compose.local.yml
       - docker-compose.dev.yml
       - .github/workflows/compose-config-check.yml
@@ -14,6 +15,7 @@ on:
     paths:
       - docker-compose.yml
       - docker-compose.images.yml
+      - docker-compose.single-host.yml
       - docker-compose.local.yml
       - docker-compose.dev.yml
       - .github/workflows/compose-config-check.yml
@@ -55,9 +57,15 @@ jobs:
 
       - name: Validate prebuilt split-stack image overlay
         env:
+          ANALYSIS_SPOOL_PATH: /srv/music/soundspan-analysis-spool
+          MUSIC_PATH: /srv/music/library
+          MUSIC_VOLUME_MARKER_PATH: /srv/music/.music-volume
           POSTGRES_PASSWORD: compose-check-postgres-password
           SESSION_SECRET: compose-check-session-secret
           SETTINGS_ENCRYPTION_KEY: compose-check-settings-key
           INTERNAL_API_SECRET: compose-check-internal-api-secret
+          SOUNDSPAN_BIND_IP: 192.0.2.10
           SOUNDSPAN_IMAGE_TAG: main-deadbee
-        run: docker compose -f docker-compose.yml -f docker-compose.images.yml --profile worker config --quiet
+          TIDAL_DATA_PATH: /opt/soundspan/tidal
+          YTMUSIC_DATA_PATH: /opt/soundspan/ytmusic
+        run: docker compose -f docker-compose.yml -f docker-compose.images.yml -f docker-compose.single-host.yml --profile worker config --quiet

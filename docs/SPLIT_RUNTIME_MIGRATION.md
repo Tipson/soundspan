@@ -33,6 +33,8 @@ manual `all` run builds all seven images. Production must use the immutable
 - `SESSION_SECRET`, `SETTINGS_ENCRYPTION_KEY`, `INTERNAL_API_SECRET`, and the
   PostgreSQL password (never print or commit them);
 - the existing music bind mount;
+- provider state directories for YouTube Music and TIDAL, so linked accounts,
+  bounded spool data, and provider caches are not reset by the runtime split;
 - optionally `/data/cache/covers` and `/data/cache/transcodes` (both can be
   regenerated);
 - the AIO volume, kept intact until the split deployment is accepted.
@@ -58,18 +60,28 @@ files between the embedded AIO Redis and the standalone image.
 
 4. Prepare a private `.env` for the split stack. Preserve the existing stable
    encryption/session secrets and PostgreSQL password. Set the same host music
-   path and the immutable image coordinates:
+   path, a dedicated analysis spool, the explicit frontend bind address, and
+   the immutable image coordinates. Copy the active `YTMUSIC_SPOOL_*`,
+   `YTMUSIC_STREAM_CACHE_MAX`, `YTMUSIC_SEARCH_CACHE_MAX`, and
+   `YTMUSIC_YTDLP_SOCKET_TIMEOUT` values too; otherwise the split sidecar would
+   silently return to defaults during the migration:
 
    ```dotenv
    SOUNDSPAN_IMAGE_REPOSITORY=ghcr.io/<owner>/<repository>
    SOUNDSPAN_IMAGE_TAG=main-<short-sha>
+   SOUNDSPAN_BIND_IP=192.0.2.10
    MUSIC_PATH=/srv/music/library
+   MUSIC_VOLUME_MARKER_PATH=/srv/music/.music-volume
+   ANALYSIS_SPOOL_PATH=/srv/music/soundspan-analysis-spool
+   YTMUSIC_DATA_PATH=/opt/soundspan/ytmusic
+   TIDAL_DATA_PATH=/opt/soundspan/tidal
    ```
 
 5. Pull the split images before downtime:
 
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.images.yml \
+     -f docker-compose.single-host.yml \
      --profile worker pull
    ```
 
@@ -90,6 +102,7 @@ files between the embedded AIO Redis and the standalone image.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.images.yml \
+  -f docker-compose.single-host.yml \
   --profile worker up -d --no-build
 ```
 
@@ -105,6 +118,10 @@ This prevents an accidental local rebuild or deployment of an unpinned image.
 - no Prisma connection targets `127.0.0.1` in component containers;
 - API and worker use distinct role-aware pool limits;
 - the frontend proxies `/api` to the split backend;
+- the frontend is published only on `SOUNDSPAN_BIND_IP`, while the backend,
+  PostgreSQL, and Redis host ports remain loopback-only;
+- backend, worker, analyzer, and DCLAP mounts keep the media library read-only;
+  only the dedicated analysis spool is writable where required;
 - DCLAP and audio analyzer health checks pass before analysis is enabled;
 - the deployed image digests match the selected immutable tag;
 - the old AIO volume is not deleted as part of the cutover.

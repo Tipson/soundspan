@@ -163,6 +163,10 @@ export interface DeviceAudioVaultSession {
 export interface DeviceAudioVault {
     inspectAccess(): Promise<DeviceAudioAccessState>;
     requestAccess(): Promise<DeviceAudioAccessState>;
+    /** Inspect a previously selected public folder after mobile writes moved private. */
+    inspectLegacyAccess?(): Promise<DeviceAudioAccessState | null>;
+    /** Re-authorize a previously selected public folder without changing new writes. */
+    requestLegacyAccess?(): Promise<DeviceAudioAccessState | null>;
     open(input: {
         ownerId: string;
         authGeneration: number;
@@ -209,6 +213,8 @@ export interface DeviceAudioDirectoryRegistry {
 /** Browser globals are injected so Node tests never require a real DOM. */
 export interface DeviceAudioVaultRuntime {
     isSupported(): boolean;
+    /** Prefer app-private storage even when the browser exposes a folder picker. */
+    prefersPrivateStorage?(): boolean;
     pickDirectory(): Promise<DeviceAudioDirectoryHandle>;
     createObjectUrl(file: Blob): string;
     revokeObjectUrl(url: string): void;

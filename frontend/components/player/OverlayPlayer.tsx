@@ -886,6 +886,9 @@ export function OverlayPlayer() {
                                                         aria-label={
                                                             ru.player.shuffle
                                                         }
+                                                        aria-pressed={isShuffle}
+                                                        data-player-control="shuffle"
+                                                        data-active={isShuffle}
                                                     >
                                                         <Shuffle className="h-5 w-5" />
                                                     </button>
@@ -1011,7 +1014,22 @@ export function OverlayPlayer() {
                                                                         .repeatOff
                                                         }
                                                         aria-label={
-                                                            ru.player.repeatOff
+                                                            repeatMode === "one"
+                                                                ? ru.player
+                                                                      .repeatOne
+                                                                : repeatMode ===
+                                                                    "all"
+                                                                  ? ru.player
+                                                                        .repeatAll
+                                                                  : ru.player
+                                                                        .repeatOff
+                                                        }
+                                                        aria-pressed={
+                                                            repeatMode !== "off"
+                                                        }
+                                                        data-player-control="repeat"
+                                                        data-active={
+                                                            repeatMode !== "off"
                                                         }
                                                     >
                                                         {repeatMode ===

@@ -14,9 +14,11 @@ from concurrent.futures import ThreadPoolExecutor
 from types import ModuleType
 
 import acoustid_backfill
+import canonical_acoustid_backfill
 import canonical_analysis
 import pytest
 from acoustid_backfill import AcoustIDBackfill
+from canonical_acoustid_backfill import CanonicalAcoustIDBackfill
 from fingerprint_persistence import persist_fingerprint
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -133,6 +135,45 @@ def _drop_test_schema(schema_name: str) -> None:
             cursor.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema_name)))
     finally:
         connection.close()
+
+
+def test_hash_index_accepts_realistic_long_chromaprint() -> None:
+    """Persist and equality-match fingerprints larger than a B-tree index row."""
+    assert TEST_DATABASE_URL is not None
+    schema_name = f"canonical_fingerprint_{uuid.uuid4().hex}"
+    connection = psycopg2.connect(TEST_DATABASE_URL, connect_timeout=5)
+    connection.autocommit = True
+    fingerprint = "AQAA" * 4_096
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema_name)))
+            cursor.execute(
+                sql.SQL(
+                    'CREATE TABLE {}."CanonicalRecording" (id TEXT PRIMARY KEY, fingerprint TEXT)'
+                ).format(sql.Identifier(schema_name))
+            )
+            cursor.execute(
+                sql.SQL(
+                    'CREATE INDEX "CanonicalRecording_fingerprint_idx" '
+                    'ON {}."CanonicalRecording" USING HASH (fingerprint)'
+                ).format(sql.Identifier(schema_name))
+            )
+            cursor.execute(
+                sql.SQL(
+                    'INSERT INTO {}."CanonicalRecording" (id, fingerprint) VALUES (%s, %s)'
+                ).format(sql.Identifier(schema_name)),
+                ("canonical-long", fingerprint),
+            )
+            cursor.execute(
+                sql.SQL('SELECT id FROM {}."CanonicalRecording" WHERE fingerprint = %s').format(
+                    sql.Identifier(schema_name)
+                ),
+                (fingerprint,),
+            )
+            assert cursor.fetchone()[0] == "canonical-long"
+    finally:
+        connection.close()
+        _drop_test_schema(schema_name)
 
 
 def _seed_canonical_analysis_lease(schema_name: str) -> None:
@@ -458,6 +499,274 @@ def test_fingerprint_upsert_and_lookup_claim_round_trip(loaded_analyzer: ModuleT
             "releaseGroupMbid": "release-group-mbid",
             "score": 0.91,
         }
+    finally:
+        database.close()
+        _drop_test_schema(schema_name)
+
+
+def test_canonical_fingerprint_lookup_promotes_online_identity(
+    loaded_analyzer: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prove canonical claim, MBID persistence and deployment locking in PostgreSQL."""
+    assert TEST_DATABASE_URL is not None
+    schema_name = f"canonical_identity_{uuid.uuid4().hex}"
+    connection = psycopg2.connect(TEST_DATABASE_URL, connect_timeout=5)
+    connection.autocommit = True
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema_name)))
+            cursor.execute(
+                sql.SQL(
+                    """
+                    CREATE TABLE {}."CanonicalRecording" (
+                        id TEXT PRIMARY KEY,
+                        fingerprint TEXT,
+                        duration INTEGER NOT NULL,
+                        "recordingMbid" TEXT UNIQUE,
+                        "identitySource" TEXT NOT NULL DEFAULT 'chromaprint',
+                        "identityConfidence" DOUBLE PRECISION NOT NULL DEFAULT 0.9,
+                        "identityLookupStatus" TEXT NOT NULL DEFAULT 'pending',
+                        "identityLookupRetryCount" INTEGER NOT NULL DEFAULT 0,
+                        "identityLookupError" TEXT,
+                        "identityLookupUpdatedAt" TIMESTAMPTZ,
+                        "analyzedAt" TIMESTAMPTZ DEFAULT NOW(),
+                        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    CREATE TABLE {}."TrackMapping" (
+                        id TEXT PRIMARY KEY,
+                        "canonicalRecordingId" TEXT,
+                        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    INSERT INTO {}."CanonicalRecording" (id, fingerprint, duration)
+                    VALUES ('canonical-online', 'online-fingerprint', 247)
+                    """
+                ).format(
+                    sql.Identifier(schema_name),
+                    sql.Identifier(schema_name),
+                    sql.Identifier(schema_name),
+                )
+            )
+    finally:
+        connection.close()
+
+    class Client:
+        def lookup(self, fingerprint: str, duration: int) -> dict[str, object]:
+            assert (fingerprint, duration) == ("online-fingerprint", 247)
+            return {
+                "recordingMbid": "online-recording-mbid",
+                "releaseGroupMbid": None,
+                "score": 0.98,
+            }
+
+    database = _configure_database(loaded_analyzer, schema_name)
+    monkeypatch.setattr(
+        canonical_acoustid_backfill,
+        "LOOKUP_OWNER_KEY",
+        f"soundspan:test:canonical-acoustid:{uuid.uuid4().hex}",
+    )
+    try:
+        worker = CanonicalAcoustIDBackfill(database, "configured", client=Client())
+        assert worker.run_once() is True
+        cursor = database.get_cursor()
+        cursor.execute(
+            'SELECT "recordingMbid", "identitySource", "identityLookupStatus" '
+            'FROM "CanonicalRecording" WHERE id = %s',
+            ("canonical-online",),
+        )
+        row = cursor.fetchone()
+        database.commit()
+        cursor.close()
+        assert row == {
+            "recordingMbid": "online-recording-mbid",
+            "identitySource": "acoustid",
+            "identityLookupStatus": "completed",
+        }
+    finally:
+        database.close()
+        _drop_test_schema(schema_name)
+
+
+def test_canonical_identity_merge_preserves_analysis_and_embeddings(
+    loaded_analyzer: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Merge duplicate identity without orphaning analyzed online features."""
+    assert TEST_DATABASE_URL is not None
+    schema_name = f"canonical_merge_{uuid.uuid4().hex}"
+    connection = psycopg2.connect(TEST_DATABASE_URL, connect_timeout=5)
+    connection.autocommit = True
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema_name)))
+            cursor.execute(
+                sql.SQL(
+                    """
+                    CREATE TABLE {}."CanonicalRecording" (
+                        id TEXT PRIMARY KEY,
+                        fingerprint TEXT,
+                        duration INTEGER NOT NULL,
+                        "recordingMbid" TEXT UNIQUE,
+                        "identitySource" TEXT NOT NULL DEFAULT 'metadata',
+                        "identityConfidence" DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+                        "identityLookupStatus" TEXT NOT NULL DEFAULT 'pending',
+                        "identityLookupRetryCount" INTEGER NOT NULL DEFAULT 0,
+                        "identityLookupError" TEXT,
+                        "identityLookupUpdatedAt" TIMESTAMPTZ,
+                        bpm DOUBLE PRECISION,
+                        key TEXT,
+                        energy DOUBLE PRECISION,
+                        loudness DOUBLE PRECISION,
+                        valence DOUBLE PRECISION,
+                        danceability DOUBLE PRECISION,
+                        arousal DOUBLE PRECISION,
+                        instrumentalness DOUBLE PRECISION,
+                        acousticness DOUBLE PRECISION,
+                        speechiness DOUBLE PRECISION,
+                        "moodTags" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+                        "essentiaGenres" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+                        "analysisStatus" TEXT NOT NULL DEFAULT 'pending',
+                        "analysisVersion" TEXT,
+                        "analyzedAt" TIMESTAMPTZ,
+                        "analysisError" TEXT,
+                        "embeddingStatus" TEXT NOT NULL DEFAULT 'pending',
+                        "embeddingVersion" TEXT,
+                        "embeddingAnalyzedAt" TIMESTAMPTZ,
+                        "embeddingError" TEXT,
+                        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    CREATE TABLE {}."TrackMapping" (
+                        id TEXT PRIMARY KEY,
+                        "canonicalRecordingId" TEXT,
+                        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    CREATE TABLE {}.canonical_recording_embeddings (
+                        canonical_recording_id TEXT NOT NULL,
+                        space_id TEXT NOT NULL,
+                        embedding TEXT NOT NULL,
+                        analyzed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        PRIMARY KEY (canonical_recording_id, space_id)
+                    );
+                    INSERT INTO {}."CanonicalRecording" (
+                        id,
+                        fingerprint,
+                        duration,
+                        "analysisStatus",
+                        "embeddingStatus"
+                    ) VALUES ('canonical-target', NULL, 247, 'pending', 'pending');
+                    UPDATE {}."CanonicalRecording"
+                    SET "recordingMbid" = 'shared-recording-mbid'
+                    WHERE id = 'canonical-target';
+                    INSERT INTO {}."CanonicalRecording" (
+                        id,
+                        fingerprint,
+                        duration,
+                        bpm,
+                        energy,
+                        "moodTags",
+                        "essentiaGenres",
+                        "analysisStatus",
+                        "analysisVersion",
+                        "analyzedAt",
+                        "embeddingStatus",
+                        "embeddingVersion",
+                        "embeddingAnalyzedAt"
+                    ) VALUES (
+                        'canonical-source',
+                        'source-fingerprint',
+                        247,
+                        128.0,
+                        0.82,
+                        ARRAY['energetic'],
+                        ARRAY['electronic'],
+                        'completed',
+                        'essentia-v1',
+                        NOW(),
+                        'completed',
+                        'dclap-v1',
+                        NOW()
+                    );
+                    INSERT INTO {}.canonical_recording_embeddings (
+                        canonical_recording_id,
+                        space_id,
+                        embedding
+                    ) VALUES ('canonical-source', 'dclap-v1', '[0.1,0.2]');
+                    INSERT INTO {}."TrackMapping" (id, "canonicalRecordingId")
+                    VALUES ('mapping-source', 'canonical-source')
+                    """
+                ).format(*[sql.Identifier(schema_name) for _ in range(8)])
+            )
+    finally:
+        connection.close()
+
+    class Client:
+        def lookup(self, fingerprint: str, duration: int) -> dict[str, object]:
+            assert (fingerprint, duration) == ("source-fingerprint", 247)
+            return {
+                "recordingMbid": "shared-recording-mbid",
+                "releaseGroupMbid": None,
+                "score": 0.99,
+            }
+
+    database = _configure_database(loaded_analyzer, schema_name)
+    monkeypatch.setattr(
+        canonical_acoustid_backfill,
+        "LOOKUP_OWNER_KEY",
+        f"soundspan:test:canonical-merge:{uuid.uuid4().hex}",
+    )
+    try:
+        worker = CanonicalAcoustIDBackfill(database, "configured", client=Client())
+        assert worker.run_once() is True
+
+        cursor = database.get_cursor()
+        cursor.execute(
+            'SELECT fingerprint, bpm, energy, "moodTags", "essentiaGenres", '
+            '"analysisStatus", "analysisVersion", "embeddingStatus", "embeddingVersion" '
+            'FROM "CanonicalRecording" WHERE id = %s',
+            ("canonical-target",),
+        )
+        target = cursor.fetchone()
+        cursor.execute(
+            'SELECT "identitySource", "identityLookupStatus" '
+            'FROM "CanonicalRecording" WHERE id = %s',
+            ("canonical-source",),
+        )
+        source = cursor.fetchone()
+        cursor.execute(
+            "SELECT canonical_recording_id, space_id, embedding "
+            "FROM canonical_recording_embeddings WHERE canonical_recording_id = %s",
+            ("canonical-target",),
+        )
+        embedding = cursor.fetchone()
+        cursor.execute(
+            'SELECT "canonicalRecordingId" FROM "TrackMapping" WHERE id = %s',
+            ("mapping-source",),
+        )
+        mapping = cursor.fetchone()
+        database.commit()
+        cursor.close()
+
+        assert target == {
+            "fingerprint": "source-fingerprint",
+            "bpm": 128.0,
+            "energy": 0.82,
+            "moodTags": ["energetic"],
+            "essentiaGenres": ["electronic"],
+            "analysisStatus": "completed",
+            "analysisVersion": "essentia-v1",
+            "embeddingStatus": "completed",
+            "embeddingVersion": "dclap-v1",
+        }
+        assert source == {
+            "identitySource": "acoustid-merged",
+            "identityLookupStatus": "completed",
+        }
+        assert embedding == {
+            "canonical_recording_id": "canonical-target",
+            "space_id": "dclap-v1",
+            "embedding": "[0.1,0.2]",
+        }
+        assert mapping == {"canonicalRecordingId": "canonical-target"}
     finally:
         database.close()
         _drop_test_schema(schema_name)

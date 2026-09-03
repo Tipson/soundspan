@@ -164,6 +164,7 @@ export interface DeviceOfflineContextValue {
     isQueueHydrated: boolean;
     storageError: string | null;
     storage: DeviceOfflineStorageState;
+    legacyStorage: DeviceOfflineStorageState | null;
     records: DeviceOfflineDownloadRecord[];
     queueItems: DeviceOfflineQueueItem[];
     automationSettings: DeviceOfflineAutomationSettings | null;
@@ -200,6 +201,7 @@ export interface DeviceOfflineContextValue {
         >,
     ): Promise<void>;
     setupStorage(): Promise<DeviceOfflineStorageState>;
+    setupLegacyStorage(): Promise<DeviceOfflineStorageState | null>;
     retryStorage(): Promise<void>;
     refresh(): Promise<void>;
 }
@@ -291,6 +293,8 @@ export function DeviceOfflineProvider({
     const [storage, setStorage] = useState<DeviceOfflineStorageState>(
         INITIAL_DEVICE_OFFLINE_STORAGE,
     );
+    const [legacyStorage, setLegacyStorage] =
+        useState<DeviceOfflineStorageState | null>(null);
     const vault = useMemo(
         () => (typeof window === "undefined" ? null : getDeviceAudioVault()),
         [],
@@ -400,6 +404,20 @@ export function DeviceOfflineProvider({
                 }
             },
         );
+        if (vault.inspectLegacyAccess) {
+            void vault.inspectLegacyAccess().then(
+                (access) => {
+                    if (active && access) {
+                        setLegacyStorage(toDeviceOfflineStorageState(access));
+                    }
+                },
+                () => {
+                    if (active) setLegacyStorage(null);
+                },
+            );
+        } else {
+            setLegacyStorage(null);
+        }
         return () => {
             active = false;
         };
@@ -753,6 +771,14 @@ export function DeviceOfflineProvider({
         storageSetupPromiseRef.current = request;
         return request;
     }, [resumeLegacyMigration, storage, vault]);
+
+    const setupLegacyStorage = useCallback(async () => {
+        if (!vault?.requestLegacyAccess) return null;
+        const access = await vault.requestLegacyAccess();
+        const next = access ? toDeviceOfflineStorageState(access) : null;
+        setLegacyStorage(next);
+        return next;
+    }, [vault]);
 
     const requireManualStorage = useCallback(async () => {
         const next =
@@ -1181,6 +1207,7 @@ export function DeviceOfflineProvider({
             isQueueHydrated,
             storageError,
             storage,
+            legacyStorage,
             records,
             queueItems,
             automationSettings,
@@ -1197,6 +1224,7 @@ export function DeviceOfflineProvider({
             collectionStatus,
             updateAutomationSettings,
             setupStorage,
+            setupLegacyStorage,
             retryStorage,
             refresh: () => load(false),
         }),
@@ -1219,7 +1247,9 @@ export function DeviceOfflineProvider({
             resume,
             retryStorage,
             setupStorage,
+            setupLegacyStorage,
             storage,
+            legacyStorage,
             storageError,
             automationSettings,
             updateAutomationSettings,

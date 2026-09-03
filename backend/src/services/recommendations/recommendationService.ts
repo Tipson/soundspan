@@ -14,6 +14,7 @@ import type {
     RecommendResult,
     RecommendationCandidate,
     RecommendationMood,
+    RecommendationRequestContext,
     RecommendationSurface,
 } from "./types";
 
@@ -45,6 +46,7 @@ export interface PersonalizedRecommendationInput {
     direction: "for-you" | "new" | "familiar";
     mood: RecommendationMood | null;
     excludeVideoIds: string[];
+    context?: RecommendationRequestContext;
 }
 
 export type PersonalizedRecommendationFeed = PersonalizedHomeFeed & {
@@ -194,6 +196,7 @@ export class UnifiedRecommendationService {
             limit: input.limit * 3,
             perLaneLimit: input.limit,
             exclude: input.excludeVideoIds,
+            context: input.context,
         });
         const shelves: PersonalizedHomeFeed["shelves"] = {
             listenAgain: [],

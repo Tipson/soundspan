@@ -805,7 +805,8 @@ describe("playlists route runtime", () => {
         expect(prisma.playlistItem.create).not.toHaveBeenCalled();
     });
 
-    it("truncates oversized playlist detail with bounded bulk resolution", async () => {
+    it("returns every item from a 1294-track imported playlist", async () => {
+        const itemCount = 1294;
         prisma.userSettings.findUnique.mockResolvedValueOnce({
             tidalOAuthJson: null,
             ytMusicOAuthJson: null,
@@ -816,14 +817,14 @@ describe("playlists route runtime", () => {
             isPublic: false,
             user: { username: "owner" },
             hiddenByUsers: [],
-            _count: { items: 1000, pendingTracks: 1 },
-            items: Array.from({ length: 1000 }, (_, index) => ({
+            _count: { items: itemCount, pendingTracks: 0 },
+            items: Array.from({ length: itemCount }, (_, index) => ({
                 id: `pli-${index + 1}`,
                 playlistId: "pl-oversized",
                 trackId: null,
                 trackTidalId: `tt-${index + 1}`,
                 trackYtMusicId: null,
-                sort: index + 1,
+                sort: index,
                 track: null,
                 trackTidal: {
                     id: `tt-${index + 1}`,
@@ -835,16 +836,7 @@ describe("playlists route runtime", () => {
                 },
                 trackYtMusic: null,
             })),
-            pendingTracks: [
-                {
-                    id: "pt-first",
-                    sort: 0,
-                    spotifyArtist: "Pending Artist",
-                    spotifyTitle: "Pending Song",
-                    spotifyAlbum: "Pending Album",
-                    deezerPreviewUrl: null,
-                },
-            ],
+            pendingTracks: [],
         });
 
         const req = {
@@ -855,24 +847,20 @@ describe("playlists route runtime", () => {
         await getPlaylist(req, res);
 
         expect(res.statusCode).toBe(200);
-        expect(res.body.items).toHaveLength(999);
-        expect(res.body.pendingTracks).toHaveLength(1);
-        expect(res.body.mergedItems).toHaveLength(1000);
-        expect(res.body.totalItemCount).toBe(1001);
-        expect(res.body.truncated).toBe(true);
-        expect(res.body.items[998].id).toBe("pli-999");
-        expect(res.body.items).not.toContainEqual(
-            expect.objectContaining({ id: "pli-1000" }),
-        );
-        expect(res.body.mergedItems[0].id).toBe("pt-first");
+        expect(res.body.items).toHaveLength(itemCount);
+        expect(res.body.pendingTracks).toHaveLength(0);
+        expect(res.body.mergedItems).toHaveLength(itemCount);
+        expect(res.body.totalItemCount).toBe(itemCount);
+        expect(res.body.truncated).toBe(false);
+        expect(res.body.items[itemCount - 1].id).toBe(`pli-${itemCount}`);
         expect(prisma.playlist.findUnique).toHaveBeenCalledWith(
             expect.objectContaining({
                 include: expect.objectContaining({
                     _count: {
                         select: { items: true, pendingTracks: true },
                     },
-                    items: expect.objectContaining({ take: 1001 }),
-                    pendingTracks: expect.objectContaining({ take: 1001 }),
+                    items: expect.objectContaining({ take: 5001 }),
+                    pendingTracks: expect.objectContaining({ take: 5001 }),
                 }),
             }),
         );
@@ -881,12 +869,300 @@ describe("playlists route runtime", () => {
         const tidalIds = mappingQuery.where.OR.find(
             (clause: any) => clause.trackTidalId,
         ).trackTidalId.in;
-        expect(tidalIds).toHaveLength(999);
-        expect(tidalIds[998]).toBe("tt-999");
-        expect(tidalIds).not.toContain("tt-1000");
+        expect(tidalIds).toHaveLength(itemCount);
+        expect(tidalIds[itemCount - 1]).toBe(`tt-${itemCount}`);
         expect(prisma.trackMapping.findFirst).not.toHaveBeenCalled();
         expect(prisma.trackMapping.findUnique).not.toHaveBeenCalled();
         expect(prisma.trackTidal.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("paginates merged playlist items with an opaque cursor", async () => {
+        prisma.userSettings.findUnique.mockResolvedValue({
+            tidalOAuthJson: null,
+            ytMusicOAuthJson: null,
+        });
+        prisma.playlist.findUnique
+            .mockResolvedValueOnce({
+                id: "pl-paged",
+                userId: "u-paged",
+                isPublic: false,
+                user: { username: "owner" },
+                hiddenByUsers: [],
+                _count: { items: 2, pendingTracks: 2 },
+                items: [
+                    {
+                        id: "track-1",
+                        playlistId: "pl-paged",
+                        trackId: null,
+                        trackTidalId: null,
+                        trackYtMusicId: null,
+                        sort: 1,
+                        track: null,
+                        trackTidal: null,
+                        trackYtMusic: null,
+                    },
+                    {
+                        id: "track-3",
+                        playlistId: "pl-paged",
+                        trackId: null,
+                        trackTidalId: null,
+                        trackYtMusicId: null,
+                        sort: 3,
+                        track: null,
+                        trackTidal: null,
+                        trackYtMusic: null,
+                    },
+                ],
+                pendingTracks: [
+                    {
+                        id: "pending-2",
+                        sort: 2,
+                        spotifyArtist: "Artist 2",
+                        spotifyTitle: "Song 2",
+                        spotifyAlbum: "Album 2",
+                        deezerPreviewUrl: null,
+                    },
+                    {
+                        id: "pending-4",
+                        sort: 4,
+                        spotifyArtist: "Artist 4",
+                        spotifyTitle: "Song 4",
+                        spotifyAlbum: "Album 4",
+                        deezerPreviewUrl: null,
+                    },
+                ],
+            })
+            .mockResolvedValueOnce({
+                id: "pl-paged",
+                userId: "u-paged",
+                isPublic: false,
+                user: { username: "owner" },
+                hiddenByUsers: [],
+                _count: { items: 2, pendingTracks: 2 },
+                items: [
+                    {
+                        id: "track-3",
+                        playlistId: "pl-paged",
+                        trackId: null,
+                        trackTidalId: null,
+                        trackYtMusicId: null,
+                        sort: 3,
+                        track: null,
+                        trackTidal: null,
+                        trackYtMusic: null,
+                    },
+                ],
+                pendingTracks: [
+                    {
+                        id: "pending-4",
+                        sort: 4,
+                        spotifyArtist: "Artist 4",
+                        spotifyTitle: "Song 4",
+                        spotifyAlbum: "Album 4",
+                        deezerPreviewUrl: null,
+                    },
+                ],
+            });
+
+        const firstRes = createRes();
+        await getPlaylist(
+            {
+                user: { id: "u-paged" },
+                params: { id: "pl-paged" },
+                query: { limit: "2" },
+            } as any,
+            firstRes,
+        );
+
+        expect(firstRes.statusCode).toBe(200);
+        expect(firstRes.body.mergedItems.map((item: any) => item.id)).toEqual([
+            "track-1",
+            "pending-2",
+        ]);
+        expect(firstRes.body.pagination).toEqual({
+            limit: 2,
+            hasMore: true,
+            nextCursor: expect.any(String),
+        });
+        expect(firstRes.body.truncated).toBe(false);
+        expect(prisma.playlist.findUnique).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({
+                include: expect.objectContaining({
+                    items: expect.objectContaining({ take: 3 }),
+                    pendingTracks: expect.objectContaining({ take: 3 }),
+                }),
+            }),
+        );
+
+        const secondRes = createRes();
+        await getPlaylist(
+            {
+                user: { id: "u-paged" },
+                params: { id: "pl-paged" },
+                query: {
+                    limit: "2",
+                    cursor: firstRes.body.pagination.nextCursor,
+                },
+            } as any,
+            secondRes,
+        );
+
+        expect(secondRes.statusCode).toBe(200);
+        expect(secondRes.body.mergedItems.map((item: any) => item.id)).toEqual([
+            "track-3",
+            "pending-4",
+        ]);
+        expect(secondRes.body.pagination).toEqual({
+            limit: 2,
+            hasMore: false,
+            nextCursor: null,
+        });
+    });
+
+    it("rejects an invalid playlist page cursor", async () => {
+        const res = createRes();
+        await getPlaylist(
+            {
+                user: { id: "u1" },
+                params: { id: "pl-1" },
+                query: { limit: "100", cursor: "not-a-cursor" },
+            } as any,
+            res,
+        );
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body).toEqual({ error: "Invalid playlist cursor" });
+        expect(prisma.playlist.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("continues with pending items that share the cursor sort value", async () => {
+        prisma.userSettings.findUnique.mockResolvedValue({
+            tidalOAuthJson: null,
+            ytMusicOAuthJson: null,
+        });
+        const base = {
+            id: "pl-tied",
+            userId: "u-tied",
+            isPublic: false,
+            user: { username: "owner" },
+            hiddenByUsers: [],
+            _count: { items: 1, pendingTracks: 1 },
+        };
+        prisma.playlist.findUnique
+            .mockResolvedValueOnce({
+                ...base,
+                items: [
+                    {
+                        id: "track-tied",
+                        playlistId: "pl-tied",
+                        trackId: null,
+                        trackTidalId: null,
+                        trackYtMusicId: null,
+                        sort: 7,
+                        track: null,
+                        trackTidal: null,
+                        trackYtMusic: null,
+                    },
+                ],
+                pendingTracks: [
+                    {
+                        id: "pending-tied",
+                        sort: 7,
+                        spotifyArtist: "Artist",
+                        spotifyTitle: "Song",
+                        spotifyAlbum: "Album",
+                        deezerPreviewUrl: null,
+                    },
+                ],
+            })
+            .mockResolvedValueOnce({
+                ...base,
+                items: [],
+                pendingTracks: [
+                    {
+                        id: "pending-tied",
+                        sort: 7,
+                        spotifyArtist: "Artist",
+                        spotifyTitle: "Song",
+                        spotifyAlbum: "Album",
+                        deezerPreviewUrl: null,
+                    },
+                ],
+            });
+
+        const firstRes = createRes();
+        await getPlaylist(
+            {
+                user: { id: "u-tied" },
+                params: { id: "pl-tied" },
+                query: { limit: "1" },
+            } as any,
+            firstRes,
+        );
+        const secondRes = createRes();
+        await getPlaylist(
+            {
+                user: { id: "u-tied" },
+                params: { id: "pl-tied" },
+                query: {
+                    limit: "1",
+                    cursor: firstRes.body.pagination.nextCursor,
+                },
+            } as any,
+            secondRes,
+        );
+
+        expect(firstRes.body.mergedItems[0].id).toBe("track-tied");
+        expect(secondRes.body.mergedItems[0].id).toBe("pending-tied");
+        expect(prisma.playlist.findUnique).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                include: expect.objectContaining({
+                    pendingTracks: expect.objectContaining({
+                        where: {
+                            OR: [{ sort: { gt: 7 } }, { sort: 7 }],
+                        },
+                    }),
+                }),
+            }),
+        );
+    });
+
+    it("keeps oversized playlist detail responses bounded at 5000 merged items", async () => {
+        const pendingCount = 5001;
+        prisma.playlist.findUnique.mockResolvedValueOnce({
+            id: "pl-bounded",
+            userId: "u-bounded",
+            isPublic: false,
+            user: { username: "owner" },
+            hiddenByUsers: [],
+            _count: { items: 0, pendingTracks: pendingCount },
+            items: [],
+            pendingTracks: Array.from({ length: pendingCount }, (_, index) => ({
+                id: `pending-${index + 1}`,
+                sort: index,
+                spotifyArtist: "Pending Artist",
+                spotifyTitle: `Pending Song ${index + 1}`,
+                spotifyAlbum: "Pending Album",
+                deezerPreviewUrl: null,
+            })),
+        });
+
+        const req = {
+            user: { id: "u-bounded" },
+            params: { id: "pl-bounded" },
+        } as any;
+        const res = createRes();
+        await getPlaylist(req, res);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.totalItemCount).toBe(pendingCount);
+        expect(res.body.truncated).toBe(true);
+        expect(res.body.items).toHaveLength(0);
+        expect(res.body.pendingTracks).toHaveLength(5000);
+        expect(res.body.mergedItems).toHaveLength(5000);
+        expect(res.body.mergedItems[4999].id).toBe("pending-5000");
     });
 
     it("bulk-resolves cross-provider mappings and misses without per-item queries", async () => {

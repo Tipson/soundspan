@@ -38,8 +38,10 @@ const router = Router();
 const PLAYLISTS_MAX_LIMIT = 1000;
 const PLAYLISTS_DEFAULT_LIMIT = 500;
 const PLAYLIST_PREVIEW_ITEMS = 12;
-const PLAYLIST_DETAIL_MAX_ITEMS = 1000;
+const PLAYLIST_DETAIL_MAX_ITEMS = 5000;
 const PLAYLIST_DETAIL_QUERY_ITEMS = PLAYLIST_DETAIL_MAX_ITEMS + 1;
+const PLAYLIST_DETAIL_PAGE_DEFAULT = 100;
+const PLAYLIST_DETAIL_PAGE_MAX = 200;
 const pendingRetryPath = "/:id/pending/:trackId/retry";
 
 type RetryRequest = Request<{ id: string; trackId: string }>;
@@ -81,6 +83,75 @@ type PendingPlaylistItemRecord = {
     spotifyAlbum: string;
     deezerPreviewUrl: string | null;
 };
+
+type PlaylistCursor = {
+    sort: number;
+    kind: "track" | "pending";
+    id: string;
+};
+
+const playlistPageQuerySchema = z.object({
+    limit: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(PLAYLIST_DETAIL_PAGE_MAX)
+        .default(PLAYLIST_DETAIL_PAGE_DEFAULT),
+    cursor: z.string().trim().min(1).max(512).optional(),
+});
+
+const playlistCursorSchema = z.object({
+    sort: z.number().int().min(0),
+    kind: z.enum(["track", "pending"]),
+    id: z.string().min(1).max(200),
+});
+
+function encodePlaylistCursor(cursor: PlaylistCursor): string {
+    return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodePlaylistCursor(value: string): PlaylistCursor | null {
+    try {
+        return playlistCursorSchema.parse(
+            JSON.parse(Buffer.from(value, "base64url").toString("utf8")),
+        );
+    } catch {
+        return null;
+    }
+}
+
+function comparePlaylistEntries(
+    left: { type: "track" | "pending"; item: { sort: number; id: string } },
+    right: { type: "track" | "pending"; item: { sort: number; id: string } },
+): number {
+    if (left.item.sort !== right.item.sort) {
+        return left.item.sort - right.item.sort;
+    }
+    if (left.type !== right.type) return left.type === "track" ? -1 : 1;
+    return left.item.id.localeCompare(right.item.id);
+}
+
+function playlistEntryWhere(
+    cursor: PlaylistCursor | null,
+    kind: PlaylistCursor["kind"],
+):
+    | Prisma.PlaylistItemWhereInput
+    | Prisma.PlaylistPendingTrackWhereInput
+    | undefined {
+    if (!cursor) return undefined;
+    const sameSortComesAfter =
+        kind === cursor.kind
+            ? { sort: cursor.sort, id: { gt: cursor.id } }
+            : cursor.kind === "track" && kind === "pending"
+              ? { sort: cursor.sort }
+              : null;
+    return {
+        OR: [
+            { sort: { gt: cursor.sort } },
+            ...(sameSortComesAfter ? [sameSortComesAfter] : []),
+        ],
+    };
+}
 
 const reorderPayloadSchema = z.object({
     itemIds: z.unknown().optional(),
@@ -610,6 +681,44 @@ async function loadPlaylistDetail(playlistId: string, userId: string) {
     });
 }
 
+async function loadPlaylistDetailPage(
+    playlistId: string,
+    userId: string,
+    limit: number,
+    cursor: PlaylistCursor | null,
+) {
+    return prisma.playlist.findUnique({
+        where: { id: playlistId },
+        include: {
+            user: { select: { username: true } },
+            hiddenByUsers: {
+                where: { userId },
+                select: { id: true },
+            },
+            _count: {
+                select: { items: true, pendingTracks: true },
+            },
+            items: {
+                include: playlistItemInclude,
+                where: playlistEntryWhere(
+                    cursor,
+                    "track",
+                ) as Prisma.PlaylistItemWhereInput,
+                orderBy: [{ sort: "asc" }, { id: "asc" }],
+                take: limit + 1,
+            },
+            pendingTracks: {
+                where: playlistEntryWhere(
+                    cursor,
+                    "pending",
+                ) as Prisma.PlaylistPendingTrackWhereInput,
+                orderBy: [{ sort: "asc" }, { id: "asc" }],
+                take: limit + 1,
+            },
+        },
+    });
+}
+
 function selectBoundedPlaylistEntries<
     TTrack extends { sort: number },
     TPending extends { sort: number },
@@ -632,6 +741,34 @@ function selectBoundedPlaylistEntries<
     return {
         items: boundedItems,
         pendingTracks: boundedPendingTracks,
+    };
+}
+
+function selectPlaylistPageEntries<
+    TTrack extends { id: string; sort: number },
+    TPending extends { id: string; sort: number },
+>(items: TTrack[], pendingTracks: TPending[], limit: number) {
+    const candidates = [
+        ...items.map((item) => ({ type: "track" as const, item })),
+        ...pendingTracks.map((item) => ({ type: "pending" as const, item })),
+    ].sort(comparePlaylistEntries);
+    const page = candidates.slice(0, limit);
+    return {
+        hasMore: candidates.length > limit,
+        nextCursor:
+            candidates.length > limit && page.length > 0
+                ? encodePlaylistCursor({
+                      sort: page[page.length - 1].item.sort,
+                      kind: page[page.length - 1].type,
+                      id: page[page.length - 1].item.id,
+                  })
+                : null,
+        items: page
+            .filter((entry) => entry.type === "track")
+            .map((entry) => entry.item as TTrack),
+        pendingTracks: page
+            .filter((entry) => entry.type === "pending")
+            .map((entry) => entry.item as TPending),
     };
 }
 
@@ -915,9 +1052,21 @@ router.post("/", async (req, res) => {
  *         schema:
  *           type: string
  *         description: Playlist ID
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *           maximum: 200
+ *         description: Enables cursor pagination and limits the merged page size
+ *       - in: query
+ *         name: cursor
+ *         schema:
+ *           type: string
+ *         description: Opaque nextCursor returned by the previous page
  *     responses:
  *       200:
- *         description: Playlist details with merged items capped at 1000 combined track and pending items
+ *         description: Playlist details with merged items capped at 5000 combined track and pending items
  *         content:
  *           application/json:
  *             schema:
@@ -931,19 +1080,30 @@ router.post("/", async (req, res) => {
  *                   description: Count of removed local tracks; omitted when zero
  *                 truncated:
  *                   type: boolean
- *                   description: True when the playlist contains more than 1000 combined items and this response was capped
+ *                   description: True when the playlist contains more than 5000 combined items and this response was capped
+ *                 pagination:
+ *                   type: object
+ *                   description: Present for cursor-paginated requests
+ *                   properties:
+ *                     limit:
+ *                       type: integer
+ *                     hasMore:
+ *                       type: boolean
+ *                     nextCursor:
+ *                       type: string
+ *                       nullable: true
  *                 items:
  *                   type: array
- *                   maxItems: 1000
+ *                   maxItems: 5000
  *                   description: Resolved track items included in the bounded detail response
  *                 pendingTracks:
  *                   type: array
- *                   maxItems: 1000
+ *                   maxItems: 5000
  *                   description: Pending items included in the bounded detail response
  *                 mergedItems:
  *                   type: array
- *                   maxItems: 1000
- *                   description: The first 1000 combined track and pending items in playlist sort order
+ *                   maxItems: 5000
+ *                   description: The first 5000 combined track and pending items in playlist sort order
  *       403:
  *         description: Access denied
  *       404:
@@ -958,8 +1118,35 @@ router.get("/:id", async (req, res) => {
             return res.status(401).json({ error: "Unauthorized" });
         }
         const userId = req.user.id;
+        const usesPagination =
+            req.query?.limit !== undefined || req.query?.cursor !== undefined;
+        let pageInput:
+            | { limit: number; cursor: PlaylistCursor | null }
+            | undefined;
+        if (usesPagination) {
+            const parsed = playlistPageQuerySchema.safeParse(req.query ?? {});
+            if (!parsed.success) {
+                return res.status(400).json({ error: "Invalid playlist page" });
+            }
+            const cursor = parsed.data.cursor
+                ? decodePlaylistCursor(parsed.data.cursor)
+                : null;
+            if (parsed.data.cursor && !cursor) {
+                return res
+                    .status(400)
+                    .json({ error: "Invalid playlist cursor" });
+            }
+            pageInput = { limit: parsed.data.limit, cursor };
+        }
 
-        const playlist = await loadPlaylistDetail(req.params.id, userId);
+        const playlist = pageInput
+            ? await loadPlaylistDetailPage(
+                  req.params.id,
+                  userId,
+                  pageInput.limit,
+                  pageInput.cursor,
+              )
+            : await loadPlaylistDetail(req.params.id, userId);
 
         if (!playlist) {
             return res.status(404).json({ error: "Playlist not found" });
@@ -974,18 +1161,28 @@ router.get("/:id", async (req, res) => {
 
         const totalItemCount =
             playlist._count.items + playlist._count.pendingTracks;
-        const bounded = selectBoundedPlaylistEntries(
-            playlist.items,
-            playlist.pendingTracks,
-        );
+        const selected = pageInput
+            ? selectPlaylistPageEntries(
+                  playlist.items,
+                  playlist.pendingTracks,
+                  pageInput.limit,
+              )
+            : {
+                  ...selectBoundedPlaylistEntries(
+                      playlist.items,
+                      playlist.pendingTracks,
+                  ),
+                  hasMore: totalItemCount > PLAYLIST_DETAIL_MAX_ITEMS,
+                  nextCursor: null,
+              };
 
         const resolvedItems = await resolvePlaylistDetailItems(
-            bounded.items,
+            selected.items,
             userId,
         );
         const formattedItems = formatResolvedPlaylistItems(resolvedItems);
         const formattedPending = formatPendingPlaylistItems(
-            bounded.pendingTracks,
+            selected.pendingTracks,
         );
 
         // Merge and sort by position
@@ -1004,7 +1201,18 @@ router.get("/:id", async (req, res) => {
             ...(unplayableCount > 0 ? { unplayableCount } : {}),
             pendingCount: _count.pendingTracks,
             totalItemCount,
-            truncated: totalItemCount > PLAYLIST_DETAIL_MAX_ITEMS,
+            truncated: pageInput
+                ? false
+                : totalItemCount > PLAYLIST_DETAIL_MAX_ITEMS,
+            ...(pageInput
+                ? {
+                      pagination: {
+                          limit: pageInput.limit,
+                          hasMore: selected.hasMore,
+                          nextCursor: selected.nextCursor,
+                      },
+                  }
+                : {}),
             items: formattedItems,
             pendingTracks: formattedPending,
             mergedItems,

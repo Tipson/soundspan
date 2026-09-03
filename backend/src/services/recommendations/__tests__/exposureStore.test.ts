@@ -313,4 +313,85 @@ describe("recommendation exposure store", () => {
             ).toBe(expected);
         },
     );
+
+    it("prefers an account-owned generation for direct attribution", async () => {
+        const findDirectExposure = jest
+            .fn()
+            .mockResolvedValue({ id: "direct-exposure" });
+        const findAttributableExposure = jest.fn();
+        const markExposureViewedIfMissing = jest
+            .fn()
+            .mockResolvedValue(undefined);
+        const updateExposure = jest.fn().mockResolvedValue(undefined);
+        const store = new RecommendationExposureStore({
+            createGeneration: jest.fn(),
+            loadRecentExposures: jest.fn(),
+            findAttributableExposure,
+            findDirectExposure,
+            markExposureViewedIfMissing,
+            markViewedExposures: jest.fn(),
+            updateExposure,
+        });
+
+        await store.attributePlayback({
+            userId: "alice",
+            provider: "youtube",
+            providerTrackId: "one",
+            generationId: "generation-1",
+            playedAt: new Date("2026-09-01T12:00:00.000Z"),
+            listenedSeconds: 42,
+            completionRatio: 0.25,
+            outcome: "meaningful",
+        });
+
+        expect(findDirectExposure).toHaveBeenCalledWith(
+            "alice",
+            "generation-1",
+            "youtube",
+            "one",
+        );
+        expect(findAttributableExposure).not.toHaveBeenCalled();
+        expect(markExposureViewedIfMissing).toHaveBeenCalledWith(
+            "direct-exposure",
+            new Date("2026-09-01T12:00:00.000Z"),
+        );
+        expect(updateExposure).toHaveBeenCalledWith(
+            "direct-exposure",
+            expect.objectContaining({ outcome: "meaningful" }),
+        );
+    });
+
+    it("marks only explicit provider rows from one account generation as viewed", async () => {
+        const markViewedExposures = jest.fn().mockResolvedValue(2);
+        const store = new RecommendationExposureStore({
+            createGeneration: jest.fn(),
+            loadRecentExposures: jest.fn(),
+            findAttributableExposure: jest.fn(),
+            findDirectExposure: jest.fn(),
+            markViewedExposures,
+            updateExposure: jest.fn(),
+        });
+        const viewedAt = new Date("2026-09-01T12:00:00.000Z");
+
+        await expect(
+            store.markViewed({
+                userId: "alice",
+                generationId: "generation-1",
+                viewedAt,
+                tracks: [
+                    { provider: "youtube", providerTrackId: "one" },
+                    { provider: "youtube", providerTrackId: "two" },
+                ],
+            }),
+        ).resolves.toBe(2);
+        expect(markViewedExposures).toHaveBeenCalledWith(
+            "alice",
+            "generation-1",
+            viewedAt,
+            [
+                { provider: "youtube", providerTrackId: "one" },
+                { provider: "youtube", providerTrackId: "two" },
+            ],
+        );
+    });
 });

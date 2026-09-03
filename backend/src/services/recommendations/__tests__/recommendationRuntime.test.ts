@@ -14,7 +14,13 @@ const mockWarn = jest.fn();
 let capturedDependencies: Record<string, any>;
 
 jest.mock("../../../config", () => ({
-    config: { recommendations: { mode: "hybrid" } },
+    config: {
+        recommendations: {
+            mode: "shadow",
+            hybridRolloutPercent: 0,
+            explorationRate: 0.1,
+        },
+    },
 }));
 jest.mock("../../../utils/logger", () => ({
     logger: { child: () => ({ warn: mockWarn }) },

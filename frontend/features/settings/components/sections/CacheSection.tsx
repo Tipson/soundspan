@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { SettingsSection, SettingsRow, SettingsToggle } from "../ui";
+import { OnlineAnalysisProgress } from "./OnlineAnalysisProgress";
 import { SystemSettings } from "../../types";
 import { api } from "@/lib/api";
 import { enrichmentApi } from "@/lib/enrichmentApi";
@@ -98,6 +99,7 @@ function EnrichmentStage({
     isBackground = false,
     failed = 0,
     processing = 0,
+    emptyLabel = "Нет объектов для обработки",
 }: {
     icon: React.ElementType;
     label: string;
@@ -108,18 +110,20 @@ function EnrichmentStage({
     isBackground?: boolean;
     failed?: number;
     processing?: number;
+    emptyLabel?: string;
 }) {
     const unresolved = Math.max(0, total - (completed + failed));
     const hasActivity = processing > 0;
     // Semantic states share the app's status tokens: success when everything
     // resolved cleanly, warning when the stage finished but left failures.
     const isSettled = unresolved === 0 && processing === 0;
-    const isComplete = isSettled && failed === 0;
+    const isEmpty = total === 0 && processing === 0 && failed === 0;
+    const isComplete = total > 0 && isSettled && failed === 0;
     const settledWithFailures = isSettled && failed > 0;
     const visibleProgress = displayProgress(progress, isSettled);
 
     return (
-        <div className="flex items-start gap-3 py-2">
+        <div aria-label={label} className="flex items-start gap-3 py-2">
             <div
                 className={`mt-0.5 p-1.5 rounded-lg ${
                     isComplete
@@ -144,42 +148,50 @@ function EnrichmentStage({
                     <span className="text-sm font-medium text-white">
                         {label}
                     </span>
-                    {isBackground && !isComplete && (
+                    {isBackground && !isComplete && !isEmpty && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">
                             {cacheRu.background}
                         </span>
                     )}
                 </div>
                 <p className="text-xs text-white/40 mt-0.5">{description}</p>
-                <div className="flex items-center gap-2 mt-2">
-                    <ProgressBar
-                        progress={visibleProgress}
-                        color={
-                            isComplete
-                                ? "bg-success"
-                                : settledWithFailures
-                                  ? "bg-warning"
-                                  : isBackground
-                                    ? "bg-ai"
-                                    : "bg-brand"
-                        }
-                    />
-                </div>
-                <div className="flex items-center gap-3 mt-1 text-[10px] text-white/30">
-                    <span>
-                        {completed} / {total}
-                    </span>
-                    {processing > 0 && (
-                        <span className="text-brand">
-                            {processing} {cacheRu.processing}
+                {isEmpty ? (
+                    <p className="mt-2 text-xs text-content-muted">
+                        {emptyLabel}
+                    </p>
+                ) : (
+                    <div className="flex items-center gap-2 mt-2">
+                        <ProgressBar
+                            progress={visibleProgress}
+                            color={
+                                isComplete
+                                    ? "bg-success"
+                                    : settledWithFailures
+                                      ? "bg-warning"
+                                      : isBackground
+                                        ? "bg-ai"
+                                        : "bg-brand"
+                            }
+                        />
+                    </div>
+                )}
+                {!isEmpty && (
+                    <div className="flex items-center gap-3 mt-1 text-[10px] text-white/30">
+                        <span>
+                            {completed} / {total}
                         </span>
-                    )}
-                    {failed > 0 && (
-                        <span className="text-error">
-                            {cacheRu.failed}: {failed}
-                        </span>
-                    )}
-                </div>
+                        {processing > 0 && (
+                            <span className="text-brand">
+                                {processing} {cacheRu.processing}
+                            </span>
+                        )}
+                        {failed > 0 && (
+                            <span className="text-error">
+                                {cacheRu.failed}: {failed}
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -629,6 +641,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
     return (
         <>
             <SettingsSection id="cache" title={cacheRu.sectionTitle}>
+                <OnlineAnalysisProgress />
                 {/* Enrichment Progress */}
                 {isProgressPending ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
@@ -749,12 +762,16 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             </div>
 
                             {/* Audio Analysis with Re-run button */}
+                            <p className="py-3 text-xs leading-5 text-content-muted">
+                                {cacheRu.localAnalysisScope}
+                            </p>
                             {!featuresLoading && musicCNN ? (
                                 <div className="flex items-start gap-2">
                                     <div className="flex-1">
                                         <EnrichmentStage
                                             icon={Activity}
                                             label={cacheRu.audioLabel}
+                                            emptyLabel={cacheRu.noLocalAudio}
                                             description={
                                                 cacheRu.audioDescription
                                             }
@@ -785,6 +802,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         onClick={handleResetAudioAnalysis}
                                         title={cacheRu.audioResetTitle}
                                         disabled={
+                                            enrichmentProgress.audioAnalysis
+                                                .total === 0 ||
                                             resettingAudio ||
                                             syncing ||
                                             reEnriching ||
@@ -820,6 +839,9 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             <EnrichmentStage
                                                 icon={Waves}
                                                 label={cacheRu.vibeLabel}
+                                                emptyLabel={
+                                                    cacheRu.noLocalAudio
+                                                }
                                                 description={
                                                     cacheRu.vibeDescription
                                                 }
@@ -933,6 +955,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         onClick={handleResetVibeEmbeddings}
                                         title={cacheRu.vibeResetTitle}
                                         disabled={
+                                            enrichmentProgress.clapEmbeddings
+                                                ?.total === 0 ||
                                             resettingVibe ||
                                             syncing ||
                                             reEnriching ||

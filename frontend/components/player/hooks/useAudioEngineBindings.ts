@@ -44,6 +44,7 @@ const createPlaybackConfirmationSeekHandler = (
     refs: PlaybackOrchestratorRefs,
 ): AudioEngineEventHandler<"seek"> => {
     return (payload) => {
+        refs.iosBackgroundTrackHandoffRef.current.reset();
         const mediaId =
             refs.playbackTypeRef.current === "track"
                 ? (refs.currentTrackRef.current?.id ?? null)

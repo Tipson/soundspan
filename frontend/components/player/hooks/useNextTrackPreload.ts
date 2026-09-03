@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Podcast, Track } from "@/lib/audio-state-context";
 import type { QueueItem } from "@/lib/queue-item";
 import { api } from "@/lib/api";
@@ -8,9 +8,12 @@ import {
     resolveDeviceOfflineMediaIdentity,
 } from "@/features/device-offline/playbackResolver";
 import { getNextTrackInfo } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
+import { resolveNetworkNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
 import { resolveRemoteStreamFormat } from "../audioPlaybackOrchestratorPolicy";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import { usePlaybackSourceLeaseController } from "./playbackSourceLeaseController";
+import { observeIosBackgroundTrackHandoff } from "../iosBackgroundTrackHandoffController";
+import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 
 interface UseNextTrackPreloadOptions {
     playbackType: "track" | "audiobook" | "podcast" | null;
@@ -22,15 +25,27 @@ interface UseNextTrackPreloadOptions {
     isShuffle: boolean;
     shuffleIndices: number[];
     repeatMode: "off" | "one" | "all";
-    lastPreloadedTrackIdRef: MutableRefObject<string | null>;
-    ytMusicAuthenticatedRef: MutableRefObject<boolean>;
+    refs: PlaybackOrchestratorRefs;
 }
 
 type PreloadableTrack = NonNullable<ReturnType<typeof getNextTrackInfo>>;
 type PreloadTrackOptions = {
-    /** Natural end may retain the iOS audio session with one provider preload. */
+    /** Stable playback or natural end may prepare one network provider item. */
     allowNetworkYouTube?: boolean;
 };
+type NetworkPreloadTiming = {
+    currentTimeSec: number;
+    isLoading: boolean;
+    loadedDurationSec: number;
+    liveTrackId: string | null;
+};
+interface NextTrackPreloadController {
+    preloadTrack: (
+        track: PreloadableTrack,
+        options?: PreloadTrackOptions,
+    ) => void;
+    preloadNetworkWhenDue: (timing: NetworkPreloadTiming) => void;
+}
 
 function isVerifiedDevicePlaybackUrl(url: string): boolean {
     return url.startsWith("blob:") || url.includes("/__offline/audio/");
@@ -47,12 +62,13 @@ export function useNextTrackPreload({
     isShuffle,
     shuffleIndices,
     repeatMode,
-    lastPreloadedTrackIdRef,
-    ytMusicAuthenticatedRef,
-}: UseNextTrackPreloadOptions): (
-    track: PreloadableTrack,
-    options?: PreloadTrackOptions,
-) => void {
+    refs,
+}: UseNextTrackPreloadOptions): NextTrackPreloadController {
+    const {
+        iosBackgroundTrackHandoffRef,
+        lastPreloadedTrackIdRef,
+        ytMusicAuthenticatedRef,
+    } = refs;
     const leaseController = usePlaybackSourceLeaseController();
     const preloadRequestIdRef = useRef(0);
     const preloadTrack = useCallback(
@@ -68,12 +84,10 @@ export function useNextTrackPreload({
                 preloadRequestIdRef.current === requestId &&
                 lastPreloadedTrackIdRef.current === preloadIdentity;
 
-            // A YouTube Music preload starts a real sidecar spool job. Rapid
-            // manual selections used to bypass the current-track debounce here
-            // and could fill the bounded provider queue with tracks the listener
-            // had already skipped. Keep gapless preload for verified device
-            // copies, while the actual network track is loaded only after it
-            // becomes the selected queue item.
+            // A YouTube Music preload starts a real sidecar spool job. The
+            // default effect remains device-only; the timing policy opts one
+            // network item in after current playback is confirmed, and the end
+            // handler may do the same as an iOS audio-session fallback.
             if (
                 nextTrack.streamSource === "youtube" &&
                 !hasDeviceOfflinePlaybackCopy(nextTrack) &&
@@ -158,8 +172,52 @@ export function useNextTrackPreload({
         [lastPreloadedTrackIdRef, leaseController, ytMusicAuthenticatedRef],
     );
 
+    const preloadNetworkWhenDue = useCallback(
+        (timing: NetworkPreloadTiming): void => {
+            const nextTrack = getNextTrackInfo(
+                queue,
+                currentIndex,
+                isShuffle,
+                shuffleIndices,
+                repeatMode,
+            );
+            if (
+                nextTrack &&
+                resolveNetworkNextTrackPreloadDecision({
+                    nextStreamSource: nextTrack.streamSource,
+                    currentTimeSec: timing.currentTimeSec,
+                    isPlaying: audioEngine.isPlaying(),
+                    isLoading: timing.isLoading,
+                }).shouldPreload
+            ) {
+                preloadTrack(nextTrack, { allowNetworkYouTube: true });
+            }
+            observeIosBackgroundTrackHandoff({
+                refs,
+                queue,
+                currentIndex,
+                isShuffle,
+                shuffleIndices,
+                repeatMode,
+                liveTrackId: timing.liveTrackId,
+                currentTimeSec: timing.currentTimeSec,
+                loadedDurationSec: timing.loadedDurationSec,
+            });
+        },
+        [
+            queue,
+            currentIndex,
+            isShuffle,
+            shuffleIndices,
+            repeatMode,
+            preloadTrack,
+            refs,
+        ],
+    );
+
     // Preload next track for gapless playback (music only)
     useEffect(() => {
+        iosBackgroundTrackHandoffRef.current.reset();
         // Preload while a track or podcast episode plays — but only when the
         // NEXT queue item is a music track (getNextTrackInfo returns null for
         // episode items). Audiobooks have no queue and never preload.
@@ -201,10 +259,11 @@ export function useNextTrackPreload({
         isShuffle,
         shuffleIndices,
         repeatMode,
+        iosBackgroundTrackHandoffRef,
         leaseController,
         lastPreloadedTrackIdRef,
         preloadTrack,
     ]);
 
-    return preloadTrack;
+    return { preloadTrack, preloadNetworkWhenDue };
 }

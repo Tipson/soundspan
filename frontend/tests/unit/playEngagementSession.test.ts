@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
     createPlayEngagementTracker,
     resolvePlaybackRecommendationContext,
+    resolvePlaybackRecommendationSessionId,
 } from "../../components/player/hooks/playEngagementSession";
 import type {
     PlayEngagementInput,
@@ -41,6 +42,20 @@ test("recommendation context maps playback routes and preserves the Wave mode", 
     assert.deepEqual(
         resolvePlaybackRecommendationContext("/search", false, "for-you"),
         { playContext: "search" },
+    );
+});
+
+test("every online play joins the current tab session while preserving direct lineage", () => {
+    assert.equal(
+        resolvePlaybackRecommendationSessionId(
+            "generation-session",
+            "tab-session",
+        ),
+        "generation-session",
+    );
+    assert.equal(
+        resolvePlaybackRecommendationSessionId(undefined, "tab-session"),
+        "tab-session",
     );
 });
 

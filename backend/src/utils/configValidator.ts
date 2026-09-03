@@ -33,13 +33,29 @@ export function inspectFfmpegVersion(binaryPath: string): string | null {
             typeof error === "object" &&
             error !== null &&
             "code" in error &&
+            error.code === "ETIMEDOUT" &&
+            "stdout" in error &&
+            typeof error.stdout === "string" &&
+            FFMPEG_VERSION_PATTERN.test(
+                error.stdout.split(/\r?\n/, 1)[0]?.trim() ?? "",
+            )
+        ) {
+            // Some distro builds print their complete version and then stall
+            // during process teardown. The executable is usable and its
+            // captured version is still sufficient for the startup gate.
+            output = error.stdout;
+        } else if (
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
             error.code === "ENOENT"
         ) {
             return null;
+        } else {
+            throw new Error(`Unable to execute FFmpeg at ${binaryPath}`, {
+                cause: error,
+            });
         }
-        throw new Error(`Unable to execute FFmpeg at ${binaryPath}`, {
-            cause: error,
-        });
     }
 
     const versionLine = output.split(/\r?\n/, 1)[0]?.trim() ?? "";

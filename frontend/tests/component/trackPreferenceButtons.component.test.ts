@@ -108,6 +108,24 @@ test("active signal renders a filled heart icon", async () => {
     assert.doesNotMatch(html, /data-icon="heart-outline"/);
 });
 
+test("preference controls remain toggleable while an earlier request is saving", async () => {
+    state.signal = "thumbs_up";
+    state.isSaving = true;
+
+    const { TrackPreferenceButtons } =
+        await import("../../components/player/TrackPreferenceButtons");
+    const html = renderToStaticMarkup(
+        React.createElement(TrackPreferenceButtons, {
+            trackId: "track-saving",
+            mode: "both",
+        }),
+    );
+
+    assert.match(html, /aria-label="Убрать отметку «Нравится»"/);
+    assert.match(html, /aria-busy="true"/);
+    assert.doesNotMatch(html, /disabled=""/);
+});
+
 test("both mode renders accessible like and dislike controls", async () => {
     const { TrackPreferenceButtons } =
         await import("../../components/player/TrackPreferenceButtons");

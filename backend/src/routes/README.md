@@ -83,6 +83,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/downloads.ts`          | `/api/downloads`                                                                                      |
 | `backend/src/routes/enrichment.ts`         | `/api/enrichment`                                                                                     |
 | `backend/src/routes/enrichmentMusicBrainzArtistSearch.ts` | MusicBrainz artist-autocomplete handler mounted by `enrichment.ts`; not a router                 |
+| `backend/src/routes/enrichmentOnlineAnalysis.ts` | `/api/enrichment/online-analysis`; admin-only aggregate, 30-second process cache, no scheduling |
 | `backend/src/routes/federation.ts`         | `/api/federation/v1`                                                                                  |
 | `backend/src/routes/federationAdmin.ts`    | `/api/federation/admin` (peer lifecycle, consumer linking, and sync enqueue)                          |
 | `backend/src/routes/homepage.ts`           | `/api/homepage`                                                                                       |
@@ -116,6 +117,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/social.ts`             | `/api/social`                                                                                         |
 | `backend/src/routes/soulseek.ts`           | `/api/soulseek`                                                                                       |
 | `backend/src/routes/streaming.ts`          | `/api/streaming`                                                                                      |
+| `backend/src/routes/streamProxyRequestAbort.ts` | Browser-cancellation helper for provider stream acquisition; not a router                        |
 | `backend/src/routes/subsonic.ts`           | `/rest` (compatibility re-export of `subsonic/index.ts`)                                              |
 | `backend/src/routes/system.ts`             | `/api/system`                                                                                         |
 | `backend/src/routes/systemSettings.ts`     | `/api/system-settings`                                                                                |
@@ -128,6 +130,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/webhooks.ts`           | `/api/webhooks`                                                                                       |
 | `backend/src/routes/youtube.ts`            | `/api/youtube`                                                                                        |
 | `backend/src/routes/youtubeMusic.ts`       | `/api/ytmusic`                                                                                        |
+| `backend/src/routes/youtubeMusicStreamProxyErrors.ts` | Typed YouTube Music stream-proxy error responses; not a router                         |
 | `backend/src/routes/youtubeMusicUnavailableRecovery.ts` | Unavailable-track recovery sub-router under `/api/ytmusic`                              |
 
 ### Library Submodules

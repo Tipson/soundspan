@@ -24,6 +24,7 @@ services:
       - soundspan_data:/data
     environment:
       - TZ=${TZ:-UTC}
+      - YTMUSIC_YTDLP_EXTRACT_CONCURRENCY=${YTMUSIC_YTDLP_EXTRACT_CONCURRENCY:-2}
       # AIO honors operator-supplied secrets; they take precedence and persist to /data/secrets.
       # Empty values generate and persist stable values on first boot.
       - SESSION_SECRET=${SESSION_SECRET:-}
@@ -70,6 +71,8 @@ services:
       - REDIS_FLUSH_ON_STARTUP=${REDIS_FLUSH_ON_STARTUP:-false}
       # Coarse feature flags for ML/recommendation subsystems (default: true)
       - RECOMMENDATION_ENGINE_MODE=${RECOMMENDATION_ENGINE_MODE:-shadow}
+      - RECOMMENDATION_HYBRID_ROLLOUT_PERCENT=${RECOMMENDATION_HYBRID_ROLLOUT_PERCENT:-0}
+      - RECOMMENDATION_EXPLORATION_PERCENT=${RECOMMENDATION_EXPLORATION_PERCENT:-10}
       - REMOTE_ANALYSIS_ENABLED=${REMOTE_ANALYSIS_ENABLED:-false}
       - REMOTE_ANALYSIS_DAILY_BUDGET=${REMOTE_ANALYSIS_DAILY_BUDGET:-100}
       - REMOTE_ANALYSIS_CONCURRENCY=${REMOTE_ANALYSIS_CONCURRENCY:-1}

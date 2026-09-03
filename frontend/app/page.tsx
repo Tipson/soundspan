@@ -107,7 +107,10 @@ export default function HomePage() {
                         </p>
                     )}
 
-                    <HomeListeningDashboard tracks={listeningTracks}>
+                    <HomeListeningDashboard
+                        tracks={listeningTracks}
+                        generationId={personalizedFeed?.generationId}
+                    >
                         <div data-home-region="mixes">
                             <HomeMadeForYou
                                 discoverWeekly={discoverWeekly}

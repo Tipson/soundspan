@@ -36,6 +36,8 @@ describe("canonical recommendation feature store", () => {
             loadTasteRows: jest.fn().mockResolvedValue([]),
             loadDislikedCanonicalKeys: jest.fn().mockResolvedValue([]),
             loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
             now: () => new Date("2026-09-01T12:00:00Z"),
         };
         const store = new RecommendationFeatureStore(dependencies);
@@ -95,6 +97,8 @@ describe("canonical recommendation feature store", () => {
             }),
             loadDislikedCanonicalKeys: jest.fn().mockResolvedValue([]),
             loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
             now: () => new Date("2026-09-01T12:00:00Z"),
         };
         const store = new RecommendationFeatureStore(dependencies);
@@ -115,6 +119,8 @@ describe("canonical recommendation feature store", () => {
                 .fn()
                 .mockResolvedValue(["meta:alice-dislike"]),
             loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
             now: () => new Date("2026-09-01T12:00:00Z"),
         };
         const store = new RecommendationFeatureStore(dependencies);
@@ -145,6 +151,8 @@ describe("canonical recommendation feature store", () => {
             loadSeedCanonicalRecordingId: jest
                 .fn()
                 .mockResolvedValue("canonical-seed"),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
             now: () => new Date("2026-09-01T12:00:00Z"),
         };
         const store = new RecommendationFeatureStore(dependencies);
@@ -158,5 +166,54 @@ describe("canonical recommendation feature store", () => {
             "canonical-seed",
         ]);
         expect(embedding).toEqual([0.2, 0.8]);
+    });
+
+    it("builds a decayed fast profile from the last session actions", async () => {
+        const now = new Date("2026-09-01T12:00:00Z");
+        const dependencies = {
+            loadCanonicalFeatures: jest.fn().mockResolvedValue([]),
+            loadTasteRows: jest.fn().mockResolvedValue([]),
+            loadDislikedCanonicalKeys: jest.fn().mockResolvedValue([]),
+            loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([
+                {
+                    embedding: [1, 0],
+                    outcome: "completed",
+                    completionRatio: 1,
+                    listenedSeconds: 180,
+                    playedAt: new Date("2026-09-01T11:58:00Z"),
+                },
+                {
+                    embedding: [0, 1],
+                    outcome: "completed",
+                    completionRatio: 1,
+                    listenedSeconds: 180,
+                    playedAt: new Date("2026-09-01T10:00:00Z"),
+                },
+                {
+                    embedding: [-1, 0],
+                    outcome: "skipped",
+                    completionRatio: 0.05,
+                    listenedSeconds: 4,
+                    playedAt: new Date("2026-09-01T11:59:00Z"),
+                },
+            ]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
+            now: () => now,
+        };
+        const store = new RecommendationFeatureStore(dependencies);
+
+        const taste = await store.loadTasteContext("alice", {
+            sessionId: "session-a",
+        });
+
+        expect(dependencies.loadSessionRows).toHaveBeenCalledWith(
+            "alice",
+            "session-a",
+            30,
+        );
+        expect(taste.sessionSignalCount).toBe(3);
+        expect(taste.sessionPositiveEmbedding?.[0]).toBeGreaterThan(0.9);
+        expect(taste.sessionNegativeEmbedding?.[0]).toBeLessThan(-0.9);
     });
 });

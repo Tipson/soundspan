@@ -67,7 +67,7 @@ export interface BrowserDeviceAudioVaultOptions {
     privateStorage?: BrowserPrivateStorageLike | null;
 }
 
-/** Prefer normal user-visible files, using private per-device storage only when required. */
+/** Prefer private storage on mobile and normal user-visible files on desktop. */
 export function createBrowserDeviceAudioVault(
     input: BrowserDeviceAudioVaultOptions = {},
 ): DeviceAudioVault {
@@ -95,8 +95,11 @@ export function createBrowserDeviceAudioVault(
         storage: input.privateStorage,
         runtime: directoryRuntime,
     });
+    const prefersPrivateStorage =
+        directoryRuntime.prefersPrivateStorage?.() === true;
 
     const writeVault = async (): Promise<DeviceAudioVault> => {
+        if (prefersPrivateStorage) return privateVault;
         const directoryAccess = await retainedDirectoryVault.inspectAccess();
         if (
             hasRetainedDirectory(directoryAccess) ||
@@ -117,6 +120,9 @@ export function createBrowserDeviceAudioVault(
 
     return {
         inspectAccess: async () => {
+            if (prefersPrivateStorage) {
+                return privateVault.inspectAccess();
+            }
             const directoryAccess =
                 await retainedDirectoryVault.inspectAccess();
             if (
@@ -128,6 +134,9 @@ export function createBrowserDeviceAudioVault(
             return privateVault.inspectAccess();
         },
         requestAccess: async () => {
+            if (prefersPrivateStorage) {
+                return privateVault.requestAccess();
+            }
             // Preserve the user's transient activation: when a picker exists,
             // invoke it without first awaiting IndexedDB or OPFS work.
             if (directoryRuntime.isSupported()) {
@@ -140,16 +149,28 @@ export function createBrowserDeviceAudioVault(
             }
             return privateVault.requestAccess();
         },
+        inspectLegacyAccess: async () =>
+            prefersPrivateStorage
+                ? retainedDirectoryVault.inspectAccess()
+                : null,
+        requestLegacyAccess: async () =>
+            prefersPrivateStorage
+                ? retainedDirectoryVault.requestAccess()
+                : null,
         open: async (openInput): Promise<DeviceAudioVaultSession> => ({
             ownerId: openInput.ownerId,
             authGeneration: openInput.authGeneration,
             storage: {
-                kind: directoryRuntime.isSupported()
-                    ? "desktop-directory"
-                    : "browser-private",
-                label: directoryRuntime.isSupported()
-                    ? "Выбранная папка"
-                    : "Soundspan на этом устройстве",
+                kind: prefersPrivateStorage
+                    ? "browser-private"
+                    : directoryRuntime.isSupported()
+                      ? "desktop-directory"
+                      : "browser-private",
+                label: prefersPrivateStorage
+                    ? "Soundspan на этом устройстве"
+                    : directoryRuntime.isSupported()
+                      ? "Выбранная папка"
+                      : "Soundspan на этом устройстве",
             },
             retain: async (retainInput) => {
                 const selected = await writeVault();

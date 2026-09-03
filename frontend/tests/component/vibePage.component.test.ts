@@ -504,7 +504,10 @@ test("My Wave presents one immersive continuous-radio stage without a finite que
     assert.ok(description);
     assert.match(description.className, /line-clamp-2/);
     assert.doesNotMatch(heading?.className ?? "", /6\.6rem/);
-    assert.match(mounted.container.textContent ?? "", /продолжится дальше/i);
+    assert.doesNotMatch(
+        mounted.container.textContent ?? "",
+        /продолжится дальше/i,
+    );
     assert.doesNotMatch(
         mounted.container.textContent ?? "",
         /\b\d+\s+(?:tracks?|songs?)\s+(?:ready|queued)\b/i,
@@ -1325,8 +1328,9 @@ test("Tune My Wave supports arrow-key radio navigation", async () => {
     await unmountPage(mounted);
 });
 
-test("My Wave exposes connected like and dislike controls for the current track", async () => {
+test("active My Wave keeps feedback on desktop without restoring the redundant mobile block", async () => {
     state.currentTrack = { id: "yt:playing-1", title: "Playing Track" };
+    state.vibeModeEnabled = true;
     const mounted = await mountPage();
 
     assert.match(mounted.container.textContent ?? "", /Сейчас играет/i);
@@ -1334,7 +1338,12 @@ test("My Wave exposes connected like and dislike controls for the current track"
         '[aria-labelledby="wave-now-playing-title"]',
     );
     assert.ok(inlineNowPlaying);
-    assert.doesNotMatch(inlineNowPlaying.className, /(?:^|\s)hidden(?:\s|$)/);
+    const desktopFeedbackRegion = inlineNowPlaying.closest<HTMLElement>(
+        ".wave-density-bottom",
+    );
+    assert.ok(desktopFeedbackRegion);
+    assert.match(desktopFeedbackRegion.className, /(?:^|\s)hidden(?:\s|$)/);
+    assert.match(desktopFeedbackRegion.className, /min-\[900px\]:block/);
     assert.equal(
         mounted.container.querySelector('[data-testid="wave-now-playing"]')
             ?.textContent,

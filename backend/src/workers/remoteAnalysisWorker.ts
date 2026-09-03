@@ -8,6 +8,10 @@ import {
     startRemoteAnalysisAssetRecovery,
     stopRemoteAnalysisAssetRecovery,
 } from "../services/recommendations/remoteAnalysisRecovery";
+import {
+    startRemoteAnalysisHotSetSweep,
+    stopRemoteAnalysisHotSetSweep,
+} from "../services/recommendations/remoteAnalysisHotSetSweep";
 import { registerQueueProcessorEvents } from "./queueEvents";
 import type { QueueProcessorEventHandlers } from "./queueEvents";
 import { remoteAnalysisQueue } from "./queues";
@@ -28,6 +32,7 @@ export function startRemoteAnalysisWorker(record: EventRecorder): void {
             config.recommendations.remoteAnalysisConcurrency,
             processRemoteAnalysis,
         );
+        startRemoteAnalysisHotSetSweep();
     } else {
         log.info("Remote hot-set analysis disabled; processor not registered");
     }
@@ -43,6 +48,7 @@ export function startRemoteAnalysisWorker(record: EventRecorder): void {
 
 /** Stop recovery first, then close the queue before removing its listeners. */
 export async function stopRemoteAnalysisWorker(): Promise<void> {
+    stopRemoteAnalysisHotSetSweep();
     await stopRemoteAnalysisAssetRecovery();
     await remoteAnalysisQueue.close();
     remoteAnalysisQueue.removeAllListeners();

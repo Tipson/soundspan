@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import http from "node:http";
 import https from "node:https";
+import pLimit from "p-limit";
 import { config } from "../config";
 import { logger } from "../utils/logger";
 import type { CanonicalMediaSearchResult } from "@soundspan/media-metadata-contract";
@@ -43,6 +44,12 @@ const RADIO_CACHE_MAX_KEYS = 256;
 // The sidecar's default YTMUSIC_BROWSE_TIMEOUT is 30 seconds. Leave margin so
 // its sanitized 503/504 response reaches the backend before Axios times out.
 const LIBRARY_PLAYLISTS_TIMEOUT_MS = 35_000;
+const ALBUM_MATCH_BATCH_TIMEOUT_MS = 150_000;
+const ALBUM_MATCH_BATCH_MAX_RETRIES = 0;
+const ALBUM_MATCH_FALLBACK_CONCURRENCY = 3;
+const limitAlbumMatchIndividualFallback = pLimit(
+    ALBUM_MATCH_FALLBACK_CONCURRENCY,
+);
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -88,6 +95,8 @@ export interface YtMusicSearchOptions {
 export interface YtMusicStreamInfoOptions {
     timeoutMs?: number;
     maxRetries?: number;
+    /** Read metadata from completed audio work without invoking yt-dlp. */
+    cachedOnly?: boolean;
 }
 
 /** A browsable YouTube Music album returned by catalog search. */
@@ -686,13 +695,7 @@ class YouTubeMusicService {
         return res.data;
     }
 
-    // ── Streaming ──────────────────────────────────────────────────
-
-    /**
-     * Get stream metadata (URL, format, quality) for a video.
-     * The URL itself is IP-locked to the sidecar — callers should
-     * use `getStreamProxy` for actual audio delivery.
-     */
+    /** Resolve metadata or read its cache; use getStreamProxy for audio. */
     async getStreamInfo(
         userId: string,
         videoId: string,
@@ -704,6 +707,7 @@ class YouTubeMusicService {
             async () => {
                 const params: Record<string, string> = { user_id: userId };
                 if (quality) params.quality = quality;
+                if (options.cachedOnly) params.cached_only = "true";
                 const res = await this.client.get(`/stream/${encodedId}`, {
                     params,
                     ...(options.timeoutMs
@@ -844,22 +848,27 @@ class YouTubeMusicService {
             error: string | null;
         }>;
         try {
-            batchResults = await this.searchBatch(userId, queries);
+            batchResults = await this.searchBatch(userId, queries, {
+                timeoutMs: ALBUM_MATCH_BATCH_TIMEOUT_MS,
+                maxRetries: ALBUM_MATCH_BATCH_MAX_RETRIES,
+            });
         } catch (err) {
             logger.warn(
                 "[YTMusic] Batch search failed, falling back to individual:",
                 err,
             );
             // Fallback: match each track individually
-            return Promise.all(
+            return await Promise.all(
                 tracks.map((t) =>
-                    this.findMatchForTrack(
-                        userId,
-                        t.artist,
-                        t.title,
-                        t.albumTitle,
-                        t.duration,
-                        t.isrc,
+                    limitAlbumMatchIndividualFallback(() =>
+                        this.findMatchForTrack(
+                            userId,
+                            t.artist,
+                            t.title,
+                            t.albumTitle,
+                            t.duration,
+                            t.isrc,
+                        ),
                     ),
                 ),
             );
@@ -917,6 +926,10 @@ class YouTubeMusicService {
                 const fallbackResults = await this.searchBatch(
                     userId,
                     fallbackQueries,
+                    {
+                        timeoutMs: ALBUM_MATCH_BATCH_TIMEOUT_MS,
+                        maxRetries: ALBUM_MATCH_BATCH_MAX_RETRIES,
+                    },
                 );
                 for (let j = 0; j < unmatchedIndices.length; j++) {
                     const idx = unmatchedIndices[j];

@@ -78,6 +78,7 @@ function TrackPreferenceButtonsContent({
             className={cn("flex items-center gap-1", className)}
             role="group"
             aria-label="Оценка трека"
+            aria-busy={isPreferenceSaving}
         >
             {showLike && (
                 <button
@@ -92,7 +93,7 @@ function TrackPreferenceButtonsContent({
                             ? "bg-success/10 text-success"
                             : "text-content-muted hover:bg-surface-hover hover:text-content",
                     )}
-                    disabled={!canToggleLike || isPreferenceSaving}
+                    disabled={!canToggleLike}
                     aria-label={likeLabel}
                     aria-pressed={isLiked}
                     title={likeLabel}
@@ -124,7 +125,7 @@ function TrackPreferenceButtonsContent({
                             ? "bg-error/10 text-error"
                             : "text-content-muted hover:bg-surface-hover hover:text-content",
                     )}
-                    disabled={!canToggleDislike || isPreferenceSaving}
+                    disabled={!canToggleDislike}
                     aria-label={dislikeLabel}
                     aria-pressed={isDisliked}
                     title={dislikeLabel}

@@ -30,9 +30,12 @@ import {
 import { coalesceInFlightByKey } from "../utils/singleflight";
 import { config } from "../config";
 import { sendInternalRouteError } from "../utils/routeErrorResponse";
+import { getHttpErrorStatus } from "../utils/httpErrorStatus";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { parsePagination } from "../middleware/parsePagination";
 import { validate } from "../middleware/validate";
+import { acquireAbortableStreamProxy } from "./streamProxyRequestAbort";
+import { handleYtMusicStreamProxyError } from "./youtubeMusicStreamProxyErrors";
 const router = Router();
 const OAUTH_CACHE_TTL_MS = config.nodeEnv === "test" ? 0 : 60_000;
 const OAUTH_NEGATIVE_CACHE_TTL_MS = config.nodeEnv === "test" ? 0 : 15_000;
@@ -47,20 +50,6 @@ const MATCH_SCHEMA = z.object({
 const MATCH_BATCH_SCHEMA = z.object({
     tracks: z.array(MATCH_SCHEMA).min(1).max(50),
 });
-function getHttpErrorStatus(error: unknown): number | undefined {
-    if (typeof error !== "object" || error === null || !("response" in error)) {
-        return undefined;
-    }
-    const response = error.response;
-    if (
-        typeof response !== "object" ||
-        response === null ||
-        !("status" in response)
-    ) {
-        return undefined;
-    }
-    return typeof response.status === "number" ? response.status : undefined;
-}
 const ytOauthSessionCache = new Map<
     string,
     { authenticated: boolean; expiresAt: number }
@@ -472,24 +461,6 @@ function handleYtMusicAuthError(
     return true;
 }
 
-type StreamProxyErrorBody = { error: string; message?: string };
-const YT_MUSIC_STREAM_PROXY_ERRORS: Record<number, StreamProxyErrorBody> = {
-    404: { error: "Stream not found" },
-    451: {
-        error: "age_restricted",
-        message:
-            "This content requires age verification and cannot be streamed via YouTube Music.",
-    },
-    503: { error: "YouTube Music streaming is busy" },
-    504: { error: "YouTube Music stream timed out" },
-};
-function handleYtMusicStreamProxyError(res: Response, err: unknown): boolean {
-    const status = getHttpErrorStatus(err);
-    if (typeof status !== "number" || !YT_MUSIC_STREAM_PROXY_ERRORS[status])
-        return false;
-    res.status(status).json(YT_MUSIC_STREAM_PROXY_ERRORS[status]);
-    return true;
-}
 const getRequestedStreamQuality = (rawQuality: unknown): string | undefined => {
     if (typeof rawQuality !== "string") {
         return undefined;
@@ -1124,12 +1095,19 @@ router.get(
             );
             const rangeHeader = req.headers.range;
 
-            const proxyRes = await ytMusicService.getStreamProxy(
-                effectiveUserId,
-                videoId,
-                quality,
-                rangeHeader,
+            const proxyRes = await acquireAbortableStreamProxy(
+                req,
+                res,
+                (signal) =>
+                    ytMusicService.getStreamProxy(
+                        effectiveUserId,
+                        videoId,
+                        quality,
+                        rangeHeader,
+                        { signal },
+                    ),
             );
+            if (!proxyRes) return;
 
             // Forward status code and relevant headers
             res.status(proxyRes.status);
@@ -1452,6 +1430,7 @@ router.use(unavailableRecoveryRouter);
  * /api/ytmusic/stream-info-public/{videoId}:
  *   get:
  *     summary: Get stream metadata without YT Music OAuth
+ *     description: cachedOnly reads existing playback metadata without resolving a new source; unknown bitrate is zero.
  *     tags: [YouTube Music]
  *     security:
  *       - apiKeyAuth: []
@@ -1485,6 +1464,9 @@ router.get(
                 "__public__",
                 videoId,
                 quality,
+                ...(req.query.cachedOnly === "true"
+                    ? [{ cachedOnly: true, maxRetries: 0, timeoutMs: 5_000 }]
+                    : []),
             );
 
             res.json({
@@ -1552,12 +1534,19 @@ router.get(
             );
             const rangeHeader = req.headers.range;
 
-            const proxyRes = await ytMusicService.getStreamProxy(
-                "__public__",
-                videoId,
-                quality,
-                rangeHeader,
+            const proxyRes = await acquireAbortableStreamProxy(
+                req,
+                res,
+                (signal) =>
+                    ytMusicService.getStreamProxy(
+                        "__public__",
+                        videoId,
+                        quality,
+                        rangeHeader,
+                        { signal },
+                    ),
             );
+            if (!proxyRes) return;
 
             res.status(proxyRes.status);
 

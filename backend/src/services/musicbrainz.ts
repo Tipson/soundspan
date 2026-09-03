@@ -9,6 +9,12 @@ import {
 import { BRAND_USER_AGENT } from "../config/brand";
 import { isValidMbid } from "../utils/musicIds";
 import { asPlainObject, isPlainObject } from "../utils/plainObject";
+import {
+    parseRecordingIdentityFromMetadataSearch,
+    parseRecordingIsrcFromLookup,
+    parseRecordingMbidFromIsrcLookup,
+    type MusicBrainzMetadataIdentity,
+} from "./musicbrainzIdentity";
 
 export { isValidMbid } from "../utils/musicIds";
 
@@ -270,6 +276,88 @@ class MusicBrainzService {
         }
 
         return data;
+    }
+
+    /** Resolve an ISRC only when MusicBrainz returns one unambiguous recording. */
+    async lookupRecordingMbidByIsrc(isrc: string): Promise<string | null> {
+        const normalized = isrc.replace(/[^a-z0-9]/giu, "").toUpperCase();
+        if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(normalized)) return null;
+        return this.cachedRequest(
+            `mb:isrc:${normalized}`,
+            async () => {
+                const response = await this.client.get(
+                    `/isrc/${encodeURIComponent(normalized)}`,
+                    { params: { fmt: "json" } },
+                );
+                return parseRecordingMbidFromIsrcLookup(response.data);
+            },
+            2592000,
+            null,
+        );
+    }
+
+    /** Resolve strict artist/title/duration metadata without provider auth. */
+    async lookupRecordingIdentityByMetadata(input: {
+        title: string;
+        artist: string;
+        duration?: number;
+    }): Promise<MusicBrainzMetadataIdentity | null> {
+        const title = input.title.trim();
+        const artist = input.artist.trim();
+        if (!title || !artist) return null;
+        const duration =
+            typeof input.duration === "number" &&
+            Number.isFinite(input.duration) &&
+            input.duration > 0
+                ? Math.round(input.duration)
+                : undefined;
+        const cacheKey = `mb:identity:v1:${artist}:${title}:${duration ?? "unknown"}`;
+        const identity = await this.cachedRequest(
+            cacheKey,
+            async () => {
+                const normalizedTitle = this.normalizeForSearch(title);
+                const normalizedArtist = this.normalizeForSearch(artist);
+                const response = await this.client.get("/recording", {
+                    params: {
+                        query: `recording:"${this.escapeLucene(
+                            normalizedTitle,
+                        )}" AND artist:"${this.escapeLucene(
+                            normalizedArtist,
+                        )}"`,
+                        limit: 10,
+                        fmt: "json",
+                    },
+                });
+                return parseRecordingIdentityFromMetadataSearch(response.data, {
+                    title,
+                    artist,
+                    duration,
+                });
+            },
+            2592000,
+            null,
+        );
+        if (!identity || identity.isrc) return identity;
+        const isrc = await this.lookupRecordingIsrc(identity.recordingMbid);
+        return isrc ? { ...identity, isrc, confidence: 0.96 } : identity;
+    }
+
+    private async lookupRecordingIsrc(
+        recordingMbid: string,
+    ): Promise<string | null> {
+        if (!isValidMbid(recordingMbid)) return null;
+        return this.cachedRequest(
+            `mb:recording-isrc:${recordingMbid}`,
+            async () => {
+                const response = await this.client.get(
+                    `/recording/${encodeURIComponent(recordingMbid)}`,
+                    { params: { inc: "isrcs", fmt: "json" } },
+                );
+                return parseRecordingIsrcFromLookup(response.data);
+            },
+            2592000,
+            null,
+        );
     }
 
     async searchArtist(query: string, limit = 10) {

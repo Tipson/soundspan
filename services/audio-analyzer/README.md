@@ -37,10 +37,13 @@ asset name, emits bounded mono float32 PCM, discards decoder stderr, and returns
 safe failures to canonical persistence and cleanup without first invoking
 Essentia's codec runtime. Ordinary library paths continue to use MonoLoader.
 
-Set `ACOUSTID_API_KEY` to enable claim-based AcoustID lookups. The worker limits
-requests to three per second, uses bounded timeouts and retries, and stores a
-MusicBrainz recording and release-group identity only at score `0.70` or higher.
-Without a key, lookup stays disabled and local fingerprint computation continues.
+Set `ACOUSTID_API_KEY` to enable claim-based AcoustID lookups. One shared client
+limits requests to three per second and uses bounded timeouts and retries. Local
+track fingerprints retain their recording and release-group lookup, while
+`canonical_acoustid_backfill.py` resolves remote canonical fingerprints to a
+recording MBID and moves provider mappings to an existing durable identity when
+needed. Both paths require score `0.70` or higher. Without a key, lookup stays
+disabled and fingerprint computation continues.
 
 Run the CI-equivalent unit suite from the repository root:
 

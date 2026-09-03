@@ -158,6 +158,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/metadata/discographyFiltering.ts` | Library artist discography secondary-type filtering policy |
 | `backend/src/services/moodBucketService.ts` | Core |
 | `backend/src/services/musicbrainz.ts` | Core |
+| `backend/src/services/musicbrainzIdentity.ts` | Strict unambiguous recording-MBID parsing for ISRC lookups |
 | `backend/src/services/musicScanner.ts` | Core |
 | `backend/src/services/musicScannerIdentity.ts` | Scanner artist and album identity resolution |
 | `backend/src/services/musicRequestService.ts` | Album request deduplication, quota, review, and notification lifecycle |
@@ -180,9 +181,11 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/recommendations/exposureStore.ts` | Persisted generation/exposure attribution and cross-session repeat history |
 | `backend/src/services/recommendations/listenBrainzAdapter.ts` | Optional cached, total-deadline-bounded, circuit-broken CF/LB Radio candidate adapter |
 | `backend/src/services/recommendations/moodEmbedding.ts` | Cached 750 ms DCLAP text-mood signal with active-space validation and scalar fallback |
+| `backend/src/services/recommendations/onlineIdentityEnrichment.ts` | Background TIDAL ISRC and MusicBrainz MBID enrichment for online canonical recordings |
 | `backend/src/services/recommendations/remoteAnalysisHotSet.ts` | Bounded canonical remote-analysis admission, durable spool leases, budget, and expiry cleanup |
+| `backend/src/services/recommendations/remoteAnalysisHotSetSweep.ts` | Periodic bounded hot-set admission for recently active accounts |
 | `backend/src/services/recommendations/remoteAnalysisRecovery.ts` | Single-flight startup and periodic TTL enforcement for remote-analysis assets |
-| `backend/src/services/recommendations/shadowEvaluation.ts` | Read-only baseline-vs-hybrid engagement, playability, repeat, diversity, and latency evaluator |
+| `backend/src/services/recommendations/shadowEvaluation.ts` | Read-only baseline-vs-hybrid quality, latency, impression-sample, identity, and analysis-coverage evaluator |
 | `backend/src/services/youtubeMusicRetry.ts` | Abort-aware bounded YouTube Music retry and backoff shared by browse and stream calls |
 | `backend/src/services/playbackTrace.ts` | Playback telemetry |
 | `backend/src/services/podcastCache.ts` | Core |

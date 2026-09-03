@@ -26,6 +26,8 @@ describe("unified recommendation engine", () => {
     function dependencies(mode: "baseline" | "shadow" | "active" = "active") {
         return {
             mode,
+            hybridRolloutPercent: 100,
+            explorationRate: 0.1,
             loadCandidates: jest.fn().mockResolvedValue({
                 candidates: [candidate("recent"), candidate("fresh")],
                 nextCursor: 1,
@@ -111,6 +113,29 @@ describe("unified recommendation engine", () => {
                 algorithm: "hybrid-v2",
                 served: false,
             }),
+        );
+    });
+
+    it("keeps non-canary accounts on baseline while persisting paired hybrid shadow", async () => {
+        const deps = dependencies("active");
+        deps.hybridRolloutPercent = 0;
+        deps.loadRecentExposures.mockResolvedValue([]);
+        const engine = new RecommendationEngine(deps);
+
+        const result = await engine.recommend(request);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(result.tracks.map((track) => track.id)).toEqual([
+            "yt:recent",
+            "yt:fresh",
+        ]);
+        expect(deps.recordGeneration).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({ algorithm: "baseline-v1", served: true }),
+        );
+        expect(deps.recordGeneration).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({ algorithm: "hybrid-v2", served: false }),
         );
     });
 

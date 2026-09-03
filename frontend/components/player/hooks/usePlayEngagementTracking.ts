@@ -11,7 +11,9 @@ import type { PlayLogInput, PlayRecommendationContext } from "@/lib/api/plays";
 import {
     createPlayEngagementTracker,
     resolvePlaybackRecommendationContext,
+    resolvePlaybackRecommendationSessionId,
 } from "./playEngagementSession";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
 
 const logger = frontendLogger.child("PlayEngagement");
 
@@ -29,12 +31,22 @@ function splitPlayInput(input: PlayLogInput): {
     trackRef: AddToPlaylistRef;
     context: PlayRecommendationContext;
 } {
-    const { playContext, waveMode, ...trackRef } = input;
+    const {
+        playContext,
+        waveMode,
+        recommendationGenerationId,
+        recommendationSessionId,
+        ...trackRef
+    } = input;
     return {
         trackRef: trackRef as AddToPlaylistRef,
         context: {
             ...(playContext ? { playContext } : {}),
             ...(waveMode ? { waveMode } : {}),
+            ...(recommendationGenerationId
+                ? { recommendationGenerationId }
+                : {}),
+            ...(recommendationSessionId ? { recommendationSessionId } : {}),
         },
     };
 }
@@ -100,6 +112,17 @@ export function usePlayEngagementTracking({
                 play: {
                     ...toAddToPlaylistRef(currentTrack),
                     ...context,
+                    recommendationSessionId:
+                        resolvePlaybackRecommendationSessionId(
+                            currentTrack.recommendationSessionId,
+                            getRecommendationSessionId(),
+                        ),
+                    ...(currentTrack.recommendationGenerationId
+                        ? {
+                              recommendationGenerationId:
+                                  currentTrack.recommendationGenerationId,
+                          }
+                        : {}),
                 },
                 durationSeconds: currentTrack.duration,
             });

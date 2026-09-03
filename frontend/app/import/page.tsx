@@ -317,6 +317,12 @@ function ImportPageContent() {
                         detail: { jobId: result.job.id },
                     }),
                 );
+                window.dispatchEvent(
+                    new CustomEvent("set-activity-panel-tab", {
+                        detail: { tab: "imports" },
+                    }),
+                );
+                window.dispatchEvent(new CustomEvent("open-activity-panel"));
                 setUrlInput("");
             } catch (error) {
                 toast.error(userFacingError(error, importPageRu.submitFailed));

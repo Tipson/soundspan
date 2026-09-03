@@ -58,6 +58,13 @@ export interface RecommendationExposureSignal {
     exposedAt: Date;
 }
 
+/** Coarse request context used for session-aware recommendation ranking. */
+export interface RecommendationRequestContext {
+    localHour?: number;
+    timezoneOffsetMinutes?: number;
+    deviceClass?: "mobile" | "tablet" | "desktop" | "tv";
+}
+
 export interface RecommendRequest {
     userId: string;
     intent: {
@@ -66,6 +73,7 @@ export interface RecommendRequest {
         mood?: RecommendationMood | null;
     };
     sessionId: string;
+    context?: RecommendationRequestContext;
     cursor?: number;
     limit: number;
     /** Optional uniform cap for candidates originating from one product lane. */

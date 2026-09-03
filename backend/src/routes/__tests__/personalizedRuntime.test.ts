@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import request from "supertest";
 
 const mockGetPersonalizedFeed = jest.fn();
+const mockMarkViewed = jest.fn();
 
 jest.mock("../../middleware/auth", () => ({
     requireAuthOrToken: (req: Request, res: Response, next: NextFunction) => {
@@ -17,6 +18,12 @@ jest.mock("../../services/recommendations/recommendationRuntime", () => ({
     unifiedRecommendationService: {
         getPersonalizedFeed: (...args: unknown[]) =>
             mockGetPersonalizedFeed(...args),
+    },
+}));
+
+jest.mock("../../services/recommendations/exposureStore", () => ({
+    recommendationExposureStore: {
+        markViewed: (...args: unknown[]) => mockMarkViewed(...args),
     },
 }));
 
@@ -193,6 +200,25 @@ describe("GET /api/personalized/home", () => {
         },
     );
 
+    it("forwards bounded client listening context", async () => {
+        const response = await request(app)
+            .get(
+                "/api/personalized/home?localHour=23&timezoneOffsetMinutes=180&deviceClass=mobile",
+            )
+            .set("x-test-auth", "ok");
+
+        expect(response.status).toBe(200);
+        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect.objectContaining({
+                context: {
+                    localHour: 23,
+                    timezoneOffsetMinutes: 180,
+                    deviceClass: "mobile",
+                },
+            }),
+        );
+    });
+
     it.each([
         "cursor=-1",
         "cursor=1.5",
@@ -201,6 +227,9 @@ describe("GET /api/personalized/home", () => {
         "mood=random",
         "surface=search",
         "sessionId=%20",
+        "localHour=24",
+        "timezoneOffsetMinutes=841",
+        "deviceClass=watch",
         `exclude=${Array.from({ length: 81 }, (_, index) => `id-${index}`).join(
             "%2C",
         )}`,
@@ -228,4 +257,46 @@ describe("GET /api/personalized/home", () => {
             expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
         },
     );
+});
+
+describe("POST /api/personalized/impressions", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockMarkViewed.mockResolvedValue(2);
+    });
+
+    it("records only authenticated explicit recommendation impressions", async () => {
+        const response = await request(app)
+            .post("/api/personalized/impressions")
+            .set("x-test-auth", "ok")
+            .send({
+                generationId: "generation-1",
+                tracks: [
+                    { provider: "youtube", providerTrackId: "video-1" },
+                    { provider: "tidal", providerTrackId: "42" },
+                ],
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ recorded: 2 });
+        expect(mockMarkViewed).toHaveBeenCalledWith({
+            userId: "user-1",
+            generationId: "generation-1",
+            viewedAt: expect.any(Date),
+            tracks: [
+                { provider: "youtube", providerTrackId: "video-1" },
+                { provider: "tidal", providerTrackId: "42" },
+            ],
+        });
+    });
+
+    it("rejects malformed and oversized impression batches", async () => {
+        const response = await request(app)
+            .post("/api/personalized/impressions")
+            .set("x-test-auth", "ok")
+            .send({ generationId: "generation-1", tracks: [] });
+
+        expect(response.status).toBe(400);
+        expect(mockMarkViewed).not.toHaveBeenCalled();
+    });
 });

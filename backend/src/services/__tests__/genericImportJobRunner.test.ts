@@ -38,8 +38,16 @@ jest.mock("../importJobStore", () => ({
 jest.mock("../playlistImportService", () => ({
     playlistImportService: {
         previewImport: jest.fn(),
+        resolvePreparedImport: jest.fn(),
         importPlaylist: jest.fn(),
         findImportedPlaylistId: jest.fn(),
+    },
+}));
+
+jest.mock("../backgroundPlaylistImport", () => ({
+    backgroundPlaylistImport: {
+        initialize: jest.fn(),
+        persistResolution: jest.fn(),
     },
 }));
 
@@ -48,6 +56,7 @@ import { logger } from "../../utils/logger";
 import { genericImportQueue } from "../../workers/queues";
 import { importJobStore } from "../importJobStore";
 import { playlistImportService } from "../playlistImportService";
+import { backgroundPlaylistImport } from "../backgroundPlaylistImport";
 import { genericImportJobRunner } from "../genericImportJobRunner";
 import { SpotifyPlaylistPaginationError } from "../spotifyPlaylistPagination";
 
@@ -55,10 +64,16 @@ describe("generic import job runner", () => {
     const mockGetJob = importJobStore.getJob as jest.Mock;
     const mockTransitionJob = importJobStore.transitionJob as jest.Mock;
     const mockPreviewImport = playlistImportService.previewImport as jest.Mock;
+    const mockResolvePreparedImport =
+        playlistImportService.resolvePreparedImport as jest.Mock;
     const mockImportPlaylist =
         playlistImportService.importPlaylist as jest.Mock;
     const mockFindImportedPlaylistId =
         playlistImportService.findImportedPlaylistId as jest.Mock;
+    const mockInitializeBackground =
+        backgroundPlaylistImport.initialize as jest.Mock;
+    const mockPersistResolution =
+        backgroundPlaylistImport.persistResolution as jest.Mock;
     const mockQueueAdd = genericImportQueue.add as jest.Mock;
     const mockQueueGetJob = genericImportQueue.getJob as jest.Mock;
     const mockQueueReady = genericImportQueue.isReady as jest.Mock;
@@ -69,8 +84,11 @@ describe("generic import job runner", () => {
         mockGetJob.mockReset();
         mockTransitionJob.mockReset();
         mockPreviewImport.mockReset();
+        mockResolvePreparedImport.mockReset();
         mockImportPlaylist.mockReset();
         mockFindImportedPlaylistId.mockReset();
+        mockInitializeBackground.mockReset();
+        mockPersistResolution.mockReset();
         mockQueueAdd.mockReset();
         mockQueueGetJob.mockReset();
         mockQueueReady.mockReset();
@@ -80,6 +98,11 @@ describe("generic import job runner", () => {
         mockQueueReady.mockResolvedValue(undefined);
         mockFindMany.mockResolvedValue([]);
         mockFindImportedPlaylistId.mockResolvedValue(null);
+        mockInitializeBackground.mockResolvedValue({
+            playlistId: "visible-playlist",
+            resolutionAttempt: 1,
+        });
+        mockPersistResolution.mockResolvedValue(true);
         mockTransitionJob.mockImplementation(
             async (
                 jobId: string,
@@ -150,6 +173,17 @@ describe("generic import job runner", () => {
         );
     });
 
+    it("uses a new durable queue identity for a later resolution attempt", async () => {
+        genericImportJobRunner.enqueue("job-retry-resolution", 2);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+
+        expect(mockQueueAdd).toHaveBeenCalledWith(
+            "generic-import-run",
+            { jobId: "job-retry-resolution" },
+            { jobId: "job-retry-resolution:resolution:2" },
+        );
+    });
+
     it("coalesces duplicate submissions onto the existing durable queue job", async () => {
         mockQueueGetJob.mockResolvedValueOnce({
             getState: jest.fn().mockResolvedValue("waiting"),
@@ -202,7 +236,7 @@ describe("generic import job runner", () => {
                 },
             },
             orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
-            select: { id: true },
+            select: { id: true, resolutionAttempt: true },
             take: 100,
         });
         expect(mockQueueAdd).toHaveBeenCalledTimes(4);
@@ -467,6 +501,202 @@ describe("generic import job runner", () => {
         );
     });
 
+    it("publishes a playlist shell before slow resolution and progressively hydrates it", async () => {
+        const job = installStatefulJob({
+            id: "job-background",
+            userId: "user-1",
+            sourceUrl: "https://open.spotify.com/playlist/abc",
+            requestedPlaylistName: null,
+            playlistName: "Spotify import",
+            status: "pending",
+            progress: 0,
+            summary: {
+                total: 0,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
+            resolvedTracks: null as unknown,
+            createdPlaylistId: null as string | null,
+            resolutionProcessed: 0,
+        });
+        const prepared = {
+            playlistName: "Visible first",
+            resolved: [
+                {
+                    index: 0,
+                    artist: "Artist",
+                    title: "Song",
+                    source: "unresolved" as const,
+                    confidence: 0,
+                },
+            ],
+            summary: {
+                total: 1,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 1,
+            },
+        };
+        const resolvedTrack = {
+            ...prepared.resolved[0],
+            source: "youtube" as const,
+            confidence: 85,
+            trackYtMusicId: "yt-row-1",
+        };
+        mockInitializeBackground.mockImplementationOnce(async () => {
+            job.createdPlaylistId = "visible-playlist";
+            job.playlistName = prepared.playlistName;
+            job.resolvedTracks = prepared.resolved;
+            job.summary = prepared.summary;
+            return { playlistId: "visible-playlist", resolutionAttempt: 1 };
+        });
+        mockPreviewImport.mockImplementationOnce(
+            async (_userId, _sourceUrl, options) => {
+                await options.onPrepared(prepared);
+                expect(job.createdPlaylistId).toBe("visible-playlist");
+                await options.onResolved([resolvedTrack]);
+                await options.onProgress({
+                    stage: "youtube",
+                    completed: 1,
+                    total: 1,
+                });
+                return {
+                    playlistName: prepared.playlistName,
+                    resolved: [resolvedTrack],
+                    summary: {
+                        total: 1,
+                        local: 0,
+                        youtube: 1,
+                        tidal: 0,
+                        unresolved: 0,
+                    },
+                };
+            },
+        );
+
+        await genericImportJobRunner.runJob(job.id);
+
+        expect(mockInitializeBackground).toHaveBeenCalledWith({
+            jobId: job.id,
+            userId: "user-1",
+            playlistName: "Visible first",
+            tracks: prepared.resolved,
+        });
+        expect(mockPersistResolution).toHaveBeenCalledWith(
+            expect.objectContaining({
+                jobId: job.id,
+                playlistId: "visible-playlist",
+                expectedResolutionAttempt: 1,
+                newlyResolved: [resolvedTrack],
+                snapshot: [resolvedTrack],
+                summary: {
+                    total: 1,
+                    local: 0,
+                    youtube: 1,
+                    tidal: 0,
+                    unresolved: 0,
+                },
+            }),
+        );
+        expect(mockImportPlaylist).not.toHaveBeenCalled();
+        expect(job.status).toBe("completed");
+        expect(job.createdPlaylistId).toBe("visible-playlist");
+    });
+
+    it("resumes an already visible partial playlist from its durable snapshot after restart", async () => {
+        const firstTrack = {
+            index: 0,
+            artist: "Ready Artist",
+            title: "Ready Song",
+            source: "youtube" as const,
+            confidence: 85,
+            trackYtMusicId: "yt-ready",
+        };
+        const pendingTrack = {
+            index: 1,
+            artist: "Pending Artist",
+            title: "Pending Song",
+            source: "unresolved" as const,
+            confidence: 0,
+        };
+        const job = installStatefulJob({
+            id: "job-resume-background",
+            userId: "user-1",
+            sourceUrl: "https://open.spotify.com/playlist/resume",
+            requestedPlaylistName: null,
+            playlistName: "Restart-safe playlist",
+            status: "resolving",
+            progress: 54,
+            summary: {
+                total: 2,
+                local: 0,
+                youtube: 1,
+                tidal: 0,
+                unresolved: 1,
+            },
+            resolvedTracks: [firstTrack, pendingTrack],
+            createdPlaylistId: "playlist-resume",
+            resolutionProcessed: 1,
+        });
+        const resumedTrack = {
+            ...pendingTrack,
+            source: "youtube" as const,
+            confidence: 85,
+            trackYtMusicId: "yt-resumed",
+        };
+        mockResolvePreparedImport.mockImplementationOnce(
+            async (_userId, prepared, options) => {
+                expect(prepared.resolved).toEqual([firstTrack, pendingTrack]);
+                await options.onResolved([resumedTrack]);
+                await options.onProgress({
+                    stage: "youtube",
+                    completed: 1,
+                    total: 1,
+                });
+                return {
+                    playlistName: prepared.playlistName,
+                    resolved: [firstTrack, resumedTrack],
+                    summary: {
+                        total: 2,
+                        local: 0,
+                        youtube: 2,
+                        tidal: 0,
+                        unresolved: 0,
+                    },
+                };
+            },
+        );
+
+        await genericImportJobRunner.runJob(job.id);
+
+        expect(mockPreviewImport).not.toHaveBeenCalled();
+        expect(mockInitializeBackground).not.toHaveBeenCalled();
+        expect(mockResolvePreparedImport).toHaveBeenCalledWith(
+            "user-1",
+            expect.objectContaining({
+                playlistName: "Restart-safe playlist",
+                resolved: [firstTrack, pendingTrack],
+            }),
+            expect.objectContaining({
+                onProgress: expect.any(Function),
+                onResolved: expect.any(Function),
+            }),
+        );
+        expect(mockPersistResolution).toHaveBeenCalledWith(
+            expect.objectContaining({
+                playlistId: "playlist-resume",
+                expectedResolutionAttempt: 0,
+                newlyResolved: [resumedTrack],
+                snapshot: [firstTrack, resumedTrack],
+            }),
+        );
+        expect(job.status).toBe("completed");
+        expect(job.createdPlaylistId).toBe("playlist-resume");
+    });
+
     it("runs a pending import job through preview and playlist creation", async () => {
         installStatefulJob({
             id: "job-1",
@@ -529,6 +759,7 @@ describe("generic import job runner", () => {
         expect(mockPreviewImport).toHaveBeenCalledWith(
             "user-1",
             "https://open.spotify.com/playlist/abc",
+            expect.objectContaining({ onProgress: expect.any(Function) }),
         );
         expect(mockTransitionJob).toHaveBeenNthCalledWith(
             2,
@@ -608,6 +839,77 @@ describe("generic import job runner", () => {
                 error: null,
             },
         );
+    });
+
+    it("persists bounded progress while a large preview is resolving", async () => {
+        installStatefulJob({
+            id: "job-progress",
+            userId: "user-1",
+            sourceUrl: "https://open.spotify.com/playlist/large",
+            requestedPlaylistName: null,
+            playlistName: "Large import",
+            status: "pending",
+            progress: 0,
+            summary: {
+                total: 0,
+                local: 0,
+                youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
+            resolvedTracks: null,
+        });
+        mockPreviewImport.mockImplementation(
+            async (
+                _userId: string,
+                _sourceUrl: string,
+                options: {
+                    onProgress: (event: {
+                        stage: string;
+                        completed: number;
+                        total: number;
+                    }) => Promise<void>;
+                },
+            ) => {
+                await options.onProgress({
+                    stage: "source",
+                    completed: 1_400,
+                    total: 1_400,
+                });
+                await options.onProgress({
+                    stage: "local",
+                    completed: 1_400,
+                    total: 1_400,
+                });
+                await options.onProgress({
+                    stage: "youtube",
+                    completed: 700,
+                    total: 1_400,
+                });
+                return {
+                    playlistName: "Large import",
+                    resolved: [],
+                    summary: {
+                        total: 0,
+                        local: 0,
+                        youtube: 0,
+                        tidal: 0,
+                        unresolved: 0,
+                    },
+                };
+            },
+        );
+
+        await (genericImportJobRunner as any).resolvePreview("job-progress");
+
+        expect(
+            mockTransitionJob.mock.calls.map(([, , update]) => update),
+        ).toEqual([
+            { status: "resolving", progress: 20 },
+            { progress: 25 },
+            { progress: 30 },
+            { progress: 54 },
+        ]);
     });
 
     it("reuses the job playlist identity after playlist commit but before completion persists", async () => {
@@ -1266,6 +1568,26 @@ describe("generic import job runner", () => {
                 total: 1,
                 local: 1,
                 youtube: 0,
+                tidal: 0,
+                unresolved: 0,
+            },
+        },
+        {
+            caseName: "out-of-order source positions",
+            resolvedTracks: [
+                {
+                    index: 1,
+                    artist: "Wrong position",
+                    title: "Invalid Track",
+                    source: "youtube",
+                    confidence: 85,
+                    trackYtMusicId: "yt-wrong-position",
+                },
+            ],
+            summary: {
+                total: 1,
+                local: 0,
+                youtube: 1,
                 tidal: 0,
                 unresolved: 0,
             },

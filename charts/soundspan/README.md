@@ -323,6 +323,12 @@ the public catalog region independently of the cluster's geo-IP.
 
 #### YouTube downloads and the music volume
 
+The streamer memory limit is 2 GiB to accommodate yt-dlp and its Deno children.
+`ytmusicStreamer.env.YTMUSIC_YTDLP_EXTRACT_CONCURRENCY` defaults to `null` (the
+runtime uses `2`). It bounds combined playback and metadata extraction. Increase
+concurrency only with a measured memory budget; quality-badge reads use cached
+download metadata and do not launch additional extraction.
+
 When `ytmusicStreamer.enabled` is true, the streamer pod also mounts the
 chart's music volume at `/music` (controlled by
 `ytmusicStreamer.musicMount.enabled`, default `true`). This is required for
@@ -670,6 +676,8 @@ When `deploymentMode=individual` and `backendWorker.enabled=true`, the chart inj
 | --- | --- | --- | --- |
 | `AUDIO_ANALYSIS_ENABLED` | `config.features.audioAnalysis` | No | `true` |
 | `RECOMMENDATION_ENGINE_MODE` | `config.recommendations.engineMode` | No | App default: `shadow` (chart leaves unset unless configured) |
+| `RECOMMENDATION_HYBRID_ROLLOUT_PERCENT` | `config.recommendations.hybridRolloutPercent` | No | App default: `0` (chart leaves unset unless configured) |
+| `RECOMMENDATION_EXPLORATION_PERCENT` | `config.recommendations.explorationPercent` | No | App default: `10` (chart leaves unset unless configured) |
 | `REMOTE_ANALYSIS_ENABLED` | `config.recommendations.remoteAnalysisEnabled` | No | App default: `false` (chart leaves unset unless configured) |
 | `REMOTE_ANALYSIS_DAILY_BUDGET` | `config.recommendations.remoteAnalysisDailyBudget` | No | App default: `100` (chart leaves unset unless configured) |
 | `REMOTE_ANALYSIS_CONCURRENCY` | `config.recommendations.remoteAnalysisConcurrency` | No | App default: `1` (chart leaves unset unless configured) |

@@ -29,6 +29,7 @@ jest.mock("../rateLimiter", () => ({
 }));
 
 const mockAxiosGet = axios.get as jest.Mock;
+const mockAxiosPost = axios.post as jest.Mock;
 const mockDeezerTrackAlbum = deezerService.getTrackAlbum as jest.Mock;
 const mockLoggerWarn = logger.warn as jest.Mock;
 const mockLoggerDebug = logger.debug as jest.Mock;
@@ -449,6 +450,196 @@ describe("spotifyService", () => {
                 }),
             }),
         );
+    });
+
+    it("falls back to Spotify web-player pagination when the public REST API is rate limited", async () => {
+        const makePartnerItem = (id: string, title: string) => ({
+            itemV2: {
+                __typename: "TrackResponseWrapper",
+                data: {
+                    __typename: "Track",
+                    uri: `spotify:track:${id}`,
+                    name: title,
+                    artists: {
+                        items: [
+                            {
+                                uri: `spotify:artist:artist-${id}`,
+                                profile: { name: `Artist ${id}` },
+                            },
+                        ],
+                    },
+                    albumOfTrack: {
+                        uri: `spotify:album:album-${id}`,
+                        name: `Album ${id}`,
+                        coverArt: {
+                            sources: [
+                                {
+                                    url: `https://images.example/${id}.jpg`,
+                                    width: 640,
+                                    height: 640,
+                                },
+                            ],
+                        },
+                    },
+                    trackDuration: { totalMilliseconds: 180000 },
+                    trackNumber: 1,
+                },
+            },
+        });
+
+        mockAxiosGet
+            .mockResolvedValueOnce(makeTokenResponse("rate-limited-token"))
+            .mockRejectedValueOnce(
+                Object.assign(new Error("quota exceeded"), {
+                    response: { status: 429 },
+                }),
+            );
+        mockAxiosPost
+            .mockResolvedValueOnce({
+                data: {
+                    data: {
+                        playlistV2: {
+                            __typename: "Playlist",
+                            uri: "spotify:playlist:playlistpartner",
+                            name: "Partner Playlist",
+                            description: "Complete public playlist",
+                            ownerV2: { data: { name: "Owner" } },
+                            images: {
+                                items: [
+                                    {
+                                        sources: [
+                                            {
+                                                url: "https://images.example/playlist.jpg",
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                            content: {
+                                totalCount: 2,
+                                pagingInfo: { offset: 0, limit: 1 },
+                                items: [
+                                    makePartnerItem("track-1", "Track One"),
+                                ],
+                            },
+                        },
+                    },
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    data: {
+                        playlistV2: {
+                            __typename: "Playlist",
+                            content: {
+                                totalCount: 2,
+                                pagingInfo: { offset: 1, limit: 1 },
+                                items: [
+                                    makePartnerItem("track-2", "Track Two"),
+                                ],
+                            },
+                        },
+                    },
+                },
+            });
+
+        const playlist = await spotifyService.getPlaylistForImport(
+            "https://open.spotify.com/playlist/playlistpartner",
+        );
+
+        expect(playlist).toMatchObject({
+            id: "playlistpartner",
+            name: "Partner Playlist",
+            owner: "Owner",
+            trackCount: 2,
+            imageUrl: "https://images.example/playlist.jpg",
+        });
+        expect(playlist?.tracks.map((track) => track.spotifyId)).toEqual([
+            "track-1",
+            "track-2",
+        ]);
+        expect(mockAxiosPost).toHaveBeenCalledTimes(2);
+        expect(mockAxiosPost.mock.calls[0][1]).toEqual(
+            expect.objectContaining({
+                operationName: "fetchPlaylist",
+                variables: expect.objectContaining({
+                    uri: "spotify:playlist:playlistpartner",
+                    offset: 0,
+                }),
+            }),
+        );
+        expect(mockAxiosPost.mock.calls[1][1]).toEqual(
+            expect.objectContaining({
+                operationName: "fetchPlaylistContents",
+                variables: expect.objectContaining({ offset: 1 }),
+            }),
+        );
+    });
+
+    it("uses the web-player fallback when a later REST playlist page fails", async () => {
+        const nextUrl =
+            "https://api.spotify.com/v1/playlists/playlistlater/tracks?offset=1&limit=1";
+        mockAxiosGet
+            .mockResolvedValueOnce(makeTokenResponse("token"))
+            .mockResolvedValueOnce({
+                data: {
+                    id: "playlistlater",
+                    name: "REST Playlist",
+                    tracks: {
+                        total: 2,
+                        next: nextUrl,
+                        items: [{ track: { id: "rest-track" } }],
+                    },
+                },
+            })
+            .mockRejectedValueOnce(new Error("later page unavailable"));
+        mockAxiosPost.mockResolvedValueOnce({
+            data: {
+                data: {
+                    playlistV2: {
+                        __typename: "Playlist",
+                        uri: "spotify:playlist:playlistlater",
+                        name: "Recovered Playlist",
+                        content: {
+                            totalCount: 1,
+                            items: [
+                                {
+                                    itemV2: {
+                                        data: {
+                                            __typename: "Track",
+                                            uri: "spotify:track:recovered-track",
+                                            name: "Recovered Track",
+                                            artists: {
+                                                items: [
+                                                    {
+                                                        uri: "spotify:artist:artist1",
+                                                        profile: {
+                                                            name: "Artist",
+                                                        },
+                                                    },
+                                                ],
+                                            },
+                                            albumOfTrack: {
+                                                uri: "spotify:album:album1",
+                                                name: "Album",
+                                            },
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            },
+        });
+
+        const playlist =
+            await spotifyService.getPlaylistForImport("playlistlater");
+
+        expect(playlist?.name).toBe("Recovered Playlist");
+        expect(playlist?.tracks[0]?.spotifyId).toBe("recovered-track");
+        expect(mockAxiosGet).toHaveBeenCalledTimes(3);
+        expect(mockAxiosPost).toHaveBeenCalledTimes(1);
     });
 
     it("fails a strict import instead of accepting an unverifiable embed subset", async () => {

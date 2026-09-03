@@ -232,6 +232,16 @@ test("explains Spotify import boundaries and names the back button", async () =>
 
 test("imports a public Spotify playlist link without an OAuth connection", async () => {
     const harness = await mountImportPage();
+    let openedActivity = 0;
+    let selectedTab: unknown = null;
+    const handleOpen = () => {
+        openedActivity += 1;
+    };
+    const handleTab = (event: Event) => {
+        selectedTab = (event as CustomEvent).detail;
+    };
+    window.addEventListener("open-activity-panel", handleOpen);
+    window.addEventListener("set-activity-panel-tab", handleTab);
     try {
         assert.doesNotMatch(
             harness.container.textContent || "",
@@ -255,7 +265,11 @@ test("imports a public Spotify playlist link without an OAuth connection", async
                 name: undefined,
             },
         ]);
+        assert.equal(openedActivity, 1);
+        assert.deepEqual(selectedTab, { tab: "imports" });
     } finally {
+        window.removeEventListener("open-activity-panel", handleOpen);
+        window.removeEventListener("set-activity-panel-tab", handleTab);
         await harness.unmount();
     }
 });

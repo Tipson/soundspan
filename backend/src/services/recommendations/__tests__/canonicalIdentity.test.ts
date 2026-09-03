@@ -28,8 +28,36 @@ describe("canonical recording identity", () => {
             buildCanonicalRecordingKey({ ...track, isrc: " gb-abc-12-34567 " }),
         ).toBe("isrc:GBABC1234567");
         expect(buildCanonicalRecordingKey(track)).toBe(
-            "meta:linkin park:one more light:243",
+            "meta:linkin park:one more light remastered:243",
         );
+    });
+
+    it("keeps materially different versions distinct in metadata fallback", () => {
+        const base = {
+            ...track,
+            recordingMbid: null,
+            isrc: null,
+            title: "One More Light",
+        };
+
+        expect(
+            buildCanonicalRecordingKey({
+                ...base,
+                title: "One More Light (Live)",
+            }),
+        ).not.toBe(buildCanonicalRecordingKey(base));
+        expect(
+            buildCanonicalRecordingKey({
+                ...base,
+                title: "One More Light - Remix",
+            }),
+        ).not.toBe(buildCanonicalRecordingKey(base));
+        expect(
+            buildCanonicalRecordingKey({
+                ...base,
+                title: "One More Light [2024 Remaster]",
+            }),
+        ).not.toBe(buildCanonicalRecordingKey(base));
     });
 
     it("reuses one canonical row and attaches every provider mapping", async () => {

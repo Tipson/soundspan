@@ -7,7 +7,12 @@ import type {
     PersonalizedHomeMood,
     PersonalizedRecommendationSurface,
 } from "../types";
-import { getRecommendationSessionId } from "@/lib/recommendationSession";
+import {
+    appendRecommendationClientContext,
+    getRecommendationClientContext,
+    getRecommendationSessionId,
+    type RecommendationClientContext,
+} from "@/lib/recommendationSession";
 import {
     PERSONALIZED_HOME_QUERY_RETRY,
     PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
@@ -26,6 +31,7 @@ export function buildPersonalizedHomeFeedUrl(
     mood: PersonalizedHomeMood | null = null,
     surface: PersonalizedRecommendationSurface = "home",
     sessionId = getRecommendationSessionId(),
+    context: RecommendationClientContext | null = getRecommendationClientContext(),
 ): string {
     const params = new URLSearchParams({
         limit: String(limit),
@@ -34,6 +40,7 @@ export function buildPersonalizedHomeFeedUrl(
         sessionId,
     });
     if (mood) params.set("mood", mood);
+    appendRecommendationClientContext(params, context);
     return `/personalized/home?${params.toString()}`;
 }
 

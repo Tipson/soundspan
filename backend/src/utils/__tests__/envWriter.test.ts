@@ -265,6 +265,8 @@ describe("envWriter", () => {
 
         await writeEnvFile({
             RECOMMENDATION_ENGINE_MODE: "shadow",
+            RECOMMENDATION_HYBRID_ROLLOUT_PERCENT: "25",
+            RECOMMENDATION_EXPLORATION_PERCENT: "10",
             REMOTE_ANALYSIS_ENABLED: "false",
             REMOTE_ANALYSIS_DAILY_BUDGET: "100",
             REMOTE_ANALYSIS_CONCURRENCY: "1",
@@ -275,6 +277,8 @@ describe("envWriter", () => {
             [
                 "# Recommendations & Remote Analysis",
                 "RECOMMENDATION_ENGINE_MODE=shadow",
+                "RECOMMENDATION_HYBRID_ROLLOUT_PERCENT=25",
+                "RECOMMENDATION_EXPLORATION_PERCENT=10",
                 "REMOTE_ANALYSIS_ENABLED=false",
                 "REMOTE_ANALYSIS_DAILY_BUDGET=100",
                 "REMOTE_ANALYSIS_CONCURRENCY=1",

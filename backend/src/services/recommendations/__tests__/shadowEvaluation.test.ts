@@ -137,6 +137,16 @@ describe("recommendation shadow evaluation", () => {
     it("returns explicit zero coverage and unavailable engagement for an empty window", async () => {
         const service = new RecommendationShadowEvaluationService({
             loadGenerations: jest.fn().mockResolvedValue([]),
+            loadDataQuality: jest.fn().mockResolvedValue({
+                canonicalRecordingCount: 100,
+                isrcCount: 40,
+                recordingMbidCount: 30,
+                fingerprintCount: 20,
+                scalarAnalysisCount: 10,
+                embeddingCount: 5,
+                viewedImpressionCount: 12,
+                participatingAccountCount: 3,
+            }),
         });
 
         const report = await service.evaluate({ since, until });
@@ -151,6 +161,74 @@ describe("recommendation shadow evaluation", () => {
             p95Ms: 0,
         });
         expect(report.pairedShadow.pairCount).toBe(0);
+        expect(report.dataQuality).toEqual({
+            canonicalRecordingCount: 100,
+            identity: {
+                isrcCount: 40,
+                isrcCoverageRate: 0.4,
+                recordingMbidCount: 30,
+                recordingMbidCoverageRate: 0.3,
+                fingerprintCount: 20,
+                fingerprintCoverageRate: 0.2,
+            },
+            analysis: {
+                scalarAnalysisCount: 10,
+                scalarAnalysisCoverageRate: 0.1,
+                embeddingCount: 5,
+                embeddingCoverageRate: 0.05,
+            },
+            experiment: {
+                viewedImpressionCount: 12,
+                participatingAccountCount: 3,
+            },
+        });
+    });
+
+    it("excludes server-generated cards that never entered the viewport", async () => {
+        const service = new RecommendationShadowEvaluationService({
+            loadGenerations: jest.fn().mockResolvedValue([
+                {
+                    id: "baseline-viewed",
+                    userId: "alice",
+                    sessionId: "session-a",
+                    surface: "home",
+                    direction: "for-you",
+                    mood: null,
+                    cursor: 0,
+                    algorithm: "baseline-v1",
+                    served: true,
+                    latencyMs: 10,
+                    createdAt: new Date("2026-09-01T10:00:00.000Z"),
+                    exposures: [
+                        {
+                            canonicalKey: "not-visible",
+                            artistKey: "artist-a",
+                            exposedAt: new Date("2026-09-01T10:00:00.000Z"),
+                            viewedAt: null,
+                            playedAt: null,
+                            listenedSeconds: null,
+                            completionRatio: null,
+                            outcome: null,
+                        },
+                        {
+                            canonicalKey: "visible",
+                            artistKey: "artist-b",
+                            exposedAt: new Date("2026-09-01T10:00:01.000Z"),
+                            viewedAt: new Date("2026-09-01T10:00:02.000Z"),
+                            playedAt: null,
+                            listenedSeconds: null,
+                            completionRatio: null,
+                            outcome: null,
+                        },
+                    ],
+                },
+            ]),
+        });
+
+        const report = await service.evaluate({ since, until });
+
+        expect(report.algorithms.baseline.engagement?.exposureCount).toBe(1);
+        expect(report.algorithms.baseline.engagement?.playbackRate).toBe(0);
     });
 
     it("does not classify missing duration as an early skip by itself", async () => {

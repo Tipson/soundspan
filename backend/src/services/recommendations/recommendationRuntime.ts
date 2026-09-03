@@ -113,6 +113,8 @@ async function loadSimilarCandidates(request: RecommendRequest) {
 
 export const unifiedRecommendationService = new UnifiedRecommendationService({
     mode: config.recommendations.mode,
+    hybridRolloutPercent: config.recommendations.hybridRolloutPercent,
+    explorationRate: config.recommendations.explorationRate,
     loadPersonalizedFeed: (
         userId,
         limit,
@@ -130,7 +132,11 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
         recommendationFeatureStore.loadDislikedCanonicalKeys(userId),
     loadTasteContext: async (userId, request) => {
         const [taste, mood] = await Promise.all([
-            recommendationFeatureStore.loadTasteContext(userId),
+            recommendationFeatureStore.loadTasteContext(userId, {
+                sessionId: request.sessionId,
+                surface: request.intent.surface,
+                context: request.context,
+            }),
             recommendationMoodEmbeddingStore.load(request.intent.mood ?? null),
         ]);
         const enrichedTaste = {

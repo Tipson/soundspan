@@ -1,0 +1,73 @@
+# Hardened single-host overlay for split Soundspan deployments.
+#
+# The public frontend binds only to the selected host address, while API and
+# infrastructure ports remain on loopback. Core runtimes see the media library
+# read-only; remote analysis shares a dedicated writable spool mounted at the
+# same container path in every participating service. The scoped HTTP proxy
+# must allow the four fixed egress addresses assigned below (.10 through .13).
+services:
+    backend:
+        environment:
+            BACKEND_PROCESS_ROLE: api
+        networks:
+            default: {}
+            soundspan-egress:
+                ipv4_address: ${BACKEND_EGRESS_IP:-172.30.121.12}
+        ports: !override
+            - "127.0.0.1:${BACKEND_PORT:-3006}:3006"
+        volumes: !override
+            - ${MUSIC_PATH:?MUSIC_PATH is required}:/music:ro
+            - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool
+            - backend_cache:/app/cache
+            - backend_logs:/app/logs
+
+    backend-worker:
+        environment:
+            BACKEND_PROCESS_ROLE: worker
+        networks:
+            default: {}
+            soundspan-egress:
+                ipv4_address: ${BACKEND_WORKER_EGRESS_IP:-172.30.121.13}
+        volumes: !override
+            - ${MUSIC_PATH:?MUSIC_PATH is required}:/music:ro
+            - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool
+            - backend_cache:/app/cache
+            - backend_logs:/app/logs
+
+    frontend:
+        ports: !override
+            - "${SOUNDSPAN_BIND_IP:?SOUNDSPAN_BIND_IP is required}:${FRONTEND_PORT:-3030}:3030"
+
+    tidal-streamer:
+        volumes: !override
+            - ${MUSIC_PATH:?MUSIC_PATH is required}:/music
+            - ${TIDAL_DATA_PATH:?TIDAL_DATA_PATH is required}:/data
+        networks:
+            default: {}
+            soundspan-egress:
+                ipv4_address: ${TIDAL_EGRESS_IP:-172.30.121.10}
+
+    ytmusic-streamer:
+        volumes: !override
+            - ${YTMUSIC_DATA_PATH:?YTMUSIC_DATA_PATH is required}:/data
+            - ${MUSIC_PATH:?MUSIC_PATH is required}:/music
+            - ${MUSIC_VOLUME_MARKER_PATH:?MUSIC_VOLUME_MARKER_PATH is required}:/run/music-volume:ro
+        networks:
+            default: {}
+            soundspan-egress:
+                ipv4_address: ${YTMUSIC_EGRESS_IP:-172.30.121.11}
+
+    audio-analyzer:
+        volumes: !override
+            - ${MUSIC_PATH:?MUSIC_PATH is required}:/music:ro
+            - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool
+
+    vibe-provider-dclap:
+        volumes: !override
+            - ${MUSIC_PATH:?MUSIC_PATH is required}:/music:ro
+            - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool:ro
+
+networks:
+    soundspan-egress:
+        external: true
+        name: ${SOUNDSPAN_EGRESS_NETWORK:-music-stack_soundspan-internal}

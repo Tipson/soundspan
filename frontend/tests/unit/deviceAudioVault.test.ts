@@ -160,6 +160,7 @@ function bytesStream(...chunks: number[][]): ReadableStream<Uint8Array> {
 
 function createHarness(options?: {
     supported?: boolean;
+    prefersPrivateStorage?: boolean;
     persisted?: MemoryDirectoryHandle | null;
     picked?: MemoryDirectoryHandle;
     order?: string[];
@@ -172,6 +173,7 @@ function createHarness(options?: {
     let opaqueCounter = 0;
     const runtime: DeviceAudioVaultRuntime = {
         isSupported: () => options?.supported ?? true,
+        prefersPrivateStorage: () => options?.prefersPrivateStorage ?? false,
         pickDirectory: () => {
             options?.order?.push("picker");
             return Promise.resolve(picked);
@@ -900,6 +902,48 @@ test("the browser vault prefers a normal directory and falls back to private sto
         (await privateFiles.inspectAccess()).storageKind,
         "browser-private",
     );
+});
+
+test("Android-style runtimes prefer private storage even when a public directory picker exists", async () => {
+    const directory = createHarness({ prefersPrivateStorage: true });
+    const privateRoot = new MemoryDirectoryHandle("OPFS");
+    const vault = createBrowserDeviceAudioVault({
+        directoryRegistry: directory.registry,
+        directoryRuntime: directory.runtime,
+        privateStorage: {
+            getDirectory: async () => privateRoot,
+            persisted: async () => true,
+            persist: async () => true,
+        },
+    });
+
+    assert.deepEqual(await vault.inspectAccess(), {
+        status: "ready",
+        code: null,
+        storageKind: "browser-private",
+        label: "Soundspan на этом устройстве",
+        reason: "Офлайн-воспроизведение использует закрытое хранилище Soundspan. В разделе «Загрузки» выберите «Сохранить как обычный файл», чтобы создать файл вне браузера.",
+    });
+    const session = await vault.open({
+        ownerId: "user-1",
+        authGeneration: 1,
+    });
+    const receipt = await session.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream([1, 2, 3]),
+        contentType: "audio/mpeg",
+        expectedBytes: 3,
+    });
+
+    assert.equal(session.storage.kind, "browser-private");
+    assert.match(receipt.ref, /^opfs1:/);
+    assert.equal(
+        (await vault.inspectLegacyAccess?.())?.status,
+        "setup-required",
+    );
+    assert.equal((await vault.requestLegacyAccess?.())?.status, "ready");
+    assert.equal(directory.registry.saved, directory.picked);
 });
 
 test("a browser vault restart routes an existing private ref even when a directory picker becomes available", async () => {

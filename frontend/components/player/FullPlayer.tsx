@@ -420,6 +420,7 @@ export function FullPlayer() {
                                     aria-pressed={isShuffle}
                                     title={ru.player.shuffle}
                                     data-player-control="shuffle"
+                                    data-active={isShuffle}
                                 >
                                     <Shuffle className="h-5 w-5" />
                                 </button>
@@ -530,6 +531,7 @@ export function FullPlayer() {
                                     title={repeatLabel}
                                     data-player-control="repeat"
                                     data-repeat-mode={repeatMode}
+                                    data-active={repeatMode !== "off"}
                                 >
                                     {repeatMode === "one" ? (
                                         <Repeat1 className="h-5 w-5" />

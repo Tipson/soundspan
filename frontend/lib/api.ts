@@ -216,6 +216,15 @@ export interface PlaylistDetailResponse {
     pendingTracks: PlaylistPendingTrackItem[];
     pendingCount: number;
     unplayableCount?: number;
+    trackCount?: number;
+    totalItemCount?: number;
+    truncated?: boolean;
+    mergedItems?: Array<PlaylistDetailTrackItem | PlaylistPendingTrackItem>;
+    pagination?: {
+        limit: number;
+        hasMore: boolean;
+        nextCursor: string | null;
+    };
 }
 
 /** Station filter accepted by generated radio playlist endpoints. */
@@ -255,6 +264,10 @@ export interface ImportJob {
     progress: number;
     summary: PlaylistImportSummary;
     createdPlaylistId: string | null;
+    resolutionStartedAt: string | null;
+    resolutionProcessed: number;
+    resolutionAttempt: number;
+    estimatedRemainingSeconds: number | null;
     error: string | null;
     createdAt: string;
     updatedAt: string;

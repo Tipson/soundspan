@@ -96,6 +96,7 @@ const settings: SystemSettings = {
 };
 
 async function renderCacheSection(options?: {
+    emptyAudio?: boolean;
     artistProgress?: {
         completed: number;
         total: number;
@@ -115,17 +116,17 @@ async function renderCacheSection(options?: {
         },
         trackTags: { completed: 2, total: 2, progress: 100, failed: 0 },
         audioAnalysis: {
-            completed: 2,
-            total: 2,
-            progress: 100,
+            completed: options?.emptyAudio ? 0 : 2,
+            total: options?.emptyAudio ? 0 : 2,
+            progress: options?.emptyAudio ? 0 : 100,
             processing: 0,
             failed: 0,
         },
         clapEmbeddings: {
-            completed: 1,
-            total: 2,
-            progress: 50,
-            processing: 1,
+            completed: options?.emptyAudio ? 0 : 1,
+            total: options?.emptyAudio ? 0 : 2,
+            progress: options?.emptyAudio ? 0 : 50,
+            processing: options?.emptyAudio ? 0 : 1,
             failed: 0,
         },
         coreComplete: true,
@@ -189,4 +190,17 @@ test("displays 99 percent when rounded progress is 100 but work remains", async 
         html,
         /Метаданные исполнителей[\s\S]*?style="width:99%"[\s\S]*?99%/,
     );
+});
+
+test("empty local analysis is not presented as completed online analysis", async () => {
+    migration = null;
+    const html = await renderCacheSection({ emptyAudio: true });
+    const audio = html.slice(
+        html.indexOf('aria-label="Аудиоанализ локальных файлов"'),
+        html.indexOf('aria-label="Vibe-эмбеддинги локальных файлов"'),
+    );
+    assert.ok(audio.length > 0);
+    assert.match(audio, /Нет локальных аудиофайлов/);
+    assert.doesNotMatch(audio, /text-success|0%|0 \/ 0/);
+    assert.match(html, /Онлайн-треки анализируются отдельным конвейером/);
 });

@@ -59,6 +59,11 @@ const coverageExpectations = [
                 branch: 95.83,
                 uncovered: "126-130",
             },
+            {
+                line: 97.69,
+                branch: 95.83,
+                uncovered: "123-125",
+            },
         ],
     },
     { file: "socialNavigation.ts", line: 100, branch: 93.75, funcs: 100 },

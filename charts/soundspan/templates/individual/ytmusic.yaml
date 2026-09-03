@@ -82,7 +82,7 @@ spec:
                   key: INTERNAL_API_SECRET
             {{- end }}
             {{- range $key := keys $ytmusicEnv | sortAlpha }}
-            {{- if not (hasKey $ytmusicExplicitEnvKeys $key) }}
+            {{- if and (not (hasKey $ytmusicExplicitEnvKeys $key)) (ne (index $ytmusicEnv $key) nil) }}
             - name: {{ $key }}
               value: {{ index $ytmusicEnv $key | quote }}
             {{- end }}

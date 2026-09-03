@@ -8,6 +8,9 @@ import { useAudioControls } from "@/lib/audio-controls-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { ru, pluralRu } from "@/lib/i18n/ru";
 import type { PersonalizedTrack } from "../types";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
+import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
+import { recommendationTrackKey } from "../recommendationIdentity";
 
 interface PersonalizedMixCardProps {
     title: string;
@@ -15,6 +18,7 @@ interface PersonalizedMixCardProps {
     tracks: PersonalizedTrack[];
     tone: "violet" | "blue" | "amber";
     index: number;
+    generationId?: string;
 }
 
 const toneClasses: Record<PersonalizedMixCardProps["tone"], string> = {
@@ -30,26 +34,48 @@ export function PersonalizedMixCard({
     tracks,
     tone,
     index,
+    generationId,
 }: PersonalizedMixCardProps) {
     const { playTracks } = useAudioControls();
-    const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
-    const covers = useMemo(
+    const queue = useMemo(
         () =>
-            Array.from(
-                new Set(
-                    tracks
-                        .map((track) => track.album.coverArt)
-                        .filter((cover): cover is string => Boolean(cover)),
-                ),
-            ).slice(0, 4),
-        [tracks],
+            tracks.map((track) =>
+                toProviderPlaybackTrack(track, {
+                    generationId,
+                    sessionId: getRecommendationSessionId(),
+                }),
+            ),
+        [generationId, tracks],
+    );
+    const coverTracks = useMemo(() => {
+        const seen = new Set<string>();
+        return tracks
+            .filter((track) => {
+                const cover = track.album.coverArt;
+                if (!cover || seen.has(cover)) return false;
+                seen.add(cover);
+                return true;
+            })
+            .slice(0, 4);
+    }, [tracks]);
+    const impressionTracks =
+        coverTracks.length > 0 ? coverTracks : tracks.slice(0, 1);
+    const impressionRef = useRecommendationImpressions(
+        generationId,
+        impressionTracks,
     );
 
     if (queue.length === 0) return null;
 
     return (
         <button
+            ref={impressionRef}
             type="button"
+            data-recommendation-track-key={
+                coverTracks.length === 0
+                    ? recommendationTrackKey(tracks[0])
+                    : undefined
+            }
             onClick={() => playTracks(queue, 0)}
             aria-label={`${ru.common.play}: ${title}`}
             data-tv-card
@@ -59,16 +85,22 @@ export function PersonalizedMixCard({
             <span
                 className={`relative mb-3 grid aspect-square overflow-hidden rounded-[1.125rem] bg-gradient-to-br ${toneClasses[tone]} shadow-lg shadow-black/25`}
             >
-                {covers.length > 0 ? (
+                {coverTracks.length > 0 ? (
                     <span className="absolute inset-0 grid grid-cols-2 grid-rows-2">
-                        {covers.map((cover, coverIndex) => (
+                        {coverTracks.map((track, coverIndex) => (
                             <span
-                                key={cover}
+                                key={recommendationTrackKey(track)}
                                 data-personal-mix-cover
-                                className={`relative overflow-hidden ${covers.length === 1 ? "col-span-2 row-span-2" : covers.length === 2 || (covers.length === 3 && coverIndex === 0) ? "row-span-2" : ""}`}
+                                data-recommendation-track-key={recommendationTrackKey(
+                                    track,
+                                )}
+                                className={`relative overflow-hidden ${coverTracks.length === 1 ? "col-span-2 row-span-2" : coverTracks.length === 2 || (coverTracks.length === 3 && coverIndex === 0) ? "row-span-2" : ""}`}
                             >
                                 <CachedImage
-                                    src={api.getCoverArtUrl(cover, 240)}
+                                    src={api.getCoverArtUrl(
+                                        track.album.coverArt as string,
+                                        240,
+                                    )}
                                     alt=""
                                     fill
                                     sizes="(max-width: 640px) 72vw, 190px"
@@ -78,10 +110,12 @@ export function PersonalizedMixCard({
                         ))}
                     </span>
                 ) : (
-                    <Music2
-                        className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 text-white/55"
-                        aria-hidden="true"
-                    />
+                    <span>
+                        <Music2
+                            className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 text-white/55"
+                            aria-hidden="true"
+                        />
+                    </span>
                 )}
                 <span className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-white/[0.04]" />
                 <span className="absolute bottom-3 right-3 grid h-11 w-11 translate-y-1 place-items-center rounded-full bg-content text-surface opacity-0 shadow-xl transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 motion-reduce:transition-none sm:h-12 sm:w-12">

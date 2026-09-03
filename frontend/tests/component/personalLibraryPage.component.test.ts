@@ -13,6 +13,7 @@ mock.module("lucide-react", {
         ArrowRight: Icon,
         Download: Icon,
         Heart: Icon,
+        HardDriveDownload: Icon,
         ListMusic: Icon,
         Loader2: Icon,
         Music2: Icon,
@@ -124,16 +125,34 @@ test("personal Library failures provide touch-sized retry actions", async () => 
 
 mock.module("@/features/device-offline/DeviceOfflineProvider", {
     namedExports: {
-        useDeviceOffline: () => ({
+        useOptionalDeviceOffline: () => ({
             records: [
                 {
                     key: "ready-download",
                     status: "ready",
+                    trackIdentity: "yt:ready",
                     integrityVersion: 1,
                 },
-                { key: "active-download", status: "downloading" },
-                { key: "interrupted-download", status: "interrupted" },
-                { key: "failed-download", status: "error" },
+                {
+                    key: "ready-download-other-quality",
+                    status: "ready",
+                    trackIdentity: "yt:ready",
+                },
+                {
+                    key: "active-download",
+                    status: "downloading",
+                    trackIdentity: "yt:active",
+                },
+                {
+                    key: "interrupted-download",
+                    status: "interrupted",
+                    trackIdentity: "yt:interrupted",
+                },
+                {
+                    key: "failed-download",
+                    status: "error",
+                    trackIdentity: "yt:failed",
+                },
             ],
         }),
     },
@@ -161,11 +180,19 @@ test("Library opens one Playlists flow for liked tracks, personal playlists, and
         /<span id="playlist-library-title"[^>]*>Любимые треки<\/span>/,
     );
     assert.match(html, /href="\/playlist\/my-liked"/);
+    assert.match(html, /href="\/library\?tab=downloads"/);
     assert.match(html, /Evening mix/);
-    assert.match(html, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
+    assert.doesNotMatch(html, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
     assert.match(html, /24 трека/);
-    assert.match(html, /обычными файлами/i);
-    assert.match(html, /профилю браузера/i);
+    assert.match(html, /1 трек/);
+    assert.ok(
+        html.indexOf("Любимые треки") < html.indexOf("Загруженное"),
+        "Любимые треки должны идти перед Загруженным",
+    );
+    assert.ok(
+        html.indexOf("Загруженное") < html.indexOf("Evening mix"),
+        "Статичные коллекции должны идти перед пользовательскими плейлистами",
+    );
     assert.doesNotMatch(html, /data-library-overview="split"/);
     assert.doesNotMatch(html, /Сохранено в аккаунте/);
     assert.doesNotMatch(html, /copies stay in this browser/i);
@@ -174,7 +201,7 @@ test("Library opens one Playlists flow for liked tracks, personal playlists, and
     assert.doesNotMatch(html, />Discovery</);
 });
 
-test("Library tabs keep saved albums and artists while legacy liked/download links open Playlists", async () => {
+test("Library tabs keep saved albums and artists while Downloads opens its own collection", async () => {
     const { default: LibraryPage } = await import("../../app/library/page");
 
     tab = "albums";
@@ -191,8 +218,9 @@ test("Library tabs keep saved albums and artists while legacy liked/download lin
     const legacyDownloadsHtml = renderToStaticMarkup(
         React.createElement(LibraryPage),
     );
-    assert.match(legacyDownloadsHtml, /data-library-view="playlists"/);
+    assert.match(legacyDownloadsHtml, /data-library-view="downloads"/);
     assert.match(legacyDownloadsHtml, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
+    assert.doesNotMatch(legacyDownloadsHtml, /Evening mix/);
 
     tab = "liked";
     const legacyLikedHtml = renderToStaticMarkup(

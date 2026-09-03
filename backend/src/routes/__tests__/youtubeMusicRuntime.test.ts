@@ -920,6 +920,7 @@ describe("youtube music route runtime behavior", () => {
             "vid-1",
             "low",
             undefined,
+            { signal: expect.any(AbortSignal) },
         );
     });
 
@@ -968,6 +969,7 @@ describe("youtube music route runtime behavior", () => {
             "vid-1",
             "medium",
             "bytes=0-200",
+            { signal: expect.any(AbortSignal) },
         );
 
         if (!onError) {
@@ -1040,12 +1042,20 @@ describe("youtube music route runtime behavior", () => {
     it.each([
         { status: 404, body: { error: "Stream not found" } },
         {
+            status: 429,
+            body: { error: "YouTube Music rate limit reached" },
+        },
+        {
             status: 451,
             body: {
                 error: "age_restricted",
                 message:
                     "This content requires age verification and cannot be streamed via YouTube Music.",
             },
+        },
+        {
+            status: 502,
+            body: { error: "YouTube Music network unavailable" },
         },
         {
             status: 503,

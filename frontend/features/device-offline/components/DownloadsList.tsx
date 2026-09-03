@@ -125,7 +125,9 @@ export function DownloadsList() {
         queueItems,
         capability,
         storage,
+        legacyStorage,
         setupStorage,
+        setupLegacyStorage,
         cancelQueuedDownload,
         deleteDownload,
         exportDownload,
@@ -146,6 +148,13 @@ export function DownloadsList() {
         Boolean(storage.directoryName) &&
         (storage.status === "needs-setup" || storage.status === "error");
     const usesPrivateStorage = storage.storageKind === "browser-private";
+    const hasLegacyFolderRecords = records.some((record) =>
+        String(record.mediaRef ?? "").startsWith("fsa1:"),
+    );
+    const legacyFolderNeedsAccess =
+        hasLegacyFolderRecords &&
+        legacyStorage !== null &&
+        legacyStorage.status !== "ready";
     const storageNotice =
         storage.status === "ready" ? (
             <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
@@ -226,6 +235,29 @@ export function DownloadsList() {
             </button>
         </div>
     ) : null;
+    const legacyStorageNotice = legacyFolderNeedsAccess ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-warning/25 bg-warning/10 px-4 py-4 text-sm text-content-body sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <p className="font-semibold">Откройте прежнюю папку загрузок</p>
+                <p className="mt-1 text-content-muted">
+                    Новые треки сохраняются внутри Soundspan и больше не
+                    попадают в галерею. Доступ к старой папке нужен только для
+                    уже загруженных файлов.
+                </p>
+            </div>
+            <button
+                type="button"
+                onClick={() => {
+                    void setupLegacyStorage().catch(() =>
+                        toast.error(ru.downloads.folderError),
+                    );
+                }}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-warning/35 px-4 py-2 font-semibold text-warning transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning motion-reduce:transition-none"
+            >
+                Разрешить доступ
+            </button>
+        </div>
+    ) : null;
 
     if ((!isHydrated || !isQueueHydrated) && !storageError) {
         return (
@@ -254,6 +286,7 @@ export function DownloadsList() {
         <div className="space-y-3">
             {storageErrorNotice}
             {storageNotice}
+            {legacyStorageNotice}
             <div className="overflow-hidden rounded-xl border border-white/10">
                 {visibleQueueItems.map((item) => (
                     <div

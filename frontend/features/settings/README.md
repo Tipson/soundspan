@@ -21,6 +21,7 @@ Start-here guide for `frontend/features/settings`.
 | `components/sections/APIKeysSection.tsx` | components |
 | `components/sections/AudiobookshelfSection.tsx` | components |
 | `components/sections/CacheSection.tsx` | components |
+| `components/sections/OnlineAnalysisProgress.tsx` | shared canonical audio analysis coverage; administrator-only read-only polling |
 | `components/sections/DownloadPreferencesSection.tsx` | components |
 | `components/sections/DeviceOfflineSettingsSection.tsx` | per-device offline automation controls |
 | `components/sections/downloadSourceConfig.ts` | components |
@@ -77,6 +78,15 @@ Start-here guide for `frontend/features/settings`.
 - When adding/removing significant files or changing behavior in this domain, update or verify this README and keep the targeted commands below accurate in the same change set.
 
 ## Integration Surfaces
+
+- Cache shows shared canonical audio and active-space embedding coverage through
+  `/api/enrichment/online-analysis`, separately from local-file enrichment.
+  Each canonical recording counts once across accounts and provider mappings.
+  Remaining coverage includes unscheduled and failed recordings, not just jobs
+  in a queue. Last-24-hour completions and UTC-day admission quota are different
+  windows. Quota checks include rejected reservations and are not a success count.
+  No active embedding space or unavailable telemetry is displayed as unknown,
+  never as a successful zero. Dashboard reads do not schedule analysis.
 
 - Playback Sources and YouTube Music configure worldwide search, provider
   recommendations, and streaming. Source order is a priority list; disabled or

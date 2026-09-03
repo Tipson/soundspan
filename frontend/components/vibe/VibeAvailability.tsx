@@ -915,8 +915,8 @@ export function VibeProviderFallback() {
                     )}
                 </div>
 
-                {(currentTrack || nextTracks.length > 0) && (
-                    <div className="wave-density-bottom wave-material relative shrink-0 border-t border-white/10 bg-black/30 px-4 py-4 backdrop-blur-2xl sm:px-6 min-[1025px]:px-8">
+                {hasActiveWave && (currentTrack || nextTracks.length > 0) && (
+                    <div className="wave-density-bottom wave-material relative hidden shrink-0 border-t border-white/10 bg-black/30 px-4 py-4 backdrop-blur-2xl min-[900px]:block min-[1025px]:px-8">
                         <div className="wave-density-bottom-grid mx-auto grid max-w-6xl gap-4 min-[900px]:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)] min-[900px]:items-center">
                             {currentTrack ? (
                                 <section

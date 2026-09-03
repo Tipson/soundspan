@@ -157,7 +157,14 @@ export function useTrackPreference(
         if (!trackId) {
             return null;
         }
-        return preferenceMutation.mutateAsync(nextSignal);
+        const response = await preferenceMutation.mutateAsync(nextSignal);
+        const latest =
+            queryClient.getQueryData<TrackPreferenceResponse>(queryKey);
+        // A caller such as the player must not act on an older response after
+        // the listener already changed or cleared the optimistic preference.
+        return latest?.signal === response.signal
+            ? response
+            : (latest ?? response);
     };
 
     const toggleLike = async () => {

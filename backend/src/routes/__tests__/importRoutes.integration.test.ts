@@ -18,14 +18,17 @@ jest.mock("../../middleware/auth", () => ({
     },
 }));
 
-jest.mock("../../utils/logger", () => ({
-    logger: {
+jest.mock("../../utils/logger", () => {
+    const logger = {
         debug: jest.fn(),
         info: jest.fn(),
         warn: jest.fn(),
         error: jest.fn(),
-    },
-}));
+        child: jest.fn(),
+    };
+    logger.child.mockReturnValue(logger);
+    return { logger };
+});
 
 jest.mock("../../services/playlistImportService", () => ({
     playlistImportService: {
@@ -44,6 +47,7 @@ jest.mock("../../services/importJobStore", () => ({
         listJobsForUser: jest.fn(),
         findActiveJobForSource: jest.fn(),
         requestCancellation: jest.fn(),
+        requestResolutionRetry: jest.fn(),
         updateJob: jest.fn(),
     },
 }));
@@ -77,6 +81,8 @@ describe("import routes integration", () => {
         importJobStore.findActiveJobForSource as jest.Mock;
     const mockRequestCancellation =
         importJobStore.requestCancellation as jest.Mock;
+    const mockRequestResolutionRetry =
+        importJobStore.requestResolutionRetry as jest.Mock;
     const mockEnqueueImportJob = genericImportJobRunner.enqueue as jest.Mock;
 
     beforeEach(() => {
@@ -342,6 +348,32 @@ describe("import routes integration", () => {
 
         expect(res.status).toBe(409);
         expect(res.body).toEqual({ error: "Import job already completed" });
+    });
+
+    it("retries unresolved positions for the owning user", async () => {
+        const retryJob = {
+            id: "job-retry",
+            userId: "user-1",
+            status: "resolving",
+            progress: 40,
+            resolutionAttempt: 2,
+        };
+        mockRequestResolutionRetry.mockResolvedValueOnce({
+            outcome: "updated",
+            job: retryJob,
+        });
+
+        const res = await request(app)
+            .post("/api/import/jobs/job-retry/retry")
+            .set(AUTH_HEADER, AUTH_VALUE);
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ job: retryJob });
+        expect(mockRequestResolutionRetry).toHaveBeenCalledWith(
+            "job-retry",
+            "user-1",
+        );
+        expect(mockEnqueueImportJob).toHaveBeenCalledWith("job-retry", 2);
     });
 
     it("rejects execute when previewData is missing", async () => {

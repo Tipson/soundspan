@@ -12,7 +12,8 @@ embedding degrades quality; it does not make the queue unavailable.
 authenticated surface
   -> provider candidate adapters (YouTube Music, optional ListenBrainz)
   -> canonical identity (MBID -> ISRC -> fingerprint -> metadata/duration)
-  -> account-scoped history, dislikes, taste centroids and recent exposures
+  -> account-scoped history, dislikes, taste centroids, recent exposures,
+     time-decayed session actions and coarse request context
   -> shared DCLAP/Essentia features + bounded DCLAP text-mood vector when available
   -> ranker v2, canonical dedupe, cooldown, MMR and artist/album caps
   -> playable queue + generationId + degradedSources
@@ -48,12 +49,21 @@ Set `RECOMMENDATION_ENGINE_MODE` to one of:
 | --- | --- | --- |
 | `baseline` | baseline-v1 | baseline only |
 | `shadow` | baseline-v1 | the same candidate batch is also ranked and stored as non-served hybrid-v2 |
-| `active` | hybrid-v2 | active hybrid generation |
+| `active` | hybrid-v2 for the stable account canary, baseline-v1 elsewhere | the non-served alternative while the canary is below 100% |
 
 `shadow` is the application default and the safe production rollout mode.
 Do not switch to `active` merely because the build is healthy. Promotion needs
 enough paired live generations and a measurable quality win without an
 unacceptable latency or provider-failure regression.
+
+`RECOMMENDATION_HYBRID_ROLLOUT_PERCENT` selects a stable zero-to-100 account
+bucket while mode is `active`; setting it to `0` is the immediate rollback.
+`RECOMMENDATION_EXPLORATION_PERCENT` reserves at most zero-to-30 percent of
+ranked slots for unfamiliar playable candidates and retains `exploration` as
+their source attribution. The ranker also uses the last thirty actions in the
+current recommendation session with time decay plus coarse local-hour,
+device-class, and surface context. Technical provider failures never enter the
+positive or negative taste vectors.
 
 The read-only evaluator accepts either a rolling window or explicit UTC dates:
 
@@ -65,8 +75,10 @@ npm --prefix backend run recommendations:evaluate-shadow -- \
 
 Its JSON report compares baseline and hybrid playability, meaningful
 completion, early skips, one/seven-day repeats, artist coverage/diversity,
-mean/p95 latency, and paired Jaccard overlap. An empty report means more live
-traffic is needed; it is not evidence for activation.
+mean/p95 latency, and paired Jaccard overlap. It separately reports the
+viewport-confirmed impression/account sample and catalog coverage for ISRC,
+MBID, fingerprint, scalar analysis, and DCLAP embeddings. An empty report means
+more live traffic is needed; it is not evidence for activation.
 
 Prometheus exposes:
 
@@ -87,6 +99,18 @@ metric labels.
 recording and registered embedding space. `TrackMapping` links provider
 identities to that shared row. The shared analysis contains no account taste or
 history.
+
+Identity enrichment is version-safe: live, remix, remaster, acoustic, demo,
+instrumental, karaoke, sped-up, and slowed versions are not collapsed by
+metadata normalization. YouTube candidates use a connected TIDAL ISRC when
+available, but TIDAL is not required: strict MusicBrainz artist, title, version,
+and duration matching supplies an MBID and an unambiguous ISRC directly.
+Spotify imports retain their source ISRC when the playable YouTube or TIDAL row
+is attached, so imported libraries seed the shared identity store without a
+second catalog lookup. Analyzer-generated Chromaprint fingerprints are resolved
+through the rate-limited AcoustID worker. When a durable identity already
+belongs to another canonical row, provider mappings move to that row while
+historical recommendation evidence remains intact.
 
 `RecommendationGeneration` and `RecommendationExposure` are account-scoped.
 They retain the served/shadow algorithm, session and surface, ordered canonical
@@ -129,8 +153,11 @@ REMOTE_ANALYSIS_CONCURRENCY=1
 
 The bounded flow is:
 
-1. Up to twelve top candidates from a generation are deduplicated by canonical
-   recording and admitted to the Bull hot-set queue.
+1. Likes, playlist contents, completed and repeated plays, active Wave signals,
+   and up to twelve top candidates from a generation are deduplicated by
+   canonical recording and admitted to the Bull hot-set queue. A six-hour sweep
+   revisits the same bounded hot set for recently active accounts, so analysis
+   progresses without requiring a recommendation request to remain open.
 2. A Redis Lua reservation enforces one global per-recording decision and the
    configured UTC daily budget atomically across worker replicas.
 3. The worker streams at most 64 MiB into a unique direct child of
@@ -175,7 +202,9 @@ Before changing production to `active`:
 4. require a useful completion/diversity improvement with acceptable p95
    latency;
 5. change only `RECOMMENDATION_ENGINE_MODE`, then monitor the same report and
-   Prometheus counters.
+   Prometheus counters. Start with a bounded
+   `RECOMMENDATION_HYBRID_ROLLOUT_PERCENT`; set that percentage to `0` for an
+   immediate baseline rollback without a rebuild.
 
 Gorse remains a future candidate adapter/ranker experiment. It is not required
 by Hybrid v2 and must pass the same shadow gate before serving users.

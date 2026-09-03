@@ -563,6 +563,8 @@ beforeEach(() => {
     };
     overlayState.queue = [{}];
     overlayState.canSeek = true;
+    overlayState.isShuffle = false;
+    overlayState.repeatMode = "off";
     isMobileViewport = true;
 });
 
@@ -929,6 +931,63 @@ test("OverlayPlayer keeps the music transport focused on shuffle, previous, next
     assert.ok(mounted.container.querySelector('[aria-label="Следующий трек"]'));
 
     await unmount(mounted);
+});
+
+test("OverlayPlayer exposes symmetric shuffle and repeat toggle state", async () => {
+    overlayState.playbackType = "track";
+    overlayState.currentTrack = {
+        id: "yt:toggle-state",
+        title: "Toggle State",
+        duration: 180,
+        streamSource: "youtube",
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+    };
+    overlayState.currentPodcast = null;
+    overlayState.isShuffle = true;
+    overlayState.repeatMode = "all";
+
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+
+    const shuffle = mounted.container.querySelector(
+        '[data-player-control="shuffle"]',
+    );
+    const repeat = mounted.container.querySelector(
+        '[data-player-control="repeat"]',
+    );
+    assert.equal(shuffle?.getAttribute("aria-pressed"), "true");
+    assert.equal(shuffle?.getAttribute("data-active"), "true");
+    assert.equal(repeat?.getAttribute("aria-pressed"), "true");
+    assert.equal(repeat?.getAttribute("data-active"), "true");
+
+    overlayState.isShuffle = false;
+    overlayState.repeatMode = "off";
+    await React.act(async () => {
+        mounted.root.unmount();
+    });
+    mounted.container.remove();
+
+    const inactive = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+    assert.equal(
+        inactive.container
+            .querySelector('[data-player-control="shuffle"]')
+            ?.getAttribute("aria-pressed"),
+        "false",
+    );
+    assert.equal(
+        inactive.container
+            .querySelector('[data-player-control="repeat"]')
+            ?.getAttribute("aria-pressed"),
+        "false",
+    );
+
+    await unmount(inactive);
 });
 
 test("OverlayPlayer exposes both like and dislike controls for music", async () => {

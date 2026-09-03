@@ -131,7 +131,7 @@ _LOAD_QUEUED_SQL = """
 """
 
 _SAVE_CANONICAL_RESULTS_SQL = """
-    UPDATE "CanonicalRecording"
+    UPDATE "CanonicalRecording" AS recording
     SET bpm = %s,
         key = %s,
         energy = %s,
@@ -144,13 +144,57 @@ _SAVE_CANONICAL_RESULTS_SQL = """
         speechiness = %s,
         "moodTags" = %s,
         "essentiaGenres" = %s,
+        "identityLookupStatus" = CASE
+            WHEN input.fingerprint IS NOT NULL
+             AND recording.fingerprint IS DISTINCT FROM input.fingerprint
+             AND recording."recordingMbid" IS NULL
+                THEN 'pending'
+            ELSE recording."identityLookupStatus"
+        END,
+        "identityLookupRetryCount" = CASE
+            WHEN input.fingerprint IS NOT NULL
+             AND recording.fingerprint IS DISTINCT FROM input.fingerprint
+             AND recording."recordingMbid" IS NULL
+                THEN 0
+            ELSE recording."identityLookupRetryCount"
+        END,
+        "identityLookupError" = CASE
+            WHEN input.fingerprint IS NOT NULL
+             AND recording.fingerprint IS DISTINCT FROM input.fingerprint
+             AND recording."recordingMbid" IS NULL
+                THEN NULL
+            ELSE recording."identityLookupError"
+        END,
+        "identityLookupUpdatedAt" = CASE
+            WHEN input.fingerprint IS NOT NULL
+             AND recording.fingerprint IS DISTINCT FROM input.fingerprint
+             AND recording."recordingMbid" IS NULL
+                THEN NULL
+            ELSE recording."identityLookupUpdatedAt"
+        END,
+        fingerprint = COALESCE(input.fingerprint, recording.fingerprint),
+        "identitySource" = CASE
+            WHEN input.fingerprint IS NOT NULL
+             AND recording."recordingMbid" IS NULL
+             AND recording.isrc IS NULL
+                THEN 'chromaprint'
+            ELSE recording."identitySource"
+        END,
+        "identityConfidence" = CASE
+            WHEN input.fingerprint IS NOT NULL
+             AND recording."recordingMbid" IS NULL
+             AND recording.isrc IS NULL
+                THEN GREATEST(recording."identityConfidence", 0.9)
+            ELSE recording."identityConfidence"
+        END,
         "analysisStatus" = 'completed',
         "analysisVersion" = %s,
         "analyzedAt" = NOW(),
         "analysisError" = NULL,
         "updatedAt" = NOW()
-    WHERE id = %s
-    RETURNING id
+    FROM (SELECT %s::text AS fingerprint) AS input
+    WHERE recording.id = %s
+    RETURNING recording.id
 """
 
 _COMPLETE_LEASE_SQL = """
@@ -323,6 +367,13 @@ def _canonical_result_values(
     analysis_version: str,
 ) -> tuple[Any, ...]:
     """Build bound scalar-feature values for one canonical recording."""
+    fingerprint_payload = features.get("fingerprint")
+    fingerprint = (
+        fingerprint_payload.get("fingerprint")
+        if isinstance(fingerprint_payload, Mapping)
+        and isinstance(fingerprint_payload.get("fingerprint"), str)
+        else None
+    )
     return (
         features.get("bpm"),
         features.get("key"),
@@ -337,6 +388,7 @@ def _canonical_result_values(
         list(features.get("moodTags") or []),
         list(features.get("essentiaGenres") or []),
         analysis_version,
+        fingerprint,
         canonical_id,
     )
 
@@ -363,7 +415,12 @@ def _persist_completed(
         database.commit()
         return True
     except Exception as error:
-        logger.warning("Failed to persist canonical analysis: %s", type(error).__name__)
+        logger.warning(
+            "Failed to persist canonical analysis: %s (%s)",
+            type(error).__name__,
+            getattr(getattr(error, "diag", None), "message_primary", None)
+            or str(error).splitlines()[0][:300],
+        )
         database.rollback()
         return False
     finally:

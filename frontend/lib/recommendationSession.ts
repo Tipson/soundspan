@@ -1,5 +1,12 @@
 const STORAGE_KEY = "soundspan.recommendation-session";
 
+/** Coarse, non-identifying browser context attached to recommendation requests. */
+export interface RecommendationClientContext {
+    localHour: number;
+    timezoneOffsetMinutes: number;
+    deviceClass: "mobile" | "tablet" | "desktop" | "tv";
+}
+
 let fallbackSessionId: string | null = null;
 
 function createSessionId(): string {
@@ -35,4 +42,38 @@ export function getRecommendationSessionId(): string {
     const sessionId = createSessionId();
     window.sessionStorage.setItem(STORAGE_KEY, sessionId);
     return sessionId;
+}
+
+/** Coarse, non-identifying listening context used to learn session preferences. */
+export function getRecommendationClientContext(): RecommendationClientContext | null {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+        return null;
+    }
+    const userAgent = navigator.userAgent.toLocaleLowerCase();
+    const deviceClass = /smart-tv|smarttv|hbbtv|appletv|googletv/.test(
+        userAgent,
+    )
+        ? "tv"
+        : window.matchMedia("(max-width: 767px)").matches
+          ? "mobile"
+          : window.matchMedia("(max-width: 1024px)").matches
+            ? "tablet"
+            : "desktop";
+    const now = new Date();
+    return {
+        localHour: now.getHours(),
+        timezoneOffsetMinutes: -now.getTimezoneOffset(),
+        deviceClass,
+    };
+}
+
+/** Appends the bounded client context shared by Home and queue continuation. */
+export function appendRecommendationClientContext(
+    params: URLSearchParams,
+    context: RecommendationClientContext | null,
+): void {
+    if (!context) return;
+    params.set("localHour", String(context.localHour));
+    params.set("timezoneOffsetMinutes", String(context.timezoneOffsetMinutes));
+    params.set("deviceClass", context.deviceClass);
 }

@@ -37,6 +37,16 @@ class _Backfill:
         return True
 
 
+def test_lookup_worker_defaults_to_combined_local_and_online_backfill() -> None:
+    """Keep canonical online identity enabled in the production worker wiring."""
+    worker = acoustid_worker.AcoustIDLookupWorker(
+        "postgresql://database",
+        "",
+    )
+
+    assert worker._backfill_factory is acoustid_worker.CombinedAcoustIDBackfill
+
+
 def test_lookup_worker_runs_off_analysis_thread_and_closes_its_database() -> None:
     """Start lookup independently and join it cleanly during shutdown."""
     database = _Database()

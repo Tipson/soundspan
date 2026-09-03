@@ -110,18 +110,22 @@ export function ImportCompletionMonitor() {
                             (previousStatus === undefined ||
                                 isActiveImportJobStatus(previousStatus))));
                 const createdPlaylistId = job.createdPlaylistId;
-                const cancelledPlaylistBecameVisible = Boolean(
-                    job.status === "cancelled" &&
+                const playlistBecameVisible = Boolean(
                     createdPlaylistId &&
                     knownCreatedPlaylistIds.get(job.id) !== createdPlaylistId &&
                     (wasSubmitted || hasBaselineRef.current),
                 );
-                if (completedBecameVisible || cancelledPlaylistBecameVisible) {
+                if (completedBecameVisible || playlistBecameVisible) {
                     sawCompletion = true;
                 }
                 if (createdPlaylistId) {
                     knownCreatedPlaylistIds.set(job.id, createdPlaylistId);
                     cancelledJobConfirmationPolls.delete(job.id);
+                    if (isActiveImportJobStatus(job.status)) {
+                        void queryClientRef.current.invalidateQueries({
+                            queryKey: queryKeys.playlist(createdPlaylistId),
+                        });
+                    }
                 }
                 const cancellationNeedsConfirmation =
                     job.status === "cancelled" &&

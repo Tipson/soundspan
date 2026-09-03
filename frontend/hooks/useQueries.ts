@@ -722,6 +722,27 @@ export function usePlaylistQuery(id: string | undefined) {
     });
 }
 
+/** Cursor-paginated playlist detail for progressively rendered large lists. */
+export function usePlaylistPagesQuery(id: string | undefined) {
+    return useInfiniteQuery({
+        queryKey: queryKeys.playlistPages(id || ""),
+        queryFn: ({ pageParam }) => {
+            if (!id) throw new Error("Playlist ID is required");
+            return api.getPlaylistPage(id, {
+                limit: 100,
+                cursor: pageParam,
+            });
+        },
+        initialPageParam: null as string | null,
+        getNextPageParam: (lastPage) =>
+            lastPage.pagination?.hasMore
+                ? lastPage.pagination.nextCursor
+                : undefined,
+        enabled: !!id,
+        staleTime: 1 * 60 * 1000,
+    });
+}
+
 /**
  * Hook to fetch the hard-wired My Liked playlist
  *

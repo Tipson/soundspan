@@ -197,6 +197,7 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
         async getYtMusicStreamInfo(
             videoId: string,
             quality?: string,
+            options: { cachedOnly?: boolean } = {},
         ): Promise<{
             videoId: string;
             abr: number;
@@ -206,6 +207,7 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
         }> {
             const params = new URLSearchParams();
             if (quality) params.set("quality", quality);
+            if (options.cachedOnly) params.set("cachedOnly", "true");
             const qs = params.toString();
             const suffix = qs ? `?${qs}` : "";
             // Use the public endpoint (no per-user YT Music OAuth required) —

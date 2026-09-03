@@ -12,6 +12,13 @@ interface FileSystemAccessGlobal {
     }) => Promise<DeviceAudioDirectoryHandle>;
 }
 
+interface BrowserStorageGlobal {
+    storage?: {
+        getDirectory?: () => Promise<unknown>;
+    };
+    userAgent?: string;
+}
+
 function browserGlobal(): FileSystemAccessGlobal {
     return globalThis as typeof globalThis & FileSystemAccessGlobal;
 }
@@ -55,6 +62,15 @@ export function createBrowserDeviceAudioVaultRuntime(): DeviceAudioVaultRuntime 
     return {
         isSupported: () =>
             typeof browserGlobal().showDirectoryPicker === "function",
+        prefersPrivateStorage: () => {
+            const browserNavigator = globalThis.navigator as unknown as
+                | BrowserStorageGlobal
+                | undefined;
+            return Boolean(
+                /Android/i.test(browserNavigator?.userAgent ?? "") &&
+                typeof browserNavigator?.storage?.getDirectory === "function",
+            );
+        },
         pickDirectory: () => {
             const picker = browserGlobal().showDirectoryPicker;
             if (!picker) {

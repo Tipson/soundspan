@@ -135,6 +135,37 @@ test("uses initial completed jobs only as a baseline", async () => {
     }
 });
 
+test("publishes a playlist as soon as its resolving job exposes it", async () => {
+    jobsResponse = [importJob("progressive", "resolving")];
+    const monitor = await mountMonitor();
+    let playlistEvents = 0;
+    const handlePlaylist = () => {
+        playlistEvents += 1;
+    };
+    window.addEventListener("playlist-created", handlePlaylist);
+
+    try {
+        jobsResponse = [
+            {
+                ...importJob("progressive", "resolving"),
+                createdPlaylistId: "playlist-progressive",
+            },
+        ];
+        document.dispatchEvent(new Event("visibilitychange"));
+        await flushAsync();
+
+        assert.deepEqual(invalidatedQueries, [
+            { queryKey: ["playlist", "playlist-progressive"] },
+            { queryKey: ["playlists"] },
+            { queryKey: ["home", "personalized"] },
+        ]);
+        assert.equal(playlistEvents, 1);
+    } finally {
+        window.removeEventListener("playlist-created", handlePlaylist);
+        await monitor.unmount();
+    }
+});
+
 test("does not request import jobs while offline and resumes on the online event", async () => {
     let intervalCallback: (() => void) | null = null;
     const originalSetInterval = globalThis.setInterval;

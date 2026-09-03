@@ -101,13 +101,14 @@ export interface PersonalizedTrack {
         title: string;
         coverArt: string | null;
     };
-    source: "youtube";
+    source: "youtube" | "tidal" | "library";
     provider: {
-        tidalTrackId: null;
-        youtubeVideoId: string;
+        tidalTrackId: number | null;
+        youtubeVideoId: string | null;
     };
-    streamSource: "youtube";
-    youtubeVideoId: string;
+    streamSource: "youtube" | "tidal" | "library";
+    youtubeVideoId?: string;
+    tidalTrackId?: number;
 }
 
 export interface PersonalizedHomeFeed {

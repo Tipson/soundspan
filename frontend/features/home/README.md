@@ -34,7 +34,9 @@ Start-here guide for `frontend/features/home`.
 | `components/StaticPlaylistCard.tsx` | components |
 | `hooks/useHomeData.ts` | hooks |
 | `hooks/usePersonalizedHomeFeed.ts` | personalized provider feed |
+| `hooks/useRecommendationImpressions.ts` | viewport-confirmed recommendation impression reporting |
 | `personalizedHomeRequestPolicy.ts` | shared bounded request and retry policy |
+| `recommendationIdentity.ts` | stable provider identity for playback lineage and impressions |
 | `types.ts` | root |
 
 ## Playback Behavior
@@ -65,8 +67,12 @@ Start-here guide for `frontend/features/home`.
   dislikes, completed listens, early skips, repeats, and playlist items that
   have a YouTube Music match. The online-first feed does not require local
   Audio-DNA files.
-- Starting a personalized provider shelf creates a directly playable YouTube
-  Music queue.
+- Personalized surfaces report an impression only after each rendered track
+  card enters the viewport. Playback carries the originating generation and
+  recommendation session directly, so evaluator attribution does not rely on
+  a timing heuristic.
+- Starting a personalized provider shelf preserves the playable YouTube Music,
+  TIDAL, or library identity of every queue item.
 - Vibe exposes For you, New, and Familiar modes. Each mode is sent to the
   personalized endpoint and therefore changes server-side ranking rather than
   only relabeling the same browser-side list. Vibe deliberately keeps the

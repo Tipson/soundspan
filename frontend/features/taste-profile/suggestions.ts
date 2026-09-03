@@ -10,25 +10,238 @@ export const SUGGESTED_GENRES = [
     "Классика",
     "Джаз",
     "Саундтреки",
+    "Русская поп-музыка",
+    "Русский рок",
+    "Русский рэп",
+    "R&B",
+    "Соул",
+    "K-pop",
+    "J-pop",
+    "Панк",
+    "Постпанк",
+    "Танцевальная",
+    "Хаус",
+    "Техно",
+    "Drum and bass",
+    "Трип-хоп",
+    "Эмбиент",
+    "Блюз",
+    "Фанк",
+    "Неоклассика",
+    "Фолк",
+    "Кантри",
+    "Регги",
+    "Латино",
+    "Шансон",
+    "Авторская песня",
 ] as const;
 
-/** Diverse defaults shown until the listener chooses genres. */
-export const SUGGESTED_ARTISTS = [
-    "Linkin Park",
-    "The Weeknd",
-    "Kendrick Lamar",
-    "Daft Punk",
-    "Земфира",
-    "Billie Eilish",
-    "Молчат Дома",
-    "Miles Davis",
-    "Hans Zimmer",
-    "Ludovico Einaudi",
+/** Browsable groups, not extra taste signals or an imported provider taxonomy. */
+export const GENRE_GROUPS = [
+    {
+        label: "Поп и соул",
+        genres: ["Поп", "Русская поп-музыка", "R&B", "Соул", "K-pop", "J-pop"],
+    },
+    {
+        label: "Рок и гитары",
+        genres: [
+            "Рок",
+            "Русский рок",
+            "Альтернативный рок",
+            "Метал",
+            "Инди",
+            "Панк",
+            "Постпанк",
+        ],
+    },
+    { label: "Хип-хоп и рэп", genres: ["Хип-хоп", "Русский рэп"] },
+    {
+        label: "Электроника и танцы",
+        genres: [
+            "Электроника",
+            "Танцевальная",
+            "Хаус",
+            "Техно",
+            "Drum and bass",
+            "Трип-хоп",
+            "Эмбиент",
+        ],
+    },
+    {
+        label: "Джаз, классика и кино",
+        genres: [
+            "Джаз",
+            "Блюз",
+            "Фанк",
+            "Классика",
+            "Неоклассика",
+            "Саундтреки",
+        ],
+    },
+    {
+        label: "Фолк и другие направления",
+        genres: [
+            "Фолк",
+            "Кантри",
+            "Регги",
+            "Латино",
+            "Шансон",
+            "Авторская песня",
+        ],
+    },
 ] as const;
 
 type SuggestedGenre = (typeof SUGGESTED_GENRES)[number];
 
 const ARTISTS_BY_GENRE: Record<SuggestedGenre, readonly string[]> = {
+    "Русская поп-музыка": [
+        "Zivert",
+        "Моя Мишель",
+        "Дима Билан",
+        "Полина Гагарина",
+        "Ёлка",
+        "Винтаж",
+    ],
+    "Русский рок": [
+        "Кино",
+        "ДДТ",
+        "Земфира",
+        "Сплин",
+        "Би-2",
+        "Наутилус Помпилиус",
+    ],
+    "Русский рэп": [
+        "Баста",
+        "Noize MC",
+        "Oxxxymiron",
+        "Каста",
+        "ATL",
+        "Скриптонит",
+    ],
+    "R&B": [
+        "SZA",
+        "Frank Ocean",
+        "Alicia Keys",
+        "Usher",
+        "H.E.R.",
+        "The Weeknd",
+    ],
+    Соул: [
+        "Aretha Franklin",
+        "Marvin Gaye",
+        "Otis Redding",
+        "Stevie Wonder",
+        "Erykah Badu",
+    ],
+    "K-pop": ["BTS", "BLACKPINK", "TWICE", "Stray Kids", "SEVENTEEN", "aespa"],
+    "J-pop": [
+        "YOASOBI",
+        "Ado",
+        "Hikaru Utada",
+        "Kenshi Yonezu",
+        "Official HIGE DANdism",
+    ],
+    Панк: [
+        "Green Day",
+        "The Offspring",
+        "Ramones",
+        "Sex Pistols",
+        "Король и Шут",
+    ],
+    Постпанк: [
+        "Joy Division",
+        "Молчат Дома",
+        "The Cure",
+        "Дурной Вкус",
+        "Буерак",
+    ],
+    Танцевальная: [
+        "Avicii",
+        "Calvin Harris",
+        "David Guetta",
+        "Martin Garrix",
+        "Swedish House Mafia",
+    ],
+    Хаус: [
+        "Disclosure",
+        "Daft Punk",
+        "Frankie Knuckles",
+        "Kerri Chandler",
+        "Duke Dumont",
+    ],
+    Техно: [
+        "Jeff Mills",
+        "Carl Cox",
+        "Charlotte de Witte",
+        "Amelie Lens",
+        "Richie Hawtin",
+    ],
+    "Drum and bass": [
+        "Pendulum",
+        "Chase & Status",
+        "Sub Focus",
+        "Netsky",
+        "Noisia",
+    ],
+    "Трип-хоп": [
+        "Massive Attack",
+        "Portishead",
+        "Tricky",
+        "Morcheeba",
+        "Sneaker Pimps",
+    ],
+    Эмбиент: [
+        "Brian Eno",
+        "Stars of the Lid",
+        "Hammock",
+        "Loscil",
+        "Biosphere",
+    ],
+    Блюз: [
+        "B.B. King",
+        "Muddy Waters",
+        "Howlin' Wolf",
+        "John Lee Hooker",
+        "Stevie Ray Vaughan",
+    ],
+    Фанк: ["James Brown", "Parliament", "Funkadelic", "Vulfpeck", "The Meters"],
+    Неоклассика: [
+        "Ludovico Einaudi",
+        "Max Richter",
+        "Ólafur Arnalds",
+        "Nils Frahm",
+        "Dustin O'Halloran",
+    ],
+    Фолк: ["Мельница", "Wardruna", "Fleet Foxes", "Пелагея", "The Dubliners"],
+    Кантри: [
+        "Johnny Cash",
+        "Dolly Parton",
+        "Willie Nelson",
+        "Chris Stapleton",
+        "Kacey Musgraves",
+    ],
+    Регги: [
+        "Bob Marley & The Wailers",
+        "Peter Tosh",
+        "Jimmy Cliff",
+        "Toots & The Maytals",
+        "Steel Pulse",
+    ],
+    Латино: ["Shakira", "Bad Bunny", "J Balvin", "Juanes", "Celia Cruz"],
+    Шансон: [
+        "Михаил Круг",
+        "Любовь Успенская",
+        "Михаил Шуфутинский",
+        "Вилли Токарев",
+        "Александр Розенбаум",
+    ],
+    "Авторская песня": [
+        "Булат Окуджава",
+        "Владимир Высоцкий",
+        "Олег Митяев",
+        "Юрий Визбор",
+        "Сергей Никитин",
+    ],
     Рок: ["Linkin Park", "Muse", "Кино", "Foo Fighters", "Queen"],
     "Альтернативный рок": [
         "Radiohead",
@@ -67,9 +280,9 @@ const ARTISTS_BY_GENRE: Record<SuggestedGenre, readonly string[]> = {
         "Земфира",
     ],
     Классика: [
-        "Ludovico Einaudi",
-        "Max Richter",
-        "Ólafur Arnalds",
+        "Johann Sebastian Bach",
+        "Wolfgang Amadeus Mozart",
+        "Ludwig van Beethoven",
         "Claude Debussy",
         "Pyotr Ilyich Tchaikovsky",
     ],
@@ -106,12 +319,12 @@ export function suggestArtistsForGenres(
 ): string[] {
     const safeLimit = Math.max(0, Math.floor(limit));
     if (safeLimit === 0) return [];
-    const groups = genres
+    const groups = (genres.length > 0 ? genres : SUGGESTED_GENRES)
         .map((genre) =>
             ARTISTS_BY_GENRE_KEY.get(genre.trim().toLocaleLowerCase("ru-RU")),
         )
         .filter((artists): artists is readonly string[] => Boolean(artists));
-    if (groups.length === 0) return [...SUGGESTED_ARTISTS].slice(0, safeLimit);
+    if (groups.length === 0) return [];
 
     const suggestions: string[] = [];
     const seen = new Set<string>();
@@ -129,3 +342,6 @@ export function suggestArtistsForGenres(
     }
     return suggestions;
 }
+
+/** Mixed, balanced discovery shelf when no genre filter is selected. */
+export const SUGGESTED_ARTISTS = suggestArtistsForGenres([], 36);

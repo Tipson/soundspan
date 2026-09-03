@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveNextTrackPreloadDecision } from "../../lib/audio-engine/nextTrackPreloadPolicy";
+import {
+    NETWORK_PRELOAD_STABLE_PROGRESS_SECONDS,
+    resolveNetworkNextTrackPreloadDecision,
+    resolveNextTrackPreloadDecision,
+} from "../../lib/audio-engine/nextTrackPreloadPolicy";
 
 test("eligible for preload in normal track playback", () => {
     const decision = resolveNextTrackPreloadDecision({
@@ -85,4 +89,64 @@ test("not eligible when playbackType is null", () => {
         isLoading: false,
     });
     assert.equal(decision.shouldPreload, false);
+});
+
+test("network YouTube preload starts after the current track has proven audible", () => {
+    const decision = resolveNetworkNextTrackPreloadDecision({
+        nextStreamSource: "youtube",
+        currentTimeSec: NETWORK_PRELOAD_STABLE_PROGRESS_SECONDS,
+        isPlaying: true,
+        isLoading: false,
+    });
+    assert.equal(decision.shouldPreload, true);
+    assert.equal(decision.reason, "stable_playback");
+});
+
+test("network YouTube preload stays idle until audible progress is stable", () => {
+    const decision = resolveNetworkNextTrackPreloadDecision({
+        nextStreamSource: "youtube",
+        currentTimeSec: NETWORK_PRELOAD_STABLE_PROGRESS_SECONDS - 0.01,
+        isPlaying: true,
+        isLoading: false,
+    });
+    assert.equal(decision.shouldPreload, false);
+    assert.equal(decision.reason, "playback_not_stable");
+});
+
+test("network YouTube preload does not wait for end-of-track timing", () => {
+    const decision = resolveNetworkNextTrackPreloadDecision({
+        nextStreamSource: "youtube",
+        currentTimeSec: NETWORK_PRELOAD_STABLE_PROGRESS_SECONDS,
+        isPlaying: true,
+        isLoading: false,
+    });
+    assert.equal(decision.shouldPreload, true);
+});
+
+test("network preload does not create provider work for paused, loading, or non-YouTube media", () => {
+    for (const input of [
+        {
+            nextStreamSource: "youtube",
+            currentTimeSec: 190,
+            isPlaying: false,
+            isLoading: false,
+        },
+        {
+            nextStreamSource: "youtube",
+            currentTimeSec: 190,
+            isPlaying: true,
+            isLoading: true,
+        },
+        {
+            nextStreamSource: "tidal",
+            currentTimeSec: 190,
+            isPlaying: true,
+            isLoading: false,
+        },
+    ]) {
+        assert.equal(
+            resolveNetworkNextTrackPreloadDecision(input).shouldPreload,
+            false,
+        );
+    }
 });

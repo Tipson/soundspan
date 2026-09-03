@@ -1766,6 +1766,99 @@ test("rapid manual YouTube selections start only the latest remote stream", asyn
     );
 });
 
+test("stable YouTube playback prepares the next queue item without waiting for track end", async () => {
+    const currentTrack = makeTrack("early-preload-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "earlyload01",
+    });
+    const nextTrack = makeTrack("early-preload-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "earlyload02",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 240 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 0.9 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 0);
+
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "https://stream.test/yt/earlyload02",
+            format: "mp4",
+        },
+    ]);
+
+    engine.emit("timeupdate", { timeSec: 30 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+});
+
+test("installed iOS PWA advances a preloaded next track before hidden source end", async (t) => {
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator",
+    );
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+            maxTouchPoints: 5,
+            standalone: true,
+            onLine: true,
+        },
+    });
+    t.after(() => {
+        if (navigatorDescriptor) {
+            Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+        } else {
+            Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+    enableWindowMetrics();
+    (
+        globalThis as unknown as {
+            window: { matchMedia: () => { matches: boolean } };
+        }
+    ).window.matchMedia = () => ({ matches: true });
+    installVisibilityDocument().dispatchVisibility("hidden");
+    runtimeEngineMode = "native";
+
+    const currentTrack = makeTrack("ios-background-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "ios-background-01",
+    });
+    const nextTrack = makeTrack("ios-background-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "ios-background-02",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 210;
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+
+    engine.emit("timeupdate", { timeSec: 209.8 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
 test("a late device-file lease cannot load a retired track and every acquired URL is released", async (t) => {
     const firstTrack = makeTrack("yt:first-file", {
         streamSource: "youtube",
@@ -3547,10 +3640,23 @@ test("remote Wave completion sends one contextual engagement update", async () =
     await flushAsync(12);
 
     assert.equal(apiCalls.logPlay.length, 1);
-    assert.deepEqual(apiCalls.logPlay[0]?.context, {
-        playContext: "wave",
-        waveMode: "new",
-    });
+    const loggedContext = apiCalls.logPlay[0]?.context;
+    const recommendationSessionId = loggedContext?.recommendationSessionId;
+    assert.ok(typeof recommendationSessionId === "string");
+    assert.match(
+        recommendationSessionId,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    assert.deepEqual(
+        {
+            playContext: loggedContext?.playContext,
+            waveMode: loggedContext?.waveMode,
+        },
+        {
+            playContext: "wave",
+            waveMode: "new",
+        },
+    );
     assert.deepEqual(apiCalls.updatePlayEngagement, [
         {
             playId: "play-1",

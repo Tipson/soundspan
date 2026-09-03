@@ -38,7 +38,12 @@ test("play API carries recommendation context and final engagement", async () =>
             album: "Meteora",
             duration: 185,
         },
-        { playContext: "wave", waveMode: "new" },
+        {
+            playContext: "wave",
+            waveMode: "new",
+            recommendationGenerationId: "generation-1",
+            recommendationSessionId: "session-1",
+        },
     );
     await client.updatePlayEngagement(play.id, {
         listenedSeconds: 181.5,
@@ -58,6 +63,8 @@ test("play API carries recommendation context and final engagement", async () =>
                 duration: 185,
                 playContext: "wave",
                 waveMode: "new",
+                recommendationGenerationId: "generation-1",
+                recommendationSessionId: "session-1",
             }),
         },
         {

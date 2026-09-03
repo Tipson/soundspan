@@ -30,11 +30,15 @@ import { getDeviceDownloadSourceUrl } from "@/features/device-offline/sourceUrl"
 import { toast } from "sonner";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { userFacingError } from "@/lib/i18n/ru";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
+import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
+import { recommendationTrackKey } from "../recommendationIdentity";
 
 interface PersonalizedTrackShelfProps {
     title: string;
     subtitle?: string;
     tracks: PersonalizedTrack[];
+    generationId?: string;
 }
 
 function trackImageUrl(track: PersonalizedTrack): string | null {
@@ -179,10 +183,21 @@ export function PersonalizedTrackShelf({
     title,
     subtitle,
     tracks,
+    generationId,
 }: PersonalizedTrackShelfProps) {
     const titleId = useId();
     const { playTracks } = useAudioControls();
-    const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
+    const queue = useMemo(
+        () =>
+            tracks.map((track) =>
+                toProviderPlaybackTrack(track, {
+                    generationId,
+                    sessionId: getRecommendationSessionId(),
+                }),
+            ),
+        [generationId, tracks],
+    );
+    const impressionRef = useRecommendationImpressions(generationId, tracks);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
@@ -241,6 +256,7 @@ export function PersonalizedTrackShelf({
 
     return (
         <section
+            ref={impressionRef}
             data-home-rail="tracks"
             aria-labelledby={titleId}
             className="relative min-w-0"
@@ -313,6 +329,9 @@ export function PersonalizedTrackShelf({
                         <div
                             key={`${track.id}-${index}`}
                             role="listitem"
+                            data-recommendation-track-key={recommendationTrackKey(
+                                track,
+                            )}
                             className="group flex min-h-[72px] snap-start scroll-ml-0 items-center overflow-hidden rounded-2xl bg-white/[0.04] transition duration-200 hover:bg-white/[0.075] motion-reduce:transition-none"
                         >
                             <button

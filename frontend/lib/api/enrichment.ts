@@ -1,10 +1,20 @@
 import { type ApiClientConstructor, type ApiData } from "./core";
+import { parseOnlineAnalysisSnapshot } from "./onlineAnalysis";
 
 /** Add enrichment-domain operations to an API client base class. */
 export function WithEnrichment<TBase extends ApiClientConstructor>(
     Base: TBase,
 ) {
     abstract class EnrichmentApi extends Base {
+        /** Read shared online counters without starting or resetting analysis. */
+        async getOnlineAnalysisProgress(signal?: AbortSignal) {
+            return parseOnlineAnalysisSnapshot(
+                await this.request<unknown>("/enrichment/online-analysis", {
+                    signal,
+                }),
+            );
+        }
+
         // Enrichment
         async getEnrichmentSettings() {
             return this.request<ApiData>("/enrichment/settings");

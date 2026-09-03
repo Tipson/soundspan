@@ -1,4 +1,4 @@
-import axios from "axios";
+import { spotifyGetWithDeadline } from "./spotifyRequest";
 
 /** Classifies Spotify pagination failures without exposing provider details. */
 export class SpotifyPlaylistPaginationError extends Error {
@@ -112,7 +112,7 @@ export async function fetchAllSpotifyPlaylistItems(
 
         let pageResponse;
         try {
-            pageResponse = await axios.get(nextUrl, {
+            pageResponse = await spotifyGetWithDeadline(nextUrl, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     "User-Agent":

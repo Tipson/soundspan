@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
+from functools import partial
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
@@ -25,6 +26,7 @@ from yt_download import (
     extract_video_id as _extract_video_id,
 )
 from ytmusic_client import _get_ytmusic
+from ytmusic_extraction_budget import ExtractionAbandoned, ExtractionBudget
 from ytmusic_runtime import (
     _USER_AGENT,
     JsonObject,
@@ -52,7 +54,9 @@ EXTRACT_DELAY_MIN = env_float("YTMUSIC_EXTRACT_DELAY_MIN", "0.5")
 EXTRACT_DELAY_MAX = env_float("YTMUSIC_EXTRACT_DELAY_MAX", "2.0")
 _extract_pacer = ThreadSafeRatePacer(EXTRACT_DELAY_MIN, EXTRACT_DELAY_MAX)
 EXTRACT_TIMEOUT = env_float("YTMUSIC_EXTRACT_TIMEOUT", "60")
-YTDLP_EXTRACT_CONCURRENCY = max(1, min(16, env_int("YTMUSIC_YTDLP_EXTRACT_CONCURRENCY", "4")))
+YTDLP_EXTRACT_CONCURRENCY = max(1, min(16, env_int("YTMUSIC_YTDLP_EXTRACT_CONCURRENCY", "2")))
+_extraction_budget = ExtractionBudget(YTDLP_EXTRACT_CONCURRENCY)
+_metadata_admission = threading.BoundedSemaphore(8)
 _yt_dlp_extract_executor = ThreadPoolExecutor(
     max_workers=YTDLP_EXTRACT_CONCURRENCY,
     thread_name_prefix="yt-dlp-extract",
@@ -60,7 +64,7 @@ _yt_dlp_extract_executor = ThreadPoolExecutor(
 BROWSE_TIMEOUT = env_float("YTMUSIC_BROWSE_TIMEOUT", "30")
 YTDLP_SOCKET_TIMEOUT = env_float("YTMUSIC_YTDLP_SOCKET_TIMEOUT", "20")
 
-# YouTube Music HLS spool. yt-dlp owns YouTube delivery; clients range-read
+# YouTube Music download spool. yt-dlp owns YouTube delivery; clients range-read
 # the completed local file instead of continuation-reading signed URLs.
 YTMUSIC_SPOOL_DIR = Path(
     os.getenv("YTMUSIC_SPOOL_DIR") or Path(tempfile.gettempdir()) / "soundspan-ytmusic-spool"
@@ -87,6 +91,8 @@ _yt_dlp_spool_executor = ThreadPoolExecutor(
 )
 # The event loop owns all access, with no await between lookup and insertion.
 _spool_tasks: dict[str, asyncio.Task[tuple[str, str]]] = {}
+_spool_cancel_events: dict[str, threading.Event] = {}
+_spool_waiters: dict[str, int] = {}
 _spool_pending_jobs = 0
 _spool_prune_lock = threading.Lock()
 _provider_challenge_lock = threading.Lock()
@@ -115,10 +121,12 @@ _PERMANENT_UNAVAILABLE_PATTERNS = (
         re.IGNORECASE,
     ),
 )
-# Both direct metadata extraction and the HLS spool use the client set that
-# exposes public audio formats without an android_music-only failure.
-_YTMUSIC_PLAYER_CLIENTS = ["default", "web_safari"]
-# Keep per-track HLS fan-out modest while shortening complete-file spool time.
+# Keep the verified default client isolated. Combining several clients merges
+# their format tables; yt-dlp can then select an android_vr URL that resolves
+# successfully but returns HTTP 403 when its bytes are downloaded. The default
+# client produced a complete spool for the same production track.
+_YTMUSIC_PLAYER_CLIENTS = ["default"]
+# Keep per-track fragment fan-out modest while shortening complete-file spool time.
 _SPOOL_FRAGMENT_CONCURRENCY = 4
 _SPOOL_QUALITY_ALTERNATION = "|".join(
     re.escape(quality) for quality in sorted(_ALLOWED_STREAM_QUALITIES)
@@ -130,6 +138,10 @@ _stream_cache: dict[str, JsonObject] = {}
 _stream_cache_lock = threading.Lock()
 STREAM_CACHE_TTL = 5 * 60 * 60
 STREAM_CACHE_MAX = env_int("YTMUSIC_STREAM_CACHE_MAX", "1024")
+
+
+class _SpoolDownloadCancelled(Exception):
+    """Stop a provider download after every HTTP waiter has disconnected."""
 
 
 def _validate_video_id(video_id: str) -> str:
@@ -314,6 +326,29 @@ def _extract_stream_info(
         raise _stream_extraction_http_error(video_id, error_label, error) from error
 
 
+def _cached_music_info(video_id: str, quality: str) -> JsonObject | None:
+    """Read anonymous music metadata without starting provider work."""
+    with _stream_cache_lock:
+        cached = _stream_cache.get(f"music:{video_id}:{quality}")
+        return cached if cached and cached.get("expires_at", 0) > time.time() else None
+
+
+def _cache_spool_info(video_id: str, quality: str, info: JsonObject) -> None:
+    """Reuse the completed download's small metadata, not its full format table."""
+    result = {
+        "url": _best_audio_stream_url(info) or "",
+        "content_type": info.get("audio_ext") or info.get("ext", "m4a"),
+        "duration": info.get("duration", 0),
+        "expires_at": time.time() + STREAM_CACHE_TTL,
+        "abr": info.get("abr") or 0,
+        "acodec": info.get("acodec") or "",
+    }
+    with _stream_cache_lock:
+        _stream_cache[f"music:{video_id}:{quality}"] = result
+        _clean_stream_cache_locked()
+        _bound_cache(_stream_cache, STREAM_CACHE_MAX)
+
+
 def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> JsonObject:
     """Extract a cached audio stream URL for a regular YouTube video."""
     fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"])
@@ -331,7 +366,7 @@ def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> JsonObject:
         "extractor_args": {"youtube": {"player_client": YT_PLAYER_CLIENTS}},
     }
     return _extract_stream_info(
-        f"yt:{video_id}",
+        f"yt:{video_id}:{quality}",
         f"https://www.youtube.com/watch?v={video_id}",
         ydl_opts,
         video_id,
@@ -339,17 +374,21 @@ def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> JsonObject:
     )
 
 
-def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> JsonObject:
-    """Extract a cached audio stream URL for a YouTube Music video."""
+def _build_ytmusic_stream_options(quality: str) -> JsonObject:
+    """Build resilient options for an immediately playable music stream.
+
+    Anonymous YouTube clients occasionally expose only a low-resolution
+    combined A/V rendition. Audio-only remains preferred, while the bounded
+    360p fallback keeps playback available during those provider transitions.
+    """
     format_map = {
-        "LOW": "ba[abr<=64]/worstaudio/ba",
-        "MEDIUM": "ba[abr<=128]/ba[abr<=192]/ba",
-        "HIGH": "ba[abr<=256]/ba",
-        "LOSSLESS": "ba/bestaudio",
+        "LOW": "ba[abr<=64]/worstaudio/ba/b[height<=360]/b",
+        "MEDIUM": "ba[abr<=128]/ba[abr<=192]/ba/b[height<=360]/b",
+        "HIGH": "ba[abr<=256]/ba/b[height<=360]/b",
+        "LOSSLESS": "ba/bestaudio/b[height<=360]/b",
     }
     fmt = format_map.get(quality, format_map["HIGH"])
-
-    ydl_opts = {
+    return {
         "format": fmt,
         "quiet": True,
         "no_warnings": True,
@@ -362,8 +401,13 @@ def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> 
         },
         "extractor_args": {"youtube": {"player_client": _YTMUSIC_PLAYER_CLIENTS}},
     }
+
+
+def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> JsonObject:
+    """Extract a cached audio stream URL for a YouTube Music video."""
+    ydl_opts = _build_ytmusic_stream_options(quality)
     return _extract_stream_info(
-        f"{user_id}:{video_id}",
+        f"music:{video_id}:{quality}",
         f"https://music.youtube.com/watch?v={video_id}",
         ydl_opts,
         video_id,
@@ -379,12 +423,29 @@ async def _extract_yt_dlp_bounded(
     Timed-out worker threads remain confined to the dedicated executor, and
     yt-dlp's socket_timeout bounds their network operations.
     """
+    if not _metadata_admission.acquire(blocking=False):
+        raise HTTPException(status_code=503, detail="YouTube metadata queue is full")
+    cancelled = threading.Event()
     try:
-        loop = asyncio.get_running_loop()
-        future = loop.run_in_executor(_yt_dlp_extract_executor, func, *args)
-        return await asyncio.wait_for(future, timeout=EXTRACT_TIMEOUT)
+        worker = _yt_dlp_extract_executor.submit(
+            _extraction_budget.run,
+            partial(func, *args),
+            cancel_event=cancelled,
+            deadline=time.monotonic() + EXTRACT_TIMEOUT,
+        )
+    except BaseException:
+        _metadata_admission.release()
+        raise
+    # Admission and heavy-work slots belong to the worker, not its HTTP waiter.
+    worker.add_done_callback(lambda _done: _metadata_admission.release())
+    try:
+        return await asyncio.wait_for(asyncio.wrap_future(worker), timeout=EXTRACT_TIMEOUT)
     except TimeoutError as error:
         raise HTTPException(status_code=504, detail=timeout_detail) from error
+    except ExtractionAbandoned as error:
+        raise HTTPException(status_code=504, detail=timeout_detail) from error
+    finally:
+        cancelled.set()
 
 
 async def _extract_stream_info_bounded(func: Callable[..., JsonObject], *args: Any) -> JsonObject:
@@ -431,12 +492,17 @@ def _build_ytmusic_spool_format(quality: str, max_bytes: int) -> str:
     # the configured limit remains eligible, matching the progress hook.
     exclusive_limit = max_bytes + 1
     candidates = []
-    for protocol_filter in ("[protocol=m3u8_native]", "[protocol=m3u8]", ""):
+    # Progressive audio is normally faster and less fragile than downloading
+    # many HLS fragments. HLS remains available when it is the only rendition.
+    for protocol_filter in ("", "[protocol=m3u8_native]", "[protocol=m3u8]"):
         for size_field in ("filesize", "filesize_approx"):
             candidates.append(f"ba{protocol_filter}{abr_filter}[{size_field}<{exclusive_limit}]")
     # If upstream omits all size estimates, choose the smallest audio stream;
     # the progress hook still enforces the hard byte limit while downloading.
     candidates.append("wa")
+    for size_field in ("filesize", "filesize_approx"):
+        candidates.append(f"b[height<=360][{size_field}<{exclusive_limit}]")
+    candidates.append("b[height<=360]")
     return "/".join(candidates)
 
 
@@ -549,7 +615,10 @@ def _prune_spool(exclude: Path | None = None) -> None:
                 continue
 
 
-def _build_spool_progress_hook(started_at: float) -> Callable[[JsonObject], None]:
+def _build_spool_progress_hook(
+    started_at: float,
+    cancel_event: threading.Event | None = None,
+) -> Callable[[JsonObject], None]:
     """Build a yt-dlp hook that enforces download-progress limits.
 
     The elapsed deadline covers the download phase and is checked only at
@@ -558,6 +627,8 @@ def _build_spool_progress_hook(started_at: float) -> Callable[[JsonObject], None
     """
 
     def enforce_spool_limits(status: JsonObject) -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
         downloaded_bytes = status.get("downloaded_bytes", 0)
         if isinstance(downloaded_bytes, int) and downloaded_bytes > YTMUSIC_SPOOL_TRACK_MAX_BYTES:
             raise RuntimeError(
@@ -620,8 +691,36 @@ def _remove_failed_spool_partials(video_id: str, quality: str) -> None:
                 path.unlink()
 
 
-def _download_ytmusic_spool_sync(video_id: str, quality: str) -> tuple[str, str]:
-    """Download a complete YouTube Music HLS stream into the bounded spool."""
+def _extract_spool_with_retry(
+    video_id: str, options: JsonObject, cancel_event: threading.Event | None
+) -> JsonObject:
+    """Retry a transient missing-format table once within the same worker slot."""
+    import yt_dlp
+
+    for attempt in range(2):
+        if cancel_event is not None and cancel_event.is_set():
+            raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(
+                    f"https://music.youtube.com/watch?v={video_id}", download=True
+                )
+            if not info:
+                raise ValueError("No info extracted while spooling stream")
+            return cast(JsonObject, info)
+        except yt_dlp.utils.DownloadError as error:
+            if attempt or "requested format is not available" not in str(error).lower():
+                raise
+            log.warning("Retrying transient YouTube format extraction for %s", video_id)
+            _extract_pacer.wait()
+    raise RuntimeError("Unreachable spool retry state")
+
+
+def _download_ytmusic_spool_sync(
+    video_id: str,
+    quality: str,
+) -> tuple[str, str]:
+    """Download a complete YouTube Music stream into the bounded spool."""
     import yt_dlp
 
     YTMUSIC_SPOOL_DIR.mkdir(parents=True, exist_ok=True)
@@ -634,21 +733,16 @@ def _download_ytmusic_spool_sync(video_id: str, quality: str) -> tuple[str, str]
     _raise_if_provider_challenge_cooldown(video_id)
 
     started_at = time.monotonic()
+    cancel_event = _spool_cancel_events.get(f"{video_id}:{quality}")
     ydl_opts = _build_ytmusic_spool_options(
         video_id,
         quality,
         match_filter=yt_dlp.utils.match_filter_func("!is_live"),
-        progress_hook=_build_spool_progress_hook(started_at),
+        progress_hook=_build_spool_progress_hook(started_at, cancel_event),
     )
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(
-                f"https://music.youtube.com/watch?v={video_id}",
-                download=True,
-            )
-            if not info:
-                raise ValueError("No info extracted while spooling stream")
+        info = _extract_spool_with_retry(video_id, ydl_opts, cancel_event)
 
         completed = _find_spooled_file(video_id, quality)
         if completed is None:
@@ -660,6 +754,7 @@ def _download_ytmusic_spool_sync(video_id: str, quality: str) -> tuple[str, str]
             raise ValueError("YouTube Music spool file exceeds the total spool byte budget")
 
         _prune_spool(exclude=completed)
+        _cache_spool_info(video_id, quality, info)
         log.info(
             "Spooled YouTube Music track %s (%s, %.1f MiB)",
             video_id,
@@ -667,12 +762,16 @@ def _download_ytmusic_spool_sync(video_id: str, quality: str) -> tuple[str, str]
             completed_size / (1024 * 1024),
         )
         return str(completed), _spool_content_type(completed)
+    except _SpoolDownloadCancelled:
+        _remove_failed_spool_partials(video_id, quality)
+        log.info("Cancelled abandoned YouTube Music spool for %s", video_id)
+        raise
     except Exception as error:
         # yt-dlp normally cleans these itself; remove leftovers after failures.
         _remove_failed_spool_partials(video_id, quality)
         raise _stream_extraction_http_error(
             video_id,
-            f"yt-dlp HLS spool for {video_id}",
+            f"yt-dlp spool for {video_id}",
             error,
         ) from error
 
@@ -681,12 +780,18 @@ async def _download_ytmusic_spool_bounded(video_id: str, quality: str) -> tuple[
     """Run one spool download for the executor thread's full lifetime."""
     loop = asyncio.get_running_loop()
     # yt-dlp's socket timeout bounds the executor thread between network reads.
-    return await loop.run_in_executor(
-        _yt_dlp_spool_executor,
-        _download_ytmusic_spool_sync,
-        video_id,
-        quality,
-    )
+    try:
+        return await loop.run_in_executor(
+            _yt_dlp_spool_executor,
+            partial(
+                _extraction_budget.run,
+                partial(_download_ytmusic_spool_sync, video_id, quality),
+                playback=True,
+                cancel_event=_spool_cancel_events.get(f"{video_id}:{quality}"),
+            ),
+        )
+    except ExtractionAbandoned as error:
+        raise HTTPException(status_code=499, detail="Client disconnected") from error
 
 
 def _remove_completed_spool_task(key: str, task: asyncio.Task[tuple[str, str]]) -> None:
@@ -695,6 +800,7 @@ def _remove_completed_spool_task(key: str, task: asyncio.Task[tuple[str, str]]) 
 
     if _spool_tasks.get(key) is task:
         _spool_tasks.pop(key, None)
+        _spool_cancel_events.pop(key, None)
     if _spool_pending_jobs > 0:
         _spool_pending_jobs -= 1
     else:
@@ -710,6 +816,7 @@ def _create_spool_task(key: str, video_id: str, quality: str) -> asyncio.Task[tu
 
     if _spool_pending_jobs >= _SPOOL_MAX_PENDING_JOBS:
         raise HTTPException(status_code=503, detail="YouTube Music spool queue is full")
+    _spool_cancel_events[key] = threading.Event()
     task = asyncio.create_task(_download_ytmusic_spool_bounded(video_id, quality))
     _spool_tasks[key] = task
     _spool_pending_jobs += 1
@@ -752,12 +859,55 @@ async def _await_spool_task(task: asyncio.Task[tuple[str, str]]) -> tuple[str, s
         raise HTTPException(status_code=504, detail="YouTube Music spool timed out") from error
 
 
-async def _get_ytmusic_spooled_stream(video_id: str, quality: str) -> tuple[str, str]:
+async def _await_spool_task_for_request(
+    key: str,
+    task: asyncio.Future[tuple[str, str]],
+    request: Request,
+) -> tuple[str, str]:
+    """Await a shared spool while cancelling work abandoned by every client."""
+    _spool_waiters[key] = _spool_waiters.get(key, 0) + 1
+    # A new listener may arrive just after the prior last waiter disconnected
+    # but before the executor observed its cancellation event. Revive that
+    # still-running single-flight instead of needlessly failing the new request.
+    cancel_event = _spool_cancel_events.get(key)
+    if cancel_event is not None:
+        cancel_event.clear()
+    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
+    try:
+        while not task.done():
+            if await request.is_disconnected():
+                raise HTTPException(status_code=499, detail="Client disconnected")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise HTTPException(status_code=504, detail="YouTube Music spool timed out")
+            await asyncio.sleep(min(0.1, remaining))
+        return task.result()
+    finally:
+        remaining = _spool_waiters.get(key, 1) - 1
+        if remaining > 0:
+            _spool_waiters[key] = remaining
+        else:
+            _spool_waiters.pop(key, None)
+            if not task.done():
+                cancel_event = _spool_cancel_events.get(key)
+                if cancel_event is not None:
+                    cancel_event.set()
+
+
+async def _get_ytmusic_spooled_stream(
+    video_id: str,
+    quality: str,
+    request: Request | None = None,
+) -> tuple[str, str]:
     """Return a cached spool entry, coalescing concurrent requests per track."""
     key = f"{video_id}:{quality}"
     task = _spool_tasks.get(key)
     if task is not None:
-        return await _await_spool_task(task)
+        return (
+            await _await_spool_task_for_request(key, task, request)
+            if request is not None
+            else await _await_spool_task(task)
+        )
 
     existing = await _find_spooled_result(video_id, quality)
     if existing is not None:
@@ -767,7 +917,11 @@ async def _get_ytmusic_spooled_stream(video_id: str, quality: str) -> tuple[str,
     # remain one event-loop-only critical section with no intervening await.
     task = _try_get_or_create_spool_task(key, video_id, quality)
     if task is not None:
-        return await _await_spool_task(task)
+        return (
+            await _await_spool_task_for_request(key, task, request)
+            if request is not None
+            else await _await_spool_task(task)
+        )
 
     # A prior task may have completed and removed itself after our preflight
     # miss. Retry disk once before reporting saturation.
@@ -777,7 +931,11 @@ async def _get_ytmusic_spooled_stream(video_id: str, quality: str) -> tuple[str,
 
     task = _spool_tasks.get(key)
     if task is not None:
-        return await _await_spool_task(task)
+        return (
+            await _await_spool_task_for_request(key, task, request)
+            if request is not None
+            else await _await_spool_task(task)
+        )
     raise HTTPException(status_code=503, detail="YouTube Music spool queue is full")
 
 
@@ -800,11 +958,12 @@ def _clean_stream_cache() -> None:
 
 @app.get("/stream/{video_id}")
 async def get_stream_info(
-    video_id: str, user_id: str = Query(...), quality: str = "HIGH"
+    video_id: str, user_id: str = Query(...), quality: str = "HIGH", cached_only: bool = False
 ) -> JsonObject:
     """Get stream URL info for a video (metadata only, no proxy).
 
-    When user_id is "__public__", skips OAuth verification.
+    When user_id is "__public__", skips OAuth verification. Quality badges use
+    cached_only to avoid a second extraction; an unknown bitrate is zero.
     """
     video_id = _validate_video_id(video_id)
     quality = _validate_stream_quality(quality)
@@ -812,7 +971,14 @@ async def get_stream_info(
     if user_id != "__public__":
         _get_ytmusic(user_id)
 
-    result = await _extract_stream_info_bounded(_get_stream_url_sync, user_id, video_id, quality)
+    result = _cached_music_info(video_id, quality)
+    if result is None:
+        if cached_only:
+            result = {"url": "", "content_type": "", "duration": 0, "expires_at": 0}
+        else:
+            result = await _extract_stream_info_bounded(
+                _get_stream_url_sync, user_id, video_id, quality
+            )
     return {
         "videoId": video_id,
         "url": result["url"],
@@ -847,7 +1013,7 @@ async def proxy_stream(
 
     # FileResponse consumes Range from the ASGI request scope itself.
     _ = request
-    path, content_type = await _get_ytmusic_spooled_stream(video_id, quality)
+    path, content_type = await _get_ytmusic_spooled_stream(video_id, quality, request)
     return FileResponse(
         path,
         media_type=content_type,

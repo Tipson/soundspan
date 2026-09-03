@@ -235,6 +235,20 @@ const vibeEmbedConcurrencyEnvSchema = z
 const recommendationEngineModeEnvSchema = z
     .enum(["baseline", "shadow", "active"])
     .optional();
+const recommendationHybridRolloutPercentEnvSchema = z
+    .string()
+    .regex(/^(?:0|[1-9]\d?|100)$/, {
+        message:
+            "RECOMMENDATION_HYBRID_ROLLOUT_PERCENT must be an integer from 0 through 100",
+    })
+    .optional();
+const recommendationExplorationPercentEnvSchema = z
+    .string()
+    .regex(/^(?:0|[1-9]|[12]\d|30)$/, {
+        message:
+            "RECOMMENDATION_EXPLORATION_PERCENT must be an integer from 0 through 30",
+    })
+    .optional();
 const remoteAnalysisDailyBudgetEnvSchema = z
     .string()
     .regex(/^[1-9]\d*$/, {
@@ -511,6 +525,10 @@ const envSchema = z
         VIBE_PROVIDER_URL: vibeProviderUrlEnvSchema,
         VIBE_EMBED_CONCURRENCY: vibeEmbedConcurrencyEnvSchema,
         RECOMMENDATION_ENGINE_MODE: recommendationEngineModeEnvSchema,
+        RECOMMENDATION_HYBRID_ROLLOUT_PERCENT:
+            recommendationHybridRolloutPercentEnvSchema,
+        RECOMMENDATION_EXPLORATION_PERCENT:
+            recommendationExplorationPercentEnvSchema,
         REMOTE_ANALYSIS_ENABLED: booleanEnvSchema,
         REMOTE_ANALYSIS_DAILY_BUDGET: remoteAnalysisDailyBudgetEnvSchema,
         REMOTE_ANALYSIS_CONCURRENCY: remoteAnalysisConcurrencyEnvSchema,
@@ -699,6 +717,12 @@ export const config = {
             | "baseline"
             | "shadow"
             | "active",
+        hybridRolloutPercent: Number(
+            process.env.RECOMMENDATION_HYBRID_ROLLOUT_PERCENT ?? "0",
+        ),
+        explorationRate:
+            Number(process.env.RECOMMENDATION_EXPLORATION_PERCENT ?? "10") /
+            100,
         remoteAnalysisEnabled: parseEnvBool(
             process.env.REMOTE_ANALYSIS_ENABLED,
             false,

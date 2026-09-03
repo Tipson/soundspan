@@ -23,6 +23,40 @@ export interface NextTrackPreloadDecision {
     reason: string;
 }
 
+/** Audible progress required before starting one speculative provider spool. */
+export const NETWORK_PRELOAD_STABLE_PROGRESS_SECONDS = 1;
+
+export interface NetworkNextTrackPreloadInput {
+    nextStreamSource: string | null | undefined;
+    currentTimeSec: number;
+    isPlaying: boolean;
+    isLoading: boolean;
+}
+
+/**
+ * Starts one network-backed YouTube preload as soon as the current source has
+ * produced stable audible progress. At that point its own provider spool has
+ * completed, so the bounded sidecar can prepare the next queue item without
+ * delaying startup of the track the listener actually selected.
+ */
+export function resolveNetworkNextTrackPreloadDecision(
+    input: NetworkNextTrackPreloadInput,
+): NextTrackPreloadDecision {
+    if (input.nextStreamSource !== "youtube") {
+        return { shouldPreload: false, reason: "not_network_youtube" };
+    }
+    if (!input.isPlaying || input.isLoading) {
+        return { shouldPreload: false, reason: "inactive_playback" };
+    }
+    if (!Number.isFinite(input.currentTimeSec) || input.currentTimeSec < 0) {
+        return { shouldPreload: false, reason: "invalid_timing" };
+    }
+    if (input.currentTimeSec < NETWORK_PRELOAD_STABLE_PROGRESS_SECONDS) {
+        return { shouldPreload: false, reason: "playback_not_stable" };
+    }
+    return { shouldPreload: true, reason: "stable_playback" };
+}
+
 /**
  * Determines whether the next track should be eagerly loaded
  * from the ended handler before React state transitions.
