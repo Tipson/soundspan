@@ -82,6 +82,14 @@ let automationSettings = {
 };
 const controllerChangeListeners = new Set<() => void>();
 const recordSubscribers = new Set<() => void>();
+const playbackInvalidationSubscribers = new Set<
+    (event: {
+        ownerId: string;
+        recordKey: string;
+        reason: "missing" | "integrity";
+    }) => void
+>();
+let reconcileCalls = 0;
 const recordDownloads: Array<Record<string, unknown>> = [];
 const legacyMigrations: string[] = [];
 const serviceWorker = {
@@ -129,6 +137,7 @@ mock.module("@/features/device-offline/browserStorage", {
                 return storedRecords;
             },
             reconcile: async () => {
+                reconcileCalls += 1;
                 if (recordStorageFailure) throw recordStorageFailure;
                 if (reconcileRequest) return reconcileRequest.promise;
                 return storedRecords;
@@ -235,6 +244,16 @@ mock.module("@/features/device-offline/playbackResolver", {
         hasPreparedDeviceOfflinePlaybackSource: () => false,
         prepareDeviceOfflinePlaybackSource: () => true,
         setDeviceOfflineRuntimeState: () => undefined,
+        subscribeToDeviceOfflinePlaybackInvalidations: (
+            listener: (event: {
+                ownerId: string;
+                recordKey: string;
+                reason: "missing" | "integrity";
+            }) => void,
+        ) => {
+            playbackInvalidationSubscribers.add(listener);
+            return () => playbackInvalidationSubscribers.delete(listener);
+        },
     },
 });
 
@@ -264,6 +283,8 @@ beforeEach(() => {
     capabilityRequests.length = 0;
     controllerChangeListeners.clear();
     recordSubscribers.clear();
+    playbackInvalidationSubscribers.clear();
+    reconcileCalls = 0;
     queueCalls.resumes.length = 0;
     queueCalls.pauses.length = 0;
     queueCalls.settingUpdates.length = 0;
@@ -323,6 +344,55 @@ const manualTrack = {
     streamSource: "youtube" as const,
     youtubeVideoId: "manual-track",
 };
+
+test("manual refresh and a playback invalidation both re-verify retained files", async (t) => {
+    const { DeviceOfflineProvider, useDeviceOffline } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+    let context: ReturnType<typeof useDeviceOffline> | null = null;
+
+    function Probe() {
+        context = useDeviceOffline();
+        return React.createElement("span", null, String(context.isHydrated));
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                DeviceOfflineProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(reconcileCalls, 1);
+
+    await React.act(async () => {
+        await context?.refresh();
+    });
+    assert.equal(reconcileCalls, 2);
+
+    await React.act(async () => {
+        for (const listener of playbackInvalidationSubscribers) {
+            listener({
+                ownerId: "user-1",
+                recordKey: "missing-key",
+                reason: "missing",
+            });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(reconcileCalls, 3);
+});
 
 test("a manual collection click requests device-folder access before queueing", async () => {
     vaultAccessState = {

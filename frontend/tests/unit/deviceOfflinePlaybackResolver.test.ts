@@ -10,6 +10,7 @@ import {
     resolveDeviceOfflinePlaybackIdentity,
     resolveDeviceOfflinePlaybackUrl,
     setDeviceOfflineRuntimeState,
+    subscribeToDeviceOfflinePlaybackInvalidations,
 } from "../../features/device-offline/playbackResolver";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
 import {
@@ -273,6 +274,15 @@ test("an offline cold-start never replaces a ready device file with an unreachab
         }),
     );
     t.after(restore);
+    const invalidations: Array<{
+        ownerId: string;
+        recordKey: string;
+        reason: "missing" | "integrity";
+    }> = [];
+    const unsubscribe = subscribeToDeviceOfflinePlaybackInvalidations(
+        (invalidation) => invalidations.push(invalidation),
+    );
+    t.after(unsubscribe);
     setDeviceOfflineRuntimeState("user-1", [
         {
             ...readyRecord("user-1", "cold-start-key"),
@@ -288,7 +298,48 @@ test("an offline cold-start never replaces a ready device file with an unreachab
         ),
         (error: unknown) => error === localFailure,
     );
-    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), true);
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+    assert.deepEqual(invalidations, [
+        {
+            ownerId: "user-1",
+            recordKey: "cold-start-key",
+            reason: "missing",
+        },
+    ]);
+});
+
+test("a missing managed file is evicted immediately and online playback falls back to the network", async (t) => {
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeVault(async () => {
+            throw new DeviceAudioVaultError(
+                "not_found",
+                "The retained device file was deleted",
+                "retry",
+            );
+        }),
+    );
+    t.after(restore);
+    const invalidations: string[] = [];
+    const unsubscribe = subscribeToDeviceOfflinePlaybackInvalidations(
+        ({ recordKey, reason }) => invalidations.push(`${recordKey}:${reason}`),
+    );
+    t.after(unsubscribe);
+    setDeviceOfflineRuntimeState("user-1", [
+        {
+            ...readyRecord("user-1", "missing-key"),
+            mediaRef: "opfs1:owner:missing" as DeviceAudioVaultRef,
+        },
+    ]);
+
+    const source = await acquireDeviceOfflinePlaybackSource(
+        TRACK,
+        "/network",
+        new AbortController().signal,
+    );
+
+    assert.equal(source.url, "/network");
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+    assert.deepEqual(invalidations, ["missing-key:missing"]);
 });
 
 test("an aborted managed acquisition releases a late vault URL", async (t) => {

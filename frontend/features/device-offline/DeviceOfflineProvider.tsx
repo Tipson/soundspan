@@ -35,6 +35,7 @@ import {
     hasPreparedDeviceOfflinePlaybackSource,
     prepareDeviceOfflinePlaybackSource,
     setDeviceOfflineRuntimeState,
+    subscribeToDeviceOfflinePlaybackInvalidations,
 } from "./playbackResolver";
 import {
     resolveBrowserDeviceOfflineTransferCapability,
@@ -676,6 +677,14 @@ export function DeviceOfflineProvider({
         };
     }, [load, manager]);
 
+    useEffect(
+        () =>
+            subscribeToDeviceOfflinePlaybackInvalidations((invalidation) => {
+                if (invalidation.ownerId === ownerId) void load(true);
+            }),
+        [load, ownerId],
+    );
+
     useEffect(() => {
         if (!queueManager) return;
         return queueManager.subscribe(() => void loadQueue());
@@ -1201,6 +1210,8 @@ export function DeviceOfflineProvider({
         }
     }, [load, loadQueue, ownerId, queueManager, storage.status]);
 
+    const refresh = useCallback(() => load(true), [load]);
+
     const value = useMemo<DeviceOfflineContextValue>(
         () => ({
             isHydrated,
@@ -1226,7 +1237,7 @@ export function DeviceOfflineProvider({
             setupStorage,
             setupLegacyStorage,
             retryStorage,
-            refresh: () => load(false),
+            refresh,
         }),
         [
             capability,
@@ -1243,6 +1254,7 @@ export function DeviceOfflineProvider({
             readyRecordForTrack,
             recordForTrack,
             records,
+            refresh,
             queueItems,
             resume,
             retryStorage,

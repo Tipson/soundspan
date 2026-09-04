@@ -20,6 +20,7 @@ const calls = {
     collectionEnqueues: [] as Array<Record<string, unknown>>,
     storageRetries: 0,
     storageSetups: 0,
+    refreshes: 0,
     confirmations: [] as string[],
 };
 let collectionStatus = {
@@ -120,7 +121,9 @@ const offlineContext = {
         calls.settingUpdates.push(patch);
         Object.assign(offlineContext.automationSettings, patch);
     },
-    refresh: async () => undefined,
+    refresh: async () => {
+        calls.refreshes += 1;
+    },
     retryStorage: async () => {
         calls.storageRetries += 1;
     },
@@ -254,6 +257,7 @@ beforeEach(() => {
     calls.collectionEnqueues.length = 0;
     calls.storageRetries = 0;
     calls.storageSetups = 0;
+    calls.refreshes = 0;
     calls.confirmations.length = 0;
     collectionStatus = {
         total: 2,
@@ -284,6 +288,41 @@ beforeEach(() => {
             return confirmDelete;
         },
     });
+});
+
+test("Downloads verifies retained files on entry and when the app returns to the foreground", async () => {
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+
+    assert.equal(calls.refreshes, 1);
+
+    await React.act(async () => {
+        window.dispatchEvent(new Event("focus"));
+        await Promise.resolve();
+    });
+    assert.equal(calls.refreshes, 2);
+
+    Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "hidden",
+    });
+    await React.act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+        await Promise.resolve();
+    });
+    assert.equal(calls.refreshes, 2);
+
+    Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+    });
+    await React.act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+        await Promise.resolve();
+    });
+    assert.equal(calls.refreshes, 3);
+    view.unmount();
 });
 
 test("storage failures stay visible in Downloads and ordinary Settings with retry", async () => {
@@ -898,7 +937,8 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
             virtualUrl: "/__offline/audio/retry-key",
             track: { ...track, id: "interrupted", title: "Interrupted song" },
             status: "interrupted",
-            errorMessage: "The transfer stopped before the file was ready.",
+            errorCode: "cache_missing",
+            errorMessage: "The browser removed this copy.",
         },
         {
             ...base,
@@ -912,6 +952,12 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
     const { DownloadsList } =
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
+
+    const interruptedRow = view.container.querySelector(
+        '[data-download-status="interrupted"]',
+    ) as HTMLElement;
+    assert.equal(interruptedRow.querySelectorAll("p").length, 3);
+    assert.match(interruptedRow.textContent ?? "", /Файл удалён с устройства/i);
 
     await React.act(async () =>
         (
@@ -942,7 +988,7 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
     assert.match(
         view.container.querySelector('[data-download-status="interrupted"]')
             ?.textContent ?? "",
-        /Загрузка прервана.*Повтор/i,
+        /Файл удалён с устройства.*скачайте трек снова/i,
     );
     assert.match(
         view.container.querySelector('[data-download-status="error"]')

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Download,
     HardDriveDownload,
@@ -51,6 +51,18 @@ function statusCopy(record: DeviceOfflineDownloadRecord): string {
         return `${ru.downloads.downloading} — ${ru.downloads.keepOpen}`;
     }
     if (record.status === "interrupted") {
+        if (
+            record.errorCode === "device_file_missing" ||
+            record.errorCode === "cache_missing"
+        ) {
+            return "Файл удалён с устройства — скачайте трек снова.";
+        }
+        if (
+            record.errorCode === "device_file_integrity" ||
+            record.errorCode === "cache_integrity"
+        ) {
+            return "Файл повреждён — скачайте трек снова.";
+        }
         return `${ru.downloads.interrupted} — ${record.errorMessage ?? "передача остановилась до готовности файла"}. Повтор запустит загрузку трека заново.`;
     }
     return `${ru.downloads.failed} — ${record.errorMessage ?? "копию не удалось сохранить"}. ${ru.downloads.retryTrack}.`;
@@ -135,7 +147,21 @@ export function DownloadsList() {
         resume,
         enqueueCollection,
         retryStorage,
+        refresh,
     } = useDeviceOffline();
+    useEffect(() => {
+        const verify = () => void refresh();
+        const verifyWhenVisible = () => {
+            if (document.visibilityState === "visible") verify();
+        };
+        verify();
+        window.addEventListener("focus", verify);
+        document.addEventListener("visibilitychange", verifyWhenVisible);
+        return () => {
+            window.removeEventListener("focus", verify);
+            document.removeEventListener("visibilitychange", verifyWhenVisible);
+        };
+    }, [refresh]);
     const visibleQueueItems = queueItems.filter(
         (item) =>
             !records.some(
@@ -412,9 +438,22 @@ export function DownloadsList() {
                                 </p>
                                 <p className="truncate text-xs text-white/50">
                                     {managementCopy(record.management)} ·{" "}
-                                    {record.track.artist.name} ·{" "}
-                                    {statusCopy(record)}
+                                    {record.track.artist.name}
+                                    {record.status === "ready"
+                                        ? ` · ${statusCopy(record)}`
+                                        : ""}
                                 </p>
+                                {record.status !== "ready" &&
+                                    record.status !== "downloading" && (
+                                        <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-warning">
+                                            {statusCopy(record)}
+                                        </p>
+                                    )}
+                                {record.status === "downloading" && (
+                                    <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-white/65">
+                                        {statusCopy(record)}
+                                    </p>
+                                )}
                                 {record.status === "downloading" && (
                                     <div
                                         className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"

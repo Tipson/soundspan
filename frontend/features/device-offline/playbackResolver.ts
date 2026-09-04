@@ -12,6 +12,16 @@ import {
 
 let activeOwnerId: string | null = null;
 let readyRecords: DeviceOfflineDownloadRecord[] = [];
+export interface DeviceOfflinePlaybackInvalidation {
+    ownerId: string;
+    recordKey: string;
+    reason: "missing" | "integrity";
+}
+type DeviceOfflinePlaybackInvalidationListener = (
+    invalidation: DeviceOfflinePlaybackInvalidation,
+) => void;
+const playbackInvalidationListeners =
+    new Set<DeviceOfflinePlaybackInvalidationListener>();
 const MAX_PREPARED_DEVICE_OFFLINE_SOURCES = 2;
 const preparedSources = new Map<
     string,
@@ -36,6 +46,34 @@ function releasePreparedSource(key: string): void {
     if (!prepared) return;
     preparedSources.delete(key);
     prepared.revoke();
+}
+
+/** Reconcile persistent metadata after playback discovers an unusable file. */
+export function subscribeToDeviceOfflinePlaybackInvalidations(
+    listener: DeviceOfflinePlaybackInvalidationListener,
+): () => void {
+    playbackInvalidationListeners.add(listener);
+    return () => playbackInvalidationListeners.delete(listener);
+}
+
+function invalidateDeviceOfflinePlaybackRecord(
+    ownerId: string,
+    recordKey: string,
+    reason: DeviceOfflinePlaybackInvalidation["reason"],
+): void {
+    readyRecords = readyRecords.filter(
+        (record) => record.ownerId !== ownerId || record.key !== recordKey,
+    );
+    releasePreparedSource(recordKey);
+    const invalidation = { ownerId, recordKey, reason } as const;
+    for (const listener of playbackInvalidationListeners) {
+        try {
+            listener(invalidation);
+        } catch {
+            // A UI subscriber must never turn a recoverable local-file miss
+            // into a playback failure.
+        }
+    }
 }
 
 function releaseStalePreparedSources(
@@ -279,6 +317,13 @@ export async function acquireDeviceOfflinePlaybackSource(
             throw playbackAcquisitionAbort();
         }
         if (error instanceof DeviceAudioVaultError) {
+            if (error.code === "not_found" || error.code === "integrity") {
+                invalidateDeviceOfflinePlaybackRecord(
+                    ownerId,
+                    recordKey,
+                    error.code === "not_found" ? "missing" : "integrity",
+                );
+            }
             if (
                 typeof navigator !== "undefined" &&
                 navigator.onLine === false
