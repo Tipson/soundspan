@@ -53,9 +53,9 @@ export const adminActivityRu = {
                 "Дополнительные обложки исполнителей и альбомов.",
             fanartPlaceholder: "Введите ключ API Fanart.tv",
             lastfmHint:
-                "Last.fm уже настроен с ключом по умолчанию. Собственный ключ повышает лимит запросов.",
-            lastfmKey: "Ключ API Last.fm (необязательно)",
-            lastfmPlaceholder: "Введите собственный ключ API Last.fm",
+                "Один ключ API включает метаданные, теги и сигналы похожести Last.fm для всех пользователей сервера.",
+            lastfmKey: "Ключ API Last.fm",
+            lastfmPlaceholder: "Введите ключ API Last.fm",
         },
         librarySafety: {
             title: "Защита серверной медиатеки",

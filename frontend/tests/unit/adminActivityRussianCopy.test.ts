@@ -12,6 +12,10 @@ import {
 
 test("Admin и панель активности используют согласованную русскую микрокопию", () => {
     assert.equal(adminActivityRu.admin.title, "Администрирование");
+    assert.equal(
+        adminActivityRu.admin.artwork.lastfmHint,
+        "Один ключ API включает метаданные, теги и сигналы похожести Last.fm для всех пользователей сервера.",
+    );
     assert.deepEqual(adminActivityRu.activity.tabs, {
         notifications: "Уведомления",
         active: "Активные",
