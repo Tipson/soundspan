@@ -11,7 +11,9 @@ import { extractColorsFromImage } from "../../utils/colorExtractor";
 import {
     fetchExternalImage,
     normalizeExternalImageUrl,
+    type ExternalImageResult,
 } from "../../services/imageProxy";
+import { coalesceInFlightByKey } from "../../utils/singleflight";
 import {
     negotiateCoverArtFormat,
     resizeCoverArt,
@@ -43,6 +45,9 @@ import {
 import { normalizeRouteName } from "../routeParamName";
 import { rgMbidKind } from "../../utils/musicIds";
 import { isLibrarySurfaceAlbumLocation } from "../../utils/librarySorting";
+
+const COVER_ART_FETCH_FAILURE_TTL_SECONDS = 5 * 60;
+const coverArtFetches = new Map<string, Promise<ExternalImageResult>>();
 
 const coverAlbumSelect = {
     id: true,
@@ -488,6 +493,10 @@ export async function handleGetCoverArt(
         .createHash("md5")
         .update(`${coverUrl}-${requestedSize || "original"}-${imageFormat}`)
         .digest("hex")}`;
+    const fetchFailureCacheKey = `cover-art-failure:${crypto
+        .createHash("md5")
+        .update(coverUrl)
+        .digest("hex")}`;
 
     // Try to get from Redis cache first
     try {
@@ -538,13 +547,30 @@ export async function handleGetCoverArt(
         logger.warn("[COVER-ART] Redis cache read error:", cacheError);
     }
 
+    try {
+        if (await redisClient.get(fetchFailureCacheKey)) {
+            return sendRouteError(
+                res,
+                503,
+                "Cover art source is temporarily unavailable",
+            );
+        }
+    } catch (cacheError) {
+        logger.warn("[COVER-ART] Redis failure cache read error:", cacheError);
+    }
+
     // Fetch and proxy image with URL validation + safe redirect handling
     logger.debug(`[COVER-ART] Fetching: ${coverUrl.substring(0, 100)}...`);
-    const imageResult = await fetchExternalImage({
-        url: coverUrl,
-        timeoutMs: 15000,
-        maxRetries: 3,
-    });
+    const imageResult = await coalesceInFlightByKey(
+        coverArtFetches,
+        coverUrl,
+        () =>
+            fetchExternalImage({
+                url: coverUrl,
+                timeoutMs: 5000,
+                maxRetries: 1,
+            }),
+    );
 
     if (!imageResult.ok) {
         if (imageResult.status === "invalid_url") {
@@ -574,6 +600,18 @@ export async function handleGetCoverArt(
         logger.error(
             `[COVER-ART] Failed to fetch: ${imageResult.url} (${imageResult.message || "fetch error"})`,
         );
+        try {
+            await redisClient.setEx(
+                fetchFailureCacheKey,
+                COVER_ART_FETCH_FAILURE_TTL_SECONDS,
+                "1",
+            );
+        } catch (cacheError) {
+            logger.warn(
+                "[COVER-ART] Redis failure cache write error:",
+                cacheError,
+            );
+        }
         return sendRouteError(res, 502, "Failed to fetch cover art");
     }
 

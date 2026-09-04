@@ -1,4 +1,5 @@
 import { prisma } from "../../utils/db";
+import { hasErrorCode } from "../../utils/prismaErrors";
 import type { RecommendationCandidate } from "./types";
 
 export interface ResolvedCanonicalRecording {
@@ -287,14 +288,27 @@ async function attachProviderMapping(
                 data: { canonicalRecordingId },
             });
         } else {
-            await prisma.trackMapping.create({
-                data: {
-                    trackYtMusicId: providerTrack.id,
-                    canonicalRecordingId,
-                    confidence: 0.72,
-                    source: "recommendation",
-                },
-            });
+            try {
+                await prisma.trackMapping.create({
+                    data: {
+                        trackYtMusicId: providerTrack.id,
+                        canonicalRecordingId,
+                        confidence: 0.72,
+                        source: "recommendation",
+                    },
+                });
+            } catch (error) {
+                if (!hasErrorCode(error, "P2002")) throw error;
+                const racedMapping = await prisma.trackMapping.findFirst({
+                    where: { trackYtMusicId: providerTrack.id, stale: false },
+                    select: { id: true },
+                });
+                if (!racedMapping) throw error;
+                await prisma.trackMapping.update({
+                    where: { id: racedMapping.id },
+                    data: { canonicalRecordingId },
+                });
+            }
         }
         return;
     }
@@ -331,14 +345,27 @@ async function attachProviderMapping(
                 data: { canonicalRecordingId },
             });
         } else {
-            await prisma.trackMapping.create({
-                data: {
-                    trackTidalId: providerTrack.id,
-                    canonicalRecordingId,
-                    confidence: candidate.isrc ? 0.95 : 0.72,
-                    source: "recommendation",
-                },
-            });
+            try {
+                await prisma.trackMapping.create({
+                    data: {
+                        trackTidalId: providerTrack.id,
+                        canonicalRecordingId,
+                        confidence: candidate.isrc ? 0.95 : 0.72,
+                        source: "recommendation",
+                    },
+                });
+            } catch (error) {
+                if (!hasErrorCode(error, "P2002")) throw error;
+                const racedMapping = await prisma.trackMapping.findFirst({
+                    where: { trackTidalId: providerTrack.id, stale: false },
+                    select: { id: true },
+                });
+                if (!racedMapping) throw error;
+                await prisma.trackMapping.update({
+                    where: { id: racedMapping.id },
+                    data: { canonicalRecordingId },
+                });
+            }
         }
     }
 }

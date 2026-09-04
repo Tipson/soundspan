@@ -394,4 +394,58 @@ describe("recommendation exposure store", () => {
             ],
         );
     });
+
+    it("retries one idempotent impression update after a database deadlock", async () => {
+        const markViewedExposures = jest
+            .fn()
+            .mockRejectedValueOnce({ code: "40P01" })
+            .mockResolvedValueOnce(2);
+        const store = new RecommendationExposureStore({
+            createGeneration: jest.fn(),
+            loadRecentExposures: jest.fn(),
+            findAttributableExposure: jest.fn(),
+            findDirectExposure: jest.fn(),
+            markViewedExposures,
+            updateExposure: jest.fn(),
+        });
+
+        await expect(
+            store.markViewed({
+                userId: "alice",
+                generationId: "generation-1",
+                viewedAt: new Date("2026-09-01T12:00:00.000Z"),
+                tracks: [{ provider: "youtube", providerTrackId: "one" }],
+            }),
+        ).resolves.toBe(2);
+        expect(markViewedExposures).toHaveBeenCalledTimes(2);
+    });
+
+    it("recognizes the PostgreSQL deadlock code nested by the Prisma adapter", async () => {
+        const markViewedExposures = jest
+            .fn()
+            .mockRejectedValueOnce({
+                meta: {
+                    driverAdapterError: { cause: { code: "40P01" } },
+                },
+            })
+            .mockResolvedValueOnce(1);
+        const store = new RecommendationExposureStore({
+            createGeneration: jest.fn(),
+            loadRecentExposures: jest.fn(),
+            findAttributableExposure: jest.fn(),
+            findDirectExposure: jest.fn(),
+            markViewedExposures,
+            updateExposure: jest.fn(),
+        });
+
+        await expect(
+            store.markViewed({
+                userId: "alice",
+                generationId: "generation-1",
+                viewedAt: new Date("2026-09-01T12:00:00.000Z"),
+                tracks: [{ provider: "youtube", providerTrackId: "one" }],
+            }),
+        ).resolves.toBe(1);
+        expect(markViewedExposures).toHaveBeenCalledTimes(2);
+    });
 });

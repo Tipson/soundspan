@@ -10,7 +10,11 @@ type RateLimitOptions = {
     validate: { trustProxy: boolean };
     store?: unknown;
     skipSuccessfulRequests?: boolean;
-    skip?: (req: { path: string }) => boolean;
+    skip?: (req: {
+        path: string;
+        headers?: Record<string, string | undefined>;
+        query?: Record<string, unknown>;
+    }) => boolean;
     keyGenerator?: (req: {
         ip: string;
         user?: { id: string };
@@ -61,6 +65,7 @@ describe("rateLimiter middleware config", () => {
         jest.doMock("express-rate-limit", () => ({
             __esModule: true,
             default: (options: RateLimitOptions) => mockRateLimit(options),
+            ipKeyGenerator: (ip: string) => ip,
         }));
         jest.doMock("../rateLimitStore", () => ({
             createRedisRateLimitOptions: mockCreateRedisRateLimitOptions,
@@ -114,7 +119,7 @@ describe("rateLimiter middleware config", () => {
             { index: 13, windowMs: 900_000, max: 20 },
             { index: 14, windowMs: 60_000, max: 20 },
             { index: 15, windowMs: 60_000, max: 30 },
-            { index: 16, windowMs: 60_000, max: 20 },
+            { index: 16, windowMs: 60_000, max: 120 },
             { index: 17, windowMs: 60_000, max: 60 },
             { index: 18, windowMs: 60_000, max: 1000 },
         ];
@@ -210,6 +215,46 @@ describe("rateLimiter middleware config", () => {
             keyGenerator({ ip: "10.0.0.1", user: { id: "account-1" } }),
         ).toBe("account-1");
         expect(keyGenerator({ ip: "10.0.0.1" })).toBe("unresolved-account");
+    });
+
+    it("counts only uncached YouTube Music stream starts per account", async () => {
+        await loadRateLimiterModule();
+        const options = getOptions(16);
+        const skip = options.skip!;
+        const keyGenerator = options.keyGenerator!;
+
+        expect(
+            skip({
+                path: "/api/ytmusic/stream-public/video-1",
+                headers: { range: "bytes=524288-1048575" },
+                query: {},
+            }),
+        ).toBe(true);
+        expect(
+            skip({
+                path: "/api/ytmusic/stream-public/video-1",
+                headers: { range: "bytes=0-524287" },
+                query: {},
+            }),
+        ).toBe(false);
+        expect(
+            skip({
+                path: "/api/ytmusic/stream-info/video-1",
+                headers: {},
+                query: { cachedOnly: "true" },
+            }),
+        ).toBe(true);
+        expect(
+            skip({
+                path: "/api/ytmusic/stream-info/video-1",
+                headers: {},
+                query: {},
+            }),
+        ).toBe(false);
+        expect(
+            keyGenerator({ ip: "10.0.0.1", user: { id: "account-1" } }),
+        ).toBe("account-1");
+        expect(keyGenerator({ ip: "10.0.0.1" })).toBe("10.0.0.1");
     });
 
     it("uses standard headers, disables legacy headers, and disables trustProxy validation for all limiters", async () => {

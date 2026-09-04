@@ -155,6 +155,29 @@ describe("default canonical identity persistence", () => {
         expect(mockMappingCreate).not.toHaveBeenCalled();
     });
 
+    it("recovers when another request creates the provider mapping first", async () => {
+        mockMappingFindFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: "mapping-raced" });
+        mockCanonicalFindFirst.mockResolvedValue({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        mockMappingCreate.mockRejectedValueOnce({ code: "P2002" });
+
+        await expect(
+            canonicalIdentityResolver.resolve(candidate("youtube")),
+        ).resolves.toEqual({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        expect(mockMappingUpdate).toHaveBeenCalledWith({
+            where: { id: "mapping-raced" },
+            data: { canonicalRecordingId: "canonical-existing" },
+        });
+    });
+
     it.each([
         [" GB-ABC-12-34567 ", 0.95],
         [undefined, 0.72],
@@ -205,6 +228,45 @@ describe("default canonical identity persistence", () => {
             where: { id: "mapping-existing" },
             data: { canonicalRecordingId: "canonical-existing" },
         });
+    });
+
+    it("recovers a concurrent Tidal provider mapping create", async () => {
+        mockMappingFindFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: "tidal-mapping-raced" });
+        mockCanonicalFindFirst.mockResolvedValue({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        mockMappingCreate.mockRejectedValueOnce({ code: "P2002" });
+
+        await expect(
+            canonicalIdentityResolver.resolve(candidate("tidal")),
+        ).resolves.toEqual({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        expect(mockMappingUpdate).toHaveBeenCalledWith({
+            where: { id: "tidal-mapping-raced" },
+            data: { canonicalRecordingId: "canonical-existing" },
+        });
+    });
+
+    it("does not hide an unrelated provider mapping create failure", async () => {
+        mockMappingFindFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null);
+        mockCanonicalFindFirst.mockResolvedValue({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        const error = new Error("database unavailable");
+        mockMappingCreate.mockRejectedValueOnce(error);
+
+        await expect(
+            canonicalIdentityResolver.resolve(candidate("youtube")),
+        ).rejects.toBe(error);
     });
 
     it("accepts a narrow imported-provider identity without exposing recommendation fields", async () => {

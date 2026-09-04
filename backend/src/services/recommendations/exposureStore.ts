@@ -153,6 +153,34 @@ function normalizedArtistKey(value: string): string {
         .toLocaleLowerCase("en-US");
 }
 
+function isRetriableExposureWriteConflict(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) return false;
+    const record = error as Record<string, unknown>;
+    if (record.code === "P2034" || record.code === "40P01") return true;
+    const message =
+        typeof record.message === "string" ? record.message.toLowerCase() : "";
+    if (
+        message.includes("deadlock") ||
+        message.includes("could not serialize")
+    ) {
+        return true;
+    }
+    const meta =
+        typeof record.meta === "object" && record.meta !== null
+            ? (record.meta as Record<string, unknown>)
+            : null;
+    const adapter =
+        typeof meta?.driverAdapterError === "object" &&
+        meta.driverAdapterError !== null
+            ? (meta.driverAdapterError as Record<string, unknown>)
+            : null;
+    const cause =
+        typeof adapter?.cause === "object" && adapter.cause !== null
+            ? (adapter.cause as Record<string, unknown>)
+            : null;
+    return cause?.code === "40P01";
+}
+
 export class RecommendationExposureStore {
     constructor(
         private readonly dependencies: ExposureStoreDependencies,
@@ -277,12 +305,29 @@ export class RecommendationExposureStore {
         ) {
             return 0;
         }
-        return this.dependencies.markViewedExposures(
-            input.userId,
-            input.generationId,
-            input.viewedAt,
-            input.tracks,
-        );
+        try {
+            return await this.dependencies.markViewedExposures(
+                input.userId,
+                input.generationId,
+                input.viewedAt,
+                input.tracks,
+            );
+        } catch (error) {
+            if (!isRetriableExposureWriteConflict(error)) throw error;
+            exposureLogger.warn(
+                "retrying impression update after write conflict",
+                {
+                    userId: input.userId,
+                    generationId: input.generationId,
+                },
+            );
+            return this.dependencies.markViewedExposures(
+                input.userId,
+                input.generationId,
+                input.viewedAt,
+                input.tracks,
+            );
+        }
     }
 
     /** Explicit taste semantics shared by ranker training and metrics. */

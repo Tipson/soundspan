@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- fix(reliability): count only new YouTube Music stream starts instead of every byte-range chunk, isolate authenticated listeners' extraction budgets, recover concurrent canonical provider mappings and impression deadlocks, and fail fast with coalescing plus a short cooldown when an external cover source is unavailable.
+
 - fix(web): keep an open browser or PWA client intact during routine service-worker activation so page navigation cannot tear down current playback, while retaining the one-time legacy offline migration reload. Playlist mosaics now replace failed artwork with the shared fallback instead of showing broken-image glyphs.
 
 - Assign active Hybrid v2 rollout per account session so active listeners contribute comparable baseline and Hybrid behavior without changing algorithms inside one listening session.
