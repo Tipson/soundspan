@@ -16,6 +16,9 @@ describe("recommendation shadow evaluation", () => {
                 cursor: 0,
                 algorithm: "baseline-v1",
                 served: true,
+                context: {
+                    experimentAssignment: "session-switchback-v1",
+                },
                 latencyMs: 100,
                 createdAt: new Date("2026-09-01T10:00:00.000Z"),
                 exposures: [
@@ -70,6 +73,9 @@ describe("recommendation shadow evaluation", () => {
                 cursor: 0,
                 algorithm: "hybrid-v2",
                 served: true,
+                context: {
+                    experimentAssignment: "session-switchback-v1",
+                },
                 latencyMs: 250,
                 createdAt: new Date("2026-09-01T11:00:00.000Z"),
                 exposures: [
@@ -132,6 +138,26 @@ describe("recommendation shadow evaluation", () => {
             meanJaccardOverlap: 1 / 3,
             meanBaselineCoverage: 0.5,
         });
+        expect(report.withinAccountSwitchback).toEqual({
+            comparableAccountCount: 1,
+            baselineAttributedCount: 2,
+            hybridAttributedCount: 1,
+            baseline: {
+                meaningfulCompletionRate: 0.5,
+                earlySkipRate: 0.5,
+                failureRate: 0,
+            },
+            hybrid: {
+                meaningfulCompletionRate: 1,
+                earlySkipRate: 0,
+                failureRate: 0,
+            },
+            hybridMinusBaseline: {
+                meaningfulCompletionRate: 0.5,
+                earlySkipRate: -0.5,
+                failureRate: 0,
+            },
+        });
     });
 
     it("returns explicit zero coverage and unavailable engagement for an empty window", async () => {
@@ -161,6 +187,14 @@ describe("recommendation shadow evaluation", () => {
             p95Ms: 0,
         });
         expect(report.pairedShadow.pairCount).toBe(0);
+        expect(report.withinAccountSwitchback).toEqual({
+            comparableAccountCount: 0,
+            baselineAttributedCount: 0,
+            hybridAttributedCount: 0,
+            baseline: null,
+            hybrid: null,
+            hybridMinusBaseline: null,
+        });
         expect(report.dataQuality).toEqual({
             canonicalRecordingCount: 100,
             identity: {
@@ -180,6 +214,106 @@ describe("recommendation shadow evaluation", () => {
             experiment: {
                 viewedImpressionCount: 12,
                 participatingAccountCount: 3,
+            },
+        });
+    });
+
+    it("does not mix legacy account-canary outcomes into session switchback evidence", async () => {
+        const generation = (
+            algorithm: "baseline-v1" | "hybrid-v2",
+            sessionId: string,
+        ) => ({
+            id: sessionId,
+            userId: "alice",
+            sessionId,
+            surface: "wave",
+            direction: "for-you",
+            mood: null,
+            cursor: 0,
+            algorithm,
+            served: true,
+            latencyMs: 10,
+            createdAt: new Date("2026-09-01T10:00:00.000Z"),
+            exposures: [
+                {
+                    canonicalKey: sessionId,
+                    playedAt: new Date("2026-09-01T10:01:00.000Z"),
+                    listenedSeconds: 180,
+                    completionRatio: 1,
+                    outcome: "completed",
+                },
+            ],
+        });
+        const service = new RecommendationShadowEvaluationService({
+            loadGenerations: jest
+                .fn()
+                .mockResolvedValue([
+                    generation("baseline-v1", "legacy-baseline"),
+                    generation("hybrid-v2", "legacy-hybrid"),
+                ]),
+        });
+
+        const report = await service.evaluate({ since, until });
+
+        expect(report.withinAccountSwitchback.comparableAccountCount).toBe(0);
+    });
+
+    it("gives each comparable account equal weight instead of letting heavy listeners dominate", async () => {
+        const generation = (
+            userId: string,
+            algorithm: "baseline-v1" | "hybrid-v2",
+            outcome: "completed" | "failed",
+            exposureCount: number,
+        ) => ({
+            id: `${userId}-${algorithm}`,
+            userId,
+            sessionId: `${userId}-${algorithm}`,
+            surface: "wave",
+            direction: "for-you",
+            mood: null,
+            cursor: 0,
+            algorithm,
+            served: true,
+            context: { experimentAssignment: "session-switchback-v1" },
+            latencyMs: 10,
+            createdAt: new Date("2026-09-01T10:00:00.000Z"),
+            exposures: Array.from({ length: exposureCount }, (_, index) => ({
+                canonicalKey: `${userId}-${algorithm}-${index}`,
+                playedAt: new Date("2026-09-01T10:01:00.000Z"),
+                listenedSeconds: outcome === "completed" ? 180 : 0,
+                completionRatio: outcome === "completed" ? 1 : 0,
+                outcome,
+            })),
+        });
+        const service = new RecommendationShadowEvaluationService({
+            loadGenerations: jest.fn().mockResolvedValue([
+                generation("heavy", "baseline-v1", "completed", 100),
+                generation("heavy", "hybrid-v2", "failed", 1),
+                generation("light", "baseline-v1", "failed", 1),
+                generation("light", "hybrid-v2", "completed", 1),
+            ]),
+        });
+
+        const report = await service.evaluate({ since, until });
+
+        expect(report.withinAccountSwitchback).toEqual({
+            comparableAccountCount: 2,
+            baselineAttributedCount: 101,
+            hybridAttributedCount: 2,
+            baseline: {
+                meaningfulCompletionRate: 0.5,
+                earlySkipRate: 0,
+                failureRate: 0.5,
+            },
+            hybrid: {
+                meaningfulCompletionRate: 0.5,
+                earlySkipRate: 0,
+                failureRate: 0.5,
+            },
+            hybridMinusBaseline: {
+                meaningfulCompletionRate: 0,
+                earlySkipRate: 0,
+                failureRate: 0,
             },
         });
     });

@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Assign active Hybrid v2 rollout per account session so active listeners contribute comparable baseline and Hybrid behavior without changing algorithms inside one listening session.
+
 - fix(downloads): revalidate device files whenever Downloads opens or returns to the foreground, replace stale ready entries with an explicit download-again state, and evict a missing or damaged local copy immediately while online playback falls back to the network.
 - chore(ci): keep the source-file-size report visible but make it advisory so oversized legacy modules do not block otherwise valid pull requests.
 - fix(ci): make frontend test globs and coverage checks work on Windows, wait for asynchronous OIDC UI state, freeze the recommendation-session test clock, and normalize cross-platform release guard fixtures.

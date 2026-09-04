@@ -87,9 +87,9 @@ export interface RecommendationEngineDependencies {
     now: () => Date;
 }
 
-function rolloutBucket(userId: string): number {
+function rolloutBucket(userId: string, sessionId: string): number {
     const digest = createHash("sha256")
-        .update(`soundspan:hybrid-v2:${userId}`)
+        .update(`soundspan:hybrid-v2:${userId}:${sessionId}`)
         .digest();
     return digest.readUInt32BE(0) / 0x1_0000_0000;
 }
@@ -359,7 +359,8 @@ export class RecommendationEngine {
             Math.min(100, this.dependencies.hybridRolloutPercent),
         );
         const servesHybrid =
-            rolloutBucket(request.userId) * 100 < normalizedRolloutPercent;
+            rolloutBucket(request.userId, request.sessionId) * 100 <
+            normalizedRolloutPercent;
         const servedAlgorithm = servesHybrid ? "hybrid-v2" : "baseline-v1";
         const servedRecommendations = servesHybrid ? hybrid : baseline;
         const generationId = await this.recordGeneration({
@@ -367,6 +368,7 @@ export class RecommendationEngine {
             cursor,
             algorithm: servedAlgorithm,
             served: true,
+            experimentAssignment: "session-switchback-v1",
             degradedSources,
             recommendations: servedRecommendations,
             startedAt,
@@ -381,6 +383,7 @@ export class RecommendationEngine {
                         cursor,
                         algorithm: servesHybrid ? "baseline-v1" : "hybrid-v2",
                         served: false,
+                        experimentAssignment: "session-switchback-v1",
                         degradedSources,
                         recommendations: servesHybrid ? baseline : hybrid,
                         startedAt,
@@ -476,6 +479,7 @@ export class RecommendationEngine {
         cursor: number;
         algorithm: RecordEngineGenerationInput["algorithm"];
         served: boolean;
+        experimentAssignment?: "session-switchback-v1";
         degradedSources: string[];
         recommendations: ScoredRecommendation[];
         startedAt: Date;
@@ -495,7 +499,12 @@ export class RecommendationEngine {
             served: input.served,
             degradedSources: [...input.degradedSources],
             latencyMs,
-            context: requestContext(input.request),
+            context: {
+                ...requestContext(input.request),
+                ...(input.experimentAssignment
+                    ? { experimentAssignment: input.experimentAssignment }
+                    : {}),
+            },
             recommendations: input.recommendations,
         });
         try {

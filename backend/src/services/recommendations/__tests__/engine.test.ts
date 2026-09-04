@@ -139,6 +139,33 @@ describe("unified recommendation engine", () => {
         );
     });
 
+    it("assigns active rollout per recommendation session instead of pinning one account", async () => {
+        const algorithms: string[] = [];
+        for (const sessionId of ["session-0", "session-6", "session-6"]) {
+            const deps = dependencies("active");
+            deps.hybridRolloutPercent = 25;
+            deps.loadRecentExposures.mockResolvedValue([]);
+            const engine = new RecommendationEngine(deps);
+
+            await engine.recommend({ ...request, sessionId });
+            algorithms.push(deps.recordGeneration.mock.calls[0]?.[0]?.algorithm);
+            expect(deps.recordGeneration).toHaveBeenNthCalledWith(
+                1,
+                expect.objectContaining({
+                    context: expect.objectContaining({
+                        experimentAssignment: "session-switchback-v1",
+                    }),
+                }),
+            );
+        }
+
+        expect(algorithms).toEqual([
+            "baseline-v1",
+            "hybrid-v2",
+            "hybrid-v2",
+        ]);
+    });
+
     it("keeps playable fallback candidates when an optional adapter degrades", async () => {
         const deps = dependencies();
         deps.loadCandidates.mockResolvedValue({

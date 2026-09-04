@@ -56,8 +56,11 @@ Do not switch to `active` merely because the build is healthy. Promotion needs
 enough paired live generations and a measurable quality win without an
 unacceptable latency or provider-failure regression.
 
-`RECOMMENDATION_HYBRID_ROLLOUT_PERCENT` selects a stable zero-to-100 account
-bucket while mode is `active`; setting it to `0` is the immediate rollback.
+`RECOMMENDATION_HYBRID_ROLLOUT_PERCENT` selects a stable zero-to-100 bucket for
+each account's recommendation session while mode is `active`. One session stays
+on one algorithm across Home, Wave, Made For You, and Similar Tracks, while an
+active account can contribute both baseline and Hybrid sessions over time.
+Setting the percentage to `0` is the immediate rollback.
 `RECOMMENDATION_EXPLORATION_PERCENT` reserves at most zero-to-30 percent of
 ranked slots for unfamiliar playable candidates and retains `exploration` as
 their source attribution. The ranker also uses the last thirty actions in the
@@ -79,6 +82,13 @@ mean/p95 latency, and paired Jaccard overlap. It separately reports the
 viewport-confirmed impression/account sample and catalog coverage for ISRC,
 MBID, fingerprint, scalar analysis, and DCLAP embeddings. An empty report means
 more live traffic is needed; it is not evidence for activation.
+
+`withinAccountSwitchback` includes only accounts with final playback outcomes
+from both served algorithms in the selected window. Its completion, early-skip,
+and failure rates are first calculated per account and then averaged with equal
+account weight. This is the promotion signal for session rollout; pooled served
+metrics remain operational context and must not be treated as a causal A/B test
+when the account cohorts differ.
 
 Prometheus exposes:
 
@@ -202,7 +212,7 @@ Before changing production to `active`:
 4. require a useful completion/diversity improvement with acceptable p95
    latency;
 5. change only `RECOMMENDATION_ENGINE_MODE`, then monitor the same report and
-   Prometheus counters. Start with a bounded
+   Prometheus counters. Start with a bounded session-level
    `RECOMMENDATION_HYBRID_ROLLOUT_PERCENT`; set that percentage to `0` for an
    immediate baseline rollback without a rebuild.
 
