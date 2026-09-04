@@ -92,7 +92,10 @@ async function retireLegacyBackgroundFetches() {
             return aborted.state === "resolved" && aborted.value !== false;
         }),
     );
-    return results.every(Boolean);
+    // The caller uses this as a migration signal. Reload the legacy client
+    // even if one best-effort abort failed, otherwise its old bundle can
+    // recreate the retired transfer protocol.
+    return ids.length > 0 && results.length === ids.length;
 }
 
 function isImageRoute(pathname) {
@@ -684,7 +687,11 @@ self.addEventListener("activate", (event) => {
     event.waitUntil(
         (async () => {
             const cacheNames = await caches.keys();
-            await retireLegacyBackgroundFetches().catch(() => false);
+            const hasLegacyShellCache = cacheNames.some(
+                (name) => name.startsWith("soundspan-v") && name !== CACHE_NAME,
+            );
+            const hadLegacyBackgroundFetches =
+                await retireLegacyBackgroundFetches().catch(() => false);
             await Promise.all(
                 cacheNames
                     .filter(
@@ -697,11 +704,10 @@ self.addEventListener("activate", (event) => {
                     .map((name) => caches.delete(name)),
             );
             await self.clients.claim();
-            // Activation is the only reliable migration barrier for already
-            // open clients: an old shell cache or Background Fetch ID may have
-            // been evicted before this worker can inspect it. Navigating every
-            // window client exactly once per worker activation prevents an old
-            // JavaScript bundle from recreating the retired transfer protocol.
+            // Reload once only while crossing the legacy shell boundary. A
+            // routine worker update must not tear down the persistent audio
+            // provider in an already open client.
+            if (!hasLegacyShellCache && !hadLegacyBackgroundFetches) return;
             const windowClients = await self.clients.matchAll({
                 type: "window",
                 includeUncontrolled: true,

@@ -1191,9 +1191,20 @@ test("activate retires legacy Background Fetch, reloads an old client once, and 
     assert.equal(harness.claimCalls, 1);
 });
 
-test("activate reloads an open client even when only the v4 cache remains", async () => {
+test("activate keeps open clients intact when no legacy shell migration is required", async () => {
     const harness = createHarness();
     await harness.caches.open("soundspan-v4");
+
+    await harness.dispatch("activate");
+
+    assert.deepEqual(harness.clientNavigations, []);
+    assert.equal(harness.claimCalls, 1);
+});
+
+test("activate reloads a legacy Background Fetch client even after its shell cache was evicted", async () => {
+    const harness = createHarness();
+    await harness.caches.open("soundspan-v4");
+    harness.addLegacyBackgroundFetch("soundspan-device-audio-stuck::2");
 
     await harness.dispatch("activate");
 
@@ -1204,6 +1215,7 @@ test("activate reloads an open client even when only the v4 cache remains", asyn
 
 test("one rejected client navigation does not block the remaining clients", async () => {
     const harness = createHarness(undefined, undefined, ["reject", "resolve"]);
+    await harness.caches.open("soundspan-v3");
     await harness.caches.open("soundspan-v4");
 
     await harness.dispatch("activate");

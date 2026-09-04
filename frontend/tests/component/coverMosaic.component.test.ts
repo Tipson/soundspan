@@ -10,6 +10,9 @@ mock.module("next/image", {
             src: props.src as string,
             alt: props.alt as string,
             "data-sizes": props.sizes as string,
+            "data-has-error-handler": String(
+                typeof props.onError === "function",
+            ),
             className: props.className as string,
         }),
 });
@@ -119,6 +122,19 @@ describe("CoverMosaic", () => {
         assert.ok(html.includes("grid-cols-2"), "Should render 2-column grid");
         assert.ok(html.includes('src="url-1"'));
         assert.ok(html.includes('src="url-4"'));
+    });
+
+    test("every artwork cell has a broken-image fallback", async () => {
+        const CoverMosaic = await loadComponent();
+        const html = renderToStaticMarkup(
+            React.createElement(CoverMosaic, {
+                coverUrls: ["url-1", "url-2", "url-3", "url-4"],
+            }),
+        );
+        const protectedImages = (
+            html.match(/data-has-error-handler="true"/g) || []
+        ).length;
+        assert.equal(protectedImages, 4);
     });
 
     test("renders 3x2 grid", async () => {
