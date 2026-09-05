@@ -105,6 +105,95 @@ test("coordinator submits current and immediate before readiness, then adaptive 
     assert.equal(calls[0].generation, calls[1].generation);
 });
 
+test("progress updates reuse one warmup generation before and after readiness", async () => {
+    const calls: TailWarmupReconcileRequest[] = [];
+    const signals: AbortSignal[] = [];
+    const pending = deferredLease();
+    const coordinator = new AdaptiveQueueWarmupCoordinator(
+        "stable-player",
+        async (request, signal) => {
+            calls.push(request);
+            signals.push(signal);
+        },
+    );
+    const input = {
+        currentVideoId: "current",
+        immediateVideoId: "next",
+        tailVideoIds: ["tail"],
+        connection: {},
+        immediateLease: pending.lease,
+    };
+    const completions = Array.from({ length: 100 }, () =>
+        coordinator.reconcile({
+            ...input,
+            tailVideoIds: [...input.tailVideoIds],
+        }),
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(signals[0].aborted, false);
+    pending.settle({ state: "ready" });
+    await Promise.all(completions);
+    for (let index = 0; index < 100; index++)
+        await coordinator.reconcile(input);
+    assert.equal(calls.length, 2);
+    await coordinator.reconcile({ ...input, tailVideoIds: ["changed"] });
+    assert.equal(calls.length, 4);
+    assert.deepEqual(calls.at(-1)?.tail, ["changed"]);
+});
+
+test("repeated inactive updates send only one clear, and a new lease is not suppressed", async () => {
+    const calls: TailWarmupReconcileRequest[] = [];
+    const coordinator = new AdaptiveQueueWarmupCoordinator(
+        "clear-player",
+        async (request) => {
+            calls.push(request);
+        },
+    );
+    for (let index = 0; index < 100; index++) await coordinator.clear();
+    assert.equal(calls.length, 1);
+    const first = deferredLease();
+    first.settle({ state: "ready" });
+    const input = {
+        currentVideoId: "current",
+        immediateVideoId: "next",
+        tailVideoIds: [],
+        connection: {},
+        immediateLease: first.lease,
+    };
+    await coordinator.reconcile(input);
+    const second = deferredLease();
+    second.settle({ state: "ready" });
+    await coordinator.reconcile({ ...input, immediateLease: second.lease });
+    assert.equal(calls.length, 3);
+    await coordinator.clear();
+    assert.equal(calls.length, 4);
+});
+
+test("unchanged warmup renews after sixty seconds instead of expiring or flooding", async (context) => {
+    context.mock.timers.enable({ apis: ["Date"], now: 1000 });
+    const calls: TailWarmupReconcileRequest[] = [];
+    const coordinator = new AdaptiveQueueWarmupCoordinator(
+        "renew-player",
+        async (request) => {
+            calls.push(request);
+        },
+    );
+    const input = {
+        currentVideoId: "current",
+        immediateVideoId: null,
+        tailVideoIds: [],
+        connection: {},
+        immediateLease: null,
+    };
+    await coordinator.reconcile(input);
+    context.mock.timers.tick(59_999);
+    await coordinator.reconcile(input);
+    assert.equal(calls.length, 1);
+    context.mock.timers.tick(1);
+    await coordinator.reconcile(input);
+    assert.equal(calls.length, 2);
+});
+
 for (const skips of [10, 20]) {
     test(`rapid-skip ${skips} generations only admits the latest tail`, async () => {
         const calls: Array<{

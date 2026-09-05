@@ -124,6 +124,10 @@ export interface AdaptiveQueueWarmupInput {
 export class AdaptiveQueueWarmupCoordinator {
     private generation = 0;
     private controller: AbortController | null = null;
+    private lastPlanKey: string | null = null;
+    private lastLease: AudioPreloadLease | null = null;
+    private lastSubmissionAt = 0;
+    private completion: Promise<void> = Promise.resolve();
 
     constructor(
         private readonly ownerId: string,
@@ -132,6 +136,16 @@ export class AdaptiveQueueWarmupCoordinator {
     ) {}
 
     reconcile(input: AdaptiveQueueWarmupInput): Promise<void> {
+        const planKey = JSON.stringify([
+            input.quality ?? null,
+            input.currentVideoId,
+            input.immediateVideoId,
+            input.tailVideoIds,
+            resolveAdaptiveTailWarmupCount(input.connection),
+        ]);
+        if (this.reusesPlan(planKey, input.immediateLease)) {
+            return this.completion;
+        }
         this.controller?.abort();
         const controller = new AbortController();
         this.controller = controller;
@@ -146,7 +160,7 @@ export class AdaptiveQueueWarmupCoordinator {
         };
         const prioritySubmission = this.submit(baseRequest, controller);
 
-        return (async () => {
+        this.completion = (async () => {
             const readiness = input.immediateLease
                 ? await input.immediateLease.result
                 : { state: "cancelled" as const };
@@ -183,14 +197,18 @@ export class AdaptiveQueueWarmupCoordinator {
             }
             await this.submit({ ...baseRequest, tail }, controller);
         })();
+        return this.completion;
     }
 
     clear(): Promise<void> {
+        if (this.reusesPlan("clear", null)) {
+            return this.completion;
+        }
         this.controller?.abort();
         const controller = new AbortController();
         this.controller = controller;
         const generation = ++this.generation;
-        return this.submit(
+        this.completion = this.submit(
             {
                 ownerId: this.ownerId,
                 generation,
@@ -200,6 +218,25 @@ export class AdaptiveQueueWarmupCoordinator {
             },
             controller,
         );
+        return this.completion;
+    }
+
+    private reusesPlan(key: string, lease: AudioPreloadLease | null): boolean {
+        // Progress events must not create new generations. Renew well before
+        // the server's owner TTL, including bounded retries after failures.
+        const now = Date.now();
+        if (
+            this.lastPlanKey === key &&
+            this.lastLease === lease &&
+            now >= this.lastSubmissionAt &&
+            now - this.lastSubmissionAt < 60_000
+        ) {
+            return true;
+        }
+        this.lastPlanKey = key;
+        this.lastLease = lease;
+        this.lastSubmissionAt = now;
+        return false;
     }
 
     dispose(): void {
