@@ -54,13 +54,13 @@ import releasesRoutes from "./routes/releases";
 import systemRoutes from "./routes/system";
 import ytMusicRoutes from "./routes/youtubeMusic";
 import youtubeRoutes from "./routes/youtube";
-import tidalStreamingRoutes from "./routes/tidalStreaming";
 import trackMappingsRoutes from "./routes/trackMappings";
 import playlistImportRoutes from "./routes/playlistImport";
 import streamingRoutes from "./routes/streaming";
 import lyricsRoutes from "./routes/lyrics";
 import listenTogetherRoutes from "./routes/listenTogether";
 import subsonicRoutes from "./routes/subsonic";
+import internalCanonicalIdentityRoutes from "./routes/internalCanonicalIdentity";
 import {
     setupListenTogetherSocket,
     stopListenTogetherSocketIntake,
@@ -85,6 +85,7 @@ import {
     apiLimiter,
     lyricsLimiter,
     shareLinkLimiter,
+    internalCanonicalIdentityLimiter,
 } from "./middleware/rateLimiter";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger";
@@ -238,6 +239,13 @@ app.use((req, res, next) => {
 app.set("trust proxy", config.trustProxy);
 
 // Routes - All API routes prefixed with /api for clear separation from frontend
+// Machine-only handoff uses a shared secret and its own narrow shared limiter;
+// its payload and database work are independently bounded.
+app.use(
+    "/api/internal/canonical-identity",
+    internalCanonicalIdentityLimiter,
+    internalCanonicalIdentityRoutes,
+);
 // Apply rate limiting to auth routes
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
@@ -363,8 +371,17 @@ if (config.features.audioAnalysis) {
 }
 app.use("/api/system", apiLimiter, systemRoutes);
 app.use("/api/ytmusic", apiLimiter, ytMusicRoutes);
+if (config.features.audius) {
+    app.use("/api/audius", apiLimiter, require("./routes/audius").default);
+} else {
+    app.use(
+        "/api/audius",
+        apiLimiter,
+        requireAuth,
+        createFeatureDisabledHandler(),
+    );
+}
 app.use("/api/youtube", apiLimiter, youtubeRoutes);
-app.use("/api/tidal-streaming", apiLimiter, tidalStreamingRoutes);
 app.use("/api/track-mappings", apiLimiter, trackMappingsRoutes);
 app.use("/api/import", apiLimiter, playlistImportRoutes);
 app.use("/api/streaming", apiLimiter, streamingRoutes);

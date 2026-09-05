@@ -55,6 +55,22 @@ export const apiLimiter = rateLimit({
     ...trustProxyValidation,
 });
 
+// The analyzer owns one global AcoustID lookup lease and normally emits no
+// more than three promotions per second. A separate shared bucket prevents
+// unauthenticated traffic on the machine route from consuming unbounded JSON
+// parsing/database work without coupling trusted handoffs to user API bursts.
+export const internalCanonicalIdentityLimiter = rateLimit({
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    max: 300,
+    message: "Too many canonical identity promotion requests.",
+    standardHeaders: true,
+    legacyHeaders: false,
+    ...createRedisRateLimitOptions("canonical-identity-promotion", {
+        fallback: "memory",
+    }),
+    ...trustProxyValidation,
+});
+
 // Admin routes previously inherited apiLimiter, so retain its exact budget
 // while sharing the counter across replicas for distributed abuse control.
 export const adminSurfaceLimiter = rateLimit({

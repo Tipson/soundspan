@@ -853,7 +853,7 @@ describe("youtube music route runtime behavior", () => {
             content_type: "audio/webm",
         });
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "vid-1",
             "high",
         );
@@ -901,7 +901,7 @@ describe("youtube music route runtime behavior", () => {
         await streamInfoHandler(streamInfoReq, streamInfoRes);
         expect(streamInfoRes.statusCode).toBe(200);
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "vid-1",
             "low",
         );
@@ -916,11 +916,14 @@ describe("youtube music route runtime behavior", () => {
         await streamHandler(streamReq, streamRes);
         expect(streamRes.statusCode).toBe(206);
         expect(ytMusicService.getStreamProxy).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "vid-1",
             "low",
             undefined,
-            { signal: expect.any(AbortSignal) },
+            {
+                signal: expect.any(AbortSignal),
+                purpose: "interactive",
+            },
         );
     });
 
@@ -965,11 +968,14 @@ describe("youtube music route runtime behavior", () => {
         expect(successRes.headers["content-type"]).toBe("audio/webm");
         expect(streamData.pipe).toHaveBeenCalledWith(successRes);
         expect(ytMusicService.getStreamProxy).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "vid-1",
             "medium",
             "bytes=0-200",
-            { signal: expect.any(AbortSignal) },
+            {
+                signal: expect.any(AbortSignal),
+                purpose: "interactive",
+            },
         );
 
         if (!onError) {

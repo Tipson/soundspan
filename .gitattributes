@@ -1,3 +1,9 @@
+# Keep source checkouts consistent with Prettier and Linux build runners.
+# Binary files retain Git's automatic detection; native Windows scripts use CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
 # Parallel PRs each append entries to the changelog; take both sides on
 # overlapping hunks instead of conflicting. Release rollovers restructure the
 # file in a single serialized PR, where union semantics are equally safe. The

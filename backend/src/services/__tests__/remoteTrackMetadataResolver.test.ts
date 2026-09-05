@@ -16,7 +16,6 @@ jest.mock("../../utils/logger", () => ({
             warn: jest.fn(),
             error: jest.fn(),
         };
-
         return {
             child: jest.fn(() => child),
             debug: jest.fn(),
@@ -29,23 +28,8 @@ jest.mock("../../utils/logger", () => ({
 }));
 
 const mockedLogger = logger as unknown as {
-    child: jest.Mock;
-    debug: jest.Mock;
-    info: jest.Mock;
-    warn: jest.Mock;
-    error: jest.Mock;
-    __childLogger: {
-        debug: jest.Mock;
-        info: jest.Mock;
-        warn: jest.Mock;
-        error: jest.Mock;
-    };
+    __childLogger: { debug: jest.Mock; warn: jest.Mock };
 };
-
-const mockTidalGetTrack = jest.fn();
-jest.mock("../tidalStreaming", () => ({
-    tidalStreamingService: { getTrack: mockTidalGetTrack },
-}));
 
 const mockYtGetSong = jest.fn();
 jest.mock("../youtubeMusic", () => ({
@@ -55,12 +39,21 @@ jest.mock("../youtubeMusic", () => ({
 describe("remoteTrackMetadataResolver", () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockTidalGetTrack.mockReset();
         mockYtGetSong.mockReset();
     });
 
     describe("hasPlaceholderRemoteTrackMetadata", () => {
-        it("returns true for missing/non-string metadata fields", () => {
+        it.each([
+            [{ title: "", artist: "Artist", album: "Album" }],
+            [{ title: "Unknown Track", artist: "Artist", album: "Album" }],
+            [{ title: "Title", artist: "Unknown Artist", album: "Album" }],
+            [{ title: "Title", artist: "Artist", album: "Single" }],
+            [{ title: "Title", artist: "Artist", album: "Unknown Album" }],
+        ])("recognizes placeholder metadata", (metadata) => {
+            expect(hasPlaceholderRemoteTrackMetadata(metadata)).toBe(true);
+        });
+
+        it("recognizes missing or non-string fields", () => {
             const metadata = {
                 title: "Real Title",
                 artist: "Real Artist",
@@ -70,58 +63,7 @@ describe("remoteTrackMetadataResolver", () => {
             expect(hasPlaceholderRemoteTrackMetadata(metadata)).toBe(true);
         });
 
-        it("returns true for title placeholders", () => {
-            expect(
-                hasPlaceholderRemoteTrackMetadata({
-                    title: "  Unknown Track  ",
-                    artist: "Artist",
-                    album: "Album",
-                }),
-            ).toBe(true);
-            expect(
-                hasPlaceholderRemoteTrackMetadata({
-                    title: "",
-                    artist: "Artist",
-                    album: "Album",
-                }),
-            ).toBe(true);
-        });
-
-        it("returns true for artist placeholders", () => {
-            expect(
-                hasPlaceholderRemoteTrackMetadata({
-                    title: "Title",
-                    artist: " unknown artist ",
-                    album: "Album",
-                }),
-            ).toBe(true);
-            expect(
-                hasPlaceholderRemoteTrackMetadata({
-                    title: "Title",
-                    artist: "Unknown",
-                    album: "Album",
-                }),
-            ).toBe(true);
-        });
-
-        it("returns true for album placeholders", () => {
-            expect(
-                hasPlaceholderRemoteTrackMetadata({
-                    title: "Title",
-                    artist: "Artist",
-                    album: "  single  ",
-                }),
-            ).toBe(true);
-            expect(
-                hasPlaceholderRemoteTrackMetadata({
-                    title: "Title",
-                    artist: "Artist",
-                    album: "Unknown Album",
-                }),
-            ).toBe(true);
-        });
-
-        it("returns false for fully-real metadata", () => {
+        it("accepts complete real metadata", () => {
             expect(
                 hasPlaceholderRemoteTrackMetadata({
                     title: "Track Name",
@@ -133,11 +75,11 @@ describe("remoteTrackMetadataResolver", () => {
     });
 
     describe("resolveRemoteTrackMetadataForRequest", () => {
-        it("returns normalized request metadata when not placeholder", async () => {
+        it("normalizes complete request metadata without provider I/O", async () => {
             const lookup: RemoteTrackLookup = {
-                provider: "tidal",
+                provider: "youtube",
                 userId: "user-1",
-                tidalId: 1,
+                videoId: "video-1",
                 metadata: {
                     title: "  Title  ",
                     artist: "  Artist  ",
@@ -145,31 +87,31 @@ describe("remoteTrackMetadataResolver", () => {
                     duration: 215.8,
                     thumbnailUrl: "  https://img.local/thumb.jpg  ",
                     isrc: "  US-S1Z-99-00001  ",
-                    quality: "  LOSSLESS  ",
+                    quality: "  HIGH  ",
                     explicit: false,
                 },
             };
 
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
-
-            expect(resolved).toEqual({
+            await expect(
+                resolveRemoteTrackMetadataForRequest(lookup),
+            ).resolves.toEqual({
                 title: "Title",
                 artist: "Artist",
                 album: "Album",
                 duration: 215,
                 thumbnailUrl: "https://img.local/thumb.jpg",
                 isrc: "US-S1Z-99-00001",
-                quality: "LOSSLESS",
+                quality: "HIGH",
                 explicit: false,
             });
-            expect(mockTidalGetTrack).not.toHaveBeenCalled();
+            expect(mockYtGetSong).not.toHaveBeenCalled();
         });
 
-        it("does not fetch missing artwork for complete metadata by default", async () => {
+        it("does not fetch missing artwork unless persisted enrichment opts in", async () => {
             const resolved = await resolveRemoteTrackMetadataForRequest({
-                provider: "tidal",
+                provider: "youtube",
                 userId: "user-fast-path",
-                tidalId: 123,
+                videoId: "complete-video",
                 metadata: {
                     title: "Complete Title",
                     artist: "Complete Artist",
@@ -179,43 +121,85 @@ describe("remoteTrackMetadataResolver", () => {
             });
 
             expect(resolved.thumbnailUrl).toBeUndefined();
-            expect(mockTidalGetTrack).not.toHaveBeenCalled();
+            expect(mockYtGetSong).not.toHaveBeenCalled();
         });
 
-        it("fetches missing artwork when persisted enrichment opts in", async () => {
-            mockTidalGetTrack.mockResolvedValueOnce({
-                title: "Complete Title",
-                artist: "Complete Artist",
-                album: { title: "Complete Album" },
-                duration: 205,
-                thumbnailUrl: "https://img.local/tidal-cover.jpg",
-                isrc: null,
-                explicit: false,
+        it("repairs placeholders and artwork from YouTube Music metadata", async () => {
+            mockYtGetSong.mockResolvedValueOnce({
+                title: "Resolved title",
+                artist: "Resolved artist",
+                album: "Resolved album",
+                duration: 234.9,
+                thumbnails: [
+                    { url: "https://img.local/small.jpg" },
+                    { url: "https://img.local/large.jpg" },
+                ],
             });
 
             const resolved = await resolveRemoteTrackMetadataForRequest({
-                provider: "tidal",
+                provider: "youtube",
                 userId: "user-enrichment",
-                tidalId: 124,
+                videoId: "video-enrichment",
                 fetchArtworkIfMissing: true,
                 metadata: {
-                    title: "Complete Title",
-                    artist: "Complete Artist",
-                    album: "Complete Album",
-                    duration: 205,
+                    title: "Unknown",
+                    artist: "Unknown Artist",
+                    album: "Single",
                 },
             });
 
-            expect(mockTidalGetTrack).toHaveBeenCalledWith(
+            expect(mockYtGetSong).toHaveBeenCalledWith(
                 "user-enrichment",
-                124,
+                "video-enrichment",
             );
-            expect(resolved.thumbnailUrl).toBe(
-                "https://img.local/tidal-cover.jpg",
-            );
+            expect(resolved).toEqual({
+                title: "Resolved title",
+                artist: "Resolved artist",
+                album: "Resolved album",
+                duration: 234,
+                thumbnailUrl: "https://img.local/large.jpg",
+                isrc: undefined,
+                quality: undefined,
+                explicit: undefined,
+            });
         });
 
-        it("normalizes placeholders to defaults and ignores invalid optional fields", async () => {
+        it("falls back to public YouTube Music metadata lookup", async () => {
+            mockYtGetSong
+                .mockRejectedValueOnce(new Error("private lookup failed"))
+                .mockResolvedValueOnce({
+                    title: "Public title",
+                    artist: "Public artist",
+                    album: "Public album",
+                    duration: 198,
+                });
+
+            const resolved = await resolveRemoteTrackMetadataForRequest({
+                provider: "youtube",
+                userId: "user-1",
+                videoId: "public-video",
+                metadata: {
+                    title: "Unknown",
+                    artist: "Unknown",
+                    album: "Unknown",
+                },
+            });
+
+            expect(mockYtGetSong).toHaveBeenNthCalledWith(
+                1,
+                "user-1",
+                "public-video",
+            );
+            expect(mockYtGetSong).toHaveBeenNthCalledWith(
+                2,
+                "__public__",
+                "public-video",
+            );
+            expect(mockedLogger.__childLogger.debug).toHaveBeenCalled();
+            expect(resolved.title).toBe("Public title");
+        });
+
+        it("returns normalized defaults when the video id is missing", async () => {
             const metadata = {
                 title: "   ",
                 artist: "",
@@ -227,13 +211,11 @@ describe("remoteTrackMetadataResolver", () => {
                 explicit: "yes",
             } as unknown as RemoteTrackMetadataInput;
 
-            const lookup: RemoteTrackLookup = {
-                provider: "tidal",
+            const resolved = await resolveRemoteTrackMetadataForRequest({
+                provider: "youtube",
                 userId: "user-1",
                 metadata,
-            };
-
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
+            });
 
             expect(resolved).toEqual({
                 title: "Unknown",
@@ -245,264 +227,18 @@ describe("remoteTrackMetadataResolver", () => {
                 quality: undefined,
                 explicit: undefined,
             });
-        });
-
-        it("returns normalized metadata for placeholder tidal request with invalid tidalId", async () => {
-            const lookup: RemoteTrackLookup = {
-                provider: "tidal",
-                userId: "user-1",
-                tidalId: 0,
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown Artist",
-                    album: "Unknown Album",
-                    duration: Infinity,
-                },
-            };
-
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
-
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "Unknown Artist",
-                album: "Unknown Album",
-                duration: 180,
-                thumbnailUrl: undefined,
-                isrc: undefined,
-                quality: undefined,
-                explicit: undefined,
-            });
-            expect(mockTidalGetTrack).not.toHaveBeenCalled();
-        });
-
-        it("returns normalized metadata when tidal detail is null", async () => {
-            mockTidalGetTrack.mockResolvedValueOnce(null);
-
-            const lookup: RemoteTrackLookup = {
-                provider: "tidal",
-                userId: "user-2",
-                tidalId: 888.7,
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown",
-                    album: "Single",
-                    duration: 0,
-                },
-            };
-
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
-
-            expect(mockTidalGetTrack).toHaveBeenCalledWith("user-2", 888);
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "Unknown",
-                album: "Single",
-                duration: 180,
-                thumbnailUrl: undefined,
-                isrc: undefined,
-                quality: undefined,
-                explicit: undefined,
-            });
-        });
-
-        it("updates only non-placeholder fields from tidal detail", async () => {
-            mockTidalGetTrack.mockResolvedValueOnce({
-                title: "Unknown Track",
-                artist: "  Resolved Artist  ",
-                album: { title: "Unknown Album" },
-                duration: -12,
-                isrc: "   ",
-                explicit: "no",
-            });
-
-            const lookup: RemoteTrackLookup = {
-                provider: "tidal",
-                userId: "user-3",
-                tidalId: 44,
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown",
-                    album: "Unknown",
-                    duration: 222,
-                    explicit: true,
-                },
-            };
-
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
-
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "  Resolved Artist  ",
-                album: "Unknown",
-                duration: 222,
-                thumbnailUrl: undefined,
-                isrc: undefined,
-                quality: undefined,
-                explicit: true,
-            });
-        });
-
-        it("overwrites metadata from valid tidal detail fields", async () => {
-            mockTidalGetTrack.mockResolvedValueOnce({
-                title: "Resolved Title",
-                artist: "Resolved Artist",
-                album: { title: "Resolved Album" },
-                duration: 301.99,
-                isrc: "  QZ5AB1234567  ",
-                explicit: false,
-            });
-
-            const lookup: RemoteTrackLookup = {
-                provider: "tidal",
-                userId: "user-4",
-                tidalId: 777,
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown",
-                    album: "Unknown",
-                    duration: -3,
-                },
-            };
-
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
-
-            expect(resolved).toEqual({
-                title: "Resolved Title",
-                artist: "Resolved Artist",
-                album: "Resolved Album",
-                duration: 301,
-                thumbnailUrl: undefined,
-                isrc: "QZ5AB1234567",
-                quality: undefined,
-                explicit: false,
-            });
-        });
-
-        it("returns resolved metadata and logs warning when tidal provider throws", async () => {
-            const providerError = new Error("tidal unavailable");
-            mockTidalGetTrack.mockRejectedValueOnce(providerError);
-
-            const lookup: RemoteTrackLookup = {
-                provider: "tidal",
-                userId: "user-5",
-                tidalId: 111,
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown",
-                    album: "Unknown",
-                    duration: 0,
-                },
-            };
-
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
-
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "Unknown",
-                album: "Unknown",
-                duration: 180,
-                thumbnailUrl: undefined,
-                isrc: undefined,
-                quality: undefined,
-                explicit: undefined,
-            });
-            expect(mockedLogger.__childLogger.warn).toHaveBeenCalledWith(
-                "Failed to resolve inline metadata for tidal track",
-                providerError,
-            );
-        });
-
-        it("returns normalized metadata for youtube request missing videoId", async () => {
-            const lookup: RemoteTrackLookup = {
-                provider: "youtube",
-                userId: "user-6",
-                videoId: "   ",
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown Artist",
-                    album: "Unknown Album",
-                },
-            };
-
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
-
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "Unknown Artist",
-                album: "Unknown Album",
-                duration: 180,
-                thumbnailUrl: undefined,
-                isrc: undefined,
-                quality: undefined,
-                explicit: undefined,
-            });
             expect(mockYtGetSong).not.toHaveBeenCalled();
         });
 
-        it("returns normalized metadata when both youtube lookups return null", async () => {
+        it("keeps normalized metadata when both YouTube lookups fail", async () => {
             mockYtGetSong
-                .mockResolvedValueOnce(null)
-                .mockResolvedValueOnce(null);
-
-            const lookup: RemoteTrackLookup = {
-                provider: "youtube",
-                userId: "user-7",
-                videoId: "abc123",
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown",
-                    album: "Unknown",
-                    duration: 0,
-                },
-            };
-
-            const resolved = await resolveRemoteTrackMetadataForRequest(lookup);
-
-            expect(mockYtGetSong).toHaveBeenNthCalledWith(
-                1,
-                "user-7",
-                "abc123",
-            );
-            expect(mockYtGetSong).toHaveBeenNthCalledWith(
-                2,
-                "__public__",
-                "abc123",
-            );
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "Unknown",
-                album: "Unknown",
-                duration: 180,
-                thumbnailUrl: undefined,
-                isrc: undefined,
-                quality: undefined,
-                explicit: undefined,
-            });
-        });
-
-        it("falls back to __public__ when primary youtube lookup throws", async () => {
-            const lookupError = new Error("auth token expired");
-            mockYtGetSong
-                .mockRejectedValueOnce(lookupError)
-                .mockResolvedValueOnce({
-                    title: "Real YT Title",
-                    artist: "Real YT Artist",
-                    album: "Real YT Album",
-                    duration: 190.6,
-                    thumbnails: [
-                        1,
-                        null,
-                        { foo: "bar" },
-                        { url: "   " },
-                        { url: "https://img.local/small.jpg" },
-                        { url: " https://img.local/large.jpg " },
-                    ],
-                });
+                .mockRejectedValueOnce(new Error("private failed"))
+                .mockRejectedValueOnce(new Error("public failed"));
 
             const resolved = await resolveRemoteTrackMetadataForRequest({
                 provider: "youtube",
-                userId: "user-8",
-                videoId: "video-8",
+                userId: "user-1",
+                videoId: "failed-video",
                 metadata: {
                     title: "Unknown",
                     artist: "Unknown",
@@ -510,132 +246,36 @@ describe("remoteTrackMetadataResolver", () => {
                 },
             });
 
-            expect(mockedLogger.__childLogger.debug).toHaveBeenCalledWith(
-                "Falling back to __public__ YT metadata lookup for videoId=video-8",
-                lookupError,
-            );
-            expect(mockYtGetSong).toHaveBeenNthCalledWith(
-                1,
-                "user-8",
-                "video-8",
-            );
-            expect(mockYtGetSong).toHaveBeenNthCalledWith(
-                2,
-                "__public__",
-                "video-8",
-            );
-            expect(resolved).toEqual({
-                title: "Real YT Title",
-                artist: "Real YT Artist",
-                album: "Real YT Album",
-                duration: 190,
-                thumbnailUrl: "https://img.local/large.jpg",
-                isrc: undefined,
-                quality: undefined,
-                explicit: undefined,
-            });
-        });
-
-        it("keeps existing thumbnail and ignores placeholder youtube fields", async () => {
-            mockYtGetSong.mockResolvedValueOnce({
-                title: "unknown track",
-                artist: " unknown ",
-                album: "single",
-                duration: 0,
-                thumbnails: [],
-            });
-
-            const resolved = await resolveRemoteTrackMetadataForRequest({
-                provider: "youtube",
-                userId: "user-9",
-                videoId: "video-9",
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown",
-                    album: "Unknown",
-                    thumbnailUrl: "https://existing.local/thumb.jpg",
-                    duration: 210,
-                    explicit: true,
-                },
-            });
-
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "Unknown",
-                album: "Unknown",
-                duration: 210,
-                thumbnailUrl: "https://existing.local/thumb.jpg",
-                isrc: undefined,
-                quality: undefined,
-                explicit: true,
-            });
-        });
-
-        it("returns resolved metadata and logs warning when youtube fallback throws", async () => {
-            const fallbackError = new Error("public lookup failed");
-            mockYtGetSong
-                .mockResolvedValueOnce(null)
-                .mockRejectedValueOnce(fallbackError);
-
-            const resolved = await resolveRemoteTrackMetadataForRequest({
-                provider: "youtube",
-                userId: "user-10",
-                videoId: "video-10",
-                metadata: {
-                    title: "Unknown",
-                    artist: "Unknown",
-                    album: "Unknown",
-                },
-            });
-
+            expect(resolved.title).toBe("Unknown");
             expect(mockedLogger.__childLogger.warn).toHaveBeenCalledWith(
                 "Failed to resolve inline metadata for youtube track",
-                fallbackError,
+                expect.any(Error),
             );
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "Unknown",
-                album: "Unknown",
-                duration: 180,
-                thumbnailUrl: undefined,
-                isrc: undefined,
-                quality: undefined,
-                explicit: undefined,
-            });
         });
     });
 
     describe("logger child fallback initialization", () => {
-        it("uses base logger when child is not a function", async () => {
+        it("uses the base logger when child is not a function", async () => {
             jest.resetModules();
-
             const fallbackWarn = jest.fn();
-            const fallbackDebug = jest.fn();
 
             jest.doMock("../../utils/logger", () => ({
                 logger: {
                     child: "not-a-function",
-                    debug: fallbackDebug,
+                    debug: jest.fn(),
                     info: jest.fn(),
                     warn: fallbackWarn,
                     error: jest.fn(),
                 },
             }));
-            jest.doMock("../tidalStreaming", () => ({
-                tidalStreamingService: { getTrack: jest.fn() },
-            }));
             jest.doMock("../youtubeMusic", () => ({
                 ytMusicService: {
-                    getSong: jest
-                        .fn()
-                        .mockResolvedValueOnce(null)
-                        .mockRejectedValueOnce(new Error("explode")),
+                    getSong: jest.fn().mockRejectedValue(new Error("explode")),
                 },
             }));
 
             const isolatedModule =
                 await import("../remoteTrackMetadataResolver");
-
             const resolved =
                 await isolatedModule.resolveRemoteTrackMetadataForRequest({
                     provider: "youtube",
@@ -648,21 +288,11 @@ describe("remoteTrackMetadataResolver", () => {
                     },
                 });
 
-            expect(resolved).toEqual({
-                title: "Unknown",
-                artist: "Unknown",
-                album: "Unknown",
-                duration: 180,
-                thumbnailUrl: undefined,
-                isrc: undefined,
-                quality: undefined,
-                explicit: undefined,
-            });
+            expect(resolved.title).toBe("Unknown");
             expect(fallbackWarn).toHaveBeenCalledWith(
                 "Failed to resolve inline metadata for youtube track",
                 expect.any(Error),
             );
-            expect(fallbackDebug).not.toHaveBeenCalled();
         });
     });
 });

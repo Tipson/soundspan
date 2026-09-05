@@ -10,7 +10,6 @@ import { queryKeys } from "@/lib/queryKeys";
 
 interface ExplorePrefs {
     showYtMusicExplore: boolean;
-    showTidalExplore: boolean;
 }
 
 /**
@@ -23,7 +22,6 @@ interface ExplorePrefs {
 export function useUserSettingsExplorePrefs(): ExplorePrefs {
     const { data } = useQuery<{
         showYtMusicExplore?: boolean;
-        showTidalExplore?: boolean;
     }>({
         queryKey: queryKeys.userSettings(),
         queryFn: () => api.getSettings(),
@@ -31,11 +29,10 @@ export function useUserSettingsExplorePrefs(): ExplorePrefs {
     });
 
     if (data === undefined) {
-        return { showYtMusicExplore: false, showTidalExplore: false };
+        return { showYtMusicExplore: false };
     }
 
     return {
         showYtMusicExplore: data.showYtMusicExplore ?? true,
-        showTidalExplore: data.showTidalExplore ?? true,
     };
 }

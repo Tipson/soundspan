@@ -42,6 +42,11 @@ const state = {
     isInGroup: false,
     isHost: false,
     playbackType: "track" as string | null,
+    cachedImageCalls: [] as Array<{
+        src: string | null | undefined;
+        alt: string;
+        fallback?: React.ReactNode;
+    }>,
 };
 
 mock.module("lucide-react", {
@@ -163,6 +168,30 @@ mock.module("next/image", {
         }),
 });
 
+mock.module("@/components/ui/CachedImage", {
+    namedExports: {
+        CachedImage: ({
+            src,
+            alt,
+            fallback,
+        }: {
+            src: string | null | undefined;
+            alt: string;
+            fallback?: React.ReactNode;
+        }) => {
+            state.cachedImageCalls.push({ src, alt, fallback });
+            return React.createElement(
+                "span",
+                {
+                    "data-testid": "cached-queue-artwork",
+                    "data-artwork-src": src ?? "",
+                },
+                fallback,
+            );
+        },
+    },
+});
+
 mock.module("@/components/ui/Card", {
     namedExports: {
         Card: ({ children }: { children: React.ReactNode }) =>
@@ -248,6 +277,7 @@ beforeEach(() => {
     state.isInGroup = false;
     state.isHost = false;
     state.playbackType = "track";
+    state.cachedImageCalls = [];
 });
 
 test("Queue page Next Up tracks render TrackOverflowMenu trigger", async () => {
@@ -320,6 +350,78 @@ test("Queue page keeps Move Up/Down and Play buttons alongside overflow menu", a
         html,
         /data-queue-row-actions="responsive" class="[^"]*\bhidden\b/,
         "Direct queue actions should not be hidden on mobile",
+    );
+});
+
+test("manual queue jumps describe skipped positions without claiming a listen", async () => {
+    state.currentIndex = 2;
+    state.currentTrack = state.queue[2];
+    const mod = await import("../../app/queue/page");
+    const QueuePage = mod.default;
+
+    const html = renderToStaticMarkup(React.createElement(QueuePage));
+
+    assert.match(html, /Ранее в очереди \(2\)/);
+    assert.doesNotMatch(html, /Прослушано ранее/);
+});
+
+test("Queue page gives current, upcoming, and earlier track artwork a runtime fallback", async () => {
+    state.queue.forEach((track, index) => {
+        if (track.album) {
+            track.album.coverArt = `https://img.test/queue-${index + 1}.jpg`;
+        }
+    });
+    state.currentIndex = 1;
+    state.currentTrack = state.queue[1];
+    const mod = await import("../../app/queue/page");
+    const QueuePage = mod.default;
+
+    const html = renderToStaticMarkup(React.createElement(QueuePage));
+
+    assert.equal(state.cachedImageCalls.length, 3);
+    assert.ok(
+        state.cachedImageCalls.every((call) => call.fallback !== undefined),
+        "every queue position must render a useful placeholder after an image error",
+    );
+    assert.match(html, /data-artwork-src="https:\/\/img\.test\/queue-1\.jpg"/);
+    assert.match(html, /data-artwork-src="https:\/\/img\.test\/queue-2\.jpg"/);
+    assert.match(html, /data-artwork-src="https:\/\/img\.test\/queue-3\.jpg"/);
+});
+
+test("Queue page gives current and upcoming episode artwork a runtime fallback", async () => {
+    state.queue = [
+        {
+            itemType: "episode",
+            id: "podcast-1:episode-1",
+            title: "Current Episode",
+            podcastTitle: "Podcast One",
+            podcastId: "podcast-1",
+            episodeId: "episode-1",
+            coverUrl: "https://img.test/episode-1.jpg",
+            duration: 1800,
+        },
+        {
+            itemType: "episode",
+            id: "podcast-1:episode-2",
+            title: "Next Episode",
+            podcastTitle: "Podcast One",
+            podcastId: "podcast-1",
+            episodeId: "episode-2",
+            coverUrl: "https://img.test/episode-2.jpg",
+            duration: 1900,
+        },
+    ] as unknown as typeof state.queue;
+    state.currentTrack = null;
+    state.currentIndex = 0;
+    state.playbackType = "podcast";
+    const mod = await import("../../app/queue/page");
+    const QueuePage = mod.default;
+
+    renderToStaticMarkup(React.createElement(QueuePage));
+
+    assert.equal(state.cachedImageCalls.length, 2);
+    assert.ok(
+        state.cachedImageCalls.every((call) => call.fallback !== undefined),
     );
 });
 

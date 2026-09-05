@@ -83,14 +83,13 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
         };
     }, []);
 
-    // Identify unowned tracks that need matching
-    // Skip any tracks already enriched by TIDAL (TIDAL takes priority)
+    // Identify unowned tracks that need matching. Historical TIDAL rows are
+    // deliberately re-matched to the active YouTube provider.
     const unownedTracks = useMemo(() => {
         if (!ytMusicAvailable || !topTracks) return [];
 
         return topTracks.filter(
             (t) =>
-                t.streamSource !== "tidal" &&
                 !(t.streamSource === "youtube" && !!t.youtubeVideoId) &&
                 (!t.album?.id ||
                     !t.album?.title ||
@@ -173,15 +172,11 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
         };
     }, [unownedTracks, artistKey, artist?.name]);
 
-    // Produce enriched top-tracks with streamSource + youtubeVideoId
-    // Preserve any existing TIDAL enrichment — don't overwrite
+    // Produce enriched top-tracks with streamSource + youtubeVideoId.
     const enrichedTopTracks = useMemo((): Track[] | undefined => {
         if (!topTracks) return undefined;
-        if (Object.keys(matches).length === 0) return topTracks;
 
         return topTracks.map((track) => {
-            // Don't overwrite TIDAL-enriched tracks
-            if (track.streamSource === "tidal") return track;
             const match = matches[track.id];
             if (match) {
                 return {
@@ -190,6 +185,13 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
                     youtubeVideoId: match.videoId,
                     // Use YT Music duration if the track doesn't have one
                     duration: track.duration || match.duration,
+                };
+            }
+            if (track.streamSource === "tidal") {
+                return {
+                    ...track,
+                    streamSource: undefined,
+                    tidalTrackId: undefined,
                 };
             }
             return track;

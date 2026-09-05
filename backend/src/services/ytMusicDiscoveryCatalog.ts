@@ -40,7 +40,7 @@ export interface YtMusicDiscoveryCatalogTransport {
 }
 
 /**
- * Fetch and normalize tracks, albums, and artists through one queued sidecar
+ * Fetch and normalize tracks, albums, and artists through one bounded sidecar
  * batch. Row-level failures remain explicit so callers can retain successful
  * categories without caching an incomplete discovery response.
  */

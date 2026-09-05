@@ -12,6 +12,10 @@ import {
     startRemoteAnalysisHotSetSweep,
     stopRemoteAnalysisHotSetSweep,
 } from "../services/recommendations/remoteAnalysisHotSetSweep";
+import {
+    startCanonicalIdentityPromotionSweep,
+    stopCanonicalIdentityPromotionSweep,
+} from "../services/recommendations/canonicalIdentityPromotionSweep";
 import { registerQueueProcessorEvents } from "./queueEvents";
 import type { QueueProcessorEventHandlers } from "./queueEvents";
 import { remoteAnalysisQueue } from "./queues";
@@ -43,12 +47,14 @@ export function startRemoteAnalysisWorker(record: EventRecorder): void {
             record,
         },
     );
+    startCanonicalIdentityPromotionSweep();
     startRemoteAnalysisAssetRecovery();
 }
 
 /** Stop recovery first, then close the queue before removing its listeners. */
 export async function stopRemoteAnalysisWorker(): Promise<void> {
     stopRemoteAnalysisHotSetSweep();
+    await stopCanonicalIdentityPromotionSweep();
     await stopRemoteAnalysisAssetRecovery();
     await remoteAnalysisQueue.close();
     remoteAnalysisQueue.removeAllListeners();

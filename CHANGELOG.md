@@ -6,14 +6,89 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Retain Audius public track attribution in queue metadata and expose a validated source-page link from the track menu; signed stream URLs are not persisted or shared as attribution.
+
+- Share the bounded remote-analysis hot set across likes, Wave seeds, completed listens, playlists, and repeated tracks so later signals are not crowded out. Likes and seeds lead each selection round, duplicate recordings retain all signal provenance, and analysis budgets remain unchanged.
+
+- Admit current recommendation seeds alongside durable account candidates and filter finished analysis before bounded historical selection. Each signal reserves up to 16 audio-analysis candidates and 4 completed recordings needing durable identity; only embeddings in usable active or migrating spaces count as coverage, and merged aliases stay out of admission.
+
+- Apply hot-set capacity to distinct canonical recordings before selecting an account-scoped provider representative, using stable canonical creation-time ordering so multiple provider mappings cannot hide eligible work. Reject persisted jobs from retired providers before budget reservation, asset creation, or YouTube requests.
+
+- Softly rotate recently viewed recommendation albums with a bounded one-day decay while preserving artist affinity, existing diversity limits, and small-pool backfill. Album identity is snapshotted on served impressions; legacy and unknown albums stay neutral. Listening history outside recommendation impressions is not used for this album signal.
+
+- Add a disabled-by-default authenticated Audius catalog API with full-access metadata validation, source attribution, bounded request concurrency, cancellation and provider throttling. It does not change existing playback or substitute covers and previews for requested recordings; Audius frontend/player integration remains separate.
+
+- Reuse fully received native YouTube Music preloads in an ephemeral, client/session-isolated service-worker buffer without a second transfer. Incomplete, oversized, expired, or uncacheable responses retain interactive streaming; credential changes revoke retained bytes, and memory reservations include in-flight captures.
+
+- Make timestamped lyric lines keyboard-accessible seek controls without also triggering global playback or volume shortcuts, preserve manual wheel or touch browsing immediately after recentering, wrap long lines, and honor reduced-motion preferences.
+
+- Preserve the listener's final Play or Pause choice while an audio source is still loading, without granting Listen Together followers local autoplay or carrying an old load's intent into its replacement.
+
+- Start a manually selected YouTube Music track immediately when its active preload has reported ready, while retaining coalescing for pending, failed, cancelled, and rapid unprepared selections.
+
+- Replace a prepared YouTube Music source when the same queued track is remapped to another video, while retaining one pending device-source acquisition across ordinary progress updates and refreshing its latest queue tail. Pending sources are cancelled when playback pauses, the next item disappears, or that item becomes a retired-provider record.
+
+- Bound YouTube Music sidecar transport before Node's hidden socket queue with isolated interactive, background and control admission. Cancelled or expired waiters now leave before dispatch, stream permits follow native request closure, and rejected streaming error bodies cannot strand capacity.
+
+- Cancel pending artist-preview stream requests when the listener disconnects, including the public fallback, without reporting intentional cancellation as a playback failure. Avoid starting provider work when the browser disconnects during earlier settings or authentication lookups.
+
+- Keep import status, playlist names and action buttons readable in narrow panels and with enlarged text, wrapping actions without clipping and retaining touch-sized keyboard-focusable controls.
+
+- Index canonical exposure history once per recommendation-ranking call instead of scanning it for each candidate, preserving recency, cooldown, exploration and ranking results while reducing CPU work for larger histories.
+
+- Coalesce compatible concurrent YouTube Music metadata probes into one request and retry chain, keeping users and transport policies separate, limiting in-flight bookkeeping, and returning independent result objects without caching failures.
+
+- Match native audio preload CORS and credential modes to playback before starting the request, allowing compatible cached media to be reused; replace a pending preload when its credential mode changes without replacing the main player element.
+
+- Count playback events without treating missing or invalid timing data as zero-latency samples; retain legitimate zero-duration measurements.
+
+- Reject new TIDAL play, preference, playlist, and Listen Together writes with a retired-provider response while preserving historical reads, clearing existing preferences, and restoring saved group state.
+
+- Keep historical TIDAL entries in already-loaded library state manageable without adding them to playback, queues, playlists, Listen Together or device downloads; preserve real local files and active YouTube identities despite legacy provider metadata. Newly fetched liked-track lists continue to omit the retired provider.
+
+- Resolve liked-track, artist and downloaded-track actions through the same playback identity, preserving local files over incidental remote metadata and authoritative YouTube IDs over stale fields. Reuse existing device copies under legacy provider keys only when their retained source route proves the same asset, with owner isolation and quality checks, without rewriting or deleting audio files. Retained TIDAL download jobs end with a clear terminal status; unavailable Play and Retry actions are hidden, and retries cannot create new retired-provider queue entries. Historical records retain management and export controls where applicable.
+
+- Keep playlist Play, Shuffle, Download, and overflow actions separated at narrow widths and enlarged text while preserving keyboard activation and full accessible labels.
+
+- Keep ordinary playlist pages focused on Play and Shuffle at every width, with all secondary actions preserved in one touch-sized overflow panel instead of a crowded desktop toolbar. The panel scrolls within short viewports and returns keyboard focus to its trigger when dismissed with Escape.
+
+- Keep My Liked playback and secondary actions on separate mobile rows with short readable labels, retain full desktop and accessible names, and allow controls to wrap under enlarged text instead of clipping the primary action.
+
+- Distinguish an unavailable import history from an empty history, retain successful progress across failed queued refreshes, and expose failed cancel/retry actions without displaying upstream error details. Admit one action per job even under rapid repeated clicks while keeping distinct jobs independent.
+
+- Keep collection download actions on one line with compact labels while retaining full accessible storage explanations and unchanged download behavior.
+
+- Cancel unused download response streams when HTTP validation, metadata setup or pre-read storage access fails, preventing abandoned transfers from competing with playback and retries.
+
+- Preserve manual browsing in the player's Up Next queue when playback advances or Wave candidates arrive; provide an explicit return-to-current action and touch-sized compact queue controls.
+
+- Expose app installation in the mobile account menu, explain Safari and embedded-browser setup, and recover from cancelled or failed single-use browser prompts without reopening an already completed installation.
+
+- Patch backend transitive dependency vulnerabilities without downgrading Prisma, retain Linux libc package metadata in the lockfile, and keep source line endings consistent across Windows and Linux formatting checks.
+
+- Update vulnerable frontend filesystem and browser-target tooling dependencies while preserving platform-specific optional package metadata.
+
+- Run combined Python quality checks on the analyzer-compatible interpreter without changing the YouTube runtime matrix, and include shared sidecar tests in both local and CI verification. Keep full frontend unit execution before strict native TypeScript coverage checks without transpiler-generated coverage exceptions.
+
+- Reject HTML, XML and JSON error documents masquerading as downloaded audio, including same-size replacements of existing device files; inspect only a bounded prefix and preserve existing files for explicit user recovery.
+
+- Run aggregate formatting checks without POSIX-only shell syntax so Windows executes every package check and retains a failing exit status when any check fails.
+
+- Fix Last.fm metadata requests using a stale key on startup or after waiting in the rate-limit queue. Workers refresh server settings without a restart, provider error responses cannot poison recommendation caches, and logged failures exclude request credentials. Application-level throttling and transient failures reach bounded retry handling without retrying authentication failures or cancellation.
+
+- test(playback): add an external-network-free 20/50/100/120-listener workload that drives the real local YouTube Music search, stream-spool, and tail-warmup HTTP boundaries while reporting admission, singleflight, queue wait, first-byte, fault, and bounded-state evidence separately from browser-audible or provider SLOs.
+- fix(playback): prevent an atomic growing-spool rename from ending a successful response with an empty body, and briefly coalesce classified per-track provider failures in a bounded purpose-aware cooldown without caching authentication failures or client aborts.
 - fix(reliability): count only new YouTube Music stream starts instead of every byte-range chunk, isolate authenticated listeners' extraction budgets, recover concurrent canonical provider mappings and impression deadlocks, and fail fast with coalescing plus a short cooldown when an external cover source is unavailable.
+- fix(playback): reconcile each player's generation-aware YouTube Music warm tail through one globally deduplicated lane with four admitted tracks, current/immediate promotion, body-free readiness states, and cancellation only after the final interested player leaves.
 - fix(admin): describe the server-wide Last.fm key accurately instead of claiming that an absent default key is already configured.
 
-- fix(web): keep an open browser or PWA client intact during routine service-worker activation so page navigation cannot tear down current playback, while retaining the one-time legacy offline migration reload. Playlist mosaics now replace failed artwork with the shared fallback instead of showing broken-image glyphs.
+- fix(web): keep an open browser or PWA client intact during routine service-worker activation so page navigation cannot tear down current playback, while retaining the one-time legacy offline migration reload. Playlist mosaics and queue rows now replace failed artwork with the shared fallback instead of showing broken-image glyphs, and nested row controls no longer start playback while handling their own activation.
+- fix(web): clarify taste-profile limits and keep its choices independently scrollable, make Wave loading readable and announced, and keep the settings save status above fixed player controls without overlapping its action.
 
 - Assign active Hybrid v2 rollout per account session so active listeners contribute comparable baseline and Hybrid behavior without changing algorithms inside one listening session.
 
 - fix(downloads): revalidate device files whenever Downloads opens or returns to the foreground, replace stale ready entries with an explicit download-again state, and evict a missing or damaged local copy immediately while online playback falls back to the network.
+- fix(downloads): keep retained rows in their stable creation order while progress, completion, repair, and deletion refresh device metadata, so background activity does not move the listener's visible place in a long Downloads list.
 - chore(ci): keep the source-file-size report visible but make it advisory so oversized legacy modules do not block otherwise valid pull requests.
 - fix(ci): make frontend test globs and coverage checks work on Windows, wait for asynchronous OIDC UI state, freeze the recommendation-session test clock, and normalize cross-platform release guard fixtures.
 - fix(ci): give asynchronous OIDC component effects a bounded wall-clock deadline under shared-runner load and cover every accepted and rejected HTTP-status error shape without lowering backend coverage thresholds.
@@ -81,7 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Installed iOS PWAs hand off to a next track whose preload has started immediately before the current source ends while the app is backgrounded, avoiding WebKit's silent next-source state without changing Safari-tab, desktop, Android, Listen Together, or repeat-one playback.
 - Backend startup accepts a supported FFmpeg version that was fully printed before a teardown timeout, preventing a valid Debian FFmpeg build from trapping the API in a restart loop after deployment.
-- YouTube Music spool jobs now prefer faster progressive audio, retain a bounded low-resolution combined-stream fallback when audio-only formats temporarily disappear, and stop obsolete downloads after the last listener disconnects so rapid skips do not starve the selected track.
+- YouTube Music spool jobs now return validated append-only progressive audio before the full track finishes downloading, retain completed-file Range semantics and HLS fallback, keep shared work alive until the last listener leaves, and stop obsolete downloads so rapid skips do not starve the selected track.
 - Playlist detail responses now include up to 5,000 ordered items instead of silently stopping at 1,000, so large imported playlists such as a 1,294-track collection remain fully visible while the shared track list keeps its bounded rendering behavior.
 - Playlist detail now supports opaque cursor pages across both playable and pending positions, and the web client loads 100 more rows near the scroll boundary. Collections larger than 5,000 can therefore remain complete without hydrating the entire playlist, provider mappings, or DOM in one request.
 - Background playlist imports preserve duplicate source occurrences, resume their durable per-position snapshot after API or worker restarts, reject stale resolution attempts, never restore positions removed by the listener, and keep already published matches when cancellation or a later provider batch fails.

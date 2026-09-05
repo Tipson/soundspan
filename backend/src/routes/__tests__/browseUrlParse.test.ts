@@ -61,13 +61,6 @@ jest.mock("../../services/youtubeMusic", () => ({
     },
 }));
 
-jest.mock("../../services/tidalStreaming", () => ({
-    tidalStreamingService: {
-        isEnabled: jest.fn(),
-        isAvailable: jest.fn(),
-    },
-}));
-
 const mockGetSystemSettings = jest.fn();
 jest.mock("../../utils/systemSettings", () => ({
     getSystemSettings: (...args: unknown[]) => mockGetSystemSettings(...args),
@@ -82,7 +75,7 @@ const { spotifyService } = jest.requireMock("../../services/spotify") as {
 };
 const mockSpotifyParseUrl = spotifyService.parseUrl as jest.Mock;
 
-describe("browse URL parse — YouTube Music & TIDAL expansion", () => {
+describe("browse URL parse — YouTube Music expansion", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockSpotifyParseUrl.mockReset();
@@ -161,42 +154,6 @@ describe("browse URL parse — YouTube Music & TIDAL expansion", () => {
             type: "playlist",
             id: "sp_uri_123",
             url: "https://open.spotify.com/playlist/sp_uri_123",
-        });
-    });
-
-    // ── TIDAL URLs ─────────────────────────────────────────────────
-
-    it("parses a TIDAL playlist URL (listen.tidal.com)", async () => {
-        const res = await request(app)
-            .post("/api/browse/playlists/parse")
-            .set(AUTH_HEADER, AUTH_VALUE)
-            .send({
-                url: "https://listen.tidal.com/playlist/12345678-abcd-ef01-2345-1234567890ab",
-            });
-
-        expect(res.status).toBe(200);
-        expect(res.body).toEqual({
-            source: "tidal",
-            type: "playlist",
-            id: "12345678-abcd-ef01-2345-1234567890ab",
-            url: "https://listen.tidal.com/playlist/12345678-abcd-ef01-2345-1234567890ab",
-        });
-    });
-
-    it("parses a TIDAL browse playlist URL (tidal.com/browse)", async () => {
-        const res = await request(app)
-            .post("/api/browse/playlists/parse")
-            .set(AUTH_HEADER, AUTH_VALUE)
-            .send({
-                url: "https://tidal.com/browse/playlist/aabbccdd-1234-5678-9012-abcdefabcdef",
-            });
-
-        expect(res.status).toBe(200);
-        expect(res.body).toEqual({
-            source: "tidal",
-            type: "playlist",
-            id: "aabbccdd-1234-5678-9012-abcdefabcdef",
-            url: "https://listen.tidal.com/playlist/aabbccdd-1234-5678-9012-abcdefabcdef",
         });
     });
 

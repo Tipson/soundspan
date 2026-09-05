@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Virtuoso } from "react-virtuoso";
 import { Button } from "@/components/ui/Button";
+import { CachedImage } from "@/components/ui/CachedImage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAudioState, useAudioControls } from "@/lib/audio-context";
 import {
@@ -39,8 +39,7 @@ import {
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { formatTime } from "@/utils/formatTime";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
-import { TidalBadge } from "@/components/ui/TidalBadge";
+import { isPlaybackOnlyTrack, toAddToPlaylistRef } from "@/lib/trackRef";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import {
@@ -56,6 +55,44 @@ import {
  * (GH #784).
  */
 const INITIAL_WINDOW_COUNT = 20;
+
+function QueueArtwork({
+    src,
+    alt,
+    size,
+}: {
+    src: string | null | undefined;
+    alt: string;
+    size: 48 | 64;
+}) {
+    const isLarge = size === 64;
+
+    return (
+        <CachedImage
+            src={src}
+            alt={alt}
+            fill
+            sizes={`${size}px`}
+            className="rounded-sm object-cover"
+            fallback={
+                <div
+                    role="img"
+                    aria-label={`Обложка для «${alt}» недоступна`}
+                    className="absolute inset-0 flex items-center justify-center bg-surface"
+                >
+                    <Music
+                        aria-hidden="true"
+                        className={
+                            isLarge
+                                ? "h-6 w-6 text-content-muted"
+                                : "h-5 w-5 text-content-muted"
+                        }
+                    />
+                </div>
+            }
+        />
+    );
+}
 
 /**
  * Renders the QueuePage component.
@@ -79,7 +116,7 @@ export default function QueuePage() {
 
     const resolveQueueSource = (
         index: number,
-        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct",
+        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct" | "audius",
     ): "local" | "peer" | "tidal" | "youtube" => {
         const resolved = trackAvailability.get(index)?.source;
         if (
@@ -241,19 +278,23 @@ export default function QueuePage() {
     const playlistTracks = queue.filter(
         (item): item is Track => !isEpisodeQueueItem(item),
     );
+    const canSavePlaylist =
+        playlistTracks.length > 0 &&
+        playlistTracks.every((track) => !isPlaybackOnlyTrack(track));
 
     const handleSaveAsPlaylist = async () => {
+        if (!canSavePlaylist) return;
         const name =
             playlistName.trim() ||
             `${queueRu.title} — ${new Date().toLocaleDateString("ru-RU")}`;
         setIsSaving(true);
         try {
+            // Validate the entire queue before creating anything: playback-only sources
+            // must not leave an empty or partially saved playlist behind.
+            const references = playlistTracks.map(toAddToPlaylistRef);
             const playlist = await api.createPlaylist(name);
-            for (const track of playlistTracks) {
-                await api.addTrackToPlaylist(
-                    playlist.id,
-                    toAddToPlaylistRef(track),
-                );
+            for (const reference of references) {
+                await api.addTrackToPlaylist(playlist.id, reference);
             }
             toast.success(formatQueueSaved(playlistTracks.length, name));
             setShowSaveDialog(false);
@@ -270,8 +311,9 @@ export default function QueuePage() {
         return null;
     }
 
-    // Split queue into current, next up, and previous
-    const previousTracks = queue.slice(0, currentIndex);
+    // Index position is not evidence that an item was actually listened to:
+    // a manual jump can move past several untouched rows at once.
+    const earlierQueueItems = queue.slice(0, currentIndex);
     const nextTracks = queue.slice(currentIndex + 1);
     const currentQueueItem = queue[currentIndex];
     const currentEpisode =
@@ -296,13 +338,15 @@ export default function QueuePage() {
                     actions={
                         queue.length > 0 ? (
                             <div className="flex flex-wrap items-center gap-2">
-                                <Button
-                                    variant="secondary"
-                                    onClick={() => setShowSaveDialog(true)}
-                                >
-                                    <Save className="w-4 h-4 mr-2" />
-                                    {queueRu.saveAsPlaylist}
-                                </Button>
+                                {canSavePlaylist && (
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => setShowSaveDialog(true)}
+                                    >
+                                        <Save className="w-4 h-4 mr-2" />
+                                        {queueRu.saveAsPlaylist}
+                                    </Button>
+                                )}
                                 <Button
                                     variant="secondary"
                                     onClick={handleClearQueue}
@@ -343,23 +387,22 @@ export default function QueuePage() {
                             className={`group flex flex-wrap items-center gap-3 border-y border-line bg-surface-elevated/40 px-3 py-4 sm:gap-4 sm:px-4 ${isCurrentUnavailable ? "opacity-50" : ""}`}
                         >
                             <div className="relative flex-shrink-0 w-16 h-16">
-                                {currentTrack.album?.coverArt ? (
-                                    <Image
-                                        src={api.getCoverArtUrl(
-                                            currentTrack.album.coverArt,
-                                            100,
-                                        )}
-                                        alt={currentTrack.album.title}
-                                        fill
-                                        sizes="64px"
-                                        className="object-cover rounded-sm"
-                                        unoptimized
-                                    />
-                                ) : (
-                                    <div className="w-16 h-16 bg-surface rounded-sm flex items-center justify-center">
-                                        <Music className="h-6 w-6 text-content-muted" />
-                                    </div>
-                                )}
+                                <QueueArtwork
+                                    src={
+                                        currentTrack.album?.coverArt
+                                            ? api.getCoverArtUrl(
+                                                  currentTrack.album.coverArt,
+                                                  100,
+                                              )
+                                            : null
+                                    }
+                                    alt={
+                                        currentTrack.album?.title ||
+                                        currentTrack.displayTitle ||
+                                        currentTrack.title
+                                    }
+                                    size={64}
+                                />
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <Play className="h-6 w-6 animate-pulse fill-brand text-brand motion-reduce:animate-none" />
                                 </div>
@@ -377,13 +420,6 @@ export default function QueuePage() {
                                         <span className="rounded border border-line-strong px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-content-muted">
                                             {queueRu.unavailable}
                                         </span>
-                                    ) : null}
-                                    {isInGroup &&
-                                    resolveQueueSource(
-                                        currentIndex,
-                                        currentTrack.streamSource,
-                                    ) === "tidal" ? (
-                                        <TidalBadge />
                                     ) : null}
                                     {isInGroup &&
                                     resolveQueueSource(
@@ -436,20 +472,14 @@ export default function QueuePage() {
                         </h2>
                         <div className="flex flex-wrap items-center gap-3 border-y border-line bg-surface-elevated/40 px-3 py-4 sm:gap-4 sm:px-4">
                             <div className="relative flex-shrink-0 w-16 h-16">
-                                {currentEpisode.coverUrl ? (
-                                    <Image
-                                        src={currentEpisode.coverUrl}
-                                        alt={currentEpisode.podcastTitle}
-                                        fill
-                                        sizes="64px"
-                                        className="object-cover rounded-sm"
-                                        unoptimized
-                                    />
-                                ) : (
-                                    <div className="w-16 h-16 bg-surface rounded-sm flex items-center justify-center">
-                                        <Music className="h-6 w-6 text-content-muted" />
-                                    </div>
-                                )}
+                                <QueueArtwork
+                                    src={currentEpisode.coverUrl}
+                                    alt={
+                                        currentEpisode.podcastTitle ||
+                                        currentEpisode.title
+                                    }
+                                    size={64}
+                                />
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <Play className="h-6 w-6 animate-pulse fill-brand text-brand motion-reduce:animate-none" />
                                 </div>
@@ -571,40 +601,41 @@ export default function QueuePage() {
                     </section>
                 )}
 
-                {/* Previously Played */}
-                {previousTracks.length > 0 && (
+                {/* Earlier queue positions */}
+                {earlierQueueItems.length > 0 && (
                     <section className="border-t border-line pt-6">
                         <h2 className="mb-4 text-2xl font-black tracking-[-0.03em] text-content">
-                            {queueRu.previouslyPlayed} ({previousTracks.length})
+                            {queueRu.earlierInQueue} ({earlierQueueItems.length}
+                            )
                         </h2>
                         <div className="overflow-hidden border-y border-line">
                             <Virtuoso
-                                totalCount={previousTracks.length}
+                                totalCount={earlierQueueItems.length}
                                 initialItemCount={Math.min(
-                                    previousTracks.length,
+                                    earlierQueueItems.length,
                                     INITIAL_WINDOW_COUNT,
                                 )}
                                 computeItemKey={(idx) =>
-                                    `prev-${previousTracks[idx]?.id ?? idx}-${idx}`
+                                    `earlier-${earlierQueueItems[idx]?.id ?? idx}-${idx}`
                                 }
                                 style={{
                                     height: Math.min(
-                                        previousTracks.length * 80,
+                                        earlierQueueItems.length * 80,
                                         600,
                                     ),
                                 }}
                                 itemContent={(idx) => {
-                                    const item = previousTracks[idx];
+                                    const item = earlierQueueItems[idx];
                                     if (isEpisodeQueueItem(item)) {
                                         return (
                                             <EpisodeQueueRow
                                                 episode={item}
-                                                played
+                                                earlierInQueue
                                             />
                                         );
                                     }
                                     return (
-                                        <PreviousTrackRow
+                                        <EarlierQueueTrackRow
                                             track={item}
                                             idx={idx}
                                             isInGroup={isInGroup}
@@ -624,7 +655,7 @@ export default function QueuePage() {
             </div>
 
             {/* Save as Playlist Dialog */}
-            {showSaveDialog && (
+            {showSaveDialog && canSavePlaylist && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <button
                         type="button"
@@ -686,16 +717,16 @@ export default function QueuePage() {
     );
 }
 
-/** Queue row for a podcast episode entry (Next Up / Previously Played). */
+/** Queue row for a podcast episode entry (next or earlier in the queue). */
 function EpisodeQueueRow({
     episode,
-    played = false,
+    earlierInQueue = false,
     onPlay,
     onRemove,
     dragHandleProps,
 }: {
     episode: EpisodeQueueItem;
-    played?: boolean;
+    earlierInQueue?: boolean;
     onPlay?: () => void;
     onRemove?: () => void;
     dragHandleProps?: React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -704,7 +735,7 @@ function EpisodeQueueRow({
 }) {
     return (
         <div
-            className={`group flex flex-wrap items-center gap-3 border-b border-line px-3 py-3 transition-colors hover:bg-surface-elevated/70 motion-reduce:transition-none sm:gap-4 sm:px-4 ${played ? "opacity-50" : ""}`}
+            className={`group flex flex-wrap items-center gap-3 border-b border-line px-3 py-3 transition-colors hover:bg-surface-elevated/70 motion-reduce:transition-none sm:gap-4 sm:px-4 ${earlierInQueue ? "opacity-50" : ""}`}
         >
             {dragHandleProps && (
                 <button
@@ -717,20 +748,11 @@ function EpisodeQueueRow({
                 </button>
             )}
             <div className="relative flex-shrink-0 w-12 h-12">
-                {episode.coverUrl ? (
-                    <Image
-                        src={episode.coverUrl}
-                        alt={episode.podcastTitle}
-                        fill
-                        sizes="48px"
-                        className="object-cover rounded-sm"
-                        unoptimized
-                    />
-                ) : (
-                    <div className="w-12 h-12 bg-surface rounded-sm flex items-center justify-center">
-                        <Music className="h-5 w-5 text-content-muted" />
-                    </div>
-                )}
+                <QueueArtwork
+                    src={episode.coverUrl}
+                    alt={episode.podcastTitle || episode.title}
+                    size={48}
+                />
             </div>
             <div className="flex-1 min-w-0">
                 <h3 className="truncate text-sm font-medium text-content">
@@ -796,7 +818,7 @@ function NextTrackRow({
     isInGroup: boolean;
     resolveQueueSource: (
         index: number,
-        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct",
+        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct" | "audius",
     ) => "local" | "peer" | "tidal" | "youtube";
     onMoveUp: (index: number) => void;
     onMoveDown: (index: number) => void;
@@ -830,20 +852,17 @@ function NextTrackRow({
                 </button>
             )}
             <div className="relative flex-shrink-0 w-12 h-12">
-                {track.album?.coverArt ? (
-                    <Image
-                        src={api.getCoverArtUrl(track.album.coverArt, 100)}
-                        alt={track.album.title}
-                        fill
-                        sizes="48px"
-                        className="object-cover rounded-sm"
-                        unoptimized
-                    />
-                ) : (
-                    <div className="w-12 h-12 bg-surface rounded-sm flex items-center justify-center">
-                        <Music className="h-5 w-5 text-content-muted" />
-                    </div>
-                )}
+                <QueueArtwork
+                    src={
+                        track.album?.coverArt
+                            ? api.getCoverArtUrl(track.album.coverArt, 100)
+                            : null
+                    }
+                    alt={
+                        track.album?.title || track.displayTitle || track.title
+                    }
+                    size={48}
+                />
             </div>
             <div className="flex-1 min-w-0">
                 <h3 className="truncate text-sm font-medium text-content">
@@ -857,9 +876,6 @@ function NextTrackRow({
                         <span className="rounded border border-line-strong px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-content-muted">
                             {queueRu.unavailable}
                         </span>
-                    ) : null}
-                    {isInGroup && resolvedSource === "tidal" ? (
-                        <TidalBadge />
                     ) : null}
                     {isInGroup && resolvedSource === "youtube" ? (
                         <YouTubeBadge />
@@ -946,8 +962,8 @@ function NextTrackRow({
     );
 }
 
-/** Virtualized row for the "Previously Played" section. */
-function PreviousTrackRow({
+/** Virtualized row for positions earlier than the current queue index. */
+function EarlierQueueTrackRow({
     track,
     idx,
     isInGroup,
@@ -959,7 +975,7 @@ function PreviousTrackRow({
     isInGroup: boolean;
     resolveQueueSource: (
         index: number,
-        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct",
+        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct" | "audius",
     ) => "local" | "peer" | "tidal" | "youtube";
     trackAvailability: Map<number, AvailabilityItem>;
 }) {
@@ -974,20 +990,17 @@ function PreviousTrackRow({
             className={`group flex flex-wrap items-center gap-3 border-b border-line px-3 py-3 opacity-50 transition-colors hover:bg-surface-elevated/70 motion-reduce:transition-none sm:gap-4 sm:px-4 ${isUnavailable ? "opacity-30" : ""}`}
         >
             <div className="relative flex-shrink-0 w-12 h-12">
-                {track.album?.coverArt ? (
-                    <Image
-                        src={api.getCoverArtUrl(track.album.coverArt, 100)}
-                        alt={track.album.title}
-                        fill
-                        sizes="48px"
-                        className="object-cover rounded-sm"
-                        unoptimized
-                    />
-                ) : (
-                    <div className="w-12 h-12 bg-surface rounded-sm flex items-center justify-center">
-                        <Music className="h-5 w-5 text-content-muted" />
-                    </div>
-                )}
+                <QueueArtwork
+                    src={
+                        track.album?.coverArt
+                            ? api.getCoverArtUrl(track.album.coverArt, 100)
+                            : null
+                    }
+                    alt={
+                        track.album?.title || track.displayTitle || track.title
+                    }
+                    size={48}
+                />
             </div>
             <div className="flex-1 min-w-0">
                 <h3 className="truncate text-sm font-medium text-content">
@@ -1001,9 +1014,6 @@ function PreviousTrackRow({
                         <span className="rounded border border-line-strong px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-content-muted">
                             {queueRu.unavailable}
                         </span>
-                    ) : null}
-                    {isInGroup && resolvedSource === "tidal" ? (
-                        <TidalBadge />
                     ) : null}
                     {isInGroup && resolvedSource === "youtube" ? (
                         <YouTubeBadge />

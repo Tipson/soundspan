@@ -4,7 +4,7 @@
 # infrastructure ports remain on loopback. Core runtimes see the media library
 # read-only; remote analysis shares a dedicated writable spool mounted at the
 # same container path in every participating service. The scoped HTTP proxy
-# must allow the four fixed egress addresses assigned below (.10 through .13).
+# must allow the three fixed egress addresses assigned below (.11 through .13).
 services:
     backend:
         environment:
@@ -37,15 +37,6 @@ services:
     frontend:
         ports: !override
             - "${SOUNDSPAN_BIND_IP:?SOUNDSPAN_BIND_IP is required}:${FRONTEND_PORT:-3030}:3030"
-
-    tidal-streamer:
-        volumes: !override
-            - ${MUSIC_PATH:?MUSIC_PATH is required}:/music
-            - ${TIDAL_DATA_PATH:?TIDAL_DATA_PATH is required}:/data
-        networks:
-            default: {}
-            soundspan-egress:
-                ipv4_address: ${TIDAL_EGRESS_IP:-172.30.121.10}
 
     ytmusic-streamer:
         volumes: !override

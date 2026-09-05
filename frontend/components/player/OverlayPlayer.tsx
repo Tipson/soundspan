@@ -33,7 +33,6 @@ import { toast } from "sonner";
 import { SeekSlider } from "./SeekSlider";
 import { useFeatures } from "@/lib/features-context";
 import { api } from "@/lib/api";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { SyncBadge } from "@/components/player/SyncBadge";
 import { useListenTogether } from "@/lib/listen-together-context";
@@ -49,7 +48,7 @@ import { OverlayQueueTab } from "./overlay-tabs/OverlayQueueTab";
 import { OverlayLyricsTab } from "./overlay-tabs/OverlayLyricsTab";
 import { OverlayRelatedTab } from "./overlay-tabs/OverlayRelatedTab";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
+import { isPlaybackOnlyTrack, toAddToPlaylistRef } from "@/lib/trackRef";
 import type { Track } from "@/lib/audio-state-context";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 
@@ -134,7 +133,9 @@ export function OverlayPlayer() {
     const currentTrackQualityBadge = useMemo(
         () =>
             resolvePlaybackQualityBadgeFromStreamSource(
-                currentTrack?.streamSource,
+                currentTrack?.streamSource === "youtube"
+                    ? "youtube"
+                    : undefined,
             ),
         [currentTrack?.streamSource],
     );
@@ -161,6 +162,9 @@ export function OverlayPlayer() {
     const isLongForm =
         playbackType === "podcast" || playbackType === "audiobook";
     const preferenceTrackId = isTrackMode ? currentTrack?.id : undefined;
+    const canPersistCurrentTrack = Boolean(
+        currentTrack && !isPlaybackOnlyTrack(currentTrack),
+    );
     const isDesktopOverlayLayout = canSkip && !isMobileOrTablet;
     // The lyrics tab mounts only while shown, so it owns its own fetch.
     const lyricsLookupTrack = useMemo(
@@ -412,9 +416,7 @@ export function OverlayPlayer() {
         setIsRadioLoading(true);
         try {
             let response: { tracks: unknown[] } | null = null;
-            const isRemote =
-                currentTrack.streamSource === "tidal" ||
-                currentTrack.streamSource === "youtube";
+            const isRemote = currentTrack.streamSource === "youtube";
             if (isRemote && currentTrack.artist.name) {
                 response = await api.getRadioTracks(
                     "artist-name",
@@ -453,7 +455,7 @@ export function OverlayPlayer() {
 
     const handleAddToPlaylist = useCallback(
         async (playlistId: string) => {
-            if (!currentTrack?.id) return;
+            if (!currentTrack?.id || !canPersistCurrentTrack) return;
             await api.addTrackToPlaylist(
                 playlistId,
                 toAddToPlaylistRef(currentTrack),
@@ -462,7 +464,7 @@ export function OverlayPlayer() {
                 `«${currentTrack.displayTitle || currentTrack.title}» добавлен в плейлист`,
             );
         },
-        [currentTrack],
+        [currentTrack, canPersistCurrentTrack],
     );
 
     const handleDrawerTabToggle = (tab: "queue" | "lyrics" | "related") => {
@@ -721,12 +723,6 @@ export function OverlayPlayer() {
                                     </p>
                                 )}
                                 {currentTrackQualityBadge?.variant ===
-                                    "tidal" && (
-                                    <div className="mt-1.5 flex justify-center">
-                                        <TidalBadge />
-                                    </div>
-                                )}
-                                {currentTrackQualityBadge?.variant ===
                                     "youtube" && (
                                     <div className="mt-1.5 flex justify-center">
                                         <YouTubeBadge />
@@ -784,24 +780,26 @@ export function OverlayPlayer() {
                                                         )}
                                                     />
 
-                                                    <button
-                                                        onClick={() =>
-                                                            setIsPlaylistSelectorOpen(
-                                                                true,
-                                                            )
-                                                        }
-                                                        className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                                        title={
-                                                            ru.player
-                                                                .addToPlaylist
-                                                        }
-                                                        aria-label={
-                                                            ru.player
-                                                                .addToPlaylist
-                                                        }
-                                                    >
-                                                        <Plus className="h-6 w-6" />
-                                                    </button>
+                                                    {canPersistCurrentTrack && (
+                                                        <button
+                                                            onClick={() =>
+                                                                setIsPlaylistSelectorOpen(
+                                                                    true,
+                                                                )
+                                                            }
+                                                            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                                            title={
+                                                                ru.player
+                                                                    .addToPlaylist
+                                                            }
+                                                            aria-label={
+                                                                ru.player
+                                                                    .addToPlaylist
+                                                            }
+                                                        >
+                                                            <Plus className="h-6 w-6" />
+                                                        </button>
+                                                    )}
 
                                                     {currentTrack?.artist?.id &&
                                                         playbackType ===
@@ -1230,10 +1228,6 @@ export function OverlayPlayer() {
                                                         {subtitle}
                                                     </p>
                                                     {currentTrackQualityBadge?.variant ===
-                                                        "tidal" && (
-                                                        <TidalBadge />
-                                                    )}
-                                                    {currentTrackQualityBadge?.variant ===
                                                         "youtube" && (
                                                         <YouTubeBadge />
                                                     )}
@@ -1439,7 +1433,7 @@ export function OverlayPlayer() {
             <div style={{ height: "env(safe-area-inset-bottom)" }} />
 
             <PlaylistSelector
-                isOpen={isPlaylistSelectorOpen}
+                isOpen={canPersistCurrentTrack && isPlaylistSelectorOpen}
                 onClose={() => setIsPlaylistSelectorOpen(false)}
                 onSelectPlaylist={handleAddToPlaylist}
             />

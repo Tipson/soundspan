@@ -17,11 +17,70 @@ interface SimilarArtist {
     url: string;
 }
 
+/** A safe provider error retaining only the fields used for fallback decisions. */
+class LastFmRequestError extends Error {
+    readonly code: string | undefined;
+    readonly response: {
+        status: number | undefined;
+        data: { error: number | undefined };
+        headers: { "retry-after"?: string };
+    };
+
+    constructor(
+        code?: number,
+        status?: number,
+        transportCode?: unknown,
+        retryAfter?: unknown,
+    ) {
+        super(code ? `Last.fm API error ${code}` : "Last.fm request failed");
+        this.name = "LastFmRequestError";
+        // Preserve only known retry classifications, never arbitrary upstream text.
+        this.code =
+            typeof transportCode === "string" &&
+            [
+                "ECONNRESET",
+                "ECONNABORTED",
+                "ETIMEDOUT",
+                "EAI_AGAIN",
+                "ENOTFOUND",
+                "EHOSTUNREACH",
+                "ENETUNREACH",
+                "ERR_SOCKET_CLOSED",
+                "ERR_CANCELED",
+            ].includes(transportCode)
+                ? transportCode
+                : undefined;
+        const retrySeconds =
+            typeof retryAfter === "string" && /^\d{1,8}$/.test(retryAfter)
+                ? Math.min(Number(retryAfter), 60)
+                : undefined;
+        this.response = {
+            status:
+                code === 29 ? 429 : code === 11 || code === 16 ? 503 : status,
+            data: { error: code },
+            headers:
+                retrySeconds === undefined
+                    ? {}
+                    : { "retry-after": String(retrySeconds) },
+        };
+    }
+}
+
+function providerErrorCode(data: unknown): number | undefined {
+    if (!data || typeof data !== "object" || !("error" in data))
+        return undefined;
+    const code = Number(data.error);
+    return Number.isSafeInteger(code) && code > 0 ? code : undefined;
+}
+
 class LastFmService {
     private client: AxiosInstance;
     private readonly envApiKey: string;
     private apiKey: string;
     private initialized = false;
+    private keyExpiresAt = 0;
+    private keyGeneration = 0;
+    private keyLoad: Promise<void> | null = null;
 
     constructor() {
         this.envApiKey = config.lastfm.apiKey;
@@ -33,18 +92,29 @@ class LastFmService {
     }
 
     private async ensureInitialized() {
-        if (this.initialized) return;
+        if (this.initialized && Date.now() < this.keyExpiresAt) return;
 
-        // Priority: 1) User settings from DB, 2) env var, 3) disabled
-        this.apiKey = config.secretsDbOnly ? "" : this.envApiKey;
+        const generation = this.keyGeneration;
+        const load = this.keyLoad ?? this.loadApiKey(generation);
+        this.keyLoad = load;
         try {
-            const { getSystemSettings } =
-                await import("../utils/systemSettings");
+            await load;
+        } finally {
+            if (this.keyLoad === load) this.keyLoad = null;
+        }
+        if (generation !== this.keyGeneration) await this.ensureInitialized();
+    }
+
+    private async loadApiKey(generation: number) {
+        // Shared settings have a 60-second cache; workers must also refresh.
+        let apiKey = config.secretsDbOnly ? "" : this.envApiKey;
+        let retrySoon = false;
+        try {
             const settings = await getSystemSettings();
             if (settings?.lastfmApiKey) {
-                this.apiKey = settings.lastfmApiKey;
+                apiKey = settings.lastfmApiKey;
                 logger.debug("Last.fm configured from user settings");
-            } else if (this.apiKey) {
+            } else if (apiKey) {
                 logger.debug("Last.fm configured from env");
             } else if (config.secretsDbOnly) {
                 logger.warn(
@@ -52,21 +122,26 @@ class LastFmService {
                 );
             }
         } catch (err) {
+            retrySoon = true;
             // DB not ready yet, use env key when provided
             if (config.secretsDbOnly) {
                 logger.warn(
                     "SECRETS_DB_ONLY: system settings unreadable; Last.fm key unavailable (no .env fallback)",
                 );
-            } else if (this.apiKey) {
+            } else if (apiKey) {
                 logger.debug("Last.fm configured from env");
             }
         }
 
-        if (!this.apiKey && !config.secretsDbOnly) {
+        if (!apiKey && !config.secretsDbOnly) {
             logger.warn("Last.fm API key not available");
         }
 
-        this.initialized = true;
+        if (generation === this.keyGeneration) {
+            this.apiKey = apiKey;
+            this.initialized = true;
+            this.keyExpiresAt = Date.now() + (retrySoon ? 5_000 : 60_000);
+        }
     }
 
     /**
@@ -74,7 +149,9 @@ class LastFmService {
      * Called when system settings are updated to pick up new key
      */
     async refreshApiKey(): Promise<void> {
+        this.keyGeneration += 1;
         this.initialized = false;
+        this.keyLoad = null;
         await this.ensureInitialized();
         logger.debug("Last.fm API key refreshed from settings");
     }
@@ -90,9 +167,65 @@ class LastFmService {
         if (!this.apiKey) {
             throw new Error("Last.fm API key not available");
         }
-        const response = await rateLimiter.execute("lastfm", () =>
-            this.client.get<T>("/", { params }),
-        );
+        const response = await rateLimiter.execute("lastfm", async () => {
+            // Bind credentials at dispatch: initialization or a settings update
+            // may have changed the key while this request waited for its slot.
+            await this.ensureInitialized();
+            if (!this.apiKey) throw new Error("Last.fm API key not available");
+            try {
+                const result = await this.client.get<T>("/", {
+                    params: { ...params, api_key: this.apiKey },
+                });
+                // Application errors may arrive with HTTP 200. The limiter must
+                // observe them before it records success or decides to retry.
+                const code = providerErrorCode(result.data);
+                if (code !== undefined) throw new LastFmRequestError(code);
+                return result;
+            } catch (error: unknown) {
+                if (error instanceof LastFmRequestError) throw error;
+                // Axios errors include request parameters (and the API key).
+                // Callers log errors, so retain only safe fallback metadata.
+                const upstream =
+                    error && typeof error === "object" && "response" in error
+                        ? error.response
+                        : undefined;
+                const status =
+                    upstream &&
+                    typeof upstream === "object" &&
+                    "status" in upstream &&
+                    typeof upstream.status === "number"
+                        ? upstream.status
+                        : undefined;
+                const data =
+                    upstream &&
+                    typeof upstream === "object" &&
+                    "data" in upstream
+                        ? upstream.data
+                        : undefined;
+                const headers =
+                    upstream &&
+                    typeof upstream === "object" &&
+                    "headers" in upstream
+                        ? upstream.headers
+                        : undefined;
+                const retryAfter =
+                    headers &&
+                    typeof headers === "object" &&
+                    "retry-after" in headers
+                        ? headers["retry-after"]
+                        : undefined;
+                const transportCode =
+                    error && typeof error === "object" && "code" in error
+                        ? error.code
+                        : undefined;
+                throw new LastFmRequestError(
+                    providerErrorCode(data),
+                    status,
+                    transportCode,
+                    retryAfter,
+                );
+            }
+        });
         return response.data;
     }
 

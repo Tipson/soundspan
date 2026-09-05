@@ -60,6 +60,7 @@ jest.mock("../../services/youtubeMusic", () => ({
         getSong: jest.fn(),
         getStreamInfo: jest.fn(),
         getStreamProxy: jest.fn(),
+        reconcileTailWarmup: jest.fn(),
         getLibrarySongs: jest.fn(),
         getLibraryAlbums: jest.fn(),
         findMatchForTrack: jest.fn(),
@@ -118,12 +119,70 @@ describe("youtube music public stream routes integration", () => {
         normalizeYtMusicStreamQuality as unknown as jest.Mock;
     const mockGetStreamInfo = ytMusicService.getStreamInfo as jest.Mock;
     const mockGetStreamProxy = ytMusicService.getStreamProxy as jest.Mock;
+    const mockReconcileTailWarmup =
+        ytMusicService.reconcileTailWarmup as jest.Mock;
     const mockRecoverUnavailable =
         ytMusicUnavailableRecoveryService.recover as jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();
         mockGetSystemSettings.mockResolvedValue({ ytMusicEnabled: true });
+    });
+
+    it("namespaces and forwards an authenticated tail warmup reconcile", async () => {
+        mockReconcileTailWarmup.mockResolvedValueOnce({
+            ownerId: "user-1:player-1",
+            generation: 3,
+            accepted: true,
+            items: [
+                { videoId: "next0000001", quality: "HIGH", status: "queued" },
+            ],
+        });
+        const res = await request(app)
+            .post("/api/ytmusic/tail-warmup/reconcile")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                ownerId: "player-1",
+                generation: 3,
+                quality: "high",
+                current: "curr0000001",
+                immediate: "next0000001",
+                tail: ["tail0000001", "tail0000002"],
+            });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual(
+            expect.objectContaining({
+                generation: 3,
+                items: expect.any(Array),
+            }),
+        );
+        expect(mockReconcileTailWarmup).toHaveBeenCalledWith(
+            {
+                ownerId: "user-1:player-1",
+                generation: 3,
+                quality: "NORM:HIGH",
+                current: "curr0000001",
+                immediate: "next0000001",
+                tail: ["tail0000001", "tail0000002"],
+            },
+            { signal: expect.any(AbortSignal) },
+        );
+    });
+
+    it("rejects an oversized tail warmup plan before reaching the sidecar", async () => {
+        const res = await request(app)
+            .post("/api/ytmusic/tail-warmup/reconcile")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .send({
+                ownerId: "player-1",
+                generation: 4,
+                current: null,
+                immediate: null,
+                tail: ["a", "b", "c", "d", "e"],
+            });
+        expect(res.status).toBe(400);
+        expect(mockReconcileTailWarmup).not.toHaveBeenCalled();
     });
 
     it("requires auth for /api/ytmusic/stream-info-public/:videoId", async () => {
@@ -295,7 +354,10 @@ describe("youtube music public stream routes integration", () => {
             "video-2",
             "norm:HIGH",
             "bytes=0-9",
-            { signal: expect.any(AbortSignal) },
+            {
+                signal: expect.any(AbortSignal),
+                purpose: "interactive",
+            },
         );
     });
 });

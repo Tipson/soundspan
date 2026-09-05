@@ -8,7 +8,6 @@ const TARGET_IMAGE_SECTIONS = [
     "backend",
     "backendWorker",
     "frontend",
-    "tidalSidecar",
     "ytmusicStreamer",
     "audioAnalyzer",
     "vibeProviderDclap",

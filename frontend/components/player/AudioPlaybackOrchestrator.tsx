@@ -39,6 +39,7 @@ import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { resolveDeviceOfflineMediaIdentity } from "@/features/device-offline/playbackResolver";
 import {
     getNextTrackInfo,
+    isRetiredProviderTrack,
     resolveAudioLoadTimeoutPolicy,
     resolveDirectTrackSourceType,
 } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
@@ -154,6 +155,7 @@ export const AudioPlaybackOrchestrator = memo(
             lastHandledTrackEndRef,
             trackEndWatchdogRef,
             howlerLoadStartMsRef,
+            playbackStartTimingRef,
             heartbeatRef,
         } = orchestratorRefs;
         const applyCurrentOutputState = H.useApplyCurrentOutputState({
@@ -251,19 +253,22 @@ export const AudioPlaybackOrchestrator = memo(
                 setCurrentAudiobook,
                 lastProgressSaveRef,
             });
-        const { preloadTrack: preloadNextTrack, preloadNetworkWhenDue } =
-            H.useNextTrackPreload({
-                playbackType,
-                currentTrack,
-                currentPodcast,
-                isPlaying,
-                queue,
-                currentIndex,
-                isShuffle,
-                shuffleIndices,
-                repeatMode,
-                refs: orchestratorRefs,
-            });
+        const {
+            preloadTrack: preloadNextTrack,
+            preloadNetworkWhenDue,
+            consumeReadyCurrentTrackPreload,
+        } = H.useNextTrackPreload({
+            playbackType,
+            currentTrack,
+            currentPodcast,
+            isPlaying,
+            queue,
+            currentIndex,
+            isShuffle,
+            shuffleIndices,
+            repeatMode,
+            refs: orchestratorRefs,
+        });
         useLayoutEffect(() => {
             const handleTimeUpdate = (data: {
                 timeSec: number;
@@ -373,9 +378,7 @@ export const AudioPlaybackOrchestrator = memo(
                     currentAudiobook?.duration ||
                     currentPodcast?.duration ||
                     0;
-                const isRemote =
-                    currentTrack?.streamSource === "tidal" ||
-                    currentTrack?.streamSource === "youtube";
+                const isRemote = currentTrack?.streamSource === "youtube";
                 setDuration(
                     resolvePlaybackDuration({
                         loadedDurationSec: loadedDuration,
@@ -989,14 +992,30 @@ export const AudioPlaybackOrchestrator = memo(
             const thisLoadId = loadIdRef.current;
             desiredLoadPlayRef.current = null;
             cancelledLoadPlayIdRef.current = null;
+            const loadStartedAtMs = Date.now();
+            const pendingAdvanceStartedAtMs = advancePlayIntentAtMsRef.current;
             const hasAdvancePlayIntent = isAdvancePlayIntentFresh(
-                advancePlayIntentAtMsRef.current,
-                Date.now(),
+                pendingAdvanceStartedAtMs,
+                loadStartedAtMs,
             );
             advancePlayIntentAtMsRef.current = null;
             const advanceOrigin = consumePlaybackAdvanceOrigin();
             if (advanceOrigin?.origin === "manual") {
                 consecutiveErrorBreakerRef.current.reset();
+            }
+            if (
+                playbackType === "track" &&
+                currentTrack &&
+                isRetiredProviderTrack(currentTrack)
+            ) {
+                isLoadingRef.current = false;
+                setIsBuffering(false);
+                logPlaybackClientMetric("player.retired_provider_skip", {
+                    trackId: currentTrack.id,
+                    sourceType: "tidal",
+                });
+                scheduleTrackErrorSkip(currentTrack.id);
+                return;
             }
             const providerFailureKey = currentTrack
                 ? getTrackProviderFailureKey(currentTrack)
@@ -1021,6 +1040,18 @@ export const AudioPlaybackOrchestrator = memo(
                 return;
             }
             loadTimeoutRetryCountRef.current = 0;
+            playbackStartTimingRef.current = {
+                trackId:
+                    playbackType === "track"
+                        ? (currentTrack?.id ?? null)
+                        : null,
+                loadId: thisLoadId,
+                startedAtMs: loadStartedAtMs,
+                transitionStartedAtMs: hasAdvancePlayIntent
+                    ? pendingAdvanceStartedAtMs
+                    : null,
+                reported: false,
+            };
             markStartupStabilityWindow(
                 playbackType === "track" ? (currentTrack?.id ?? null) : null,
                 "track_load_started",
@@ -1030,6 +1061,12 @@ export const AudioPlaybackOrchestrator = memo(
                 clearTimeout(loadTimeoutRef.current);
                 loadTimeoutRef.current = null;
             }
+
+            const currentTrackPreloadWasReady = Boolean(
+                playbackType === "track" &&
+                currentTrack &&
+                consumeReadyCurrentTrackPreload(currentTrack),
+            );
 
             // Transition state machine to LOADING
             playbackStateMachine.forceTransition("LOADING");
@@ -1048,23 +1085,20 @@ export const AudioPlaybackOrchestrator = memo(
                     hasSeenTrackLoadRef.current = true;
                 }
 
-                // TIDAL streaming takes priority
-                if (
-                    currentTrack.streamSource === "tidal" &&
-                    currentTrack.tidalTrackId
-                ) {
-                    streamUrl = api.getTidalStreamUrl(
-                        currentTrack.tidalTrackId,
-                    );
+                if (currentTrack.streamSource === "audius") {
+                    // Metadata locator only: the source lease revalidates and resolves it
+                    // before any native media load. Never fall through to local/YouTube.
+                    streamUrl = `/api/audius/tracks/${encodeURIComponent(currentTrack.provider?.providerTrackId ?? "")}/playback`;
                 } else if (
                     currentTrack.streamSource === "youtube" &&
                     currentTrack.youtubeVideoId
                 ) {
-                    // Prefer authenticated endpoint when user has YT Music OAuth, else public
+                    // Playback is always public: user OAuth only unlocks private
+                    // YouTube Music library surfaces, not the yt-dlp audio path.
                     streamUrl = api.getYtMusicStreamUrl(
                         currentTrack.youtubeVideoId,
                         undefined,
-                        !ytMusicAuthenticatedRef.current,
+                        true,
                     );
                 } else if (
                     currentTrack.streamSource === "youtube-direct" &&
@@ -1157,7 +1191,10 @@ export const AudioPlaybackOrchestrator = memo(
                         0;
                     setDuration(fallbackDuration);
 
-                    const format = resolveTrackFormatHint(currentTrack ?? null);
+                    const format =
+                        currentTrack?.streamSource === "audius"
+                            ? "mp3"
+                            : resolveTrackFormatHint(currentTrack ?? null);
 
                     if (playbackType === "track" && currentTrack) {
                         setStreamProfile({
@@ -1257,11 +1294,28 @@ export const AudioPlaybackOrchestrator = memo(
                         // Passing autoplay=true here would cause Howler's onload to
                         // play() from position 0 before handleLoaded can seek,
                         // producing overlapping audio streams.
-                        audioEngine.load(
-                            streamUrl,
-                            deferAutoplay ? false : shouldAutoPlayOnLoad,
-                            format,
-                        );
+                        if (currentTrack?.streamSource === "audius") {
+                            audioEngine.load(
+                                {
+                                    url: streamUrl,
+                                    trackId: currentTrack.id,
+                                    sourceType: "audius",
+                                },
+                                {
+                                    autoplay: deferAutoplay
+                                        ? false
+                                        : shouldAutoPlayOnLoad,
+                                    format,
+                                    withCredentials: false,
+                                },
+                            );
+                        } else {
+                            audioEngine.load(
+                                streamUrl,
+                                deferAutoplay ? false : shouldAutoPlayOnLoad,
+                                format,
+                            );
+                        }
                         applyCurrentOutputState();
 
                         if (playbackType === "podcast" && currentPodcast) {
@@ -1469,6 +1523,7 @@ export const AudioPlaybackOrchestrator = memo(
                     const shouldCoalesceManualYouTubeSelection =
                         advanceOrigin?.origin === "manual" &&
                         currentTrack?.streamSource === "youtube" &&
+                        !currentTrackPreloadWasReady &&
                         !resolvedStreamUrl.startsWith("blob:") &&
                         !resolvedStreamUrl.startsWith("/__offline/audio/");
                     if (!shouldCoalesceManualYouTubeSelection) {

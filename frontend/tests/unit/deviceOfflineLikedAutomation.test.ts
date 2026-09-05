@@ -8,6 +8,7 @@ import {
     publishDeviceOfflineLikedChangeForSignal,
     subscribeToDeviceOfflineLikedChanges,
 } from "../../features/device-offline/likedAutomation";
+import { resolveDeviceOfflineTrackIdentity } from "../../features/device-offline/trackIdentity";
 
 test("liked playlist rows retain the provider identity required for a device download", () => {
     assert.deepEqual(
@@ -75,10 +76,84 @@ test("automatic liked downloads skip rows without a playable provider on this de
     assert.equal(
         isLikedPlaylistTrackDownloadable({
             ...base,
+            id: "tidal:991",
             source: "tidal",
-            tidalTrackId: null,
+            streamSource: "tidal",
+            tidalTrackId: 991,
         }),
         false,
+    );
+    assert.equal(
+        isLikedPlaylistTrackDownloadable({
+            ...base,
+            id: "local-with-stale-tidal",
+            filePath: "/music/local.flac",
+            source: "tidal",
+            streamSource: "tidal",
+            tidalTrackId: 991,
+        }),
+        true,
+    );
+});
+
+test("liked device conversion keeps local and active YouTube identity ahead of stale TIDAL metadata", () => {
+    const base = {
+        title: "Track",
+        duration: 180,
+        trackNo: null,
+        likedAt: "2026-08-29T10:00:00.000Z",
+        artist: { id: null, name: "Artist" },
+        album: { id: null, title: "Album", coverArt: null },
+    };
+    const local = likedPlaylistTrackToDeviceTrack({
+        ...base,
+        id: "local-stale",
+        filePath: "/music/local.flac",
+        source: "tidal",
+        streamSource: "tidal",
+        tidalTrackId: 991,
+    });
+    const youtube = likedPlaylistTrackToDeviceTrack({
+        ...base,
+        id: "tidal:992",
+        filePath: null,
+        source: "youtube",
+        youtubeVideoId: "active-video",
+        tidalTrackId: 992,
+    });
+
+    assert.equal(resolveDeviceOfflineTrackIdentity(local), "track:local-stale");
+    assert.equal(
+        resolveDeviceOfflineTrackIdentity(youtube),
+        "youtube:active-video",
+    );
+    assert.deepEqual(
+        {
+            source: local.source,
+            streamSource: local.streamSource,
+            tidalTrackId: local.tidalTrackId,
+            youtubeVideoId: local.youtubeVideoId,
+        },
+        {
+            source: "local",
+            streamSource: undefined,
+            tidalTrackId: undefined,
+            youtubeVideoId: undefined,
+        },
+    );
+    assert.deepEqual(
+        {
+            source: youtube.source,
+            streamSource: youtube.streamSource,
+            tidalTrackId: youtube.tidalTrackId,
+            youtubeVideoId: youtube.youtubeVideoId,
+        },
+        {
+            source: "youtube",
+            streamSource: "youtube",
+            tidalTrackId: undefined,
+            youtubeVideoId: "active-video",
+        },
     );
 });
 

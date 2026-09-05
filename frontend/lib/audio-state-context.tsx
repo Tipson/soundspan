@@ -132,6 +132,8 @@ export interface Track {
     // Streaming source fields
     mediaSource?: CanonicalMediaSource;
     provider?: CanonicalMediaProviderIdentity;
+    /** Public attribution page retained with queue metadata, never a signed media URL. */
+    sourcePageUrl?: string;
     source?: UnifiedTrackSource;
     peer?: FederatedTrackPeer;
     streamSource?: RemoteMediaSource;

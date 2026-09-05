@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import threading
 from collections.abc import Callable
 from typing import Protocol
 
 from acoustid_backfill import Database
 from canonical_acoustid_backfill import CombinedAcoustIDBackfill
+from canonical_identity_client import CanonicalIdentityPromotionClient
 
 from services.common.logging_utils import configure_service_logger
 
@@ -43,6 +45,19 @@ def _create_database(database_url: str) -> _Database:
     return DatabaseConnection(database_url)
 
 
+def _create_backfill(database: _Database, api_key: str) -> _Backfill:
+    """Construct the lookup and private backend handoff from service config."""
+    promotion_client = CanonicalIdentityPromotionClient(
+        os.getenv("BACKEND_INTERNAL_URL", ""),
+        os.getenv("INTERNAL_API_SECRET", ""),
+    )
+    return CombinedAcoustIDBackfill(
+        database,
+        api_key,
+        promotion_client=promotion_client,
+    )
+
+
 class AcoustIDLookupWorker:
     """Run lookup passes away from the synchronous track-analysis loop."""
 
@@ -52,7 +67,7 @@ class AcoustIDLookupWorker:
         api_key: str,
         *,
         database_factory: DatabaseFactory = _create_database,
-        backfill_factory: BackfillFactory = CombinedAcoustIDBackfill,
+        backfill_factory: BackfillFactory = _create_backfill,
         cadence_seconds: float = DEFAULT_LOOKUP_CADENCE_SECONDS,
     ) -> None:
         self._database_url = database_url
@@ -94,7 +109,11 @@ class AcoustIDLookupWorker:
         database = self._database_factory(self._database_url)
         try:
             database.connect()
-            backfill = self._backfill_factory(database, self._api_key)
+            try:
+                backfill = self._backfill_factory(database, self._api_key)
+            except ValueError as error:
+                logger.error("AcoustID identity handoff is not configured: %s", error)
+                return
             while not self._stop_event.is_set():
                 try:
                     backfill.run_once(self._stop_event.is_set)

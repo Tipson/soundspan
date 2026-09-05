@@ -53,18 +53,10 @@ const mockYtMusicService = {
     restoreOAuthWithCredentials: jest.fn(),
 };
 
-const mockTidalStreamingService = {
-    restoreOAuth: jest.fn(),
-    findMatchesForAlbum: jest.fn(),
-    getBrowsePlaylist: jest.fn(),
-    getPublicBrowsePlaylist: jest.fn(),
-};
-
 const mockGetSystemSettings = jest.fn();
 
 const mockTrackMappingService = {
     upsertTrackYtMusic: jest.fn(),
-    upsertTrackTidal: jest.fn(),
     createMapping: jest.fn(),
 };
 const mockCanonicalIdentityResolver = {
@@ -77,9 +69,6 @@ jest.mock("../../utils/logger", () => ({ logger: mockLogger }));
 jest.mock("../spotify", () => ({ spotifyService: mockSpotifyService }));
 jest.mock("../deezer", () => ({ deezerService: mockDeezerService }));
 jest.mock("../youtubeMusic", () => ({ ytMusicService: mockYtMusicService }));
-jest.mock("../tidalStreaming", () => ({
-    tidalStreamingService: mockTidalStreamingService,
-}));
 jest.mock("../trackMappingService", () => ({
     trackMappingService: mockTrackMappingService,
 }));
@@ -102,7 +91,6 @@ describe("PlaylistImportService", () => {
     beforeEach(() => {
         jest.resetAllMocks();
         mockLogger.child.mockReturnValue(mockLogger);
-        // Default: empty local library, no tidal auth
         mockPrisma.$transaction.mockImplementation(async (callback: any) =>
             callback(mockPrisma),
         );
@@ -128,7 +116,6 @@ describe("PlaylistImportService", () => {
         mockPrisma.playlistItem.createMany.mockImplementation(
             async ({ data }: { data: unknown[] }) => ({ count: data.length }),
         );
-        mockTidalStreamingService.restoreOAuth.mockResolvedValue(true);
         mockTrackMappingService.createMapping.mockResolvedValue({
             id: "mapping_1",
         });
@@ -229,26 +216,6 @@ describe("PlaylistImportService", () => {
             );
 
             expect(result).toEqual({ source: "youtube", id: "PLmobile456" });
-        });
-
-        it("parses Tidal playlist URL", () => {
-            mockSpotifyService.parseUrl.mockReturnValueOnce(null);
-
-            const result = playlistImportService.parseSourceUrl(
-                "https://tidal.com/playlist/abc-123-def",
-            );
-
-            expect(result).toEqual({ source: "tidal", id: "abc-123-def" });
-        });
-
-        it("parses Tidal browse playlist URL", () => {
-            mockSpotifyService.parseUrl.mockReturnValueOnce(null);
-
-            const result = playlistImportService.parseSourceUrl(
-                "https://listen.tidal.com/browse/playlist/abc-123-def",
-            );
-
-            expect(result).toEqual({ source: "tidal", id: "abc-123-def" });
         });
 
         it("parses YouTube URL with list param not first", () => {
@@ -495,194 +462,6 @@ describe("PlaylistImportService", () => {
                 "__public__",
             );
         });
-
-        it("fetches Tidal playlist tracks with tidalId preserved", async () => {
-            mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-                tidalOAuthJson: "encrypted",
-            });
-            mockTidalStreamingService.getBrowsePlaylist.mockResolvedValueOnce({
-                id: "a1b2c3d4-e5f6-0000-0000-000000000099",
-                title: "Tidal Playlist",
-                trackCount: 1,
-                thumbnailUrl: null,
-                tracks: [
-                    {
-                        trackId: 12345,
-                        title: "Tidal Song",
-                        artist: "Tidal Artist",
-                        artists: ["Tidal Artist"],
-                        album: "Tidal Album",
-                        duration: 300,
-                        isrc: "USRC17607839",
-                        thumbnailUrl: null,
-                    },
-                ],
-            });
-
-            const result = await (
-                playlistImportService as any
-            ).fetchSourceTracks(
-                "tidal",
-                "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "user_1",
-            );
-
-            expect(result.name).toBe("Tidal Playlist");
-            expect(result.tracks).toHaveLength(1);
-            expect(result.tracks[0].tidalId).toBe(12345);
-            expect(result.tracks[0].isrc).toBe("USRC17607839");
-        });
-
-        it("uses public Tidal browse when no userId is provided", async () => {
-            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce(
-                {
-                    id: "a1b2c3d4-e5f6-0000-0000-000000000099",
-                    title: "Tidal Public Playlist",
-                    trackCount: 1,
-                    thumbnailUrl: null,
-                    tracks: [
-                        {
-                            trackId: 12345,
-                            title: "Tidal Song",
-                            artist: "Tidal Artist",
-                            artists: ["Tidal Artist"],
-                            album: "Tidal Album",
-                            duration: 300,
-                            isrc: "USRC17607839",
-                            thumbnailUrl: null,
-                        },
-                    ],
-                },
-            );
-
-            const result = await (
-                playlistImportService as any
-            ).fetchSourceTracks(
-                "tidal",
-                "a1b2c3d4-e5f6-0000-0000-000000000099",
-            );
-
-            expect(result.name).toBe("Tidal Public Playlist");
-            expect(
-                mockTidalStreamingService.getPublicBrowsePlaylist,
-            ).toHaveBeenCalledWith(
-                "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "HIGH",
-            );
-        });
-
-        it("uses public Tidal browse when userId exists but Tidal auth is unavailable", async () => {
-            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce(
-                {
-                    id: "a1b2c3d4-e5f6-0000-0000-000000000099",
-                    title: "Tidal Public Playlist",
-                    trackCount: 1,
-                    thumbnailUrl: null,
-                    tracks: [
-                        {
-                            trackId: 12345,
-                            title: "Tidal Song",
-                            artist: "Tidal Artist",
-                            artists: ["Tidal Artist"],
-                            album: "Tidal Album",
-                            duration: 300,
-                            isrc: "USRC17607839",
-                            thumbnailUrl: null,
-                        },
-                    ],
-                },
-            );
-
-            const result = await (
-                playlistImportService as any
-            ).fetchSourceTracks(
-                "tidal",
-                "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "user_1",
-            );
-
-            expect(result.name).toBe("Tidal Public Playlist");
-            expect(
-                mockTidalStreamingService.getBrowsePlaylist,
-            ).not.toHaveBeenCalled();
-            expect(
-                mockTidalStreamingService.getPublicBrowsePlaylist,
-            ).toHaveBeenCalledWith(
-                "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "HIGH",
-            );
-        });
-
-        it("falls back to public Tidal browse when authenticated browse returns 401", async () => {
-            mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-                tidalOAuthJson: "encrypted",
-            });
-            mockTidalStreamingService.restoreOAuth.mockResolvedValueOnce(true);
-            const unauthorizedError = new Error(
-                "Request failed with status code 401",
-            ) as Error & {
-                response?: { status?: number };
-            };
-            unauthorizedError.response = { status: 401 };
-            mockTidalStreamingService.getBrowsePlaylist.mockRejectedValueOnce(
-                unauthorizedError,
-            );
-            mockTidalStreamingService.getPublicBrowsePlaylist.mockResolvedValueOnce(
-                {
-                    id: "a1b2c3d4-e5f6-0000-0000-000000000099",
-                    title: "Tidal Public Playlist",
-                    trackCount: 1,
-                    thumbnailUrl: null,
-                    tracks: [
-                        {
-                            trackId: 12345,
-                            title: "Tidal Song",
-                            artist: "Tidal Artist",
-                            artists: ["Tidal Artist"],
-                            album: "Tidal Album",
-                            duration: 300,
-                            isrc: "USRC17607839",
-                            thumbnailUrl: null,
-                        },
-                    ],
-                },
-            );
-
-            const result = await (
-                playlistImportService as any
-            ).fetchSourceTracks(
-                "tidal",
-                "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "user_1",
-            );
-
-            expect(result.name).toBe("Tidal Public Playlist");
-            expect(
-                mockTidalStreamingService.getPublicBrowsePlaylist,
-            ).toHaveBeenCalledWith(
-                "a1b2c3d4-e5f6-0000-0000-000000000099",
-                "HIGH",
-            );
-        });
-
-        it("maps public Tidal browse 404 responses to not-found errors", async () => {
-            const notFoundError = new Error(
-                "Request failed with status code 404",
-            ) as Error & {
-                response?: { status?: number };
-            };
-            notFoundError.response = { status: 404 };
-            mockTidalStreamingService.getPublicBrowsePlaylist.mockRejectedValueOnce(
-                notFoundError,
-            );
-
-            await expect(
-                (playlistImportService as any).fetchSourceTracks(
-                    "tidal",
-                    "a1b2c3d4-e5f6-0000-0000-000000000099",
-                ),
-            ).rejects.toThrow("Tidal playlist not found");
-        });
     });
 
     describe("resolveTrack", () => {
@@ -739,7 +518,7 @@ describe("PlaylistImportService", () => {
             expect(result.confidence).toBe(85);
         });
 
-        it("both YT and Tidal fail returns unresolved", async () => {
+        it("returns unresolved when local and YouTube Music matching fail", async () => {
             mockYtMusicService.findMatchesForAlbum.mockResolvedValueOnce([
                 null,
             ]);
@@ -756,73 +535,6 @@ describe("PlaylistImportService", () => {
 
             expect(result.source).toBe("unresolved");
             expect(result.confidence).toBe(0);
-        });
-
-        it("Tidal match when user has auth", async () => {
-            mockYtMusicService.findMatchesForAlbum.mockResolvedValueOnce([
-                null,
-            ]);
-            mockTidalStreamingService.findMatchesForAlbum.mockResolvedValueOnce(
-                [
-                    {
-                        id: 99999,
-                        title: "Tidal Song",
-                        artist: "Tidal Artist",
-                        duration: 300,
-                        isrc: "USRC17607839",
-                    },
-                ],
-            );
-            mockTrackMappingService.upsertTrackTidal.mockResolvedValueOnce({
-                id: "ct_1",
-            });
-
-            const result = await playlistImportService.resolveTrack(
-                {
-                    artist: "Tidal Artist",
-                    title: "Tidal Song",
-                },
-                [],
-                "user_1",
-                true, // has Tidal auth
-            );
-
-            expect(result.source).toBe("tidal");
-            expect(result.trackTidalId).toBe("ct_1");
-        });
-
-        it("prefers Tidal over YouTube when both matches exist and user has Tidal auth", async () => {
-            mockTidalStreamingService.findMatchesForAlbum.mockResolvedValueOnce(
-                [
-                    {
-                        id: 77777,
-                        title: "Dual Match Song",
-                        artist: "Dual Match Artist",
-                        duration: 210,
-                        isrc: "DUALMATCH1",
-                    },
-                ],
-            );
-            mockTrackMappingService.upsertTrackTidal.mockResolvedValueOnce({
-                id: "ct_dual",
-            });
-
-            const result = await playlistImportService.resolveTrack(
-                {
-                    artist: "Dual Match Artist",
-                    title: "Dual Match Song",
-                    album: "Dual Match Album",
-                },
-                [],
-                "user_1",
-                true,
-            );
-
-            expect(result.source).toBe("tidal");
-            expect(result.trackTidalId).toBe("ct_dual");
-            expect(
-                mockYtMusicService.findMatchesForAlbum,
-            ).not.toHaveBeenCalled();
         });
 
         it("upsert reuses existing TrackYtMusic", async () => {
@@ -935,97 +647,6 @@ describe("PlaylistImportService", () => {
             expect(result.resolved[0].trackId).toBe("t1_local");
         });
 
-        it("Tidal playlist: creates TrackTidal directly from tidalId without search", async () => {
-            mockSpotifyService.parseUrl.mockReturnValue(null);
-
-            mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-                tidalOAuthJson: "encrypted",
-            });
-
-            mockTidalStreamingService.getBrowsePlaylist.mockResolvedValueOnce({
-                id: "a1b2c3d4-e5f6-0000-0000-000000000001",
-                title: "Tidal Native Playlist",
-                trackCount: 1,
-                thumbnailUrl: null,
-                tracks: [
-                    {
-                        trackId: 99999,
-                        title: "Tidal Native Song",
-                        artist: "Tidal Native Artist",
-                        artists: ["Tidal Native Artist"],
-                        album: "Tidal Native Album",
-                        duration: 250,
-                        isrc: "USRC17607839",
-                        thumbnailUrl: null,
-                    },
-                ],
-            });
-
-            mockTrackMappingService.upsertTrackTidal.mockResolvedValueOnce({
-                id: "ct_native1",
-            });
-
-            const result = await playlistImportService.previewImport(
-                "user_1",
-                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000001",
-            );
-
-            expect(result.resolved[0].source).toBe("tidal");
-            expect(result.resolved[0].trackTidalId).toBe("ct_native1");
-            expect(result.resolved[0].confidence).toBe(100);
-            expect(
-                mockTidalStreamingService.findMatchesForAlbum,
-            ).not.toHaveBeenCalled();
-        });
-
-        it("Tidal playlist: local match takes priority over direct tidalId", async () => {
-            mockSpotifyService.parseUrl.mockReturnValue(null);
-
-            mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-                tidalOAuthJson: "encrypted",
-            });
-
-            mockTidalStreamingService.getBrowsePlaylist.mockResolvedValueOnce({
-                id: "a1b2c3d4-e5f6-0000-0000-000000000002",
-                title: "Priority Tidal",
-                trackCount: 1,
-                thumbnailUrl: null,
-                tracks: [
-                    {
-                        trackId: 88888,
-                        title: "Song 1",
-                        artist: "Artist 1",
-                        artists: ["Artist 1"],
-                        album: "Album 1",
-                        duration: 240,
-                        isrc: null,
-                        thumbnailUrl: null,
-                    },
-                ],
-            });
-
-            mockPrisma.track.findMany.mockResolvedValueOnce([
-                {
-                    id: "t1_local",
-                    title: "Song 1",
-                    duration: 240,
-                    filePath: "/music/s1.flac",
-                    album: {
-                        title: "Album 1",
-                        artist: { name: "Artist 1" },
-                    },
-                },
-            ]);
-
-            const result = await playlistImportService.previewImport(
-                "user_1",
-                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000002",
-            );
-
-            expect(result.resolved[0].source).toBe("local");
-            expect(result.resolved[0].trackId).toBe("t1_local");
-        });
-
         it("YouTube import: remaining unresolved tracks still search YT Music", async () => {
             mockSpotifyService.parseUrl.mockReturnValue(null);
 
@@ -1075,69 +696,6 @@ describe("PlaylistImportService", () => {
             expect(result.summary.youtube).toBe(2);
             expect(result.resolved[0].confidence).toBe(100);
             expect(result.resolved[1].confidence).toBe(85);
-        });
-
-        it("Tidal import: remaining unresolved tracks still search YouTube as fallback", async () => {
-            mockSpotifyService.parseUrl.mockReturnValue(null);
-
-            mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-                tidalOAuthJson: "encrypted",
-            });
-
-            mockTidalStreamingService.getBrowsePlaylist.mockResolvedValueOnce({
-                id: "a1b2c3d4-e5f6-0000-0000-000000000003",
-                title: "Tidal Mixed",
-                trackCount: 2,
-                thumbnailUrl: null,
-                tracks: [
-                    {
-                        trackId: 11111,
-                        title: "Tidal Native",
-                        artist: "Tidal Artist",
-                        artists: ["Tidal Artist"],
-                        album: "Tidal Album",
-                        duration: 200,
-                        isrc: "ISRC1",
-                        thumbnailUrl: null,
-                    },
-                    {
-                        trackId: 0,
-                        title: "Fallback Song",
-                        artist: "Fallback Artist",
-                        artists: ["Fallback Artist"],
-                        album: "Fallback Album",
-                        duration: 190,
-                        isrc: null,
-                        thumbnailUrl: null,
-                    },
-                ],
-            });
-
-            // Native upsert
-            mockTrackMappingService.upsertTrackTidal.mockResolvedValueOnce({
-                id: "ct_native",
-            });
-
-            // YT search fallback for second track
-            mockYtMusicService.findMatchesForAlbum.mockResolvedValueOnce([
-                {
-                    videoId: "yt_fallback",
-                    title: "Fallback Song",
-                    duration: 190,
-                },
-            ]);
-            mockTrackMappingService.upsertTrackYtMusic.mockResolvedValueOnce({
-                id: "cy_fallback",
-            });
-
-            const result = await playlistImportService.previewImport(
-                "user_1",
-                "https://tidal.com/playlist/a1b2c3d4-e5f6-0000-0000-000000000003",
-            );
-
-            expect(result.summary.tidal).toBe(1);
-            expect(result.summary.youtube).toBe(1);
-            expect(result.resolved[0].confidence).toBe(100);
         });
     });
 
@@ -1189,9 +747,6 @@ describe("PlaylistImportService", () => {
             });
             expect(
                 mockYtMusicService.findMatchesForAlbum,
-            ).not.toHaveBeenCalled();
-            expect(
-                mockTidalStreamingService.findMatchesForAlbum,
             ).not.toHaveBeenCalled();
         });
 
@@ -1431,190 +986,6 @@ describe("PlaylistImportService", () => {
                 expect.anything(),
             );
         });
-
-        it("batch-resolves unresolved tracks through Tidal after YT misses", async () => {
-            mockSpotifyService.parseUrl.mockReturnValue({
-                type: "playlist",
-                id: "sp_tidal",
-            });
-            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
-                name: "Tidal Playlist",
-                tracks: [
-                    {
-                        title: "Tidal 1",
-                        artist: "Tidal Artist 1",
-                        album: "Tidal Album 1",
-                        durationMs: 200000,
-                        isrc: null,
-                    },
-                    {
-                        title: "Tidal 2",
-                        artist: "Tidal Artist 2",
-                        album: "Tidal Album 2",
-                        durationMs: 205000,
-                        isrc: null,
-                    },
-                ],
-            });
-            mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-                tidalOAuthJson: "encrypted",
-            });
-            mockYtMusicService.findMatchesForAlbum.mockResolvedValueOnce([
-                null,
-                null,
-            ]);
-            mockTidalStreamingService.findMatchesForAlbum.mockResolvedValueOnce(
-                [
-                    {
-                        id: 123,
-                        title: "Tidal 1",
-                        artist: "Tidal Artist 1",
-                        duration: 200,
-                        isrc: "ISRC123",
-                    },
-                    null,
-                ],
-            );
-            mockTrackMappingService.upsertTrackTidal.mockResolvedValueOnce({
-                id: "ct_123",
-            });
-
-            const result = await playlistImportService.previewImport(
-                "user_1",
-                "https://open.spotify.com/playlist/sp_tidal",
-            );
-
-            expect(
-                mockYtMusicService.findMatchesForAlbum,
-            ).toHaveBeenCalledTimes(1);
-            expect(
-                mockTidalStreamingService.findMatchesForAlbum,
-            ).toHaveBeenCalledTimes(1);
-            expect(
-                mockTidalStreamingService.findMatchesForAlbum,
-            ).toHaveBeenCalledWith("user_1", [
-                expect.objectContaining({
-                    artist: "Tidal Artist 1",
-                    title: "Tidal 1",
-                    albumTitle: "Tidal Album 1",
-                }),
-                expect.objectContaining({
-                    artist: "Tidal Artist 2",
-                    title: "Tidal 2",
-                    albumTitle: "Tidal Album 2",
-                }),
-            ]);
-            expect(result.summary.tidal).toBe(1);
-            expect(result.summary.unresolved).toBe(1);
-            expect(result.resolved[0]).toEqual(
-                expect.objectContaining({
-                    trackTidalId: "ct_123",
-                    tidalId: 123,
-                }),
-            );
-        });
-
-        it("propagates persistence callback failures from Tidal resolution", async () => {
-            mockSpotifyService.parseUrl.mockReturnValue({
-                type: "playlist",
-                id: "sp_tidal_persistence_failure",
-            });
-            mockSpotifyService.getPlaylistForImport.mockResolvedValue({
-                name: "Tidal Persistence Failure",
-                tracks: [
-                    {
-                        title: "Tidal Song",
-                        artist: "Tidal Artist",
-                        album: "Tidal Album",
-                        durationMs: 180000,
-                        isrc: null,
-                    },
-                ],
-            });
-            mockPrisma.userSettings.findUnique.mockResolvedValue({
-                tidalOAuthJson: "encrypted",
-            });
-            mockTidalStreamingService.findMatchesForAlbum.mockResolvedValue([
-                {
-                    id: 123,
-                    title: "Tidal Song",
-                    artist: "Tidal Artist",
-                    duration: 180,
-                    isrc: "ISRC123",
-                },
-            ]);
-            mockTrackMappingService.upsertTrackTidal.mockResolvedValue({
-                id: "tidal-row-persist",
-            });
-
-            await expect(
-                playlistImportService.previewImport(
-                    "user_1",
-                    "https://open.spotify.com/playlist/sp_tidal_persistence_failure",
-                    {
-                        onResolved: async () => {
-                            throw new Error("persist failed");
-                        },
-                    },
-                ),
-            ).rejects.toThrow("persist failed");
-            expect(mockLogger.warn).not.toHaveBeenCalledWith(
-                "Tidal batch match failed during import:",
-                expect.anything(),
-            );
-            expect(
-                mockYtMusicService.findMatchesForAlbum,
-            ).not.toHaveBeenCalled();
-        });
-
-        it("skips Tidal matching when session restore fails and falls back to YouTube", async () => {
-            mockSpotifyService.parseUrl.mockReturnValue({
-                type: "playlist",
-                id: "sp_tidal_restore_fail",
-            });
-            mockSpotifyService.getPlaylistForImport.mockResolvedValueOnce({
-                name: "Restore Fail Playlist",
-                tracks: [
-                    {
-                        title: "Fallback Only",
-                        artist: "Fallback Artist",
-                        album: "Fallback Album",
-                        durationMs: 190000,
-                        isrc: null,
-                    },
-                ],
-            });
-            mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
-                tidalOAuthJson: "encrypted",
-            });
-            mockTidalStreamingService.restoreOAuth.mockResolvedValueOnce(false);
-            mockYtMusicService.findMatchesForAlbum.mockResolvedValueOnce([
-                {
-                    videoId: "yt_fallback_only",
-                    title: "Fallback Only",
-                    duration: 190,
-                },
-            ]);
-            mockTrackMappingService.upsertTrackYtMusic.mockResolvedValueOnce({
-                id: "cy_restore_fail",
-            });
-
-            const result = await playlistImportService.previewImport(
-                "user_1",
-                "https://open.spotify.com/playlist/sp_tidal_restore_fail",
-            );
-
-            expect(mockTidalStreamingService.restoreOAuth).toHaveBeenCalledWith(
-                "user_1",
-                "encrypted",
-            );
-            expect(
-                mockTidalStreamingService.findMatchesForAlbum,
-            ).not.toHaveBeenCalled();
-            expect(result.summary.tidal).toBe(0);
-            expect(result.summary.youtube).toBe(1);
-            expect(result.summary.unresolved).toBe(0);
-        });
     });
 
     describe("previewM3UImport", () => {
@@ -1716,9 +1087,6 @@ D:\\Exports\\Mixes\\Filename Winner.mp3
             });
             expect(
                 mockYtMusicService.findMatchesForAlbum,
-            ).not.toHaveBeenCalled();
-            expect(
-                mockTidalStreamingService.findMatchesForAlbum,
             ).not.toHaveBeenCalled();
         });
 

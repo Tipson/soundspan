@@ -471,6 +471,132 @@ test("a retain receipt can discard its exact file after the auth generation chan
     assert.equal(tracks?.files.size, 0);
 });
 
+for (const body of [
+    "<!DOCTYPE html><html><body>Sign in</body></html>",
+    '\ufeff  <html lang="en">upstream failure</html>',
+    '{"error":"provider unavailable"}',
+    '<?xml version="1.0"?><Error>AccessDenied</Error>',
+]) {
+    test(`retain rejects a server error document disguised as audio: ${body.slice(0, 24)}`, async () => {
+        const { vault, picked, createdUrls } = createHarness();
+        await vault.requestAccess();
+        const session = await vault.open({
+            ownerId: "user-1",
+            authGeneration: 1,
+        });
+        const bytes = new TextEncoder().encode(body);
+        await assert.rejects(
+            session.retain({
+                track: TRACK,
+                quality: "auto",
+                stream: bytesStream([...bytes]),
+                contentType: "audio/mpeg",
+                expectedBytes: bytes.length,
+            }),
+            (error: unknown) =>
+                error instanceof DeviceAudioVaultError &&
+                error.code === "integrity",
+        );
+        const files = picked.directories
+            .get("Soundspan")!
+            .directories.get("scope-user-1")!
+            .directories.get("tracks")!.files;
+        assert.equal(files.size, 0);
+        assert.equal(createdUrls.length, 0);
+    });
+}
+
+test("access rejects a same-size error-document replacement without deleting the user's file", async () => {
+    const { vault, picked, createdUrls } = createHarness();
+    await vault.requestAccess();
+    const session = await vault.open({ ownerId: "user-1", authGeneration: 1 });
+    const receipt = await session.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream(Array(128).fill(1)),
+        contentType: "audio/mpeg",
+        expectedBytes: 128,
+    });
+    const files = picked.directories
+        .get("Soundspan")!
+        .directories.get("scope-user-1")!
+        .directories.get("tracks")!.files;
+    const file = [...files.values()][0];
+    const writer = await file.createWritable();
+    await writer.write(
+        new TextEncoder().encode("<html>Server error</html>".padEnd(128, " ")),
+    );
+    await writer.close();
+    for (const kind of ["inspect", "play", "export"] as const) {
+        await assert.rejects(
+            session.access({ kind, ref: receipt.ref, expectedBytes: 128 }),
+            (error: unknown) =>
+                error instanceof DeviceAudioVaultError &&
+                error.code === "integrity",
+        );
+    }
+    assert.equal(files.size, 1);
+    assert.equal(createdUrls.length, 0);
+});
+
+test("document-like ID3 tag text is not mistaken for an error body", async () => {
+    const { vault } = createHarness();
+    await vault.requestAccess();
+    const session = await vault.open({ ownerId: "user-1", authGeneration: 1 });
+    const bytes = new TextEncoder().encode(
+        'ID3\x04\x00\x00<!DOCTYPE html>{"error":"song title"}',
+    );
+    const receipt = await session.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream([...bytes]),
+        contentType: "audio/mpeg",
+        expectedBytes: bytes.length,
+    });
+    assert.equal(receipt.bytes, bytes.length);
+});
+
+test("async integrity inspection cannot issue a playback URL after account rotation", async () => {
+    let current = true;
+    const { vault, picked, createdUrls } = createHarness({
+        isAuthGenerationCurrent: () => current,
+    });
+    await vault.requestAccess();
+    const session = await vault.open({ ownerId: "user-1", authGeneration: 1 });
+    const receipt = await session.retain({
+        track: TRACK,
+        quality: "auto",
+        stream: bytesStream([1, 2, 3]),
+        contentType: "audio/mpeg",
+        expectedBytes: 3,
+    });
+    const file = [
+        ...picked.directories
+            .get("Soundspan")!
+            .directories.get("scope-user-1")!
+            .directories.get("tracks")!
+            .files.values(),
+    ][0];
+    const getFile = file.getFile.bind(file);
+    file.getFile = async () => {
+        const blob = await getFile();
+        const slice = blob.slice.bind(blob);
+        blob.slice = (start, end) => {
+            current = false;
+            assert.equal(end, 512);
+            return slice(start, end);
+        };
+        return blob;
+    };
+    await assert.rejects(
+        session.access({ kind: "play", ref: receipt.ref, expectedBytes: 3 }),
+        (error: unknown) =>
+            error instanceof DeviceAudioVaultError &&
+            error.code === "auth_changed",
+    );
+    assert.equal(createdUrls.length, 0);
+});
+
 test("retain removes an incomplete file and reports a stable integrity code", async () => {
     const { vault, picked } = createHarness();
     await vault.requestAccess();

@@ -64,6 +64,11 @@ jest.mock("../../services/recommendations/exposureStore", () => ({
 import router from "../plays";
 import { prisma } from "../../utils/db";
 import { resolveRemoteTrackMetadataForRequest } from "../../services/remoteTrackMetadataResolver";
+import {
+    forwardScrobbleIsolated,
+    forwardTrackReferenceIsolated,
+} from "../../services/scrobbleForwarder";
+import { recommendationExposureStore } from "../../services/recommendations/exposureStore";
 
 const mockTrackFindUnique = prisma.track.findUnique as jest.Mock;
 const mockTrackTidalFindUnique = prisma.trackTidal.findUnique as jest.Mock;
@@ -76,6 +81,11 @@ const mockPlayCount = prisma.play.count as jest.Mock;
 const mockPlayDeleteMany = prisma.play.deleteMany as jest.Mock;
 const mockResolveRemoteTrackMetadataForRequest =
     resolveRemoteTrackMetadataForRequest as jest.Mock;
+const mockForwardScrobbleIsolated = forwardScrobbleIsolated as jest.Mock;
+const mockForwardTrackReferenceIsolated =
+    forwardTrackReferenceIsolated as jest.Mock;
+const mockAttributeRecommendationPlayback =
+    recommendationExposureStore.attributePlayback as jest.Mock;
 
 function getGetHandler(path: string) {
     const layer = (router as any).stack.find(
@@ -334,23 +344,7 @@ describe("plays history compatibility", () => {
         expect(errRes.body).toEqual({ error: "Failed to log play" });
     });
 
-    it("materializes remote tracks when logging tidal or youtube plays", async () => {
-        mockPlayCreate
-            .mockResolvedValueOnce({
-                id: "play-tidal",
-                userId: "user-1",
-                trackTidalId: "tt-1",
-                source: "TIDAL",
-                playedAt: expect.any(Date),
-            })
-            .mockResolvedValueOnce({
-                id: "play-yt",
-                userId: "user-1",
-                trackYtMusicId: "yt-1",
-                source: "YOUTUBE_MUSIC",
-                playedAt: expect.any(Date),
-            });
-
+    it("rejects retired TIDAL play writes without persistence or forwarding", async () => {
         const tidalReq = {
             session: { userId: "user-1" },
             user: { id: "user-1" },
@@ -364,14 +358,45 @@ describe("plays history compatibility", () => {
         } as any;
         const tidalRes = createRes();
         await createPlayHandler(tidalReq, tidalRes);
-        expect(tidalRes.statusCode).toBe(200);
-        expect(mockPlayCreate).toHaveBeenCalledWith({
-            data: {
-                userId: "user-1",
-                trackTidalId: "tt-1",
-                source: "TIDAL",
-                playedAt: expect.any(Date),
-            },
+
+        expect(tidalRes.statusCode).toBe(400);
+        expect(tidalRes.body).toEqual({ error: "retired_provider" });
+        expect(mockResolveRemoteTrackMetadataForRequest).not.toHaveBeenCalled();
+        expect(mockTrackTidalFindUnique).not.toHaveBeenCalled();
+        expect(mockTrackTidalUpsert).not.toHaveBeenCalled();
+        expect(mockPlayCreate).not.toHaveBeenCalled();
+        expect(mockForwardScrobbleIsolated).not.toHaveBeenCalled();
+        expect(mockForwardTrackReferenceIsolated).not.toHaveBeenCalled();
+        expect(mockAttributeRecommendationPlayback).not.toHaveBeenCalled();
+    });
+
+    it("rejects a TIDAL-prefixed pseudo-local id before lookup or forwarding", async () => {
+        const req = {
+            session: { userId: "user-1" },
+            user: { id: "user-1" },
+            body: { trackId: "tidal:991" },
+        } as any;
+        const res = createRes();
+
+        await createPlayHandler(req, res);
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body).toEqual({ error: "retired_provider" });
+        expect(mockTrackFindUnique).not.toHaveBeenCalled();
+        expect(mockResolveRemoteTrackMetadataForRequest).not.toHaveBeenCalled();
+        expect(mockTrackTidalUpsert).not.toHaveBeenCalled();
+        expect(mockPlayCreate).not.toHaveBeenCalled();
+        expect(mockForwardScrobbleIsolated).not.toHaveBeenCalled();
+        expect(mockForwardTrackReferenceIsolated).not.toHaveBeenCalled();
+    });
+
+    it("materializes YouTube tracks when logging remote plays", async () => {
+        mockPlayCreate.mockResolvedValueOnce({
+            id: "play-yt",
+            userId: "user-1",
+            trackYtMusicId: "yt-1",
+            source: "YOUTUBE_MUSIC",
+            playedAt: expect.any(Date),
         });
 
         const ytReq = {
@@ -397,70 +422,6 @@ describe("plays history compatibility", () => {
                 playedAt: expect.any(Date),
             },
         });
-    });
-
-    it("repairs placeholder tidal metadata before logging the play", async () => {
-        mockTrackTidalUpsert.mockResolvedValueOnce({
-            id: "tt-repaired",
-            tidalId: 69778330,
-        });
-        mockPlayCreate.mockResolvedValueOnce({
-            id: "play-tidal-repaired",
-            userId: "user-1",
-            trackTidalId: "tt-repaired",
-            source: "TIDAL",
-        });
-        mockResolveRemoteTrackMetadataForRequest.mockResolvedValueOnce({
-            title: "Blinded By The Light",
-            artist: "Manfred Mann's Earth Band",
-            album: "The Roaring Silence",
-            duration: 428,
-            isrc: "USWB10800347",
-            explicit: false,
-        });
-
-        const req = {
-            session: { userId: "user-1" },
-            user: { id: "user-1" },
-            body: {
-                tidalTrackId: 69778330,
-                title: "Unknown",
-                artist: "Unknown",
-                album: "Unknown",
-                duration: 180,
-            },
-        } as any;
-        const res = createRes();
-        await createPlayHandler(req, res);
-
-        expect(res.statusCode).toBe(200);
-        expect(mockResolveRemoteTrackMetadataForRequest).toHaveBeenCalledWith(
-            expect.objectContaining({
-                provider: "tidal",
-                userId: "user-1",
-                tidalId: 69778330,
-            }),
-        );
-        expect(mockTrackTidalUpsert).toHaveBeenCalledWith(
-            expect.objectContaining({
-                create: expect.objectContaining({
-                    title: "Blinded By The Light",
-                    artist: "Manfred Mann's Earth Band",
-                    album: "The Roaring Silence",
-                    duration: 428,
-                    isrc: "USWB10800347",
-                    explicit: false,
-                }),
-                update: expect.objectContaining({
-                    title: "Blinded By The Light",
-                    artist: "Manfred Mann's Earth Band",
-                    album: "The Roaring Silence",
-                    duration: 428,
-                    isrc: "USWB10800347",
-                    explicit: false,
-                }),
-            }),
-        );
     });
 
     it("lists recent plays with default/custom limits and handles failures", async () => {

@@ -41,6 +41,17 @@ the final destination for a new download.
   retained file passes integrity checks. Metadata and the owner-scoped work
   queue remain in IndexedDB; the audio bytes live in the selected device
   folder or the browser-private OPFS fallback.
+- Rejected HTTP responses and failures before storage acquires a stream reader
+  cancel the unused response before a retry. After reader acquisition, the vault
+  owns cancellation and partial-file cleanup. Cleanup failures do not replace
+  the original download error.
+- Retained files and subsequent inspect/play/export requests reject empty or
+  truncated files and recognizable HTML/XML/JSON error documents, even when
+  the server labels them as audio. Content inspection reads at most the first
+  512 bytes; it does not decode the whole track or guarantee codec support.
+  An invalid just-created file is discarded before publishing ready metadata.
+  An existing invalid file is preserved for explicit user recovery, without
+  issuing a playback or export URL.
 - `offlineQueue.ts` and `browserQueueStorage.ts` de-duplicate album, artist,
   playlist, and My Liked work by owner, track identity, and quality. Renewable
   leases ensure one foreground transfer per owner across tabs. Interrupted work
@@ -63,6 +74,9 @@ the final destination for a new download.
 - Album, artist, playlist, My Liked, and YouTube Music collection pages
   queue the playable tracks currently exposed by the page. Artist downloads
   remain deliberately bounded instead of crawling an unbounded discography.
+  Shared collection buttons use compact single-line visible labels; their
+  accessible name and linked status retain the complete action, collection,
+  progress, and storage explanation.
 - Settings can opt in to gradual liked-song downloads after storage setup. The
   default is off. Automatic copies are capped by the selected 25, 50, 100, or
   200 newest liked songs and by 2 GiB; eviction removes only the oldest

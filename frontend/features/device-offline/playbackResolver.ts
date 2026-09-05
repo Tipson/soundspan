@@ -1,9 +1,10 @@
 import {
+    deviceOfflineRecordMatchesTrack,
     normalizeDeviceOfflineQuality,
-    resolveDeviceOfflineTrackIdentity,
 } from "./trackIdentity";
 import type { DeviceOfflineDownloadRecord, DeviceOfflineTrack } from "./types";
 import { getAuthRuntimeLease } from "@/lib/auth-runtime-generation";
+import { isRetiredRemoteOnlyTrack } from "@/lib/trackRef";
 import {
     DeviceAudioVaultError,
     getDeviceAudioVault,
@@ -29,7 +30,12 @@ const preparedSources = new Map<
 >();
 type DeviceOfflinePlaybackTrack = Pick<
     DeviceOfflineTrack,
-    "id" | "streamSource" | "tidalTrackId" | "youtubeVideoId"
+    | "id"
+    | "filePath"
+    | "source"
+    | "streamSource"
+    | "tidalTrackId"
+    | "youtubeVideoId"
 >;
 
 /** User-facing terminal copy for an offline playback failure. */
@@ -171,14 +177,14 @@ function resolveReadyPlaybackRecord(
     preferredQuality: string = "auto",
 ): DeviceOfflineDownloadRecord | null {
     if (!activeOwnerId) return null;
+    if (isRetiredRemoteOnlyTrack(track)) return null;
 
-    const identity = resolveDeviceOfflineTrackIdentity(track);
     const quality = normalizeDeviceOfflineQuality(preferredQuality);
     const candidates = readyRecords
         .filter(
             (record) =>
                 record.ownerId === activeOwnerId &&
-                record.trackIdentity === identity,
+                deviceOfflineRecordMatchesTrack(record, track),
         )
         .sort((left, right) => right.updatedAt - left.updatedAt);
     return (

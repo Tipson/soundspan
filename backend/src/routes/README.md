@@ -74,6 +74,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/artistRouteName.ts`    | Shared artist route-name helper; not a router                                                         |
 | `backend/src/routes/artists.ts`            | `/api/artists`                                                                                        |
 | `backend/src/routes/audiobooks.ts`         | `/api/audiobooks`                                                                                     |
+| `backend/src/routes/audius.ts`             | `/api/audius` (opt-in, authenticated independent catalog; see `docs/AUDIUS.md`) |
 | `backend/src/routes/auth.ts`               | `/api/auth` (compatibility re-export of `auth/index.ts`)                                              |
 | `backend/src/routes/browse.ts`             | `/api/browse`                                                                                         |
 | `backend/src/routes/browseYtMusicErrors.ts` | Shared YouTube Music browse error mapping; not a router                                              |
@@ -87,6 +88,7 @@ route file is intentionally incremental (per touched file), not a big-bang.
 | `backend/src/routes/federation.ts`         | `/api/federation/v1`                                                                                  |
 | `backend/src/routes/federationAdmin.ts`    | `/api/federation/admin` (peer lifecycle, consumer linking, and sync enqueue)                          |
 | `backend/src/routes/homepage.ts`           | `/api/homepage`                                                                                       |
+| `backend/src/routes/internalCanonicalIdentity.ts` | `/api/internal/canonical-identity` (shared-secret authenticated, rate-limited analyzer promotion handoff) |
 | `backend/src/routes/library.ts`            | `/api/library`                                                                                        |
 | `backend/src/routes/libraryHealthDashboard.ts` | `/api/library-health` (admin-gated read-only dashboard analytics)                                 |
 | `backend/src/routes/listeningState.ts`     | `/api/listening-state`                                                                                |
@@ -234,6 +236,7 @@ stays rate limited (`apiLimiter`) and returns
 - `AUTO_PLAYLISTS_ENABLED`: `/api/mixes`
 - `FEDERATION_ENABLED`: `/api/federation/v1`, `/api/federation/admin`, consumer sync/health jobs, and federated playback/cover branches
 - `FEATURE_REQUESTS`: `/api/requests` (Helm value: `config.features.requests`)
+- `FEATURE_AUDIUS`: `/api/audius` (default off; Helm `config.features.audius` defaults null). Authentication is required even when disabled. The existing system features response gates the separate search shelf and personal player integration. Experimental limited-origin transport: unsupported media nodes fail closed; no automatic fallback. See `docs/AUDIUS.md` for the still-blocked final live acceptance gate.
 
 ## Conventions
 

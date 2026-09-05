@@ -153,6 +153,11 @@ export interface DeviceAudioVaultSession {
         kind: DeviceAudioStorageKind;
         label: string;
     };
+    /**
+     * Consume the complete stream before returning a receipt. Once a reader is
+     * acquired, the implementation owns cancellation and must release its lock
+     * on rejection, together with cleanup of any partial file.
+     */
     retain(input: DeviceAudioRetainInput): Promise<DeviceAudioReceipt>;
     access<T extends DeviceAudioAccessRequest>(
         input: T,

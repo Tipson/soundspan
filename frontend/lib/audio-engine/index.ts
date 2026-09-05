@@ -10,6 +10,7 @@ import type {
     AudioEngineEventHandler,
     AudioEngineEventType,
     AudioEngineLoadOptions,
+    AudioPreloadLease,
     AudioEngineSource,
 } from "@/lib/audio-engine/types";
 import { DEFAULT_AUDIO_VOLUME, clampAudioVolume } from "@/lib/audio-volume";
@@ -64,8 +65,11 @@ interface RuntimeAudioEngine extends AudioEngine {
     preload(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void;
-    preload(source: AudioEngineSource | string, format?: string): void;
+    ): AudioPreloadLease | null;
+    preload(
+        source: AudioEngineSource | string,
+        format?: string,
+    ): AudioPreloadLease | null;
     reload(): void;
     getActualCurrentTime(): number;
     hasTrackEnded(): boolean;
@@ -219,12 +223,15 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
     preload(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void;
-    preload(source: AudioEngineSource | string, format?: string): void;
+    ): AudioPreloadLease | null;
+    preload(
+        source: AudioEngineSource | string,
+        format?: string,
+    ): AudioPreloadLease | null;
     preload(
         source: AudioEngineSource | string,
         optionsOrFormat?: AudioEngineLoadOptions | string,
-    ): void {
+    ): AudioPreloadLease | null {
         const normalizedSource = resolveSource(source);
         const normalizedOptions: AudioEngineLoadOptions =
             typeof optionsOrFormat === "string"
@@ -232,8 +239,12 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
                 : (optionsOrFormat ?? {});
 
         if (typeof this.howlerEngine.preload === "function") {
-            this.howlerEngine.preload(normalizedSource, normalizedOptions);
+            return this.howlerEngine.preload(
+                normalizedSource,
+                normalizedOptions,
+            );
         }
+        return null;
     }
 
     reload(): void {

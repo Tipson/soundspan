@@ -8,7 +8,6 @@ import { DiscoverResult } from "../types";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { getArtistRouteParam } from "@/utils/artistRoute";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import {
@@ -50,12 +49,9 @@ function toPlaybackTrack(
     key: string,
     match: SearchProviderMatch,
 ) {
-    const playbackId =
-        match.source === "tidal" && match.tidalTrackId
-            ? `tidal:${match.tidalTrackId}`
-            : match.source === "youtube" && match.youtubeVideoId
-              ? `yt:${match.youtubeVideoId}`
-              : key;
+    const playbackId = match.youtubeVideoId
+        ? `yt:${match.youtubeVideoId}`
+        : key;
     return {
         id: playbackId,
         title: track.name,
@@ -63,9 +59,7 @@ function toPlaybackTrack(
         album: { title: track.album ?? "" },
         duration: match.duration ?? track.duration ?? 0,
         streamSource: match.source,
-        ...(match.source === "tidal"
-            ? { tidalTrackId: match.tidalTrackId }
-            : { youtubeVideoId: match.youtubeVideoId }),
+        youtubeVideoId: match.youtubeVideoId,
     };
 }
 
@@ -76,13 +70,6 @@ function getDirectProviderMatch(
         return {
             source: "youtube",
             youtubeVideoId: track.youtubeVideoId,
-            duration: track.duration ?? undefined,
-        };
-    }
-    if (track.streamSource === "tidal" && track.tidalTrackId) {
-        return {
-            source: "tidal",
-            tidalTrackId: track.tidalTrackId,
             duration: track.duration ?? undefined,
         };
     }
@@ -236,7 +223,6 @@ export function DiscoverTracksList({
                         <div className="flex-1 min-w-0">
                             <p className="flex truncate text-sm font-semibold text-content items-center gap-1.5">
                                 <span className="truncate">{track.name}</span>
-                                {match?.source === "tidal" && <TidalBadge />}
                                 {match?.source === "youtube" && (
                                     <YouTubeBadge />
                                 )}

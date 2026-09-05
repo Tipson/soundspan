@@ -13,6 +13,7 @@ import {
     consumePlaybackAdvanceOrigin,
     isPlaybackAutoRestartSuppressed,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
 
 interface UsePlaybackControlSyncOptions {
     refs: PlaybackOrchestratorRefs;
@@ -169,7 +170,32 @@ export function usePlaybackControlSync({
             cancelledLoadPlayIdRef.current = loadIdRef.current;
         }
 
-        if (isLoadingRef.current) return;
+        if (isLoadingRef.current) {
+            if (isPlaying) {
+                const advanceOrigin = consumePlaybackAdvanceOrigin();
+                if (advanceOrigin?.origin === "manual") {
+                    consecutiveErrorBreakerRef.current.reset();
+                }
+                const listenTogetherSnapshot =
+                    getListenTogetherSessionSnapshot();
+                const isListenTogetherFollower = Boolean(
+                    listenTogetherSnapshot?.groupId &&
+                    !listenTogetherSnapshot.isHost,
+                );
+                if (
+                    !isListenTogetherFollower &&
+                    !isPlaybackAutoRestartSuppressed()
+                ) {
+                    desiredLoadPlayRef.current = {
+                        loadId: loadIdRef.current,
+                        shouldPlay: true,
+                        decidedAtMs: Date.now(),
+                    };
+                    cancelledLoadPlayIdRef.current = null;
+                }
+            }
+            return;
+        }
 
         isUserInitiatedRef.current = true;
 

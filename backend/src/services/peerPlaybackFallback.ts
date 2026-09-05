@@ -8,12 +8,10 @@ import { isProviderMappingEligible } from "./providerMappingEligibility";
 /** One stream-time replacement rung for an unavailable peer track. */
 export type PeerPlaybackFallback =
     | { source: "library"; trackId: string }
-    | { source: "tidal"; tidalTrackId: number }
     | { source: "ytmusic"; youtubeVideoId: string };
 
 interface PeerFallbackCandidates {
     localTwinId: string | null;
-    tidalTrackId: number | null;
     youtubeVideoId: string | null;
 }
 
@@ -27,12 +25,6 @@ export function choosePeerPlaybackFallback(
         ladder.push({ source: "library", trackId: candidates.localTwinId });
     }
     const providers: PeerPlaybackFallback[] = [];
-    if (candidates.tidalTrackId) {
-        providers.push({
-            source: "tidal",
-            tidalTrackId: candidates.tidalTrackId,
-        });
-    }
     if (candidates.youtubeVideoId) {
         providers.push({
             source: "ytmusic",
@@ -72,22 +64,12 @@ export async function loadPeerPlaybackFallback(
         where: { stale: false, trackId: { in: linkedIds } },
         select: {
             confidence: true,
-            trackTidal: { select: { tidalId: true, duration: true } },
             trackYtMusic: { select: { videoId: true, duration: true } },
         },
         orderBy: { confidence: "desc" },
         take: 20,
     });
     const expectedDurationSeconds = track?.duration ?? Number.NaN;
-    const tidal = mappings.find(
-        (row) =>
-            row.trackTidal &&
-            isProviderMappingEligible({
-                confidence: row.confidence,
-                expectedDurationSeconds,
-                actualDurationSeconds: row.trackTidal.duration,
-            }),
-    )?.trackTidal;
     const youtube = mappings.find(
         (row) =>
             row.trackYtMusic &&
@@ -100,7 +82,6 @@ export async function loadPeerPlaybackFallback(
     return choosePeerPlaybackFallback(
         {
             localTwinId: track?.dedupOfTrackId ?? null,
-            tidalTrackId: tidal?.tidalId ?? null,
             youtubeVideoId: youtube?.videoId ?? null,
         },
         systemSettings?.playbackSourceOrder,

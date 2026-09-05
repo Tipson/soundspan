@@ -10,7 +10,6 @@ import {
     resolveDownloadSource,
 } from "./downloadSourcePolicy";
 import { simpleDownloadManager } from "./simpleDownloadManager";
-import { processTidalDownload } from "./tidalLibraryDownload";
 import { processYoutubeDownload } from "./youtubeLibraryDownload";
 import { processSoulseekDownload } from "./soulseekLibraryDownload";
 import { parseArtistAlbumSubject } from "../utils/downloadSubject";
@@ -126,16 +125,6 @@ async function dispatchResolvedSource(
     names: AlbumNames,
     userId: string,
 ): Promise<void> {
-    if (source === "tidal") {
-        await dispatchProviderSource(
-            processTidalDownload,
-            fallbackSource,
-            params,
-            names,
-            userId,
-        );
-        return;
-    }
     if (source === "youtube") {
         await dispatchProviderSource(
             processYoutubeDownload,

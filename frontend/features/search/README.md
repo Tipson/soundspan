@@ -46,9 +46,18 @@ so a slow provider yields available partial results instead of erasing them.
 
 ## Directory Contents
 
+The optional `AudiusSearchPanel` is shown only when `/api/system/features.audius`
+is explicitly true. It runs no background catalog query; the user searches a
+separate, source-labelled shelf and selects a result for the existing personal
+queue/player. The panel is keyed by query to cancel obsolete results on unmount.
+It never ranks a remix/cover/upload as a substitute for another catalog's original.
+This is an experimental limited-origin source; see `docs/AUDIUS.md` for the
+unpassed strict-policy live gate and unsupported storage redirects.
+
 | Path | Kind |
 | --- | --- |
 | `components/AliasResolutionBanner.tsx` | components |
+| `components/AudiusSearchPanel.tsx` | components |
 | `components/DiscoverPodcastsGrid.tsx` | components |
 | `components/DiscoverTracksList.tsx` | components |
 | `components/EmptyState.tsx` | components |

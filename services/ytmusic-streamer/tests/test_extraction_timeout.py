@@ -273,7 +273,7 @@ async def test_metadata_extraction_configures_socket_timeout(
 async def test_metadata_extraction_concurrency_is_bounded(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Concurrent metadata work should not exceed the configured worker bound."""
+    """Metadata stays bounded while preserving one configured slot for playback."""
     import app
     import yt_dlp
 
@@ -281,6 +281,7 @@ async def test_metadata_extraction_concurrency_is_bounded(
     release = threading.Event()
     state_lock = threading.Lock()
     state = {"active": 0, "started": 0, "max_active": 0}
+    metadata_limit = max(1, app.YTDLP_EXTRACT_CONCURRENCY - 1)
 
     monkeypatch.setattr(app, "EXTRACT_TIMEOUT", 5)
     monkeypatch.setattr(
@@ -291,7 +292,7 @@ async def test_metadata_extraction_concurrency_is_bounded(
             state_lock,
             at_limit,
             release,
-            app.YTDLP_EXTRACT_CONCURRENCY,
+            metadata_limit,
         ),
     )
     request_count = app.YTDLP_EXTRACT_CONCURRENCY + 1
@@ -310,9 +311,9 @@ async def test_metadata_extraction_concurrency_is_bounded(
         await asyncio.gather(*tasks, return_exceptions=True)
 
     assert reached_limit
-    assert started_at_limit == app.YTDLP_EXTRACT_CONCURRENCY
-    assert active_at_limit == app.YTDLP_EXTRACT_CONCURRENCY
-    assert state["max_active"] == app.YTDLP_EXTRACT_CONCURRENCY
+    assert started_at_limit == metadata_limit
+    assert active_at_limit == metadata_limit
+    assert state["max_active"] == metadata_limit
     assert state["started"] == request_count
     assert all(response.status_code == 200 for response in responses)
 

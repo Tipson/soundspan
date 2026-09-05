@@ -902,6 +902,106 @@ test("manual collection action promotes an existing auto copy without redownload
     assert.equal(harness.calls.length, 0);
 });
 
+test("manual collection reuses a provenance-verified legacy provider key", async () => {
+    const harness = createHarness();
+    const localTrack = {
+        ...TRACK,
+        id: "local-legacy",
+        filePath: "/music/local.flac",
+        source: "local" as const,
+        streamSource: undefined,
+        youtubeVideoId: undefined,
+    };
+    harness.downloads.push({
+        ...readyRecord("user-1", "legacy-ready", "manual", 1),
+        trackIdentity: "tidal:991",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+        track: { ...localTrack, tidalTrackId: 991 },
+    });
+
+    const result = await harness.manager.enqueueBatch([
+        request("user-1", localTrack),
+    ]);
+
+    assert.equal(result.alreadyReady, 1);
+    assert.equal(result.queued, 0);
+    assert.equal(harness.calls.length, 0);
+});
+
+test("enqueue drops retired TIDAL before creating durable queue work", async () => {
+    const harness = createHarness();
+    const retiredTrack = {
+        ...TRACK,
+        id: "tidal:991",
+        streamSource: "tidal" as const,
+        tidalTrackId: 991,
+        youtubeVideoId: undefined,
+    };
+
+    const result = await harness.manager.enqueueBatch([
+        {
+            ...request("user-1", retiredTrack),
+            sourceUrl: "/api/tidal/stream/991",
+        },
+        request("user-1"),
+    ]);
+
+    assert.deepEqual(result, { total: 1, queued: 1, alreadyReady: 0 });
+    assert.deepEqual(
+        (await harness.manager.list("user-1")).map(
+            (item) => item.trackIdentity,
+        ),
+        ["youtube:video-1"],
+    );
+    assert.equal(harness.calls.length, 0);
+});
+
+test("resume terminally rejects persisted retired TIDAL work without download or retry", async () => {
+    const harness = createHarness();
+    const statuses = ["queued", "interrupted", "error"] as const;
+    for (const [index, status] of statuses.entries()) {
+        const tidalTrack = {
+            ...TRACK,
+            id: `tidal:${991 + index}`,
+            streamSource: "tidal" as const,
+            tidalTrackId: 991 + index,
+            youtubeVideoId: undefined,
+        };
+        const item = await harness.store.upsert({
+            ...request("user-1", tidalTrack),
+            key: `retired-${status}`,
+            trackIdentity: `tidal:${991 + index}`,
+            sourceUrl: `/api/tidal/stream/${991 + index}`,
+            quality: "auto",
+            now: index + 1,
+        });
+        harness.store.items.set(item.key, {
+            ...item,
+            status,
+            errorMessage: status === "error" ? "Previous failure" : null,
+        });
+    }
+
+    await harness.manager.resume("user-1");
+
+    assert.equal(harness.calls.length, 0);
+    assert.deepEqual(harness.retryDelays, []);
+    const remaining = await harness.manager.list("user-1");
+    assert.equal(remaining.length, 3);
+    assert.ok(remaining.every((item) => item.status === "error"));
+    assert.ok(
+        remaining
+            .filter((item) => item.key !== "retired-error")
+            .every((item) =>
+                item.errorMessage?.includes("TIDAL больше недоступен"),
+            ),
+    );
+    assert.equal(
+        remaining.find((item) => item.key === "retired-error")?.errorMessage,
+        "Previous failure",
+    );
+});
+
 test("per-device automation settings are owner-scoped and normalized", async () => {
     const harness = createHarness();
     assert.deepEqual(await harness.manager.getSettings("user-1"), {

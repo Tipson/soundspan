@@ -472,6 +472,90 @@ test("TrackRow enter key handler triggers play callback and prevents default", a
     assert.equal(preventDefaultCalls, 1);
 });
 
+test("TrackRow leaves nested controls and links to handle pointer and keyboard activation", async () => {
+    const { TrackRow } = await loadTrackExports();
+
+    let playCalls = 0;
+    let preventDefaultCalls = 0;
+    const element = TrackRow({
+        item: {
+            id: "track-interactive",
+            title: "Interactive Track",
+            artistName: "Artist",
+            duration: 120,
+            coverArtUrl: null,
+        },
+        index: 4,
+        onPlay: () => {
+            playCalls += 1;
+        },
+    });
+    const rowTarget = {
+        closest: () => rowTarget,
+    };
+    const nestedTarget = (selectorFragment: string) => {
+        const target = {
+            closest: (selector: string) =>
+                selector.includes(selectorFragment) ? target : rowTarget,
+        };
+        return target;
+    };
+    const handlers = element.props as {
+        onClick?: (event: {
+            currentTarget: typeof rowTarget;
+            target: ReturnType<typeof nestedTarget> | typeof rowTarget;
+        }) => void;
+        onKeyDown?: (event: {
+            currentTarget: typeof rowTarget;
+            target: ReturnType<typeof nestedTarget> | typeof rowTarget;
+            key: string;
+            preventDefault: () => void;
+        }) => void;
+    };
+
+    for (const selectorFragment of ["button", "a", "input", "label"]) {
+        const target = nestedTarget(selectorFragment);
+        handlers.onClick?.({ currentTarget: rowTarget, target });
+        handlers.onKeyDown?.({
+            currentTarget: rowTarget,
+            target,
+            key: selectorFragment === "input" ? " " : "Enter",
+            preventDefault: () => {
+                preventDefaultCalls += 1;
+            },
+        });
+    }
+    const menuItem = nestedTarget('[role="menuitem"]');
+    handlers.onKeyDown?.({
+        currentTarget: rowTarget,
+        target: menuItem,
+        key: "Enter",
+        preventDefault: () => {
+            preventDefaultCalls += 1;
+        },
+    });
+
+    assert.equal(playCalls, 0);
+    assert.equal(
+        preventDefaultCalls,
+        0,
+        "the row must not consume keyboard activation owned by a nested control",
+    );
+
+    handlers.onClick?.({ currentTarget: rowTarget, target: rowTarget });
+    handlers.onKeyDown?.({
+        currentTarget: rowTarget,
+        target: rowTarget,
+        key: "Enter",
+        preventDefault: () => {
+            preventDefaultCalls += 1;
+        },
+    });
+
+    assert.equal(playCalls, 2, "the row itself remains playable");
+    assert.equal(preventDefaultCalls, 1);
+});
+
 test("track badges render all expected labels", async () => {
     const { InQueueBadge, PreviewBadge, LoadingBadge, UnplayableBadge } =
         await loadTrackExports();

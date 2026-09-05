@@ -20,6 +20,7 @@ const mockPrisma: any = {
     },
     canonicalRecording: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         updateMany: jest.fn(),
         update: jest.fn(),
@@ -54,7 +55,6 @@ jest.mock("../../../utils/db", () => ({ prisma: mockPrisma }));
 jest.mock("../../../utils/redis", () => ({
     redisClient: { eval: jest.fn() },
 }));
-jest.mock("../../tidalStreaming", () => ({ tidalStreamingService: {} }));
 jest.mock("../../youtubeMusic", () => ({
     ytMusicService: { getStreamProxy: mockGetStreamProxy },
 }));
@@ -119,12 +119,43 @@ describe("remote recommendation hot set", () => {
             id: "lease-1",
         });
         mockPrisma.canonicalRecording.update.mockResolvedValue({});
+        mockPrisma.canonicalRecording.findMany
+            .mockReset()
+            .mockResolvedValue([]);
+        mockPrisma.canonicalRecording.findUnique.mockResolvedValue({
+            mergedIntoId: null,
+            identitySource: "metadata",
+        });
         mockPrisma.play.findMany.mockResolvedValue([]);
         mockPrisma.trackMapping.findMany.mockResolvedValue([]);
         mockPrisma.embeddingSpace.updateMany.mockResolvedValue({ count: 1 });
         mockPrisma.$queryRaw.mockResolvedValue([{ dim: 512 }]);
         mockPrisma.$executeRaw.mockResolvedValue(1);
         (redisClient.eval as jest.Mock).mockResolvedValue(1);
+    });
+
+    it("rejects a persisted legacy TIDAL job before budget, lease or YouTube dispatch", async () => {
+        const persistedJob = JSON.parse(
+            '{"userId":"alice","canonicalRecordingId":"legacy-canonical","provider":"tidal","providerTrackId":"12345678901"}',
+        );
+        mockPrisma.canonicalRecording.findMany.mockResolvedValue([]);
+        mockPrisma.canonicalRecording.findUniqueOrThrow.mockResolvedValue({
+            analysisStatus: "pending",
+            embeddingStatus: "pending",
+            embeddings: [],
+        });
+        mockGetStreamProxy.mockRejectedValue(
+            new Error("Unexpected YouTube dispatch for legacy source"),
+        );
+
+        await expect(
+            processRemoteAnalysis({ data: persistedJob } as never),
+        ).rejects.toThrow("Invalid remote analysis job");
+        expect(mockPrisma.canonicalRecording.findMany).not.toHaveBeenCalled();
+        expect(redisClient.eval).not.toHaveBeenCalled();
+        expect(mockMkdir).not.toHaveBeenCalled();
+        expect(mockPrisma.analysisAssetLease.create).not.toHaveBeenCalled();
+        expect(mockGetStreamProxy).not.toHaveBeenCalled();
     });
 
     it("lets a Bull retry pass the scheduler-only failed-analysis cooldown", async () => {
@@ -157,6 +188,10 @@ describe("remote recommendation hot set", () => {
                 embeddingAnalyzedAt: expect.any(Object),
             }),
         );
+        expect(query.where.OR).toContainEqual({ mergedIntoId: { not: null } });
+        expect(query.where.OR).toContainEqual({
+            identitySource: "identity-merged",
+        });
     });
 
     it("recognizes only Prisma unique conflicts as an active-lease race", () => {
@@ -189,6 +224,32 @@ describe("remote recommendation hot set", () => {
         expect(mockGetStreamProxy).not.toHaveBeenCalled();
     });
 
+    it("does not create analysis work for a canonical that merged during admission", async () => {
+        mockPrisma.canonicalRecording.findMany.mockResolvedValue([]);
+        mockPrisma.canonicalRecording.findUniqueOrThrow.mockResolvedValue({
+            analysisStatus: "pending",
+            embeddingStatus: "pending",
+            embeddings: [],
+        });
+        mockPrisma.canonicalRecording.findUnique.mockResolvedValue({
+            mergedIntoId: "canonical-survivor",
+            identitySource: "identity-merged",
+        });
+
+        await expect(
+            processRemoteAnalysis({
+                data: {
+                    userId: "user-1",
+                    canonicalRecordingId: "canonical-alias",
+                    provider: "youtube",
+                    providerTrackId: "video-alias",
+                },
+            } as never),
+        ).resolves.toEqual({ status: "canonical-merged" });
+        expect(mockPrisma.analysisAssetLease.create).not.toHaveBeenCalled();
+        expect(mockPipeline).not.toHaveBeenCalled();
+    });
+
     it("uses the public YouTube context for account-scoped hot-set audio", async () => {
         mockPrisma.canonicalRecording.findMany.mockResolvedValue([]);
         mockPrisma.canonicalRecording.findUniqueOrThrow.mockResolvedValue({
@@ -218,7 +279,10 @@ describe("remote recommendation hot set", () => {
             "video-public-stream",
             "medium",
             undefined,
-            expect.objectContaining({ signal: expect.any(AbortSignal) }),
+            expect.objectContaining({
+                signal: expect.any(AbortSignal),
+                purpose: "analysis",
+            }),
         );
     });
 
@@ -504,18 +568,83 @@ describe("remote recommendation hot set", () => {
                 }),
                 "remote-analysis:canonical-youtube-fresh",
             ],
-            [
-                expect.objectContaining({
-                    canonicalRecordingId: "canonical-tidal-42",
-                    provider: "tidal",
-                    providerTrackId: "42",
-                }),
-                "remote-analysis:canonical-tidal-42",
-            ],
         ]);
     });
 
-    it("prioritizes durable account hot-set signals before the current response", async () => {
+    it("admits current input even when all48 durable account candidates are already covered", async () => {
+        const account = Array.from({ length: 48 }, (_, index) =>
+            candidate(`covered-${index}`),
+        );
+        const current = candidate("current-wave");
+        const dependencies = {
+            enabled: true,
+            loadAccountCandidates: jest.fn().mockResolvedValue(account),
+            enrichIdentities: jest.fn().mockResolvedValue(undefined),
+            resolveCanonicalIdentities: jest.fn(
+                async (items: RecommendationCandidate[]) => items,
+            ),
+            loadCoveredCanonicalIds: jest
+                .fn()
+                .mockResolvedValue(
+                    new Set(account.map((item) => item.canonicalRecordingId!)),
+                ),
+            enqueue: jest.fn().mockResolvedValue(undefined),
+        };
+        await new RemoteAnalysisHotSetScheduler(dependencies).schedule({
+            userId: "alice",
+            sessionId: "current-session",
+            surface: "wave",
+            candidates: [current],
+        });
+        expect(dependencies.enrichIdentities).toHaveBeenCalledWith(
+            "alice",
+            expect.arrayContaining([current]),
+        );
+        expect(
+            dependencies.resolveCanonicalIdentities.mock.calls[0][0],
+        ).toHaveLength(48);
+        expect(dependencies.enqueue).toHaveBeenCalledTimes(1);
+        expect(dependencies.enqueue).toHaveBeenCalledWith(
+            expect.objectContaining({ providerTrackId: "current-wave" }),
+            "remote-analysis:canonical-youtube-current-wave",
+        );
+    });
+
+    it("deduplicates before admission capacity and merges current/account provenance without mutating inputs", async () => {
+        const current = {
+            ...candidate("shared"),
+            candidateSources: ["current-seed"],
+        };
+        const account = {
+            ...candidate("shared"),
+            title: "account metadata",
+            candidateSources: ["hot-liked"],
+        };
+        const tail = candidate("unique-tail");
+        const snapshot = structuredClone({ current, account });
+        const enrichIdentities = jest.fn().mockResolvedValue(undefined);
+        const enqueue = jest.fn().mockResolvedValue(undefined);
+        await new RemoteAnalysisHotSetScheduler({
+            enabled: true,
+            loadAccountCandidates: async () => [account],
+            enrichIdentities,
+            loadCoveredCanonicalIds: async () => new Set(),
+            enqueue,
+        }).schedule({
+            userId: "alice",
+            sessionId: "current-session",
+            surface: "wave",
+            candidates: [...Array.from({ length: 48 }, () => current), tail],
+        });
+        expect(enqueue).toHaveBeenCalledTimes(2);
+        expect(enrichIdentities.mock.calls[0][1]).toEqual([
+            { ...current, candidateSources: ["current-seed", "hot-liked"] },
+            tail,
+        ]);
+        expect({ current, account }).toEqual(snapshot);
+    });
+
+    it("prioritizes current seeds while retaining durable account signals and canonical refresh", async () => {
         const callOrder: string[] = [];
         const dependencies = {
             enabled: true,
@@ -557,8 +686,8 @@ describe("remote recommendation hot set", () => {
             dependencies.enqueue.mock.calls.map(
                 (call) => call[0].providerTrackId,
             ),
-        ).toEqual(["liked", "playlist", "response"]);
-        expect(dependencies.enqueue.mock.calls[0]?.[0]).toEqual(
+        ).toEqual(["response", "liked", "playlist"]);
+        expect(dependencies.enqueue.mock.calls[1]?.[0]).toEqual(
             expect.objectContaining({
                 canonicalRecordingId: "canonical-merged",
             }),
@@ -604,7 +733,7 @@ describe("remote recommendation hot set", () => {
             enabled: true,
             enrichIdentities: jest
                 .fn()
-                .mockRejectedValue(new Error("tidal unavailable")),
+                .mockRejectedValue(new Error("identity lookup unavailable")),
             resolveCanonicalIdentities: jest.fn().mockResolvedValue([
                 {
                     ...current,
@@ -638,26 +767,36 @@ describe("remote recommendation hot set", () => {
             { trackYtMusicId: "yt-row", trackTidalId: null },
             { trackYtMusicId: "single-row", trackTidalId: null },
         ]);
-        mockPrisma.trackMapping.findMany
+        mockPrisma.canonicalRecording.findMany
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([])
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([
                 {
-                    canonicalRecordingId: "canonical-repeated",
-                    trackYtMusic: {
-                        id: "yt-row",
-                        videoId: "video-repeated",
-                        title: "Repeated",
-                        artist: "Artist",
-                        album: "Album",
-                        duration: 180,
-                        thumbnailUrl: null,
-                    },
-                    trackTidal: null,
+                    id: "canonical-repeated",
+                    recordingMbid: null,
+                    isrc: null,
+                    mappings: [
+                        {
+                            trackYtMusic: {
+                                id: "yt-row",
+                                videoId: "video-repeated",
+                                title: "Repeated",
+                                artist: "Artist",
+                                album: "Album",
+                                duration: 180,
+                                thumbnailUrl: null,
+                            },
+                        },
+                    ],
                 },
-            ]);
+            ])
+            .mockResolvedValueOnce([]);
 
         const candidates = await loadAccountHotSetCandidates("alice");
 
@@ -667,11 +806,169 @@ describe("remote recommendation hot set", () => {
                 candidateSources: ["hot-repeated"],
             }),
         ]);
-        const repeatedQuery = mockPrisma.trackMapping.findMany.mock.calls[4][0];
-        expect(repeatedQuery.where.OR).toContainEqual({
+        const repeatedQuery =
+            mockPrisma.canonicalRecording.findMany.mock.calls[8][0];
+        expect(repeatedQuery.select.mappings.where.AND).toContainEqual({
             trackYtMusicId: { in: ["yt-row"] },
         });
         expect(JSON.stringify(repeatedQuery)).not.toContain("single-row");
+    });
+
+    function mapping(id: string) {
+        return {
+            canonicalRecordingId: `canonical-${id}`,
+            trackYtMusic: {
+                id,
+                videoId: id,
+                title: id,
+                artist: "Artist",
+                album: "Album",
+                duration: 180,
+                thumbnailUrl: null,
+            },
+        };
+    }
+
+    function signalBatches(batches: ReturnType<typeof mapping>[][]) {
+        mockPrisma.canonicalRecording.findMany.mockReset();
+        for (const rows of batches) {
+            const canonicalRows = rows.map((row) => ({
+                id: row.canonicalRecordingId,
+                recordingMbid: null,
+                isrc: null,
+                mappings: [{ trackYtMusic: row.trackYtMusic }],
+            }));
+            mockPrisma.canonicalRecording.findMany.mockResolvedValueOnce(
+                canonicalRows.slice(0, 16),
+            );
+            mockPrisma.canonicalRecording.findMany.mockResolvedValueOnce(
+                canonicalRows.slice(16, 20),
+            );
+        }
+        mockPrisma.play.findMany.mockResolvedValue(
+            batches[4].flatMap((row) => [
+                { trackYtMusicId: row.trackYtMusic.id },
+                { trackYtMusicId: row.trackYtMusic.id },
+            ]),
+        );
+    }
+
+    it("admits all five full durable signal pools fairly within48 and retains likes/seed precedence", async () => {
+        const sources = [
+            "hot-liked",
+            "hot-wave-seed",
+            "hot-completed",
+            "hot-playlist",
+            "hot-repeated",
+        ];
+        const batches = sources.map((source) =>
+            Array.from({ length: 20 }, (_, index) =>
+                mapping(`${source}-${index}`),
+            ),
+        );
+        signalBatches(batches);
+        const result = await loadAccountHotSetCandidates("alice");
+        expect(result).toHaveLength(48);
+        expect(
+            new Set(result.map((item) => item.canonicalRecordingId)).size,
+        ).toBe(48);
+        expect(
+            result.slice(0, 5).map((item) => item.candidateSources[0]),
+        ).toEqual(sources);
+        expect(
+            sources.map(
+                (source) =>
+                    result.filter((item) =>
+                        item.candidateSources.includes(source),
+                    ).length,
+            ),
+        ).toEqual([10, 10, 10, 9, 9]);
+        expect(mockPrisma.canonicalRecording.findMany).toHaveBeenCalledTimes(
+            10,
+        );
+        for (const [
+            index,
+            [query],
+        ] of mockPrisma.canonicalRecording.findMany.mock.calls.entries()) {
+            expect(query.take).toBe(index % 2 ? 4 : 16);
+            expect(query.select.mappings.take).toBe(1);
+            expect(query.select.mappings.where.AND).toContainEqual({
+                stale: false,
+                trackYtMusic: { isNot: null },
+            });
+            expect(query.where.AND).toContainEqual({
+                mappings: { some: query.select.mappings.where },
+            });
+        }
+        expect(mockPrisma.play.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { userId: "alice", trackYtMusicId: { not: null } },
+                take: 500,
+            }),
+        );
+    });
+
+    it("merges late duplicate provenance past the capacity cutoff without replacing preferred metadata", async () => {
+        const batches = Array.from({ length: 5 }, (_, signal) =>
+            Array.from({ length: 20 }, (_, index) =>
+                mapping(`${signal}-${index}`),
+            ),
+        );
+        batches[4][19] = {
+            ...mapping("0-16"),
+            trackYtMusic: {
+                ...mapping("0-16").trackYtMusic,
+                title: "less preferred",
+            },
+        };
+        const original = structuredClone(batches);
+        signalBatches(batches);
+        const result = await loadAccountHotSetCandidates("alice");
+        const shared = result.find(
+            (item) => item.canonicalRecordingId === "canonical-0-16",
+        );
+        expect(shared?.candidateSources).toEqual(["hot-liked", "hot-repeated"]);
+        expect(shared?.title).toBe("0-16");
+        expect(result).toHaveLength(48);
+        expect(batches).toEqual(original);
+    });
+
+    it("merges one canonical shared by all signals without duplicate admission", async () => {
+        signalBatches(Array.from({ length: 5 }, () => [mapping("shared")]));
+        const result = await loadAccountHotSetCandidates("alice");
+        expect(result).toHaveLength(1);
+        expect(result[0].candidateSources).toEqual([
+            "hot-liked",
+            "hot-wave-seed",
+            "hot-completed",
+            "hot-playlist",
+            "hot-repeated",
+        ]);
+    });
+
+    it("reclaims empty and duplicate-only signal slots without inventing candidates", async () => {
+        const liked = Array.from({ length: 20 }, (_, index) =>
+            mapping(`liked-${index}`),
+        );
+        const playlist = Array.from({ length: 20 }, (_, index) =>
+            mapping(`playlist-${index}`),
+        );
+        signalBatches([liked, [], [], playlist, liked]);
+        const result = await loadAccountHotSetCandidates("alice");
+        expect(result).toHaveLength(40);
+        expect(
+            result.filter((item) =>
+                item.candidateSources.includes("hot-liked"),
+            ),
+        ).toHaveLength(20);
+        expect(
+            result.filter((item) =>
+                item.candidateSources.includes("hot-repeated"),
+            ),
+        ).toHaveLength(20);
+        expect(
+            new Set(result.map((item) => item.canonicalRecordingId)).size,
+        ).toBe(40);
     });
 
     it("does not touch the queue while remote analysis is disabled", async () => {

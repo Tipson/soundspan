@@ -11,7 +11,6 @@ import {
     buildStreamMatchQuery,
     getRelatedTrackArtistName,
     getRelatedTrackKey,
-    partitionTidalBatchMatches,
     selectTracksNeedingStreamMatch,
     sortRelatedTracksByRelevance,
     type RelatedStreamMatch,
@@ -49,7 +48,7 @@ function rememberStreamMatches(
     }
 }
 
-/** TIDAL first, YouTube Music second; null when neither service matches. */
+/** Resolve a playable YouTube Music stream for one related track. */
 async function resolveSingleStreamMatch(
     track: RelatedTrack,
 ): Promise<RelatedStreamMatch | null> {
@@ -57,26 +56,6 @@ async function resolveSingleStreamMatch(
     const artist = query.artist.trim();
     const title = query.title.trim();
     if (!artist || !title) return null;
-
-    try {
-        const tidalResponse = await api.matchTidalTrack(
-            artist,
-            title,
-            query.albumTitle,
-            query.duration,
-        );
-        if (tidalResponse.match?.id) {
-            return {
-                streamSource: "tidal",
-                tidalTrackId: tidalResponse.match.id,
-                title: tidalResponse.match.title,
-                artist: tidalResponse.match.artist,
-                duration: tidalResponse.match.duration,
-            };
-        }
-    } catch {
-        // Ignore TIDAL single-match failures and try YT.
-    }
 
     try {
         const ytResponse = await api.matchYtMusicTrack(
@@ -119,7 +98,6 @@ function buildLibraryPlaybackTrack(
         duration: track.duration || 0,
         filePath: track.filePath,
         streamSource: track.streamSource,
-        tidalTrackId: track.tidalTrackId,
         youtubeVideoId: track.youtubeVideoId,
     } as Track;
 }
@@ -130,10 +108,7 @@ function buildStreamPlaybackTrack(
     artistName: string,
 ): Track {
     return {
-        id:
-            match.streamSource === "tidal"
-                ? `related-tidal-${match.tidalTrackId}`
-                : `related-yt-${match.youtubeVideoId}`,
+        id: `related-yt-${match.youtubeVideoId}`,
         title: track.title,
         artist: { name: artistName },
         album: {
@@ -142,7 +117,6 @@ function buildStreamPlaybackTrack(
         },
         duration: match.duration || track.duration || 0,
         streamSource: match.streamSource,
-        tidalTrackId: match.tidalTrackId,
         youtubeVideoId: match.youtubeVideoId,
     } as Track;
 }
@@ -249,14 +223,6 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
                     title: track.title,
                     duration: track.duration,
                 };
-            } else if (track.streamSource === "tidal" && track.tidalTrackId) {
-                directMatches[key] = {
-                    streamSource: "tidal",
-                    tidalTrackId: track.tidalTrackId,
-                    title: track.title,
-                    artist: getRelatedTrackArtistName(track),
-                    duration: track.duration,
-                };
             }
         }
         if (Object.keys(directMatches).length > 0) {
@@ -275,26 +241,9 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
         let cancelled = false;
 
         const hydrateMissingRelatedStreams = async () => {
-            let tidalMatches: Array<{
-                id: number;
-                title: string;
-                artist: string;
-                duration: number;
-                isrc?: string;
-            } | null> = [];
-            try {
-                const tidalResponse = await api.matchTidalBatch(
-                    missingTracks.map(buildStreamMatchQuery),
-                );
-                tidalMatches = Array.isArray(tidalResponse.matches)
-                    ? tidalResponse.matches
-                    : [];
-            } catch {
-                tidalMatches = [];
-            }
-
-            const { foundMatches, youtubePayload, youtubeTrackKeys } =
-                partitionTidalBatchMatches(missingTracks, tidalMatches);
+            const foundMatches: Record<string, RelatedStreamMatch> = {};
+            const youtubePayload = missingTracks.map(buildStreamMatchQuery);
+            const youtubeTrackKeys = missingTracks.map(getRelatedTrackKey);
 
             if (youtubePayload.length > 0) {
                 try {
@@ -356,15 +305,7 @@ export const OverlayRelatedTab = memo(function OverlayRelatedTab({
                               title: track.title,
                               duration: track.duration,
                           }
-                        : track.streamSource === "tidal" && track.tidalTrackId
-                          ? {
-                                streamSource: "tidal",
-                                tidalTrackId: track.tidalTrackId,
-                                title: track.title,
-                                artist: artistName,
-                                duration: track.duration,
-                            }
-                          : null);
+                        : null);
                 if (!resolvedMatch) {
                     resolvedMatch = await resolveSingleStreamMatch(track);
                 }

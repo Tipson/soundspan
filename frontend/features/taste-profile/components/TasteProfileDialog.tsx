@@ -23,6 +23,8 @@ import { cn } from "@/utils/cn";
 import {
     addTasteLabel,
     isTasteLabelSelected,
+    MAX_TASTE_LABELS_PER_KIND,
+    MAX_TASTE_SIGNALS,
     normalizeTasteProfileSelection,
     toggleTasteLabel,
     validateTasteProfileSelection,
@@ -268,6 +270,12 @@ export function TasteProfileDialog({
     };
     const visibleError = localError ?? error;
     const stepIndex = STEPS.indexOf(step);
+    const selectionLimitLabel =
+        step === "genres"
+            ? `Жанры ${selection.genres.length} из ${MAX_TASTE_LABELS_PER_KIND} · Всего ${count} из ${MAX_TASTE_SIGNALS}`
+            : step === "artists"
+              ? `Артисты ${selection.artists.length} из ${MAX_TASTE_LABELS_PER_KIND} · Всего ${count} из ${MAX_TASTE_SIGNALS}`
+              : `Всего ${count} из ${MAX_TASTE_SIGNALS}`;
     const changeStep = (nextStep: TasteProfileStep) => {
         setStep(nextStep);
         setLocalError(null);
@@ -297,13 +305,14 @@ export function TasteProfileDialog({
             <div
                 ref={dialogRef}
                 role="dialog"
+                data-testid="taste-profile-dialog"
                 data-taste-stage="spectral"
                 aria-modal="true"
                 aria-labelledby={titleId}
                 aria-describedby={descriptionId}
                 aria-busy={isSaving}
                 tabIndex={-1}
-                className="wave-material relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[2rem] border border-white/10 bg-surface-raised/95 px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-5 shadow-2xl shadow-black/70 backdrop-blur-2xl focus:outline-none sm:max-w-3xl sm:rounded-[2rem] sm:p-7"
+                className="wave-material relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-white/10 bg-surface-raised/95 px-5 pb-[max(1.25rem,var(--safe-area-bottom))] pt-[max(1.25rem,var(--safe-area-top))] shadow-2xl shadow-black/70 backdrop-blur-2xl focus:outline-none sm:h-auto sm:max-h-[min(90dvh,52rem)] sm:max-w-3xl sm:rounded-[2rem] sm:p-7"
             >
                 <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-4">
                     <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl border border-brand/25 bg-brand/12 text-brand-light sm:grid">
@@ -327,8 +336,9 @@ export function TasteProfileDialog({
                             id={descriptionId}
                             className="mt-2 max-w-xl text-xs leading-5 text-content-secondary sm:text-sm sm:leading-6"
                         >
-                            Выберите от 3 до 16 жанров и артистов. Настройка не
-                            ставит лайки автоматически.
+                            Выберите от 3 до 16 вариантов суммарно — не больше
+                            10 жанров и 10 артистов. Настройка не ставит лайки
+                            автоматически.
                         </p>
                     </div>
                     {mode === "edit" ? (
@@ -346,7 +356,11 @@ export function TasteProfileDialog({
                     )}
                 </header>
 
-                <div ref={contentRef} className="min-h-0 overflow-y-auto">
+                <div
+                    ref={contentRef}
+                    data-testid="taste-profile-scroll-region"
+                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]"
+                >
                     <div
                         className="mt-6 grid grid-cols-3 gap-2"
                         aria-hidden="true"
@@ -395,7 +409,7 @@ export function TasteProfileDialog({
                                 aria-live="polite"
                                 className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-semibold text-content-secondary"
                             >
-                                Выбрано {count} из 16
+                                {selectionLimitLabel}
                             </span>
                         </div>
 
@@ -448,9 +462,9 @@ export function TasteProfileDialog({
                                                                 (selection
                                                                     .genres
                                                                     .length >=
-                                                                    10 ||
+                                                                    MAX_TASTE_LABELS_PER_KIND ||
                                                                     count >=
-                                                                        16))
+                                                                        MAX_TASTE_SIGNALS))
                                                         }
                                                         onClick={() =>
                                                             updateChoice(
@@ -608,8 +622,10 @@ export function TasteProfileDialog({
                                                             artist,
                                                         ) &&
                                                             (selection.artists
-                                                                .length >= 10 ||
-                                                                count >= 16))
+                                                                .length >=
+                                                                MAX_TASTE_LABELS_PER_KIND ||
+                                                                count >=
+                                                                    MAX_TASTE_SIGNALS))
                                                     }
                                                     onClick={() =>
                                                         updateChoice(
@@ -693,12 +709,14 @@ export function TasteProfileDialog({
                                                         disabled={
                                                             isSaving ||
                                                             (selection.artists
-                                                                .length >= 10 &&
+                                                                .length >=
+                                                                MAX_TASTE_LABELS_PER_KIND &&
                                                                 !isTasteLabelSelected(
                                                                     selection.artists,
                                                                     artist.name,
                                                                 )) ||
-                                                            (count >= 16 &&
+                                                            (count >=
+                                                                MAX_TASTE_SIGNALS &&
                                                                 !isTasteLabelSelected(
                                                                     selection.artists,
                                                                     artist.name,
@@ -873,26 +891,38 @@ export function TasteProfileDialog({
                         </p>
                     )}
                 </div>
-                <footer className="mt-5 grid shrink-0 gap-3 border-t border-white/8 pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <footer
+                    data-testid="taste-profile-footer"
+                    className="mt-4 grid shrink-0 gap-3 border-t border-white/8 bg-surface-raised/95 pt-4 sm:mt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                >
                     <div className="text-sm leading-5 text-content-secondary">
                         {validation.code === "valid"
                             ? "Выбор можно изменить позже."
                             : validation.message}
                     </div>
-                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <div
+                        data-testid="taste-profile-actions"
+                        className="grid grid-cols-2 gap-2 sm:flex sm:justify-end"
+                    >
                         {mode === "onboarding" && onSkip && (
                             <button
                                 type="button"
+                                aria-label="Пропустить настройку"
                                 disabled={isSaving}
                                 onClick={() => void skip()}
-                                className="inline-flex min-h-11 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-55 motion-reduce:transition-none"
+                                className="order-3 col-span-2 inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-70 motion-reduce:transition-none sm:order-none sm:col-span-1"
                             >
-                                Пропустить настройку
+                                Пропустить
                             </button>
                         )}
                         {step !== "genres" ? (
                             <button
                                 type="button"
+                                aria-label={
+                                    step === "review"
+                                        ? "Назад к артистам"
+                                        : "Назад к жанрам"
+                                }
                                 disabled={isSaving}
                                 onClick={() => {
                                     changeStep(
@@ -901,22 +931,20 @@ export function TasteProfileDialog({
                                             : "genres",
                                     );
                                 }}
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-55 motion-reduce:transition-none"
+                                className="order-1 inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-70 motion-reduce:transition-none sm:order-none"
                             >
                                 <ChevronLeft
                                     className="h-4 w-4"
                                     aria-hidden="true"
                                 />
-                                {step === "review"
-                                    ? "Назад к артистам"
-                                    : "Назад к жанрам"}
+                                Назад
                             </button>
                         ) : mode === "edit" ? (
                             <button
                                 type="button"
                                 disabled={isSaving}
                                 onClick={onClose}
-                                className="inline-flex min-h-11 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-55 motion-reduce:transition-none"
+                                className="order-1 inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:opacity-70 motion-reduce:transition-none sm:order-none"
                             >
                                 Отмена
                             </button>
@@ -925,6 +953,11 @@ export function TasteProfileDialog({
                         {step !== "review" ? (
                             <button
                                 type="button"
+                                aria-label={
+                                    step === "genres"
+                                        ? "Дальше: артисты"
+                                        : "Дальше: проверить выбор"
+                                }
                                 disabled={isSaving}
                                 onClick={() => {
                                     changeStep(
@@ -933,11 +966,9 @@ export function TasteProfileDialog({
                                             : "review",
                                     );
                                 }}
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised disabled:opacity-55 motion-reduce:transition-none"
+                                className="order-2 col-start-2 inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand px-5 py-2.5 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised disabled:opacity-70 motion-reduce:transition-none sm:order-none sm:col-start-auto"
                             >
-                                {step === "genres"
-                                    ? "Дальше: артисты"
-                                    : "Дальше: проверить выбор"}
+                                {step === "genres" ? "К артистам" : "Проверить"}
                                 <ChevronRight
                                     className="h-4 w-4"
                                     aria-hidden="true"
@@ -946,11 +977,12 @@ export function TasteProfileDialog({
                         ) : (
                             <button
                                 type="button"
+                                aria-label="Сохранить вкусы"
                                 disabled={
                                     isSaving || validation.code !== "valid"
                                 }
                                 onClick={() => void save()}
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none"
+                                className="order-2 col-start-2 inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand px-5 py-2.5 text-sm font-black text-black transition-[transform,background-color] active:scale-[0.98] hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none sm:order-none sm:col-start-auto"
                             >
                                 {isSaving && (
                                     <LoaderCircle
@@ -958,7 +990,7 @@ export function TasteProfileDialog({
                                         aria-hidden="true"
                                     />
                                 )}
-                                {isSaving ? "Сохраняем…" : "Сохранить вкусы"}
+                                {isSaving ? "Сохраняем…" : "Сохранить"}
                             </button>
                         )}
                     </div>

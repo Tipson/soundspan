@@ -35,10 +35,6 @@ function providerVideoId(track: ProviderQueueEntry): string | null {
 function providerQueueIdentity(track: ProviderQueueEntry): string {
     const videoId = providerVideoId(track);
     if (videoId) return videoId;
-    const tidalTrackId = track.provider?.tidalTrackId ?? track.tidalTrackId;
-    if (Number.isSafeInteger(tidalTrackId) && Number(tidalTrackId) > 0) {
-        return `tidal:${tidalTrackId}`;
-    }
     return track.id;
 }
 
@@ -49,13 +45,7 @@ export function isProviderRadioTrack(track: Track): boolean {
             track.streamSource === "youtube-direct" ||
             track.provider?.source === "youtube") &&
         providerVideoId(track) !== null;
-    const tidalTrackId = track.provider?.tidalTrackId ?? track.tidalTrackId;
-    const tidalTrack =
-        (track.streamSource === "tidal" ||
-            track.provider?.source === "tidal") &&
-        Number.isSafeInteger(tidalTrackId) &&
-        Number(tidalTrackId) > 0;
-    return youtubeTrack || tidalTrack;
+    return youtubeTrack;
 }
 
 /** Builds one bounded continuation request without allowing the queue in the URL to grow forever. */
@@ -126,18 +116,6 @@ export function toProviderPlaybackTrack(
         };
     }
 
-    const tidalTrackId = track.tidalTrackId ?? track.provider.tidalTrackId;
-    if (tidalTrackId !== null && tidalTrackId !== undefined) {
-        return {
-            ...baseTrack,
-            id: `tidal:${tidalTrackId}`,
-            source: "tidal",
-            provider: { source: "tidal", tidalTrackId },
-            streamSource: "tidal",
-            tidalTrackId,
-        };
-    }
-
     return {
         ...baseTrack,
         source: "local",
@@ -162,6 +140,12 @@ export function collectProviderRadioContinuation(
     ];
 
     for (const candidate of candidates) {
+        if (
+            candidate.source !== "library" &&
+            providerVideoId(candidate) === null
+        ) {
+            continue;
+        }
         const identity = providerQueueIdentity(candidate);
         if (!identity || excludedTrackIds.has(identity)) continue;
         excludedTrackIds.add(identity);

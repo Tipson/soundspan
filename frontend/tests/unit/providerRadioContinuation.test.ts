@@ -25,26 +25,6 @@ const personalized = (videoId: string, title = videoId) => ({
     youtubeVideoId: videoId,
 });
 
-const tidalPersonalized = (
-    tidalTrackId: number,
-    title = String(tidalTrackId),
-) => ({
-    id: `tidal:${tidalTrackId}`,
-    title,
-    duration: 180,
-    trackNo: null,
-    artist: { id: `artist-${tidalTrackId}`, name: `Artist ${tidalTrackId}` },
-    album: {
-        id: `album-${tidalTrackId}`,
-        title: `Album ${tidalTrackId}`,
-        coverArt: null,
-    },
-    source: "tidal" as const,
-    provider: { tidalTrackId, youtubeVideoId: null },
-    streamSource: "tidal" as const,
-    tidalTrackId,
-});
-
 test("builds fresh provider continuation with discovery first and no repeats", () => {
     const feed: PersonalizedHomeFeed = {
         shelves: {
@@ -99,7 +79,7 @@ test("recognizes only directly playable YouTube provider tracks", () => {
             streamSource: "tidal",
             tidalTrackId: 42,
         }),
-        true,
+        false,
     );
     assert.equal(
         isProviderRadioTrack({
@@ -113,33 +93,43 @@ test("recognizes only directly playable YouTube provider tracks", () => {
     );
 });
 
-test("converts and deduplicates TIDAL continuation tracks without inventing YouTube ids", () => {
+test("does not add retired TIDAL-only rows to provider continuation", () => {
+    const legacyTidal = (tidalTrackId: number) => ({
+        id: `tidal:${tidalTrackId}`,
+        title: String(tidalTrackId),
+        duration: 180,
+        trackNo: null,
+        artist: {
+            id: `artist-${tidalTrackId}`,
+            name: `Artist ${tidalTrackId}`,
+        },
+        album: {
+            id: `album-${tidalTrackId}`,
+            title: `Album ${tidalTrackId}`,
+            coverArt: null,
+        },
+        source: "tidal" as const,
+        provider: { tidalTrackId, youtubeVideoId: null },
+        streamSource: "tidal" as const,
+        tidalTrackId,
+    });
     const feed: PersonalizedHomeFeed = {
         shelves: {
-            discovery: [tidalPersonalized(42), tidalPersonalized(43)],
-            quickPicks: [tidalPersonalized(42)],
+            discovery: [legacyTidal(42), personalized("fresh")],
+            quickPicks: [],
             listenAgain: [],
         },
         degraded: false,
         reason: null,
         seedCount: 1,
-        generationId: "generation-tidal",
+        generationId: "generation-1",
     };
 
-    const tracks = collectProviderRadioContinuation(
-        feed,
-        [{ id: "tidal:43", provider: { source: "tidal", tidalTrackId: 43 } }],
-        25,
-    );
+    const tracks = collectProviderRadioContinuation(feed, [], 25);
 
     assert.equal(tracks.length, 1);
-    assert.equal(tracks[0].id, "tidal:42");
-    assert.equal(tracks[0].source, "tidal");
-    assert.equal(tracks[0].streamSource, "tidal");
-    assert.equal(tracks[0].provider?.source, "tidal");
-    assert.equal(tracks[0].tidalTrackId, 42);
-    assert.equal(tracks[0].youtubeVideoId, undefined);
-    assert.equal(tracks[0].recommendationGenerationId, "generation-tidal");
+    assert.equal(tracks[0].youtubeVideoId, "fresh");
+    assert.equal(tracks[0].recommendationGenerationId, "generation-1");
 });
 
 test("converts local recommendation rows to local playback tracks", () => {

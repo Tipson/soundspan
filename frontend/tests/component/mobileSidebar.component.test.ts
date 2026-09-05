@@ -1,7 +1,51 @@
 import assert from "node:assert/strict";
-import { beforeEach, mock, test } from "node:test";
+import { after, beforeEach, mock, test } from "node:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+
+GlobalRegistrator.register();
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+after(() => GlobalRegistrator.unregister());
+
+test("mobile install action closes the drawer and requests the existing installation UI", async () => {
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const calls: string[] = [];
+    const request = () => calls.push("install");
+    window.addEventListener("request-pwa-install", request);
+    try {
+        await React.act(async () =>
+            root.render(
+                React.createElement(MobileSidebar, {
+                    isOpen: true,
+                    onClose: () => calls.push("close"),
+                    hasActiveSessions: false,
+                }),
+            ),
+        );
+        calls.length = 0;
+        const button = Array.from(container.querySelectorAll("button")).find(
+            (item) => item.textContent?.includes("Установить приложение"),
+        );
+        assert.ok(
+            button,
+            "installation must be reachable from mobile navigation",
+        );
+        await React.act(async () => button.click());
+        assert.deepEqual(calls, ["close", "install"]);
+    } finally {
+        window.removeEventListener("request-pwa-install", request);
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});
 
 const state: {
     pathname: string;

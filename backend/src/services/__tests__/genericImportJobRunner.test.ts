@@ -841,7 +841,7 @@ describe("generic import job runner", () => {
         );
     });
 
-    it("persists bounded progress while a large preview is resolving", async () => {
+    it("persists monotonic bounded progress while a large preview is resolving", async () => {
         installStatefulJob({
             id: "job-progress",
             userId: "user-1",
@@ -883,7 +883,27 @@ describe("generic import job runner", () => {
                 });
                 await options.onProgress({
                     stage: "youtube",
+                    completed: 0,
+                    total: 1_400,
+                });
+                await options.onProgress({
+                    stage: "youtube",
                     completed: 700,
+                    total: 1_400,
+                });
+                await options.onProgress({
+                    stage: "youtube",
+                    completed: 350,
+                    total: 1_400,
+                });
+                await options.onProgress({
+                    stage: "youtube",
+                    completed: 1_400,
+                    total: 1_400,
+                });
+                await options.onProgress({
+                    stage: "youtube",
+                    completed: 2_800,
                     total: 1_400,
                 });
                 return {
@@ -908,7 +928,8 @@ describe("generic import job runner", () => {
             { status: "resolving", progress: 20 },
             { progress: 25 },
             { progress: 30 },
-            { progress: 54 },
+            { progress: 49 },
+            { progress: 68 },
         ]);
     });
 

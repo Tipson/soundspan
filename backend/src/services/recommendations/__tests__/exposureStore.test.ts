@@ -50,6 +50,7 @@ describe("recommendation exposure store", () => {
                         userId: "alice",
                         canonicalKey: "mbid:one",
                         artistKey: "artist",
+                        albumKey: '["artist","album"]',
                         provider: "youtube",
                         providerTrackId: "one",
                         source: "listenbrainz+youtube-radio",

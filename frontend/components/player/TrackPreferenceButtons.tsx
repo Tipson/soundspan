@@ -7,6 +7,7 @@ import {
     type TrackPreferenceMetadata,
 } from "@/hooks/useTrackPreference";
 import { cn } from "@/utils/cn";
+import { isPlaybackOnlyTrack } from "@/lib/trackRef";
 
 interface TrackPreferenceButtonsProps {
     trackId?: string | null;
@@ -235,6 +236,8 @@ function TrackPreferenceButtonsWithQuery({
  * Renders the TrackPreferenceButtons component.
  */
 export function TrackPreferenceButtons(props: TrackPreferenceButtonsProps) {
+    // Fence before the query-owning child mounts, not merely before a mutation.
+    if (isPlaybackOnlyTrack({ id: props.trackId })) return null;
     if (props.resolveFromQuery === false) {
         return <TrackPreferenceButtonsControlled {...props} />;
     }

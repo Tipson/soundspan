@@ -79,6 +79,10 @@ import {
     type RecommendationExposureMetricInput,
     type RecommendationGenerationMetricInput,
 } from "./recommendationMetrics";
+import {
+    createPlaybackMetrics,
+    type PlaybackMetricInput,
+} from "./playbackMetrics";
 
 export type {
     FederationAuthFailureReason,
@@ -112,6 +116,7 @@ const schedulerMetrics = createSchedulerMetrics(metricsRegistry);
 const soulseekAlbumMetrics = createSoulseekAlbumMetrics(metricsRegistry);
 const scrobbleMetrics = createScrobbleMetrics(metricsRegistry);
 const recommendationMetrics = createRecommendationMetrics(metricsRegistry);
+const playbackMetrics = createPlaybackMetrics(metricsRegistry);
 createLoudnessMetrics(metricsRegistry, prisma, {
     getBackfillOutcomes: async () => {
         const { redisClient } = await import("../utils/redis");
@@ -218,6 +223,11 @@ export function recordRecommendationPlaybackOutcome(
     outcome: string | null,
 ): void {
     recommendationMetrics.recordPlaybackOutcome(outcome);
+}
+
+/** Records one anonymous client playback signal with bounded labels. */
+export function recordPlaybackClientMetric(input: PlaybackMetricInput): void {
+    playbackMetrics.record(input);
 }
 
 /** Records one completed scheduler job duration. */

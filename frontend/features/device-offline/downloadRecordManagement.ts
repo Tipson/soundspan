@@ -115,6 +115,7 @@ interface ReuseReadyDeviceOfflineRecordInput {
     isAuthorized(): boolean;
     assertAuthorized(): void;
     notifyChanged(): void;
+    matchesTrack(record: DeviceOfflineDownloadRecord): boolean;
 }
 
 interface ReuseReadyDeviceOfflineRecordResult {
@@ -215,7 +216,7 @@ export async function reuseReadyDeviceOfflineRecord(
     const reusable =
         current?.ownerId === input.ownerId &&
         current.status === "ready" &&
-        current.trackIdentity === input.trackIdentity &&
+        input.matchesTrack(current) &&
         current.quality === input.quality
             ? current
             : null;

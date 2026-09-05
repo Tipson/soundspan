@@ -6,7 +6,6 @@ import { requireAuth, requireAdmin } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { z } from "zod";
 import { staleJobCleanupService } from "../services/staleJobCleanup";
-import { tidalStreamingService } from "../services/tidalStreaming";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -39,13 +38,21 @@ const settingsSchema = z.object({
     maxCacheSizeMb: z.number().int().min(0).optional(),
     // YouTube Music (per-user)
     showYtMusicExplore: z.boolean().optional(),
-    showTidalExplore: z.boolean().optional(),
     ytMusicQuality: z.enum(["LOW", "MEDIUM", "HIGH", "LOSSLESS"]).optional(),
-    tidalStreamingQuality: z
-        .enum(["LOW", "HIGH", "LOSSLESS", "HI_RES_LOSSLESS"])
-        .optional(),
     displayName: displayNameSchema.nullable().optional(),
 });
+
+function withoutRetiredTidalSettings<T extends Record<string, unknown>>(
+    settings: T,
+): Omit<T, "showTidalExplore" | "tidalOAuthJson" | "tidalStreamingQuality"> {
+    const {
+        showTidalExplore: _showTidalExplore,
+        tidalOAuthJson: _tidalOAuthJson,
+        tidalStreamingQuality: _tidalStreamingQuality,
+        ...publicSettings
+    } = settings;
+    return publicSettings;
+}
 
 /**
  * @openapi
@@ -96,13 +103,12 @@ router.get("/", async (req, res) => {
                     offlineEnabled: false,
                     maxCacheSizeMb: 5120,
                     showYtMusicExplore: true,
-                    showTidalExplore: true,
                 },
             });
         }
 
         res.json({
-            ...settings,
+            ...withoutRetiredTidalSettings(settings),
             displayName: user?.displayName ?? null,
             hasProfilePicture,
         });
@@ -146,15 +152,9 @@ router.get("/", async (req, res) => {
  *               showYtMusicExplore:
  *                 type: boolean
  *                 description: Show YouTube Music content on the Explore page
- *               showTidalExplore:
- *                 type: boolean
- *                 description: Show TIDAL content on the Explore page
  *               ytMusicQuality:
  *                 type: string
  *                 enum: [LOW, MEDIUM, HIGH, LOSSLESS]
- *               tidalStreamingQuality:
- *                 type: string
- *                 enum: [LOW, HIGH, LOSSLESS, HI_RES_LOSSLESS]
  *               displayName:
  *                 type: string
  *                 nullable: true
@@ -189,10 +189,6 @@ router.post("/", async (req, res) => {
             update: settingsData,
         });
 
-        if (settingsData.tidalStreamingQuality !== undefined) {
-            tidalStreamingService.clearUserQualityCache(userId);
-        }
-
         if (normalizedDisplayName !== undefined) {
             await prisma.user.update({
                 where: { id: userId },
@@ -206,7 +202,7 @@ router.post("/", async (req, res) => {
         });
 
         res.json({
-            ...settings,
+            ...withoutRetiredTidalSettings(settings),
             displayName: user?.displayName ?? null,
         });
     } catch (error) {

@@ -9,17 +9,26 @@ const input = await new Promise((resolve) => {
     process.stdin.on("end", () => resolve(buffer));
 });
 
-process.stdout.write(input);
-
-if (!input.includes("start of coverage report")) {
+const reportStartMarker = "start of coverage report";
+const reportEndMarker = "end of coverage report";
+const reportStart = input.indexOf(reportStartMarker);
+if (reportStart === -1) {
     console.error(
         "targeted coverage check failed: raw coverage report was not produced",
     );
     process.exit(1);
 }
 
-const failMatch = input.match(/(?:ℹ|#) fail (\d+)/);
-if (!failMatch || failMatch[1] !== "0") {
+const reportEnd = input.indexOf(reportEndMarker, reportStart);
+if (reportEnd === -1) {
+    console.error(
+        "targeted coverage check failed: coverage report was incomplete",
+    );
+    process.exit(1);
+}
+
+const failMatches = [...input.matchAll(/(?:ℹ|#)\s+fail\s+(\d+)/gu)];
+if (failMatches.length === 0 || failMatches.some((match) => match[1] !== "0")) {
     console.error("targeted coverage check failed: one or more tests failed");
     process.exit(1);
 }
@@ -42,93 +51,57 @@ for (const testName of requiredTests) {
     }
 }
 
-const coverageExpectations = [
-    {
-        file: "activityPanelTabs.ts",
-        line: 100,
-        branch: 97.62,
-        funcs: 100,
-        lfSourceMapArtifacts: [
-            {
-                line: 95.54,
-                branch: 95.35,
-                uncovered: "108-112",
-            },
-            {
-                line: 96.15,
-                branch: 95.83,
-                uncovered: "126-130",
-            },
-            {
-                line: 96.15,
-                branch: 95.83,
-                uncovered: "124-128",
-            },
-            {
-                line: 97.69,
-                branch: 95.83,
-                uncovered: "123-125",
-            },
-        ],
-    },
-    { file: "socialNavigation.ts", line: 100, branch: 93.75, funcs: 100 },
-    { file: "playbackHistoryConfig.ts", line: 100, branch: 94.12, funcs: 100 },
+const targetFiles = [
+    "activityPanelTabs.ts",
+    "socialNavigation.ts",
+    "playbackHistoryConfig.ts",
 ];
-
-const coverageRows = input
+const report = input.slice(reportStart, reportEnd);
+const coverageRows = report
     .split("\n")
     .map((line) => line.trimEnd())
     .filter((line) => line.includes("|"));
 
-for (const expectation of coverageExpectations) {
-    const row = coverageRows.find((line) => line.includes(expectation.file));
-    if (!row) {
+for (const file of targetFiles) {
+    const rows = coverageRows.filter((line) => {
+        const [name = ""] = line.split("|");
+        return name.trim().endsWith(file);
+    });
+    if (rows.length === 0) {
         console.error(
-            `targeted coverage check failed: coverage row missing for ${expectation.file}`,
+            `targeted coverage check failed: coverage row missing for ${file}`,
+        );
+        process.exit(1);
+    }
+    if (rows.length !== 1) {
+        console.error(
+            `targeted coverage check failed: duplicate coverage rows for ${file}`,
         );
         process.exit(1);
     }
 
-    const [, lineText, branchText, funcsText, uncoveredText = ""] = row
-        .split("|")
-        .map((segment) => segment.trim());
-    const line = Number(lineText);
-    const branch = Number(branchText);
-    const funcs = Number(funcsText);
-    const uncovered = uncoveredText.trim();
-    const isKnownLfSourceMapArtifact =
-        expectation.lfSourceMapArtifacts?.some(
-            (artifact) =>
-                line === artifact.line &&
-                branch >= artifact.branch &&
-                uncovered === artifact.uncovered,
-        ) ?? false;
-
+    const segments = rows[0].split("|").map((segment) => segment.trim());
+    const [, lineText, branchText, funcsText, uncoveredText = ""] = segments;
+    const percentages = [lineText, branchText, funcsText].map(Number);
     if (
-        (line !== expectation.line && !isKnownLfSourceMapArtifact) ||
-        funcs !== expectation.funcs
+        segments.length < 4 ||
+        percentages.some(
+            (percentage) => !Number.isFinite(percentage) || percentage !== 100,
+        )
     ) {
         console.error(
-            `targeted coverage check failed: ${expectation.file} line/functions coverage drifted (${lineText}/${funcsText})`,
+            `targeted coverage check failed: ${file} line/branch/functions coverage must be exactly 100 (${lineText}/${branchText}/${funcsText})`,
         );
         process.exit(1);
     }
-
-    if (branch < expectation.branch && !isKnownLfSourceMapArtifact) {
+    if (uncoveredText.length > 0) {
         console.error(
-            `targeted coverage check failed: ${expectation.file} branch coverage dropped below the tolerated helper-artifact floor (${branchText} < ${expectation.branch.toFixed(2)})`,
-        );
-        process.exit(1);
-    }
-
-    if (uncovered.length > 0 && !isKnownLfSourceMapArtifact) {
-        console.error(
-            `targeted coverage check failed: ${expectation.file} reported uncovered source lines (${uncovered})`,
+            `targeted coverage check failed: ${file} reported uncovered source lines (${uncoveredText})`,
         );
         process.exit(1);
     }
 }
 
 console.log(
-    "targeted coverage check passed: raw coverage only reported the known Node/tsx helper-branch artifact",
+    "strict native coverage check passed: 100/100/100 for every target",
 );

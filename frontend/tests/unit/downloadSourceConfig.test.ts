@@ -15,8 +15,6 @@ const noSettings = {
     lidarrApiKey: "",
     soulseekUsername: "",
     soulseekPassword: "",
-    tidalEnabled: false,
-    tidalConnected: false,
     ytMusicEnabled: false,
 };
 
@@ -26,15 +24,12 @@ const allSettings = {
     lidarrApiKey: "key",
     soulseekUsername: "user",
     soulseekPassword: "pass",
-    tidalEnabled: true,
-    tidalConnected: true,
     ytMusicEnabled: true,
 };
 
 const none: ConfiguredSources = {
     soulseek: false,
     lidarr: false,
-    tidal: false,
     youtube: false,
 };
 
@@ -46,7 +41,6 @@ test("getConfiguredSources reports every source configured", () => {
     assert.deepEqual(getConfiguredSources(allSettings), {
         soulseek: true,
         lidarr: true,
-        tidal: true,
         youtube: true,
     });
 });
@@ -61,11 +55,6 @@ test("soulseek requires non-blank username and password", () => {
     assert.equal(getConfiguredSources(blank).soulseek, false);
 });
 
-test("tidal requires both enabled and connected", () => {
-    const enabledOnly = { ...noSettings, tidalEnabled: true };
-    assert.equal(getConfiguredSources(enabledOnly).tidal, false);
-});
-
 test("youtube keys off the ytMusicEnabled admin toggle", () => {
     const enabled = { ...noSettings, ytMusicEnabled: true };
     assert.equal(getConfiguredSources(enabled).youtube, true);
@@ -75,20 +64,22 @@ test("countConfiguredSources counts configured flags", () => {
     assert.equal(countConfiguredSources(none), 0);
     assert.equal(countConfiguredSources({ ...none, youtube: true }), 1);
     assert.equal(
-        countConfiguredSources({ ...none, tidal: true, soulseek: true }),
+        countConfiguredSources({ ...none, youtube: true, soulseek: true }),
         2,
     );
 });
 
 test("pickAutoSource returns null with zero or multiple sources", () => {
     assert.equal(pickAutoSource(none), null);
-    assert.equal(pickAutoSource({ ...none, tidal: true, lidarr: true }), null);
+    assert.equal(
+        pickAutoSource({ ...none, youtube: true, lidarr: true }),
+        null,
+    );
 });
 
 test("pickAutoSource returns the single configured source", () => {
     assert.equal(pickAutoSource({ ...none, soulseek: true }), "soulseek");
     assert.equal(pickAutoSource({ ...none, lidarr: true }), "lidarr");
-    assert.equal(pickAutoSource({ ...none, tidal: true }), "tidal");
     assert.equal(pickAutoSource({ ...none, youtube: true }), "youtube");
 });
 
@@ -96,14 +87,13 @@ test("getSourceOptions lists configured sources in stable order", () => {
     const options = getSourceOptions({
         soulseek: true,
         lidarr: false,
-        tidal: true,
         youtube: true,
     });
     assert.deepEqual(
         options.map((o) => o.value),
-        ["soulseek", "tidal", "youtube"],
+        ["soulseek", "youtube"],
     );
-    assert.equal(options[2].label, "YouTube Music (альбомы)");
+    assert.equal(options[1].label, "YouTube Music (альбомы)");
 });
 
 test("getSourceOptions falls back to soulseek when nothing is configured", () => {
@@ -122,16 +112,15 @@ test("getFallbackOptions excludes the current primary source", () => {
     const all: ConfiguredSources = {
         soulseek: true,
         lidarr: true,
-        tidal: true,
         youtube: true,
     };
     assert.deepEqual(
         getFallbackOptions(all, "youtube").map((o) => o.value),
-        ["none", "soulseek", "lidarr", "tidal"],
+        ["none", "soulseek", "lidarr"],
     );
     assert.deepEqual(
         getFallbackOptions(all, "soulseek").map((o) => o.value),
-        ["none", "lidarr", "tidal", "youtube"],
+        ["none", "lidarr", "youtube"],
     );
 });
 

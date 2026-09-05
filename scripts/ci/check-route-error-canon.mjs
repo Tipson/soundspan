@@ -48,7 +48,6 @@ const BASELINE = Object.freeze({
     "backend/src/routes/soulseek.ts": 6,
     "backend/src/routes/system.ts": 2,
     "backend/src/routes/systemSettings.ts": 12,
-    "backend/src/routes/tidalStreaming.ts": 10,
     "backend/src/routes/trackMappings.ts": 2,
     "backend/src/routes/webhooks.ts": 0,
     "backend/src/routes/youtube.ts": 1,
@@ -130,6 +129,8 @@ const LEAK_BASELINE = Object.freeze({
     "backend/src/services/spotifyImport/state.ts": 4,
     // youtubeDownload.ts remaining 4: sidecar job-state plumbing — data.error in the per-video mapper (~L433), and data.errors / entry.error / data.error in the album-job mapper (~L443-459). The sidecar sanitizes these to code-owned generic strings ("Track download failed", "Album download failed") before they enter any payload; frozen under the slice-J scope guard.
     "backend/src/services/youtubeDownload.ts": 4,
+    // youtubeMusic.ts: closeRejectedStreamingResponse reads the rejected Axios body only to destroy its stream; it is neither logged nor returned to a client. Keep this cleanup-only match visible without exempting further response-data assignments.
+    "backend/src/services/youtubeMusic.ts": 1,
     // errorHandler.ts remaining 5: typed AppError fields plus development-only unknown-error detail; this is an existing transport-boundary policy exception frozen as the middleware root enters the ratchet.
     "backend/src/middleware/errorHandler.ts": 5,
     // index.ts remaining 3: one scheduler retry classifier, one numeric error counter, and one worker-result detail used only in scoped server logs.

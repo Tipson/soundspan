@@ -340,6 +340,12 @@ export function WaveDirectionSheet({
                     >
                         {WAVE_MOODS.map((mood) => {
                             const selected = mood.id === draftMood;
+                            const visibleLabel =
+                                mood.id === "focus"
+                                    ? "Фокус"
+                                    : mood.id === "workout"
+                                      ? "Тренировка"
+                                      : mood.label;
                             return (
                                 <button
                                     key={mood.id ?? "any"}
@@ -375,8 +381,8 @@ export function WaveDirectionSheet({
                                         )}
                                     </span>
                                     <span className="min-w-0">
-                                        <span className="block text-sm font-bold text-content">
-                                            {mood.label}
+                                        <span className="block truncate whitespace-nowrap text-sm font-bold text-content">
+                                            {visibleLabel}
                                         </span>
                                         <span className="mt-0.5 hidden text-xs leading-4 text-content-muted min-[480px]:block">
                                             {mood.subtitle}
@@ -406,7 +412,7 @@ export function WaveDirectionSheet({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
                             {ru.common.cancel}
                         </button>
@@ -414,7 +420,7 @@ export function WaveDirectionSheet({
                             type="button"
                             onClick={() => onApply(draftMode, draftMood)}
                             aria-label={`${applyLabel}: ${selectedDefinition.label}, ${selectedMoodDefinition.label}`}
-                            className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
+                            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
                         >
                             {applyLabel}
                         </button>

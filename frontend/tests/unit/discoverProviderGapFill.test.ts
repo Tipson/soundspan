@@ -26,7 +26,7 @@ function makeTrack(
 
 test("marks fully local playlists as local without provider metadata", () => {
     const tracks = [makeTrack("1", 0.9), makeTrack("2", 0.8)];
-    const result = applyDiscoverProviderGapFill(tracks, [], [], []);
+    const result = applyDiscoverProviderGapFill(tracks, [], []);
 
     assert.ok(result.every((track) => track.sourceType === "local"));
     assert.ok(result.every((track) => track.streamSource === undefined));
@@ -34,18 +34,13 @@ test("marks fully local playlists as local without provider metadata", () => {
 
 test("keeps unmatched unavailable tracks local", () => {
     const tracks = [makeTrack("1", 0.9, false), makeTrack("2", 0.8, false)];
-    const result = applyDiscoverProviderGapFill(
-        tracks,
-        [0, 1],
-        [null, null],
-        [null, null],
-    );
+    const result = applyDiscoverProviderGapFill(tracks, [0, 1], [null, null]);
 
     assert.ok(result.every((track) => track.sourceType === "local"));
     assert.ok(result.every((track) => track.streamSource === undefined));
 });
 
-test("prefers TIDAL matches and falls back to YouTube when needed", () => {
+test("fills unavailable tracks from YouTube and keeps misses local", () => {
     const tracks = [
         makeTrack("0", 1.0, false),
         makeTrack("1", 0.95, false),
@@ -62,7 +57,6 @@ test("prefers TIDAL matches and falls back to YouTube when needed", () => {
     const result = applyDiscoverProviderGapFill(
         tracks,
         [0, 1, 2, 4, 7, 8, 9],
-        [null, { id: 111 }, { id: 222 }, null, { id: 777 }, null, null],
         [
             { videoId: "yt-0" },
             { videoId: "yt-1" },
@@ -75,18 +69,14 @@ test("prefers TIDAL matches and falls back to YouTube when needed", () => {
     );
 
     assert.equal(
-        result.filter((track) => track.sourceType === "tidal").length,
-        3,
-    );
-    assert.equal(
         result.filter((track) => track.sourceType === "youtube").length,
-        3,
+        6,
     );
     assert.equal(
         result.filter((track) => track.sourceType === "local").length,
         4,
     );
-    assert.equal(result[1].sourceType, "tidal");
+    assert.equal(result[1].sourceType, "youtube");
     assert.equal(result[0].sourceType, "youtube");
     assert.equal(result[3].sourceType, "local");
     assert.equal(result[8].sourceType, "youtube");

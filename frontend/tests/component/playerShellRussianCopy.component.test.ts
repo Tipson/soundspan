@@ -91,12 +91,6 @@ mock.module("@/utils/artistRoute", {
     },
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => React.createElement("span", null, "TIDAL"),
-    },
-});
-
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: {
         YouTubeBadge: () => React.createElement("span", null, "YouTube"),

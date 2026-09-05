@@ -159,7 +159,14 @@ def test_gap_before_same_id_candidate_resumes_without_downloading(
 def test_concurrent_colliding_downloads_use_unique_temps_and_preserve_both(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    import ytmusic_album_downloads
+    from ytmusic_extraction_budget import ExtractionBudget
+
     app = _configure_fake_download(monkeypatch)
+    # The production default reserves one of two slots for playback. This
+    # collision test explicitly supplies capacity for two background workers
+    # so it still exercises simultaneous temp-file resolution.
+    monkeypatch.setattr(ytmusic_album_downloads, "_extraction_budget", ExtractionBudget(3))
     extraction_barrier = threading.Barrier(2)
     extract_info = _FakeYoutubeDL.extract_info
 

@@ -122,6 +122,87 @@ test("tracks without a verified ready record have no device playback identity", 
     assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
 });
 
+test("playback reuses provenance-verified legacy provider keys without reviving retired TIDAL", () => {
+    const localTrack = {
+        id: "local-legacy",
+        filePath: "/music/local.flac",
+        source: "local" as const,
+    };
+    const localRecord = {
+        ...readyRecord("user-1", "legacy-local-key"),
+        trackIdentity: "tidal:991",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+        track: {
+            ...TRACK,
+            ...localTrack,
+            tidalTrackId: 991,
+            youtubeVideoId: undefined,
+            streamSource: undefined,
+        },
+    };
+    const youtubeTrack = {
+        ...TRACK,
+        id: "yt:active-video",
+        youtubeVideoId: "active-video",
+    };
+    const youtubeRecord = {
+        ...readyRecord("user-1", "legacy-youtube-key"),
+        trackIdentity: "tidal:992",
+        sourceUrl: "/api/ytmusic/stream-public/active-video",
+        track: {
+            ...youtubeTrack,
+            tidalTrackId: 992,
+        },
+    };
+    setDeviceOfflineRuntimeState("user-1", [localRecord, youtubeRecord]);
+
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity(localTrack),
+        "legacy-local-key",
+    );
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity(youtubeTrack),
+        "legacy-youtube-key",
+    );
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity({
+            id: "tidal:992",
+            streamSource: "tidal",
+            tidalTrackId: 992,
+        }),
+        null,
+    );
+});
+
+test("legacy playback aliases stay owner-scoped and reject mismatched asset routes", () => {
+    const localTrack = {
+        id: "local-legacy",
+        filePath: "/music/local.flac",
+        source: "local" as const,
+    };
+    const unsafe = {
+        ...readyRecord("user-1", "unsafe-key"),
+        trackIdentity: "tidal:991",
+        sourceUrl: "/api/ytmusic/stream-public/unrelated-video",
+        track: {
+            ...TRACK,
+            ...localTrack,
+            tidalTrackId: 991,
+            youtubeVideoId: "unrelated-video",
+            streamSource: "tidal" as const,
+        },
+    };
+    const otherOwner = {
+        ...unsafe,
+        key: "other-owner-key",
+        ownerId: "user-2",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+    };
+    setDeviceOfflineRuntimeState("user-1", [unsafe, otherOwner]);
+
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(localTrack), null);
+});
+
 test("managed device playback opens an owner-scoped vault lease", async (t) => {
     const record = {
         ...readyRecord("user-1", "managed-key"),

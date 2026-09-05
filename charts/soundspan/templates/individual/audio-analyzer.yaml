@@ -61,6 +61,8 @@ spec:
             "MUSIC_PATH" true
             "TZ" true
             "ACOUSTID_API_KEY" true
+            "BACKEND_INTERNAL_URL" true
+            "INTERNAL_API_SECRET" true
           }}
           env:
             {{- if hasKey $audioAnalyzerEnv "POSTGRES_USER" }}
@@ -128,6 +130,23 @@ spec:
               value: {{ .Values.config.timezone | quote }}
             {{- end }}
             {{- include "soundspan.optionalSecretEnv" (dict "ctx" . "name" "ACOUSTID_API_KEY" "secretKey" "ACOUSTID_API_KEY" "value" .Values.config.acoustidApiKey "enabled" (or .Values.config.acoustidApiKey (and .Values.secrets.existingSecret .Values.secrets.apiKeysInExistingSecret)) "envMap" $audioAnalyzerEnv) | nindent 12 }}
+            {{- if hasKey $audioAnalyzerEnv "BACKEND_INTERNAL_URL" }}
+            - name: BACKEND_INTERNAL_URL
+              value: {{ index $audioAnalyzerEnv "BACKEND_INTERNAL_URL" | quote }}
+            {{- else }}
+            - name: BACKEND_INTERNAL_URL
+              value: {{ printf "http://%s-backend:%v" (include "soundspan.fullname" .) .Values.backend.port | quote }}
+            {{- end }}
+            {{- if hasKey $audioAnalyzerEnv "INTERNAL_API_SECRET" }}
+            - name: INTERNAL_API_SECRET
+              value: {{ index $audioAnalyzerEnv "INTERNAL_API_SECRET" | quote }}
+            {{- else }}
+            - name: INTERNAL_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "soundspan.secretName" . }}
+                  key: INTERNAL_API_SECRET
+            {{- end }}
             {{- range $key := keys $audioAnalyzerEnv | sortAlpha }}
             {{- if not (hasKey $audioAnalyzerExplicitEnvKeys $key) }}
             - name: {{ $key }}

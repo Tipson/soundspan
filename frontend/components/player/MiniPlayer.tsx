@@ -22,6 +22,7 @@ import { clampTime } from "@/utils/formatTime";
 import { CurrentTrackPreferenceButtons } from "@/components/player/CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { ru } from "@/lib/i18n/ru";
+import { isPlaybackOnlyTrack } from "@/lib/trackRef";
 
 /**
  * Renders the MiniPlayer component.
@@ -160,23 +161,27 @@ export function MiniPlayer() {
                         )}
                     </div>
 
-                    {playbackType === "track" && currentTrack?.id && (
-                        <div
-                            className="hidden flex-shrink-0 items-center min-[360px]:flex"
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
-                            role="group"
-                            aria-label={ru.player.preference}
-                        >
-                            <CurrentTrackPreferenceButtons
-                                trackId={currentTrack.id}
-                                mode="up-only"
-                                buttonSizeClassName="h-11 w-11"
-                                iconSizeClassName="h-4 w-4"
-                                metadata={buildPreferenceMetadata(currentTrack)}
-                            />
-                        </div>
-                    )}
+                    {playbackType === "track" &&
+                        currentTrack?.id &&
+                        !isPlaybackOnlyTrack(currentTrack) && (
+                            <div
+                                className="hidden flex-shrink-0 items-center min-[360px]:flex"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                role="group"
+                                aria-label={ru.player.preference}
+                            >
+                                <CurrentTrackPreferenceButtons
+                                    trackId={currentTrack.id}
+                                    mode="up-only"
+                                    buttonSizeClassName="h-11 w-11"
+                                    iconSizeClassName="h-4 w-4"
+                                    metadata={buildPreferenceMetadata(
+                                        currentTrack,
+                                    )}
+                                />
+                            </div>
+                        )}
 
                     <div
                         className="flex flex-shrink-0 items-center"

@@ -171,6 +171,9 @@ mock.module("@/features/search/components/TopResult", {
 mock.module("@/features/search/components/EmptyState", {
     namedExports: { EmptyState: () => null },
 });
+mock.module("@/features/search/components/AudiusSearchPanel", {
+    namedExports: { AudiusSearchPanel: marker("audius-search") },
+});
 mock.module("@/features/search/components/LibraryTracksList", {
     namedExports: {
         LibraryTracksList: ({ limit }: { limit?: number | null }) => {

@@ -7,6 +7,10 @@ from typing import Any, Protocol
 
 from acoustid_backfill import AcoustIDBackfill
 from acoustid_lookup import AcoustIDCandidate, AcoustIDClient, AcoustIDLookupError
+from canonical_identity_client import (
+    CanonicalIdentityPromotionError,
+    PromotionAdmission,
+)
 
 from services.common.logging_utils import configure_service_logger
 
@@ -57,131 +61,6 @@ MARK_CLAIMED_SQL = """
         "updatedAt" = NOW()
     WHERE id = ANY(%s)
       AND "identityLookupStatus" IN ('pending', 'processing')
-    RETURNING id
-"""
-FIND_EXISTING_MBID_SQL = """
-    SELECT id
-    FROM "CanonicalRecording"
-    WHERE "recordingMbid" = %s
-      AND id <> %s
-    LIMIT 1
-"""
-LOCK_IDENTITY_SQL = """
-    SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))
-"""
-MERGE_CANONICAL_FEATURES_SQL = """
-    UPDATE "CanonicalRecording" AS target
-    SET fingerprint = COALESCE(target.fingerprint, source.fingerprint),
-        bpm = COALESCE(target.bpm, source.bpm),
-        key = COALESCE(target.key, source.key),
-        energy = COALESCE(target.energy, source.energy),
-        loudness = COALESCE(target.loudness, source.loudness),
-        valence = COALESCE(target.valence, source.valence),
-        danceability = COALESCE(target.danceability, source.danceability),
-        arousal = COALESCE(target.arousal, source.arousal),
-        instrumentalness = COALESCE(target.instrumentalness, source.instrumentalness),
-        acousticness = COALESCE(target.acousticness, source.acousticness),
-        speechiness = COALESCE(target.speechiness, source.speechiness),
-        "moodTags" = CASE
-            WHEN cardinality(target."moodTags") = 0 THEN source."moodTags"
-            ELSE target."moodTags"
-        END,
-        "essentiaGenres" = CASE
-            WHEN cardinality(target."essentiaGenres") = 0 THEN source."essentiaGenres"
-            ELSE target."essentiaGenres"
-        END,
-        "analysisStatus" = CASE
-            WHEN target."analysisStatus" <> 'completed'
-             AND source."analysisStatus" = 'completed'
-                THEN 'completed'
-            ELSE target."analysisStatus"
-        END,
-        "analysisVersion" = CASE
-            WHEN target."analysisStatus" <> 'completed'
-             AND source."analysisStatus" = 'completed'
-                THEN source."analysisVersion"
-            ELSE target."analysisVersion"
-        END,
-        "analyzedAt" = CASE
-            WHEN target."analysisStatus" <> 'completed'
-             AND source."analysisStatus" = 'completed'
-                THEN source."analyzedAt"
-            ELSE target."analyzedAt"
-        END,
-        "analysisError" = CASE
-            WHEN source."analysisStatus" = 'completed' THEN NULL
-            ELSE target."analysisError"
-        END,
-        "embeddingStatus" = CASE
-            WHEN target."embeddingStatus" <> 'completed'
-             AND source."embeddingStatus" = 'completed'
-                THEN 'completed'
-            ELSE target."embeddingStatus"
-        END,
-        "embeddingVersion" = CASE
-            WHEN target."embeddingStatus" <> 'completed'
-             AND source."embeddingStatus" = 'completed'
-                THEN source."embeddingVersion"
-            ELSE target."embeddingVersion"
-        END,
-        "embeddingAnalyzedAt" = CASE
-            WHEN target."embeddingStatus" <> 'completed'
-             AND source."embeddingStatus" = 'completed'
-                THEN source."embeddingAnalyzedAt"
-            ELSE target."embeddingAnalyzedAt"
-        END,
-        "embeddingError" = CASE
-            WHEN source."embeddingStatus" = 'completed' THEN NULL
-            ELSE target."embeddingError"
-        END,
-        "updatedAt" = NOW()
-    FROM "CanonicalRecording" AS source
-    WHERE source.id = %s
-      AND target.id = %s
-"""
-COPY_CANONICAL_EMBEDDINGS_SQL = """
-    INSERT INTO canonical_recording_embeddings (
-        canonical_recording_id,
-        space_id,
-        embedding,
-        analyzed_at
-    )
-    SELECT %s, space_id, embedding, analyzed_at
-    FROM canonical_recording_embeddings
-    WHERE canonical_recording_id = %s
-    ON CONFLICT (canonical_recording_id, space_id) DO NOTHING
-"""
-REPOINT_MAPPINGS_SQL = """
-    UPDATE "TrackMapping"
-    SET "canonicalRecordingId" = %s,
-        "updatedAt" = NOW()
-    WHERE "canonicalRecordingId" = %s
-"""
-SAVE_LOOKUP_SQL = """
-    UPDATE "CanonicalRecording"
-    SET "recordingMbid" = %s,
-        "identitySource" = 'acoustid',
-        "identityConfidence" = GREATEST("identityConfidence", %s),
-        "identityLookupStatus" = 'completed',
-        "identityLookupError" = NULL,
-        "identityLookupUpdatedAt" = NOW(),
-        "updatedAt" = NOW()
-    WHERE id = %s
-      AND fingerprint = %s
-      AND "identityLookupStatus" = 'processing'
-    RETURNING id
-"""
-SAVE_MERGED_SQL = """
-    UPDATE "CanonicalRecording"
-    SET "identitySource" = 'acoustid-merged',
-        "identityConfidence" = GREATEST("identityConfidence", %s),
-        "identityLookupStatus" = 'completed',
-        "identityLookupError" = NULL,
-        "identityLookupUpdatedAt" = NOW(),
-        "updatedAt" = NOW()
-    WHERE id = %s
-      AND fingerprint = %s
-      AND "identityLookupStatus" = 'processing'
     RETURNING id
 """
 SAVE_NO_MATCH_SQL = """
@@ -238,6 +117,19 @@ class LookupClient(Protocol):
     """Describe the shared bounded AcoustID client."""
 
     def lookup(self, fingerprint: str, duration: int) -> AcoustIDCandidate | None: ...
+
+
+class PromotionClient(Protocol):
+    """Publish a replay-safe intent to the TypeScript merge owner."""
+
+    def submit(
+        self,
+        *,
+        source_canonical_id: str,
+        expected_fingerprint: str,
+        recording_mbid: str,
+        confidence: float,
+    ) -> PromotionAdmission: ...
 
 
 def _acquire_lookup_owner(database: Database) -> int | None:
@@ -315,40 +207,26 @@ def _save_completed(
     canonical_id: str,
     fingerprint: str,
     candidate: AcoustIDCandidate | None,
+    promotion_client: PromotionClient | None,
 ) -> bool:
+    if candidate is not None:
+        if promotion_client is None:
+            raise CanonicalIdentityPromotionError(
+                "Canonical identity promotion client is unavailable"
+            )
+        return (
+            promotion_client.submit(
+                source_canonical_id=canonical_id,
+                expected_fingerprint=fingerprint,
+                recording_mbid=candidate["recordingMbid"],
+                confidence=float(candidate["score"]),
+            )
+            == "accepted"
+        )
+
     cursor = database.get_cursor()
     try:
-        if candidate is None:
-            cursor.execute(SAVE_NO_MATCH_SQL, (canonical_id, fingerprint))
-        else:
-            recording_mbid = candidate["recordingMbid"]
-            confidence = float(candidate["score"])
-            # Serialize MBID promotion with the TypeScript online identity path.
-            # The lock lasts only for this transaction and prevents duplicate
-            # canonical rows from racing through the unique MBID constraint.
-            cursor.execute(LOCK_IDENTITY_SQL, (recording_mbid,))
-            cursor.execute(FIND_EXISTING_MBID_SQL, (recording_mbid, canonical_id))
-            existing = cursor.fetchone()
-            target_id = existing.get("id") if existing is not None else None
-            if isinstance(target_id, str) and target_id:
-                cursor.execute(
-                    MERGE_CANONICAL_FEATURES_SQL,
-                    (canonical_id, target_id),
-                )
-                cursor.execute(
-                    COPY_CANONICAL_EMBEDDINGS_SQL,
-                    (target_id, canonical_id),
-                )
-                cursor.execute(REPOINT_MAPPINGS_SQL, (target_id, canonical_id))
-                cursor.execute(
-                    SAVE_MERGED_SQL,
-                    (confidence, canonical_id, fingerprint),
-                )
-            else:
-                cursor.execute(
-                    SAVE_LOOKUP_SQL,
-                    (recording_mbid, confidence, canonical_id, fingerprint),
-                )
+        cursor.execute(SAVE_NO_MATCH_SQL, (canonical_id, fingerprint))
         saved = cursor.fetchone() is not None
         database.commit()
         return saved
@@ -390,11 +268,13 @@ class CanonicalAcoustIDBackfill:
         api_key: str,
         *,
         client: LookupClient | None = None,
+        promotion_client: PromotionClient | None = None,
         batch_size: int = DEFAULT_LOOKUP_BATCH_SIZE,
     ) -> None:
         self._database = database
         self._enabled = bool(api_key)
         self._client = client or (AcoustIDClient(api_key) if api_key else None)
+        self._promotion_client = promotion_client
         self._batch_size = max(1, min(100, batch_size))
 
     def run_once(self, stop_requested: Callable[[], bool] = _never_stop) -> bool:
@@ -459,21 +339,44 @@ class CanonicalAcoustIDBackfill:
             fingerprint = str(row["fingerprint"])
             try:
                 candidate = self._client.lookup(fingerprint, int(row["duration"]))
-                if _save_completed(self._database, canonical_id, fingerprint, candidate):
+                if _save_completed(
+                    self._database,
+                    canonical_id,
+                    fingerprint,
+                    candidate,
+                    self._promotion_client,
+                ):
                     completed += 1
             except AcoustIDLookupError as error:
                 if _save_failure(self._database, canonical_id, fingerprint, error):
                     failed += 1
+            except CanonicalIdentityPromotionError as error:
+                # Leave the committed processing claim untouched. The stale
+                # claim window retries it after the bounded HTTP attempts, so
+                # a backend outage cannot discard the discovered identity.
+                logger.warning("Canonical identity handoff deferred: %s", error)
+                failed += 1
         return completed, failed
 
 
 class CombinedAcoustIDBackfill:
     """Share one rate limiter across local and online fingerprint identity."""
 
-    def __init__(self, database: Database, api_key: str) -> None:
+    def __init__(
+        self,
+        database: Database,
+        api_key: str,
+        *,
+        promotion_client: PromotionClient | None = None,
+    ) -> None:
         client = AcoustIDClient(api_key) if api_key else None
         self._track = AcoustIDBackfill(database, api_key, client=client)
-        self._canonical = CanonicalAcoustIDBackfill(database, api_key, client=client)
+        self._canonical = CanonicalAcoustIDBackfill(
+            database,
+            api_key,
+            client=client,
+            promotion_client=promotion_client,
+        )
 
     def run_once(self, stop_requested: Callable[[], bool] = _never_stop) -> bool:
         """Process local and online fingerprints on one bounded client."""

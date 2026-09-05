@@ -33,7 +33,6 @@ import {
 import {
     type UnifiedTrackResponse,
     normalizeLocalTrack,
-    normalizeTidalTrack,
     normalizeYtMusicTrack,
 } from "../../services/unifiedTrackResponse";
 import {
@@ -385,10 +384,14 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
                   ],
               }
             : { userId, track: TRACK_VISIBLE_WHERE };
+    const supportedRemoteWhere: Prisma.LikedRemoteTrackWhereInput = {
+        userId,
+        trackYtMusicId: { not: null },
+    };
     const remoteWhere: Prisma.LikedRemoteTrackWhereInput =
         cursorLikedAt && remoteCursorIdParam
             ? {
-                  userId,
+                  ...supportedRemoteWhere,
                   OR: [
                       { likedAt: { lt: cursorLikedAt } },
                       {
@@ -399,10 +402,10 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
               }
             : cursorLikedAt
               ? {
-                    userId,
+                    ...supportedRemoteWhere,
                     likedAt: { lte: cursorLikedAt },
                 }
-              : { userId };
+              : supportedRemoteWhere;
 
     const [
         total,
@@ -415,11 +418,10 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
         prisma.likedTrack.count({
             where: { userId, track: TRACK_VISIBLE_WHERE },
         }),
-        prisma.likedRemoteTrack.count({ where: { userId } }),
+        prisma.likedRemoteTrack.count({ where: supportedRemoteWhere }),
         prisma.userSettings.findUnique({
             where: { userId },
             select: {
-                tidalOAuthJson: true,
                 ytMusicOAuthJson: true,
             },
         }),
@@ -447,7 +449,6 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
         }),
     ]);
 
-    const hasTidal = hasConnectedProviderToken(userSettings?.tidalOAuthJson);
     const hasYtMusic = hasConnectedProviderToken(
         userSettings?.ytMusicOAuthJson,
     );
@@ -677,8 +678,8 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
         }
         return rankPlaybackSource(
             {
-                source: entry.source === "tidal" ? "tidal" : "ytmusic",
-                available: entry.source === "tidal" ? hasTidal : hasYtMusic,
+                source: "ytmusic",
+                available: entry.source === "youtube" && hasYtMusic,
             },
             sourceOrder,
         );
@@ -708,13 +709,10 @@ export async function handleGetLikedTracks(req: Request, res: Response) {
                 if (localTrack) {
                     normalized = normalizeLocalTrack(localTrack as any);
                 }
-            } else if (preferred.source === "tidal") {
-                if (preferred.remote.trackTidal) {
-                    normalized = normalizeTidalTrack(
-                        preferred.remote.trackTidal,
-                    );
-                }
-            } else if (preferred.remote.trackYtMusic) {
+            } else if (
+                preferred.source === "youtube" &&
+                preferred.remote.trackYtMusic
+            ) {
                 normalized = normalizeYtMusicTrack(
                     preferred.remote.trackYtMusic,
                 );

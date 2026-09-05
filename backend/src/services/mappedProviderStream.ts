@@ -79,15 +79,10 @@ export async function serveMappedProviderStream(input: {
         const adapter =
             remoteProviderAdapters[toMappingProvider(input.fallback.source)];
         const response = await adapter.streamTrack({
-            userId:
-                input.fallback.source === "ytmusic"
-                    ? (input.youtubeUserId ?? "__public__")
-                    : input.userId,
+            userId: input.youtubeUserId ?? "__public__",
             quality: input.quality,
             range,
-            ...(input.fallback.source === "tidal"
-                ? { tidalTrackId: input.fallback.tidalTrackId }
-                : { youtubeVideoId: input.fallback.youtubeVideoId }),
+            youtubeVideoId: input.fallback.youtubeVideoId,
         });
         if (!response) return { status: "unavailable" };
         input.res.status(response.status);

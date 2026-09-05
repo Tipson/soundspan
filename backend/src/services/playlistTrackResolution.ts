@@ -63,14 +63,12 @@ function compareMappings(
 function getMappingTokens(mapping: MappingLinkageRow): string[] {
     const tokens: string[] = [];
     if (mapping.trackId) tokens.push(`l:${mapping.trackId}`);
-    if (mapping.trackTidalId) tokens.push(`t:${mapping.trackTidalId}`);
     if (mapping.trackYtMusicId) tokens.push(`y:${mapping.trackYtMusicId}`);
     return tokens;
 }
 
 function getItemToken(item: UnifiedPlaylistItemRecord): string | null {
     if (item.trackId) return `l:${item.trackId}`;
-    if (item.trackTidalId) return `t:${item.trackTidalId}`;
     if (item.trackYtMusicId) return `y:${item.trackYtMusicId}`;
     return null;
 }
@@ -87,13 +85,6 @@ function selectPreferredMappingForItem(
     );
     if (localCandidate) return localCandidate;
 
-    if (profile.hasTidal) {
-        const tidalCandidate = ranked.find(
-            (candidate) => candidate.trackTidalId !== null,
-        );
-        if (tidalCandidate) return tidalCandidate;
-    }
-
     if (profile.hasYtMusic) {
         const ytCandidate = ranked.find(
             (candidate) => candidate.trackYtMusicId !== null,
@@ -107,7 +98,6 @@ function selectPreferredMappingForItem(
     const usable = ranked.find(
         (c) =>
             c.trackId !== null ||
-            (c.trackTidalId !== null && profile.hasTidal) ||
             (c.trackYtMusicId !== null && profile.hasYtMusic),
     );
     return usable;
@@ -193,13 +183,6 @@ export async function resolvePlaylistItemsForUser(
                 .filter((value): value is string => typeof value === "string"),
         ),
     );
-    const trackTidalIds = Array.from(
-        new Set(
-            items
-                .map((item) => item.trackTidalId)
-                .filter((value): value is string => typeof value === "string"),
-        ),
-    );
     const trackYtMusicIds = Array.from(
         new Set(
             items
@@ -215,9 +198,6 @@ export async function resolvePlaylistItemsForUser(
     }> = [];
     if (trackIds.length > 0) {
         mappingWhereOr.push({ trackId: { in: trackIds } });
-    }
-    if (trackTidalIds.length > 0) {
-        mappingWhereOr.push({ trackTidalId: { in: trackTidalIds } });
     }
     if (trackYtMusicIds.length > 0) {
         mappingWhereOr.push({ trackYtMusicId: { in: trackYtMusicIds } });

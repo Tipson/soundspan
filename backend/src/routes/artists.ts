@@ -13,6 +13,7 @@ import { getSystemSettings } from "../utils/systemSettings";
 import { prisma } from "../utils/db";
 import { normalizeArtistName } from "../utils/artistNormalization";
 import { findRouteNameMatch } from "./artistRouteName";
+import { acquireAbortableStreamProxy } from "./streamProxyRequestAbort";
 import {
     findFreshCatalogAlbum,
     findFreshCatalogReleaseGroups,
@@ -196,12 +197,19 @@ router.get(
                 }
             }
 
-            const proxyRes = await ytMusicService.getStreamProxy(
-                effectiveUserId,
-                videoId,
-                "high",
-                rangeHeader,
+            const proxyRes = await acquireAbortableStreamProxy(
+                req,
+                res,
+                (signal) =>
+                    ytMusicService.getStreamProxy(
+                        effectiveUserId,
+                        videoId,
+                        "high",
+                        rangeHeader,
+                        { signal },
+                    ),
             );
+            if (!proxyRes) return;
 
             res.status(proxyRes.status);
             const forwardHeaders = [
@@ -240,12 +248,19 @@ router.get(
             // If user's OAuth failed, retry with public
             if (error?.response?.status === 401 && req.user?.id) {
                 try {
-                    const proxyRes = await ytMusicService.getStreamProxy(
-                        "__public__",
-                        req.params.videoId,
-                        "high",
-                        req.headers.range,
+                    const proxyRes = await acquireAbortableStreamProxy(
+                        req,
+                        res,
+                        (signal) =>
+                            ytMusicService.getStreamProxy(
+                                "__public__",
+                                req.params.videoId,
+                                "high",
+                                req.headers.range,
+                                { signal },
+                            ),
                     );
+                    if (!proxyRes) return;
                     res.status(proxyRes.status);
                     for (const h of [
                         "content-type",

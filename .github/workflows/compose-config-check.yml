@@ -66,6 +66,5 @@ jobs:
           INTERNAL_API_SECRET: compose-check-internal-api-secret
           SOUNDSPAN_BIND_IP: 192.0.2.10
           SOUNDSPAN_IMAGE_TAG: main-deadbee
-          TIDAL_DATA_PATH: /opt/soundspan/tidal
           YTMUSIC_DATA_PATH: /opt/soundspan/ytmusic
         run: docker compose -f docker-compose.yml -f docker-compose.images.yml -f docker-compose.single-host.yml --profile worker config --quiet

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { afterEach, mock, test } from "node:test";
+import { after, afterEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Episode } from "../../features/podcast/types";
 import { createConsecutiveErrorBreaker } from "../../lib/audio-engine/consecutiveErrorBreaker";
 import {
@@ -9,6 +10,12 @@ import {
     playbackAdvanceOriginRef,
     setPlaybackAutoRestartSuppressed,
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
+
+GlobalRegistrator.register();
+(
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+window.confirm = () => true;
 
 /**
  * Behavior tests for the mixed-queue UX fixes in
@@ -85,6 +92,10 @@ afterEach(() => {
     listenTogetherSocketMock.hasActiveGroup = false;
     listenTogetherSocketMock.activeGroupId = null;
     listenTogetherQueueCalls.length = 0;
+});
+
+after(async () => {
+    await GlobalRegistrator.unregister();
 });
 
 mock.module("@/lib/audio-volume-mode-context", {
@@ -601,6 +612,100 @@ test("manual next keeps repeat-one behavior", async () => {
     assert.equal(state.currentIndex, 0);
     assert.equal((state.currentTrack as { id: string }).id, "repeat-current");
     assert.equal(state.repeatOneCount, 1);
+});
+
+test("shuffle toggle keeps the flag and shuffle order unambiguous on and off", async () => {
+    const currentTrack = makeTrack("shuffle-current", "artist-1");
+    const state = createDeferredAudioState({
+        queue: [
+            currentTrack,
+            makeTrack("shuffle-next", "artist-2"),
+            makeTrack("shuffle-last", "artist-3"),
+        ],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        isShuffle: false,
+        shuffleIndices: [],
+    });
+    const controls = await renderControls({
+        state,
+        playback: createPlaybackStub(),
+    });
+
+    controls.toggleShuffle();
+    state.commit();
+
+    assert.equal(state.isShuffle, true);
+    assert.deepEqual(
+        [...(state.shuffleIndices as number[])].sort((a, b) => a - b),
+        [0, 1, 2],
+    );
+
+    controls.toggleShuffle();
+    state.commit();
+
+    assert.equal(state.isShuffle, false);
+    assert.deepEqual(state.shuffleIndices, []);
+});
+
+test("persisted active shuffle rebuilds its missing factual order on mount", async (testContext) => {
+    const currentTrack = makeTrack("persisted-shuffle", "artist-1");
+    const state = createDeferredAudioState({
+        queue: [
+            currentTrack,
+            makeTrack("persisted-next", "artist-2"),
+            makeTrack("persisted-last", "artist-3"),
+        ],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        isShuffle: true,
+        shuffleIndices: [],
+    });
+    stateHolder.current = state;
+    playbackHolder.current = createPlaybackStub();
+
+    const [{ AudioControlsProvider, useAudioControls }, { createRoot }] =
+        await Promise.all([
+            import("../../lib/audio-controls-context"),
+            import("react-dom/client"),
+        ]);
+    const controlsRef: {
+        current: ReturnType<typeof useAudioControls> | null;
+    } = { current: null };
+    const Probe = () => {
+        controlsRef.current = useAudioControls();
+        return React.createElement("div", null, "ready");
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    testContext.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                AudioControlsProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await Promise.resolve();
+    });
+    state.commit();
+
+    assert.deepEqual(
+        [...(state.shuffleIndices as number[])].sort((a, b) => a - b),
+        [0, 1, 2],
+    );
+    assert.ok(controlsRef.current);
+    controlsRef.current.next();
+    state.commit();
+    assert.notEqual(state.currentIndex, 0);
 });
 
 test("provider radio extends the played shuffle order without replaying old tracks", async () => {

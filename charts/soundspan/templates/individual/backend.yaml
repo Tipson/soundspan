@@ -143,7 +143,6 @@ spec:
             "OIDC_EMAIL_CLAIM" true
             "OIDC_NAME_CLAIM" true
             "OIDC_PROVIDER_NAME" true
-            "TIDAL_SIDECAR_URL" true
             "YTMUSIC_STREAMER_URL" true
             "VIBE_PROVIDER_URL" true
             "ALLOWED_ORIGINS" true
@@ -159,6 +158,7 @@ spec:
             "DISCOVERY_ENABLED" true
             "AUTO_PLAYLISTS_ENABLED" true
             "FEATURE_REQUESTS" true
+            "FEATURE_AUDIUS" true
             "FEDERATION_ENABLED" true
             "SCAN_FILE_CONCURRENCY" true
             "CATALOG_PERSISTENCE" true
@@ -424,13 +424,6 @@ spec:
               value: "true"
             {{- end }}
             {{- include "soundspan.oidcEnv" (dict "ctx" . "envMap" $backendEnv) | nindent 12 }}
-            {{- if hasKey $backendEnv "TIDAL_SIDECAR_URL" }}
-            - name: TIDAL_SIDECAR_URL
-              value: {{ index $backendEnv "TIDAL_SIDECAR_URL" | quote }}
-            {{- else }}
-            - name: TIDAL_SIDECAR_URL
-              value: {{ include "soundspan.tidalSidecarUrl" . | quote }}
-            {{- end }}
             {{- if hasKey $backendEnv "YTMUSIC_STREAMER_URL" }}
             - name: YTMUSIC_STREAMER_URL
               value: {{ index $backendEnv "YTMUSIC_STREAMER_URL" | quote }}
@@ -584,6 +577,13 @@ spec:
             {{- else }}
             - name: FEATURE_REQUESTS
               value: {{ .Values.config.features.requests | quote }}
+            {{- end }}
+            {{- if hasKey $backendEnv "FEATURE_AUDIUS" }}
+            - name: FEATURE_AUDIUS
+              value: {{ index $backendEnv "FEATURE_AUDIUS" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.features.audius) }}
+            - name: FEATURE_AUDIUS
+              value: {{ .Values.config.features.audius | quote }}
             {{- end }}
             {{- if hasKey $backendEnv "LIDARR_ENABLED" }}
             - name: LIDARR_ENABLED

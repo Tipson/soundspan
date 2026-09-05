@@ -259,9 +259,6 @@ function DiscoverWeeklyPageContent() {
                                         {discoverRu.sourceMix}:{" "}
                                         {providerCounts.local}{" "}
                                         {discoverRu.local}
-                                        {providerCounts.tidal > 0
-                                            ? ` • ${providerCounts.tidal} TIDAL — ${discoverRu.gapFill}`
-                                            : ""}
                                         {providerCounts.youtube > 0
                                             ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
                                             : ""}

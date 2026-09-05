@@ -31,6 +31,7 @@ APP_MODULES = (
     "ytmusic_runtime",
     "ytmusic_search",
     "ytmusic_stream",
+    "ytmusic_tail_warmup",
 )
 
 

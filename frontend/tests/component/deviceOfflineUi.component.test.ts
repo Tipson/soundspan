@@ -16,6 +16,7 @@ const calls = {
     prepares: [] as string[],
     exports: [] as string[],
     plays: [] as string[],
+    playedTrackInputs: [] as Array<Record<string, unknown>>,
     settingUpdates: [] as Array<Record<string, unknown>>,
     collectionEnqueues: [] as Array<Record<string, unknown>>,
     storageRetries: 0,
@@ -182,12 +183,6 @@ mock.module("@/components/ui/PlaylistSelector", {
 mock.module("@/components/ui/ShareLinkModal", {
     namedExports: { ShareLinkModal: () => null },
 });
-mock.module("@/lib/trackRef", {
-    namedExports: {
-        isRemoteTrack: () => false,
-        toAddToPlaylistRef: () => ({ source: "local", trackId: "track" }),
-    },
-});
 mock.module("@/lib/shareLinks", {
     namedExports: { canShareTrack: () => false },
 });
@@ -209,7 +204,10 @@ mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
             playTracks() {},
-            playNow: (track: { id: string }) => calls.plays.push(track.id),
+            playNow: (track: Record<string, unknown> & { id: string }) => {
+                calls.plays.push(track.id);
+                calls.playedTrackInputs.push(track);
+            },
             playNext() {},
             addToQueue() {},
             playTrack() {},
@@ -253,6 +251,7 @@ beforeEach(() => {
     calls.prepares.length = 0;
     calls.exports.length = 0;
     calls.plays.length = 0;
+    calls.playedTrackInputs.length = 0;
     calls.settingUpdates.length = 0;
     calls.collectionEnqueues.length = 0;
     calls.storageRetries = 0;
@@ -696,6 +695,9 @@ async function render(element: React.ReactElement) {
     await React.act(async () => root.render(element));
     return {
         container,
+        async rerender(nextElement: React.ReactElement) {
+            await React.act(async () => root.render(nextElement));
+        },
         unmount() {
             void React.act(() => root.unmount());
             container.remove();
@@ -905,6 +907,81 @@ test("single-track actions can protect an automatic ready copy", async () => {
     checking.unmount();
 });
 
+test("Downloads keeps retained rows in stable creation order when an older transfer finishes", async () => {
+    const base = {
+        ownerId: "user-1",
+        quality: "auto",
+        sourceUrl: "/api/ytmusic/stream/video-a",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 3,
+        totalBytes: 6,
+        contentType: "audio/mpeg",
+        persistenceGranted: false,
+        attempt: 1,
+        errorCode: null,
+        errorMessage: null,
+        virtualUrl: "/__offline/audio/test",
+        status: "downloading",
+    };
+    const newest = {
+        ...base,
+        key: "newest-key",
+        trackIdentity: "youtube:newest",
+        track: { ...track, id: "newest", title: "Newest download" },
+        createdAt: 300,
+        updatedAt: 300,
+    };
+    const middle = {
+        ...base,
+        key: "middle-key",
+        trackIdentity: "youtube:middle",
+        track: { ...track, id: "middle", title: "Middle download" },
+        createdAt: 200,
+        updatedAt: 200,
+    };
+    const oldest = {
+        ...base,
+        key: "oldest-key",
+        trackIdentity: "youtube:oldest",
+        track: { ...track, id: "oldest", title: "Oldest download" },
+        createdAt: 100,
+        updatedAt: 100,
+    };
+    records = [newest, middle, oldest];
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+    const rows = () => [
+        ...view.container.querySelectorAll("[data-download-status]"),
+    ];
+    const oldestRow = rows().find((row) =>
+        row.textContent?.includes("Oldest download"),
+    );
+
+    records = [
+        {
+            ...oldest,
+            status: "ready",
+            bytesReceived: 6,
+            updatedAt: 1_000,
+        },
+        newest,
+        middle,
+    ];
+    await view.rerender(React.createElement(DownloadsList));
+
+    assert.deepEqual(
+        rows().map((row) => row.querySelector("p")?.textContent),
+        ["Newest download", "Middle download", "Oldest download"],
+    );
+    assert.strictEqual(
+        rows().find((row) => row.textContent?.includes("Oldest download")),
+        oldestRow,
+    );
+    view.unmount();
+});
+
 test("Downloads UI plays ready copies and exposes retry/delete state actions", async () => {
     const base = {
         ownerId: "user-1",
@@ -937,8 +1014,8 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
             virtualUrl: "/__offline/audio/retry-key",
             track: { ...track, id: "interrupted", title: "Interrupted song" },
             status: "interrupted",
-            errorCode: "cache_missing",
-            errorMessage: "The browser removed this copy.",
+            errorCode: "device_file_missing",
+            errorMessage: "The retained device file is missing.",
         },
         {
             ...base,
@@ -948,13 +1025,26 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
             status: "error",
             errorMessage: "The provider rejected this file.",
         },
+        {
+            ...base,
+            key: "damaged-key",
+            virtualUrl: "/__offline/audio/damaged-key",
+            track: { ...track, id: "damaged", title: "Damaged song" },
+            status: "interrupted",
+            errorCode: "device_file_integrity",
+            errorMessage: "The retained file failed integrity checks.",
+        },
     ];
     const { DownloadsList } =
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
 
-    const interruptedRow = view.container.querySelector(
-        '[data-download-status="interrupted"]',
+    const interruptedRow = [
+        ...view.container.querySelectorAll(
+            '[data-download-status="interrupted"]',
+        ),
+    ].find((row) =>
+        row.textContent?.includes("Interrupted song"),
     ) as HTMLElement;
     assert.equal(interruptedRow.querySelectorAll("p").length, 3);
     assert.match(interruptedRow.textContent ?? "", /Файл удалён с устройства/i);
@@ -973,6 +1063,13 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
             ) as HTMLButtonElement
         ).click(),
     );
+    await React.act(async () =>
+        (
+            view.container.querySelector(
+                'button[aria-label="Повторить загрузку: Damaged song"]',
+            ) as HTMLButtonElement
+        ).click(),
+    );
     assert.equal(
         view.container.querySelector(
             'button[aria-label="Воспроизвести: Interrupted song"]',
@@ -985,15 +1082,24 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
         ),
         null,
     );
+    assert.equal(
+        view.container.querySelector(
+            'button[aria-label="Воспроизвести: Damaged song"]',
+        ),
+        null,
+    );
     assert.match(
-        view.container.querySelector('[data-download-status="interrupted"]')
-            ?.textContent ?? "",
+        interruptedRow.textContent ?? "",
         /Файл удалён с устройства.*скачайте трек снова/i,
     );
     assert.match(
         view.container.querySelector('[data-download-status="error"]')
             ?.textContent ?? "",
         /Не удалось сохранить.*Повторить/i,
+    );
+    assert.match(
+        view.container.textContent ?? "",
+        /Файл повреждён.*скачайте трек снова/i,
     );
     const deleteButtons = view.container.querySelectorAll(
         'button[aria-label="Удалить копию с устройства: Alpha"]',
@@ -1011,8 +1117,168 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
 
     assert.deepEqual(calls.prepares, ["ready-key"]);
     assert.deepEqual(calls.plays, ["yt:video-a"]);
-    assert.deepEqual(calls.resumes, ["retry-key"]);
+    assert.equal(calls.playedTrackInputs[0]?.youtubeVideoId, "video-a");
+    assert.equal(calls.playedTrackInputs[0]?.streamSource, "youtube");
+    assert.deepEqual(calls.resumes, ["retry-key", "damaged-key"]);
     assert.deepEqual(calls.deletes, ["ready-key"]);
+    view.unmount();
+});
+
+test("historical TIDAL rows stay manageable without Play or Retry actions", async () => {
+    const retiredTrack = {
+        ...track,
+        id: "tidal:991",
+        title: "Historical TIDAL copy",
+        filePath: undefined,
+        mediaSource: "tidal",
+        streamSource: "tidal",
+        tidalTrackId: 991,
+        youtubeVideoId: undefined,
+    };
+    const base = {
+        ownerId: "user-1",
+        trackIdentity: "tidal:991",
+        quality: "auto",
+        sourceUrl: "/api/tidal/stream/991",
+        track: retiredTrack,
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 6,
+        totalBytes: 6,
+        contentType: "audio/mpeg",
+        persistenceGranted: false,
+        management: "manual",
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        errorCode: null,
+        errorMessage: null,
+    };
+    records = [
+        {
+            ...base,
+            key: "retired-ready",
+            virtualUrl: "/__offline/audio/retired-ready",
+            status: "ready",
+        },
+        {
+            ...base,
+            key: "retired-error",
+            virtualUrl: "/__offline/audio/retired-error",
+            track: { ...retiredTrack, title: "Historical TIDAL failure" },
+            status: "interrupted",
+            errorMessage: "Historical provider failure",
+        },
+        {
+            ...base,
+            key: "local-legacy-ready",
+            trackIdentity: "tidal:994",
+            virtualUrl: "/__offline/audio/local-legacy-ready",
+            sourceUrl: "/api/library/tracks/local-legacy/stream",
+            track: {
+                ...retiredTrack,
+                id: "local-legacy",
+                title: "Local legacy copy",
+                filePath: "/music/local-legacy.flac",
+                source: "local",
+                tidalTrackId: 994,
+            },
+            status: "ready",
+        },
+    ];
+    offlineContext.queueItems.push({
+        key: "retired-queue",
+        ownerId: "user-1",
+        trackIdentity: "tidal:993",
+        quality: "auto",
+        track: {
+            ...retiredTrack,
+            id: "tidal:993",
+            title: "Historical TIDAL queue",
+            tidalTrackId: 993,
+        },
+        sourceUrl: "/api/tidal/stream/993",
+        management: "manual",
+        collectionId: null,
+        collectionLabel: null,
+        status: "error",
+        attempt: 1,
+        leaseId: null,
+        leaseExpiresAt: null,
+        createdAt: 1,
+        updatedAt: 1,
+        errorMessage: "Historical provider failure",
+    });
+
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+    const rows = [...view.container.querySelectorAll("[data-download-status]")];
+    const readyRow = rows.find((row) =>
+        row.textContent?.includes("Historical TIDAL copy"),
+    );
+    const errorRow = rows.find((row) =>
+        row.textContent?.includes("Historical TIDAL failure"),
+    );
+    const localLegacyRow = rows.find((row) =>
+        row.textContent?.includes("Local legacy copy"),
+    );
+    const queueRow = view.container.querySelector(
+        'button[aria-label="Удалить с этого устройства: Historical TIDAL queue"]',
+    )?.parentElement;
+
+    assert.ok(readyRow);
+    assert.ok(errorRow);
+    assert.ok(localLegacyRow);
+    assert.ok(queueRow);
+    assert.equal(
+        readyRow.querySelector('button[aria-label^="Воспроизвести:"]'),
+        null,
+    );
+    assert.equal(
+        errorRow.querySelector('button[aria-label^="Повторить загрузку:"]'),
+        null,
+    );
+    assert.doesNotMatch(errorRow.textContent ?? "", /Повтор/);
+    assert.match(readyRow.textContent ?? "", /TIDAL больше недоступен/);
+    assert.match(errorRow.textContent ?? "", /TIDAL больше недоступен/);
+    assert.match(queueRow.textContent ?? "", /TIDAL больше недоступен/);
+    assert.equal(
+        queueRow.querySelector('button[aria-label^="Повторить загрузку:"]'),
+        null,
+    );
+    assert.ok(
+        localLegacyRow.querySelector(
+            'button[aria-label="Воспроизвести: Local legacy copy"]',
+        ),
+    );
+    await React.act(async () => {
+        (
+            localLegacyRow.querySelector(
+                'button[aria-label="Воспроизвести: Local legacy copy"]',
+            ) as HTMLButtonElement
+        ).click();
+        await Promise.resolve();
+    });
+    const playedLocalLegacy = calls.playedTrackInputs.at(-1);
+    assert.equal(playedLocalLegacy?.id, "local-legacy");
+    assert.equal(playedLocalLegacy?.mediaSource, "local");
+    assert.equal(playedLocalLegacy?.source, "local");
+    assert.equal(playedLocalLegacy?.streamSource, undefined);
+    assert.equal(playedLocalLegacy?.tidalTrackId, undefined);
+    assert.ok(
+        readyRow.querySelector('button[title="Удалить копию с устройства"]'),
+    );
+    assert.ok(
+        errorRow.querySelector('button[title="Удалить копию с устройства"]'),
+    );
+    assert.ok(
+        queueRow.querySelector('button[title="Удалить с этого устройства"]'),
+    );
+    assert.deepEqual(calls.prepares, ["local-legacy-ready"]);
+    assert.deepEqual(calls.plays, ["local-legacy"]);
+    assert.deepEqual(calls.resumes, []);
+    assert.deepEqual(calls.collectionEnqueues, []);
     view.unmount();
 });
 

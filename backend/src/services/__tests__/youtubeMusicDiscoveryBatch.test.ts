@@ -42,6 +42,7 @@ describe("YouTube Music discovery batch", () => {
     });
 
     it("normalizes tracks, albums, and artists from one bounded batch call", async () => {
+        const controller = new AbortController();
         mockClient.post.mockResolvedValueOnce({
             data: {
                 results: [
@@ -107,7 +108,11 @@ describe("YouTube Music discovery batch", () => {
                 "__public__",
                 "massive attack",
                 20,
-                { timeoutMs: 8_000, maxRetries: 0 },
+                {
+                    timeoutMs: 8_000,
+                    maxRetries: 0,
+                    signal: controller.signal,
+                },
             ),
         ).resolves.toEqual({
             tracks: [
@@ -146,6 +151,7 @@ describe("YouTube Music discovery batch", () => {
             {
                 params: { user_id: "__public__" },
                 timeout: 8_000,
+                signal: controller.signal,
             },
         );
     });

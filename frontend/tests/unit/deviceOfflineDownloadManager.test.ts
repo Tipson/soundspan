@@ -770,6 +770,123 @@ test("foreground download publishes ready metadata only after a complete atomic 
     );
 });
 
+test("download reuses only same-owner, same-quality legacy copies with proven local provenance", async () => {
+    let fetches = 0;
+    const deps = createDependencies({
+        fetch: async () => {
+            fetches += 1;
+            return new Response(Uint8Array.of(1), {
+                status: 200,
+                headers: {
+                    "content-type": "audio/mpeg",
+                    "content-length": "1",
+                },
+            });
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+    const localTrack: DeviceOfflineTrack = {
+        ...TRACK,
+        id: "local-legacy",
+        source: "local",
+        filePath: "/music/local.flac",
+    };
+    const legacyRecord: DeviceOfflineDownloadRecord = {
+        key: "legacy-ready-key",
+        ownerId: "user-1",
+        trackIdentity: "tidal:991",
+        quality: "auto",
+        virtualUrl: "/__offline/audio/legacy-ready-key",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+        track: { ...localTrack, tidalTrackId: 991 },
+        status: "ready",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 6,
+        totalBytes: 6,
+        contentType: "audio/mpeg",
+        persistenceGranted: true,
+        management: "manual",
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        errorCode: null,
+        errorMessage: null,
+    };
+    await deps.metadataStore.put(legacyRecord);
+    await deps.metadataStore.put({
+        ...legacyRecord,
+        key: "other-owner-key",
+        ownerId: "user-2",
+        updatedAt: 2,
+    });
+
+    const reused = await manager.download({
+        ownerId: "user-1",
+        track: localTrack,
+        quality: "auto",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+    });
+    assert.equal(reused.key, "legacy-ready-key");
+    assert.equal(fetches, 0);
+
+    const differentQuality = await manager.download({
+        ownerId: "user-1",
+        track: localTrack,
+        quality: "high",
+        sourceUrl: "/api/library/tracks/local-legacy/stream?quality=high",
+    });
+    assert.notEqual(differentQuality.key, "legacy-ready-key");
+    assert.equal(fetches, 1);
+});
+
+test("direct download rejects retired TIDAL before metadata and network access", async () => {
+    class ReadCountingMetadataStore extends MemoryMetadataStore {
+        reads = 0;
+
+        override async listByOwner(ownerId: string) {
+            this.reads += 1;
+            return super.listByOwner(ownerId);
+        }
+
+        override async getByTrackQuality(
+            ownerId: string,
+            trackIdentity: string,
+            quality: string,
+        ) {
+            this.reads += 1;
+            return super.getByTrackQuality(ownerId, trackIdentity, quality);
+        }
+    }
+    const metadataStore = new ReadCountingMetadataStore();
+    let fetches = 0;
+    const deps = createDependencies({
+        metadataStore,
+        fetch: async () => {
+            fetches += 1;
+            return new Response("must not fetch");
+        },
+    });
+    const manager = new DeviceOfflineDownloadManager(deps);
+
+    await assert.rejects(
+        manager.download({
+            ownerId: "user-1",
+            track: {
+                ...TRACK,
+                id: "tidal:991",
+                streamSource: "tidal",
+                tidalTrackId: 991,
+            },
+            sourceUrl: "/api/tidal/stream/991",
+        }),
+        /TIDAL больше недоступен/i,
+    );
+    assert.equal(metadataStore.reads, 0);
+    assert.equal(metadataStore.records.size, 0);
+    assert.equal(fetches, 0);
+});
+
 test("configured device-file storage retains new audio outside CacheStorage", async () => {
     const audioVault = new MemoryDeviceAudioVault();
     const deps = createDependencies({ audioVault });

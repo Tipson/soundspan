@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "../../utils/db";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
@@ -781,6 +783,10 @@ export const recommendationShadowEvaluation =
                 },
             }),
         loadDataQuality: async (since, until) => {
+            const liveCanonicalWhere: Prisma.CanonicalRecordingWhereInput = {
+                mergedIntoId: null,
+                NOT: { identitySource: "identity-merged" },
+            };
             const [
                 canonicalRecordingCount,
                 isrcCount,
@@ -791,21 +797,38 @@ export const recommendationShadowEvaluation =
                 viewedImpressionCount,
                 participatingAccounts,
             ] = await Promise.all([
-                prisma.canonicalRecording.count(),
                 prisma.canonicalRecording.count({
-                    where: { isrc: { not: null } },
+                    where: liveCanonicalWhere,
                 }),
                 prisma.canonicalRecording.count({
-                    where: { recordingMbid: { not: null } },
+                    where: {
+                        ...liveCanonicalWhere,
+                        isrc: { not: null },
+                    },
                 }),
                 prisma.canonicalRecording.count({
-                    where: { fingerprint: { not: null } },
+                    where: {
+                        ...liveCanonicalWhere,
+                        recordingMbid: { not: null },
+                    },
                 }),
                 prisma.canonicalRecording.count({
-                    where: { analysisStatus: "completed" },
+                    where: {
+                        ...liveCanonicalWhere,
+                        fingerprint: { not: null },
+                    },
                 }),
                 prisma.canonicalRecording.count({
-                    where: { embeddings: { some: {} } },
+                    where: {
+                        ...liveCanonicalWhere,
+                        analysisStatus: "completed",
+                    },
+                }),
+                prisma.canonicalRecording.count({
+                    where: {
+                        ...liveCanonicalWhere,
+                        embeddings: { some: {} },
+                    },
                 }),
                 prisma.recommendationExposure.count({
                     where: { viewedAt: { gte: since, lt: until } },

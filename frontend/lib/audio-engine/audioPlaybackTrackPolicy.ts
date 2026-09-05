@@ -16,10 +16,27 @@ import {
 export interface RuntimeProviderTrack {
     mediaSource?: CanonicalMediaSource;
     provider?: CanonicalMediaProviderIdentity;
-    streamSource?: "local" | "peer" | "tidal" | "youtube" | "youtube-direct";
+    streamSource?: CanonicalMediaSource;
     tidalTrackId?: number;
     youtubeVideoId?: string;
     youtubeAudioFormat?: "mp4" | "webm";
+}
+
+function normalizeRuntimeProvider(
+    track: RuntimeProviderTrack,
+): CanonicalMediaProviderIdentity {
+    return normalizeCanonicalMediaProviderIdentity({
+        mediaSource: track.provider?.source ?? track.mediaSource,
+        providerTrackId: track.provider?.providerTrackId,
+        tidalTrackId: track.provider?.tidalTrackId ?? track.tidalTrackId,
+        youtubeVideoId: track.provider?.youtubeVideoId ?? track.youtubeVideoId,
+        streamSource: track.streamSource,
+    });
+}
+
+/** Returns true for retained metadata from the removed TIDAL integration. */
+export function isRetiredProviderTrack(track: RuntimeProviderTrack): boolean {
+    return normalizeRuntimeProvider(track).source === "tidal";
 }
 
 /** Resolves the next music item eligible for gapless preload. */
@@ -35,7 +52,8 @@ export function getNextTrackInfo(
             | "peer"
             | "tidal"
             | "youtube"
-            | "youtube-direct";
+            | "youtube-direct"
+            | "audius";
         tidalTrackId?: number;
         youtubeVideoId?: string;
         youtubeAudioFormat?: "mp4" | "webm";
@@ -50,7 +68,7 @@ export function getNextTrackInfo(
     filePath?: string;
     mediaSource?: CanonicalMediaSource;
     provider?: CanonicalMediaProviderIdentity;
-    streamSource?: "local" | "peer" | "tidal" | "youtube" | "youtube-direct";
+    streamSource?: CanonicalMediaSource;
     tidalTrackId?: number;
     youtubeVideoId?: string;
     youtubeAudioFormat?: "mp4" | "webm";
@@ -87,14 +105,7 @@ export function getNextTrackInfo(
 export function resolveDirectTrackSourceType(
     track: RuntimeProviderTrack,
 ): AudioEngineSourceType {
-    const provider = normalizeCanonicalMediaProviderIdentity({
-        mediaSource: track.mediaSource,
-        providerTrackId: track.provider?.providerTrackId,
-        tidalTrackId: track.provider?.tidalTrackId ?? track.tidalTrackId,
-        youtubeVideoId: track.provider?.youtubeVideoId ?? track.youtubeVideoId,
-        streamSource: track.streamSource,
-    });
-    return toAudioEngineSourceType(provider.source);
+    return toAudioEngineSourceType(normalizeRuntimeProvider(track).source);
 }
 
 /** Classifies retryable transport and source-availability failures. */

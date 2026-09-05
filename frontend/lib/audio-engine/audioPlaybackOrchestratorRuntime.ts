@@ -6,9 +6,12 @@ import {
     PODCAST_DEBUG_STORAGE_KEY,
     readMigratingStorageItem,
 } from "@/lib/storage-migration";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
 
 const PLAYBACK_CLIENT_SIGNAL_EVENTS = new Set<string>([
     "player.engine_startup",
+    "player.audible_start",
+    "player.transition_gap",
     "player.rebuffer",
     "player.rebuffer_timeout",
     "player.rebuffer_recovered",
@@ -45,12 +48,23 @@ export function logPlaybackClientMetric(
     // playback at this moment — platform pins make the two legitimately
     // diverge, and the disagreements are themselves diagnostic.
     const activeEngine = audioEngine.getActiveEngineDescriptor();
+    let sessionId: string | undefined;
+    try {
+        sessionId = getRecommendationSessionId();
+    } catch {
+        // Telemetry must never interfere with playback in restricted storage
+        // contexts. The server accepts a missing session id as uncorrelated.
+    }
+    const correlatedFields = {
+        ...fields,
+        ...(sessionId ? { sessionId } : {}),
+    };
     sharedFrontendLogger.info("[Playback][ClientMetric]", {
         event,
         timestamp: new Date().toISOString(),
         engineMode: resolveStreamingEngineMode(),
         activeEngine,
-        ...fields,
+        ...correlatedFields,
     });
 
     // Temporary high-signal beaconing to backend for live stall diagnostics.
@@ -64,7 +78,7 @@ export function logPlaybackClientMetric(
             fields: {
                 engineMode: resolveStreamingEngineMode(),
                 activeEngine,
-                ...fields,
+                ...correlatedFields,
             },
         })
         .catch(() => undefined);

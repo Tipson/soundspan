@@ -186,6 +186,47 @@ test("Vibe recommendation failure exposes a touch-sized retry action", async () 
     container.remove();
 });
 
+test("Wave loading remains legible, announced, and single-line while playback is unavailable", async () => {
+    feedResult = {
+        data: undefined,
+        isLoading: true,
+        isError: false,
+    };
+    const { VibeProviderFallback } =
+        await import("../../components/vibe/VibeAvailability");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await React.act(async () => {
+        root.render(React.createElement(VibeProviderFallback));
+    });
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+        '[data-testid="wave-main-toggle"]',
+    );
+    assert.ok(toggle);
+    assert.equal(toggle.disabled, true);
+    assert.equal(toggle.getAttribute("aria-busy"), "true");
+    assert.match(toggle.className, /disabled:bg-white\/85/);
+    const visibleLabel = toggle.querySelector<HTMLElement>(
+        '[data-testid="wave-main-label"]',
+    );
+    const status = container.querySelector<HTMLElement>(
+        '[data-testid="wave-loading-status"][role="status"]',
+    );
+    assert.ok(visibleLabel);
+    assert.ok(status);
+    assert.equal(toggle.contains(status), false);
+    assert.match(visibleLabel.className, /whitespace-nowrap/);
+    assert.equal(visibleLabel.textContent?.trim(), "Настраиваем…");
+    assert.equal(status.textContent?.trim(), "Настраиваем мою волну");
+
+    await React.act(async () => root.unmount());
+    container.remove();
+});
+
 test("Vibe starts its ranked queue with shuffle explicitly disabled", async () => {
     feedResult = {
         data: {

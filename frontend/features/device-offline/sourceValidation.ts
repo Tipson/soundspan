@@ -5,7 +5,6 @@ const STREAM_SOURCE_PATHS = [
     /^\/api\/artists\/preview-stream\/[^/]+\/?$/,
     /^\/api\/ytmusic\/(?:stream|stream-public)\/[^/]+\/?$/,
     /^\/api\/youtube\/stream\/[^/]+\/?$/,
-    /^\/api\/tidal-streaming\/stream\/[^/]+\/?$/,
     /^\/api\/audiobooks\/[^/]+\/stream\/?$/,
     /^\/api\/podcasts\/[^/]+\/episodes\/[^/]+\/stream\/?$/,
 ];

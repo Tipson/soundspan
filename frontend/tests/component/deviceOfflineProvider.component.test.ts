@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
+import type { DeviceAudioVaultRef } from "../../features/device-offline/vault/types";
 
 GlobalRegistrator.register();
 (
@@ -525,6 +527,209 @@ test("a manual track click requests device-folder access before downloading", as
     container.remove();
 });
 
+test("retrying a reconciled device-file failure queues a manual replacement", async () => {
+    const brokenRecord: DeviceOfflineDownloadRecord = {
+        key: "broken-device-file",
+        ownerId: "user-1",
+        trackIdentity: "youtube:manual-track",
+        quality: "auto",
+        virtualUrl: "/__offline/audio/broken-device-file",
+        sourceUrl: "/api/ytmusic/stream-public/manual-track",
+        track: manualTrack,
+        status: "interrupted",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        foregroundLeaseId: null,
+        foregroundLeaseExpiresAt: null,
+        bytesReceived: 0,
+        totalBytes: 3_244,
+        contentType: "audio/wav",
+        persistenceGranted: true,
+        management: "manual",
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 2,
+        errorCode: "device_file_missing",
+        errorMessage: "The retained device file is missing.",
+        mediaRef: "opfs1:owner:missing.wav" as DeviceAudioVaultRef,
+    };
+    const { DeviceOfflineProvider, useDeviceOffline } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+
+    function Probe() {
+        const offline = useDeviceOffline();
+        return React.createElement(
+            "button",
+            { onClick: () => void offline.resume(brokenRecord) },
+            "retry",
+        );
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                DeviceOfflineProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const resumesBeforeRetry = queueCalls.resumes.length;
+    const reconcilesBeforeRetry = reconcileCalls;
+
+    await React.act(async () => {
+        (container.querySelector("button") as HTMLButtonElement).click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(queueCalls.enqueues.at(-1), {
+        ownerId: "user-1",
+        track: manualTrack,
+        quality: "auto",
+        sourceUrl: "/api/ytmusic/stream-public/manual-track",
+        management: "manual",
+        collectionId: "retry:device-download",
+        collectionLabel: "Manual track",
+    });
+    assert.equal(queueCalls.resumes.length, resumesBeforeRetry + 1);
+    assert.ok(reconcileCalls > reconcilesBeforeRetry);
+    assert.equal(vaultCalls.requests, 0);
+
+    await React.act(async () => root.unmount());
+    container.remove();
+});
+
+test("retired TIDAL records cannot retry or prepare playback through the provider", async (t) => {
+    const retiredTrack = {
+        ...manualTrack,
+        id: "tidal:991",
+        filePath: undefined,
+        source: undefined,
+        streamSource: "tidal" as const,
+        tidalTrackId: 991,
+        youtubeVideoId: undefined,
+    };
+    const baseRecord: DeviceOfflineDownloadRecord = {
+        key: "retired-ready",
+        ownerId: "user-1",
+        trackIdentity: "tidal:991",
+        quality: "auto",
+        virtualUrl: "/__offline/audio/retired-ready",
+        sourceUrl: "/api/tidal/stream/991",
+        track: retiredTrack,
+        status: "ready",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        foregroundLeaseId: null,
+        foregroundLeaseExpiresAt: null,
+        bytesReceived: 3_244,
+        totalBytes: 3_244,
+        contentType: "audio/wav",
+        persistenceGranted: true,
+        management: "manual",
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 2,
+        errorCode: null,
+        errorMessage: null,
+        mediaRef: "opfs1:owner:retired.wav" as DeviceAudioVaultRef,
+    };
+    let captured:
+        | {
+              resume(record: DeviceOfflineDownloadRecord): Promise<void>;
+              preparePlayback(
+                  record: DeviceOfflineDownloadRecord,
+              ): Promise<void>;
+          }
+        | undefined;
+    const { DeviceOfflineProvider, useDeviceOffline } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+
+    function Probe() {
+        const offline = useDeviceOffline();
+        captured = offline;
+        return null;
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                DeviceOfflineProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.ok(captured);
+    const offline = captured;
+    const enqueuesBefore = queueCalls.enqueues.length;
+    const storageRequestsBefore = vaultCalls.requests;
+
+    await assert.rejects(
+        offline.preparePlayback(baseRecord),
+        /TIDAL больше недоступен/i,
+    );
+    await assert.rejects(
+        offline.resume({
+            ...baseRecord,
+            key: "retired-error",
+            status: "error",
+            errorMessage: "Historical provider failure",
+        }),
+        /TIDAL больше недоступен/i,
+    );
+    assert.equal(queueCalls.enqueues.length, enqueuesBefore);
+    assert.equal(vaultCalls.requests, storageRequestsBefore);
+
+    const localLegacyRecord: DeviceOfflineDownloadRecord = {
+        ...baseRecord,
+        key: "local-legacy-ready",
+        trackIdentity: "tidal:992",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+        track: {
+            ...manualTrack,
+            id: "local-legacy",
+            filePath: "/music/local-legacy.flac",
+            source: "local",
+            streamSource: "tidal",
+            tidalTrackId: 992,
+            youtubeVideoId: undefined,
+        },
+        mediaRef: "opfs1:owner:local-legacy.wav" as DeviceAudioVaultRef,
+    };
+    await React.act(async () => {
+        await offline.preparePlayback(localLegacyRecord);
+        await offline.resume({
+            ...localLegacyRecord,
+            key: "local-legacy-error",
+            status: "error",
+            errorMessage: "Local copy needs repair",
+        });
+    });
+    assert.equal(queueCalls.enqueues.length, enqueuesBefore + 1);
+    assert.equal(
+        (queueCalls.enqueues.at(-1)?.track as { id?: string }).id,
+        "local-legacy",
+    );
+});
+
 test("auto-liked never opens a picker or starts before device storage is ready", async () => {
     vaultAccessState = {
         status: "setup-required",
@@ -764,6 +969,99 @@ test("track lookups keep the latest attempt and latest ready copy indexed separa
         offline.readyRecordForTrack(manualTrack);
     }
     assert.equal(identityReads, 0, "lookups reuse the memoized identity index");
+});
+
+test("track lookups expose only owner-scoped provenance-verified legacy copies", async (t) => {
+    const localTrack = {
+        id: "local-legacy",
+        title: "Local legacy",
+        duration: 180,
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        source: "local" as const,
+        filePath: "/music/local.flac",
+    };
+    const record = {
+        key: "legacy-owner-copy",
+        ownerId: "user-1",
+        trackIdentity: "youtube:stale-video",
+        quality: "auto",
+        virtualUrl: "/__offline/audio/legacy-owner-copy",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+        track: {
+            ...localTrack,
+            streamSource: "youtube" as const,
+            youtubeVideoId: "stale-video",
+        },
+        status: "ready" as const,
+        transferMode: "foreground" as const,
+        backgroundFetchId: null,
+        bytesReceived: 1024,
+        totalBytes: 1024,
+        contentType: "audio/webm",
+        persistenceGranted: true,
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        errorCode: null,
+        errorMessage: null,
+    };
+    storedRecords = [
+        record,
+        {
+            ...record,
+            key: "other-owner-copy",
+            ownerId: "user-2",
+            updatedAt: 2,
+        },
+    ];
+    const { DeviceOfflineProvider, useDeviceOffline } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+    let context: ReturnType<typeof useDeviceOffline> | null = null;
+
+    function Probe() {
+        context = useDeviceOffline();
+        return React.createElement("span", null, context.isHydrated.toString());
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                DeviceOfflineProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const offline = context as ReturnType<typeof useDeviceOffline> | null;
+    assert.ok(offline);
+    assert.equal(offline.recordForTrack(localTrack)?.key, "legacy-owner-copy");
+    assert.equal(
+        offline.readyRecordForTrack(localTrack)?.key,
+        "legacy-owner-copy",
+    );
+    assert.equal(
+        offline.readyRecordForTrack({
+            ...localTrack,
+            id: "tidal:991",
+            filePath: undefined,
+            source: "tidal",
+            streamSource: "tidal",
+            tidalTrackId: 991,
+        }),
+        null,
+    );
 });
 
 test("a storage notification during initial hydration cannot expose an unverified ready record", async () => {

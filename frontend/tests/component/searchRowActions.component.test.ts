@@ -15,14 +15,11 @@ GlobalRegistrator.register();
 const state = {
     played: [] as Array<{ tracks: unknown[]; index: number }>,
     routed: [] as string[],
-    tidalAvailable: true,
-    tidalMatches: [] as Array<{
-        id: number;
-        title: string;
-        artist: string;
-        duration: number;
+    ytAvailable: true,
+    ytMatches: [] as Array<{
+        videoId: string;
+        duration?: number;
     } | null>,
-    tidalMatchCalls: 0,
     ytMatchCalls: 0,
 };
 
@@ -72,25 +69,15 @@ mock.module("@/lib/api", {
         api: {
             getCoverArtUrl: (url: string) => url,
             addTrackToPlaylist: async () => undefined,
-            getTidalStreamingStatus: async () => ({
-                enabled: state.tidalAvailable,
-                available: state.tidalAvailable,
-                authenticated: state.tidalAvailable,
-                credentialsConfigured: state.tidalAvailable,
-            }),
             getYtMusicStatus: async () => ({
-                enabled: false,
-                available: false,
-                authenticated: false,
-                credentialsConfigured: false,
+                enabled: state.ytAvailable,
+                available: state.ytAvailable,
+                authenticated: state.ytAvailable,
+                credentialsConfigured: state.ytAvailable,
             }),
-            matchTidalBatch: async () => {
-                state.tidalMatchCalls += 1;
-                return { matches: state.tidalMatches };
-            },
             matchYtMusicBatch: async () => {
                 state.ytMatchCalls += 1;
-                return { matches: [] };
+                return { matches: state.ytMatches };
             },
         },
     },
@@ -121,11 +108,6 @@ mock.module("next/navigation", {
                 state.routed.push(path);
             },
         }),
-    },
-});
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => React.createElement("span", null, "TIDAL"),
     },
 });
 mock.module("@/components/ui/YouTubeBadge", {
@@ -179,9 +161,8 @@ after(() => {
 beforeEach(() => {
     state.played.length = 0;
     state.routed.length = 0;
-    state.tidalAvailable = true;
-    state.tidalMatches = [];
-    state.tidalMatchCalls = 0;
+    state.ytAvailable = true;
+    state.ytMatches = [];
     state.ytMatchCalls = 0;
 });
 
@@ -231,7 +212,6 @@ test("direct YouTube Music discover rows play with their exact provider id witho
     );
 
     assert.match(container.innerHTML, /YT/);
-    assert.equal(state.tidalMatchCalls, 0);
     assert.equal(state.ytMatchCalls, 0);
 
     const row = container.querySelector('[role="button"]');
@@ -255,11 +235,9 @@ test("direct YouTube Music discover rows play with their exact provider id witho
 });
 
 test("metadata-only rows keep their original match key beside direct provider rows", async () => {
-    state.tidalMatches = [
+    state.ytMatches = [
         {
-            id: 84,
-            title: "Metadata Song",
-            artist: "Metadata Artist",
+            videoId: "metadata-1",
             duration: 198,
         },
     ];
@@ -285,7 +263,7 @@ test("metadata-only rows keep their original match key beside direct provider ro
         }),
     );
 
-    assert.equal(state.tidalMatchCalls, 1);
+    assert.equal(state.ytMatchCalls, 1);
     const rows = container.querySelectorAll('[role="button"]');
     assert.equal(rows.length, 2);
     await React.act(async () => {
@@ -299,18 +277,18 @@ test("metadata-only rows keep their original match key beside direct provider ro
     const played = state.played[0].tracks[1] as {
         id: string;
         streamSource: string;
-        tidalTrackId: number;
+        youtubeVideoId: string;
         title: string;
     };
-    assert.equal(played.id, "tidal:84");
-    assert.equal(played.streamSource, "tidal");
-    assert.equal(played.tidalTrackId, 84);
+    assert.equal(played.id, "yt:metadata-1");
+    assert.equal(played.streamSource, "youtube");
+    assert.equal(played.youtubeVideoId, "metadata-1");
     assert.equal(played.title, "Metadata Song");
     unmount();
 });
 
 test("discover row click snapshots playable visible rows in visual order", async () => {
-    state.tidalMatches = [null];
+    state.ytMatches = [null];
     const { DiscoverTracksList } =
         await import("../../features/search/components/DiscoverTracksList");
     const { container, unmount } = await render(
@@ -369,11 +347,9 @@ test("discover row click snapshots playable visible rows in visual order", async
 });
 
 test("matched discover rows play in place with a provider badge", async () => {
-    state.tidalMatches = [
+    state.ytMatches = [
         {
-            id: 42,
-            title: "Every Light In The House",
-            artist: "Trace Adkins",
+            videoId: "house-light",
             duration: 221,
         },
     ];
@@ -391,7 +367,8 @@ test("matched discover rows play in place with a provider badge", async () => {
         }),
     );
 
-    assert.match(container.innerHTML, /TIDAL/);
+    assert.match(container.innerHTML, /YT/);
+    assert.doesNotMatch(container.innerHTML, /TIDAL/);
     const row = container.querySelector('[role="button"]');
     assert.ok(row, "row not found");
     await React.act(async () => {
@@ -402,17 +379,17 @@ test("matched discover rows play in place with a provider badge", async () => {
     assert.equal(state.played.length, 1);
     const played = state.played[0].tracks[0] as {
         streamSource: string;
-        tidalTrackId: number;
+        youtubeVideoId: string;
         title: string;
     };
-    assert.equal(played.streamSource, "tidal");
-    assert.equal(played.tidalTrackId, 42);
+    assert.equal(played.streamSource, "youtube");
+    assert.equal(played.youtubeVideoId, "house-light");
     assert.equal(played.title, "Every Light In The House");
     unmount();
 });
 
 test("unmatched discover rows navigate to the artist page", async () => {
-    state.tidalMatches = [null];
+    state.ytMatches = [null];
     const { DiscoverTracksList } =
         await import("../../features/search/components/DiscoverTracksList");
     const { container, unmount } = await render(
@@ -440,7 +417,7 @@ test("unmatched discover rows navigate to the artist page", async () => {
 });
 
 test("discover rows always carry an overflow menu trigger", async () => {
-    state.tidalMatches = [null];
+    state.ytMatches = [null];
     const { DiscoverTracksList } =
         await import("../../features/search/components/DiscoverTracksList");
     const { container, unmount } = await render(

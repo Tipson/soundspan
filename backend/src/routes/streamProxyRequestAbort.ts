@@ -33,6 +33,10 @@ export function createStreamProxyRequestAbort(
     if (typeof res.once === "function") {
         res.once("close", handleResponseClose);
     }
+    // Settings/auth lookups can finish after the browser has already left.
+    if (req.aborted || (res.destroyed && !res.writableEnded)) {
+        abortPendingProvider();
+    }
 
     return {
         signal: controller.signal,
@@ -56,6 +60,7 @@ export async function acquireAbortableStreamProxy<T>(
 ): Promise<T | null> {
     const requestAbort = createStreamProxyRequestAbort(req, res);
     try {
+        if (requestAbort.wasClientAborted()) return null;
         const proxy = await acquire(requestAbort.signal);
         return requestAbort.wasClientAborted() ? null : proxy;
     } catch (error) {

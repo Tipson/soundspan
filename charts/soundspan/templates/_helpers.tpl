@@ -154,17 +154,6 @@ Redis connection URL
 {{- end }}
 
 {{/*
-TIDAL sidecar URL
-*/}}
-{{- define "soundspan.tidalSidecarUrl" -}}
-{{- if .Values.tidalSidecar.enabled }}
-{{- printf "http://%s-tidal:%d" (include "soundspan.fullname" .) (.Values.tidalSidecar.port | int) }}
-{{- else }}
-{{- printf "http://127.0.0.1:8585" }}
-{{- end }}
-{{- end }}
-
-{{/*
 YouTube Music streamer URL
 */}}
 {{- define "soundspan.ytmusicStreamerUrl" -}}

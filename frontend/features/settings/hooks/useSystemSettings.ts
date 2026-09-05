@@ -23,13 +23,6 @@ const defaultSystemSettings: SystemSettings = {
     audiobookshelfApiKey: "",
     soulseekUsername: "",
     soulseekPassword: "",
-    tidalEnabled: false,
-    tidalConnected: false,
-    tidalUserId: "",
-    tidalCountryCode: "US",
-    tidalQuality: "HIGH",
-    tidalFileTemplate:
-        "{album.artist}/{album.title}/{item.number:02d}. {item.title}",
     musicPath: "/music",
     downloadPath: "/downloads",
     transcodeCacheMaxGb: 10,
@@ -42,7 +35,7 @@ const defaultSystemSettings: SystemSettings = {
     // Download preferences
     downloadSource: "soulseek",
     federationInstanceName: null,
-    playbackSourceOrder: "library,peers,tidal,ytmusic",
+    playbackSourceOrder: "library,peers,ytmusic",
     primaryFailureFallback: "none",
     // YouTube Music streaming
     ytMusicEnabled: false,
@@ -217,10 +210,6 @@ export function useSystemSettings() {
             ) {
                 changed.push("Audiobookshelf");
             }
-            if (originalSettings.tidalEnabled !== settingsToSave.tidalEnabled) {
-                changed.push("TIDAL");
-            }
-
             setChangedServices(changed);
             setOriginalSettings(settingsToSave);
 
@@ -283,9 +272,6 @@ export function useSystemSettings() {
                         systemSettings.soulseekUsername,
                         systemSettings.soulseekPassword,
                     );
-                    break;
-                case "tidal":
-                    result = await api.testTidal();
                     break;
                 default:
                     throw new Error(`Unknown service: ${service}`);

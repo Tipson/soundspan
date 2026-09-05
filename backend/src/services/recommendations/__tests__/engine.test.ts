@@ -148,7 +148,9 @@ describe("unified recommendation engine", () => {
             const engine = new RecommendationEngine(deps);
 
             await engine.recommend({ ...request, sessionId });
-            algorithms.push(deps.recordGeneration.mock.calls[0]?.[0]?.algorithm);
+            algorithms.push(
+                deps.recordGeneration.mock.calls[0]?.[0]?.algorithm,
+            );
             expect(deps.recordGeneration).toHaveBeenNthCalledWith(
                 1,
                 expect.objectContaining({
@@ -159,11 +161,7 @@ describe("unified recommendation engine", () => {
             );
         }
 
-        expect(algorithms).toEqual([
-            "baseline-v1",
-            "hybrid-v2",
-            "hybrid-v2",
-        ]);
+        expect(algorithms).toEqual(["baseline-v1", "hybrid-v2", "hybrid-v2"]);
     });
 
     it("keeps playable fallback candidates when an optional adapter degrades", async () => {

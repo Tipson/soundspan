@@ -438,11 +438,10 @@ for key in INTERNAL_API_SECRET POSTGRES_PASSWORD; do
   fi
 done
 
-echo "[CHECK] render AIO secret rotations with optional HTTP sidecars"
+echo "[CHECK] render AIO secret rotations with optional HTTP sidecar"
 helm template "$RELEASE_NAME" "$CHART_PATH" \
   --set secrets.internalApiSecret=rotated-internal-secret \
   --set secrets.postgresPassword=rotated-postgres-password \
-  --set tidalSidecar.enabled=true \
   --set ytmusicStreamer.enabled=true \
   >"$tmp_aio_rotated_secrets"
 
@@ -454,7 +453,7 @@ for expected_secret in \
     exit 1
   fi
 done
-for deployment in "$RELEASE_NAME" "${RELEASE_NAME}-tidal" "${RELEASE_NAME}-ytmusic"; do
+for deployment in "$RELEASE_NAME" "${RELEASE_NAME}-ytmusic"; do
   if ! DEPLOYMENT_NAME="$deployment" SECRET_NAME="$RELEASE_NAME" perl -0777 -ne '
       for my $doc (split /^---/m, $_) {
           next unless $doc =~ /kind:\s*Deployment/;
@@ -492,9 +491,8 @@ if ! perl -0777 -ne '
   exit 1
 fi
 
-echo "[CHECK] render AIO mode with HTTP sidecars for Service selector isolation"
+echo "[CHECK] render AIO mode with HTTP sidecar for Service selector isolation"
 helm template "$RELEASE_NAME" "$CHART_PATH" \
-  --set tidalSidecar.enabled=true \
   --set ytmusicStreamer.enabled=true \
   >"$tmp_aio_sidecars"
 assert_service_selectors_isolated "AIO with HTTP sidecars" "$tmp_aio_sidecars"
@@ -528,7 +526,6 @@ echo "[CHECK] reserved selector labels override global labels in individual mode
 helm template "$RELEASE_NAME" "$CHART_PATH" \
   --set deploymentMode=individual \
   --set backendWorker.enabled=true \
-  --set tidalSidecar.enabled=true \
   --set ytmusicStreamer.enabled=true \
   --set audioAnalyzer.enabled=true \
   --set vibeProviderDclap.enabled=true \
@@ -582,7 +579,6 @@ digest_aio="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 digest_backend="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 digest_worker="sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 digest_frontend="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-digest_tidal="sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 digest_ytmusic="sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 digest_analyzer="sha256:1111111111111111111111111111111111111111111111111111111111111111"
 digest_dclap="sha256:3333333333333333333333333333333333333333333333333333333333333333"
@@ -601,14 +597,12 @@ echo "[CHECK] render every individual application image by digest"
 helm template "$RELEASE_NAME" "$CHART_PATH" \
   --set deploymentMode=individual \
   --set backendWorker.enabled=true \
-  --set tidalSidecar.enabled=true \
   --set ytmusicStreamer.enabled=true \
   --set audioAnalyzer.enabled=true \
   --set vibeProviderDclap.enabled=true \
   --set backend.image.digest="$digest_backend" \
   --set backendWorker.image.digest="$digest_worker" \
   --set frontend.image.digest="$digest_frontend" \
-  --set tidalSidecar.image.digest="$digest_tidal" \
   --set ytmusicStreamer.image.digest="$digest_ytmusic" \
   --set audioAnalyzer.image.digest="$digest_analyzer" \
   --set vibeProviderDclap.image.digest="$digest_dclap" \
@@ -617,7 +611,6 @@ helm template "$RELEASE_NAME" "$CHART_PATH" \
 assert_deployment_image "backend Deployment" "$tmp_individual_digests" "${RELEASE_NAME}-backend" "ghcr.io/soundspan/soundspan-backend@${digest_backend}"
 assert_deployment_image "backend-worker Deployment" "$tmp_individual_digests" "${RELEASE_NAME}-backend-worker" "ghcr.io/soundspan/soundspan-backend-worker@${digest_worker}"
 assert_deployment_image "frontend Deployment" "$tmp_individual_digests" "${RELEASE_NAME}-frontend" "ghcr.io/soundspan/soundspan-frontend@${digest_frontend}"
-assert_deployment_image "TIDAL Deployment" "$tmp_individual_digests" "${RELEASE_NAME}-tidal" "ghcr.io/soundspan/soundspan-tidal-streamer@${digest_tidal}"
 assert_deployment_image "YT Music Deployment" "$tmp_individual_digests" "${RELEASE_NAME}-ytmusic" "ghcr.io/soundspan/soundspan-ytmusic-streamer@${digest_ytmusic}"
 assert_deployment_image "audio analyzer Deployment" "$tmp_individual_digests" "${RELEASE_NAME}-audio-analyzer" "ghcr.io/soundspan/soundspan-audio-analyzer@${digest_analyzer}"
 assert_deployment_image "DCLAP provider Deployment" "$tmp_individual_digests" "${RELEASE_NAME}-vibe-provider-dclap" "ghcr.io/soundspan/soundspan-vibe-provider-dclap@${digest_dclap}"
@@ -656,20 +649,19 @@ if ! perl -0777 -ne 'exit((/configMapRef:\s+name:\s+soundspan-global-env/s) ? 0 
   exit 1
 fi
 
-# Sidecar auth (F31): the default renders never enable the HTTP sidecars, so
-# without this check the tidal/ytmusic templates are never exercised at all.
-# Both must consume INTERNAL_API_SECRET from the chart-managed Secret
+# Sidecar auth (F31): the default renders never enable the HTTP sidecar, so
+# without this check the ytmusic template is never exercised at all.
+# It must consume INTERNAL_API_SECRET from the chart-managed Secret
 # (soundspan.secretName -> fullname, i.e. the release name by default).
-echo "[CHECK] render HTTP sidecars with INTERNAL_API_SECRET secretKeyRef"
+echo "[CHECK] render HTTP sidecar with INTERNAL_API_SECRET secretKeyRef"
 helm template "$RELEASE_NAME" "$CHART_PATH" \
   --set deploymentMode=individual \
-  --set tidalSidecar.enabled=true \
   --set ytmusicStreamer.enabled=true \
   --set-string ytmusicStreamer.env.YTMUSIC_LANGUAGE=ru \
   --set-string ytmusicStreamer.env.YTMUSIC_LOCATION=RU \
   >"$tmp_sidecars"
 
-for sidecar in tidal ytmusic; do
+for sidecar in ytmusic; do
   if ! line_match '^  name: '"$RELEASE_NAME"'-'"$sidecar"'$' "$tmp_sidecars"; then
     echo "[ERROR] sidecar render missing ${sidecar} deployment/service resources" >&2
     exit 1

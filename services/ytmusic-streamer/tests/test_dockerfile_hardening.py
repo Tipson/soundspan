@@ -2,6 +2,7 @@
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -46,18 +47,30 @@ def test_lock_constraint_sed_preserves_every_pinned_distribution() -> None:
         dockerfile,
     )
     assert sed_match is not None
+    sed_program = sed_match.group(1)
+    assert sed_program == r"s/^\([A-Za-z0-9._-]\+==[^ \\]\+\).*$/\1/p"
 
-    derived = subprocess.run(  # noqa: S603 -- fixed executable and repo-owned sed program
-        ["/usr/bin/sed", "-n", sed_match.group(1), str(REQUIREMENTS_LOCK)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    derived_pins = set(derived.stdout.splitlines())
     lock_lines = REQUIREMENTS_LOCK.read_text(encoding="utf-8").splitlines()
     pinned_distributions = {
         line.split()[0] for line in lock_lines if re.match(r"^[A-Za-z0-9._-]+==", line)
     }
+    sed_binary = shutil.which("sed")
+    if sed_binary is not None:
+        derived = subprocess.run(  # noqa: S603 -- resolved executable and repo-owned sed program
+            [sed_binary, "-n", sed_program, str(REQUIREMENTS_LOCK)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        derived_pins = set(derived.stdout.splitlines())
+    else:
+        # Windows test hosts need not ship the Linux image's sed executable;
+        # exercise the asserted program's equivalent pinned-line selection.
+        derived_pins = {
+            match.group(1)
+            for line in lock_lines
+            if (match := re.match(r"^([A-Za-z0-9._-]+==[^ \\]+)", line))
+        }
 
     assert pinned_distributions
     assert derived_pins == pinned_distributions

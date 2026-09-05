@@ -2,12 +2,15 @@ const mockMappingFindFirst = jest.fn();
 const mockMappingCreate = jest.fn();
 const mockMappingUpdate = jest.fn();
 const mockCanonicalFindFirst = jest.fn();
+const mockCanonicalFindUnique = jest.fn();
 const mockCanonicalUpsert = jest.fn();
 const mockYoutubeUpsert = jest.fn();
 const mockTidalUpsert = jest.fn();
+const mockTransaction = jest.fn();
 
 jest.mock("../../../utils/db", () => ({
     prisma: {
+        $transaction: mockTransaction,
         trackMapping: {
             findFirst: mockMappingFindFirst,
             create: mockMappingCreate,
@@ -15,6 +18,7 @@ jest.mock("../../../utils/db", () => ({
         },
         canonicalRecording: {
             findFirst: mockCanonicalFindFirst,
+            findUnique: mockCanonicalFindUnique,
             upsert: mockCanonicalUpsert,
         },
         trackYtMusic: { upsert: mockYoutubeUpsert },
@@ -59,12 +63,35 @@ describe("default canonical identity persistence", () => {
         mockMappingCreate.mockResolvedValue({ id: "mapping-new" });
         mockMappingUpdate.mockResolvedValue({ id: "mapping-existing" });
         mockCanonicalFindFirst.mockReset();
+        mockCanonicalFindUnique.mockImplementation(
+            async ({ where }: { where: { id: string } }) => ({
+                id: where.id,
+                canonicalKey: "meta:artist:song:183",
+                mergedIntoId: null,
+                identitySource: null,
+            }),
+        );
         mockCanonicalUpsert.mockResolvedValue({
             id: "canonical-new",
             canonicalKey: "meta:artist:song:183",
         });
         mockYoutubeUpsert.mockResolvedValue({ id: "youtube-row" });
         mockTidalUpsert.mockResolvedValue({ id: "tidal-row" });
+        mockTransaction.mockImplementation(
+            async (load: (database: unknown) => Promise<unknown>) =>
+                load({
+                    trackMapping: {
+                        findFirst: mockMappingFindFirst,
+                        create: mockMappingCreate,
+                        update: mockMappingUpdate,
+                    },
+                    canonicalRecording: {
+                        findUnique: mockCanonicalFindUnique,
+                    },
+                    trackYtMusic: { upsert: mockYoutubeUpsert },
+                    trackTidal: { upsert: mockTidalUpsert },
+                }),
+        );
     });
 
     it.each([

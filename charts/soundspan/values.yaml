@@ -403,37 +403,8 @@ redis:
   envFrom: []
 
 # =============================================================================
-# STREAMING SIDECARS (optional, both modes)
+# STREAMING SIDECAR (optional, both modes)
 # =============================================================================
-
-tidalSidecar:
-  enabled: false
-  image:
-    repository: ghcr.io/soundspan/soundspan-tidal-streamer
-    tag: 2.6.1
-    # -- Immutable sha256 digest. When set, takes precedence over tag.
-    digest: ""
-    pullPolicy: Always
-  port: 8585
-  resources:
-    requests:
-      memory: 128Mi
-    limits:
-      memory: 512Mi
-  persistence:
-    enabled: true
-    size: 1Gi
-    storageClass: ""
-    accessMode: ReadWriteOnce
-    existingClaim: ""
-  env:
-    TIDAL_TRACK_DELAY: "3"
-  # -- Additional environment variable sources for TIDAL sidecar container.
-  # Example:
-  # envFrom:
-  #   - secretRef:
-  #       name: soundspan-tidal-extra-env
-  envFrom: []
 
 ytmusicStreamer:
   enabled: false
@@ -655,7 +626,7 @@ music:
     size: 100Gi
     storageClass: ""
     # -- RWX required if multiple pods need read/write access (individual mode
-    #    with tidal-streamer). Use RWO if only one pod accesses it.
+  #    with another media writer). Use RWO if only one pod accesses it.
     accessMode: ReadWriteMany
     # -- Name of a pre-existing PVC to mount. When set, no new PVC is created.
     existingClaim: ""
@@ -781,13 +752,12 @@ config:
   # -- Federation tombstone retention in days. Minimum 3 preserves the stale
   #    cursor safety margin before a consumer must perform a full resync.
   federationTombstoneRetentionDays: 90
-  # -- Retention window in days for stale provider track rows (TIDAL/YouTube
+  # -- Retention window in days for stale provider track rows (YouTube
   #    Music) before garbage collection. Range 1 through 3650.
   providerTrackRetentionDays: 30
   # -- Consumer federation catalog sync interval in minutes. Minimum 1.
   federationSyncIntervalMinutes: 15
-  # -- Coarse feature flags. Application feature flags default ON; federation
-  #    defaults OFF.
+  # -- Coarse feature flags. Analysis defaults ON; federation and Audius OFF.
   #    Rendered as AUDIO_ANALYSIS_ENABLED / DISCOVERY_ENABLED /
   #    AUTO_PLAYLISTS_ENABLED / FEATURE_REQUESTS / FEDERATION_ENABLED on the
   #    backend, backend-worker, and AIO workloads.
@@ -804,6 +774,10 @@ config:
     autoPlaylists: true
     # -- Music request API and request-fulfillment reconciliation.
     requests: true
+    # -- Independent Audius backend API. Null leaves FEATURE_AUDIUS unset,
+    #    preserving the application default false and envFrom overrides.
+    #    No automatic fallback or frontend player integration.
+    audius: null
     # -- Scoped peer credentials and read-only host federation API.
     federation: false
   # -- Hybrid recommendation and bounded remote-analysis controls. Null leaves

@@ -13,6 +13,10 @@ import type {
     RecommendationSurface,
     ScoredRecommendation,
 } from "./types";
+import {
+    buildRecommendationAlbumKey,
+    normalizeRecommendationArtistKey,
+} from "./identityKeys";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1_000;
 const exposureLogger = logger.child("RecommendationExposureStore");
@@ -22,6 +26,7 @@ interface ExposureCreateInput {
     canonicalRecordingId: string | null;
     canonicalKey: string;
     artistKey: string;
+    albumKey: string | null;
     provider: string;
     providerTrackId: string;
     source: string;
@@ -145,14 +150,6 @@ function providerIdentity(recommendation: ScoredRecommendation): {
     return null;
 }
 
-function normalizedArtistKey(value: string): string {
-    return value
-        .normalize("NFKC")
-        .trim()
-        .replace(/\s+/g, " ")
-        .toLocaleLowerCase("en-US");
-}
-
 function isRetriableExposureWriteConflict(error: unknown): boolean {
     if (typeof error !== "object" || error === null) return false;
     const record = error as Record<string, unknown>;
@@ -208,8 +205,12 @@ export class RecommendationExposureStore {
                         canonicalRecordingId:
                             recommendation.track.canonicalRecordingId ?? null,
                         canonicalKey: recommendation.track.canonicalKey,
-                        artistKey: normalizedArtistKey(
+                        artistKey: normalizeRecommendationArtistKey(
                             recommendation.track.artist.name,
+                        ),
+                        albumKey: buildRecommendationAlbumKey(
+                            recommendation.track.artist.name,
+                            recommendation.track.album.title,
                         ),
                         ...identity,
                         source:
@@ -381,11 +382,18 @@ export const recommendationExposureStore = new RecommendationExposureStore({
                     generation: { served: true },
                 },
                 orderBy: { viewedAt: "desc" },
-                select: { canonicalKey: true, viewedAt: true },
+                select: {
+                    canonicalKey: true,
+                    artistKey: true,
+                    albumKey: true,
+                    viewedAt: true,
+                },
             })
             .then((rows) =>
                 rows.map((row) => ({
                     canonicalKey: row.canonicalKey,
+                    artistKey: row.artistKey,
+                    albumKey: row.albumKey,
                     exposedAt: row.viewedAt!,
                 })),
             ),

@@ -107,7 +107,7 @@ describe("listenTogetherResolution", () => {
         });
     });
 
-    it("ranks an offline peer below an available TIDAL mapping", async () => {
+    it("ignores retired TIDAL mappings and falls back from an offline peer to YouTube", async () => {
         const profile = {
             userId: "user-1",
             hasLocal: true as const,
@@ -140,9 +140,9 @@ describe("listenTogetherResolution", () => {
 
         expect(resolved).toEqual({
             available: true,
-            source: "tidal",
-            tidalTrackId: 123,
-            trackTidalId: "tt-1",
+            source: "youtube",
+            youtubeVideoId: "vid-1",
+            trackYtMusicId: "yt-1",
         });
     });
 
@@ -184,7 +184,7 @@ describe("listenTogetherResolution", () => {
         });
     });
 
-    it("honors the configured source order for mapped peer candidates", async () => {
+    it("ignores retired TIDAL entries in a legacy source order", async () => {
         const profile = {
             userId: "user-1",
             hasLocal: true as const,
@@ -218,9 +218,8 @@ describe("listenTogetherResolution", () => {
 
         expect(resolved).toEqual({
             available: true,
-            source: "tidal",
-            tidalTrackId: 123,
-            trackTidalId: "tt-1",
+            source: "local",
+            trackId: "peer-track-1",
         });
     });
 
@@ -255,7 +254,7 @@ describe("listenTogetherResolution", () => {
         });
     });
 
-    it("marks duration mismatches unavailable", async () => {
+    it("treats a TIDAL-only mapping as unavailable after provider retirement", async () => {
         const profile = {
             userId: "user-1",
             hasLocal: true as const,
@@ -282,7 +281,7 @@ describe("listenTogetherResolution", () => {
         );
         expect(resolved).toEqual({
             available: false,
-            reason: "duration-mismatch",
+            reason: "no-provider",
         });
     });
 
@@ -304,7 +303,7 @@ describe("listenTogetherResolution", () => {
         });
     });
 
-    it("falls back to youtube via cross-provider mapping when tidal unavailable", async () => {
+    it("does not rematch a retired direct TIDAL reference to YouTube", async () => {
         const profile = {
             userId: "user-1",
             hasLocal: true as const,
@@ -312,34 +311,15 @@ describe("listenTogetherResolution", () => {
             hasYtMusic: true,
         };
 
-        mockPrisma.trackMapping.findFirst.mockResolvedValueOnce({
-            confidence: 0.9,
-            trackYtMusic: {
-                id: "yt-cross",
-                videoId: "cross-vid",
-                duration: 182,
-            },
-        });
-
         const resolved = await resolveTrackForUser(
             queueItem({ trackTidalId: "tt-direct", tidalTrackId: 444 }),
             profile,
         );
         expect(resolved).toEqual({
-            available: true,
-            source: "youtube",
-            youtubeVideoId: "cross-vid",
-            trackYtMusicId: "yt-cross",
+            available: false,
+            reason: "no-provider",
         });
-        expect(mockPrisma.trackMapping.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({
-                    stale: false,
-                    trackTidalId: "tt-direct",
-                    trackYtMusicId: { not: null },
-                }),
-            }),
-        );
+        expect(mockPrisma.trackMapping.findFirst).not.toHaveBeenCalled();
     });
 
     it("returns no-provider for direct tidal refs when no cross-provider match exists", async () => {
@@ -362,22 +342,13 @@ describe("listenTogetherResolution", () => {
         });
     });
 
-    it("falls back to tidal via cross-provider mapping when youtube unavailable", async () => {
+    it("does not rematch a YouTube reference to retired TIDAL", async () => {
         const profile = {
             userId: "user-1",
             hasLocal: true as const,
             hasTidal: true,
             hasYtMusic: false,
         };
-
-        mockPrisma.trackMapping.findFirst.mockResolvedValueOnce({
-            confidence: 0.88,
-            trackTidal: {
-                id: "tt-cross",
-                tidalId: 999,
-                duration: 181,
-            },
-        });
 
         const resolved = await resolveTrackForUser(
             queueItem({
@@ -387,20 +358,10 @@ describe("listenTogetherResolution", () => {
             profile,
         );
         expect(resolved).toEqual({
-            available: true,
-            source: "tidal",
-            tidalTrackId: 999,
-            trackTidalId: "tt-cross",
+            available: false,
+            reason: "no-provider",
         });
-        expect(mockPrisma.trackMapping.findFirst).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({
-                    stale: false,
-                    trackYtMusicId: "yt-direct",
-                    trackTidalId: { not: null },
-                }),
-            }),
-        );
+        expect(mockPrisma.trackMapping.findFirst).not.toHaveBeenCalled();
     });
 
     it("marks youtube as available even when user oauth token is absent", async () => {
@@ -413,8 +374,9 @@ describe("listenTogetherResolution", () => {
         expect(profile).toEqual({
             userId: "user-abc",
             hasLocal: true,
-            hasTidal: true,
+            hasTidal: false,
             hasYtMusic: true,
+            playbackSourceOrder: undefined,
         });
     });
 
@@ -430,8 +392,9 @@ describe("listenTogetherResolution", () => {
         expect(profile).toEqual({
             userId: "user-disabled",
             hasLocal: true,
-            hasTidal: true,
+            hasTidal: false,
             hasYtMusic: false,
+            playbackSourceOrder: undefined,
         });
     });
 

@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import os
+import stat
 from pathlib import Path
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
+
+
+def _assert_private_file_mode(path: Path) -> None:
+    """Assert the strongest credential-mode contract exposed by this OS."""
+    mode = stat.S_IMODE(path.stat().st_mode)
+    if os.name == "nt":
+        # Python's Windows chmod only controls the read-only attribute and
+        # reports synthetic group/other bits for writable files. The sidecar's
+        # production Linux contract is asserted exactly below.
+        assert mode & stat.S_IWUSR
+        assert mode & 0o111 == 0
+        return
+    assert mode == 0o600
 
 
 @pytest.fixture()
@@ -31,8 +46,7 @@ async def test_auth_restore_writes_0600(client: AsyncClient, data_path: Any) -> 
     )
     assert response.status_code == 200
     for name in ["oauth_userx.json", "client_creds_userx.json"]:
-        mode = (data_path / name).stat().st_mode & 0o777
-        assert mode == 0o600
+        _assert_private_file_mode(data_path / name)
 
 
 @pytest.mark.anyio
@@ -44,7 +58,7 @@ async def test_auth_restore_tightens_existing_file(client: AsyncClient, data_pat
 
     response = await client.post("/auth/restore?user_id=usery", json={"oauth_json": "{}"})
     assert response.status_code == 200
-    assert oauth_path.stat().st_mode & 0o777 == 0o600
+    _assert_private_file_mode(oauth_path)
 
 
 @pytest.mark.anyio
@@ -73,4 +87,4 @@ async def test_device_code_poll_success_writes_0600(
     for name in ["oauth_userz.json", "client_creds_userz.json"]:
         path = data_path / name
         assert path.exists()
-        assert path.stat().st_mode & 0o777 == 0o600
+        _assert_private_file_mode(path)

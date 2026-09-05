@@ -37,7 +37,6 @@ import { EqBars } from "@/components/ui/EqBars";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { useVisibilityGatedInterval } from "@/hooks/useVisibilityGatedInterval";
 import type { SyncQueueItem } from "@/lib/listen-together-socket";
@@ -939,7 +938,6 @@ function QueueItem({
                     >
                         {item.title}
                     </p>
-                    {item.streamSource === "tidal" && <TidalBadge />}
                     {item.streamSource === "youtube" && <YouTubeBadge />}
                 </div>
                 <p className="text-xs text-content-disabled truncate">

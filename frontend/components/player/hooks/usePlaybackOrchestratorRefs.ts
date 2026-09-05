@@ -4,6 +4,7 @@ import { HeartbeatMonitor } from "@/lib/audio";
 import { createConsecutiveErrorBreaker } from "@/lib/audio-engine/consecutiveErrorBreaker";
 import { createPlaybackProgressConfirmationState } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
+import type { AudioPreloadLease } from "@/lib/audio-engine/types";
 import { createIosBackgroundTrackHandoff } from "@/lib/audio-engine/iosBackgroundTrackHandoff";
 import { TRACK_END_WATCHDOG_TIMEOUT_MS } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
 import {
@@ -81,6 +82,9 @@ export function usePlaybackOrchestratorRefs({
     const pendingSeekTimeRef = useRef<number | null>(null);
     // Preload management
     const lastPreloadedTrackIdRef = useRef<string | null>(null);
+    const enginePreloadLeaseRef = useRef<AudioPreloadLease | null>(null);
+    // Set only after the concrete media engine reports actual readiness.
+    const readyPreloadedTrackIdRef = useRef<string | null>(null);
     const iosBackgroundTrackHandoffRef = useRef(
         createIosBackgroundTrackHandoff(),
     );
@@ -199,6 +203,19 @@ export function usePlaybackOrchestratorRefs({
         });
     }
     const howlerLoadStartMsRef = useRef<number>(0);
+    const playbackStartTimingRef = useRef<{
+        trackId: string | null;
+        loadId: number;
+        startedAtMs: number;
+        transitionStartedAtMs: number | null;
+        reported: boolean;
+    }>({
+        trackId: null,
+        loadId: -1,
+        startedAtMs: 0,
+        transitionStartedAtMs: null,
+        reported: false,
+    });
 
     // Heartbeat monitor for detecting stalled playback
     const heartbeatRef = useRef<HeartbeatMonitor | null>(null);
@@ -242,6 +259,8 @@ export function usePlaybackOrchestratorRefs({
         seekDebounceRef,
         pendingSeekTimeRef,
         lastPreloadedTrackIdRef,
+        enginePreloadLeaseRef,
+        readyPreloadedTrackIdRef,
         iosBackgroundTrackHandoffRef,
         pendingTrackErrorSkipRef,
         pendingTrackErrorTrackIdRef,
@@ -277,6 +296,7 @@ export function usePlaybackOrchestratorRefs({
         lastHandledTrackEndRef,
         trackEndWatchdogRef,
         howlerLoadStartMsRef,
+        playbackStartTimingRef,
         heartbeatRef,
         listenTogetherFollowerRecoveryRef,
     };

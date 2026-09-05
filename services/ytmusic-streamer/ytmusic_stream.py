@@ -6,14 +6,17 @@ import re
 import tempfile
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import suppress
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
+from urllib.parse import urlsplit
 
-from fastapi import HTTPException, Query, Request
+import requests
+from fastapi import HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from yt_download import (
     PROXY_AUDIO_FORMAT_SELECTORS,
@@ -85,16 +88,48 @@ _PROVIDER_CHALLENGE_COOLDOWN_SECONDS = 90.0
 _SPOOL_PARTIAL_STALE_SECONDS = 900
 _SPOOL_EVICT_MIN_AGE_SECONDS = 60
 _SPOOL_MAX_PENDING_JOBS = 8
+_SPOOL_MAX_BACKGROUND_PENDING_JOBS = max(0, _SPOOL_MAX_PENDING_JOBS - 1)
+_SPOOL_READ_CHUNK_BYTES = 64 * 1024
+_SPOOL_PREFIX_PROBE_BYTES = 2 * 1024 * 1024
+_SOUNDSPAN_PART_SUFFIX = ".soundspan-part"
+_SPOOL_DRAIN_SECONDS = 5.0
+_SPOOL_RENAME_RETRY_SECONDS = 0.01
+_SPOOL_RENAME_MAX_ATTEMPTS = 21
+_SPOOL_PROVIDER_IDENTITY = "public-spool"
+_SPOOL_TRANSIENT_FAILURE_COOLDOWN_SECONDS = 5.0
+_SPOOL_UNAVAILABLE_FAILURE_COOLDOWN_SECONDS = 5.0
+_SPOOL_FAILURE_CACHE_MAX = 512
+_SPOOL_FAILURE_STATUSES = frozenset({404, 408, 410, 429, 451, 502, 503, 504})
+_PROGRESSIVE_SOURCE_REFRESH_STATUSES = frozenset({401, 403, 410})
+# Waiting jobs are cheap threads held outside yt-dlp by the process-wide
+# extraction budget. Let every admitted job reach that priority-aware queue;
+# otherwise background waiters can occupy this executor and hide an urgent
+# interactive start behind them.
 _yt_dlp_spool_executor = ThreadPoolExecutor(
-    max_workers=YTMUSIC_SPOOL_CONCURRENCY,
+    max_workers=_SPOOL_MAX_PENDING_JOBS,
     thread_name_prefix="yt-dlp-spool",
 )
+# All admitted jobs must reach the priority-aware transfer budget. The budget,
+# not this executor's worker count, owns the network concurrency limit.
+_spool_transfer_executor = ThreadPoolExecutor(
+    max_workers=_SPOOL_MAX_PENDING_JOBS,
+    thread_name_prefix="ytmusic-spool-transfer",
+)
+_spool_transfer_budget = ExtractionBudget(YTMUSIC_SPOOL_CONCURRENCY)
 # The event loop owns all access, with no await between lookup and insertion.
 _spool_tasks: dict[str, asyncio.Task[tuple[str, str]]] = {}
 _spool_cancel_events: dict[str, threading.Event] = {}
 _spool_waiters: dict[str, int] = {}
+_spool_sessions: dict[str, "_SpoolSession"] = {}
+_spool_failure_cache: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+_spool_pinned_paths: set[Path] = set()
+_spool_pin_counts: dict[Path, int] = {}
 _spool_pending_jobs = 0
+_spool_background_pending_jobs = 0
+_spool_reserved_bytes = 0
+_spool_admitting = True
 _spool_prune_lock = threading.Lock()
+_spool_worker_context = threading.local()
 _provider_challenge_lock = threading.Lock()
 _provider_challenge_cooldown_until = 0.0
 
@@ -140,8 +175,314 @@ STREAM_CACHE_TTL = 5 * 60 * 60
 STREAM_CACHE_MAX = env_int("YTMUSIC_STREAM_CACHE_MAX", "1024")
 
 
+def _spool_failure_key(
+    video_id: str,
+    quality: str,
+    purpose: str,
+    *,
+    provider_identity: str,
+) -> tuple[str, str, str, str]:
+    """Scope a short failure cooldown to the actual provider request context."""
+    return provider_identity, video_id, quality, purpose
+
+
+def _spool_failure_ttl(status_code: int) -> float | None:
+    if status_code not in _SPOOL_FAILURE_STATUSES:
+        return None
+    if status_code in {404, 410, 451}:
+        return _SPOOL_UNAVAILABLE_FAILURE_COOLDOWN_SECONDS
+    return _SPOOL_TRANSIENT_FAILURE_COOLDOWN_SECONDS
+
+
+def _clean_spool_failure_cache(now: float | None = None) -> None:
+    observed_at = time.monotonic() if now is None else now
+    expired = [
+        key
+        for key, entry in _spool_failure_cache.items()
+        if float(entry["expires_at"]) <= observed_at
+    ]
+    for key in expired:
+        _spool_failure_cache.pop(key, None)
+
+
+def _cache_spool_failure(
+    key: tuple[str, str, str, str],
+    error: HTTPException,
+) -> None:
+    """Briefly coalesce classified provider failures without caching auth or aborts."""
+    ttl = _spool_failure_ttl(error.status_code)
+    if ttl is None:
+        return
+    now = time.monotonic()
+    _clean_spool_failure_cache(now)
+    _spool_failure_cache.pop(key, None)
+    _spool_failure_cache[key] = {
+        "expires_at": now + ttl,
+        "status_code": error.status_code,
+        "detail": error.detail,
+        "headers": dict(error.headers) if error.headers else None,
+    }
+    while len(_spool_failure_cache) > _SPOOL_FAILURE_CACHE_MAX:
+        _spool_failure_cache.pop(next(iter(_spool_failure_cache)))
+
+
+def _raise_cached_spool_failure(key: tuple[str, str, str, str]) -> None:
+    now = time.monotonic()
+    _clean_spool_failure_cache(now)
+    entry = _spool_failure_cache.pop(key, None)
+    if entry is None:
+        return
+    _spool_failure_cache[key] = entry
+    raise HTTPException(
+        status_code=int(entry["status_code"]),
+        detail=entry["detail"],
+        headers=entry["headers"],
+    )
+
+
+def _clear_spool_failures(video_id: str, quality: str) -> None:
+    """Let one successful provider attempt clear stale scoped failures for the track."""
+    for key in tuple(_spool_failure_cache):
+        if key[1:3] == (video_id, quality):
+            _spool_failure_cache.pop(key, None)
+
+
 class _SpoolDownloadCancelled(Exception):
     """Stop a provider download after every HTTP waiter has disconnected."""
+
+
+def _spool_purpose_priority(purpose: str) -> int:
+    """Map a request purpose to background, preload, or current playback."""
+    if purpose == "interactive":
+        return 2
+    if purpose == "preload":
+        return 1
+    return 0
+
+
+def _notify_spool_priority_change() -> None:
+    """Wake both phase queues when a shared task gains an interactive owner."""
+    for budget in (_extraction_budget, _spool_transfer_budget):
+        notify = getattr(budget, "notify_priority_change", None)
+        if callable(notify):
+            notify()
+
+
+def _pin_spool_path(path: Path) -> None:
+    """Reference-count one completed or in-progress path against pruning."""
+    with _spool_prune_lock:
+        _pin_spool_path_locked(path)
+
+
+def _pin_spool_path_locked(path: Path) -> None:
+    """Pin a path while the caller owns ``_spool_prune_lock``."""
+    _spool_pin_counts[path] = _spool_pin_counts.get(path, 0) + 1
+    _spool_pinned_paths.add(path)
+
+
+def _unpin_spool_path(path: Path) -> None:
+    """Release one prune pin without disturbing concurrent readers."""
+    with _spool_prune_lock:
+        remaining = _spool_pin_counts.get(path, 1) - 1
+        if remaining > 0:
+            _spool_pin_counts[path] = remaining
+        else:
+            _spool_pin_counts.pop(path, None)
+            _spool_pinned_paths.discard(path)
+
+
+class _SpoolSession:
+    """Coordinate one append-only spool writer and all of its readers."""
+
+    def __init__(
+        self,
+        key: str,
+        loop: asyncio.AbstractEventLoop,
+        cancel_event: threading.Event,
+        *,
+        allow_growing: bool,
+        priority: int = 2,
+    ) -> None:
+        self.key = key
+        self.loop = loop
+        self.cancel_event = cancel_event
+        self.allow_growing = allow_growing
+        self.task: asyncio.Task[tuple[str, str]] | None = None
+        self.partial_path: Path | None = None
+        self.content_type: str | None = None
+        self.readable = False
+        self.lease_count = 0
+        self._changed = asyncio.Event()
+        self._pinned_paths: set[Path] = set()
+        self._pin_lock = threading.Lock()
+        self.failure_scopes: set[tuple[str, str]] = set()
+        self.priority = max(0, min(2, priority))
+        self.background_admission = self.priority < 2
+
+    def current_priority(self) -> int:
+        """Return the latest owner priority for worker-side budget admission."""
+        return self.priority
+
+    def register_failure_scope(self, purpose: str, provider_identity: str) -> None:
+        """Remember request contexts that joined this globally shared provider task."""
+        global _spool_background_pending_jobs
+
+        self.failure_scopes.add((purpose, provider_identity))
+        promoted_priority = _spool_purpose_priority(purpose)
+        if promoted_priority <= self.priority:
+            return
+        self.priority = promoted_priority
+        if self.priority == 2 and self.background_admission:
+            self.background_admission = False
+            if _spool_background_pending_jobs > 0:
+                _spool_background_pending_jobs -= 1
+            else:
+                log.error("YouTube Music spool background counter underflow")
+        _notify_spool_priority_change()
+
+    def _notify(self) -> None:
+        changed = self._changed
+        self._changed = asyncio.Event()
+        changed.set()
+
+    def pin_path(self, path: Path) -> None:
+        """Protect a partial or completed path from concurrent pruning."""
+        with self._pin_lock:
+            if path in self._pinned_paths:
+                return
+            self._pinned_paths.add(path)
+            _pin_spool_path(path)
+
+    def release_pins(self) -> None:
+        """Release every prune pin owned by this session."""
+        with self._pin_lock:
+            for path in self._pinned_paths:
+                _unpin_spool_path(path)
+            self._pinned_paths.clear()
+
+    def publish_readable(self, path: Path, content_type: str) -> None:
+        """Publish a prefix only after the writer proved it browser-readable."""
+        if not self.allow_growing:
+            return
+        self.pin_path(path)
+        self.partial_path = path
+        self.content_type = content_type
+        self.readable = True
+        self._notify()
+
+    def publish_readable_from_worker(self, path: Path, content_type: str) -> None:
+        """Thread-safely publish a proven append-only prefix."""
+        self.pin_path(path)
+        try:
+            self.loop.call_soon_threadsafe(self.publish_readable, path, content_type)
+        except RuntimeError:
+            return
+
+    def publish_growth(self) -> None:
+        """Wake readers after bytes land or the writer completes."""
+        self._notify()
+
+    def publish_growth_from_worker(self) -> None:
+        """Thread-safely wake readers after an append."""
+        try:
+            self.loop.call_soon_threadsafe(self.publish_growth)
+        except RuntimeError:
+            return
+
+    async def wait_for_growth(self, wait_seconds: float = 0.1) -> None:
+        """Wait for writer progress without depending on polling alone."""
+        changed = self._changed
+        with suppress(TimeoutError):
+            await asyncio.wait_for(changed.wait(), timeout=wait_seconds)
+
+
+class _SpoolLease:
+    """Keep shared work alive until one HTTP reader has really finished."""
+
+    def __init__(
+        self,
+        key: str,
+        task: asyncio.Future[tuple[str, str]],
+        cancel_event: threading.Event | None,
+        session: _SpoolSession | None,
+    ) -> None:
+        self.key = key
+        self.task = task
+        self.cancel_event = cancel_event
+        self.session = session
+        self.closed = False
+        _spool_waiters[key] = _spool_waiters.get(key, 0) + 1
+        if session is not None:
+            session.lease_count += 1
+        if cancel_event is not None:
+            cancel_event.clear()
+
+    def close(self) -> None:
+        """Release this waiter and cancel only after the final waiter leaves."""
+        if self.closed:
+            return
+        self.closed = True
+        remaining = _spool_waiters.get(self.key, 1) - 1
+        if remaining > 0:
+            _spool_waiters[self.key] = remaining
+        else:
+            _spool_waiters.pop(self.key, None)
+            if not self.task.done() and self.cancel_event is not None:
+                self.cancel_event.set()
+        if self.session is not None:
+            self.session.lease_count = max(0, self.session.lease_count - 1)
+            _cleanup_spool_session_if_unused(self.session)
+
+
+class _PinnedFileResponse(FileResponse):
+    """Keep a completed spool file pinned for the ASGI response lifetime."""
+
+    def __init__(self, path: str, content_type: str, *, pin_owned: bool = False) -> None:
+        self._spool_path = Path(path)
+        self._pin_released = False
+        if not pin_owned:
+            _pin_spool_path(self._spool_path)
+        try:
+            super().__init__(
+                path,
+                media_type=content_type,
+                headers={"Accept-Ranges": "bytes"},
+            )
+        except BaseException:
+            self._release_pin()
+            raise
+
+    def _release_pin(self) -> None:
+        if self._pin_released:
+            return
+        self._pin_released = True
+        _unpin_spool_path(self._spool_path)
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._release_pin()
+
+
+class _LeaseStreamingResponse(StreamingResponse):
+    """Release a growing-spool lease even when ASGI sending is interrupted."""
+
+    def __init__(
+        self, content: AsyncIterator[bytes], content_type: str, lease: _SpoolLease
+    ) -> None:
+        self._lease = lease
+        super().__init__(
+            content,
+            media_type=content_type,
+            headers={"Accept-Ranges": "bytes", "Cache-Control": "no-store"},
+        )
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._lease.close()
 
 
 def _validate_video_id(video_id: str) -> str:
@@ -256,18 +597,23 @@ def _stream_extraction_http_error(
     return _sanitized_http_error(error_label, error, 502, "Failed to extract stream")
 
 
-def _best_audio_stream_url(info: JsonObject) -> str | None:
-    """Return the direct URL or the highest-bitrate audio-only format URL."""
-    stream_url = info.get("url")
-    if stream_url:
-        return cast(str, stream_url)
+def _selected_audio_stream(info: JsonObject) -> JsonObject | None:
+    """Keep a selected URL paired with its protocol, container, and codec."""
+    if info.get("url"):
+        return info
     audio_formats = [
         item
         for item in info.get("formats", [])
         if item.get("acodec") != "none" and item.get("vcodec") in ("none", None)
     ]
     audio_formats.sort(key=lambda item: item.get("abr", 0) or 0, reverse=True)
-    return audio_formats[0].get("url") if audio_formats else None
+    return cast(JsonObject, audio_formats[0]) if audio_formats else None
+
+
+def _best_audio_stream_url(info: JsonObject) -> str | None:
+    """Return the direct URL or the highest-bitrate audio-only format URL."""
+    selected = _selected_audio_stream(info)
+    return cast(str, selected.get("url")) if selected and selected.get("url") else None
 
 
 def _extract_stream_info(
@@ -296,18 +642,22 @@ def _extract_stream_info(
             info = ydl.extract_info(url, download=False)
             if not info:
                 raise ValueError("No info extracted")
-            stream_url = _best_audio_stream_url(info)
-            if not stream_url:
+            selected = _selected_audio_stream(cast(JsonObject, info))
+            if selected is None or not selected.get("url"):
                 raise ValueError("No audio stream URL found")
             result = {
-                "url": stream_url,
-                "content_type": info.get("audio_ext", "m4a"),
+                "url": selected["url"],
+                "content_type": selected.get("audio_ext")
+                or selected.get("ext")
+                or info.get("audio_ext", "m4a"),
                 "duration": info.get("duration", 0),
                 "title": info.get("title", ""),
                 "artist": info.get("artist") or info.get("uploader", ""),
                 "expires_at": time.time() + STREAM_CACHE_TTL,
-                "abr": info.get("abr", 0),
-                "acodec": info.get("acodec", ""),
+                "abr": selected.get("abr", info.get("abr", 0)),
+                "acodec": selected.get("acodec", info.get("acodec", "")),
+                "protocol": selected.get("protocol", ""),
+                "ext": selected.get("ext") or selected.get("audio_ext", ""),
             }
             with _stream_cache_lock:
                 _stream_cache[cache_key] = result
@@ -326,25 +676,47 @@ def _extract_stream_info(
         raise _stream_extraction_http_error(video_id, error_label, error) from error
 
 
+def _music_stream_cache_key(video_id: str, quality: str) -> str:
+    """Build the anonymous music-stream cache identity."""
+    return f"music:{video_id}:{quality}"
+
+
 def _cached_music_info(video_id: str, quality: str) -> JsonObject | None:
     """Read anonymous music metadata without starting provider work."""
     with _stream_cache_lock:
-        cached = _stream_cache.get(f"music:{video_id}:{quality}")
+        cached = _stream_cache.get(_music_stream_cache_key(video_id, quality))
         return cached if cached and cached.get("expires_at", 0) > time.time() else None
+
+
+def _invalidate_music_stream_url(video_id: str, quality: str, failed_url: str) -> bool:
+    """Remove only the rejected URL, preserving a concurrent cache refresh."""
+    cache_key = _music_stream_cache_key(video_id, quality)
+    with _stream_cache_lock:
+        cached = _stream_cache.get(cache_key)
+        if cached is None or cached.get("url") != failed_url:
+            return False
+        del _stream_cache[cache_key]
+        return True
 
 
 def _cache_spool_info(video_id: str, quality: str, info: JsonObject) -> None:
     """Reuse the completed download's small metadata, not its full format table."""
+    selected = _selected_audio_stream(info) or {}
     result = {
-        "url": _best_audio_stream_url(info) or "",
-        "content_type": info.get("audio_ext") or info.get("ext", "m4a"),
+        "url": selected.get("url") or "",
+        "content_type": selected.get("audio_ext")
+        or selected.get("ext")
+        or info.get("audio_ext")
+        or info.get("ext", "m4a"),
         "duration": info.get("duration", 0),
         "expires_at": time.time() + STREAM_CACHE_TTL,
-        "abr": info.get("abr") or 0,
-        "acodec": info.get("acodec") or "",
+        "abr": selected.get("abr") or info.get("abr") or 0,
+        "acodec": selected.get("acodec") or info.get("acodec") or "",
+        "protocol": selected.get("protocol") or "",
+        "ext": selected.get("ext") or selected.get("audio_ext") or "",
     }
     with _stream_cache_lock:
-        _stream_cache[f"music:{video_id}:{quality}"] = result
+        _stream_cache[_music_stream_cache_key(video_id, quality)] = result
         _clean_stream_cache_locked()
         _bound_cache(_stream_cache, STREAM_CACHE_MAX)
 
@@ -407,7 +779,7 @@ def _get_stream_url_sync(user_id: str, video_id: str, quality: str = "HIGH") -> 
     """Extract a cached audio stream URL for a YouTube Music video."""
     ydl_opts = _build_ytmusic_stream_options(quality)
     return _extract_stream_info(
-        f"music:{video_id}:{quality}",
+        _music_stream_cache_key(video_id, quality),
         f"https://music.youtube.com/watch?v={video_id}",
         ydl_opts,
         video_id,
@@ -506,6 +878,246 @@ def _build_ytmusic_spool_format(quality: str, max_bytes: int) -> str:
     return "/".join(candidates)
 
 
+def _progressive_source(info: JsonObject) -> tuple[str, str, str] | None:
+    """Return a direct, append-only source that Soundspan can own safely."""
+    stream_url = info.get("url")
+    protocol = str(info.get("protocol") or "").lower()
+    extension = str(info.get("ext") or info.get("content_type") or "").lower().lstrip(".")
+    if not isinstance(stream_url, str) or not stream_url:
+        return None
+    if protocol not in {"http", "https"} or urlsplit(stream_url).scheme.lower() != protocol:
+        return None
+    if extension not in {"m4a", "mp4", "webm"}:
+        return None
+    content_type = "audio/webm" if extension == "webm" else "audio/mp4"
+    return stream_url, extension, content_type
+
+
+@dataclass(frozen=True, slots=True)
+class _ProgressiveSpoolPlan:
+    """Small resolved handoff from scarce provider work to bounded CDN I/O."""
+
+    stream_url: str
+    extension: str
+    content_type: str
+    info: JsonObject
+
+
+class _ProgressiveSourceRefreshRequired(Exception):
+    """Signal one rejected direct URL without exposing its signed query string."""
+
+    def __init__(self, stream_url: str, status_code: int) -> None:
+        super().__init__(f"Progressive source rejected direct URL with HTTP {status_code}")
+        self.stream_url = stream_url
+        self.status_code = status_code
+
+
+def _resolve_progressive_spool_plan_sync(
+    video_id: str,
+    quality: str,
+    session: _SpoolSession,
+) -> _ProgressiveSpoolPlan | None:
+    """Resolve a direct source without keeping its later byte transfer in this lane."""
+    if not session.allow_growing:
+        return None
+    if session.cancel_event.is_set():
+        raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+    info = _get_stream_url_sync("__public__", video_id, quality)
+    if session.cancel_event.is_set():
+        raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+    source = _progressive_source(info)
+    if source is None:
+        return None
+    stream_url, extension, content_type = source
+    return _ProgressiveSpoolPlan(stream_url, extension, content_type, info)
+
+
+def _progressive_prefix_state(
+    prefix: bytes,
+    extension: str,
+) -> Literal["pending", "readable", "rejected"]:
+    """Prove whether a bounded prefix can start browser decoding safely."""
+    if prefix.startswith(b"#EXTM3U"):
+        return "rejected"
+    if extension == "webm":
+        if len(prefix) >= 4 and not prefix.startswith(b"\x1aE\xdf\xa3"):
+            return "rejected"
+        if prefix.startswith(b"\x1aE\xdf\xa3") and b"\x1fC\xb6u" in prefix:
+            return "readable"
+        return "pending"
+    if extension not in {"m4a", "mp4"}:
+        return "rejected"
+
+    offset = 0
+    saw_ftyp = False
+    saw_moov = False
+    while offset + 8 <= len(prefix):
+        size = int.from_bytes(prefix[offset : offset + 4], "big")
+        kind = prefix[offset + 4 : offset + 8]
+        header_size = 8
+        if size == 1:
+            if offset + 16 > len(prefix):
+                return "pending"
+            size = int.from_bytes(prefix[offset + 8 : offset + 16], "big")
+            header_size = 16
+        if offset == 0 and kind != b"ftyp":
+            return "rejected"
+        if size != 0 and size < header_size:
+            return "rejected"
+        if kind == b"mdat":
+            return "readable" if saw_ftyp and saw_moov else "rejected"
+        if size == 0:
+            return "rejected"
+        box_end = offset + size
+        if box_end > len(prefix):
+            return "pending"
+        if kind == b"ftyp":
+            saw_ftyp = True
+        elif kind == b"moov":
+            saw_moov = True
+        offset = box_end
+    return "pending"
+
+
+def _progressive_partial_path(video_id: str, quality: str, extension: str) -> Path:
+    """Build the private filename for Soundspan's append-only writer."""
+    return YTMUSIC_SPOOL_DIR / f"{video_id}-{quality}.{extension}{_SOUNDSPAN_PART_SUFFIX}"
+
+
+def _replace_completed_spool(
+    partial_path: Path,
+    completed_path: Path,
+    cancel_event: threading.Event,
+) -> None:
+    """Atomically publish a spool, tolerating a brief Windows reader collision."""
+    for attempt in range(_SPOOL_RENAME_MAX_ATTEMPTS):
+        try:
+            os.replace(partial_path, completed_path)
+            return
+        except PermissionError:
+            if attempt + 1 == _SPOOL_RENAME_MAX_ATTEMPTS:
+                raise
+            if cancel_event.is_set():
+                raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+            time.sleep(_SPOOL_RENAME_RETRY_SECONDS)
+
+
+def _download_progressive_spool_sync(
+    video_id: str,
+    quality: str,
+    session: _SpoolSession,
+    plan: _ProgressiveSpoolPlan | None = None,
+) -> tuple[str, str, JsonObject] | None:
+    """Download a proven direct source into a Soundspan-owned append-only file."""
+    if not session.allow_growing:
+        return None
+    if plan is None:
+        plan = _resolve_progressive_spool_plan_sync(video_id, quality, session)
+    if plan is None:
+        return None
+    if session.cancel_event.is_set():
+        raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+    stream_url = plan.stream_url
+    extension = plan.extension
+    content_type = plan.content_type
+    partial_path = _progressive_partial_path(video_id, quality, extension)
+    completed_path = YTMUSIC_SPOOL_DIR / f"{video_id}-{quality}.{extension}"
+    with suppress(FileNotFoundError):
+        partial_path.unlink()
+    session.pin_path(partial_path)
+    started_at = time.monotonic()
+    byte_limit = _spool_track_byte_limit()
+    prefix = bytearray()
+    prefix_state: Literal["pending", "readable", "rejected"] = "pending"
+    headers = {
+        "User-Agent": _USER_AGENT,
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "identity",
+        "Referer": "https://music.youtube.com/",
+    }
+    with requests.get(
+        stream_url,
+        headers=headers,
+        stream=True,
+        timeout=(YTDLP_SOCKET_TIMEOUT, YTDLP_SOCKET_TIMEOUT),
+    ) as response:
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as error:
+            if response.status_code in _PROGRESSIVE_SOURCE_REFRESH_STATUSES:
+                raise _ProgressiveSourceRefreshRequired(
+                    stream_url,
+                    response.status_code,
+                ) from error
+            raise
+        content_encoding = response.headers.get("Content-Encoding", "identity").lower()
+        if content_encoding not in {"", "identity"}:
+            raise ValueError("Progressive source unexpectedly used content encoding")
+        content_length = response.headers.get("Content-Length")
+        if content_length is not None and int(content_length) > byte_limit:
+            raise ValueError("YouTube Music spool file exceeds the per-track byte budget")
+
+        downloaded = 0
+        with partial_path.open("wb", buffering=0) as spool:
+            for chunk in response.iter_content(chunk_size=_SPOOL_READ_CHUNK_BYTES):
+                if not chunk:
+                    continue
+                if session.cancel_event.is_set():
+                    raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+                downloaded += len(chunk)
+                if downloaded > byte_limit:
+                    raise ValueError("YouTube Music spool file exceeds the per-track byte budget")
+                if time.monotonic() - started_at > YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:
+                    raise RuntimeError("YouTube Music spool download timeout exceeded")
+                spool.write(chunk)
+                if prefix_state == "pending":
+                    remaining = _SPOOL_PREFIX_PROBE_BYTES - len(prefix)
+                    if remaining > 0:
+                        prefix.extend(chunk[:remaining])
+                    prefix_state = _progressive_prefix_state(bytes(prefix), extension)
+                    if prefix_state == "pending" and len(prefix) >= _SPOOL_PREFIX_PROBE_BYTES:
+                        prefix_state = "rejected"
+                    if prefix_state == "readable":
+                        session.publish_readable_from_worker(partial_path, content_type)
+                if prefix_state == "readable":
+                    session.publish_growth_from_worker()
+
+    if downloaded == 0:
+        raise ValueError("Progressive source returned an empty body")
+    if session.cancel_event.is_set():
+        raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+    session.pin_path(completed_path)
+    _replace_completed_spool(partial_path, completed_path, session.cancel_event)
+    session.publish_growth_from_worker()
+    return str(completed_path), content_type, plan.info
+
+
+def _materialize_progressive_spool_sync(
+    video_id: str,
+    quality: str,
+    session: _SpoolSession,
+    plan: _ProgressiveSpoolPlan | None,
+) -> tuple[str, str] | None:
+    """Own aggregate disk capacity while materializing one progressive plan."""
+    with _spool_byte_reservation():
+        progressive = _download_progressive_spool_sync(video_id, quality, session, plan)
+        if progressive is None:
+            return None
+        path, content_type, info = progressive
+        progressive_completed = Path(path)
+        completed_size = progressive_completed.stat().st_size
+        _prune_spool(exclude=progressive_completed)
+        _cache_spool_info(video_id, quality, info)
+        log.info(
+            "Spooled progressive YouTube Music track %s (%s, %.1f MiB)",
+            video_id,
+            quality,
+            completed_size / (1024 * 1024),
+        )
+        return path, content_type
+
+
 def _spool_candidates(video_id: str, quality: str) -> list[Path]:
     """Return completed spool files for one track, newest first."""
     if not YTMUSIC_SPOOL_DIR.exists():
@@ -514,10 +1126,11 @@ def _spool_candidates(video_id: str, quality: str) -> list[Path]:
     candidates: list[tuple[float, Path]] = []
     for path in YTMUSIC_SPOOL_DIR.iterdir():
         if (
-            not path.is_file()
-            or not path.name.startswith(prefix)
+            not path.name.startswith(prefix)
             or ".part" in path.name
             or path.name.endswith(".ytdl")
+            or path.name.endswith(_SOUNDSPAN_PART_SUFFIX)
+            or not path.is_file()
         ):
             continue
         try:
@@ -538,7 +1151,7 @@ def _require_spool_worker_thread() -> None:
     raise RuntimeError("Spool filesystem lookup must run off the event loop")
 
 
-def _find_spooled_file(video_id: str, quality: str) -> Path | None:
+def _find_spooled_file(video_id: str, quality: str, *, pin: bool = False) -> Path | None:
     """Return and touch a valid spool entry from a worker thread.
 
     The prune lock makes the candidate snapshot and touch atomic with eviction.
@@ -550,6 +1163,8 @@ def _find_spooled_file(video_id: str, quality: str) -> Path | None:
             try:
                 if path.stat().st_size > 0:
                     os.utime(path, None)
+                    if pin:
+                        _pin_spool_path_locked(path)
                     return path
             except FileNotFoundError:
                 continue
@@ -577,8 +1192,16 @@ def _collect_spool_entries() -> tuple[int, list[tuple[float, int, Path]]]:
             stat = path.stat()
         except FileNotFoundError:
             continue
-        if ".part" in path.name or path.name.endswith(".ytdl"):
-            if now - stat.st_mtime > _SPOOL_PARTIAL_STALE_SECONDS:
+        is_partial = (
+            ".part" in path.name
+            or path.name.endswith(".ytdl")
+            or path.name.endswith(_SOUNDSPAN_PART_SUFFIX)
+        )
+        if is_partial:
+            if (
+                path not in _spool_pinned_paths
+                and now - stat.st_mtime > _SPOOL_PARTIAL_STALE_SECONDS
+            ):
                 try:
                     path.unlink()
                 except FileNotFoundError:
@@ -588,6 +1211,54 @@ def _collect_spool_entries() -> tuple[int, list[tuple[float, int, Path]]]:
         total += stat.st_size
         entries.append((stat.st_mtime, stat.st_size, path))
     return total, entries
+
+
+def _spool_track_byte_limit() -> int:
+    """Keep every individual writer inside both the track and aggregate caps."""
+    return max(1, min(YTMUSIC_SPOOL_TRACK_MAX_BYTES, YTMUSIC_SPOOL_MAX_BYTES))
+
+
+def _reserve_spool_bytes() -> int:
+    """Reserve worst-case bytes for one active writer, evicting only unpinned files."""
+    global _spool_reserved_bytes
+
+    reserved = _spool_track_byte_limit()
+    YTMUSIC_SPOOL_DIR.mkdir(parents=True, exist_ok=True)
+    with _spool_prune_lock:
+        total, entries = _collect_spool_entries()
+        for _modified_at, size, path in sorted(entries):
+            if total + _spool_reserved_bytes + reserved <= YTMUSIC_SPOOL_MAX_BYTES:
+                break
+            if path in _spool_pinned_paths:
+                continue
+            try:
+                path.unlink()
+                total -= size
+                log.debug("Evicted YouTube Music spool file %s for writer capacity", path.name)
+            except FileNotFoundError:
+                continue
+        if total + _spool_reserved_bytes + reserved > YTMUSIC_SPOOL_MAX_BYTES:
+            raise HTTPException(status_code=503, detail="YouTube Music spool byte capacity is full")
+        _spool_reserved_bytes += reserved
+    return reserved
+
+
+def _release_spool_bytes(reserved: int) -> None:
+    """Release one active writer's aggregate byte reservation."""
+    global _spool_reserved_bytes
+
+    with _spool_prune_lock:
+        _spool_reserved_bytes = max(0, _spool_reserved_bytes - reserved)
+
+
+@contextmanager
+def _spool_byte_reservation() -> Iterator[int]:
+    """Own one active writer's disk allowance through success or failure."""
+    reserved = _reserve_spool_bytes()
+    try:
+        yield reserved
+    finally:
+        _release_spool_bytes(reserved)
 
 
 def _prune_spool(exclude: Path | None = None) -> None:
@@ -602,6 +1273,8 @@ def _prune_spool(exclude: Path | None = None) -> None:
             if total <= YTMUSIC_SPOOL_MAX_BYTES:
                 break
             if exclude is not None and path == exclude:
+                continue
+            if path in _spool_pinned_paths:
                 continue
             # Young files may transiently push the spool over budget while a
             # completed download is about to be served or was just cache-hit.
@@ -630,10 +1303,10 @@ def _build_spool_progress_hook(
         if cancel_event is not None and cancel_event.is_set():
             raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
         downloaded_bytes = status.get("downloaded_bytes", 0)
-        if isinstance(downloaded_bytes, int) and downloaded_bytes > YTMUSIC_SPOOL_TRACK_MAX_BYTES:
+        byte_limit = _spool_track_byte_limit()
+        if isinstance(downloaded_bytes, int) and downloaded_bytes > byte_limit:
             raise RuntimeError(
-                "YouTube Music spool downloaded bytes exceeded "
-                f"{YTMUSIC_SPOOL_TRACK_MAX_BYTES} byte limit"
+                f"YouTube Music spool downloaded bytes exceeded {byte_limit} byte limit"
             )
         if time.monotonic() - started_at > YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:
             raise RuntimeError(
@@ -652,7 +1325,7 @@ def _build_ytmusic_spool_options(
     progress_hook: Callable[[JsonObject], None],
 ) -> JsonObject:
     """Build yt-dlp options for one validated spool request."""
-    fmt = _build_ytmusic_spool_format(quality, YTMUSIC_SPOOL_TRACK_MAX_BYTES)
+    fmt = _build_ytmusic_spool_format(quality, _spool_track_byte_limit())
     outtmpl = str(YTMUSIC_SPOOL_DIR / f"{video_id}-{quality}.%(ext)s")
     return {
         "format": fmt,
@@ -685,9 +1358,15 @@ def _remove_failed_spool_partials(video_id: str, quality: str) -> None:
         return
     prefix = f"{video_id}-{quality}."
     for path in YTMUSIC_SPOOL_DIR.iterdir():
-        is_partial = ".part" in path.name or path.name.endswith(".ytdl")
+        is_partial = (
+            ".part" in path.name
+            or path.name.endswith(".ytdl")
+            or path.name.endswith(_SOUNDSPAN_PART_SUFFIX)
+        )
         if path.name.startswith(prefix) and is_partial:
-            with suppress(FileNotFoundError):
+            # A growing response may briefly have the file open on Windows. It is
+            # already unpinned after the final lease and stale-prune can retry.
+            with suppress(OSError):
                 path.unlink()
 
 
@@ -719,6 +1398,9 @@ def _extract_spool_with_retry(
 def _download_ytmusic_spool_sync(
     video_id: str,
     quality: str,
+    *,
+    progressive_plan: _ProgressiveSpoolPlan | None = None,
+    progressive_only: bool = False,
 ) -> tuple[str, str]:
     """Download a complete YouTube Music stream into the bounded spool."""
     import yt_dlp
@@ -734,37 +1416,55 @@ def _download_ytmusic_spool_sync(
 
     started_at = time.monotonic()
     cancel_event = _spool_cancel_events.get(f"{video_id}:{quality}")
-    ydl_opts = _build_ytmusic_spool_options(
-        video_id,
-        quality,
-        match_filter=yt_dlp.utils.match_filter_func("!is_live"),
-        progress_hook=_build_spool_progress_hook(started_at, cancel_event),
-    )
-
     try:
-        info = _extract_spool_with_retry(video_id, ydl_opts, cancel_event)
-
-        completed = _find_spooled_file(video_id, quality)
-        if completed is None:
-            raise ValueError("yt-dlp completed without a spool file")
-        completed_size = completed.stat().st_size
-        if completed_size > YTMUSIC_SPOOL_MAX_BYTES:
-            with suppress(FileNotFoundError):
-                completed.unlink()
-            raise ValueError("YouTube Music spool file exceeds the total spool byte budget")
-
-        _prune_spool(exclude=completed)
-        _cache_spool_info(video_id, quality, info)
-        log.info(
-            "Spooled YouTube Music track %s (%s, %.1f MiB)",
+        session = cast(_SpoolSession | None, getattr(_spool_worker_context, "session", None))
+        if session is not None:
+            progressive = _materialize_progressive_spool_sync(
+                video_id,
+                quality,
+                session,
+                progressive_plan,
+            )
+            if progressive is not None:
+                return progressive
+        if progressive_only:
+            raise RuntimeError("Resolved progressive source did not produce a spool")
+        ydl_opts = _build_ytmusic_spool_options(
             video_id,
             quality,
-            completed_size / (1024 * 1024),
+            match_filter=yt_dlp.utils.match_filter_func("!is_live"),
+            progress_hook=_build_spool_progress_hook(started_at, cancel_event),
         )
-        return str(completed), _spool_content_type(completed)
+        with _spool_byte_reservation():
+            info = _extract_spool_with_retry(video_id, ydl_opts, cancel_event)
+
+            completed = _find_spooled_file(video_id, quality)
+            if completed is None:
+                raise ValueError("yt-dlp completed without a spool file")
+            completed_size = completed.stat().st_size
+            if completed_size > _spool_track_byte_limit():
+                with suppress(FileNotFoundError):
+                    completed.unlink()
+                raise ValueError("YouTube Music spool file exceeds the total spool byte budget")
+
+            _prune_spool(exclude=completed)
+            _cache_spool_info(video_id, quality, info)
+            log.info(
+                "Spooled YouTube Music track %s (%s, %.1f MiB)",
+                video_id,
+                quality,
+                completed_size / (1024 * 1024),
+            )
+            return str(completed), _spool_content_type(completed)
     except _SpoolDownloadCancelled:
         _remove_failed_spool_partials(video_id, quality)
         log.info("Cancelled abandoned YouTube Music spool for %s", video_id)
+        raise
+    except _ProgressiveSourceRefreshRequired:
+        _remove_failed_spool_partials(video_id, quality)
+        raise
+    except HTTPException:
+        _remove_failed_spool_partials(video_id, quality)
         raise
     except Exception as error:
         # yt-dlp normally cleans these itself; remove leftovers after failures.
@@ -776,27 +1476,149 @@ def _download_ytmusic_spool_sync(
         ) from error
 
 
-async def _download_ytmusic_spool_bounded(video_id: str, quality: str) -> tuple[str, str]:
-    """Run one spool download for the executor thread's full lifetime."""
+def _run_spool_download_sync(
+    video_id: str,
+    quality: str,
+    session: _SpoolSession | None,
+    progressive_plan: _ProgressiveSpoolPlan | None = None,
+    progressive_only: bool = False,
+) -> tuple[str, str]:
+    """Bind one event-loop session to its executor thread without changing writers."""
+    _spool_worker_context.session = session
+    try:
+        if progressive_plan is not None or progressive_only:
+            return _download_ytmusic_spool_sync(
+                video_id,
+                quality,
+                progressive_plan=progressive_plan,
+                progressive_only=progressive_only,
+            )
+        return _download_ytmusic_spool_sync(video_id, quality)
+    finally:
+        with suppress(AttributeError):
+            del _spool_worker_context.session
+
+
+async def _download_ytmusic_spool_bounded(
+    video_id: str,
+    quality: str,
+    *,
+    playback: bool = True,
+    session: _SpoolSession | None = None,
+) -> tuple[str, str]:
+    """Resolve in the scarce provider lane, then transfer in bounded CDN I/O."""
     loop = asyncio.get_running_loop()
+    cancel_event = _spool_cancel_events.get(f"{video_id}:{quality}")
+    priority = session.current_priority if session is not None else None
+
+    def run_extraction(
+        operation: Callable[[], tuple[str, str] | _ProgressiveSpoolPlan | None],
+    ) -> Any:
+        if priority is None:
+            return _extraction_budget.run(
+                operation,
+                playback=playback,
+                cancel_event=cancel_event,
+            )
+        return _extraction_budget.run(
+            operation,
+            cancel_event=cancel_event,
+            priority=priority,
+        )
+
+    async def resolve_progressive_plan(
+        active_session: _SpoolSession,
+    ) -> _ProgressiveSpoolPlan | None:
+        resolved = await loop.run_in_executor(
+            _yt_dlp_spool_executor,
+            partial(
+                run_extraction,
+                partial(
+                    _resolve_progressive_spool_plan_sync,
+                    video_id,
+                    quality,
+                    active_session,
+                ),
+            ),
+        )
+        return cast(_ProgressiveSpoolPlan | None, resolved)
+
+    async def transfer_progressive_plan(
+        active_session: _SpoolSession,
+        plan: _ProgressiveSpoolPlan,
+    ) -> tuple[str, str]:
+        return await loop.run_in_executor(
+            _spool_transfer_executor,
+            partial(
+                _spool_transfer_budget.run,
+                partial(
+                    _run_spool_download_sync,
+                    video_id,
+                    quality,
+                    active_session,
+                    plan,
+                    True,
+                ),
+                cancel_event=cancel_event,
+                priority=priority,
+            ),
+        )
+
     # yt-dlp's socket timeout bounds the executor thread between network reads.
     try:
+        if session is not None and session.allow_growing:
+            progressive_plan = await resolve_progressive_plan(session)
+            if progressive_plan is not None:
+                try:
+                    return await transfer_progressive_plan(session, progressive_plan)
+                except _ProgressiveSourceRefreshRequired as rejected:
+                    _invalidate_music_stream_url(
+                        video_id,
+                        quality,
+                        rejected.stream_url,
+                    )
+                    refreshed_plan = await resolve_progressive_plan(session)
+                    if refreshed_plan is not None:
+                        try:
+                            return await transfer_progressive_plan(session, refreshed_plan)
+                        except _ProgressiveSourceRefreshRequired as repeated:
+                            _invalidate_music_stream_url(
+                                video_id,
+                                quality,
+                                repeated.stream_url,
+                            )
+                            raise _stream_extraction_http_error(
+                                video_id,
+                                f"progressive spool for {video_id}",
+                                repeated,
+                            ) from repeated
         return await loop.run_in_executor(
             _yt_dlp_spool_executor,
             partial(
-                _extraction_budget.run,
-                partial(_download_ytmusic_spool_sync, video_id, quality),
-                playback=True,
-                cancel_event=_spool_cancel_events.get(f"{video_id}:{quality}"),
+                run_extraction,
+                partial(_run_spool_download_sync, video_id, quality, None),
             ),
         )
-    except ExtractionAbandoned as error:
+    except (ExtractionAbandoned, _SpoolDownloadCancelled) as error:
         raise HTTPException(status_code=499, detail="Client disconnected") from error
 
 
-def _remove_completed_spool_task(key: str, task: asyncio.Task[tuple[str, str]]) -> None:
+def _cleanup_spool_session_if_unused(session: _SpoolSession) -> None:
+    """Drop one terminal session after its final response lease closes."""
+    if session.lease_count or (session.task is not None and not session.task.done()):
+        return
+    if _spool_sessions.get(session.key) is session:
+        _spool_sessions.pop(session.key, None)
+    session.release_pins()
+
+
+def _remove_completed_spool_task(
+    key: str,
+    task: asyncio.Task[tuple[str, str]],
+    session: _SpoolSession,
+) -> None:
     """Remove one completed single-flight task without disturbing a replacement."""
-    global _spool_pending_jobs
+    global _spool_background_pending_jobs, _spool_pending_jobs
 
     if _spool_tasks.get(key) is task:
         _spool_tasks.pop(key, None)
@@ -805,27 +1627,102 @@ def _remove_completed_spool_task(key: str, task: asyncio.Task[tuple[str, str]]) 
         _spool_pending_jobs -= 1
     else:
         log.error("YouTube Music spool pending-job counter underflow")
-    if not task.cancelled():
+    if session.background_admission:
+        session.background_admission = False
+        if _spool_background_pending_jobs > 0:
+            _spool_background_pending_jobs -= 1
+        else:
+            log.error("YouTube Music spool background counter underflow")
+    session.publish_growth()
+    if task.cancelled():
+        if session.partial_path is not None:
+            with suppress(OSError):
+                session.partial_path.unlink()
+    else:
         # Observe failures when every waiter disconnected before completion.
-        _ = task.exception()
+        error = task.exception()
+        if error is not None and session.partial_path is not None:
+            with suppress(OSError):
+                session.partial_path.unlink()
+        if isinstance(error, HTTPException):
+            for purpose, provider_identity in session.failure_scopes:
+                _cache_spool_failure(
+                    _spool_failure_key(
+                        key.rsplit(":", 1)[0],
+                        key.rsplit(":", 1)[1],
+                        purpose,
+                        provider_identity=provider_identity,
+                    ),
+                    error,
+                )
+        elif error is None and session.lease_count:
+            completed_path, _content_type = task.result()
+            session.pin_path(Path(completed_path))
+        if error is None:
+            video_id, quality = key.rsplit(":", 1)
+            _clear_spool_failures(video_id, quality)
+    _cleanup_spool_session_if_unused(session)
 
 
-def _create_spool_task(key: str, video_id: str, quality: str) -> asyncio.Task[tuple[str, str]]:
+def _spool_has_admission(purpose: str) -> bool:
+    """Reserve one pending-job slot for a current interactive request."""
+    if not _spool_admitting or _spool_pending_jobs >= _SPOOL_MAX_PENDING_JOBS:
+        return False
+    return purpose == "interactive" or (
+        _spool_background_pending_jobs < _SPOOL_MAX_BACKGROUND_PENDING_JOBS
+    )
+
+
+def _create_spool_task(
+    key: str,
+    video_id: str,
+    quality: str,
+    *,
+    playback: bool = True,
+    purpose: Literal["interactive", "preload", "analysis"] = "interactive",
+    provider_identity: str = _SPOOL_PROVIDER_IDENTITY,
+) -> asyncio.Task[tuple[str, str]]:
     """Create one bounded event-loop-owned spool task."""
-    global _spool_pending_jobs
+    global _spool_background_pending_jobs, _spool_pending_jobs
 
-    if _spool_pending_jobs >= _SPOOL_MAX_PENDING_JOBS:
+    if not _spool_has_admission(purpose):
         raise HTTPException(status_code=503, detail="YouTube Music spool queue is full")
-    _spool_cancel_events[key] = threading.Event()
-    task = asyncio.create_task(_download_ytmusic_spool_bounded(video_id, quality))
-    _spool_tasks[key] = task
+    cancel_event = threading.Event()
+    _spool_cancel_events[key] = cancel_event
+    session = _SpoolSession(
+        key,
+        asyncio.get_running_loop(),
+        cancel_event,
+        allow_growing=playback,
+        priority=_spool_purpose_priority(purpose),
+    )
     _spool_pending_jobs += 1
-    task.add_done_callback(lambda completed: _remove_completed_spool_task(key, completed))
+    if session.background_admission:
+        _spool_background_pending_jobs += 1
+    session.register_failure_scope(purpose, provider_identity)
+    task = asyncio.create_task(
+        _download_ytmusic_spool_bounded(
+            video_id,
+            quality,
+            playback=playback,
+            session=session,
+        )
+    )
+    session.task = task
+    _spool_sessions[key] = session
+    _spool_tasks[key] = task
+    task.add_done_callback(lambda completed: _remove_completed_spool_task(key, completed, session))
     return task
 
 
 def _try_get_or_create_spool_task(
-    key: str, video_id: str, quality: str
+    key: str,
+    video_id: str,
+    quality: str,
+    *,
+    playback: bool = True,
+    purpose: Literal["interactive", "preload", "analysis"] = "interactive",
+    provider_identity: str = _SPOOL_PROVIDER_IDENTITY,
 ) -> asyncio.Task[tuple[str, str]] | None:
     """Join or create a task, or return None when the queue is full.
 
@@ -834,10 +1731,20 @@ def _try_get_or_create_spool_task(
     """
     task = _spool_tasks.get(key)
     if task is not None:
+        session = _spool_sessions.get(key)
+        if session is not None:
+            session.register_failure_scope(purpose, provider_identity)
         return task
-    if _spool_pending_jobs >= _SPOOL_MAX_PENDING_JOBS:
+    if not _spool_has_admission(purpose):
         return None
-    return _create_spool_task(key, video_id, quality)
+    return _create_spool_task(
+        key,
+        video_id,
+        quality,
+        playback=playback,
+        purpose=purpose,
+        provider_identity=provider_identity,
+    )
 
 
 def _spooled_file_result(path: Path) -> tuple[str, str]:
@@ -845,9 +1752,37 @@ def _spooled_file_result(path: Path) -> tuple[str, str]:
     return str(path), _spool_content_type(path)
 
 
-async def _find_spooled_result(video_id: str, quality: str) -> tuple[str, str] | None:
-    """Find a spool file off the event loop and map it to a stream result."""
-    existing = await asyncio.to_thread(_find_spooled_file, video_id, quality)
+async def _find_spooled_result(
+    video_id: str,
+    quality: str,
+    *,
+    pin: bool = False,
+) -> tuple[str, str] | None:
+    """Find a spool file off-loop, optionally transferring an atomic pin."""
+    if pin:
+        lookup = asyncio.create_task(
+            asyncio.to_thread(
+                _find_spooled_file,
+                video_id,
+                quality,
+                pin=True,
+            )
+        )
+        try:
+            existing = await asyncio.shield(lookup)
+        except asyncio.CancelledError:
+            # The worker cannot be cancelled after it acquires the prune lock.
+            # Reclaim any pin it returns after its abandoned waiter is gone.
+            def release_abandoned_pin(completed: asyncio.Task[Path | None]) -> None:
+                with suppress(BaseException):
+                    abandoned = completed.result()
+                    if abandoned is not None:
+                        _unpin_spool_path(abandoned)
+
+            lookup.add_done_callback(release_abandoned_pin)
+            raise
+    else:
+        existing = await asyncio.to_thread(_find_spooled_file, video_id, quality)
     return _spooled_file_result(existing) if existing is not None else None
 
 
@@ -863,15 +1798,12 @@ async def _await_spool_task_for_request(
     key: str,
     task: asyncio.Future[tuple[str, str]],
     request: Request,
+    *,
+    pin_result: bool = False,
 ) -> tuple[str, str]:
     """Await a shared spool while cancelling work abandoned by every client."""
-    _spool_waiters[key] = _spool_waiters.get(key, 0) + 1
-    # A new listener may arrive just after the prior last waiter disconnected
-    # but before the executor observed its cancellation event. Revive that
-    # still-running single-flight instead of needlessly failing the new request.
     cancel_event = _spool_cancel_events.get(key)
-    if cancel_event is not None:
-        cancel_event.clear()
+    lease = _SpoolLease(key, task, cancel_event, _spool_sessions.get(key))
     deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
     try:
         while not task.done():
@@ -881,62 +1813,336 @@ async def _await_spool_task_for_request(
             if remaining <= 0:
                 raise HTTPException(status_code=504, detail="YouTube Music spool timed out")
             await asyncio.sleep(min(0.1, remaining))
-        return task.result()
+        result = task.result()
+        if pin_result:
+            video_id, quality = key.rsplit(":", 1)
+            pinned = await _find_spooled_result(video_id, quality, pin=True)
+            if pinned is None:
+                raise HTTPException(status_code=503, detail="YouTube Music spool file unavailable")
+            return pinned
+        return result
     finally:
-        remaining = _spool_waiters.get(key, 1) - 1
-        if remaining > 0:
-            _spool_waiters[key] = remaining
-        else:
-            _spool_waiters.pop(key, None)
-            if not task.done():
-                cancel_event = _spool_cancel_events.get(key)
-                if cancel_event is not None:
-                    cancel_event.set()
+        lease.close()
+
+
+async def _find_or_start_spool_task(
+    video_id: str,
+    quality: str,
+    *,
+    purpose: Literal["interactive", "preload", "analysis"] = "interactive",
+    provider_identity: str = _SPOOL_PROVIDER_IDENTITY,
+    pin_completed: bool = False,
+) -> tuple[tuple[str, str] | None, asyncio.Task[tuple[str, str]] | None]:
+    """Find a completed entry or atomically join/start its single-flight task."""
+    if not _spool_admitting:
+        raise HTTPException(status_code=503, detail="YouTube Music spool is shutting down")
+    key = f"{video_id}:{quality}"
+    task = _spool_tasks.get(key)
+    if task is not None:
+        session = _spool_sessions.get(key)
+        if session is not None:
+            session.register_failure_scope(purpose, provider_identity)
+        return None, task
+
+    existing = (
+        await _find_spooled_result(video_id, quality, pin=True)
+        if pin_completed
+        else await _find_spooled_result(video_id, quality)
+    )
+    if existing is not None:
+        return existing, None
+
+    failure_key = _spool_failure_key(
+        video_id,
+        quality,
+        purpose,
+        provider_identity=provider_identity,
+    )
+    _raise_cached_spool_failure(failure_key)
+
+    # Re-check after the filesystem await. Map lookup, limit check, and insert
+    # remain one event-loop-only critical section with no intervening await.
+    task = _try_get_or_create_spool_task(
+        key,
+        video_id,
+        quality,
+        # Preloading still exposes progressive readiness, while the session's
+        # three-level priority keeps current playback above speculative work.
+        playback=purpose != "analysis",
+        purpose=purpose,
+        provider_identity=provider_identity,
+    )
+    if task is not None:
+        return None, task
+
+    # A prior task may have completed and removed itself after our preflight
+    # miss. Retry disk once before reporting saturation.
+    existing = (
+        await _find_spooled_result(video_id, quality, pin=True)
+        if pin_completed
+        else await _find_spooled_result(video_id, quality)
+    )
+    if existing is not None:
+        return existing, None
+
+    task = _spool_tasks.get(key)
+    if task is not None:
+        session = _spool_sessions.get(key)
+        if session is not None:
+            session.register_failure_scope(purpose, provider_identity)
+        return None, task
+    _raise_cached_spool_failure(failure_key)
+    raise HTTPException(status_code=503, detail="YouTube Music spool queue is full")
 
 
 async def _get_ytmusic_spooled_stream(
     video_id: str,
     quality: str,
     request: Request | None = None,
+    *,
+    purpose: Literal["interactive", "preload", "analysis"] = "interactive",
+    pin_result: bool = False,
 ) -> tuple[str, str]:
     """Return a cached spool entry, coalescing concurrent requests per track."""
+    completed, task = await _find_or_start_spool_task(
+        video_id,
+        quality,
+        purpose=purpose,
+        pin_completed=pin_result,
+    )
+    if completed is not None:
+        return completed
+    if task is None:
+        raise RuntimeError("Spool resolution returned neither a file nor a task")
     key = f"{video_id}:{quality}"
-    task = _spool_tasks.get(key)
-    if task is not None:
-        return (
-            await _await_spool_task_for_request(key, task, request)
-            if request is not None
-            else await _await_spool_task(task)
+    return (
+        await _await_spool_task_for_request(
+            key,
+            task,
+            request,
+            pin_result=pin_result,
         )
+        if request is not None
+        else await _await_spool_task(task)
+    )
 
-    existing = await _find_spooled_result(video_id, quality)
-    if existing is not None:
-        return existing
 
-    # Re-check after the filesystem await. Map lookup, limit check, and insert
-    # remain one event-loop-only critical section with no intervening await.
-    task = _try_get_or_create_spool_task(key, video_id, quality)
-    if task is not None:
-        return (
-            await _await_spool_task_for_request(key, task, request)
-            if request is not None
-            else await _await_spool_task(task)
+async def is_ytmusic_spooled(video_id: str, quality: str) -> bool:
+    """Report whether an atomic completed spool currently exists."""
+    video_id = _validate_video_id(video_id)
+    quality = _validate_stream_quality(quality)
+    return await _find_spooled_result(video_id, quality) is not None
+
+
+async def warm_ytmusic_spool(
+    video_id: str,
+    quality: str,
+    on_readable: Callable[[], None],
+) -> None:
+    """Warm one shared spool while exposing only readiness, never audio bytes."""
+    video_id = _validate_video_id(video_id)
+    quality = _validate_stream_quality(quality)
+    completed, task = await _find_or_start_spool_task(
+        video_id,
+        quality,
+        purpose="preload",
+    )
+    if completed is not None:
+        return
+    if task is None:
+        raise RuntimeError("Warmup spool resolution returned neither a file nor a task")
+
+    key = f"{video_id}:{quality}"
+    session = _spool_sessions.get(key)
+    if session is None:
+        await _await_spool_task(task)
+        return
+
+    lease = _SpoolLease(key, task, session.cancel_event, session)
+    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
+    notified_readable = False
+    try:
+        while not task.done():
+            if session.readable and not notified_readable:
+                notified_readable = True
+                try:
+                    on_readable()
+                except Exception:
+                    log.exception("YouTube Music warmup readiness callback failed for %s", video_id)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise HTTPException(status_code=504, detail="YouTube Music spool timed out")
+            await session.wait_for_growth(min(0.1, remaining))
+        task.result()
+    finally:
+        lease.close()
+
+
+def _read_spool_chunk(path: Path, offset: int) -> bytes:
+    """Read one bounded chunk while allowing an atomic writer rename on Windows."""
+    for attempt in range(_SPOOL_RENAME_MAX_ATTEMPTS):
+        try:
+            with path.open("rb") as spool:
+                spool.seek(offset)
+                return spool.read(_SPOOL_READ_CHUNK_BYTES)
+        except FileNotFoundError:
+            return b""
+        except PermissionError:
+            if attempt + 1 == _SPOOL_RENAME_MAX_ATTEMPTS:
+                raise
+            time.sleep(_SPOOL_RENAME_RETRY_SECONDS)
+    raise RuntimeError("unreachable spool read retry state")
+
+
+async def _stream_growing_spool(
+    session: _SpoolSession,
+    task: asyncio.Task[tuple[str, str]],
+    lease: _SpoolLease,
+) -> AsyncIterator[bytes]:
+    """Tail an append-only partial, switching to the atomic final path at EOF."""
+    offset = 0
+    try:
+        while True:
+            path: Path | None
+            if task.done():
+                path_text, _content_type = task.result()
+                path = Path(path_text)
+            else:
+                path = session.partial_path
+            if path is not None:
+                chunk = await asyncio.to_thread(_read_spool_chunk, path, offset)
+                if chunk:
+                    offset += len(chunk)
+                    yield chunk
+                    continue
+            if task.done():
+                completed_path = Path(task.result()[0])
+                if path != completed_path:
+                    # The writer may have atomically renamed the partial after
+                    # the path selection but before this read. Make one pass
+                    # over the completed path instead of ending with a 200 and
+                    # an empty (or truncated) response.
+                    continue
+                return
+            await session.wait_for_growth()
+    finally:
+        lease.close()
+
+
+async def _growing_spool_response(
+    video_id: str,
+    quality: str,
+    request: Request,
+    *,
+    purpose: Literal["interactive", "preload"],
+) -> Response:
+    """Return at a proven prefix, or fall back to the completed local file."""
+    completed, task = await _find_or_start_spool_task(
+        video_id,
+        quality,
+        purpose=purpose,
+        pin_completed=True,
+    )
+    if completed is not None:
+        return _PinnedFileResponse(*completed, pin_owned=True)
+    if task is None:
+        raise RuntimeError("Growing spool resolution returned neither a file nor a task")
+    key = f"{video_id}:{quality}"
+    session = _spool_sessions.get(key)
+    if session is None:
+        path, content_type = await _await_spool_task_for_request(
+            key,
+            task,
+            request,
+            pin_result=True,
         )
+        return _PinnedFileResponse(path, content_type, pin_owned=True)
 
-    # A prior task may have completed and removed itself after our preflight
-    # miss. Retry disk once before reporting saturation.
-    existing = await _find_spooled_result(video_id, quality)
-    if existing is not None:
-        return existing
-
-    task = _spool_tasks.get(key)
-    if task is not None:
-        return (
-            await _await_spool_task_for_request(key, task, request)
-            if request is not None
-            else await _await_spool_task(task)
+    lease = _SpoolLease(key, task, session.cancel_event, session)
+    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
+    try:
+        while not task.done() and not session.readable:
+            if await request.is_disconnected():
+                raise HTTPException(status_code=499, detail="Client disconnected")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise HTTPException(status_code=504, detail="YouTube Music spool timed out")
+            await session.wait_for_growth(min(0.1, remaining))
+        if task.done():
+            path, content_type = task.result()
+            response = _PinnedFileResponse(path, content_type)
+            lease.close()
+            return response
+        if session.content_type is None:
+            raise RuntimeError("Readable spool session has no content type")
+        return _LeaseStreamingResponse(
+            _stream_growing_spool(session, task, lease),
+            session.content_type,
+            lease,
         )
-    raise HTTPException(status_code=503, detail="YouTube Music spool queue is full")
+    except BaseException:
+        lease.close()
+        raise
+
+
+def _drain_spool_executors(
+    drained: asyncio.Event,
+    loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Drain both bounded spool phases and notify the event loop."""
+    for label, executor in (
+        ("extraction", _yt_dlp_spool_executor),
+        ("transfer", _spool_transfer_executor),
+    ):
+        try:
+            executor.shutdown(wait=True, cancel_futures=True)
+        except Exception:
+            log.exception("YouTube Music spool %s executor drain failed", label)
+    try:
+        loop.call_soon_threadsafe(drained.set)
+    except RuntimeError:
+        return
+
+
+async def shutdown_stream_provider() -> None:
+    """Stop spool admission, signal writers, and bound executor draining."""
+    global _spool_admitting
+
+    _spool_admitting = False
+    for cancel_event in tuple(_spool_cancel_events.values()):
+        cancel_event.set()
+
+    active_tasks = tuple(_spool_tasks.values())
+    if active_tasks:
+        done, pending = await asyncio.wait(active_tasks, timeout=_SPOOL_DRAIN_SECONDS)
+        for task in done:
+            if not task.cancelled():
+                _ = task.exception()
+        if pending:
+            log.warning(
+                "YouTube Music spool task drain exceeded %.1f seconds (%d active)",
+                _SPOOL_DRAIN_SECONDS,
+                len(pending),
+            )
+
+    loop = asyncio.get_running_loop()
+    drained = asyncio.Event()
+    drain_thread = threading.Thread(
+        target=_drain_spool_executors,
+        args=(drained, loop),
+        name="ytmusic-spool-shutdown",
+        daemon=True,
+    )
+    drain_thread.start()
+    try:
+        async with asyncio.timeout(_SPOOL_DRAIN_SECONDS):
+            await drained.wait()
+    except TimeoutError:
+        log.warning(
+            "YouTube Music spool executor drain exceeded %.1f seconds",
+            _SPOOL_DRAIN_SECONDS,
+        )
+    _spool_failure_cache.clear()
 
 
 def _clean_stream_cache_locked() -> int:
@@ -996,12 +2202,13 @@ async def proxy_stream(
     request: Request,
     user_id: str = Query(...),
     quality: str = "HIGH",
-) -> FileResponse:
-    """Serve YouTube Music audio from a bounded local yt-dlp HLS spool.
+    purpose: Literal["interactive", "preload", "analysis"] = Query("interactive"),
+) -> Response:
+    """Serve YouTube Music audio from a bounded local spool.
 
-    YouTube progressive signed URLs no longer reliably support continuation
-    ranges. yt-dlp downloads the complete HLS audio first; Starlette then
-    provides normal local-file Range semantics to the player.
+    Soundspan tails only direct progressive sources whose container prefix has
+    been validated. HLS, analysis, and exact range reads wait for the completed
+    atomic local file, preserving normal local-file Range semantics.
 
     Concurrent requests for the same track share one download.
     """
@@ -1011,14 +2218,24 @@ async def proxy_stream(
     if user_id != "__public__":
         _get_ytmusic(user_id)
 
-    # FileResponse consumes Range from the ASGI request scope itself.
-    _ = request
-    path, content_type = await _get_ytmusic_spooled_stream(video_id, quality, request)
-    return FileResponse(
-        path,
-        media_type=content_type,
-        headers={"Accept-Ranges": "bytes"},
+    range_header = request.headers.get("range", "").strip().lower()
+    if purpose in {"interactive", "preload"} and range_header in {"", "bytes=0-"}:
+        return await _growing_spool_response(
+            video_id,
+            quality,
+            request,
+            purpose=purpose,
+        )
+
+    # FileResponse consumes completed-file Range from the ASGI scope itself.
+    path, content_type = await _get_ytmusic_spooled_stream(
+        video_id,
+        quality,
+        request,
+        purpose=purpose,
+        pin_result=True,
     )
+    return _PinnedFileResponse(path, content_type, pin_owned=True)
 
 
 @app.get("/yt/info")

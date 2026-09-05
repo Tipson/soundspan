@@ -33,9 +33,31 @@ export interface YtMusicArtistResponse {
     }> | null;
 }
 
+export interface YtMusicTailWarmupRequest {
+    ownerId: string;
+    generation: number;
+    quality?: string;
+    current: string | null;
+    immediate: string | null;
+    tail: string[];
+}
+
+export interface YtMusicTailWarmupSnapshot {
+    ownerId: string;
+    generation: number;
+    accepted: boolean;
+    items: Array<{
+        videoId: string;
+        quality: string;
+        status: "complete" | "readable" | "queued" | "miss" | "failed";
+    }>;
+}
+
 /** Add YouTube Music-domain operations to an API client base class. */
 export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class YtMusicApi extends Base {
+        private streamPreloadNonce: string | null = null;
+
         async getYtMusicMixes(): Promise<{
             mixes: Array<{
                 playlistId: string;
@@ -178,6 +200,7 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             videoId: string,
             quality?: string,
             usePublic?: boolean,
+            purpose: "interactive" | "preload" = "interactive",
         ): string {
             const endpoint = usePublic ? "stream-public" : "stream";
             const baseUrl =
@@ -185,6 +208,22 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             let url = `${baseUrl}/api/ytmusic/${endpoint}/${encodeURIComponent(videoId)}`;
             const params = new URLSearchParams();
             if (quality) params.set("quality", quality);
+            if (purpose === "preload") params.set("purpose", purpose);
+            // Isolate ephemeral worker bytes without putting credentials in URLs.
+            // Unsupported/insecure browsers retain the uncached playback path.
+            if (
+                usePublic &&
+                typeof window !== "undefined" &&
+                this.getToken() &&
+                typeof crypto !== "undefined" &&
+                typeof crypto.randomUUID === "function"
+            ) {
+                this.streamPreloadNonce ??= crypto.randomUUID();
+                params.set(
+                    "preloadSession",
+                    `${this.streamPreloadNonce}:${this.getSessionGeneration()}`,
+                );
+            }
             const qs = params.toString();
             if (qs) url += `?${qs}`;
             return url;
@@ -213,6 +252,20 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             // Use the public endpoint (no per-user YT Music OAuth required) —
             // consistent with stream-public used for playback.
             return this.get(`/ytmusic/stream-info-public/${videoId}${suffix}`);
+        }
+
+        /** Reconcile bounded server-side queue warmup without reading audio. */
+        async reconcileYtMusicTailWarmup(
+            input: YtMusicTailWarmupRequest,
+            signal?: AbortSignal,
+        ): Promise<YtMusicTailWarmupSnapshot> {
+            return this.request(`/ytmusic/tail-warmup/reconcile`, {
+                method: "POST",
+                body: JSON.stringify(input),
+                ...(signal ? { signal } : {}),
+                timeoutMs: 5_000,
+                retryOnTimeout: false,
+            });
         }
     }
     return YtMusicApi;

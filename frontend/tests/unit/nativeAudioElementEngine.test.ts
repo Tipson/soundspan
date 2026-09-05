@@ -33,6 +33,7 @@ class FakeAudioElement implements NativeAudioElementLike {
     playCalls = 0;
     pauseCalls = 0;
     srcAssignments = 0;
+    crossOriginAtSrc: Array<string | null> = [];
     playBehavior: PlayBehavior = { kind: "resolve" };
 
     private srcValue = "";
@@ -46,6 +47,7 @@ class FakeAudioElement implements NativeAudioElementLike {
     // the in-progress stream and resets readiness.
     set src(value: string) {
         this.srcAssignments += 1;
+        this.crossOriginAtSrc.push(this.crossOrigin);
         this.srcValue = value;
         this.paused = true;
         this.ended = false;
@@ -866,6 +868,87 @@ test("preload uses a single muted buffer element that never plays", () => {
     assert.equal(buffer.volume, 0);
     assert.equal(buffer.playCalls, 0);
     assert.equal(buffer.src, "https://stream.example/track-3.flac");
+});
+
+test("preload lease becomes ready only after the buffer emits canplay", async () => {
+    const harness = createHarness();
+    const lease = harness.engine.preload("https://stream.example/ready.flac");
+    assert.ok(lease);
+    let settled = false;
+    void lease.result.then(() => {
+        settled = true;
+    });
+    await Promise.resolve();
+    assert.equal(settled, false);
+
+    harness.elements[0]?.fire("canplay");
+    assert.deepEqual(await lease.result, { state: "ready" });
+});
+
+test("preload configures the same request mode as playback before assigning src", () => {
+    for (const withCredentials of [false, true]) {
+        const harness = createHarness();
+        harness.engine.load("https://stream.example/current.flac", {
+            withCredentials,
+        });
+        const main = harness.mainElement();
+        harness.engine.preload("https://stream.example/next.flac", {
+            withCredentials,
+        });
+        const buffer = harness.elements[1];
+        assert.equal(
+            buffer.crossOriginAtSrc[0],
+            main.crossOriginAtSrc[0],
+            "the first preload request must use playback's CORS/credentials mode",
+        );
+        assert.equal(buffer.playCalls, 0);
+        assert.equal(main.src, "https://stream.example/current.flac");
+        harness.engine.destroy();
+    }
+});
+
+test("same-URL preload dedupe respects credential mode and cancels only the old lease", async () => {
+    const harness = createHarness();
+    const url = "https://stream.example/next.flac";
+    const first = harness.engine.preload(url, { withCredentials: true });
+    assert.ok(first);
+    const buffer = harness.elements[0];
+    const assignments = buffer.srcAssignments;
+    assert.strictEqual(
+        harness.engine.preload(url, { withCredentials: true }),
+        first,
+    );
+    assert.equal(buffer.srcAssignments, assignments);
+
+    const replacement = harness.engine.preload(url, "flac");
+    assert.ok(replacement);
+    assert.notStrictEqual(replacement, first);
+    assert.deepEqual(await first.result, { state: "cancelled" });
+    assert.equal(buffer.crossOriginAtSrc.at(-1), "anonymous");
+    assert.equal(buffer.srcAssignments, assignments + 1);
+    first.cancel();
+    assert.equal(
+        buffer.src,
+        url,
+        "old cancellation must not clear replacement",
+    );
+    buffer.fire("canplay");
+    assert.deepEqual(await replacement.result, { state: "ready" });
+    assert.equal(harness.elements.length, 1);
+    assert.equal(buffer.playCalls, 0);
+    harness.engine.destroy();
+});
+
+test("a replacement preload cancels the previous readiness lease", async () => {
+    const harness = createHarness();
+    const first = harness.engine.preload("https://stream.example/first.flac");
+    const second = harness.engine.preload("https://stream.example/second.flac");
+    assert.ok(first);
+    assert.ok(second);
+
+    assert.deepEqual(await first.result, { state: "cancelled" });
+    harness.elements[0]?.fire("canplay");
+    assert.deepEqual(await second.result, { state: "ready" });
 });
 
 test("preload skips the currently loaded source", () => {

@@ -65,25 +65,25 @@ export async function retainDeviceAudioFile(
         cache: "no-store",
         signal: input.signal,
     });
-    if (response.status !== 200) {
-        throw new DeviceOfflineDownloadError(
-            "http",
-            `Не удалось скачать аудио: HTTP ${response.status}`,
-            response.status,
-        );
-    }
-
-    const totalBytes = parseDeviceAudioContentLength(response);
-    const contentType = response.headers.get("content-type");
-    await input.onHeaders({ totalBytes, contentType });
-    const stream =
-        response.body ??
-        new Blob([await response.arrayBuffer()], {
-            type: contentType ?? undefined,
-        }).stream();
     let progress = Promise.resolve();
     let receipt: DeviceAudioReceipt | null = null;
     try {
+        if (response.status !== 200) {
+            throw new DeviceOfflineDownloadError(
+                "http",
+                `Не удалось скачать аудио: HTTP ${response.status}`,
+                response.status,
+            );
+        }
+
+        const totalBytes = parseDeviceAudioContentLength(response);
+        const contentType = response.headers.get("content-type");
+        await input.onHeaders({ totalBytes, contentType });
+        const stream =
+            response.body ??
+            new Blob([await response.arrayBuffer()], {
+                type: contentType ?? undefined,
+            }).stream();
         receipt = await session.retain({
             track: input.track,
             quality: input.quality,
@@ -100,6 +100,12 @@ export async function retainDeviceAudioFile(
         await progress;
         return { receipt };
     } catch (error) {
+        // Preflight or storage setup can fail before the vault owns a reader.
+        // Stop that unused response before a retry starts another transfer.
+        // An acquired reader remains the vault's cancellation responsibility.
+        if (response.body && !response.body.locked) {
+            await response.body.cancel().catch(() => undefined);
+        }
         await progress.catch(() => undefined);
         if (receipt) {
             await receipt.discard().catch(() => undefined);

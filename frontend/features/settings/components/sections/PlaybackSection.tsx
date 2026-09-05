@@ -43,7 +43,7 @@ export function PlaybackSection({
             id="playback"
             title="Воспроизведение"
             titleExtra={
-                <InfoTooltip text="Здесь настраивается качество локальных файлов из коллекции. Качество YouTube Music и TIDAL задаётся отдельно в разделе интеграций." />
+                <InfoTooltip text="Здесь настраивается качество локальных файлов из коллекции. Качество YouTube Music задаётся отдельно в разделе интеграций." />
             }
         >
             <SettingsRow

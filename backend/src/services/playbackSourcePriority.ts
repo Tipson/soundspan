@@ -1,17 +1,12 @@
 /** Providers accepted by the persisted playback source-order setting. */
-export const PLAYBACK_SOURCE_VALUES = [
-    "library",
-    "peers",
-    "tidal",
-    "ytmusic",
-] as const;
+export const PLAYBACK_SOURCE_VALUES = ["library", "peers", "ytmusic"] as const;
 
 /** One configurable tier in playback source selection. */
 export type PlaybackSource = (typeof PLAYBACK_SOURCE_VALUES)[number];
 /** A complete ordered permutation of playback source tiers. */
 export type PlaybackSourceOrder = readonly PlaybackSource[];
 
-/** Default playback order: owned library, online peers, TIDAL, then YT Music. */
+/** Default playback order: owned library, online peers, then YouTube Music. */
 export const DEFAULT_PLAYBACK_SOURCE_ORDER: PlaybackSourceOrder =
     PLAYBACK_SOURCE_VALUES;
 /** Persisted string representation of the default playback order. */
@@ -24,7 +19,10 @@ const UNAVAILABLE_SOURCE_PRIORITY = 100;
 /** Parses a stored source order and safely restores the default on drift. */
 export function parsePlaybackSourceOrder(value: unknown): PlaybackSourceOrder {
     if (typeof value !== "string") return DEFAULT_PLAYBACK_SOURCE_ORDER;
-    const entries = value.split(",").map((entry) => entry.trim());
+    const entries = value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== "tidal");
     if (entries.length !== PLAYBACK_SOURCE_VALUES.length) {
         return DEFAULT_PLAYBACK_SOURCE_ORDER;
     }

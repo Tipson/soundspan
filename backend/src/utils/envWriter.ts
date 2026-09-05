@@ -30,6 +30,7 @@ const ENV_CATEGORIES = {
     "Fanart.tv": ["FANART_API_KEY"],
     OpenAI: ["OPENAI_API_KEY"],
     Audiobookshelf: ["AUDIOBOOKSHELF_URL", "AUDIOBOOKSHELF_API_KEY"],
+    Audius: ["FEATURE_AUDIUS"],
     "Docker Paths": ["MUSIC_PATH", "DOWNLOAD_PATH"],
     "Recommendations & Remote Analysis": [
         "RECOMMENDATION_ENGINE_MODE",

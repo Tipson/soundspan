@@ -1,4 +1,5 @@
 import {
+    deviceOfflineRecordMatchesTrack,
     normalizeDeviceOfflineQuality,
     resolveDeviceOfflineTrackIdentity,
 } from "./trackIdentity";
@@ -11,6 +12,7 @@ import type {
 import type { AuthRuntimeLease } from "@/lib/auth-runtime-generation";
 import { DeviceOfflineDownloadError } from "./downloadError";
 import { DeviceAudioVaultError } from "./vault";
+import { isTrackActionable } from "@/lib/trackRef";
 
 export const DEVICE_OFFLINE_QUEUE_LEASE_MS = 60_000;
 export const DEVICE_OFFLINE_QUEUE_HEARTBEAT_MS = 20_000;
@@ -344,13 +346,15 @@ function recordManagement(
 
 function findReadyRecord(
     records: DeviceOfflineDownloadRecord[],
-    trackIdentity: string,
+    ownerId: string,
+    track: DeviceOfflineTrack,
     quality: string,
 ): DeviceOfflineDownloadRecord | null {
     return (
         records.find(
             (record) =>
-                record.trackIdentity === trackIdentity &&
+                record.ownerId === ownerId &&
+                deviceOfflineRecordMatchesTrack(record, track) &&
                 record.quality === quality &&
                 record.status === "ready",
         ) ?? null
@@ -465,6 +469,7 @@ export class DeviceOfflineQueueManager {
     ): Promise<DeviceOfflineBatchEnqueueResult> {
         const unique = new Map<string, DeviceOfflineQueueRequest>();
         for (const request of requests) {
+            if (!isTrackActionable(request.track)) continue;
             const quality = normalizeDeviceOfflineQuality(request.quality);
             const identity = resolveDeviceOfflineTrackIdentity(request.track);
             unique.set(
@@ -502,7 +507,12 @@ export class DeviceOfflineQueueManager {
                 this.assertOwnerAuthCurrent(request.ownerId, authRuntimeLease);
                 downloadsByOwner.set(request.ownerId, records);
             }
-            const ready = findReadyRecord(records, trackIdentity, quality);
+            const ready = findReadyRecord(
+                records,
+                request.ownerId,
+                request.track,
+                quality,
+            );
             if (ready) {
                 let retainedReady: DeviceOfflineDownloadRecord | null = ready;
                 if (
@@ -755,6 +765,15 @@ export class DeviceOfflineQueueManager {
                 await this.cleanupCancelledTrack(claimed, authRuntimeLease);
                 return true;
             }
+            if (!isTrackActionable(claimed.track)) {
+                await this.markQueueFailure(
+                    claimed,
+                    "error",
+                    "Этот источник TIDAL больше недоступен для загрузки.",
+                    authRuntimeLease,
+                );
+                return true;
+            }
             const records = await this.dependencies.downloads.list(
                 claimed.ownerId,
             );
@@ -763,7 +782,8 @@ export class DeviceOfflineQueueManager {
             }
             const ready = findReadyRecord(
                 records,
-                claimed.trackIdentity,
+                claimed.ownerId,
+                claimed.track,
                 claimed.quality,
             );
             if (this.isTrackCancelled(claimed)) {
@@ -1172,20 +1192,22 @@ export function summarizeDeviceOfflineCollection(
     quality = "auto",
 ): DeviceOfflineCollectionStatus {
     const normalizedQuality = normalizeDeviceOfflineQuality(quality);
-    const identities = Array.from(
-        new Set(
-            tracks.map((track) => resolveDeviceOfflineTrackIdentity(track)),
-        ),
-    );
+    const tracksByIdentity = new Map<string, DeviceOfflineTrack>();
+    for (const track of tracks) {
+        const identity = resolveDeviceOfflineTrackIdentity(track);
+        if (!tracksByIdentity.has(identity)) {
+            tracksByIdentity.set(identity, track);
+        }
+    }
     let ready = 0;
     let autoReady = 0;
     let queued = 0;
     let processing = 0;
     let errors = 0;
-    for (const identity of identities) {
+    for (const [identity, track] of tracksByIdentity) {
         const record = records.find(
             (candidate) =>
-                candidate.trackIdentity === identity &&
+                deviceOfflineRecordMatchesTrack(candidate, track) &&
                 candidate.quality === normalizedQuality,
         );
         if (record?.status === "ready") {
@@ -1204,7 +1226,7 @@ export function summarizeDeviceOfflineCollection(
         } else if (item?.status === "error" || record) errors += 1;
     }
     return {
-        total: identities.length,
+        total: tracksByIdentity.size,
         ready,
         autoReady,
         queued,

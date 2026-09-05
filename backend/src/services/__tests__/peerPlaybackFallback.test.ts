@@ -23,7 +23,7 @@ describe("peer playback fallback ladder", () => {
             duration: 180,
         });
         mockSystemSettingsFindUnique.mockResolvedValue({
-            playbackSourceOrder: "library,peers,tidal,ytmusic",
+            playbackSourceOrder: "library,peers,ytmusic",
         });
     });
 
@@ -31,50 +31,27 @@ describe("peer playback fallback ladder", () => {
         expect(
             choosePeerPlaybackFallback({
                 localTwinId: "local-1",
-                tidalTrackId: 42,
                 youtubeVideoId: "video-1",
             }),
         ).toEqual([
             { source: "library", trackId: "local-1" },
-            { source: "tidal", tidalTrackId: 42 },
             { source: "ytmusic", youtubeVideoId: "video-1" },
         ]);
     });
 
-    it("selects an existing TIDAL mapping without a local twin", () => {
+    it("selects a YouTube Music mapping without a local twin", () => {
         expect(
             choosePeerPlaybackFallback({
                 localTwinId: null,
-                tidalTrackId: 42,
                 youtubeVideoId: "video-1",
             }),
-        ).toEqual([
-            { source: "tidal", tidalTrackId: 42 },
-            { source: "ytmusic", youtubeVideoId: "video-1" },
-        ]);
-    });
-
-    it("honors the configured order for provider rungs", () => {
-        expect(
-            choosePeerPlaybackFallback(
-                {
-                    localTwinId: null,
-                    tidalTrackId: 42,
-                    youtubeVideoId: "video-1",
-                },
-                "library,peers,ytmusic,tidal",
-            ),
-        ).toEqual([
-            { source: "ytmusic", youtubeVideoId: "video-1" },
-            { source: "tidal", tidalTrackId: 42 },
-        ]);
+        ).toEqual([{ source: "ytmusic", youtubeVideoId: "video-1" }]);
     });
 
     it("returns an empty ladder when no fallback exists", () => {
         expect(
             choosePeerPlaybackFallback({
                 localTwinId: null,
-                tidalTrackId: null,
                 youtubeVideoId: null,
             }),
         ).toEqual([]);
@@ -97,7 +74,7 @@ describe("peer playback fallback ladder", () => {
         );
     });
 
-    it("selects an eligible provider mapping", async () => {
+    it("ignores a historical TIDAL-only provider mapping", async () => {
         mockTrackMappingFindMany.mockResolvedValueOnce([
             {
                 confidence: 0.7,
@@ -106,8 +83,8 @@ describe("peer playback fallback ladder", () => {
             },
         ]);
 
-        await expect(loadPeerPlaybackFallback("peer-track")).resolves.toEqual([
-            { source: "tidal", tidalTrackId: 42 },
-        ]);
+        await expect(loadPeerPlaybackFallback("peer-track")).resolves.toEqual(
+            [],
+        );
     });
 });

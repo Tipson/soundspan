@@ -78,10 +78,8 @@ function persistedProgressFor(event: PlaylistImportProgressEvent): number {
             return 25;
         case "local":
             return 30;
-        case "tidal":
-            return 30 + Math.round(10 * fraction);
         case "youtube":
-            return 40 + Math.round(28 * fraction);
+            return 30 + Math.round(38 * fraction);
     }
 }
 

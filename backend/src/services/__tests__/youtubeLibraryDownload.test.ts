@@ -39,10 +39,6 @@ jest.mock("../simpleDownloadManager", () => ({
     simpleDownloadManager: { startDownload: jest.fn() },
 }));
 
-jest.mock("../tidalLibraryDownload", () => ({
-    processTidalDownload: jest.fn(),
-}));
-
 jest.mock("../coalescedLibraryScan", () => ({
     requestCoalescedLibraryScan: jest.fn(),
 }));
@@ -62,7 +58,6 @@ import {
     watchYouTubeDownloadJobUntilTerminal,
     youtubeDownloadService,
 } from "../youtubeDownload";
-import { processTidalDownload } from "../tidalLibraryDownload";
 import {
     findAlbumBrowseId,
     processYoutubeDownload,
@@ -78,7 +73,6 @@ const mockGetAlbumStatus =
     youtubeDownloadService.getAlbumDownloadJobStatus as jest.Mock;
 const mockWatch = watchYouTubeDownloadJobUntilTerminal as jest.Mock;
 const mockFallback = simpleDownloadManager.startDownload as jest.Mock;
-const mockProcessTidalDownload = processTidalDownload as jest.Mock;
 const mockScan = requestCoalescedLibraryScan as jest.Mock;
 
 const completedStatus = {
@@ -411,55 +405,6 @@ describe("youtubeLibraryDownload", () => {
             undefined,
         );
         expect(mockStartAlbum).not.toHaveBeenCalled();
-    });
-
-    it("hands a search miss to a configured tidal fallback", async () => {
-        mockSearch.mockResolvedValueOnce([]);
-        await processYoutubeDownload("job-1", "Artist", "Album", "user-1", {
-            fallbackSource: "tidal",
-        });
-
-        expect(mockProcessTidalDownload).toHaveBeenCalledWith(
-            "job-1",
-            "Artist",
-            "Album",
-            "user-1",
-            { isFallback: true },
-        );
-        expect(mockUpdate).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: { id: "job-1" },
-                data: expect.objectContaining({
-                    metadata: expect.objectContaining({
-                        currentSource: "tidal",
-                        statusText: "YouTube Music not found → tidal",
-                    }),
-                }),
-            }),
-        );
-    });
-
-    it("does not bounce a tidal fallback back to tidal on another search miss", async () => {
-        mockSearch.mockResolvedValueOnce([]);
-        mockSettings.mockResolvedValueOnce({
-            primaryFailureFallback: "tidal",
-        });
-
-        await processYoutubeDownload("job-1", "Artist", "Album", "user-1", {
-            isFallback: true,
-            fallbackSource: "tidal",
-        });
-
-        expect(mockProcessTidalDownload).not.toHaveBeenCalled();
-        expect(mockUpdate).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: { id: "job-1" },
-                data: expect.objectContaining({
-                    status: "failed",
-                    error: "YouTube download failed",
-                }),
-            }),
-        );
     });
 
     it("persists only a sanitized error when album search misses", async () => {

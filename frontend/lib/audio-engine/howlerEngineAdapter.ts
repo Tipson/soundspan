@@ -10,6 +10,7 @@ import {
     type AudioEngineEventHandler,
     type AudioEngineEventType,
     type AudioEngineLoadOptions,
+    type AudioPreloadLease,
     type AudioEngineSource,
     type StreamingEngineMode,
 } from "@/lib/audio-engine/types";
@@ -72,7 +73,7 @@ interface HowlerEngineLike {
         src: string,
         format?: string,
         requestOptions?: HowlerRequestOptions,
-    ): void;
+    ): AudioPreloadLease | null;
     reload(): void;
     getActualCurrentTime(): number;
     hasTrackEnded(): boolean;
@@ -344,15 +345,18 @@ export class HowlerEngineAdapter implements AudioEngine {
     preload(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void;
-    preload(source: AudioEngineSource | string, format?: string): void;
+    ): AudioPreloadLease | null;
+    preload(
+        source: AudioEngineSource | string,
+        format?: string,
+    ): AudioPreloadLease | null;
     preload(
         source: AudioEngineSource | string,
         optionsOrFormat?: AudioEngineLoadOptions | string,
-    ): void {
+    ): AudioPreloadLease | null {
         const resolvedSource = resolveSource(source);
         if (!resolvedSource.url) {
-            return;
+            return null;
         }
 
         const normalizedOptions: AudioEngineLoadOptions =
@@ -360,7 +364,7 @@ export class HowlerEngineAdapter implements AudioEngine {
                 ? { format: optionsOrFormat }
                 : (optionsOrFormat ?? {});
 
-        this.engine.preload(
+        return this.engine.preload(
             resolvedSource.url,
             resolveFormat(resolvedSource, normalizedOptions),
             toHowlerRequestOptions(normalizedOptions),

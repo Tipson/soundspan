@@ -40,10 +40,6 @@ jest.mock("../lidarr", () => ({
     lidarrService: { isEnabled: jest.fn() },
 }));
 
-jest.mock("../tidal", () => ({
-    tidalService: { isAvailable: jest.fn() },
-}));
-
 jest.mock("../youtubeDownload", () => ({
     youtubeDownloadService: { isAvailable: jest.fn() },
 }));

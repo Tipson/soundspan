@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { dispatchQueryEvent } from "@/lib/query-events";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
@@ -13,11 +15,17 @@ import { Button } from "@/components/ui/Button";
  * Renders the SyncPage component.
  */
 export default function SyncPage() {
+    const router = useRouter();
+    const queryClient = useQueryClient();
     const [syncing, setSyncing] = useState(true);
     const [progress, setProgress] = useState(0);
     const [message, setMessage] = useState<string>(syncRu.scanningLibrary);
     const [error, setError] = useState("");
     const [completedSteps, setCompletedSteps] = useState<string[]>([]);
+    const navigateHome = useCallback(() => {
+        void queryClient.invalidateQueries();
+        router.replace("/");
+    }, [queryClient, router]);
 
     useEffect(() => {
         let mounted = true;
@@ -78,8 +86,7 @@ export default function SyncPage() {
                             setProgress(100);
                             setMessage(syncRu.redirecting);
                             redirectTimeout = setTimeout(() => {
-                                // Use window.location for full page reload to ensure fresh data
-                                window.location.href = "/";
+                                navigateHome();
                             }, 1500);
                         } else if (status.status === "failed") {
                             if (pollInterval) clearInterval(pollInterval);
@@ -139,12 +146,9 @@ export default function SyncPage() {
                 clearTimeout(redirectTimeout);
             }
         };
-    }, []);
+    }, [navigateHome]);
 
-    const handleSkip = () => {
-        // Use window.location for full page reload to ensure fresh data
-        window.location.href = "/";
-    };
+    const handleSkip = navigateHome;
 
     const steps = [
         { id: "tracks", label: syncRu.stepTracks },

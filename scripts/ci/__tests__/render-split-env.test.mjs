@@ -66,8 +66,6 @@ test("split env renderer preserves tuning, secrets, and isolated rehearsal endpo
             "/srv/music/spool",
             "--music-volume-marker-path",
             "/srv/music/.marker",
-            "--tidal-data-path",
-            "/opt/tidal",
             "--ytmusic-data-path",
             "/opt/ytmusic-rehearsal",
         ],

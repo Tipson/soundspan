@@ -187,42 +187,14 @@ export function createPlaybackErrorHandler({
                 errorCategory,
                 stage: "pre_recovery",
             });
-            if (providerStartupFailure) {
-                releasePlaybackSource();
-                finishFailedPlay();
-                playbackStateMachine.forceTransition("ERROR", {
-                    error: errorMessage,
-                });
-                setIsPlaying(false);
-                setIsBuffering(false);
-                recoverablePlayErrorPendingRef.current = false;
-                isUserInitiatedRef.current = false;
-                heartbeatRef.current?.stop();
-                clearPendingTrackErrorSkip();
-                clearStartupPlaybackRecovery();
-                clearTransientTrackRecovery(true);
-                toast.error(
-                    "Несколько треков YouTube Music подряд не загрузились. Текущий трек сохранён — повторите запуск немного позже.",
-                    {
-                        id: "youtube-provider-temporarily-unavailable",
-                        duration: 6000,
-                    },
-                );
-                logPlaybackClientMetric("player.playback_error", {
-                    trackId: currentTrack?.id ?? null,
-                    sourceType,
-                    error: errorMessage,
-                    errorCategory,
-                    stage: "provider_startup_paused",
-                });
-                return;
-            }
             const failedTrackId = currentTrack?.id ?? null;
             const transientScheduled =
+                !providerStartupFailure &&
                 shouldAttemptOuterTransientRecovery({
                     error: data.error,
                     recoverable: data.recoverable,
-                }) && attemptTransientTrackRecovery(failedTrackId, data.error);
+                }) &&
+                attemptTransientTrackRecovery(failedTrackId, data.error);
             if (transientScheduled) {
                 logPlaybackClientMetric("player.rebuffer", {
                     reason: "transient_track_recovery",

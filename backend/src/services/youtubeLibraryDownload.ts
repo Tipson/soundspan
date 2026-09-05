@@ -77,7 +77,7 @@ function selectAlbumBrowseId(
     return null;
 }
 
-/** Find the best public album-search result using TIDAL-compatible matching. */
+/** Find the best public album-search result using normalized album matching. */
 export async function findAlbumBrowseId(
     artistName: string,
     albumTitle: string,
@@ -163,20 +163,6 @@ const youtubeLibraryDownloadConfig = {
         },
     }),
     readDownloadedCount: (result) => result.downloaded,
-    fallbackPeer: {
-        sourceKey: "tidal",
-        run: async (jobId, artistName, albumTitle, userId, options) => {
-            const { processTidalDownload } =
-                await import("./tidalLibraryDownload");
-            await processTidalDownload(
-                jobId,
-                artistName,
-                albumTitle,
-                userId,
-                options,
-            );
-        },
-    },
     logFallbackSelection: false,
     prefixManagerFailureLog: true,
     scanSource: "youtube-download",

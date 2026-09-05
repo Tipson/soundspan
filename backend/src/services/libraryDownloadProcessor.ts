@@ -56,7 +56,7 @@ export interface LibraryDownloadProcessorConfig<TMatch, TResult> {
     download: (match: TMatch, context: DownloadContext) => Promise<TResult>;
     resultSummary: (match: TMatch, result: TResult) => ResultSummary;
     readDownloadedCount: (result: TResult) => number | null;
-    fallbackPeer: {
+    fallbackPeer?: {
         sourceKey: string;
         run: (
             jobId: string,
@@ -208,6 +208,7 @@ async function handOffToPeer<TMatch, TResult>(
     config: LibraryDownloadProcessorConfig<TMatch, TResult>,
     context: ProcessorContext,
 ): Promise<void> {
+    if (!config.fallbackPeer) return;
     const options: PeerFallbackOptions = { isFallback: true };
     await config.fallbackPeer.run(
         context.jobId,
@@ -223,7 +224,7 @@ async function dispatchHandOff<TMatch, TResult>(
     fallback: DownloadSource,
     context: ProcessorContext,
 ): Promise<void> {
-    if (fallback === config.fallbackPeer.sourceKey) {
+    if (config.fallbackPeer && fallback === config.fallbackPeer.sourceKey) {
         await handOffToPeer(config, context);
         return;
     }

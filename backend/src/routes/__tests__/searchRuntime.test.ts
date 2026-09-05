@@ -170,7 +170,11 @@ describe("search route runtime behavior", () => {
                 userId: string,
                 query: string,
                 limit: number,
-                options: { timeoutMs: number; maxRetries: number },
+                options: {
+                    timeoutMs: number;
+                    maxRetries: number;
+                    signal?: AbortSignal;
+                },
             ) => {
                 const [tracks, albums, artists] = await Promise.all([
                     mockYtMusicSearch(userId, query, "songs", limit, options),
@@ -605,7 +609,11 @@ describe("search route runtime behavior", () => {
             "Radiohead",
             "songs",
             60,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(mockAxiosGet).toHaveBeenCalledWith(
             "https://itunes.apple.com/search",
@@ -954,21 +962,33 @@ describe("search route runtime behavior", () => {
             "massive attack",
             "songs",
             20,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(mockYtMusicCatalogSearch).toHaveBeenCalledWith(
             "__public__",
             "massive attack",
             "albums",
             20,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(mockYtMusicCatalogSearch).toHaveBeenCalledWith(
             "__public__",
             "massive attack",
             "artists",
             20,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(res.body.results).toEqual(
             expect.arrayContaining([
@@ -1152,6 +1172,7 @@ describe("search route runtime behavior", () => {
 
     it("returns ready metadata when a YouTube Music source exceeds the discovery deadline", async () => {
         jest.useFakeTimers();
+        let discoverySignal: AbortSignal | undefined;
         mockSearchTracks.mockResolvedValueOnce([
             {
                 type: "track",
@@ -1161,7 +1182,16 @@ describe("search route runtime behavior", () => {
             },
         ]);
         mockYtMusicSearch.mockImplementationOnce(
-            () => new Promise(() => undefined),
+            (
+                _userId: string,
+                _query: string,
+                _filter: string,
+                _limit: number,
+                options: { signal?: AbortSignal },
+            ) => {
+                discoverySignal = options.signal;
+                return new Promise(() => undefined);
+            },
         );
 
         const req = {
@@ -1179,6 +1209,8 @@ describe("search route runtime behavior", () => {
                 expect.objectContaining({ id: "lastfm-ready" }),
             ]),
         );
+        expect(discoverySignal).toBeDefined();
+        expect(discoverySignal?.aborted).toBe(true);
         expect(mockRedisSetEx).not.toHaveBeenCalled();
         jest.useRealTimers();
     });
@@ -1226,7 +1258,11 @@ describe("search route runtime behavior", () => {
             "linkin park",
             "songs",
             50,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(
             res.body.results
@@ -1266,7 +1302,11 @@ describe("search route runtime behavior", () => {
             "linkin park",
             "songs",
             100,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(
             res.body.results.filter(

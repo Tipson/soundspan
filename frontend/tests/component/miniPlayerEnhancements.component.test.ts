@@ -209,11 +209,6 @@ mock.module("@/lib/audio-playback-context", {
 });
 
 // Mock TidalBadge
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => null,
-    },
-});
 
 // Mock SyncBadge
 mock.module("@/components/player/SyncBadge", {

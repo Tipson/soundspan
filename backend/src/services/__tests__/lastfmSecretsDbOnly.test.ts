@@ -70,7 +70,7 @@ describe("Last.fm DB-only secrets policy", () => {
             service.request({ method: "artist.getInfo" }),
         ).resolves.toEqual({ ok: true });
         expect(mockHttpGet).toHaveBeenCalledWith("/", {
-            params: { method: "artist.getInfo" },
+            params: { method: "artist.getInfo", api_key: "env-key-456" },
         });
         expect(service.apiKey).toBe("env-key-456");
     });

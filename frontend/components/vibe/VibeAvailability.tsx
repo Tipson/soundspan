@@ -790,9 +790,14 @@ export function VibeProviderFallback() {
                             type="button"
                             onClick={toggleWavePlayback}
                             disabled={!hasActiveWave && !canPlay}
-                            aria-label={primaryControlLabel}
+                            aria-label={
+                                !hasActiveWave && isLoading
+                                    ? ru.vibe.tuning
+                                    : primaryControlLabel
+                            }
+                            aria-busy={!hasActiveWave && isLoading}
                             aria-pressed={hasActiveWave && isPlaying}
-                            className="wave-density-toggle group relative z-10 flex h-28 min-h-20 w-28 min-w-20 flex-col items-center justify-center gap-1.5 rounded-full bg-white px-4 text-center text-sm font-black text-black shadow-2xl shadow-black/40 transition-[transform,background-color,box-shadow] duration-200 ease-out hover:scale-[1.035] hover:bg-brand-light hover:shadow-brand/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-transparent disabled:scale-100 disabled:bg-white/15 disabled:text-content-muted motion-reduce:transition-none sm:h-32 sm:w-32 sm:text-base"
+                            className={`wave-density-toggle group relative z-10 flex h-28 min-h-20 w-28 min-w-20 flex-col items-center justify-center gap-1.5 rounded-full bg-white px-4 text-center text-sm font-black text-black shadow-2xl shadow-black/40 transition-[transform,background-color,box-shadow] duration-200 ease-out hover:scale-[1.035] hover:bg-brand-light hover:shadow-brand/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-transparent disabled:scale-100 motion-reduce:transition-none sm:h-32 sm:w-32 sm:text-base ${!hasActiveWave && isLoading ? "disabled:bg-white/85 disabled:text-black" : "disabled:bg-white/20 disabled:text-content-secondary"}`}
                         >
                             {!hasActiveWave && isLoading ? (
                                 <Loader2
@@ -810,12 +815,24 @@ export function VibeProviderFallback() {
                                     aria-hidden="true"
                                 />
                             )}
-                            <span className="max-w-full leading-[1.05] [text-wrap:balance]">
+                            <span
+                                data-testid="wave-main-label"
+                                className={`max-w-full leading-[1.05] ${!hasActiveWave && isLoading ? "whitespace-nowrap" : "[text-wrap:balance]"}`}
+                            >
                                 {!hasActiveWave && isLoading
-                                    ? ru.vibe.tuning
+                                    ? "Настраиваем…"
                                     : primaryControlLabel}
                             </span>
                         </button>
+                        {!hasActiveWave && isLoading && (
+                            <span
+                                data-testid="wave-loading-status"
+                                role="status"
+                                className="sr-only"
+                            >
+                                {ru.vibe.tuning}
+                            </span>
+                        )}
                     </div>
 
                     <div

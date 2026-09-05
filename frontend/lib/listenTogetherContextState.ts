@@ -6,7 +6,11 @@ import type {
     QueueTrackInput,
     SyncQueueItem,
 } from "@/lib/listen-together-socket";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
+import {
+    isTrackActionable,
+    resolvePreferenceTrackId,
+    toAddToPlaylistRef,
+} from "@/lib/trackRef";
 import {
     normalizeCanonicalMediaProviderIdentity,
     toLegacyStreamFields,
@@ -27,9 +31,20 @@ export function toLocalTrack(
         availability?.youtubeVideoId ??
         item.provider?.youtubeVideoId ??
         item.youtubeVideoId;
+    const providerTrackId =
+        effectiveSource === "local"
+            ? undefined
+            : effectiveSource === "youtube"
+              ? youtubeVideoId
+              : effectiveSource === "tidal"
+                ? tidalTrackId == null
+                    ? undefined
+                    : String(tidalTrackId)
+                : item.provider?.providerTrackId;
     const provider = normalizeCanonicalMediaProviderIdentity({
-        mediaSource: effectiveSource === "local" ? "local" : item.mediaSource,
-        providerTrackId: item.provider?.providerTrackId,
+        mediaSource:
+            effectiveSource ?? item.provider?.source ?? item.mediaSource,
+        providerTrackId,
         tidalTrackId: effectiveSource === "youtube" ? undefined : tidalTrackId,
         youtubeVideoId:
             effectiveSource === "tidal" ? undefined : youtubeVideoId,
@@ -89,7 +104,7 @@ export function extractQueueTrackInputs(
         queue.length > 0 ? queue : currentTrack ? [currentTrack] : [];
     const queueTracks: QueueTrackInput[] = [];
     for (const track of source) {
-        if (isEpisodeQueueItem(track)) continue;
+        if (isEpisodeQueueItem(track) || !isTrackActionable(track)) continue;
         try {
             queueTracks.push(toAddToPlaylistRef(track));
         } catch {
@@ -97,7 +112,11 @@ export function extractQueueTrackInputs(
         }
     }
     const currentTrackId =
-        currentTrack && queueTracks.length > 0 ? currentTrack.id : undefined;
+        currentTrack &&
+        isTrackActionable(currentTrack) &&
+        queueTracks.length > 0
+            ? resolvePreferenceTrackId(currentTrack)
+            : undefined;
     return { queueTracks, currentTrackId };
 }
 

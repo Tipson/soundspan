@@ -1,4 +1,10 @@
 import type { LikedPlaylistTrack, TrackPreferenceSignal } from "@/lib/api";
+import {
+    hasLocalTrackBacking,
+    isTrackActionable,
+    resolveTrackProviderSource,
+    toTrackRef,
+} from "@/lib/trackRef";
 import type { DeviceOfflineTrack } from "./types";
 
 export const DEVICE_OFFLINE_LIKED_CHANGE_EVENT =
@@ -50,52 +56,37 @@ export function subscribeToDeviceOfflineLikedChanges(
 export function isLikedPlaylistTrackDownloadable(
     track: LikedPlaylistTrack,
 ): boolean {
-    const source = track.streamSource ?? track.source;
+    if (!isTrackActionable(track)) return false;
+    if (hasLocalTrackBacking(track)) return Boolean(track.id);
+    const source = resolveTrackProviderSource(track);
     if (source === "peer") return false;
-    if (source === "youtube") {
+    if (source === "youtube" || source === "youtube-direct") {
         return Boolean(track.youtubeVideoId ?? track.provider?.youtubeVideoId);
     }
-    if (source === "tidal") {
-        const tidalId = track.tidalTrackId ?? track.provider?.tidalTrackId;
-        return tidalId != null && Number.isFinite(Number(tidalId));
-    }
-    if (source === "local") return Boolean(track.id);
     if (track.youtubeVideoId ?? track.provider?.youtubeVideoId) return true;
-    if (track.tidalTrackId ?? track.provider?.tidalTrackId) return true;
-    return Boolean(track.filePath);
+    return false;
 }
 
 /** Convert a My Liked API row into portable, device-local track metadata. */
 export function likedPlaylistTrackToDeviceTrack(
     track: LikedPlaylistTrack,
 ): DeviceOfflineTrack {
-    const streamSource =
-        track.streamSource ??
-        (track.source === "tidal" || track.source === "youtube"
-            ? track.source
-            : undefined);
-    const providerTidalId = track.provider?.tidalTrackId ?? null;
-    const tidalId = track.tidalTrackId ?? providerTidalId;
-    const normalizedTidalId =
-        tidalId == null || !Number.isFinite(Number(tidalId))
-            ? undefined
-            : Number(tidalId);
+    const isLocal = hasLocalTrackBacking(track);
+    const reference = isLocal ? null : toTrackRef(track);
+    const youtubeVideoId =
+        reference && "youtubeVideoId" in reference
+            ? reference.youtubeVideoId
+            : undefined;
 
     return {
         id: track.id,
         title: track.title,
         duration: track.duration,
         filePath: track.filePath || undefined,
-        source:
-            track.source === "local" ||
-            track.source === "tidal" ||
-            track.source === "youtube"
-                ? track.source
-                : undefined,
-        streamSource,
-        youtubeVideoId:
-            track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
-        tidalTrackId: normalizedTidalId,
+        source: isLocal ? "local" : youtubeVideoId ? "youtube" : undefined,
+        streamSource: youtubeVideoId ? "youtube" : undefined,
+        youtubeVideoId,
+        tidalTrackId: undefined,
         artist: {
             id: track.artist.id ?? undefined,
             name: track.artist.name,

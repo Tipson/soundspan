@@ -114,6 +114,10 @@ describe("workers runtime behavior", () => {
         const recoverExpiredRemoteAnalysisAssets = jest.fn(async () => 0);
         const startRemoteAnalysisAssetRecovery = jest.fn();
         const stopRemoteAnalysisAssetRecovery = jest.fn(async () => undefined);
+        const startCanonicalIdentityPromotionSweep = jest.fn();
+        const stopCanonicalIdentityPromotionSweep = jest.fn(
+            async () => undefined,
+        );
         const finalizeAlbumDownloadQueueFailure = jest.fn(
             async () => undefined,
         );
@@ -201,11 +205,6 @@ describe("workers runtime behavior", () => {
                     createdAt: Date;
                 } | null,
             })),
-            reconcileYoutubeToTidal: jest.fn(async () => ({
-                processed: 0,
-                upgraded: 0,
-                skipped: 0,
-            })),
         };
 
         const prisma = {
@@ -244,6 +243,13 @@ describe("workers runtime behavior", () => {
             () => ({
                 startRemoteAnalysisAssetRecovery,
                 stopRemoteAnalysisAssetRecovery,
+            }),
+        );
+        jest.doMock(
+            "../../services/recommendations/canonicalIdentityPromotionSweep",
+            () => ({
+                startCanonicalIdentityPromotionSweep,
+                stopCanonicalIdentityPromotionSweep,
             }),
         );
         jest.doMock("../federationJobs", () => ({
@@ -435,6 +441,8 @@ describe("workers runtime behavior", () => {
             recoverExpiredRemoteAnalysisAssets,
             startRemoteAnalysisAssetRecovery,
             stopRemoteAnalysisAssetRecovery,
+            startCanonicalIdentityPromotionSweep,
+            stopCanonicalIdentityPromotionSweep,
             finalizeAlbumDownloadQueueFailure,
             recoverUnqueuedAlbumDownloads,
             recoverUnqueuedArtistDownloadExpansions,
@@ -557,6 +565,9 @@ describe("workers runtime behavior", () => {
         expect(mocks.startMoodBucketWorker).toHaveBeenCalledTimes(1);
         expect(mocks.startVibeEmbedWorker).toHaveBeenCalledTimes(1);
         expect(mocks.startDiscoverWeeklyCron).toHaveBeenCalledTimes(1);
+        expect(
+            mocks.startCanonicalIdentityPromotionSweep,
+        ).toHaveBeenCalledTimes(1);
         expect(mocks.stopDiscoverWeeklyCron).not.toHaveBeenCalled();
         expect(mocks.schedulerQueue.isReady).toHaveBeenCalledTimes(1);
         expect(mocks.schedulerMaintenanceQueue.isReady).toHaveBeenCalledTimes(
@@ -1251,6 +1262,9 @@ describe("workers runtime behavior", () => {
         expect(mocks.stopUnifiedEnrichmentWorker).toHaveBeenCalledTimes(1);
         expect(mocks.stopMoodBucketWorker).toHaveBeenCalledTimes(1);
         expect(mocks.stopVibeEmbedWorker).toHaveBeenCalledTimes(1);
+        expect(mocks.stopCanonicalIdentityPromotionSweep).toHaveBeenCalledTimes(
+            1,
+        );
         expect(mocks.scanQueue.removeAllListeners).toHaveBeenCalledTimes(1);
         expect(
             mocks.genericImportQueue.removeAllListeners,
@@ -1573,7 +1587,7 @@ describe("workers runtime behavior", () => {
         );
     });
 
-    it("runs track-mapping reconcile job including YT->TIDAL upgrade pass", async () => {
+    it("runs track-mapping reconciliation without retired provider upgrades", async () => {
         process.env = { ...originalEnv };
         const mocks = setupWorkerModuleMocks();
         mocks.trackReconciliationService.reconcileOrphans.mockResolvedValueOnce(
@@ -1589,13 +1603,6 @@ describe("workers runtime behavior", () => {
             result: { processed: 2, linked: 1, skipped: 1 },
             nextCursor,
         });
-        mocks.trackReconciliationService.reconcileYoutubeToTidal.mockResolvedValueOnce(
-            {
-                processed: 3,
-                upgraded: 2,
-                skipped: 1,
-            },
-        );
 
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         loadWorkers();
@@ -1624,12 +1631,6 @@ describe("workers runtime behavior", () => {
                 id: nextCursor.id,
                 createdAt: nextCursor.createdAt.toISOString(),
             }),
-        );
-        expect(
-            mocks.trackReconciliationService.reconcileYoutubeToTidal,
-        ).toHaveBeenCalledTimes(1);
-        expect(mocks.logger.info).toHaveBeenCalledWith(
-            expect.stringContaining("Upgraded 2 YT mappings to TIDAL"),
         );
     });
 

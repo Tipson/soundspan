@@ -27,6 +27,7 @@ interface PlaylistDetailActionDockProps {
     playlistId: string;
     playlistName: string;
     trackItemCount: number;
+    canPlayAll?: boolean;
     playableTracks: Track[];
     isThisPlaylistPlaying: boolean;
     isPlaying: boolean;
@@ -73,12 +74,12 @@ function SecondaryAction({
             title={label}
             aria-label={label}
             className={cn(
-                "flex min-h-11 w-full items-center justify-start gap-3 rounded-xl px-3 text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none sm:h-11 sm:w-11 sm:justify-center sm:rounded-full sm:px-0",
+                "flex min-h-11 w-full items-center justify-start gap-3 rounded-xl px-3 text-content-secondary transition-colors hover:bg-white/10 hover:text-content active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
                 className,
             )}
         >
             {icon}
-            <span className="text-sm sm:sr-only">{label}</span>
+            <span className="text-sm">{label}</span>
         </button>
     );
 }
@@ -88,6 +89,7 @@ export function PlaylistDetailActionDock({
     playlistId,
     playlistName,
     trackItemCount,
+    canPlayAll = trackItemCount > 0,
     playableTracks,
     isThisPlaylistPlaying,
     isPlaying,
@@ -112,11 +114,16 @@ export function PlaylistDetailActionDock({
 }: PlaylistDetailActionDockProps) {
     const [isMoreOpen, setIsMoreOpen] = useState(false);
     const moreActionsRef = useRef<HTMLDivElement | null>(null);
+    const moreButtonRef = useRef<HTMLButtonElement | null>(null);
     const likeLabel = isAllLiked ? ru.playlist.unlikeAll : ru.playlist.likeAll;
     const shareLabel = isPublic
         ? ru.playlist.makePrivate
         : ru.playlist.shareWithOthers;
     const visibilityLabel = isHidden ? ru.playlist.show : ru.playlist.hide;
+    const primaryActionLabel =
+        isThisPlaylistPlaying && isPlaying
+            ? ru.common.pause
+            : ru.common.playAll;
 
     useEffect(() => {
         if (!isMoreOpen) return;
@@ -129,7 +136,10 @@ export function PlaylistDetailActionDock({
             }
         };
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setIsMoreOpen(false);
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            setIsMoreOpen(false);
+            queueMicrotask(() => moreButtonRef.current?.focus());
         };
         document.addEventListener("mousedown", closeOnOutsideClick);
         document.addEventListener("keydown", closeOnEscape);
@@ -148,11 +158,12 @@ export function PlaylistDetailActionDock({
                 data-detail-action-tier="primary"
                 className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
             >
-                {trackItemCount > 0 && (
+                {canPlayAll && (
                     <button
                         type="button"
                         onClick={onPlay}
-                        className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none"
+                        aria-label={primaryActionLabel}
+                        className="flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-3 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none sm:px-5"
                     >
                         {showPlaySpinner ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
@@ -161,10 +172,19 @@ export function PlaylistDetailActionDock({
                         ) : (
                             <Play className="ml-0.5 h-5 w-5 fill-current" />
                         )}
-                        <span>
+                        <span
+                            data-playlist-primary-label="compact"
+                            className="min-w-0 truncate sm:hidden"
+                        >
                             {isThisPlaylistPlaying && isPlaying
                                 ? ru.common.pause
-                                : ru.common.playAll}
+                                : ru.common.listen}
+                        </span>
+                        <span
+                            data-playlist-primary-label="full"
+                            className="hidden sm:inline"
+                        >
+                            {primaryActionLabel}
                         </span>
                     </button>
                 )}
@@ -181,15 +201,16 @@ export function PlaylistDetailActionDock({
                 )}
             </div>
 
-            <div ref={moreActionsRef} className="relative sm:contents">
+            <div ref={moreActionsRef} className="relative shrink-0">
                 <button
+                    ref={moreButtonRef}
                     type="button"
                     data-playlist-actions-overflow
                     onClick={() => setIsMoreOpen((open) => !open)}
                     aria-label="Ещё действия с плейлистом"
                     aria-expanded={isMoreOpen}
                     aria-controls="playlist-secondary-actions"
-                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light sm:hidden"
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                 >
                     <Ellipsis className="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -200,11 +221,10 @@ export function PlaylistDetailActionDock({
                     role="group"
                     aria-label="Действия с плейлистом"
                     className={cn(
-                        "absolute right-0 top-[calc(100%+0.5rem)] z-40 min-w-[17rem] flex-col gap-1 rounded-2xl border border-line bg-surface-overlay p-2 shadow-2xl",
+                        "absolute right-0 top-[calc(100%+0.5rem)] z-40 max-h-[min(24rem,calc(100dvh-var(--app-topbar-height)-var(--safe-area-top)-var(--app-bottom-nav-height)-var(--safe-area-bottom)-2rem))] w-[min(17rem,calc(100vw-2rem))] min-w-0 flex-col gap-1 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface-overlay p-2 shadow-2xl [scrollbar-gutter:stable] md:max-h-[min(28rem,calc(100dvh-var(--app-topbar-height-desktop)-var(--safe-area-top)-var(--app-player-height-desktop)-var(--safe-area-bottom)-2rem))]",
                         isMoreOpen ? "flex" : "hidden",
-                        "sm:static sm:z-auto sm:flex sm:min-w-0 sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none",
                     )}
-                    onClick={() => setIsMoreOpen(false)}
+                    onClickCapture={() => setIsMoreOpen(false)}
                 >
                     {playableTracks.length > 0 && (
                         <SecondaryAction
@@ -237,7 +257,7 @@ export function PlaylistDetailActionDock({
                         tracks={playableTracks}
                         collectionId={`playlist:${playlistId}`}
                         collectionLabel={playlistName}
-                        className="w-full justify-start rounded-xl border-0 px-3 sm:w-auto sm:justify-center sm:rounded-full sm:border sm:px-4"
+                        className="min-h-11 w-full justify-start rounded-xl border-0 px-3 [&>span]:whitespace-normal [&>span]:text-left"
                     />
                     {trackItemCount > 0 && (
                         <SecondaryAction
@@ -246,12 +266,9 @@ export function PlaylistDetailActionDock({
                             onClick={onStartRadio}
                         />
                     )}
-                    {radioActions}
-
-                    <span
-                        className="hidden flex-1 sm:block"
-                        aria-hidden="true"
-                    />
+                    <div className="contents [&_button]:min-h-11 [&_button]:w-full [&_button]:justify-start [&_button]:rounded-xl">
+                        {radioActions}
+                    </div>
 
                     {isOwner && (
                         <SecondaryAction

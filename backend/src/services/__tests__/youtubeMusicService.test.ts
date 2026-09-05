@@ -1,3 +1,6 @@
+import http from "node:http";
+import { PassThrough } from "node:stream";
+
 const mockClient = {
     get: jest.fn(),
     post: jest.fn(),
@@ -56,6 +59,45 @@ describe("youtubeMusic service", () => {
         });
     });
 
+    it("forwards tail warmup reconciliation as an abortable JSON-only request", async () => {
+        const signal = new AbortController().signal;
+        const snapshot = {
+            ownerId: "user-1:player-1",
+            generation: 7,
+            accepted: true,
+            items: [
+                { videoId: "next0000001", quality: "HIGH", status: "queued" },
+            ],
+        };
+        mockClient.post.mockResolvedValueOnce({ data: snapshot });
+
+        await expect(
+            ytMusicService.reconcileTailWarmup(
+                {
+                    ownerId: "user-1:player-1",
+                    generation: 7,
+                    quality: "HIGH",
+                    current: "current01",
+                    immediate: "next01",
+                    tail: ["tail0000001"],
+                },
+                { signal },
+            ),
+        ).resolves.toEqual(snapshot);
+        expect(mockClient.post).toHaveBeenCalledWith(
+            "/tail-warmup/reconcile",
+            {
+                ownerId: "user-1:player-1",
+                generation: 7,
+                quality: "HIGH",
+                current: "current01",
+                immediate: "next01",
+                tail: ["tail0000001"],
+            },
+            { signal, timeout: 5_000 },
+        );
+    });
+
     describe("internal-secret header (F31)", () => {
         it("attaches x-internal-secret to the sidecar client when configured", () => {
             mockConfig.internalApiSecret = "sek-123";
@@ -79,6 +121,534 @@ describe("youtubeMusic service", () => {
             const createArg = mockAxiosCreate.mock.calls.at(-1)?.[0] ?? {};
             expect(createArg.headers).toBeUndefined();
         });
+    });
+
+    it("reserves bounded sidecar transport capacity for interactive listeners", async () => {
+        let isolatedService: typeof ytMusicService;
+        jest.isolateModules(() => {
+            isolatedService = require("../youtubeMusic").ytMusicService;
+        });
+        const createArg = mockAxiosCreate.mock.calls.at(-1)?.[0];
+
+        expect(createArg.maxRedirects).toBe(0);
+        expect(createArg.httpAgent.maxSockets).toBe(16);
+        expect(createArg.httpAgent.maxTotalSockets).toBe(16);
+        expect(createArg.httpAgent.maxFreeSockets).toBe(8);
+        expect(createArg.httpsAgent.maxSockets).toBe(16);
+        expect(createArg.httpsAgent.maxTotalSockets).toBe(16);
+        expect(createArg.httpsAgent.maxFreeSockets).toBe(8);
+
+        mockClient.get.mockResolvedValue({ data: { pipe: jest.fn() } });
+        await isolatedService!.getStreamProxy("u1", "current", "high");
+        const interactiveConfig = mockClient.get.mock.calls.at(-1)?.[1];
+        await isolatedService!.getStreamProxy("u1", "next", "high", undefined, {
+            purpose: "preload",
+        });
+        const preloadConfig = mockClient.get.mock.calls.at(-1)?.[1];
+        await isolatedService!.getStreamProxy(
+            "u1",
+            "analysis",
+            "high",
+            undefined,
+            { purpose: "analysis" },
+        );
+        const analysisConfig = mockClient.get.mock.calls.at(-1)?.[1];
+
+        expect(interactiveConfig.httpAgent).not.toBe(createArg.httpAgent);
+        expect(interactiveConfig.httpsAgent).not.toBe(createArg.httpsAgent);
+        expect(interactiveConfig.httpAgent.maxSockets).toBe(120);
+        expect(interactiveConfig.httpAgent.maxTotalSockets).toBe(120);
+        expect(interactiveConfig.httpAgent.maxFreeSockets).toBe(16);
+        expect(interactiveConfig.httpsAgent.maxSockets).toBe(120);
+        expect(interactiveConfig.httpsAgent.maxTotalSockets).toBe(120);
+        expect(interactiveConfig.httpsAgent.maxFreeSockets).toBe(16);
+        expect(preloadConfig.httpAgent).not.toBe(interactiveConfig.httpAgent);
+        expect(preloadConfig.httpsAgent).not.toBe(interactiveConfig.httpsAgent);
+        expect(preloadConfig.httpAgent.maxSockets).toBe(8);
+        expect(preloadConfig.httpAgent.maxTotalSockets).toBe(8);
+        expect(preloadConfig.httpAgent.maxFreeSockets).toBe(4);
+        expect(preloadConfig.httpsAgent.maxSockets).toBe(8);
+        expect(preloadConfig.httpsAgent.maxTotalSockets).toBe(8);
+        expect(preloadConfig.httpsAgent.maxFreeSockets).toBe(4);
+        expect(analysisConfig.httpAgent).toBe(preloadConfig.httpAgent);
+        expect(analysisConfig.httpsAgent).toBe(preloadConfig.httpsAgent);
+        expect(
+            createArg.httpAgent.maxSockets +
+                interactiveConfig.httpAgent.maxSockets +
+                preloadConfig.httpAgent.maxSockets,
+        ).toBe(144);
+        expect(
+            createArg.httpsAgent.maxSockets +
+                interactiveConfig.httpsAgent.maxSockets +
+                preloadConfig.httpsAgent.maxSockets,
+        ).toBe(144);
+    });
+
+    it("does not follow sidecar redirects while normal JSON and stream responses work", async () => {
+        jest.isolateModules(() => {
+            require("../youtubeMusic");
+        });
+        const createArg = mockAxiosCreate.mock.calls.at(-1)?.[0];
+        expect(createArg.adapter).toEqual(expect.any(Function));
+        const actualAxios = (
+            jest.requireActual("axios") as unknown as {
+                default: import("axios").AxiosStatic;
+            }
+        ).default;
+        let redirectedRequests = 0;
+        const redirectTarget = http.createServer((_request, response) => {
+            redirectedRequests += 1;
+            response.end("redirected");
+        });
+        const sidecar = http.createServer((request, response) => {
+            if (request.url === "/json") {
+                response.setHeader("content-type", "application/json");
+                response.end(JSON.stringify({ ok: true }));
+                return;
+            }
+            if (request.url === "/stream") {
+                response.setHeader("content-type", "audio/webm");
+                response.end("audio");
+                return;
+            }
+            const status = request.url === "/redirect-307" ? 307 : 302;
+            const targetAddress = redirectTarget.address();
+            if (!targetAddress || typeof targetAddress === "string") {
+                response.statusCode = 500;
+                response.end();
+                return;
+            }
+            response.writeHead(status, {
+                location: `http://127.0.0.1:${targetAddress.port}/target`,
+            });
+            response.end();
+        });
+        const listen = (server: http.Server) =>
+            new Promise<void>((resolve, reject) => {
+                server.once("error", reject);
+                server.listen(0, "127.0.0.1", resolve);
+            });
+        const close = (server: http.Server) =>
+            new Promise<void>((resolve) => {
+                server.close(() => resolve());
+                server.closeAllConnections();
+            });
+
+        await listen(redirectTarget);
+        await listen(sidecar);
+        const sidecarAddress = sidecar.address();
+        if (!sidecarAddress || typeof sidecarAddress === "string") {
+            throw new Error("Expected a TCP listener");
+        }
+        const { adapter: _boundedAdapter, ...transportOptions } = createArg;
+        const client = actualAxios.create({
+            ...transportOptions,
+            baseURL: `http://127.0.0.1:${sidecarAddress.port}`,
+        });
+        try {
+            await expect(client.get("/json")).resolves.toMatchObject({
+                status: 200,
+                data: { ok: true },
+            });
+            const streamResponse = await client.get("/stream", {
+                responseType: "stream",
+            });
+            const chunks: Buffer[] = [];
+            for await (const chunk of streamResponse.data) {
+                chunks.push(Buffer.from(chunk));
+            }
+            expect(Buffer.concat(chunks).toString("utf8")).toBe("audio");
+
+            await expect(client.get("/redirect-302")).rejects.toMatchObject({
+                response: { status: 302 },
+            });
+            await expect(client.get("/redirect-307")).rejects.toMatchObject({
+                response: { status: 307 },
+            });
+            expect(redirectedRequests).toBe(0);
+        } finally {
+            createArg.httpAgent.destroy();
+            createArg.httpsAgent.destroy();
+            await Promise.all([close(sidecar), close(redirectTarget)]);
+        }
+    });
+
+    it("admits current and control traffic while other transport lanes are saturated", async () => {
+        let isolatedService: typeof ytMusicService;
+        jest.isolateModules(() => {
+            isolatedService = require("../youtubeMusic").ytMusicService;
+        });
+        const controlAgent = mockAxiosCreate.mock.calls.at(-1)?.[0]
+            .httpAgent as http.Agent;
+
+        mockClient.get.mockResolvedValue({ data: { pipe: jest.fn() } });
+        await isolatedService!.getStreamProxy("u1", "current", "high");
+        const interactiveAgent = mockClient.get.mock.calls.at(-1)?.[1]
+            .httpAgent as http.Agent;
+        await isolatedService!.getStreamProxy(
+            "u1",
+            "preload",
+            "high",
+            undefined,
+            { purpose: "preload" },
+        );
+        const backgroundAgent = mockClient.get.mock.calls.at(-1)?.[1]
+            .httpAgent as http.Agent;
+
+        const heldRequests: http.ClientRequest[] = [];
+        const heldResponses: http.IncomingMessage[] = [];
+        const server = http.createServer((request, response) => {
+            if (request.url === "/hold") {
+                response.writeHead(200, {
+                    "content-type": "audio/webm",
+                    "transfer-encoding": "chunked",
+                });
+                response.flushHeaders();
+                return;
+            }
+            response.end("ok");
+        });
+        await new Promise<void>((resolve, reject) => {
+            server.once("error", reject);
+            server.listen(0, "127.0.0.1", resolve);
+        });
+        const address = server.address();
+        if (!address || typeof address === "string") {
+            throw new Error("Expected a TCP listener");
+        }
+        const origin = `http://127.0.0.1:${address.port}`;
+
+        const hold = (agent: http.Agent) =>
+            new Promise<void>((resolve, reject) => {
+                const request = http.get(
+                    `${origin}/hold`,
+                    { agent },
+                    (response) => {
+                        heldResponses.push(response);
+                        resolve();
+                    },
+                );
+                heldRequests.push(request);
+                request.once("error", reject);
+            });
+        const fast = (agent: http.Agent) =>
+            new Promise<void>((resolve, reject) => {
+                const request = http.get(
+                    `${origin}/fast`,
+                    { agent },
+                    (response) => {
+                        response.resume();
+                        response.once("end", () => {
+                            clearTimeout(timeout);
+                            resolve();
+                        });
+                    },
+                );
+                const timeout = setTimeout(() => {
+                    request.destroy(
+                        new Error("Independent transport lane timed out"),
+                    );
+                }, 2_000);
+                request.once("error", (error) => {
+                    clearTimeout(timeout);
+                    reject(error);
+                });
+            });
+
+        try {
+            await Promise.all(
+                Array.from({ length: 8 }, () => hold(backgroundAgent)),
+            );
+            await Promise.all([fast(interactiveAgent), fast(controlAgent)]);
+
+            await Promise.all(
+                Array.from({ length: 120 }, () => hold(interactiveAgent)),
+            );
+            await expect(fast(controlAgent)).resolves.toBeUndefined();
+        } finally {
+            for (const response of heldResponses) response.destroy();
+            for (const request of heldRequests) request.destroy();
+            controlAgent.destroy();
+            interactiveAgent.destroy();
+            backgroundAgent.destroy();
+            await new Promise<void>((resolve) => {
+                server.close(() => resolve());
+                server.closeAllConnections();
+            });
+        }
+    }, 15_000);
+
+    it("bounds background stream admission and removes cancelled waiters", async () => {
+        let isolatedService: typeof ytMusicService;
+        jest.isolateModules(() => {
+            isolatedService = require("../youtubeMusic").ytMusicService;
+        });
+        const responseStreams: PassThrough[] = [];
+        mockClient.get.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    setTimeout(() => {
+                        const stream = new PassThrough();
+                        responseStreams.push(stream);
+                        resolve({ data: stream });
+                    }, 10);
+                }),
+        );
+
+        const requestPreload = (index: number, signal?: AbortSignal) =>
+            isolatedService!.getStreamProxy(
+                "u1",
+                `preload-${index}`,
+                "high",
+                undefined,
+                { purpose: "preload", signal },
+            );
+        const active = Array.from({ length: 8 }, (_unused, index) =>
+            requestPreload(index),
+        );
+        const queued = Array.from({ length: 7 }, (_unused, index) =>
+            requestPreload(index + 8),
+        );
+        const cancelledController = new AbortController();
+        const cancelled = requestPreload(15, cancelledController.signal);
+        const rejected = requestPreload(16);
+        const requests = [...active, ...queued, cancelled, rejected];
+        let replacement: ReturnType<typeof requestPreload> | undefined;
+
+        try {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            expect(mockClient.get).toHaveBeenCalledTimes(8);
+            await expect(rejected).rejects.toMatchObject({
+                response: { status: 503 },
+            });
+
+            cancelledController.abort();
+            await expect(cancelled).rejects.toMatchObject({
+                name: "AbortError",
+            });
+            replacement = requestPreload(17);
+            requests.push(replacement);
+            expect(mockClient.get).toHaveBeenCalledTimes(8);
+
+            await Promise.all(active);
+            for (const stream of responseStreams) stream.destroy();
+            await Promise.all([...queued, replacement]);
+            expect(mockClient.get).toHaveBeenCalledTimes(16);
+            expect(
+                mockClient.get.mock.calls.map(([path]) => path),
+            ).not.toContain("/proxy/preload-15");
+        } finally {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            for (const stream of responseStreams) stream.destroy();
+            await Promise.allSettled(requests);
+            for (const stream of responseStreams) stream.destroy();
+        }
+    });
+
+    it("expires queued background work within its total request budget", async () => {
+        jest.useFakeTimers();
+        let isolatedService: typeof ytMusicService;
+        jest.isolateModules(() => {
+            isolatedService = require("../youtubeMusic").ytMusicService;
+        });
+        const responseStreams: PassThrough[] = [];
+        mockClient.get.mockImplementation(() => {
+            const stream = new PassThrough();
+            responseStreams.push(stream);
+            return Promise.resolve({ data: stream });
+        });
+        const requestPreload = (
+            index: number,
+            timeoutMs: number,
+            signal?: AbortSignal,
+        ) =>
+            isolatedService!.getStreamProxy(
+                "u1",
+                `deadline-${index}`,
+                "high",
+                undefined,
+                { purpose: "preload", timeoutMs, signal },
+            );
+        const active = Array.from({ length: 8 }, (_unused, index) =>
+            requestPreload(index, 5_000),
+        );
+        const queued = Array.from({ length: 7 }, (_unused, index) =>
+            requestPreload(index + 8, 5_000),
+        );
+        const expired = requestPreload(15, 100);
+        const requests = [...active, ...queued, expired];
+        let expiredError: unknown;
+        void expired.catch((error) => {
+            expiredError = error;
+        });
+
+        try {
+            await Promise.all(active);
+            expect(mockClient.get).toHaveBeenCalledTimes(8);
+
+            jest.advanceTimersByTime(100);
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(expiredError).toMatchObject({
+                response: { status: 504 },
+            });
+            expect(
+                mockClient.get.mock.calls.map(([path]) => path),
+            ).not.toContain("/proxy/deadline-15");
+
+            const replacement = requestPreload(16, 5_000);
+            requests.push(replacement);
+            const overflow = requestPreload(17, 5_000);
+            requests.push(overflow);
+            await expect(overflow).rejects.toMatchObject({
+                response: { status: 503 },
+            });
+            expect(mockClient.get).toHaveBeenCalledTimes(8);
+
+            for (const stream of responseStreams.slice(0, 8)) {
+                stream.emit("end");
+                stream.emit("close");
+            }
+            await Promise.all([...queued, replacement]);
+            expect(mockClient.get).toHaveBeenCalledTimes(16);
+        } finally {
+            for (const stream of responseStreams) stream.emit("close");
+            jest.runOnlyPendingTimers();
+            await Promise.allSettled(requests);
+            for (const stream of responseStreams) stream.emit("close");
+            jest.useRealTimers();
+        }
+    });
+
+    it("preserves cancellation and release races while passing only the remaining budget", async () => {
+        jest.useFakeTimers();
+        let isolatedService: typeof ytMusicService;
+        jest.isolateModules(() => {
+            isolatedService = require("../youtubeMusic").ytMusicService;
+        });
+        const responseStreams: PassThrough[] = [];
+        mockClient.get.mockImplementation(() => {
+            const stream = new PassThrough();
+            responseStreams.push(stream);
+            return Promise.resolve({ data: stream });
+        });
+        const requestPreload = (
+            name: string,
+            timeoutMs: number,
+            signal?: AbortSignal,
+        ) =>
+            isolatedService!.getStreamProxy("u1", name, "high", undefined, {
+                purpose: "preload",
+                timeoutMs,
+                signal,
+            });
+        const active = Array.from({ length: 8 }, (_unused, index) =>
+            requestPreload(`race-active-${index}`, 5_000),
+        );
+        const requests = [...active];
+
+        try {
+            await Promise.all(active);
+            const cancelledController = new AbortController();
+            const cancelled = requestPreload(
+                "race-cancelled",
+                1_000,
+                cancelledController.signal,
+            );
+            const firstQueued = requestPreload("race-first", 1_000);
+            const secondQueued = requestPreload("race-second", 1_000);
+            requests.push(cancelled, firstQueued, secondQueued);
+
+            jest.advanceTimersByTime(200);
+            cancelledController.abort();
+            await expect(cancelled).rejects.toMatchObject({
+                name: "AbortError",
+            });
+            jest.advanceTimersByTime(300);
+
+            responseStreams[0]!.emit("end");
+            responseStreams[0]!.emit("close");
+            await firstQueued;
+            expect(mockClient.get).toHaveBeenCalledTimes(9);
+            const firstConfig = mockClient.get.mock.calls.find(
+                ([path]) => path === "/proxy/race-first",
+            )?.[1];
+            expect(firstConfig.timeout).toBeGreaterThan(0);
+            expect(firstConfig.timeout).toBeLessThanOrEqual(500);
+
+            jest.advanceTimersByTime(400);
+            expect(mockClient.get).toHaveBeenCalledTimes(9);
+            responseStreams[1]!.emit(
+                "error",
+                new Error("simulated upstream stream failure"),
+            );
+            responseStreams[1]!.emit("close");
+            await secondQueued;
+            expect(mockClient.get).toHaveBeenCalledTimes(10);
+            const secondConfig = mockClient.get.mock.calls.find(
+                ([path]) => path === "/proxy/race-second",
+            )?.[1];
+            expect(secondConfig.timeout).toBeGreaterThan(0);
+            expect(secondConfig.timeout).toBeLessThanOrEqual(100);
+            expect(
+                mockClient.get.mock.calls.map(([path]) => path),
+            ).not.toContain("/proxy/race-cancelled");
+
+            jest.advanceTimersByTime(200);
+            const afterHeaders = requestPreload("race-after-headers", 1_000);
+            requests.push(afterHeaders);
+            await Promise.resolve();
+            expect(mockClient.get).toHaveBeenCalledTimes(10);
+            responseStreams[2]!.emit("end");
+            responseStreams[2]!.emit("close");
+            await afterHeaders;
+            expect(mockClient.get).toHaveBeenCalledTimes(11);
+        } finally {
+            for (const stream of responseStreams) stream.emit("close");
+            jest.runOnlyPendingTimers();
+            await Promise.allSettled(requests);
+            for (const stream of responseStreams) stream.emit("close");
+            jest.useRealTimers();
+        }
+    });
+
+    it("falls back to the finite default budget for invalid timer values", async () => {
+        jest.useFakeTimers();
+        let isolatedService: typeof ytMusicService;
+        jest.isolateModules(() => {
+            isolatedService = require("../youtubeMusic").ytMusicService;
+        });
+        const responseStreams: PassThrough[] = [];
+        mockClient.get.mockImplementation(() => {
+            const stream = new PassThrough();
+            responseStreams.push(stream);
+            return Promise.resolve({ data: stream });
+        });
+
+        try {
+            for (const [index, timeoutMs] of [
+                0,
+                Number.NaN,
+                Number.POSITIVE_INFINITY,
+                Number.NEGATIVE_INFINITY,
+                Number.MAX_SAFE_INTEGER,
+            ].entries()) {
+                await isolatedService!.getStreamProxy(
+                    "u1",
+                    `invalid-budget-${index}`,
+                    "high",
+                    undefined,
+                    { purpose: "preload", timeoutMs },
+                );
+                const requestConfig = mockClient.get.mock.calls.at(-1)?.[1];
+                expect(requestConfig.timeout).toBe(120_000);
+                responseStreams.at(-1)?.emit("end");
+                responseStreams.at(-1)?.emit("close");
+            }
+        } finally {
+            for (const stream of responseStreams) stream.emit("close");
+            jest.useRealTimers();
+        }
     });
 
     it("checks sidecar availability and handles auth/oath method payloads", async () => {
@@ -497,12 +1067,27 @@ describe("youtubeMusic service", () => {
             "low",
             "bytes=0-512",
         );
-        expect(mockClient.get).toHaveBeenLastCalledWith("/proxy/vid-2", {
-            params: { user_id: "u1", quality: "low" },
-            headers: { Range: "bytes=0-512" },
-            responseType: "stream",
-            timeout: 120000,
-        });
+        expect(mockClient.get).toHaveBeenLastCalledWith(
+            "/proxy/vid-2",
+            expect.objectContaining({
+                params: {
+                    user_id: "u1",
+                    quality: "low",
+                    purpose: "interactive",
+                },
+                headers: { Range: "bytes=0-512" },
+                responseType: "stream",
+                timeout: 120000,
+                httpAgent: expect.objectContaining({
+                    maxSockets: 120,
+                    maxTotalSockets: 120,
+                }),
+                httpsAgent: expect.objectContaining({
+                    maxSockets: 120,
+                    maxTotalSockets: 120,
+                }),
+            }),
+        );
 
         const controller = new AbortController();
         mockClient.get.mockResolvedValueOnce({ data: { pipe: jest.fn() } });
@@ -511,15 +1096,34 @@ describe("youtubeMusic service", () => {
             "vid-3",
             "medium",
             undefined,
-            { signal: controller.signal, timeoutMs: 15_000 },
+            {
+                signal: controller.signal,
+                timeoutMs: 15_000,
+                purpose: "analysis",
+            },
         );
-        expect(mockClient.get).toHaveBeenLastCalledWith("/proxy/vid-3", {
-            params: { user_id: "u1", quality: "medium" },
-            headers: {},
-            responseType: "stream",
-            timeout: 15_000,
-            signal: controller.signal,
-        });
+        expect(mockClient.get).toHaveBeenLastCalledWith(
+            "/proxy/vid-3",
+            expect.objectContaining({
+                params: {
+                    user_id: "u1",
+                    quality: "medium",
+                    purpose: "analysis",
+                },
+                headers: {},
+                responseType: "stream",
+                timeout: 15_000,
+                httpAgent: expect.objectContaining({
+                    maxSockets: 8,
+                    maxTotalSockets: 8,
+                }),
+                httpsAgent: expect.objectContaining({
+                    maxSockets: 8,
+                    maxTotalSockets: 8,
+                }),
+                signal: controller.signal,
+            }),
+        );
 
         mockClient.get
             .mockResolvedValueOnce({ data: { songs: [{ id: "s1" }] } })

@@ -5,9 +5,16 @@ import type {
     RecommendationMood,
     ScoredRecommendation,
 } from "./types";
+import {
+    buildRecommendationAlbumKey,
+    normalizeRecommendationArtistKey,
+} from "./identityKeys";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
+const MAX_RECENT_ARTIST_PENALTY = 0.6;
+// Reuse the existing diversity strength, not an additional hard album quota.
+const DIVERSITY_PENALTY = 0.42;
 const MAX_TRACKS_PER_ARTIST = 2;
 const MAX_TRACKS_PER_ALBUM = 2;
 
@@ -109,6 +116,7 @@ function moodFeatureScore(
 ): number {
     if (!mood) return candidate.moodSimilarity ?? 0;
     if (candidate.moodSimilarity !== undefined) return candidate.moodSimilarity;
+    if (mood === "favorites") return candidate.accountAffinity ?? 0;
     const features = candidate.audioFeatures;
     if (!features) return 0;
     const energy = features.energy ?? 0.5;
@@ -128,24 +136,81 @@ function moodFeatureScore(
             );
         case "workout":
             return energy * 0.55 + danceability * 0.45;
-        case "favorites":
-            return candidate.accountAffinity ?? 0;
         case "forgotten":
             return valence * 0.1;
     }
 }
 
+function latestCanonicalExposureTimes(
+    exposures: readonly RecommendationExposureSignal[],
+): ReadonlyMap<string, number> {
+    const latest = new Map<string, number>();
+    for (const exposure of exposures) {
+        const key = exposure.canonicalKey;
+        // Preserve the scan's NaN behavior for invalid dates as well as its
+        // pre-epoch and duplicate handling; this index changes cost, not policy.
+        latest.set(
+            key,
+            Math.max(
+                latest.get(key) ?? Number.NEGATIVE_INFINITY,
+                exposure.exposedAt.getTime(),
+            ),
+        );
+    }
+    return latest;
+}
+
 function latestExposureAge(
     key: string,
-    exposures: readonly RecommendationExposureSignal[],
+    latestExposures: ReadonlyMap<string, number>,
     now: Date,
 ): number | null {
-    let newest = Number.NEGATIVE_INFINITY;
-    for (const exposure of exposures) {
-        if (exposure.canonicalKey !== key) continue;
-        newest = Math.max(newest, exposure.exposedAt.getTime());
-    }
+    const newest = latestExposures.get(key) ?? Number.NEGATIVE_INFINITY;
     return Number.isFinite(newest) ? Math.max(0, now.getTime() - newest) : null;
+}
+
+function latestArtistExposureTimes(
+    exposures: readonly RecommendationExposureSignal[],
+): ReadonlyMap<string, number> {
+    const latest = new Map<string, number>();
+    for (const exposure of exposures) {
+        if (!exposure.artistKey) continue;
+        const artistKey = normalizeRecommendationArtistKey(exposure.artistKey);
+        const exposedAt = exposure.exposedAt.getTime();
+        if (!artistKey || !Number.isFinite(exposedAt)) continue;
+        latest.set(artistKey, Math.max(latest.get(artistKey) ?? 0, exposedAt));
+    }
+    return latest;
+}
+
+function latestAlbumExposureTimes(
+    exposures: readonly RecommendationExposureSignal[],
+): ReadonlyMap<string, number> {
+    const latest = new Map<string, number>();
+    for (const exposure of exposures) {
+        const time = exposure.exposedAt.getTime();
+        if (!exposure.albumKey || !Number.isFinite(time)) continue;
+        latest.set(
+            exposure.albumKey,
+            Math.max(
+                latest.get(exposure.albumKey) ?? Number.NEGATIVE_INFINITY,
+                time,
+            ),
+        );
+    }
+    return latest;
+}
+
+function latestArtistExposureAge(
+    artist: string,
+    latestExposures: ReadonlyMap<string, number>,
+    now: Date,
+): number | null {
+    const artistKey = normalizeRecommendationArtistKey(artist);
+    const exposedAt = artistKey ? latestExposures.get(artistKey) : undefined;
+    return exposedAt === undefined
+        ? null
+        : Math.max(0, now.getTime() - exposedAt);
 }
 
 function candidateSimilarity(
@@ -153,8 +218,8 @@ function candidateSimilarity(
     right: RecommendationCandidate,
 ): number {
     if (left.canonicalKey === right.canonicalKey) return 1;
-    const leftArtist = left.artist.name.trim().toLocaleLowerCase();
-    const rightArtist = right.artist.name.trim().toLocaleLowerCase();
+    const leftArtist = normalizeRecommendationArtistKey(left.artist.name);
+    const rightArtist = normalizeRecommendationArtistKey(right.artist.name);
     if (leftArtist && leftArtist === rightArtist) return 0.82;
     const leftAlbum = left.album.title.trim().toLocaleLowerCase();
     const rightAlbum = right.album.title.trim().toLocaleLowerCase();
@@ -170,6 +235,9 @@ function candidateSimilarity(
 function baseScore(
     candidate: RecommendationCandidate,
     options: RankRecommendationOptions,
+    latestArtistExposures: ReadonlyMap<string, number>,
+    latestCanonicalExposures: ReadonlyMap<string, number>,
+    latestAlbumExposures: ReadonlyMap<string, number>,
 ): number {
     let score = candidate.providerPrior + (candidate.accountAffinity ?? 0);
     score += moodFeatureScore(candidate, options.mood) * 0.8;
@@ -221,11 +289,31 @@ function baseScore(
     }
     const exposureAge = latestExposureAge(
         candidate.canonicalKey,
-        options.exposures,
+        latestCanonicalExposures,
         options.now,
     );
     if (exposureAge !== null && exposureAge < SEVEN_DAYS_MS) {
         score -= 2 * (1 - exposureAge / SEVEN_DAYS_MS);
+    }
+    const artistExposureAge = latestArtistExposureAge(
+        candidate.artist.name,
+        latestArtistExposures,
+        options.now,
+    );
+    if (artistExposureAge !== null && artistExposureAge < ONE_DAY_MS) {
+        score -=
+            MAX_RECENT_ARTIST_PENALTY * (1 - artistExposureAge / ONE_DAY_MS);
+    }
+    const albumKey = buildRecommendationAlbumKey(
+        candidate.artist.name,
+        candidate.album.title,
+    );
+    const albumExposureAge =
+        albumKey === null
+            ? null
+            : latestExposureAge(albumKey, latestAlbumExposures, options.now);
+    if (albumExposureAge !== null && albumExposureAge < ONE_DAY_MS) {
+        score -= DIVERSITY_PENALTY * (1 - albumExposureAge / ONE_DAY_MS);
     }
     const exploration =
         stableUnitInterval(`${options.sessionId}:${candidate.canonicalKey}`) -
@@ -261,14 +349,41 @@ export function rankRecommendationCandidates(
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
 ): ScoredRecommendation[] {
-    const fresh = rankRecommendationCandidatePool(candidates, options, true);
+    const latestArtistExposures = latestArtistExposureTimes(options.exposures);
+    const latestAlbumExposures = latestAlbumExposureTimes(options.exposures);
+    const latestCanonicalExposures = latestCanonicalExposureTimes(
+        options.exposures,
+    );
+    const fresh = rankRecommendationCandidatePool(
+        candidates,
+        options,
+        latestArtistExposures,
+        latestCanonicalExposures,
+        latestAlbumExposures,
+        true,
+    );
     const shouldBackfillRecent =
         fresh.length === 0 ||
         (options.perLaneLimit !== undefined && fresh.length < options.limit);
     const ranked = !shouldBackfillRecent
         ? fresh
-        : rankRecommendationCandidatePool(candidates, options, false, fresh);
-    return applyExplorationQuota(ranked, candidates, options);
+        : rankRecommendationCandidatePool(
+              candidates,
+              options,
+              latestArtistExposures,
+              latestCanonicalExposures,
+              latestAlbumExposures,
+              false,
+              fresh,
+          );
+    return applyExplorationQuota(
+        ranked,
+        candidates,
+        options,
+        latestArtistExposures,
+        latestCanonicalExposures,
+        latestAlbumExposures,
+    );
 }
 
 function isExplorationCandidate(candidate: RecommendationCandidate): boolean {
@@ -282,6 +397,9 @@ function applyExplorationQuota(
     selected: ScoredRecommendation[],
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
+    latestArtistExposures: ReadonlyMap<string, number>,
+    latestCanonicalExposures: ReadonlyMap<string, number>,
+    latestAlbumExposures: ReadonlyMap<string, number>,
 ): ScoredRecommendation[] {
     const rate = Math.max(0, Math.min(0.3, options.explorationRate ?? 0));
     const target = Math.min(selected.length, Math.round(options.limit * rate));
@@ -300,7 +418,7 @@ function applyExplorationQuota(
             options.dislikedCanonicalKeys.has(candidate.canonicalKey) ||
             latestExposureAge(
                 candidate.canonicalKey,
-                options.exposures,
+                latestCanonicalExposures,
                 options.now,
             ) !== null
         ) {
@@ -319,7 +437,13 @@ function applyExplorationQuota(
                     new Set([...track.candidateSources, "exploration"]),
                 ),
             },
-            score: baseScore(track, options),
+            score: baseScore(
+                track,
+                options,
+                latestArtistExposures,
+                latestCanonicalExposures,
+                latestAlbumExposures,
+            ),
         }))
         .sort(
             (left, right) =>
@@ -336,7 +460,7 @@ function applyExplorationQuota(
     const albumCounts = new Map<string, number>();
     const laneCounts = new Map<string, number>();
     const keys = (track: RecommendationCandidate) => {
-        const artist = track.artist.name.trim().toLocaleLowerCase();
+        const artist = normalizeRecommendationArtistKey(track.artist.name);
         return {
             artist,
             album: `${artist}:${track.album.title.trim().toLocaleLowerCase()}`,
@@ -412,6 +536,9 @@ function applyExplorationQuota(
 function rankRecommendationCandidatePool(
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
+    latestArtistExposures: ReadonlyMap<string, number>,
+    latestCanonicalExposures: ReadonlyMap<string, number>,
+    latestAlbumExposures: ReadonlyMap<string, number>,
     enforceOneDayCooldown: boolean,
     initialSelections: readonly ScoredRecommendation[] = [],
 ): ScoredRecommendation[] {
@@ -429,7 +556,7 @@ function rankRecommendationCandidatePool(
         if (!providerTrackId) continue;
         const age = latestExposureAge(
             candidate.canonicalKey,
-            options.exposures,
+            latestCanonicalExposures,
             options.now,
         );
         if (enforceOneDayCooldown && age !== null && age < ONE_DAY_MS) continue;
@@ -440,7 +567,16 @@ function rankRecommendationCandidatePool(
     }
 
     const scored = [...bestByCanonical.values()]
-        .map((track) => ({ track, score: baseScore(track, options) }))
+        .map((track) => ({
+            track,
+            score: baseScore(
+                track,
+                options,
+                latestArtistExposures,
+                latestCanonicalExposures,
+                latestAlbumExposures,
+            ),
+        }))
         .sort(
             (left, right) =>
                 right.score - left.score ||
@@ -460,7 +596,9 @@ function rankRecommendationCandidatePool(
             : null;
 
     for (const picked of selected) {
-        const artistKey = picked.track.artist.name.trim().toLocaleLowerCase();
+        const artistKey = normalizeRecommendationArtistKey(
+            picked.track.artist.name,
+        );
         const albumKey = `${artistKey}:${picked.track.album.title
             .trim()
             .toLocaleLowerCase()}`;
@@ -478,9 +616,9 @@ function rankRecommendationCandidatePool(
         let bestIndex = -1;
         let bestMmr = Number.NEGATIVE_INFINITY;
         scored.forEach((entry, index) => {
-            const artistKey = entry.track.artist.name
-                .trim()
-                .toLocaleLowerCase();
+            const artistKey = normalizeRecommendationArtistKey(
+                entry.track.artist.name,
+            );
             const albumKey = `${artistKey}:${entry.track.album.title
                 .trim()
                 .toLocaleLowerCase()}`;
@@ -504,7 +642,7 @@ function rankRecommendationCandidatePool(
                       ),
                   )
                 : 0;
-            const mmr = entry.score - redundancy * 0.42;
+            const mmr = entry.score - redundancy * DIVERSITY_PENALTY;
             if (mmr > bestMmr) {
                 bestMmr = mmr;
                 bestIndex = index;
@@ -513,7 +651,9 @@ function rankRecommendationCandidatePool(
         if (bestIndex < 0) break;
         const [winner] = scored.splice(bestIndex, 1);
         selected.push(winner);
-        const artistKey = winner.track.artist.name.trim().toLocaleLowerCase();
+        const artistKey = normalizeRecommendationArtistKey(
+            winner.track.artist.name,
+        );
         const albumKey = `${artistKey}:${winner.track.album.title
             .trim()
             .toLocaleLowerCase()}`;

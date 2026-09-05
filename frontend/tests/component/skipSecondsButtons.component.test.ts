@@ -3,6 +3,7 @@ import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as realTrackRef from "../../lib/trackRef";
 
 /**
  * Component tests for issue #20: wire the existing 15-second skip
@@ -475,9 +476,6 @@ mock.module("@/lib/api", {
     },
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: { TidalBadge: () => null },
-});
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: { YouTubeBadge: () => null },
 });
@@ -517,6 +515,7 @@ mock.module("@/lib/logger", {
 
 mock.module("@/lib/trackRef", {
     namedExports: {
+        ...realTrackRef,
         toAddToPlaylistRef: () => ({}),
         isRemoteTrack: () => false,
     },

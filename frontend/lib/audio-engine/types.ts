@@ -52,6 +52,21 @@ export interface AudioEngineBufferingPayload {
     reason?: string;
 }
 
+export type AudioPreloadResult =
+    | { state: "ready" }
+    | { state: "cancelled" }
+    | { state: "failed"; code?: string };
+
+/**
+ * Ownership handle for one real media preload. The result never rejects and
+ * only reports ready after the underlying media implementation does.
+ */
+export interface AudioPreloadLease {
+    readonly sourceUrl: string;
+    readonly result: Promise<AudioPreloadResult>;
+    cancel(): void;
+}
+
 export interface AudioEngineEventPayloadMap {
     load: AudioEngineLoadPayload;
     play: void;
@@ -104,7 +119,7 @@ export interface AudioEngine {
     preload?(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void | Promise<void>;
+    ): AudioPreloadLease | null;
     reload?(): void | Promise<void>;
     getActualCurrentTime?(): number;
     hasTrackEnded?(): boolean;

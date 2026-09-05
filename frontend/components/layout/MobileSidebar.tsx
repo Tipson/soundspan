@@ -210,6 +210,24 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                 <div className="border-t border-white/[0.07] p-3">
                     <button
                         type="button"
+                        onClick={() => {
+                            onClose();
+                            window.dispatchEvent(
+                                new CustomEvent("request-pwa-install"),
+                            );
+                        }}
+                        className={linkClassName(false)}
+                    >
+                        <Download
+                            className="h-5 w-5 shrink-0"
+                            aria-hidden="true"
+                        />
+                        <span className="whitespace-nowrap">
+                            Установить приложение
+                        </span>
+                    </button>
+                    <button
+                        type="button"
                         onClick={handleLogout}
                         className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                     >

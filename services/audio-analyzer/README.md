@@ -41,9 +41,32 @@ Set `ACOUSTID_API_KEY` to enable claim-based AcoustID lookups. One shared client
 limits requests to three per second and uses bounded timeouts and retries. Local
 track fingerprints retain their recording and release-group lookup, while
 `canonical_acoustid_backfill.py` resolves remote canonical fingerprints to a
-recording MBID and moves provider mappings to an existing durable identity when
-needed. Both paths require score `0.70` or higher. Without a key, lookup stays
-disabled and fingerprint computation continues.
+recording MBID and hands the fenced result to the backend through
+`BACKEND_INTERNAL_URL` plus the shared `INTERNAL_API_SECRET`. The backend is the
+only owner of canonical promotion/merge mutations and retries durable intents
+after active analysis leases finish. Both lookup paths require score `0.70` or
+higher. Without a key, lookup stays disabled and fingerprint computation
+continues.
+
+`BACKEND_INTERNAL_URL` is privileged operator configuration: the analyzer sends
+the internal secret to that origin. Keep it on the private deployment network
+(or an explicitly trusted HTTPS origin) and do not derive it from request data.
+
+### Canonical-promotion rollout and rollback
+
+The promotion-intent migration quarantines unresolved legacy
+`acoustid-merged` rows and installs a database invariant that rejects any new
+completed merge marker without `mergedIntoId`. This makes a rolling upgrade
+fail closed: an older analyzer transaction is rolled back and its processing
+claim becomes eligible for stale reclaim after the analyzer is upgraded.
+
+For a database rollback, first stop every audio-analyzer and backend-worker
+process. Reset `CanonicalRecording.identityLookupStatus` from `merge_pending`
+to `pending` only for sources referenced by non-settled promotion intents, then
+drop the intent table. Keep the alias invariant during an application rollback;
+drop it only after all legacy analyzer writers are stopped and affected rows
+have been validated, otherwise the old writer can recreate live-looking
+aliases without a survivor.
 
 Run the CI-equivalent unit suite from the repository root:
 

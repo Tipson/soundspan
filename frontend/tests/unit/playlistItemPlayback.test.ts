@@ -56,9 +56,13 @@ test("playlist row playback preserves playable visual order and starts at the se
 
     assert.deepEqual(
         selection.tracks.map((track) => track.id),
-        ["local-1", "yt:video-2", "tidal:3"],
+        ["local-1", "yt:video-2"],
     );
     assert.equal(selection.startIndex, 1);
+    assert.deepEqual(
+        selectPlaylistPlaybackQueue([first, selected, last], last.id),
+        { tracks: [], startIndex: -1 },
+    );
 });
 
 test("playlist row playback returns no selection for an unavailable row", () => {

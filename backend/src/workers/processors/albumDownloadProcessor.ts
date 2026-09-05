@@ -210,9 +210,7 @@ function requiresAlbumDownloadClaim(
 ): routing is Extract<AlbumDownloadRouting, { kind: "dispatch" }> {
     return (
         routing?.kind === "dispatch" &&
-        (routing.source === "tidal" ||
-            routing.source === "youtube" ||
-            routing.source === "soulseek")
+        (routing.source === "youtube" || routing.source === "soulseek")
     );
 }
 

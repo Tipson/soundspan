@@ -1,18 +1,8 @@
-const mockTidalStream = jest.fn();
-const mockTidalPlaylist = jest.fn();
-const mockTidalPublicPlaylist = jest.fn();
 const mockYoutubeStream = jest.fn();
 const mockYoutubePlaylist = jest.fn();
 const mockFindTidal = jest.fn();
 const mockFindYoutube = jest.fn();
 
-jest.mock("../../tidalStreaming", () => ({
-    tidalStreamingService: {
-        getStreamProxy: mockTidalStream,
-        getBrowsePlaylist: mockTidalPlaylist,
-        getPublicBrowsePlaylist: mockTidalPublicPlaylist,
-    },
-}));
 jest.mock("../../youtubeMusic", () => ({
     ytMusicService: {
         getStreamProxy: mockYoutubeStream,
@@ -33,37 +23,28 @@ describe("remote provider adapter table", () => {
         jest.clearAllMocks();
     });
 
-    it("routes Tidal operations to Tidal services", async () => {
+    it("keeps historical TIDAL rows readable without exposing runtime operations", async () => {
         const adapter = remoteProviderAdapters.tidal;
-        mockTidalStream.mockResolvedValueOnce(null);
-        mockTidalPlaylist.mockResolvedValueOnce({ title: "Tidal", tracks: [] });
         mockFindTidal.mockResolvedValueOnce([]);
 
-        await adapter.streamTrack({
-            userId: "user-1",
-            tidalTrackId: 42,
-            quality: "HIGH",
-            range: "bytes=0-9",
-        });
-        await adapter.fetchPlaylist({
-            sourceId: "playlist-1",
-            userId: "user-1",
-            authenticated: true,
-            quality: "HIGH",
-        });
+        await expect(
+            adapter.streamTrack({
+                userId: "user-1",
+                tidalTrackId: 42,
+                quality: "HIGH",
+                range: "bytes=0-9",
+            }),
+        ).resolves.toBeNull();
+        await expect(
+            adapter.fetchPlaylist({
+                sourceId: "playlist-1",
+                userId: "user-1",
+                authenticated: true,
+                quality: "HIGH",
+            }),
+        ).rejects.toThrow("TIDAL provider has been retired");
         await adapter.findTracksByIds(["tidal-row-1"]);
 
-        expect(mockTidalStream).toHaveBeenCalledWith(
-            "user-1",
-            42,
-            "HIGH",
-            "bytes=0-9",
-        );
-        expect(mockTidalPlaylist).toHaveBeenCalledWith(
-            "user-1",
-            "playlist-1",
-            "HIGH",
-        );
         expect(mockFindTidal).toHaveBeenCalledWith({
             where: { id: { in: ["tidal-row-1"] } },
         });

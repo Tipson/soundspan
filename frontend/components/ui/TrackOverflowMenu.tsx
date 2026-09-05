@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import {
     EllipsisVertical,
     Link as LinkIcon,
@@ -26,11 +32,17 @@ import { getArtistHref } from "@/utils/artistRoute";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { isRemoteTrack, toAddToPlaylistRef } from "@/lib/trackRef";
+import {
+    isRemoteTrack,
+    isPlaybackOnlyTrack,
+    normalizeActionableAudioTrack,
+    toAddToPlaylistRef,
+} from "@/lib/trackRef";
 import { canShareTrack } from "@/lib/shareLinks";
 import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
 import { getDeviceDownloadSourceUrl } from "@/features/device-offline/sourceUrl";
 import { pluralRu, ru } from "@/lib/i18n/ru";
+import { audiusTrackSchema } from "@/lib/audio/audiusPlayback";
 
 interface TrackOverflowMenuProps {
     track: Track;
@@ -95,8 +107,20 @@ export function TrackOverflowMenu({
     const router = useRouter();
     const controls = useAudioControls();
     const deviceOffline = useOptionalDeviceOffline();
+    const normalizedActionTrack = useMemo(
+        () => normalizeActionableAudioTrack(track),
+        [track],
+    );
+    const isActionable = normalizedActionTrack !== null;
+    const actionTrack = normalizedActionTrack ?? track;
+    const canPersist = isActionable && !isPlaybackOnlyTrack(actionTrack);
+    // Restored queue metadata is untrusted; only the provider's public page can leave the app.
+    const attribution = isPlaybackOnlyTrack(actionTrack)
+        ? audiusTrackSchema.shape.attributionUrl.safeParse(track.sourcePageUrl)
+        : null;
+    const sourcePageUrl = attribution?.success ? attribution.data : null;
     const isRemote = isRemoteTrack(track);
-    const deviceRecord = deviceOffline?.recordForTrack(track) ?? null;
+    const deviceRecord = deviceOffline?.recordForTrack(actionTrack) ?? null;
     const deviceStorageStatus = deviceOffline?.storage.status ?? null;
     const deviceStorageBlocked =
         deviceStorageStatus === "unsupported" ||
@@ -200,28 +224,31 @@ export function TrackOverflowMenu({
     const handlePlayNext = useCallback(
         (e: React.MouseEvent) => {
             e.stopPropagation();
-            controls.playNext(track);
+            if (!isActionable) return;
+            controls.playNext(actionTrack);
             closeMenu();
         },
-        [track, controls, closeMenu],
+        [actionTrack, controls, closeMenu, isActionable],
     );
 
     const handleAddToQueue = useCallback(
         (e: React.MouseEvent) => {
             e.stopPropagation();
-            controls.addToQueue(track);
+            if (!isActionable) return;
+            controls.addToQueue(actionTrack);
             closeMenu();
         },
-        [track, controls, closeMenu],
+        [actionTrack, controls, closeMenu, isActionable],
     );
 
     const handleAddToPlaylist = useCallback(
         (e: React.MouseEvent) => {
             e.stopPropagation();
+            if (!canPersist) return;
             closeMenu();
             setIsPlaylistSelectorOpen(true);
         },
-        [closeMenu],
+        [closeMenu, canPersist],
     );
 
     const handleShare = useCallback(
@@ -235,10 +262,14 @@ export function TrackOverflowMenu({
 
     const handleSelectPlaylist = useCallback(
         async (playlistId: string) => {
-            await api.addTrackToPlaylist(playlistId, toAddToPlaylistRef(track));
+            if (!canPersist) return;
+            await api.addTrackToPlaylist(
+                playlistId,
+                toAddToPlaylistRef(actionTrack),
+            );
             toast.success(`«${track.title}» добавлен в плейлист`);
         },
-        [track],
+        [actionTrack, canPersist, track.title],
     );
 
     const handleCopyTrackLink = useCallback(
@@ -280,9 +311,10 @@ export function TrackOverflowMenu({
     const handleMatchVibe = useCallback(
         async (e: React.MouseEvent) => {
             e.stopPropagation();
+            if (!isActionable) return;
             closeMenu();
             // Play the track first, then start vibe mode
-            controls.playTrack(track);
+            controls.playTrack(actionTrack);
             // Small delay to let the track load before starting vibe
             setTimeout(async () => {
                 const result = await controls.startVibeMode();
@@ -293,7 +325,7 @@ export function TrackOverflowMenu({
                 }
             }, 500);
         },
-        [track, controls, closeMenu],
+        [actionTrack, controls, closeMenu, isActionable],
     );
 
     const handleShowVibeMap = useCallback(
@@ -330,11 +362,24 @@ export function TrackOverflowMenu({
                 }
 
                 if (response.tracks && response.tracks.length > 0) {
-                    const filtered = response.tracks.filter(
-                        (t): t is Track =>
-                            isPlayableTrack(t) && t.id !== track.id,
-                    );
-                    controls.playTracks([track, ...filtered], 0);
+                    const filtered = response.tracks
+                        .map((candidate) =>
+                            isPlayableTrack(candidate)
+                                ? normalizeActionableAudioTrack(candidate)
+                                : null,
+                        )
+                        .filter(
+                            (candidate): candidate is Track =>
+                                candidate !== null && candidate.id !== track.id,
+                        );
+                    const radioTracks = isActionable
+                        ? [actionTrack, ...filtered]
+                        : filtered;
+                    if (radioTracks.length === 0) {
+                        toast.error(ru.trackMenu.radioNotEnough);
+                        return;
+                    }
+                    controls.playTracks(radioTracks, 0);
                     toast.success(
                         `Радио «${track.artist.name}»: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,
                     );
@@ -345,36 +390,52 @@ export function TrackOverflowMenu({
                 toast.error(ru.trackMenu.radioFailed);
             }
         },
-        [track, controls, closeMenu, isRemote],
+        [actionTrack, track, controls, closeMenu, isActionable, isRemote],
     );
 
     const handleDeviceDownload = useCallback(
         (e: React.MouseEvent) => {
             e.stopPropagation();
             closeMenu();
-            if (!deviceOffline || deviceDownloadDisabled) return;
-            void deviceOffline
-                .download({
-                    track,
-                    sourceUrl: getDeviceDownloadSourceUrl(track),
-                    quality: "auto",
-                })
-                .then((record) =>
-                    toast.success(
-                        record.status === "ready"
-                            ? `«${track.title}» доступен без интернета`
-                            : `Загрузка «${track.title}» началась`,
-                    ),
-                )
-                .catch((error: unknown) =>
-                    toast.error(
-                        error instanceof Error
-                            ? error.message
-                            : ru.trackMenu.downloadFailed,
-                    ),
+            if (!canPersist || !deviceOffline || deviceDownloadDisabled) return;
+            try {
+                const sourceUrl = getDeviceDownloadSourceUrl(actionTrack);
+                void deviceOffline
+                    .download({
+                        track: actionTrack,
+                        sourceUrl,
+                        quality: "auto",
+                    })
+                    .then((record) =>
+                        toast.success(
+                            record.status === "ready"
+                                ? `«${track.title}» доступен без интернета`
+                                : `Загрузка «${track.title}» началась`,
+                        ),
+                    )
+                    .catch((error: unknown) =>
+                        toast.error(
+                            error instanceof Error
+                                ? error.message
+                                : ru.trackMenu.downloadFailed,
+                        ),
+                    );
+            } catch (error) {
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : ru.trackMenu.downloadFailed,
                 );
+            }
         },
-        [closeMenu, deviceDownloadDisabled, deviceOffline, track],
+        [
+            actionTrack,
+            closeMenu,
+            deviceDownloadDisabled,
+            deviceOffline,
+            canPersist,
+            track.title,
+        ],
     );
 
     return (
@@ -416,7 +477,25 @@ export function TrackOverflowMenu({
                     >
                         {extraItemsBefore}
 
-                        {showPlayNext && (
+                        {sourcePageUrl && (
+                            <a
+                                href={sourcePageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                role="menuitem"
+                                onClick={closeMenu}
+                                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-content-body transition-colors hover:bg-surface-hover hover:text-content focus-visible:ring-2 focus-visible:ring-brand"
+                                aria-label="Открыть страницу трека в Audius (новая вкладка)"
+                            >
+                                <LinkIcon
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
+                                Открыть в Audius
+                            </a>
+                        )}
+
+                        {showPlayNext && isActionable && (
                             <MenuButton
                                 onClick={handlePlayNext}
                                 icon={<ListEnd className="h-4 w-4" />}
@@ -424,7 +503,7 @@ export function TrackOverflowMenu({
                             />
                         )}
 
-                        {showAddToQueue && (
+                        {showAddToQueue && isActionable && (
                             <MenuButton
                                 onClick={handleAddToQueue}
                                 icon={<ListPlus className="h-4 w-4" />}
@@ -432,7 +511,7 @@ export function TrackOverflowMenu({
                             />
                         )}
 
-                        {showAddToPlaylist && (
+                        {showAddToPlaylist && canPersist && (
                             <MenuButton
                                 onClick={handleAddToPlaylist}
                                 icon={<Plus className="h-4 w-4" />}
@@ -440,7 +519,7 @@ export function TrackOverflowMenu({
                             />
                         )}
 
-                        {deviceOffline && (
+                        {deviceOffline && canPersist && (
                             <MenuButton
                                 onClick={handleDeviceDownload}
                                 disabled={deviceDownloadDisabled}
@@ -523,7 +602,7 @@ export function TrackOverflowMenu({
             </div>
 
             <PlaylistSelector
-                isOpen={isPlaylistSelectorOpen}
+                isOpen={canPersist && isPlaylistSelectorOpen}
                 onClose={() => setIsPlaylistSelectorOpen(false)}
                 onSelectPlaylist={handleSelectPlaylist}
             />

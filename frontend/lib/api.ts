@@ -1,6 +1,7 @@
 import { ApiClientCore, type ApiData } from "./api/core";
 import { WithAuth } from "./api/auth";
 import { WithAudiobooks } from "./api/audiobooks";
+import { WithAudius } from "./api/audius";
 import { WithConnectors } from "./api/connectors";
 import { WithEnrichment } from "./api/enrichment";
 import { WithFederation } from "./api/federation";
@@ -36,7 +37,6 @@ import { WithRecommendations } from "./api/recommendations";
 import { WithRequests } from "./api/requests";
 import { WithSettings } from "./api/settings";
 import { WithSoulseek } from "./api/soulseek";
-import { WithTidal } from "./api/tidal";
 import { WithVibe } from "./api/vibe";
 import { WithYouTube } from "./api/youtube";
 import { WithYtMusic } from "./api/ytmusic";
@@ -137,6 +137,7 @@ export type PlaylistPlaybackReason =
     | "missing_provider_track"
     | "track_removed"
     | "peer_offline"
+    | "retired_provider"
     | "pending_import";
 
 /** Playback availability metadata returned with a playlist item. */
@@ -526,28 +527,28 @@ class ApiClient extends WithRequests(
         WithLibraryHealthDashboard(
             WithListenGroups(
                 WithFederation(
-                    WithTidal(
-                        WithYouTube(
-                            WithYtMusic(
-                                WithVibe(
-                                    WithAudiobooks(
-                                        WithPodcasts(
-                                            WithSoulseek(
-                                                WithEnrichment(
-                                                    WithMetadata(
-                                                        WithNotifications(
-                                                            WithDiscover(
-                                                                WithImports(
-                                                                    WithDownloads(
-                                                                        WithAuth(
-                                                                            WithConnectors(
-                                                                                WithSettings(
-                                                                                    WithScrobbling(
-                                                                                        WithPlays(
-                                                                                            WithRecommendations(
-                                                                                                WithMedia(
-                                                                                                    WithPlaylists(
-                                                                                                        WithLibrary(
+                    WithYouTube(
+                        WithYtMusic(
+                            WithVibe(
+                                WithAudiobooks(
+                                    WithPodcasts(
+                                        WithSoulseek(
+                                            WithEnrichment(
+                                                WithMetadata(
+                                                    WithNotifications(
+                                                        WithDiscover(
+                                                            WithImports(
+                                                                WithDownloads(
+                                                                    WithAuth(
+                                                                        WithConnectors(
+                                                                            WithSettings(
+                                                                                WithScrobbling(
+                                                                                    WithPlays(
+                                                                                        WithRecommendations(
+                                                                                            WithMedia(
+                                                                                                WithPlaylists(
+                                                                                                    WithLibrary(
+                                                                                                        WithAudius(
                                                                                                             ApiClientCore,
                                                                                                         ),
                                                                                                     ),

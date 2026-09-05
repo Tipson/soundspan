@@ -94,7 +94,7 @@ const NO_ACQUISITION_SOURCES: DownloadBehavior = {
 function acquisitionAvailability(
     availability: DownloadSourceAvailability,
 ): DownloadSourceAvailability {
-    return { ...availability, tidal: false, youtube: false };
+    return { ...availability, youtube: false };
 }
 
 function isAcquisitionSource(

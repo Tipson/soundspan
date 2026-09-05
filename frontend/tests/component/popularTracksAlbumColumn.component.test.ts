@@ -97,11 +97,6 @@ mock.module("next/link", {
     }) => React.createElement("a", { href, ...props }, children),
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => React.createElement("span", null, "TIDAL"),
-    },
-});
 mock.module("@/hooks/useQueuedTrackIds", {
     namedExports: { useQueuedTrackIds: () => new Set<string>() },
 });
@@ -337,5 +332,37 @@ test("tracks view exposes every returned track as the ordered playback context",
             visibleIds: tracks.map((track) => track.id),
         },
     ]);
+    unmount();
+});
+
+test("a local file with stale TIDAL metadata remains playable and manageable", async () => {
+    const calls: string[] = [];
+    const { container, unmount } = await renderPopular(
+        [
+            {
+                id: "local-stale-tidal",
+                title: "Local survivor",
+                duration: 180,
+                filePath: "/music/local.flac",
+                streamSource: "tidal",
+                tidalTrackId: 991,
+                artist,
+                album: { id: "album-local", title: "Local Album" },
+            },
+        ],
+        (track) => calls.push(track.id),
+    );
+
+    const row = container.querySelector<HTMLElement>(
+        '[data-track-id="local-stale-tidal"]',
+    );
+    assert.ok(row);
+    await React.act(async () => row.click());
+
+    assert.deepEqual(calls, ["local-stale-tidal"]);
+    assert.ok(
+        container.querySelector('[data-testid="track-preference-buttons"]'),
+    );
+    assert.ok(container.querySelector('[aria-haspopup="menu"]'));
     unmount();
 });

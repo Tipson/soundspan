@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     Download,
     HardDriveDownload,
@@ -15,6 +15,10 @@ import { useDeviceOffline } from "../DeviceOfflineProvider";
 import type { DeviceOfflineQueueItem } from "../offlineQueue";
 import type { DeviceOfflineDownloadRecord } from "../types";
 import { ru } from "@/lib/i18n/ru";
+import {
+    isTrackActionable,
+    normalizeActionableAudioTrack,
+} from "@/lib/trackRef";
 
 function formatBytes(value: number | null): string {
     if (!value || value < 1) return ru.downloads.sizeUnavailable;
@@ -29,6 +33,12 @@ function formatBytes(value: number | null): string {
 }
 
 function statusCopy(record: DeviceOfflineDownloadRecord): string {
+    if (
+        !isTrackActionable(record.track) &&
+        !isDeviceFileDeleteRecovery(record)
+    ) {
+        return "Источник TIDAL больше недоступен. Эту запись можно удалить с устройства.";
+    }
     if (record.status === "ready") return formatBytes(record.totalBytes);
     if (record.status === "downloading") {
         if (record.transferMode === "background") {
@@ -111,6 +121,9 @@ function deleteConfirmation(
 }
 
 function queueStatusCopy(item: DeviceOfflineQueueItem): string {
+    if (!isTrackActionable(item.track)) {
+        return "Источник TIDAL больше недоступен. Эту задачу можно удалить с устройства.";
+    }
     if (item.status === "processing") {
         return ru.downloads.starting;
     }
@@ -169,6 +182,15 @@ export function DownloadsList() {
                     record.trackIdentity === item.trackIdentity &&
                     record.quality === item.quality,
             ),
+    );
+    const displayRecords = useMemo(
+        () =>
+            [...records].sort(
+                (left, right) =>
+                    right.createdAt - left.createdAt ||
+                    left.key.localeCompare(right.key),
+            ),
+        [records],
     );
     const reconnectRememberedFolder =
         Boolean(storage.directoryName) &&
@@ -314,95 +336,105 @@ export function DownloadsList() {
             {storageNotice}
             {legacyStorageNotice}
             <div className="overflow-hidden rounded-xl border border-white/10">
-                {visibleQueueItems.map((item) => (
-                    <div
-                        key={`queue:${item.key}`}
-                        className="flex min-h-16 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-3 py-2 last:border-b-0"
-                    >
+                {visibleQueueItems.map((item) => {
+                    const actionable = isTrackActionable(item.track);
+                    return (
                         <div
-                            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white/35"
-                            aria-hidden="true"
+                            key={`queue:${item.key}`}
+                            className="flex min-h-16 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-3 py-2 last:border-b-0"
                         >
-                            <HardDriveDownload className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-white">
-                                {item.track.title}
-                            </p>
-                            <p className="truncate text-xs text-white/50">
-                                {managementCopy(item.management)} ·{" "}
-                                {item.track.artist.name} ·{" "}
-                                {queueStatusCopy(item)}
-                            </p>
-                        </div>
-                        {(item.status === "error" ||
-                            item.status === "interrupted") && (
+                            <div
+                                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white/35"
+                                aria-hidden="true"
+                            >
+                                <HardDriveDownload className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-white">
+                                    {item.track.title}
+                                </p>
+                                <p className="truncate text-xs text-white/50">
+                                    {managementCopy(item.management)} ·{" "}
+                                    {item.track.artist.name} ·{" "}
+                                    {queueStatusCopy(item)}
+                                </p>
+                            </div>
+                            {actionable &&
+                                (item.status === "error" ||
+                                    item.status === "interrupted") && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            void enqueueCollection({
+                                                tracks: [item.track as Track],
+                                                collectionId:
+                                                    item.collectionId ??
+                                                    `retry:${item.key}`,
+                                                collectionLabel:
+                                                    item.collectionLabel ??
+                                                    item.track.title,
+                                                quality: item.quality,
+                                            }).catch(() =>
+                                                toast.error(
+                                                    ru.downloads.retryFailed,
+                                                ),
+                                            );
+                                        }}
+                                        className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
+                                        aria-label={`${ru.downloads.retry}: ${item.track.title}`}
+                                        title={ru.downloads.retry}
+                                    >
+                                        <RotateCcw className="h-4 w-4" />
+                                    </button>
+                                )}
                             <button
                                 type="button"
                                 onClick={() => {
-                                    void enqueueCollection({
-                                        tracks: [item.track as Track],
-                                        collectionId:
-                                            item.collectionId ??
-                                            `retry:${item.key}`,
-                                        collectionLabel:
-                                            item.collectionLabel ??
-                                            item.track.title,
-                                        quality: item.quality,
-                                    }).catch(() =>
-                                        toast.error(ru.downloads.retryFailed),
+                                    if (
+                                        !window.confirm(
+                                            deleteConfirmation(
+                                                item.track.title,
+                                                item.management,
+                                            ),
+                                        )
+                                    ) {
+                                        return;
+                                    }
+                                    void cancelQueuedDownload(item).catch(() =>
+                                        toast.error(ru.downloads.removeFailed),
                                     );
                                 }}
-                                className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
-                                aria-label={`${ru.downloads.retry}: ${item.track.title}`}
-                                title={ru.downloads.retry}
+                                className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"
+                                aria-label={`${ru.downloads.removeDevice}: ${item.track.title}`}
+                                title={ru.downloads.removeDevice}
                             >
-                                <RotateCcw className="h-4 w-4" />
+                                <Trash2
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
                             </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (
-                                    !window.confirm(
-                                        deleteConfirmation(
-                                            item.track.title,
-                                            item.management,
-                                        ),
-                                    )
-                                ) {
-                                    return;
-                                }
-                                void cancelQueuedDownload(item).catch(() =>
-                                    toast.error(ru.downloads.removeFailed),
-                                );
-                            }}
-                            className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"
-                            aria-label={`${ru.downloads.removeDevice}: ${item.track.title}`}
-                            title={ru.downloads.removeDevice}
-                        >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                    </div>
-                ))}
-                {records.map((record) => {
+                        </div>
+                    );
+                })}
+                {displayRecords.map((record) => {
                     const percent = progressPercent(record);
+                    const playbackTrack = normalizeActionableAudioTrack(
+                        record.track as Track,
+                    );
+                    const actionable = playbackTrack !== null;
                     return (
                         <div
                             key={record.key}
                             data-download-status={record.status}
                             className="flex min-h-16 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-3 py-2 last:border-b-0"
                         >
-                            {record.status === "ready" ? (
+                            {record.status === "ready" && actionable ? (
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        if (!playbackTrack) return;
                                         void preparePlayback(record)
-                                            .then(() =>
-                                                playNow({
-                                                    ...(record.track as Track),
-                                                }),
-                                            )
+                                            .then(() => playNow(playbackTrack))
                                             .catch(() =>
                                                 toast.error(
                                                     ru.downloads
@@ -480,6 +512,7 @@ export function DownloadsList() {
                             </div>
                             {(record.status === "interrupted" ||
                                 record.status === "error") &&
+                                actionable &&
                                 !isDeviceFileDeleteRecovery(record) && (
                                     <button
                                         type="button"

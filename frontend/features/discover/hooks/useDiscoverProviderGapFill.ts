@@ -3,10 +3,6 @@ import { api } from "@/lib/api";
 import type { DiscoverTrack } from "../types";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 
-interface TidalMatch {
-    id: number;
-}
-
 interface YtMatch {
     videoId: string;
 }
@@ -16,7 +12,6 @@ interface GapFillResult {
     isMatching: boolean;
     providerCounts: {
         local: number;
-        tidal: number;
         youtube: number;
     };
 }
@@ -49,7 +44,6 @@ function toLocalTrack(track: DiscoverTrack): DiscoverTrack {
 export function applyDiscoverProviderGapFill(
     sourceTracks: DiscoverTrack[],
     gapIndices: number[],
-    tidalMatches: Array<TidalMatch | null>,
     ytMatches: Array<YtMatch | null>,
 ): DiscoverTrack[] {
     const gapSet = new Set(gapIndices);
@@ -61,19 +55,8 @@ export function applyDiscoverProviderGapFill(
             return toLocalTrack(track);
         }
 
-        const tidalMatch = tidalMatches[matchIdx];
         const ytMatch = ytMatches[matchIdx];
         matchIdx++;
-
-        if (tidalMatch) {
-            return {
-                ...track,
-                sourceType: "tidal",
-                streamSource: "tidal",
-                tidalTrackId: tidalMatch.id,
-                youtubeVideoId: undefined,
-            };
-        }
 
         if (ytMatch) {
             return {
@@ -118,17 +101,10 @@ export function useDiscoverProviderGapFill(
                 isMatching: true,
             });
 
-            const [tidalStatus, ytStatus] = await Promise.all([
-                api.getTidalStreamingStatus().catch(() => null),
-                api.getYtMusicStatus().catch(() => null),
-            ]);
+            const ytStatus = await api.getYtMusicStatus().catch(() => null);
 
             if (cancelled) return;
 
-            const tidalAvailable =
-                !!tidalStatus?.enabled &&
-                !!tidalStatus?.available &&
-                !!tidalStatus?.authenticated;
             // Match/search uses public sidecar client — no user OAuth required
             const ytAvailable = !!ytStatus?.enabled && !!ytStatus?.available;
 
@@ -140,7 +116,7 @@ export function useDiscoverProviderGapFill(
                 }
             }
 
-            if ((!tidalAvailable && !ytAvailable) || gapIndices.length === 0) {
+            if (!ytAvailable || gapIndices.length === 0) {
                 setMatchState({
                     key: tracksKey,
                     tracks: sourceTracks.map(toLocalTrack),
@@ -162,31 +138,17 @@ export function useDiscoverProviderGapFill(
                 };
             });
 
-            const [tidalMatchesResponse, ytMatchesResponse] = await Promise.all(
-                [
-                    tidalAvailable
-                        ? api
-                              .matchTidalBatch(payload)
-                              .catch(() => ({ matches: [] }))
-                        : Promise.resolve({ matches: [] }),
-                    ytAvailable
-                        ? api
-                              .matchYtMusicBatch(payload)
-                              .catch(() => ({ matches: [] }))
-                        : Promise.resolve({ matches: [] }),
-                ],
-            );
+            const ytMatchesResponse = await api
+                .matchYtMusicBatch(payload)
+                .catch(() => ({ matches: [] }));
 
             if (cancelled) return;
 
-            const tidalMatches =
-                tidalMatchesResponse.matches as Array<TidalMatch | null>;
             const ytMatches =
                 ytMatchesResponse.matches as Array<YtMatch | null>;
             const nextTracks = applyDiscoverProviderGapFill(
                 sourceTracks,
                 gapIndices,
-                tidalMatches,
                 ytMatches,
             );
 
@@ -232,14 +194,11 @@ export function useDiscoverProviderGapFill(
     const providerCounts = useMemo(() => {
         const counts = {
             local: 0,
-            tidal: 0,
             youtube: 0,
         };
 
         for (const track of effectiveTracks) {
-            if (track.sourceType === "tidal") {
-                counts.tidal += 1;
-            } else if (track.sourceType === "youtube") {
+            if (track.sourceType === "youtube") {
                 counts.youtube += 1;
             } else {
                 counts.local += 1;

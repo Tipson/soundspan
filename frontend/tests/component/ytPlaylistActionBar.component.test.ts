@@ -3,6 +3,7 @@ import { beforeEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as realTrackRef from "../../lib/trackRef";
 
 const state = {
     isLoading: false,
@@ -156,6 +157,7 @@ mock.module(
 
 mock.module("@/lib/trackRef", {
     namedExports: {
+        ...realTrackRef,
         toAddToPlaylistRef: (track: Record<string, unknown>) => track,
     },
 });

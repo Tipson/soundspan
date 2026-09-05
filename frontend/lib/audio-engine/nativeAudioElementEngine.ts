@@ -26,8 +26,13 @@ import {
     type AudioEngineEventHandler,
     type AudioEngineEventType,
     type AudioEngineLoadOptions,
+    type AudioPreloadLease,
     type AudioEngineSource,
 } from "@/lib/audio-engine/types";
+import {
+    createAudioPreloadLease,
+    type AudioPreloadLeaseController,
+} from "@/lib/audio-engine/audioPreloadLease";
 import {
     createInitialNativeEngineState,
     NATIVE_ENGINE_END_PAUSE_EPSILON_SEC,
@@ -185,6 +190,8 @@ export class NativeAudioElementEngine implements AudioEngine {
     private element: NativeAudioElementLike | null = null;
     private preloadElement: NativeAudioElementLike | null = null;
     private preloadedUrl: string | null = null;
+    private preloadController: AudioPreloadLeaseController | null = null;
+    private preloadReadinessCleanup: (() => void) | null = null;
     private policyState: NativeEnginePolicyState =
         createInitialNativeEngineState();
     private lastSource: AudioEngineSource | null = null;
@@ -357,23 +364,82 @@ export class NativeAudioElementEngine implements AudioEngine {
     preload(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void;
-    preload(source: AudioEngineSource | string, format?: string): void;
+    ): AudioPreloadLease | null;
     preload(
         source: AudioEngineSource | string,
-        _optionsOrFormat?: AudioEngineLoadOptions | string,
-    ): void {
+        format?: string,
+    ): AudioPreloadLease | null;
+    preload(
+        source: AudioEngineSource | string,
+        optionsOrFormat?: AudioEngineLoadOptions | string,
+    ): AudioPreloadLease | null {
         const resolvedSource = resolveSource(source);
         const url = resolvedSource.url;
-        if (!url || url === this.lastSource?.url || url === this.preloadedUrl) {
-            return;
+        const crossOrigin =
+            typeof optionsOrFormat === "object" &&
+            optionsOrFormat?.withCredentials
+                ? "use-credentials"
+                : "anonymous";
+        if (!url || this.isDestroyed || url === this.lastSource?.url) {
+            return null;
+        }
+        if (
+            url === this.preloadedUrl &&
+            this.preloadElement?.crossOrigin === crossOrigin
+        ) {
+            return this.preloadController?.lease ?? null;
         }
         const buffer = this.ensurePreloadElement();
         if (!buffer) {
-            return;
+            return null;
         }
+
+        this.preloadController?.lease.cancel();
+        const controller = createAudioPreloadLease(url, () => {
+            if (this.preloadController !== controller) {
+                return;
+            }
+            this.preloadReadinessCleanup?.();
+            this.preloadReadinessCleanup = null;
+            this.preloadController = null;
+            this.preloadedUrl = null;
+            this.releaseElement(buffer);
+        });
+        const handleReady = (): void => {
+            if (
+                this.preloadController !== controller ||
+                this.preloadedUrl !== url
+            ) {
+                return;
+            }
+            this.preloadReadinessCleanup?.();
+            this.preloadReadinessCleanup = null;
+            controller.settle({ state: "ready" });
+        };
+        const handleError = (): void => {
+            if (this.preloadController !== controller) {
+                return;
+            }
+            const code = buffer.error?.code;
+            controller.settle({
+                state: "failed",
+                ...(typeof code === "number" ? { code: String(code) } : {}),
+            });
+            controller.lease.cancel();
+        };
+        buffer.addEventListener("canplay", handleReady);
+        buffer.addEventListener("error", handleError);
+        this.preloadReadinessCleanup = () => {
+            buffer.removeEventListener("canplay", handleReady);
+            buffer.removeEventListener("error", handleError);
+        };
+        this.preloadController = controller;
+        // Match load() before src starts the request. Credential mode also
+        // participates in dedupe so a lease never reuses a different mode.
+        buffer.crossOrigin = crossOrigin;
         buffer.src = url;
         this.preloadedUrl = url;
+        return controller.lease;
     }
 
     reload(): void {
@@ -417,6 +483,9 @@ export class NativeAudioElementEngine implements AudioEngine {
 
     destroy(): void {
         this.isDestroyed = true;
+        this.preloadController?.lease.cancel();
+        this.preloadReadinessCleanup?.();
+        this.preloadReadinessCleanup = null;
         this.cancelRetryTimer();
         this.stopTicker();
         this.disarmGestureRetry();
@@ -563,8 +632,8 @@ export class NativeAudioElementEngine implements AudioEngine {
         }
         this.loadGeneration += 1;
         if (this.preloadedUrl === source.url) {
-            // Consumed by this load; the buffer element stays for reuse.
-            this.preloadedUrl = null;
+            // The main element now owns playback; stop the background buffer.
+            this.preloadController?.lease.cancel();
         }
         element.crossOrigin = this.lastLoadOptions?.withCredentials
             ? "use-credentials"

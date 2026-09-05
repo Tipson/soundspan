@@ -15,6 +15,7 @@ export const ru = {
         delete: "Удалить",
         create: "Создать",
         showAll: "Показать все",
+        listen: "Слушать",
         play: "Воспроизвести",
         download: "Загрузить",
         playAll: "Воспроизвести всё",

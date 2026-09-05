@@ -21,6 +21,11 @@ const mockPlaybackTraceLogger = {
     error: jest.fn(),
     child: jest.fn(),
 };
+const mockRecordPlaybackClientMetric = jest.fn();
+
+jest.mock("../../metrics", () => ({
+    recordPlaybackClientMetric: mockRecordPlaybackClientMetric,
+}));
 
 jest.mock("../../config", () => ({
     config: { streaming: { traceEnabled: true } },
@@ -164,6 +169,13 @@ describe("playback client-signal route", () => {
                 userId: "user-1",
             }),
         );
+        expect(mockRecordPlaybackClientMetric).toHaveBeenCalledWith({
+            event: "player.engine_startup",
+            sourceType: "local",
+            outcome: undefined,
+            reason: undefined,
+            durationMs: undefined,
+        });
     });
 
     it("keeps retired startup fields in the generic trace only", async () => {

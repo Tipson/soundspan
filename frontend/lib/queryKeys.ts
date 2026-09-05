@@ -139,12 +139,7 @@ export const queryKeys = {
     browseCategories: () => ["browse", "ytmusic", "categories"] as const,
     browseYtMusicMixes: () => ["browse", "ytmusic", "mixes"] as const,
 
-    // Browse (TIDAL) — used by Explore page
-    browseTidalHome: () => ["browse", "tidal", "home"] as const,
-    browseTidalExplore: () => ["browse", "tidal", "explore"] as const,
-    browseTidalGenres: () => ["browse", "tidal", "genres"] as const,
-    browseTidalMoods: () => ["browse", "tidal", "moods"] as const,
-    browseTidalMixes: () => ["browse", "tidal", "mixes"] as const,
+    // Provider browse content used by Explore pages
 
     // Prefix keys for whole-domain invalidation of the parameterized entries
     libraryArtistsAll: () => ["library", "artists"] as const,
@@ -206,7 +201,6 @@ export const queryKeys = {
     // Settings
     userSettings: () => ["user-settings"] as const,
     scrobblingStatus: () => ["scrobbling-status"] as const,
-    tidalStreamingStatus: () => ["tidal-streaming-status"] as const,
 
     // Podcast discovery
     podcastDiscoveryGenres: () => ["podcasts", "discovery", "genres"] as const,

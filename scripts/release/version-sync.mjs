@@ -30,7 +30,6 @@ const RELEASE_IMAGE_SECTIONS = [
     "backend",
     "backendWorker",
     "frontend",
-    "tidalSidecar",
     "ytmusicStreamer",
     "audioAnalyzer",
     "vibeProviderDclap",

@@ -162,6 +162,48 @@ npm run verify:python
 npm run verify:python-quality
 ```
 
+### Local YouTube Music playback concurrency
+
+Use the deterministic loopback workload when changing YouTube Music search,
+stream spooling, or tail warmup concurrency:
+
+```bash
+npm run test:sidecar-load
+npm run playback:sidecar-load -- --output=test-results/ytmusic-sidecar-load-report.json
+```
+
+The first command is a bounded integration smoke. The second starts the actual
+FastAPI sidecar with uvicorn and runs the default 20, 50, 100, and 120
+concurrent-client stages through `/search`, `/search/batch`, `/proxy/{video_id}`,
+and `/tail-warmup/reconcile`. It patches the final public-search, stream-resolution,
+and progressive CDN-byte provider seams, so it cannot contact YouTube or production. Do not
+replace those deterministic seams with public-provider load.
+
+The report separates two TCP profiles:
+
+- The main fan-out opens a fresh loopback connection per request. That models
+  independent listeners without making them share one artificial HTTPX idle
+  pool.
+- The keepalive regression uses one independent pool per listener, proves an
+  immediate connection reuse, waits for uvicorn's server idle timeout, and
+  proves that every pool reconnects cleanly afterward through the real
+  `/search` boundary. This covers the HTTP connection layer without claiming
+  that one process is equivalent to 120 browsers.
+
+`serverReadyMs` ends when response headers arrive and `firstByteMs` ends at the
+first non-empty media body chunk. Neither metric proves browser decode or
+audible playback; the JSON records `audibleMs.measured=false`. Real provider
+latency, browser media startup, audio-output gaps, and device/network variance
+still require a separate browser/device run. The same-track phase gates its
+deterministic provider until every HTTP stream holds a real sidecar lease, then
+reports concurrent stream leases, pending spool jobs, and provider workers
+separately.
+
+The command exits non-zero when its explicit singleflight, classification,
+cancellation, keepalive, cleanup, or bounded-state invariants fail. Controlled
+capacity and request-deadline rejections in distinct cold-load phases remain
+reported as classified results rather than being hidden.
+
 ### Scale smoke tier
 
 The scale smoke tier exercises real boundaries at production-like volume. It

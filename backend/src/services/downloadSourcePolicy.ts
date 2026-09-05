@@ -1,10 +1,9 @@
 /** Supported sources for library album downloads. */
 import { lidarrService } from "./lidarr";
 import { soulseekService } from "./soulseek";
-import { tidalService } from "./tidal";
 import { youtubeDownloadService } from "./youtubeDownload";
 
-export type DownloadSource = "tidal" | "lidarr" | "soulseek" | "youtube";
+export type DownloadSource = "lidarr" | "soulseek" | "youtube";
 
 /** Health snapshot used by the pure source-resolution policy. */
 export type DownloadSourceAvailability = Record<DownloadSource, boolean>;
@@ -21,30 +20,23 @@ interface DownloadSourcePolicyInput {
 }
 
 const LEGACY_FALLBACK_ORDER: Record<DownloadSource, DownloadSource[]> = {
-    tidal: ["soulseek", "lidarr", "youtube"],
-    soulseek: ["tidal", "lidarr", "youtube"],
-    lidarr: ["tidal", "soulseek", "youtube"],
-    youtube: ["tidal", "soulseek", "lidarr"],
+    soulseek: ["lidarr", "youtube"],
+    lidarr: ["soulseek", "youtube"],
+    youtube: ["soulseek", "lidarr"],
 };
 
 /** Probe every supported album-download source concurrently. */
 export async function probeDownloadSourceAvailability(): Promise<DownloadSourceAvailability> {
-    const [tidal, lidarr, soulseek, youtube] = await Promise.all([
-        tidalService.isAvailable(),
+    const [lidarr, soulseek, youtube] = await Promise.all([
         lidarrService.isEnabled(),
         soulseekService.isAvailable(),
         youtubeDownloadService.isAvailable(),
     ]);
-    return { tidal, lidarr, soulseek, youtube };
+    return { lidarr, soulseek, youtube };
 }
 
 function isDownloadSource(value: unknown): value is DownloadSource {
-    return (
-        value === "tidal" ||
-        value === "lidarr" ||
-        value === "soulseek" ||
-        value === "youtube"
-    );
+    return value === "lidarr" || value === "soulseek" || value === "youtube";
 }
 
 function unavailablePrimary(

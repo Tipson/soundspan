@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { EventEmitter } from "node:events";
 import { PassThrough } from "stream";
 
 // ── Mocks ──────────────────────────────────────────────────────────
@@ -363,6 +364,64 @@ describe("artists preview (YT Music) routes", () => {
                 headers: opts?.range ? { range: opts.range } : {},
             }) as any;
 
+        it.each([false, true])(
+            "cancels a pending preview on disconnect (public fallback: %s)",
+            async (fallback) => {
+                if (fallback) {
+                    mockFindUniqueUserSettings.mockResolvedValueOnce({
+                        ytMusicOAuthJson: '{"token":"expired"}',
+                    });
+                    mockGetStreamProxy.mockRejectedValueOnce({
+                        response: { status: 401 },
+                    });
+                }
+                let markStarted!: () => void;
+                const started = new Promise<void>((resolve) => {
+                    markStarted = resolve;
+                });
+                let cleanup!: () => void;
+                mockGetStreamProxy.mockImplementationOnce(
+                    (_user, _video, _quality, _range, options) =>
+                        new Promise((_resolve, reject) => {
+                            cleanup = () =>
+                                reject(new Error("fixture cleanup"));
+                            options?.signal.addEventListener(
+                                "abort",
+                                () => reject(options.signal.reason),
+                                { once: true },
+                            );
+                            markStarted();
+                        }),
+                );
+                const req = Object.assign(
+                    new EventEmitter(),
+                    buildReq("pending-preview", { userId: "u1" }),
+                    { aborted: false },
+                );
+                const res = createRes();
+                const responseEvents = new EventEmitter();
+                res.once = responseEvents.once.bind(responseEvents);
+                res.off = responseEvents.off.bind(responseEvents);
+                res.writableEnded = false;
+                const handling = getPreviewStream(req, res);
+                try {
+                    await started;
+                    responseEvents.emit("close");
+                    const options = mockGetStreamProxy.mock.calls.at(-1)?.[4];
+                    expect(options?.signal.aborted).toBe(true);
+                    await handling;
+                    expect(res.json).not.toHaveBeenCalled();
+                    expect(res.end).not.toHaveBeenCalled();
+                    expect(mockLoggerError).not.toHaveBeenCalled();
+                    expect(req.listenerCount("aborted")).toBe(0);
+                    expect(responseEvents.listenerCount("close")).toBe(0);
+                } finally {
+                    cleanup();
+                    await handling;
+                }
+            },
+        );
+
         it("returns 503 when YT Music is disabled", async () => {
             mockGetSystemSettings.mockResolvedValueOnce({
                 ytMusicEnabled: false,
@@ -401,6 +460,7 @@ describe("artists preview (YT Music) routes", () => {
                 "vid-pub",
                 "high",
                 undefined,
+                { signal: expect.any(AbortSignal) },
             );
             expect(res.statusCode).toBe(200);
         });
@@ -424,6 +484,7 @@ describe("artists preview (YT Music) routes", () => {
                 "vid-auth",
                 "high",
                 undefined,
+                { signal: expect.any(AbortSignal) },
             );
         });
 
@@ -472,6 +533,7 @@ describe("artists preview (YT Music) routes", () => {
                 "vid-anon",
                 "high",
                 undefined,
+                { signal: expect.any(AbortSignal) },
             );
         });
 
@@ -498,6 +560,7 @@ describe("artists preview (YT Music) routes", () => {
                 "vid-range",
                 "high",
                 "bytes=0-1024",
+                { signal: expect.any(AbortSignal) },
             );
             expect(res.statusCode).toBe(206);
             expect(res._headers["content-range"]).toBe("bytes 0-1024/5000");
@@ -546,6 +609,7 @@ describe("artists preview (YT Music) routes", () => {
                 "vid-fallback",
                 "high",
                 undefined,
+                { signal: expect.any(AbortSignal) },
             );
             // Fallback with public
             expect(mockGetStreamProxy).toHaveBeenNthCalledWith(
@@ -554,6 +618,7 @@ describe("artists preview (YT Music) routes", () => {
                 "vid-fallback",
                 "high",
                 undefined,
+                { signal: expect.any(AbortSignal) },
             );
             expect(res.statusCode).toBe(200);
         });

@@ -42,11 +42,6 @@ ignore = [
 "services/*/app.py" = [
   "B008", # FastAPI Depends and Query objects are intentionally constructed as defaults.
 ]
-"services/tidal-streamer/app.py" = [
-  "B008", # FastAPI Depends and Query objects are intentionally constructed as defaults.
-  "B904", # Endpoint handlers intentionally translate provider failures into stable HTTP errors.
-  "E402", # The shared-service path bootstrap must run before local imports.
-]
 "services/ytmusic-streamer/app.py" = [
   "ASYNC240", # Small local credential-path operations are bounded and predate async file support.
   "B008", # FastAPI Depends and Query objects are intentionally constructed as defaults.
@@ -75,11 +70,6 @@ disallow_any_unimported = true
 show_error_codes = true
 # Allow package-specific follow_imports overrides to apply to incompatible stubs too.
 follow_imports_for_stubs = true
-
-[[tool.mypy.overrides]]
-# tiddl 3.4.4 does not publish PEP 561 type information (7 import diagnostics).
-module = ["tiddl", "tiddl.*"]
-ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # Mutagen 1.48.1 marks itself typed, but its file loaders and tag mappings remain untyped.

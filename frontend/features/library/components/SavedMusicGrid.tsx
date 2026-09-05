@@ -21,9 +21,7 @@ function imageUrl(entity: SavedMusicEntity): string | null {
     if (entity.source === "ytmusic") {
         return api.getBrowseImageUrl(entity.imageUrl);
     }
-    if (entity.source === "tidal") {
-        return api.getTidalBrowseImageUrl(entity.imageUrl);
-    }
+    if (entity.source === "tidal") return null;
     return api.getCoverArtUrl(entity.imageUrl, 400);
 }
 

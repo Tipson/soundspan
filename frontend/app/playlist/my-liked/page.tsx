@@ -29,14 +29,21 @@ import { formatTime } from "@/utils/formatTime";
 import { shuffleArray } from "@/utils/shuffle";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { useToast } from "@/lib/toast-context";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
+import {
+    hasLocalTrackBacking,
+    isTrackActionable,
+    toAddToPlaylistRef,
+} from "@/lib/trackRef";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { toAudioTrack } from "./likedPlaylistUtils";
+import {
+    selectActionableLikedTracks,
+    toAudioTrack,
+    toLikedTrackActionTarget,
+} from "./likedPlaylistUtils";
 import { TrackList, TrackListHeader } from "@/components/track";
 import type { TrackRowItem, TrackRowSlots } from "@/components/track";
 import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
@@ -60,37 +67,28 @@ export function resolveLikedTrackCoverUrl(
     if (!track.album.coverArt) {
         return null;
     }
-    if (track.streamSource === "tidal") {
-        return api.getTidalBrowseImageUrl(track.album.coverArt);
+    if (hasLocalTrackBacking(track)) {
+        return api.getCoverArtUrl(track.album.coverArt, size);
     }
     if (track.streamSource === "youtube") {
         return api.getBrowseImageUrl(track.album.coverArt);
     }
+    if (track.streamSource === "tidal") return null;
     return api.getCoverArtUrl(track.album.coverArt, size);
 }
 
 function toRowItem(track: LikedPlaylistTrack): TrackRowItem {
-    const rawTidalTrackId = track.tidalTrackId ?? track.provider?.tidalTrackId;
-    const tidalTrackId =
-        typeof rawTidalTrackId === "number"
-            ? rawTidalTrackId
-            : typeof rawTidalTrackId === "string" &&
-                /^\d+$/.test(rawTidalTrackId)
-              ? Number(rawTidalTrackId)
-              : undefined;
     return {
         id: track.id,
         title: track.title,
         artistName: track.artist.name,
         duration: track.duration,
         streamSource:
-            track.streamSource === "tidal" || track.streamSource === "youtube"
-                ? track.streamSource
-                : undefined,
-        tidalTrackId,
+            track.streamSource === "youtube" ? track.streamSource : undefined,
         youtubeVideoId:
             track.youtubeVideoId ?? track.provider?.youtubeVideoId ?? undefined,
         coverArtUrl: resolveLikedTrackCoverUrl(track, 100),
+        isPlayable: isTrackActionable(track),
     };
 }
 
@@ -116,19 +114,11 @@ function LikedTrackList({
 
     const rowSlots = useCallback(
         (track: LikedPlaylistTrack): TrackRowSlots => {
-            const isRemote =
-                track.streamSource === "youtube" ||
-                track.streamSource === "tidal";
             return {
-                titleBadges: isRemote ? (
-                    <>
-                        {track.streamSource === "tidal" ? (
-                            <TidalBadge />
-                        ) : (
-                            <YouTubeBadge />
-                        )}
-                    </>
-                ) : undefined,
+                titleBadges:
+                    track.streamSource === "youtube" ? (
+                        <YouTubeBadge />
+                    ) : undefined,
                 middleColumns: (
                     <p className="hidden truncate text-sm text-gray-400 md:flex items-center">
                         {track.album.title}
@@ -154,9 +144,15 @@ function LikedTrackList({
                             iconSizeClassName="h-4 w-4"
                         />
                         <TrackOverflowMenu
-                            track={toAudioTrack(track)}
-                            showGoToAlbum={!isRemote}
-                            showMatchVibe={!isRemote}
+                            track={toLikedTrackActionTarget(track)}
+                            showPlayNext={isTrackActionable(track)}
+                            showAddToQueue={isTrackActionable(track)}
+                            showAddToPlaylist={isTrackActionable(track)}
+                            showGoToAlbum={track.streamSource !== "youtube"}
+                            showMatchVibe={
+                                isTrackActionable(track) &&
+                                track.streamSource !== "youtube"
+                            }
                         />
                     </div>
                 ),
@@ -215,16 +211,24 @@ export default function MyLikedPlaylistPage() {
         () => new Set(likedTracks.map((track) => track.id)),
         [likedTracks],
     );
-    const audioTracks = useMemo(
-        () => likedTracks.map((track) => toAudioTrack(track)),
+    const actionableLikedTracks = useMemo(
+        () => selectActionableLikedTracks(likedTracks),
         [likedTracks],
+    );
+    const audioTracks = useMemo(
+        () =>
+            actionableLikedTracks
+                .map((track) => toAudioTrack(track))
+                .filter((track): track is NonNullable<typeof track> => !!track),
+        [actionableLikedTracks],
     );
     const deviceDownloadTracks = useMemo(
         () =>
-            likedTracks
+            actionableLikedTracks
                 .filter((track) => isLikedPlaylistTrackDownloadable(track))
-                .map((track) => toAudioTrack(track)),
-        [likedTracks],
+                .map((track) => toAudioTrack(track))
+                .filter((track): track is NonNullable<typeof track> => !!track),
+        [actionableLikedTracks],
     );
     const totalDuration = useMemo(
         () =>
@@ -237,6 +241,10 @@ export default function MyLikedPlaylistPage() {
         }
         return likedTrackIds.has(currentTrack.id);
     }, [currentTrack, isPlaying, likedTracks.length, likedTrackIds]);
+    const primaryActionLabel =
+        isThisPlaylistPlaying && isPlaying
+            ? ru.common.pause
+            : ru.common.playAll;
 
     const coverUrl = useMemo(() => {
         if (likedTracks.length === 0) return null;
@@ -315,27 +323,17 @@ export default function MyLikedPlaylistPage() {
     };
 
     const handlePlaylistSelected = async (playlistId: string) => {
-        if (likedTracks.length === 0) return;
+        if (actionableLikedTracks.length === 0) return;
         setIsAddingToPlaylist(true);
         try {
-            for (const track of likedTracks) {
+            for (const track of actionableLikedTracks) {
                 await api.addTrackToPlaylist(
                     playlistId,
-                    toAddToPlaylistRef({
-                        id: track.id,
-                        title: track.title,
-                        artist: track.artist?.name,
-                        album: track.album?.title,
-                        duration: track.duration,
-                        streamSource: track.streamSource,
-                        youtubeVideoId: track.youtubeVideoId,
-                        tidalTrackId: track.tidalTrackId,
-                        thumbnailUrl: track.album?.coverArt || undefined,
-                    }),
+                    toAddToPlaylistRef(track),
                 );
             }
             toast.success(
-                `Добавлено в плейлист: ${likedTracks.length} ${pluralRu(likedTracks.length, ["трек", "трека", "треков"])}`,
+                `Добавлено в плейлист: ${actionableLikedTracks.length} ${pluralRu(actionableLikedTracks.length, ["трек", "трека", "треков"])}`,
             );
         } catch (error) {
             sharedFrontendLogger.error(
@@ -369,7 +367,8 @@ export default function MyLikedPlaylistPage() {
     };
 
     const handlePlayTrack = (track: LikedPlaylistTrack) => {
-        playNow(toAudioTrack(track));
+        const audioTrack = toAudioTrack(track);
+        if (audioTrack) playNow(audioTrack);
     };
 
     const handleStartRadio = async () => {
@@ -487,11 +486,14 @@ export default function MyLikedPlaylistPage() {
                         >
                             <div
                                 data-detail-action-tier="primary"
-                                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                                className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-none"
                             >
                                 <button
+                                    type="button"
                                     onClick={handlePlayAll}
-                                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] motion-reduce:transition-none sm:flex-none"
+                                    disabled={audioTracks.length === 0}
+                                    aria-label={primaryActionLabel}
+                                    className="flex min-h-11 min-w-fit flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-2 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none sm:px-5"
                                 >
                                     {showPlaySpinner ? (
                                         <Loader2 className="h-5 w-5 animate-spin" />
@@ -500,13 +502,22 @@ export default function MyLikedPlaylistPage() {
                                     ) : (
                                         <Play className="ml-0.5 h-5 w-5 fill-current" />
                                     )}
-                                    <span>
+                                    <span
+                                        data-playlist-primary-label="compact"
+                                        className="min-w-0 truncate sm:hidden"
+                                    >
                                         {isThisPlaylistPlaying && isPlaying
                                             ? ru.common.pause
-                                            : ru.common.playAll}
+                                            : ru.common.listen}
+                                    </span>
+                                    <span
+                                        data-playlist-primary-label="full"
+                                        className="hidden sm:inline"
+                                    >
+                                        {primaryActionLabel}
                                     </span>
                                 </button>
-                                {likedTracks.length > 1 && (
+                                {audioTracks.length > 1 && (
                                     <button
                                         onClick={handleShuffle}
                                         className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
@@ -519,7 +530,7 @@ export default function MyLikedPlaylistPage() {
                             </div>
                             <div
                                 data-detail-action-tier="secondary"
-                                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                                className="flex w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:flex-none sm:gap-2"
                             >
                                 <DeviceCollectionDownloadButton
                                     tracks={deviceDownloadTracks}
@@ -528,6 +539,7 @@ export default function MyLikedPlaylistPage() {
                                 />
                                 <button
                                     onClick={handleAddAllToQueue}
+                                    disabled={audioTracks.length === 0}
                                     className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                     title={ru.playlist.addAllQueue}
                                     aria-label={ru.playlist.addAllQueue}
@@ -537,6 +549,9 @@ export default function MyLikedPlaylistPage() {
                                 <button
                                     onClick={() =>
                                         setShowPlaylistSelector(true)
+                                    }
+                                    disabled={
+                                        actionableLikedTracks.length === 0
                                     }
                                     className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                     title={ru.playlist.addAllPlaylist}

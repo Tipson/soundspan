@@ -20,9 +20,7 @@ export const defaultSettings: UserSettings = {
     offlineEnabled: false,
     maxCacheSizeMb: 5120,
     showYtMusicExplore: true,
-    showTidalExplore: true,
     ytMusicQuality: "HIGH",
-    tidalStreamingQuality: "HIGH",
 };
 
 /**
@@ -52,7 +50,6 @@ export function useSettingsData() {
                     shareOnlinePresence: data.shareOnlinePresence ?? false,
                     shareListeningStatus: data.shareListeningStatus ?? false,
                     showYtMusicExplore: data.showYtMusicExplore ?? true,
-                    showTidalExplore: data.showTidalExplore ?? true,
                 });
                 setLoadError(false);
             } catch (error) {

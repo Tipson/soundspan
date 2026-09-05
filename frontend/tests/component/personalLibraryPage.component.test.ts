@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { LucideProps } from "lucide-react";
 
 let tab: string | null = null;
 
-const Icon = () => React.createElement("i");
+const Icon = React.forwardRef<SVGSVGElement, LucideProps>((props, ref) =>
+    React.createElement("svg", { ...props, ref }),
+);
+Icon.displayName = "TestIcon";
 
 mock.module("lucide-react", {
     namedExports: {
@@ -121,6 +125,59 @@ test("personal Library failures provide touch-sized retry actions", async () => 
     assert.match(playlists, /min-h-11/);
     assert.match(albums, />Повторить</);
     assert.match(albums, /min-h-11/);
+});
+
+test("personal Library keeps system collections ahead of loading and error content", async () => {
+    const { PersonalPlaylistGrid } =
+        await import("../../features/library/components/PersonalPlaylistGrid");
+    const { LibraryPlaylistCard } =
+        await import("../../features/library/components/LibraryPlaylistCard");
+
+    const leadingCards = React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(LibraryPlaylistCard, {
+            href: "/playlist/my-liked",
+            title: "Любимые треки",
+            trackCount: 24,
+            icon: Icon,
+            accent: "liked",
+        }),
+        React.createElement(LibraryPlaylistCard, {
+            href: "/library?tab=downloads",
+            title: "Загруженное",
+            trackCount: 1,
+            icon: Icon,
+            accent: "downloaded",
+        }),
+    );
+
+    for (const state of [
+        { isLoading: true, isError: false, marker: "animate-pulse" },
+        {
+            isLoading: false,
+            isError: true,
+            marker: 'role="alert"',
+        },
+    ]) {
+        const html = renderToStaticMarkup(
+            React.createElement(PersonalPlaylistGrid, {
+                playlists: [],
+                isLoading: state.isLoading,
+                isError: state.isError,
+                onRetry: () => undefined,
+                leadingCards,
+            }),
+        );
+
+        assert.match(html, /href="\/playlist\/my-liked"/);
+        assert.match(html, /href="\/library\?tab=downloads"/);
+        assert.match(html, new RegExp(state.marker));
+        assert.ok(
+            html.indexOf("Любимые треки") < html.indexOf("Загруженное"),
+            "Любимые треки должны оставаться первой системной карточкой",
+        );
+    }
 });
 
 mock.module("@/features/device-offline/DeviceOfflineProvider", {

@@ -92,15 +92,20 @@ const DISCOVERY_SOURCE_DEADLINE_MS = 9_000;
 const DISCOVERY_CORRECTION_DEADLINE_MS = 1_500;
 
 function withDiscoveryDeadline<T>(
-    promise: Promise<T>,
+    operation: (signal: AbortSignal) => Promise<T>,
     timeoutMs: number,
     label: string,
 ): Promise<T> {
+    const controller = new AbortController();
     return new Promise<T>((resolve, reject) => {
         const timeout = setTimeout(() => {
+            controller.abort();
             reject(new Error(`${label} exceeded ${timeoutMs}ms deadline`));
         }, timeoutMs);
-        promise.then(resolve, reject).finally(() => clearTimeout(timeout));
+        Promise.resolve()
+            .then(() => operation(controller.signal))
+            .then(resolve, reject)
+            .finally(() => clearTimeout(timeout));
     });
 }
 
@@ -230,13 +235,18 @@ function mapYtMusicDiscoverArtist(
 async function searchYtMusicDiscoverCatalog(
     query: string,
     limit: number,
+    signal?: AbortSignal,
 ): Promise<DiscoverYtMusicCatalogResult> {
     const response = await searchYtMusicDiscoveryCatalog(
         ytMusicService,
         "__public__",
         query,
         limit,
-        { timeoutMs: YT_MUSIC_DISCOVERY_TIMEOUT_MS, maxRetries: 0 },
+        {
+            timeoutMs: YT_MUSIC_DISCOVERY_TIMEOUT_MS,
+            maxRetries: 0,
+            ...(signal ? { signal } : {}),
+        },
     );
 
     const tracks = response.tracks
@@ -963,7 +973,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         if ((type === "music" || type === "all") && lastFmEnabled) {
             try {
                 const correction = await withDiscoveryDeadline(
-                    lastFmService.getArtistCorrection(query),
+                    () => lastFmService.getArtistCorrection(query),
                     DISCOVERY_CORRECTION_DEADLINE_MS,
                     "Last.fm correction",
                 );
@@ -992,22 +1002,28 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         if (type === "music" || type === "all") {
             if (lastFmEnabled) {
                 promiseMap.artists = withDiscoveryDeadline(
-                    lastFmService.searchArtists(
-                        searchQuery,
-                        Math.min(searchLimit, 50),
-                    ),
+                    () =>
+                        lastFmService.searchArtists(
+                            searchQuery,
+                            Math.min(searchLimit, 50),
+                        ),
                     DISCOVERY_SOURCE_DEADLINE_MS,
                     "Last.fm artist search",
                 );
                 promiseMap.tracks = withDiscoveryDeadline(
-                    lastFmService.searchTracks(searchQuery, searchLimit),
+                    () => lastFmService.searchTracks(searchQuery, searchLimit),
                     DISCOVERY_SOURCE_DEADLINE_MS,
                     "Last.fm track search",
                 );
             }
             if (ytMusicEnabled) {
                 promiseMap.ytMusicCatalog = withDiscoveryDeadline(
-                    searchYtMusicDiscoverCatalog(searchQuery, searchLimit),
+                    (signal) =>
+                        searchYtMusicDiscoverCatalog(
+                            searchQuery,
+                            searchLimit,
+                            signal,
+                        ),
                     DISCOVERY_SOURCE_DEADLINE_MS,
                     "YouTube Music discovery batch",
                 );

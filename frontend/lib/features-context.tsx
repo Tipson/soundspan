@@ -22,6 +22,7 @@ interface FeaturesState {
     discovery: boolean;
     autoPlaylists: boolean;
     federation: boolean;
+    audius: boolean;
     vibe: VibeSystemStatus;
     /** Server-configured loudness normalization reference (LUFS). */
     loudnessTargetLufs: number;
@@ -39,6 +40,7 @@ const defaultState: FeaturesState = {
     discovery: true,
     autoPlaylists: true,
     federation: false,
+    audius: false,
     vibe: {
         provider: {
             configured: false,
@@ -76,6 +78,7 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
                 discovery: features.discovery ?? true,
                 autoPlaylists: features.autoPlaylists ?? true,
                 federation: features.federation ?? false,
+                audius: features.audius === true,
                 vibe: features.vibe,
                 loudnessTargetLufs:
                     typeof features.loudnessTargetLufs === "number"
@@ -95,6 +98,7 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
                           discovery: true,
                           autoPlaylists: true,
                           federation: false,
+                          audius: false,
                           vibe: defaultState.vibe,
                           loudnessTargetLufs: -18,
                           showVersion: false,

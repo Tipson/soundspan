@@ -31,6 +31,7 @@ jest.mock("../../utils/logger", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        underJest: true,
         music: {
             musicPath: "/music",
         },
@@ -55,14 +56,6 @@ jest.mock("../../services/soulseek", () => ({
     },
 }));
 
-jest.mock("../../services/tidal", () => ({
-    tidalService: {
-        isAvailable: jest.fn(),
-        findAlbum: jest.fn(),
-        downloadAlbum: jest.fn(),
-    },
-}));
-
 jest.mock("../../services/musicbrainz", () => ({
     musicBrainzService: {
         getArtist: jest.fn(),
@@ -81,6 +74,11 @@ jest.mock("../../services/simpleDownloadManager", () => ({
         startDownload: jest.fn(),
         clearLidarrQueue: jest.fn(),
     },
+}));
+
+jest.mock("../../services/albumDownloadQueueService", () => ({
+    enqueueAlbumDownloadInBackground: jest.fn(),
+    enqueueArtistDownloadExpansionInBackground: jest.fn(),
 }));
 
 jest.mock("../../utils/db", () => ({

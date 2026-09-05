@@ -289,6 +289,22 @@ export function generateSeparatedShuffleIndices(
     return [currentIdx, ...separated];
 }
 
+function isCompleteShuffleOrder(
+    indices: readonly number[],
+    queueLength: number,
+    currentIndex: number,
+): boolean {
+    return (
+        indices.length === queueLength &&
+        indices.includes(currentIndex) &&
+        new Set(indices).size === queueLength &&
+        indices.every(
+            (index) =>
+                Number.isInteger(index) && index >= 0 && index < queueLength,
+        )
+    );
+}
+
 const AudioControlsContext = createContext<
     AudioControlsContextType | undefined
 >(undefined);
@@ -432,6 +448,34 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         },
         [],
     );
+    const activeShuffle = state.isShuffle;
+    const activeQueueLength = state.queue.length;
+    const activeQueueIndex = state.currentIndex;
+    const activeShuffleIndices = state.shuffleIndices;
+    const setActiveShuffleIndices = state.setShuffleIndices;
+
+    useEffect(() => {
+        if (!activeShuffle || activeQueueLength === 0) return;
+        if (
+            isCompleteShuffleOrder(
+                activeShuffleIndices,
+                activeQueueLength,
+                activeQueueIndex,
+            )
+        ) {
+            return;
+        }
+        setActiveShuffleIndices(
+            generateShuffleIndices(activeQueueLength, activeQueueIndex),
+        );
+    }, [
+        activeShuffle,
+        activeQueueLength,
+        activeQueueIndex,
+        activeShuffleIndices,
+        setActiveShuffleIndices,
+        generateShuffleIndices,
+    ]);
 
     const getActiveListenTogetherSession = useCallback(() => {
         return resolveActiveListenTogetherSession({
@@ -2032,6 +2076,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         state.currentIndex,
                     ),
                 );
+            } else {
+                state.setShuffleIndices([]);
             }
             return newShuffle;
         });

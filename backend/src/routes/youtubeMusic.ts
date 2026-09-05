@@ -50,6 +50,23 @@ const MATCH_SCHEMA = z.object({
 const MATCH_BATCH_SCHEMA = z.object({
     tracks: z.array(MATCH_SCHEMA).min(1).max(50),
 });
+const WARMUP_VIDEO_ID_SCHEMA = z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{11}$/);
+const TAIL_WARMUP_RECONCILE_SCHEMA = z.object({
+    ownerId: z
+        .string()
+        .trim()
+        .min(1)
+        .max(80)
+        .regex(/^[A-Za-z0-9:._-]+$/),
+    generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    quality: z.string().trim().min(1).max(32).optional(),
+    current: WARMUP_VIDEO_ID_SCHEMA.nullable(),
+    immediate: WARMUP_VIDEO_ID_SCHEMA.nullable(),
+    tail: z.array(WARMUP_VIDEO_ID_SCHEMA).max(4),
+});
 const ytOauthSessionCache = new Map<
     string,
     { authenticated: boolean; expiresAt: number }
@@ -996,8 +1013,6 @@ router.get(
     asyncHandler(async (req: Request<{ videoId: string }>, res: Response) => {
         try {
             const userId = req.user!.id;
-            const effectiveUserId = await getUserIdOrPublic(userId);
-
             const { videoId } = req.params;
             const quality = await resolveYtMusicStreamQuality(
                 userId,
@@ -1005,7 +1020,7 @@ router.get(
             );
 
             const info = await ytMusicService.getStreamInfo(
-                effectiveUserId,
+                "__public__",
                 videoId,
                 quality,
             );
@@ -1086,8 +1101,6 @@ router.get(
     asyncHandler(async (req: Request<{ videoId: string }>, res: Response) => {
         try {
             const userId = req.user!.id;
-            const effectiveUserId = await getUserIdOrPublic(userId);
-
             const { videoId } = req.params;
             const quality = await resolveYtMusicStreamQuality(
                 userId,
@@ -1100,11 +1113,17 @@ router.get(
                 res,
                 (signal) =>
                     ytMusicService.getStreamProxy(
-                        effectiveUserId,
+                        "__public__",
                         videoId,
                         quality,
                         rangeHeader,
-                        { signal },
+                        {
+                            signal,
+                            purpose:
+                                req.query.purpose === "preload"
+                                    ? "preload"
+                                    : "interactive",
+                        },
                     ),
             );
             if (!proxyRes) return;
@@ -1419,6 +1438,49 @@ router.post(
 
 router.use(unavailableRecoveryRouter);
 
+// ── Server-side queue warmup (public provider strategy) ───────────
+
+router.post(
+    "/tail-warmup/reconcile",
+    requireAuth,
+    requireYtMusicEnabled,
+    ytMusicStreamLimiter,
+    asyncHandler(async (req: Request, res: Response) => {
+        const parsed = TAIL_WARMUP_RECONCILE_SCHEMA.safeParse(req.body);
+        if (!parsed.success) {
+            return res.status(400).json({ error: "Invalid tail warmup plan" });
+        }
+
+        const abortController = new AbortController();
+        const abortUpstream = (): void => abortController.abort();
+        req.once("aborted", abortUpstream);
+        try {
+            const plan = parsed.data;
+            const quality = plan.quality
+                ? (normalizeYtMusicStreamQuality(plan.quality) ??
+                  DEFAULT_YTMUSIC_STREAM_QUALITY)
+                : await resolveYtMusicStreamQuality(req.user!.id, undefined);
+            const snapshot = await ytMusicService.reconcileTailWarmup(
+                {
+                    ...plan,
+                    ownerId: `${req.user!.id}:${plan.ownerId}`,
+                    quality: quality.toUpperCase(),
+                },
+                { signal: abortController.signal },
+            );
+            return res.json(snapshot);
+        } catch (error) {
+            if (abortController.signal.aborted) {
+                return;
+            }
+            logger.warn("[YTMusic Route] Tail warmup reconcile failed:", error);
+            sendInternalRouteError(res, "Failed to reconcile tail warmup");
+        } finally {
+            req.off("aborted", abortUpstream);
+        }
+    }),
+);
+
 // ── Public Stream Routes (no user OAuth required) ─────────────────
 // These endpoints use the "__public__" user_id sentinel to bypass
 // OAuth on the sidecar. yt-dlp extraction is unauthenticated.
@@ -1543,7 +1605,13 @@ router.get(
                         videoId,
                         quality,
                         rangeHeader,
-                        { signal },
+                        {
+                            signal,
+                            purpose:
+                                req.query.purpose === "preload"
+                                    ? "preload"
+                                    : "interactive",
+                        },
                     ),
             );
             if (!proxyRes) return;

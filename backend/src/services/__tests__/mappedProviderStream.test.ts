@@ -1,12 +1,8 @@
 import { Readable, Writable } from "node:stream";
 import type { Request, Response } from "express";
 
-const mockTidalStream = jest.fn();
 const mockYtMusicStream = jest.fn();
 
-jest.mock("../tidalStreaming", () => ({
-    tidalStreamingService: { getStreamProxy: mockTidalStream },
-}));
 jest.mock("../youtubeMusic", () => ({
     ytMusicService: { getStreamProxy: mockYtMusicStream },
 }));
@@ -49,9 +45,9 @@ describe("mapped provider stream", () => {
         "reports a destroyed response when the body fails afterBytes=%s",
         async (afterBytes) => {
             const res = responseSink();
-            mockTidalStream.mockResolvedValueOnce({
+            mockYtMusicStream.mockResolvedValueOnce({
                 status: 200,
-                headers: { "content-type": "audio/flac" },
+                headers: { "content-type": "audio/webm" },
                 data: failingBody(res, afterBytes),
             });
 
@@ -60,7 +56,10 @@ describe("mapped provider stream", () => {
                 res,
                 userId: "user-1",
                 quality: "high",
-                fallback: { source: "tidal", tidalTrackId: 42 },
+                fallback: {
+                    source: "ytmusic",
+                    youtubeVideoId: "video-1",
+                },
             });
 
             expect(result).toMatchObject({
@@ -70,9 +69,9 @@ describe("mapped provider stream", () => {
                     destroyed: true,
                 },
             });
-            expect(mockTidalStream).toHaveBeenCalledWith(
-                "user-1",
-                42,
+            expect(mockYtMusicStream).toHaveBeenCalledWith(
+                "__public__",
+                "video-1",
                 "high",
                 undefined,
             );

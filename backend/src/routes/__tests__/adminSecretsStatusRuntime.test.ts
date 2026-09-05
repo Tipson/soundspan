@@ -41,6 +41,10 @@ jest.mock("../../utils/db", () => ({
     },
 }));
 
+jest.mock("../../workers/queues", () => ({
+    schedulerMaintenanceQueue: {},
+}));
+
 jest.mock("../../config", () => ({
     config: { workers: { trackRemovalRetentionDays: 90 } },
 }));

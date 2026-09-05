@@ -72,6 +72,7 @@ router.get("/features", requireAuth, async (req, res) => {
             discovery: config.features.discovery,
             autoPlaylists: config.features.autoPlaylists,
             federation: config.features.federation,
+            audius: config.features.audius === true,
             loudnessTargetLufs: config.loudnessTargetLufs,
         });
     } catch (error: any) {

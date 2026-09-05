@@ -30,6 +30,7 @@ import {
     isHiddenGenreItem,
 } from "@/features/explore/genreClassification";
 import { preserveDiscoverPrefixData } from "@/features/search/discoverSearchPlaceholder";
+import { getPlaylistNextPageParam } from "@/features/playlist/lib/playlistPagination";
 
 import { queryKeys } from "../lib/queryKeys";
 
@@ -734,10 +735,7 @@ export function usePlaylistPagesQuery(id: string | undefined) {
             });
         },
         initialPageParam: null as string | null,
-        getNextPageParam: (lastPage) =>
-            lastPage.pagination?.hasMore
-                ? lastPage.pagination.nextCursor
-                : undefined,
+        getNextPageParam: getPlaylistNextPageParam,
         enabled: !!id,
         staleTime: 1 * 60 * 1000,
     });
@@ -1373,112 +1371,6 @@ export function useYtMusicMixesQuery(options?: { enabled?: boolean }) {
         queryKey: queryKeys.browseYtMusicMixes(),
         queryFn: async () => {
             const response = await api.getYtMusicMixes();
-            return response?.mixes ?? [];
-        },
-        staleTime: 5 * 60 * 1000,
-        enabled: options?.enabled ?? true,
-    });
-}
-
-// ── TIDAL Browse / Explore hooks ────────────────────────────────────────
-
-export interface TidalBrowseShelfItem {
-    type: string;
-    playlistId?: string;
-    mixId?: string;
-    albumId?: string;
-    title: string;
-    thumbnailUrl: string | null;
-    subtitle?: string;
-}
-
-export interface TidalBrowseShelf {
-    title: string;
-    contents: TidalBrowseShelfItem[];
-}
-
-export interface TidalGenre {
-    name: string;
-    path: string;
-    hasPlaylists: boolean;
-    imageUrl: string | null;
-}
-
-export interface TidalMixPreview {
-    mixId: string;
-    title: string;
-    subTitle: string;
-    thumbnailUrl: string | null;
-}
-
-/**
- * Fetch TIDAL personalized home shelves for the Explore page.
- */
-export function useTidalHomeShelvesQuery(options?: { enabled?: boolean }) {
-    return useQuery<TidalBrowseShelf[]>({
-        queryKey: queryKeys.browseTidalHome(),
-        queryFn: async () => {
-            const response = await api.getTidalHomeShelves();
-            return response?.shelves ?? [];
-        },
-        staleTime: 5 * 60 * 1000,
-        enabled: options?.enabled ?? true,
-    });
-}
-
-/**
- * Fetch TIDAL editorial explore shelves for the Explore page.
- */
-export function useTidalExploreShelvesQuery(options?: { enabled?: boolean }) {
-    return useQuery<TidalBrowseShelf[]>({
-        queryKey: queryKeys.browseTidalExplore(),
-        queryFn: async () => {
-            const response = await api.getTidalExploreShelves();
-            return response?.shelves ?? [];
-        },
-        staleTime: 5 * 60 * 1000,
-        enabled: options?.enabled ?? true,
-    });
-}
-
-/**
- * Fetch TIDAL genre categories for Explore mood/genre drilldown.
- */
-export function useTidalGenresQuery(options?: { enabled?: boolean }) {
-    return useQuery<TidalGenre[]>({
-        queryKey: queryKeys.browseTidalGenres(),
-        queryFn: async () => {
-            const response = await api.getTidalGenres();
-            return response?.genres ?? [];
-        },
-        staleTime: 5 * 60 * 1000,
-        enabled: options?.enabled ?? true,
-    });
-}
-
-/**
- * Fetch TIDAL mood categories for Explore mood/genre drilldown.
- */
-export function useTidalMoodsQuery(options?: { enabled?: boolean }) {
-    return useQuery<TidalGenre[]>({
-        queryKey: queryKeys.browseTidalMoods(),
-        queryFn: async () => {
-            const response = await api.getTidalMoods();
-            return response?.moods ?? [];
-        },
-        staleTime: 5 * 60 * 1000,
-        enabled: options?.enabled ?? true,
-    });
-}
-
-/**
- * Fetch TIDAL personal mix previews (for-you style mixes).
- */
-export function useTidalMixesQuery(options?: { enabled?: boolean }) {
-    return useQuery<TidalMixPreview[]>({
-        queryKey: queryKeys.browseTidalMixes(),
-        queryFn: async () => {
-            const response = await api.getTidalMixes();
             return response?.mixes ?? [];
         },
         staleTime: 5 * 60 * 1000,

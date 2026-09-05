@@ -71,9 +71,9 @@ export function observeIosBackgroundTrackHandoff({
             ),
             repeatMode,
             hasNextTrack: Boolean(nextTrack),
-            nextTrackPreloadRequested:
+            nextTrackPreloadReady:
                 nextTrackIdentity !== null &&
-                nextTrackIdentity === refs.lastPreloadedTrackIdRef.current,
+                nextTrackIdentity === refs.readyPreloadedTrackIdRef.current,
             currentTimeSec,
             durationSec,
         },

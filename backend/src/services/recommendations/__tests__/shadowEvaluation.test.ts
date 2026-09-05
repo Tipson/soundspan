@@ -286,12 +286,14 @@ describe("recommendation shadow evaluation", () => {
             })),
         });
         const service = new RecommendationShadowEvaluationService({
-            loadGenerations: jest.fn().mockResolvedValue([
-                generation("heavy", "baseline-v1", "completed", 100),
-                generation("heavy", "hybrid-v2", "failed", 1),
-                generation("light", "baseline-v1", "failed", 1),
-                generation("light", "hybrid-v2", "completed", 1),
-            ]),
+            loadGenerations: jest
+                .fn()
+                .mockResolvedValue([
+                    generation("heavy", "baseline-v1", "completed", 100),
+                    generation("heavy", "hybrid-v2", "failed", 1),
+                    generation("light", "baseline-v1", "failed", 1),
+                    generation("light", "hybrid-v2", "completed", 1),
+                ]),
         });
 
         const report = await service.evaluate({ since, until });

@@ -55,6 +55,9 @@ export interface RecommendationCandidate {
 
 export interface RecommendationExposureSignal {
     canonicalKey: string;
+    artistKey?: string;
+    /** Known album snapshot from an actually viewed, served recommendation. */
+    albumKey?: string | null;
     exposedAt: Date;
 }
 

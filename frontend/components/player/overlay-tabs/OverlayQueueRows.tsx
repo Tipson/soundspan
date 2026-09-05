@@ -7,7 +7,6 @@ import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { api } from "@/lib/api";
 import { resolvePlaybackQualityBadgeFromStreamSource } from "@/hooks/useStreamBitrate";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
@@ -21,17 +20,17 @@ import { ru } from "@/lib/i18n/ru";
 interface QueueRowSharedProps {
     queueIndex: number;
     isCurrentTrack: boolean;
-    isPlayedTrack: boolean;
+    isEarlierInQueue: boolean;
     onPlayFromQueue: (index: number) => void;
     onRemoveFromQueue: (index: number) => void;
 }
 
-function queueRowClassName(isCurrentTrack: boolean, isPlayedTrack: boolean) {
+function queueRowClassName(isCurrentTrack: boolean, isEarlierInQueue: boolean) {
     return cn(
         "mb-1.5 flex items-center gap-2 px-2 py-2 transition-colors",
         isCurrentTrack
             ? "rounded-md border border-brand-hover/35 bg-brand-hover/10"
-            : isPlayedTrack
+            : isEarlierInQueue
               ? "rounded-md bg-white/[0.03] hover:bg-white/[0.06]"
               : "hover:bg-white/[0.06]",
     );
@@ -102,26 +101,18 @@ function QueueRemoveButton({
     );
 }
 
-function PlayedPill() {
-    return (
-        <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-gray-400">
-            Прослушано
-        </span>
-    );
-}
-
 export const OverlayQueueEpisodeRow = memo(function OverlayQueueEpisodeRow({
     item,
     queueIndex,
     isCurrentTrack,
-    isPlayedTrack,
+    isEarlierInQueue,
     onPlayFromQueue,
     onRemoveFromQueue,
 }: QueueRowSharedProps & { item: EpisodeQueueItem }) {
     return (
         <div
             data-queue-index={queueIndex}
-            className={queueRowClassName(isCurrentTrack, isPlayedTrack)}
+            className={queueRowClassName(isCurrentTrack, isEarlierInQueue)}
         >
             <QueuePositionNumber
                 queueIndex={queueIndex}
@@ -175,7 +166,6 @@ export const OverlayQueueEpisodeRow = memo(function OverlayQueueEpisodeRow({
                                 Играет
                             </span>
                         )}
-                        {isPlayedTrack && !isCurrentTrack && <PlayedPill />}
                     </div>
                 </div>
             </button>
@@ -198,17 +188,17 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
     track,
     queueIndex,
     isCurrentTrack,
-    isPlayedTrack,
+    isEarlierInQueue,
     onPlayFromQueue,
     onRemoveFromQueue,
 }: QueueRowSharedProps & { track: TrackQueueItem }) {
     const qualityBadge = resolvePlaybackQualityBadgeFromStreamSource(
-        track.streamSource,
+        track.streamSource === "youtube" ? "youtube" : undefined,
     );
     return (
         <div
             data-queue-index={queueIndex}
-            className={queueRowClassName(isCurrentTrack, isPlayedTrack)}
+            className={queueRowClassName(isCurrentTrack, isEarlierInQueue)}
         >
             <QueuePositionNumber
                 queueIndex={queueIndex}
@@ -256,7 +246,6 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
                         >
                             {track.displayTitle ?? track.title}
                         </p>
-                        {qualityBadge?.variant === "tidal" && <TidalBadge />}
                         {qualityBadge?.variant === "youtube" && (
                             <YouTubeBadge />
                         )}
@@ -275,7 +264,6 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
                                 Играет
                             </span>
                         )}
-                        {isPlayedTrack && !isCurrentTrack && <PlayedPill />}
                     </div>
                 </div>
             </button>

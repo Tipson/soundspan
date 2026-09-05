@@ -262,7 +262,11 @@ describe("search discover compatibility", () => {
             "__public__",
             "radiohead",
             20,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(mockYtMusicDiscoverySearch).toHaveBeenNthCalledWith(
             2,
@@ -270,7 +274,11 @@ describe("search discover compatibility", () => {
             "__public__",
             "massive attack",
             20,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(mockYtMusicSearch).not.toHaveBeenCalled();
 

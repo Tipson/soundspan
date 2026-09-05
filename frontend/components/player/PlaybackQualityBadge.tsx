@@ -9,7 +9,6 @@ const PLAYBACK_QUALITY_BADGE_TONE_CLASS: Record<
     PlaybackQualityBadgeValue["variant"],
     string
 > = {
-    tidal: "bg-[#00BFFF]/20 text-[#00BFFF]",
     youtube: "bg-red-500/20 text-red-400",
     local: "bg-emerald-500/20 text-emerald-400",
 };

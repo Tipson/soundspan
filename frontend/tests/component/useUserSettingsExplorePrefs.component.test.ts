@@ -10,6 +10,7 @@ import {
 
 type Settings = {
     showYtMusicExplore?: boolean;
+    // A stale server payload must not revive the retired provider preference.
     showTidalExplore?: boolean;
 };
 
@@ -73,7 +74,6 @@ test("settings errors fail closed and a later success restores provider preferen
     const failedPrefs = await readPrefs(queryClient);
     assert.deepEqual(failedPrefs, {
         showYtMusicExplore: false,
-        showTidalExplore: false,
     });
 
     getSettings = async () => ({
@@ -88,7 +88,6 @@ test("settings errors fail closed and a later success restores provider preferen
     const recoveredPrefs = await readPrefs(queryClient);
     assert.deepEqual(recoveredPrefs, {
         showYtMusicExplore: false,
-        showTidalExplore: true,
     });
 });
 
@@ -127,6 +126,5 @@ test("background refetch errors retain cached provider preferences", async () =>
     });
     assert.deepEqual(await readPrefs(queryClient), {
         showYtMusicExplore: true,
-        showTidalExplore: false,
     });
 });

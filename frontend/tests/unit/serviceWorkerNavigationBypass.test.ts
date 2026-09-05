@@ -23,6 +23,67 @@ function requestUrl(input: Request | string | { url: string }): string {
     return new URL(raw, ORIGIN).toString();
 }
 
+test("native completed preload is reused only by its session and cleared by the sender", async () => {
+    let requests = 0;
+    const harness = createHarness(async () => {
+        requests += 1;
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+            headers: {
+                "Content-Type": "audio/mpeg",
+                "Content-Length": "4",
+                "Cache-Control": "private, max-age=120",
+            },
+        });
+    });
+    const url = `${ORIGIN}/api/ytmusic/stream-public/dQw4w9WgXcQ?preloadSession=11111111-1111-4111-8111-111111111111:1`;
+    const preload = await harness.dispatch("fetch", {
+        clientId: "owner",
+        request: new Request(`${url}&purpose=preload`),
+    });
+    assert.ok(
+        preload,
+        "eligible real cookie-auth media requests are intercepted",
+    );
+    await preload.arrayBuffer();
+    const interactive = await harness.dispatch("fetch", {
+        clientId: "owner",
+        request: new Request(url, { headers: { Range: "bytes=1-2" } }),
+    });
+    assert.equal(interactive?.status, 206);
+    assert.deepEqual(
+        [...new Uint8Array(await interactive!.arrayBuffer())],
+        [2, 3],
+    );
+    assert.equal(requests, 1, "completed bytes avoid the second transfer");
+    await harness.dispatch("message", {
+        data: { type: "CLEAR_STREAM_PRELOAD_CACHE", clientId: "owner" },
+        source: { id: "other" },
+    });
+    await harness.dispatch("fetch", {
+        clientId: "owner",
+        request: new Request(url),
+    });
+    assert.equal(
+        requests,
+        1,
+        "another client's message cannot clear the owner's bytes",
+    );
+    await harness.dispatch("message", {
+        data: { type: "CLEAR_STREAM_PRELOAD_CACHE" },
+        source: { id: "owner" },
+    });
+    await harness.dispatch("fetch", {
+        clientId: "owner",
+        request: new Request(url),
+    });
+    assert.equal(requests, 2, "logout forces an authenticated network request");
+    assert.deepEqual(
+        await harness.caches.keys(),
+        [],
+        "online reuse does not create persistent offline downloads",
+    );
+});
+
 class FakeCache {
     readonly values = new Map<string, Response>();
     readonly putKeys: string[] = [];
@@ -421,31 +482,44 @@ function createHarness(
         },
     };
 
-    vm.runInContext(
-        serviceWorkerSource,
-        vm.createContext({
-            self,
-            caches,
-            indexedDB,
-            fetch: fetchImpl,
-            Request,
-            Response,
-            Headers,
-            URL,
-            ReadableStream,
-            AbortController,
-            setTimeout:
-                timerOverrides?.setTimeout ??
-                ((callback: () => void, delayMs?: number) =>
-                    setTimeout(callback, delayMs)),
-            clearTimeout:
-                timerOverrides?.clearTimeout ??
-                ((handle: unknown) =>
-                    clearTimeout(handle as ReturnType<typeof setTimeout>)),
-            console,
-        }),
-        { filename: "sw.js" },
-    );
+    const context = vm.createContext({
+        self,
+        caches,
+        indexedDB,
+        fetch: fetchImpl,
+        Request,
+        Response,
+        Headers,
+        URL,
+        Blob,
+        Uint8Array,
+        ReadableStream,
+        AbortController,
+        setTimeout:
+            timerOverrides?.setTimeout ??
+            ((callback: () => void, delayMs?: number) =>
+                setTimeout(callback, delayMs)),
+        clearTimeout:
+            timerOverrides?.clearTimeout ??
+            ((handle: unknown) =>
+                clearTimeout(handle as ReturnType<typeof setTimeout>)),
+        console,
+        importScripts(path: string) {
+            assert.equal(path, "/stream-preload-cache.js");
+            vm.runInContext(
+                readFileSync(
+                    new URL(
+                        "../../public/stream-preload-cache.js",
+                        import.meta.url,
+                    ),
+                    "utf8",
+                ),
+                context,
+                { filename: "stream-preload-cache.js" },
+            );
+        },
+    });
+    vm.runInContext(serviceWorkerSource, context, { filename: "sw.js" });
 
     async function dispatch(
         type: string,

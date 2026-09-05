@@ -34,7 +34,7 @@ import { logger } from "../../utils/logger";
  */
 export const remoteTracksRouter = Router();
 const remoteTrackPreferenceLogger = logger.child("RemoteTrackPreference");
-// ── Remote Track Preference (YT Music / TIDAL) ─────────────────
+// ── Remote Track Preference (YT Music + historical TIDAL reads/clears) ─────
 
 /**
  * @openapi
@@ -113,37 +113,32 @@ async function resolveLikedRemoteTrack(
     userId: string,
     metadata: RemotePreferenceMetadata,
 ) {
+    if (parsed.provider !== "youtube") {
+        throw new Error("Retired TIDAL preferences cannot be materialized");
+    }
     const resolved = await resolveRemoteTrackMetadataForRequest({
-        provider: parsed.provider,
+        provider: "youtube",
         userId,
-        ...(parsed.provider === "tidal"
-            ? { tidalId: parsed.tidalId }
-            : { videoId: parsed.externalId }),
+        videoId: parsed.externalId,
         fetchArtworkIfMissing: true,
         metadata,
     });
-    return parsed.provider === "tidal"
-        ? trackMappingService.ensureRemoteTrack({
-              provider: "tidal",
-              tidalId: parsed.tidalId,
-              ...resolved,
-          })
-        : trackMappingService.ensureRemoteTrack({
-              provider: "youtube",
-              videoId: parsed.externalId,
-              title: resolved.title,
-              artist: resolved.artist,
-              album: resolved.album,
-              duration: resolved.duration,
-              thumbnailUrl: resolved.thumbnailUrl,
-          });
+    return trackMappingService.ensureRemoteTrack({
+        provider: "youtube",
+        videoId: parsed.externalId,
+        title: resolved.title,
+        artist: resolved.artist,
+        album: resolved.album,
+        duration: resolved.duration,
+        thumbnailUrl: resolved.thumbnailUrl,
+    });
 }
 
 /**
  * @openapi
  * /api/library/remote-tracks/{id}/preference:
  *   post:
- *     summary: Set preference for a remote (YT/TIDAL) track
+ *     summary: Set preference for a remote track
  *     tags: [Library]
  *     security:
  *       - apiKeyAuth: []
@@ -153,7 +148,7 @@ async function resolveLikedRemoteTrack(
  *         required: true
  *         schema:
  *           type: string
- *         description: "Composite track ID (yt:videoId or tidal:trackId)"
+ *         description: "Composite track ID. New preferences use yt:videoId; tidal:trackId only supports clearing historical state."
  *     requestBody:
  *       required: true
  *       content:
@@ -214,6 +209,9 @@ export async function handleSetRemoteTrackPreference(
             error: "Invalid preference signal. Use thumbs_up, thumbs_down, or clear.",
         });
     }
+    if (parsed.provider === "tidal" && signal !== "clear") {
+        return res.status(400).json({ error: "retired_provider" });
+    }
 
     const metadata = readRemotePreferenceMetadata(req.body);
     const now = new Date();
@@ -234,10 +232,10 @@ export async function handleSetRemoteTrackPreference(
                 userId,
                 metadata,
             );
-            likedTarget =
-                ensured.provider === "tidal"
-                    ? { provider: "tidal", trackTidalId: ensured.id }
-                    : { provider: "youtube", trackYtMusicId: ensured.id };
+            likedTarget = {
+                provider: "youtube",
+                trackYtMusicId: ensured.id,
+            };
         }
         preference = await applyRemoteTrackPreferenceSignal({
             userId,

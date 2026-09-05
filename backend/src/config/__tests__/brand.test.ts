@@ -13,7 +13,8 @@ describe("brand runtime metadata", () => {
         delete process.env.npm_package_version;
 
         jest.isolateModules(() => {
-            const { BRAND_USER_AGENT } = require("../brand") as typeof import("../brand");
+            const { BRAND_USER_AGENT } =
+                require("../brand") as typeof import("../brand");
 
             expect(BRAND_USER_AGENT).toBe(
                 "soundspan/1.0.0 (https://github.com/soundspan/soundspan)",

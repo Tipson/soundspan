@@ -19,7 +19,6 @@ import {
     formatImportSongsFound,
     importPageRu,
 } from "@/lib/i18n/utilityPagesRu";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
@@ -82,10 +81,6 @@ export function isSupportedPlaylistUrl(url: string): boolean {
         return path === "/playlist" && parsed.searchParams.has("list");
     }
 
-    if (hostname === "tidal.com" || hostname === "listen.tidal.com") {
-        return /^\/(?:browse\/)?playlist\/[a-zA-Z0-9-]+\/?$/i.test(path);
-    }
-
     return false;
 }
 
@@ -124,10 +119,6 @@ export function ImportResolutionBadge({
 
     if (source === "youtube") {
         return <YouTubeBadge />;
-    }
-
-    if (source === "tidal") {
-        return <TidalBadge />;
     }
 
     return (
@@ -591,7 +582,7 @@ function ImportPageContent() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-5">
+                        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4">
                             <div className="bg-surface px-3 py-4 text-center">
                                 <div className="text-xl font-bold tabular-nums text-content">
                                     {preview.summary.total}
@@ -614,14 +605,6 @@ function ImportPageContent() {
                                 </div>
                                 <div className="text-xs text-content-muted">
                                     YouTube
-                                </div>
-                            </div>
-                            <div className="bg-surface px-3 py-4 text-center">
-                                <div className="text-xl font-bold tabular-nums text-brand-light">
-                                    {preview.summary.tidal}
-                                </div>
-                                <div className="text-xs text-content-muted">
-                                    TIDAL
                                 </div>
                             </div>
                             <div className="bg-surface px-3 py-4 text-center">

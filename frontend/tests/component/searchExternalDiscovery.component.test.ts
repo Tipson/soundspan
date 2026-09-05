@@ -77,9 +77,6 @@ mock.module("@/lib/audio-controls-context", {
     },
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: { TidalBadge: () => null },
-});
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: { YouTubeBadge: () => null },
 });

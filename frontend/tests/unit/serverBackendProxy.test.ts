@@ -250,6 +250,25 @@ test("media cookie and legacy query token cannot authenticate a non-media mutati
     assert.equal(req.url, "/api/settings");
 });
 
+test("retired TIDAL routes cannot use media-cookie authentication", () => {
+    const req: {
+        url: string;
+        method: string;
+        headers: Record<string, string | string[] | undefined>;
+    } = {
+        url: "/api/tidal-streaming/stream/12345",
+        method: "GET",
+        headers: {
+            cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+        },
+    };
+
+    prepareProxyAuthentication(req);
+
+    assert.equal(req.headers.authorization, undefined);
+    assert.equal(req.headers.cookie, "theme=dark");
+});
+
 test("proxy error handler does not write once headers were already sent", () => {
     const handler = createProxyErrorHandler({
         name: "api-proxy",

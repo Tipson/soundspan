@@ -12,6 +12,7 @@ import { YouTubePreviewCard } from "@/features/search/components/YouTubePreviewC
 import { useYouTubePlaylist } from "@/features/search/hooks/useYouTubePlaylist";
 import { YouTubePlaylistPreviewCard } from "@/features/search/components/YouTubePlaylistPreviewCard";
 import { SearchFilters } from "@/features/search/components/SearchFilters";
+import { AudiusSearchPanel } from "@/features/search/components/AudiusSearchPanel";
 import { SearchSectionHeader } from "@/features/search/components/SearchSectionHeader";
 import { SearchArtistsGrid } from "@/features/search/components/SearchArtistsGrid";
 import { TopResult } from "@/features/search/components/TopResult";
@@ -493,6 +494,10 @@ export default function SearchPage() {
                         {tracksSection}
                     </>
                 )}
+
+                {showTracksView && query.trim() ? (
+                    <AudiusSearchPanel key={query} query={query} />
+                ) : null}
 
                 {hasSearched &&
                 (sectionView === null || isAlbumsView) &&

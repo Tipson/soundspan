@@ -13,6 +13,7 @@ import {
     sendInternalRouteError,
     sendRouteError,
 } from "../utils/routeErrorResponse";
+import { recordPlaybackClientMetric } from "../metrics";
 
 const router = express.Router();
 const playbackRouteLogger = logger.child("Playback");
@@ -62,6 +63,18 @@ function acceptClientMetric(
     const sessionId = optionalStringField(fields, "sessionId");
     const sourceType = optionalStringField(fields, "sourceType");
     const trackId = optionalStringField(fields, "trackId");
+    recordPlaybackClientMetric({
+        event,
+        sourceType,
+        outcome: optionalStringField(fields, "outcome"),
+        reason: optionalStringField(fields, "reason"),
+        durationMs:
+            typeof fields.durationMs === "number"
+                ? fields.durationMs
+                : typeof fields.totalToAudibleMs === "number"
+                  ? fields.totalToAudibleMs
+                  : undefined,
+    });
     logPlaybackMetric("client.signal", {
         status: "success",
         event,

@@ -29,7 +29,10 @@ def test_pacer_is_thread_safe_and_serializes() -> None:
         completion_times = sorted(executor.map(wait_and_record, range(8)))
 
     spacings = [later - earlier for earlier, later in pairwise(completion_times)]
-    assert all(spacing >= 0.015 for spacing in spacings)
+    # Windows commonly exposes a ~15.6 ms scheduler/clock quantum. Keep a
+    # little measurement tolerance while still rejecting the zero-spacing
+    # bursts produced when reserved sleepers wake together.
+    assert all(spacing >= 0.012 for spacing in spacings)
     assert completion_times[-1] - started_at >= 7 * 0.02 * 0.8
 
 

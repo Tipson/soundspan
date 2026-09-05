@@ -232,7 +232,7 @@ describe("youtubeMusic routes branch coverage", () => {
 
         expect(res.status).toBe(200);
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "video-1",
             "high",
         );
@@ -247,7 +247,7 @@ describe("youtubeMusic routes branch coverage", () => {
 
         expect(res.status).toBe(200);
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "video-1",
             "high",
         );
@@ -263,7 +263,7 @@ describe("youtubeMusic routes branch coverage", () => {
             expect.objectContaining({ select: { ytMusicQuality: true } }),
         );
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "video-1",
             "custom-quality",
         );

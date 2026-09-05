@@ -1,4 +1,11 @@
 // soundspan Service Worker
+importScripts("/stream-preload-cache.js");
+const completedStreamPreloads = self.createCompletedStreamPreloadCache({
+    origin: self.location.origin,
+    parseRange: parseSingleByteRange,
+    fetch: (request) => fetch(request),
+});
+
 const CACHE_NAME = "soundspan-v4";
 const IMAGE_CACHE_NAME = "soundspan-images-v3";
 const IMAGE_METADATA_CACHE_NAME = "soundspan-images-metadata-v2";
@@ -673,6 +680,12 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("message", (event) => {
+    if (event.data?.type === "CLEAR_STREAM_PRELOAD_CACHE") {
+        // The browser-authenticated sender owns the cache, never a payload id.
+        if (event.source?.id)
+            completedStreamPreloads.clearClient(event.source.id);
+        return;
+    }
     if (event.data?.type === "DEVICE_OFFLINE_CAPABILITIES_REQUEST") {
         event.ports?.[0]?.postMessage({
             type: "DEVICE_OFFLINE_CAPABILITIES",
@@ -784,6 +797,19 @@ self.addEventListener("fetch", (event) => {
         request.headers.has("Next-Url") ||
         request.headers.has("Next-Router-Prefetch");
     if (isNextRouteRequest) return;
+    if (
+        url.origin === self.location.origin &&
+        /^\/api\/ytmusic\/stream-public\/[A-Za-z0-9_-]{11}$/.test(
+            url.pathname,
+        ) &&
+        url.searchParams.has("preloadSession") &&
+        event.clientId
+    ) {
+        event.respondWith(
+            completedStreamPreloads.handle(request, event.clientId),
+        );
+        return;
+    }
     if (url.pathname.includes("/stream")) return;
     if (url.pathname.startsWith("/_next/image")) return;
 

@@ -89,7 +89,7 @@ async function flushReact() {
     }
 }
 
-test("an older failed mutation cannot overwrite a newer preference from another hook instance", async (testContext) => {
+test("separate hook instances serialize writes and an older failure cannot overwrite the newer intent", async (testContext) => {
     const [{ useTrackPreference }, { createRoot }] = await Promise.all([
         import("../../hooks/useTrackPreference"),
         import("react-dom/client"),
@@ -166,13 +166,8 @@ test("an older failed mutation cannot overwrite a newer preference from another 
     await flushReact();
     assert.deepEqual(
         pendingPreferences.map(({ signal }) => signal),
-        ["thumbs_up", "thumbs_down"],
+        ["thumbs_up"],
     );
-
-    await React.act(async () => {
-        pendingPreferences[1]?.resolve(preferenceResponse("thumbs_down"));
-    });
-    await flushReact();
     assert.equal(
         queryClient.getQueryData<PreferenceResponse>([
             "track-preference",
@@ -183,6 +178,15 @@ test("an older failed mutation cannot overwrite a newer preference from another 
 
     await React.act(async () => {
         pendingPreferences[0]?.reject(new Error("older provider failed"));
+    });
+    await flushReact();
+    assert.deepEqual(
+        pendingPreferences.map(({ signal }) => signal),
+        ["thumbs_up", "thumbs_down"],
+    );
+
+    await React.act(async () => {
+        pendingPreferences[1]?.resolve(preferenceResponse("thumbs_down"));
     });
     await flushReact();
     assert.equal(
@@ -244,21 +248,27 @@ test("a second like tap clears the optimistic like before the first request sett
 
     const button = container.querySelector("button");
     assert.ok(button);
-    await React.act(async () => button.click());
+    await React.act(async () => {
+        button.click();
+        button.click();
+    });
     await flushReact();
-    assert.equal(button.textContent, "thumbs_up");
+    assert.deepEqual(
+        pendingPreferences.map(({ signal }) => signal),
+        ["thumbs_up"],
+    );
+    assert.equal(button.textContent, "clear");
 
-    await React.act(async () => button.click());
+    await React.act(async () => {
+        pendingPreferences[0]?.resolve(preferenceResponse("thumbs_up"));
+    });
     await flushReact();
     assert.deepEqual(
         pendingPreferences.map(({ signal }) => signal),
         ["thumbs_up", "clear"],
     );
-    assert.equal(button.textContent, "clear");
-
     await React.act(async () => {
         pendingPreferences[1]?.resolve(preferenceResponse("clear"));
-        pendingPreferences[0]?.resolve(preferenceResponse("thumbs_up"));
     });
     await flushReact();
     assert.equal(
@@ -314,18 +324,27 @@ test("a cleared rapid dislike cannot advance playback when its older request res
 
     const button = container.querySelector("button");
     assert.ok(button);
-    await React.act(async () => button.click());
+    await React.act(async () => {
+        button.click();
+        button.click();
+    });
     await flushReact();
-    await React.act(async () => button.click());
+    assert.deepEqual(
+        pendingPreferences.map(({ signal }) => signal),
+        ["thumbs_down"],
+    );
+
+    await React.act(async () => {
+        pendingPreferences[0]?.resolve(preferenceResponse("thumbs_down"));
+    });
     await flushReact();
+    assert.equal(appliedCount, 0);
     assert.deepEqual(
         pendingPreferences.map(({ signal }) => signal),
         ["thumbs_down", "clear"],
     );
-
     await React.act(async () => {
         pendingPreferences[1]?.resolve(preferenceResponse("clear"));
-        pendingPreferences[0]?.resolve(preferenceResponse("thumbs_down"));
     });
     await flushReact();
     assert.equal(appliedCount, 0);

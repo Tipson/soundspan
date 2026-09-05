@@ -6,7 +6,8 @@ import { useAuth } from "@/lib/auth-context";
 import { createFrontendLogger } from "@/lib/logger";
 import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
+import { useInlineStatus } from "@/components/ui/InlineStatus";
+import { SettingsSaveDock } from "@/features/settings/components/SettingsSaveDock";
 import { SettingsLayout, SidebarItem } from "@/features/settings/components/ui";
 import { ru } from "@/lib/i18n/ru";
 
@@ -215,28 +216,19 @@ export default function SettingsPage() {
 
             <DeviceOfflineSettingsSection />
 
-            {/* Integrations (YouTube Music + TIDAL — visible to all users) */}
+            {/* Optional YouTube Music account linking. */}
             <IntegrationsSection
                 settings={userSettings}
                 onUpdate={updateUserSettings}
             />
 
-            <div className="sticky bottom-3 z-20 pt-4 md:bottom-4 md:pt-6">
-                <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.1] bg-surface-overlay/90 p-2.5 shadow-2xl shadow-black/30 backdrop-blur-xl md:justify-end">
-                    <div className="min-w-0 flex-1 px-2 md:flex-none">
-                        <InlineStatus {...saveStatus.props} />
-                    </div>
-                    <button
-                        onClick={handleSaveAll}
-                        disabled={isSaving}
-                        className="min-h-11 flex-shrink-0 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-brand/15 transition hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand"
-                    >
-                        {isSaving
-                            ? ru.settings.saving
-                            : ru.settings.saveChanges}
-                    </button>
-                </div>
-            </div>
+            <SettingsSaveDock
+                isSaving={isSaving}
+                status={saveStatus.status}
+                message={saveStatus.message}
+                onStatusClear={saveStatus.reset}
+                onSave={handleSaveAll}
+            />
         </SettingsLayout>
     );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ListMusic, Trash2 } from "lucide-react";
@@ -33,8 +33,8 @@ interface OverlayQueueTabProps {
 
 /**
  * The overlay drawer's Up Next tab (GH #787): windowed queue list that
- * keeps the playing row centered. Mounts only while the tab is visible, so
- * a mount is a "reveal" and later index changes glide via scrollToIndex.
+ * follows playback until the listener interacts with the list. Manual
+ * browsing stays in place until an explicit return to the playing row.
  */
 export const OverlayQueueTab = memo(function OverlayQueueTab({
     queueTracks,
@@ -47,6 +47,26 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
     const virtuosoRef = useRef<VirtuosoHandle | null>(null);
     const isFirstRevealRef = useRef(true);
     const previousIndexRef = useRef<number | null>(null);
+    const isBrowsingRef = useRef(false);
+    const [isBrowsing, setIsBrowsing] = useState(false);
+
+    const preserveBrowsingPosition = () => {
+        if (isBrowsingRef.current) return;
+        isBrowsingRef.current = true;
+        setIsBrowsing(true);
+    };
+
+    const returnToCurrentTrack = () => {
+        isBrowsingRef.current = false;
+        setIsBrowsing(false);
+        // An explicit return may span thousands of rows: jump directly
+        // instead of animating through the whole virtual list.
+        virtuosoRef.current?.scrollToIndex({
+            index: resolveQueueCenteringIndex(currentIndex, queueTracks.length),
+            align: "center",
+            behavior: "auto",
+        });
+    };
 
     useEffect(() => {
         const isFirstReveal = isFirstRevealRef.current;
@@ -63,7 +83,7 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
             queueLength: queueTracks.length,
         });
         // The reveal itself is handled by initialTopMostItemIndex below.
-        if (!behavior || isFirstReveal) return;
+        if (!behavior || isFirstReveal || isBrowsingRef.current) return;
         virtuosoRef.current?.scrollToIndex({
             index: resolveQueueCenteringIndex(currentIndex, queueTracks.length),
             align: "center",
@@ -78,21 +98,39 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
             className="h-full overflow-hidden flex flex-col"
         >
             <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-2">
-                <div className="flex items-center gap-2">
-                    <ListMusic className="h-4 w-4 text-brand-hover" />
-                    <h2 className="text-sm font-semibold text-white">Далее</h2>
+                <div className="flex min-h-11 items-center gap-2">
+                    <ListMusic
+                        className="h-4 w-4 shrink-0 text-brand-hover"
+                        aria-hidden="true"
+                    />
+                    {isBrowsing && queueTracks.length > 0 ? (
+                        <button
+                            type="button"
+                            onClick={returnToCurrentTrack}
+                            aria-label="Вернуться к текущему треку"
+                            className="min-h-11 whitespace-nowrap rounded-lg px-1 text-sm font-semibold text-brand-hover hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                        >
+                            К треку
+                        </button>
+                    ) : (
+                        <h2 className="text-sm font-semibold text-white">
+                            Далее
+                        </h2>
+                    )}
                 </div>
                 <div className="flex items-center gap-3">
                     {queueTracks.length > 0 && (
                         <button
                             type="button"
                             onClick={onClearQueue}
-                            className="inline-flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-white"
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg text-xs text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                             title={ru.player.clearQueue}
                             aria-label={ru.player.clearQueue}
                         >
-                            <Trash2 className="h-3 w-3" />
-                            Очистить очередь
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            <span className="hidden sm:inline">
+                                Очистить очередь
+                            </span>
                         </button>
                     )}
                     <span className="text-xs text-gray-400">
@@ -113,7 +151,27 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
                     </p>
                 </div>
             ) : (
-                <div className="min-h-0 flex-1 px-2 py-2">
+                <div
+                    className="min-h-0 flex-1 px-2 py-2"
+                    onPointerDownCapture={preserveBrowsingPosition}
+                    onTouchMoveCapture={preserveBrowsingPosition}
+                    onWheelCapture={preserveBrowsingPosition}
+                    onKeyDownCapture={(event) => {
+                        if (
+                            [
+                                "ArrowUp",
+                                "ArrowDown",
+                                "PageUp",
+                                "PageDown",
+                                "Home",
+                                "End",
+                                " ",
+                            ].includes(event.key)
+                        ) {
+                            preserveBrowsingPosition();
+                        }
+                    }}
+                >
                     <Virtuoso
                         ref={virtuosoRef}
                         style={{ height: "100%" }}
@@ -140,7 +198,7 @@ export const OverlayQueueTab = memo(function OverlayQueueTab({
                             const rowProps = {
                                 queueIndex,
                                 isCurrentTrack: queueIndex === currentIndex,
-                                isPlayedTrack: queueIndex < currentIndex,
+                                isEarlierInQueue: queueIndex < currentIndex,
                                 onPlayFromQueue,
                                 onRemoveFromQueue,
                             };

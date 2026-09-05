@@ -66,6 +66,7 @@ jest.mock("../../utils/redis", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        underJest: true,
         audiobookshelf: undefined,
         features: { federation: false },
         get audiobookshelfEnv() {

@@ -6,7 +6,6 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatTime } from "@/utils/formatTime";
 import { formatNumber } from "@/utils/formatNumber";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import {
     TrackList as SharedTrackList,
@@ -62,11 +61,7 @@ export const TrackList = memo(function TrackList({
             artistName: track.artist?.name ?? album.artist?.name ?? "",
             duration: track.duration,
             streamSource:
-                track.streamSource === "tidal" ||
-                track.streamSource === "youtube"
-                    ? track.streamSource
-                    : undefined,
-            tidalTrackId: track.tidalTrackId,
+                track.streamSource === "youtube" ? "youtube" : undefined,
             youtubeVideoId: track.youtubeVideoId,
             coverArtUrl: null, // Album page doesn't show per-row cover art
             isPlayable: isAlbumTrackPlayable(track, source),
@@ -81,16 +76,11 @@ export const TrackList = memo(function TrackList({
     const handlePlay = useCallback(
         (track: Track, index: number) => {
             const isYouTubeTrack = track.streamSource === "youtube";
-            const isTidalTrack =
-                track.streamSource === "tidal" && !!track.tidalTrackId;
             const hasLocalFile =
                 typeof track.filePath === "string" &&
                 track.filePath.trim().length > 0;
             const isAwaitingProviderMatch =
-                isProviderMatching &&
-                !hasLocalFile &&
-                !isTidalTrack &&
-                !isYouTubeTrack;
+                isProviderMatching && !hasLocalFile && !isYouTubeTrack;
             const isPlayable = isAlbumTrackPlayable(track, source);
             const isPreviewOnly = !isPlayable && !isAwaitingProviderMatch;
 
@@ -109,17 +99,12 @@ export const TrackList = memo(function TrackList({
     const rowSlots = useCallback(
         (track: Track, index: number, state: RowState): TrackRowSlots => {
             const isYouTubeTrack = track.streamSource === "youtube";
-            const isTidalTrack =
-                track.streamSource === "tidal" && !!track.tidalTrackId;
             const isFederated = track.source === "federated";
             const hasLocalFile =
                 typeof track.filePath === "string" &&
                 track.filePath.trim().length > 0;
             const isAwaitingProviderMatch =
-                isProviderMatching &&
-                !hasLocalFile &&
-                !isTidalTrack &&
-                !isYouTubeTrack;
+                isProviderMatching && !hasLocalFile && !isYouTubeTrack;
             const isPlayable = isAlbumTrackPlayable(track, source);
             const isPreviewOnly = !isPlayable && !isAwaitingProviderMatch;
             const isPreviewPlaying =
@@ -149,7 +134,6 @@ export const TrackList = memo(function TrackList({
                 ),
                 titleBadges: (
                     <>
-                        {isTidalTrack && <TidalBadge />}
                         {isYouTubeTrack && <YouTubeBadge />}
                         {isFederated && track.peer && (
                             <PeerBadge
@@ -235,9 +219,8 @@ export const TrackList = memo(function TrackList({
                                     },
                                     duration: track.duration ?? 0,
                                     streamSource:
-                                        track.streamSource === "tidal" ||
                                         track.streamSource === "youtube"
-                                            ? track.streamSource
+                                            ? "youtube"
                                             : undefined,
                                 }}
                                 showGoToAlbum={false}
