@@ -122,6 +122,11 @@ export function useNextTrackPreload({
     } = refs;
     const leaseController = usePlaybackSourceLeaseController();
     const preloadRequestIdRef = useRef(0);
+    const failedNetworkPreloadRef = useRef<{
+        identity: string;
+        sourceUrl: string;
+        retryAt: number;
+    } | null>(null);
     const readyCurrentTrackPreloadAtCommitRef = useRef<{
         identity: string;
         lease: AudioPreloadLease;
@@ -285,6 +290,16 @@ export function useNextTrackPreload({
                           "preload",
                       )
                     : null;
+            const failedPreload = failedNetworkPreloadRef.current;
+            if (
+                failedPreload?.identity === preloadIdentity &&
+                failedPreload.sourceUrl === expectedNetworkYtMusicPreloadUrl &&
+                Date.now() < failedPreload.retryAt
+            ) {
+                // A failed speculative read must not be restarted by every
+                // progress tick. Foreground playback has its own recovery.
+                return;
+            }
             if (preloadIdentity === lastPreloadedTrackIdRef.current) {
                 const existingLease = enginePreloadLeaseRef.current;
                 const existingLeaseMatchesSource =
@@ -445,6 +460,16 @@ export function useNextTrackPreload({
                                 readyPreloadedTrackIdRef.current =
                                     preloadIdentity;
                                 return;
+                            }
+                            if (
+                                result.state === "failed" &&
+                                expectedNetworkYtMusicPreloadUrl !== null
+                            ) {
+                                failedNetworkPreloadRef.current = {
+                                    identity: preloadIdentity,
+                                    sourceUrl: expectedNetworkYtMusicPreloadUrl,
+                                    retryAt: Date.now() + 60_000,
+                                };
                             }
                             enginePreloadLeaseRef.current = null;
                             lastPreloadedTrackIdRef.current = null;

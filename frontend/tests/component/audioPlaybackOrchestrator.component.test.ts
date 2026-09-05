@@ -2006,6 +2006,43 @@ test("a same-id preload for a different YouTube source cannot bypass manual debo
     );
 });
 
+test("failed network preload is not retried by progress ticks and becomes eligible after cooldown", async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: 1000 });
+    const currentTrack = makeTrack("cooldown-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "cooldown-current",
+    });
+    const nextTrack = makeTrack("cooldown-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "cooldown-next",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+    engine.preloadAutoReady = false;
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    engine.settleLatestPreload({
+        state: "failed",
+        code: "MEDIA_ERR_SRC_NOT_SUPPORTED",
+    });
+    await flushAsync();
+    for (let timeSec = 2; timeSec < 102; timeSec++) {
+        engine.emit("timeupdate", { timeSec });
+        await flushAsync();
+    }
+    assert.equal(engine.preloadCalls.length, 1);
+    t.mock.timers.tick(60_000);
+    engine.emit("timeupdate", { timeSec: 102 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 2);
+});
+
 for (const preloadResult of [
     null,
     { state: "failed", code: "MEDIA_ERR_DECODE" } as const,

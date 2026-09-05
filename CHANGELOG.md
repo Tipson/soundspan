@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Back off failed YouTube Music speculative preloads for one minute instead of retrying on every playback-progress event; foreground selections and changed source URLs remain independently eligible.
+
 - Reuse unchanged queue-warmup generations across playback progress updates and repeated clears. Renew retained plans at a bounded interval while applying changed queues and preload leases immediately, preventing self-inflicted stream rate limits.
 
 - Include the service worker's completed-preload helper in release artifacts and evaluate local worker imports before frontend builds, preventing an omitted asset from disabling PWA and offline support.
