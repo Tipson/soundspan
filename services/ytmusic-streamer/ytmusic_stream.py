@@ -90,6 +90,7 @@ _SPOOL_EVICT_MIN_AGE_SECONDS = 60
 _SPOOL_MAX_PENDING_JOBS = 8
 _SPOOL_MAX_BACKGROUND_PENDING_JOBS = max(0, _SPOOL_MAX_PENDING_JOBS - 1)
 _SPOOL_READ_CHUNK_BYTES = 64 * 1024
+_SPOOL_CDN_RANGE_BYTES = 1024 * 1024
 _SPOOL_PREFIX_PROBE_BYTES = 2 * 1024 * 1024
 _SOUNDSPAN_PART_SUFFIX = ".soundspan-part"
 _SPOOL_DRAIN_SECONDS = 5.0
@@ -1015,6 +1016,101 @@ def _replace_completed_spool(
             time.sleep(_SPOOL_RENAME_RETRY_SECONDS)
 
 
+def _iter_progressive_cdn_chunks(
+    stream_url: str,
+    headers: dict[str, str],
+    session: _SpoolSession,
+    byte_limit: int,
+    started_at: float,
+) -> Iterator[tuple[bytes, int | None]]:
+    """Read contiguous bounded CDN ranges under one transfer/cancellation budget.
+
+    Some CDN renditions pace an unbounded GET near playback speed. Bounded
+    ranges fill the shared spool promptly without changing the audio format.
+    An upstream ignoring Range is accepted only for the initial full response.
+    """
+    offset = 0
+    total: int | None = None
+    validator: str | None = None
+    while total is None or offset < total:
+        if session.cancel_event.is_set():
+            raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+        remaining = YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT - (time.monotonic() - started_at)
+        if remaining <= 0:
+            raise RuntimeError("YouTube Music spool download timeout exceeded")
+        end = min(offset + _SPOOL_CDN_RANGE_BYTES, total or byte_limit) - 1
+        range_headers = {**headers, "Range": f"bytes={offset}-{end}"}
+        if validator is not None:
+            range_headers["If-Range"] = validator
+        timeout = min(YTDLP_SOCKET_TIMEOUT, remaining)
+        with requests.get(
+            stream_url, headers=range_headers, stream=True, timeout=(timeout, timeout)
+        ) as response:
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as error:
+                # Restarting from zero after publishing bytes could corrupt readers.
+                if response.status_code in _PROGRESSIVE_SOURCE_REFRESH_STATUSES and offset == 0:
+                    raise _ProgressiveSourceRefreshRequired(
+                        stream_url, response.status_code
+                    ) from error
+                raise
+            if response.headers.get("Content-Encoding", "identity").lower() not in {"", "identity"}:
+                raise ValueError("Progressive source unexpectedly used content encoding")
+            declared = response.headers.get("Content-Length")
+            length = int(declared) if declared is not None else None
+            expected: int | None
+            if response.status_code == 206:
+                match = re.fullmatch(
+                    r"bytes (\d+)-(\d+)/(\d+)", response.headers.get("Content-Range", "")
+                )
+                if match is None:
+                    raise ValueError("Progressive source returned an invalid content range")
+                first, last, represented_total = map(int, match.groups())
+                if (
+                    first != offset
+                    or last != min(end, represented_total - 1)
+                    or last < first
+                    or (total is not None and represented_total != total)
+                ):
+                    raise ValueError("Progressive source changed or skipped a byte range")
+                expected = last - first + 1
+                if length is not None and length != expected:
+                    raise ValueError("Progressive range did not match its content length")
+                total = represented_total
+            elif response.status_code == 200 and offset == 0:
+                total = length
+                expected = length
+            else:
+                raise ValueError("Progressive source did not honor a continuation range")
+            if total is not None and (total <= 0 or total > byte_limit):
+                raise ValueError("Progressive source returned an invalid total length")
+            current_validator = response.headers.get("ETag")
+            if validator is not None and current_validator != validator:
+                raise ValueError("Progressive source changed its representation")
+            if current_validator and not current_validator.startswith("W/"):
+                validator = current_validator
+            received = 0
+            for chunk in response.iter_content(chunk_size=_SPOOL_READ_CHUNK_BYTES):
+                if not chunk:
+                    continue
+                if session.cancel_event.is_set():
+                    raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+                if time.monotonic() - started_at > YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:
+                    raise RuntimeError("YouTube Music spool download timeout exceeded")
+                received += len(chunk)
+                if (expected is not None and received > expected) or offset + len(
+                    chunk
+                ) > byte_limit:
+                    raise ValueError("Progressive source exceeded its declared byte range")
+                yield chunk, total
+                offset += len(chunk)
+            if received == 0 or (expected is not None and received != expected):
+                raise ValueError("Progressive source returned an incomplete byte range")
+            if response.status_code == 200:
+                return
+
+
 def _download_progressive_spool_sync(
     video_id: str,
     quality: str,
@@ -1049,62 +1145,25 @@ def _download_progressive_spool_sync(
         "Accept-Encoding": "identity",
         "Referer": "https://music.youtube.com/",
     }
-    with requests.get(
-        stream_url,
-        headers=headers,
-        stream=True,
-        timeout=(YTDLP_SOCKET_TIMEOUT, YTDLP_SOCKET_TIMEOUT),
-    ) as response:
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as error:
-            if response.status_code in _PROGRESSIVE_SOURCE_REFRESH_STATUSES:
-                raise _ProgressiveSourceRefreshRequired(
-                    stream_url,
-                    response.status_code,
-                ) from error
-            raise
-        if response.status_code != 200:
-            raise ValueError("Progressive source did not return a complete representation")
-        content_encoding = response.headers.get("Content-Encoding", "identity").lower()
-        if content_encoding not in {"", "identity"}:
-            raise ValueError("Progressive source unexpectedly used content encoding")
-        content_length = response.headers.get("Content-Length")
-        total_bytes = int(content_length) if content_length is not None else None
-        if total_bytes is not None:
-            if total_bytes <= 0:
-                raise ValueError("Progressive source returned an invalid content length")
-            if total_bytes > byte_limit:
-                raise ValueError("YouTube Music spool file exceeds the per-track byte budget")
-
-        downloaded = 0
-        with partial_path.open("wb", buffering=0) as spool:
-            for chunk in response.iter_content(chunk_size=_SPOOL_READ_CHUNK_BYTES):
-                if not chunk:
-                    continue
-                if session.cancel_event.is_set():
-                    raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
-                downloaded += len(chunk)
-                if downloaded > byte_limit:
-                    raise ValueError("YouTube Music spool file exceeds the per-track byte budget")
-                if total_bytes is not None and downloaded > total_bytes:
-                    raise ValueError("Progressive source exceeded its content length")
-                if time.monotonic() - started_at > YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:
-                    raise RuntimeError("YouTube Music spool download timeout exceeded")
-                spool.write(chunk)
-                if prefix_state == "pending":
-                    remaining = _SPOOL_PREFIX_PROBE_BYTES - len(prefix)
-                    if remaining > 0:
-                        prefix.extend(chunk[:remaining])
-                    prefix_state = _progressive_prefix_state(bytes(prefix), extension)
-                    if prefix_state == "pending" and len(prefix) >= _SPOOL_PREFIX_PROBE_BYTES:
-                        prefix_state = "rejected"
-                    if prefix_state == "readable":
-                        session.publish_readable_from_worker(
-                            partial_path, content_type, total_bytes
-                        )
+    downloaded = 0
+    total_bytes: int | None = None
+    with partial_path.open("wb", buffering=0) as spool:
+        for chunk, total_bytes in _iter_progressive_cdn_chunks(
+            stream_url, headers, session, byte_limit, started_at
+        ):
+            downloaded += len(chunk)
+            spool.write(chunk)
+            if prefix_state == "pending":
+                remaining = _SPOOL_PREFIX_PROBE_BYTES - len(prefix)
+                if remaining > 0:
+                    prefix.extend(chunk[:remaining])
+                prefix_state = _progressive_prefix_state(bytes(prefix), extension)
+                if prefix_state == "pending" and len(prefix) >= _SPOOL_PREFIX_PROBE_BYTES:
+                    prefix_state = "rejected"
                 if prefix_state == "readable":
-                    session.publish_growth_from_worker()
+                    session.publish_readable_from_worker(partial_path, content_type, total_bytes)
+            if prefix_state == "readable":
+                session.publish_growth_from_worker()
 
     if downloaded == 0:
         raise ValueError("Progressive source returned an empty body")

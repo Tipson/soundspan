@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Fill progressive YouTube audio spools through contiguous bounded CDN ranges instead of a paced whole-file request. Preserve original audio bytes, total-length validation, cancellation and shared admission limits; reject changed or malformed continuation responses.
+
 - Back off failed YouTube Music speculative preloads for one minute instead of retrying on every playback-progress event; foreground selections and changed source URLs remain independently eligible.
 
 - Reuse unchanged queue-warmup generations across playback progress updates and repeated clears. Renew retained plans at a bounded interval while applying changed queues and preload leases immediately, preventing self-inflicted stream rate limits.

@@ -689,9 +689,207 @@ async def test_progressive_writer_owns_bytes_and_atomically_completes(
     assert session.content_length == len(prefix + tail)
     assert request_options["stream"] is True
     assert request_options["headers"]["Accept-Encoding"] == "identity"
-    assert "Range" not in request_options["headers"]
+    assert request_options["headers"]["Range"] == "bytes=0-1048575"
     assert replace_attempts == 2
     session.release_pins()
+
+
+@pytest.mark.anyio
+async def test_progressive_writer_downloads_contiguous_bounded_cdn_ranges(
+    stream_module: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    payload = b"\x1aE\xdf\xa3metadata\x1fC\xb6u" + b"x" * (2 * 1024 * 1024)
+    ranges: list[str] = []
+
+    def get_source(_url: str, **options: Any) -> Any:
+        header = options["headers"].get("Range")
+        assert header is not None, "unbounded CDN request reproduces slow delivery"
+        ranges.append(header)
+        start, end = map(int, header.removeprefix("bytes=").split("-"))
+        assert end - start < 1024 * 1024
+        end = min(end, len(payload) - 1)
+        response = stream_module.requests.Response()
+        response.status_code = 206
+        response.headers.update(
+            {
+                "Content-Range": f"bytes {start}-{end}/{len(payload)}",
+                "Content-Length": str(end - start + 1),
+            }
+        )
+        response._content = payload[start : end + 1]
+        response._content_consumed = True
+        return response
+
+    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    session = stream_module._SpoolSession(
+        f"{VIDEO_ID}:{QUALITY}",
+        asyncio.get_running_loop(),
+        threading.Event(),
+        allow_growing=True,
+    )
+    plan = stream_module._ProgressiveSpoolPlan("https://cdn.test/audio", "webm", "audio/webm", {})
+    try:
+        result = await asyncio.to_thread(
+            stream_module._download_progressive_spool_sync, VIDEO_ID, QUALITY, session, plan
+        )
+        assert result is not None
+        assert await asyncio.to_thread(Path(result[0]).read_bytes) == payload
+        assert len(ranges) == 3
+        assert session.content_length == len(payload)
+    finally:
+        session.release_pins()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("status", "content_range", "length", "etag"),
+    [
+        (206, "bytes 3-6/8", "4", '"one"'),
+        (206, "bytes 4-7/9", "4", '"one"'),
+        (206, "bytes 4-7/8", "3", '"one"'),
+        (206, "bytes 4-7/8", "4", '"two"'),
+        (206, "invalid", "4", '"one"'),
+        (200, "", "8", '"one"'),
+    ],
+)
+async def test_progressive_continuation_rejects_changed_representation(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+    content_range: str,
+    length: str,
+    etag: str,
+) -> None:
+    calls = 0
+    monkeypatch.setattr(stream_module, "_SPOOL_CDN_RANGE_BYTES", 4)
+
+    def get_source(_url: str, **options: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        response = stream_module.requests.Response()
+        response.status_code = 206 if calls == 1 else status
+        response.headers.update(
+            {
+                "Content-Range": "bytes 0-3/8" if calls == 1 else content_range,
+                "Content-Length": "4" if calls == 1 else length,
+                "ETag": '"one"' if calls == 1 else etag,
+            }
+        )
+        if calls == 2:
+            assert options["headers"]["If-Range"] == '"one"'
+        response._content = b"abcd"
+        response._content_consumed = True
+        return response
+
+    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    session = stream_module._SpoolSession(
+        "test",
+        asyncio.get_running_loop(),
+        threading.Event(),
+        allow_growing=True,
+    )
+    chunks = stream_module._iter_progressive_cdn_chunks(
+        "https://cdn.test/audio", {}, session, 8, time.monotonic()
+    )
+    assert next(chunks) == (b"abcd", 8)
+    with pytest.raises(ValueError):
+        next(chunks)
+    assert calls == 2
+
+
+@pytest.mark.anyio
+async def test_progressive_cancellation_prevents_next_cdn_range(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    monkeypatch.setattr(stream_module, "_SPOOL_CDN_RANGE_BYTES", 4)
+
+    def get_source(_url: str, **_options: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        response = stream_module.requests.Response()
+        response.status_code = 206
+        response.headers.update({"Content-Range": "bytes 0-3/8", "Content-Length": "4"})
+        response._content = b"abcd"
+        response._content_consumed = True
+        return response
+
+    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    session = stream_module._SpoolSession(
+        "test",
+        asyncio.get_running_loop(),
+        threading.Event(),
+        allow_growing=True,
+    )
+    chunks = stream_module._iter_progressive_cdn_chunks(
+        "https://cdn.test/audio", {}, session, 8, time.monotonic()
+    )
+    assert next(chunks) == (b"abcd", 8)
+    session.cancel_event.set()
+    with pytest.raises(stream_module._SpoolDownloadCancelled):
+        next(chunks)
+    assert calls == 1
+
+
+@pytest.mark.anyio
+async def test_progressive_ranges_over_real_http_preserve_audio_bytes(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    payload = b"\x1aE\xdf\xa3metadata\x1fC\xb6u" + b"audio" * 40000
+    observed: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            header = self.headers.get("Range", "")
+            observed.append(header)
+            first, end = map(int, header.removeprefix("bytes=").split("-"))
+            end = min(end, len(payload) - 1)
+            body = payload[first : end + 1]
+            self.send_response(206)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Range", f"bytes {first}-{end}/{len(payload)}")
+            self.send_header("ETag", '"unchanged-audio"')
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format: str, *args: Any) -> None:
+            pass
+
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    monkeypatch.setattr(stream_module, "_SPOOL_CDN_RANGE_BYTES", 65536)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    session = stream_module._SpoolSession(
+        "http-test",
+        asyncio.get_running_loop(),
+        threading.Event(),
+        allow_growing=True,
+    )
+    plan = stream_module._ProgressiveSpoolPlan(
+        f"http://127.0.0.1:{server.server_port}/audio", "webm", "audio/webm", {}
+    )
+    try:
+        result = await asyncio.to_thread(
+            stream_module._download_progressive_spool_sync, VIDEO_ID, QUALITY, session, plan
+        )
+        assert result is not None
+        assert await asyncio.to_thread(Path(result[0]).read_bytes) == payload
+        assert observed == [
+            "bytes=0-65535",
+            "bytes=65536-131071",
+            "bytes=131072-196607",
+            f"bytes=196608-{len(payload) - 1}",
+        ]
+    finally:
+        await asyncio.to_thread(server.shutdown)
+        server.server_close()
+        worker.join(timeout=2)
+        session.release_pins()
 
 
 @pytest.mark.anyio
