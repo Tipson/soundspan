@@ -152,10 +152,12 @@ async def _start_same_key_waiter(
     real_await_spool_task = stream_module._await_spool_task
     existing_joined = asyncio.Event()
 
-    async def record_existing_join(task: asyncio.Task[tuple[str, str]]) -> tuple[str, str]:
+    async def record_existing_join(
+        task: asyncio.Task[tuple[str, str]], *, deadline: float | None = None
+    ) -> tuple[str, str]:
         if task is capacity_tasks[0]:
             existing_joined.set()
-        return cast(tuple[str, str], await real_await_spool_task(task))
+        return cast(tuple[str, str], await real_await_spool_task(task, deadline=deadline))
 
     monkeypatch.setattr(stream_module, "_await_spool_task", record_existing_join)
     waiter = asyncio.create_task(stream_module._get_ytmusic_spooled_stream("video-0", "HIGH"))
@@ -620,6 +622,7 @@ async def test_progressive_writer_owns_bytes_and_atomically_completes(
 
     class FakeResponse:
         def __init__(self) -> None:
+            self.status_code = 200
             self.headers = {
                 "Content-Encoding": "identity",
                 "Content-Length": str(len(prefix + tail)),
@@ -683,11 +686,48 @@ async def test_progressive_writer_owns_bytes_and_atomically_completes(
     assert completed.read_bytes() == prefix + tail
     assert not (tmp_path / f"{VIDEO_ID}-{QUALITY}.webm.soundspan-part").exists()
     assert session.readable
+    assert session.content_length == len(prefix + tail)
     assert request_options["stream"] is True
     assert request_options["headers"]["Accept-Encoding"] == "identity"
     assert "Range" not in request_options["headers"]
     assert replace_attempts == 2
     session.release_pins()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("status_code", "declared_length"),
+    [(206, 23), (200, 0), (200, -1), (200, 22), (200, 24)],
+)
+async def test_progressive_writer_rejects_unreliable_total_length(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    status_code: int,
+    declared_length: int,
+) -> None:
+    payload = b"\x1aE\xdf\xa3metadata\x1fC\xb6ucluster"
+    upstream = stream_module.requests.Response()
+    upstream.status_code = status_code
+    upstream.headers["Content-Length"] = str(declared_length)
+    upstream._content = payload
+    upstream._content_consumed = True
+    monkeypatch.setattr(stream_module.requests, "get", lambda *_args, **_kwargs: upstream)
+    session = stream_module._SpoolSession(
+        f"{VIDEO_ID}:{QUALITY}",
+        asyncio.get_running_loop(),
+        threading.Event(),
+        allow_growing=True,
+    )
+    plan = stream_module._ProgressiveSpoolPlan("https://cdn.test/audio", "webm", "audio/webm", {})
+    try:
+        with pytest.raises(ValueError):
+            await asyncio.to_thread(
+                stream_module._download_progressive_spool_sync, VIDEO_ID, QUALITY, session, plan
+            )
+        assert not (tmp_path / f"{VIDEO_ID}-{QUALITY}.webm").exists()
+    finally:
+        session.release_pins()
 
 
 @pytest.mark.parametrize("rejected_status", [401, 403, 410])
@@ -1045,6 +1085,7 @@ async def test_slow_progressive_cdn_does_not_hold_heavy_extraction_slot(
     class FakeResponse:
         def __init__(self, video_id: str) -> None:
             self.video_id = video_id
+            self.status_code = 200
             self.headers = {
                 "Content-Encoding": "identity",
                 "Content-Length": str(len(payload)),
@@ -1283,6 +1324,7 @@ async def test_cancelled_progressive_transfer_does_not_open_cdn_after_queue_wait
     class FakeResponse:
         def __init__(self, video_id: str) -> None:
             self.video_id = video_id
+            self.status_code = 200
             self.headers = {
                 "Content-Encoding": "identity",
                 "Content-Length": str(len(payload)),
@@ -1517,7 +1559,7 @@ async def test_last_disconnected_waiter_cancels_abandoned_spool(
 
 
 @pytest.mark.anyio
-async def test_new_waiter_revives_spool_before_worker_observes_cancellation(
+async def test_completed_spool_waiter_does_not_revoke_worker_cancellation(
     stream_module: Any,
 ) -> None:
     key = f"{VIDEO_ID}:{QUALITY}"
@@ -1538,7 +1580,7 @@ async def test_new_waiter_revives_spool_before_worker_observes_cancellation(
     )
 
     assert result == ("track.m4a", "audio/mp4")
-    assert not cancel_event.is_set()
+    assert cancel_event.is_set()
     assert stream_module._spool_waiters == {}
 
 
@@ -2183,6 +2225,154 @@ class _ConnectedStreamRequest:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("next_range", ["bytes=2-", "bytes=0-65535"])
+async def test_sequential_range_waits_for_cancelled_writer_to_close_before_retry(
+    client: AsyncClient,
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    next_range: str,
+) -> None:
+    prefix = b"\x1aE\xdf\xa3metadata\x1fC\xb6ucluster"
+    tail = b"tail"
+    advance_first_cdn = threading.Event()
+    cancellation_observed = threading.Event()
+    close_first_cdn = threading.Event()
+    opened: list[object] = []
+
+    class GatedResponse:
+        def __init__(self) -> None:
+            self.status_code = 200
+            self.headers = {"Content-Length": str(len(prefix + tail))}
+            self.first = not opened
+            opened.append(self)
+
+        def __enter__(self) -> GatedResponse:
+            return self
+
+        def __exit__(self, error_type: object, error: object, traceback: object) -> None:
+            if self.first:
+                assert isinstance(error, stream_module._SpoolDownloadCancelled)
+                cancellation_observed.set()
+                if not close_first_cdn.wait(timeout=3):
+                    raise TimeoutError("cancelled test CDN close was not released")
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_content(self, *, chunk_size: int) -> Iterator[bytes]:
+            yield prefix
+            if self.first and not advance_first_cdn.wait(timeout=3):
+                raise TimeoutError("test CDN was not advanced after initial range")
+            yield tail
+
+    monkeypatch.setattr(stream_module.requests, "get", lambda *_args, **_kwargs: GatedResponse())
+    monkeypatch.setattr(
+        stream_module,
+        "_get_stream_url_sync",
+        lambda *_args: {"url": "https://cdn.test/audio", "protocol": "https", "ext": "webm"},
+    )
+    next_request: asyncio.Task[Response] | None = None
+    try:
+        first = await asyncio.wait_for(
+            client.get(f"/proxy/{VIDEO_ID}?user_id=__public__", headers={"Range": "bytes=0-1"}),
+            timeout=1,
+        )
+        assert first.status_code == 206
+        assert first.content == prefix[:2]
+        advance_first_cdn.set()
+        assert await asyncio.to_thread(cancellation_observed.wait, 1)
+        old_session = stream_module._spool_sessions[f"{VIDEO_ID}:{QUALITY}"]
+        next_request = asyncio.create_task(
+            client.get(f"/proxy/{VIDEO_ID}?user_id=__public__", headers={"Range": next_range})
+        )
+        await asyncio.sleep(0.05)
+        assert old_session.cancel_event.is_set(), "new reader revoked irreversible cancellation"
+        assert len(opened) == 1, "replacement writer overlapped the old writer's close"
+        assert not next_request.done()
+        close_first_cdn.set()
+        response = await asyncio.wait_for(next_request, timeout=2)
+        assert response.status_code == 206
+        expected = (prefix + tail)[2:] if next_range == "bytes=2-" else prefix + tail
+        assert response.content == expected
+        assert len(opened) == 2
+        assert stream_module._spool_waiters == {}
+    finally:
+        advance_first_cdn.set()
+        close_first_cdn.set()
+        if next_request is not None:
+            await asyncio.wait_for(next_request, timeout=2)
+        for task in tuple(stream_module._spool_tasks.values()):
+            await asyncio.gather(task, return_exceptions=True)
+    assert stream_module._spool_pin_counts == {}
+    assert stream_module._spool_reserved_bytes == 0
+
+
+@pytest.mark.anyio
+async def test_initial_range_http_response_finishes_while_shared_cdn_is_growing(
+    client: AsyncClient,
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prefix = b"\x1aE\xdf\xa3metadata\x1fC\xb6ucluster".ljust(65536, b"x")
+    tail = b"tail"
+    release_cdn = threading.Event()
+    readable = asyncio.Event()
+
+    class GatedResponse:
+        def __init__(self) -> None:
+            self.status_code = 200
+            self.headers = {"Content-Length": str(len(prefix + tail))}
+
+        def __enter__(self) -> GatedResponse:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_content(self, *, chunk_size: int) -> Iterator[bytes]:
+            assert chunk_size == len(prefix)
+            yield prefix
+            if not release_cdn.wait(timeout=2):
+                raise TimeoutError("test CDN tail was not released")
+            yield tail
+
+    monkeypatch.setattr(stream_module.requests, "get", lambda *_args, **_kwargs: GatedResponse())
+    monkeypatch.setattr(
+        stream_module,
+        "_get_stream_url_sync",
+        lambda *_args: {"url": "https://cdn.test/audio", "protocol": "https", "ext": "webm"},
+    )
+    warmup = asyncio.create_task(stream_module.warm_ytmusic_spool(VIDEO_ID, QUALITY, readable.set))
+    try:
+        await asyncio.wait_for(readable.wait(), timeout=1)
+        session = stream_module._spool_sessions[f"{VIDEO_ID}:{QUALITY}"]
+        assert session.content_length == len(prefix + tail)
+        response = await asyncio.wait_for(
+            client.get(
+                f"/proxy/{VIDEO_ID}?user_id=__public__",
+                headers={"Range": "bytes=0-65535"},
+            ),
+            timeout=1,
+        )
+        assert response.status_code == 206
+        assert response.content == prefix
+        assert response.headers["content-length"] == "65536"
+        assert response.headers["content-range"] == "bytes 0-65535/65540"
+        assert response.headers["accept-ranges"] == "bytes"
+        assert not warmup.done()
+        assert not session.cancel_event.is_set()
+        assert stream_module._spool_waiters == {f"{VIDEO_ID}:{QUALITY}": 1}
+    finally:
+        release_cdn.set()
+        await asyncio.wait_for(warmup, timeout=2)
+    assert stream_module._spool_pin_counts == {}
+    assert stream_module._spool_reserved_bytes == 0
+
+
+@pytest.mark.anyio
 async def test_cached_file_lookup_hands_an_atomic_pin_to_the_response(
     stream_module: Any,
     monkeypatch: pytest.MonkeyPatch,
@@ -2283,9 +2473,10 @@ async def test_cancelled_cached_lookup_releases_worker_owned_pin(
 class _GrowingSpoolDownload:
     """Publish an append-only prefix and gate the atomic completion."""
 
-    def __init__(self, root: Path, *, fail: bool = False) -> None:
+    def __init__(self, root: Path, *, fail: bool = False, known_length: bool = False) -> None:
         self.root = root
         self.fail = fail
+        self.known_length = known_length
         self.started = asyncio.Event()
         self.release = asyncio.Event()
         self.prefix = b"\x1aE\xdf\xa3webm-header\x1fC\xb6ucluster-one"
@@ -2306,7 +2497,11 @@ class _GrowingSpoolDownload:
         self.partial = self.root / f"{video_id}-{quality}.webm.soundspan-part"
         self.completed = self.root / f"{video_id}-{quality}.webm"
         self.partial.write_bytes(self.prefix)
-        session.publish_readable(self.partial, "audio/webm")
+        session.publish_readable(
+            self.partial,
+            "audio/webm",
+            len(self.prefix + self.tail) if self.known_length else None,
+        )
         self.started.set()
         await self.release.wait()
         if self.fail:
@@ -2316,6 +2511,151 @@ class _GrowingSpoolDownload:
         self.partial.replace(self.completed)
         session.publish_growth()
         return str(self.completed), "audio/webm"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("stop", ["deadline", "disconnect", "cancel"])
+async def test_retiring_spool_wait_is_bounded_and_does_not_revive_writer(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    stop: str,
+) -> None:
+    download = _GrowingSpoolDownload(tmp_path, known_length=True)
+    monkeypatch.setattr(stream_module, "_download_ytmusic_spool_bounded", download)
+    first = await asyncio.wait_for(
+        stream_module.proxy_stream(
+            VIDEO_ID,
+            _ConnectedStreamRequest(),
+            user_id="__public__",
+            quality=QUALITY,
+            purpose="interactive",
+        ),
+        timeout=1,
+    )
+    await anext(first.body_iterator)
+    await first.body_iterator.aclose()
+    session = stream_module._spool_sessions[f"{VIDEO_ID}:{QUALITY}"]
+    checked_disconnect = asyncio.Event()
+
+    class WaitingRequest(_ConnectedStreamRequest):
+        async def is_disconnected(self) -> bool:
+            checked_disconnect.set()
+            return stop == "disconnect"
+
+    monkeypatch.setattr(stream_module, "YTMUSIC_SPOOL_TIMEOUT", 0.03)
+    waiter = asyncio.create_task(
+        stream_module.proxy_stream(
+            VIDEO_ID,
+            WaitingRequest("bytes=0-65535"),
+            user_id="__public__",
+            quality=QUALITY,
+            purpose="interactive",
+        )
+    )
+    try:
+        await asyncio.wait_for(checked_disconnect.wait(), timeout=1)
+        if stop == "cancel":
+            waiter.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await waiter
+        else:
+            with pytest.raises(HTTPException) as raised:
+                await asyncio.wait_for(waiter, timeout=1)
+            assert raised.value.status_code == (504 if stop == "deadline" else 499)
+        assert session.cancel_event.is_set()
+        assert stream_module._spool_waiters == {}
+        assert stream_module._spool_tasks == {session.key: session.task}
+    finally:
+        download.release.set()
+        await asyncio.gather(session.task, return_exceptions=True)
+    assert stream_module._spool_pin_counts == {}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("purpose", ["interactive", "preload"])
+@pytest.mark.parametrize("end", [0, 1, 15, 65535])
+async def test_initial_bounded_range_starts_before_atomic_completion(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    purpose: str,
+    end: int,
+) -> None:
+    download = _GrowingSpoolDownload(tmp_path, known_length=True)
+    monkeypatch.setattr(stream_module, "_download_ytmusic_spool_bounded", download)
+    response_task = asyncio.create_task(
+        stream_module.proxy_stream(
+            VIDEO_ID,
+            _ConnectedStreamRequest(f"bytes=0-{end}"),
+            user_id="__public__",
+            quality=QUALITY,
+            purpose=purpose,
+        )
+    )
+    response: Any | None = None
+    try:
+        await asyncio.wait_for(download.started.wait(), timeout=1)
+        session = stream_module._spool_sessions[f"{VIDEO_ID}:{QUALITY}"]
+        response = await asyncio.wait_for(response_task, timeout=1)
+        assert response is not None
+        expected = (download.prefix + download.tail)[: end + 1]
+        assert response.status_code == 206
+        assert response.headers["content-range"] == (
+            f"bytes 0-{len(expected) - 1}/{len(download.prefix + download.tail)}"
+        )
+        assert response.headers["content-length"] == str(len(expected))
+        assert response.headers["content-type"] == "audio/webm"
+        first = await asyncio.wait_for(anext(response.body_iterator), timeout=1)
+        assert first == expected[: len(download.prefix)]
+        assert session.task is not None and not session.task.done()
+        if len(expected) <= len(download.prefix):
+            with pytest.raises(StopAsyncIteration):
+                await asyncio.wait_for(anext(response.body_iterator), timeout=1)
+            assert session.cancel_event.is_set()
+        else:
+            download.release.set()
+            remainder = b"".join([chunk async for chunk in response.body_iterator])
+            assert first + remainder == expected
+        assert stream_module._spool_waiters == {}
+    finally:
+        download.release.set()
+        if response is not None:
+            await response.body_iterator.aclose()
+        if session.task is not None:
+            await asyncio.wait_for(asyncio.shield(session.task), timeout=1)
+    assert stream_module._spool_pin_counts == {}
+
+
+@pytest.mark.anyio
+async def test_initial_range_stops_exactly_at_64k_across_growing_reads(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    download = _GrowingSpoolDownload(tmp_path, known_length=True)
+    download.prefix = download.prefix.ljust(32768, b"x")
+    download.tail = b"y" * 100000
+    monkeypatch.setattr(stream_module, "_download_ytmusic_spool_bounded", download)
+    response = await asyncio.wait_for(
+        stream_module.proxy_stream(
+            VIDEO_ID,
+            _ConnectedStreamRequest("bytes=0-65535"),
+            user_id="__public__",
+            quality=QUALITY,
+            purpose="interactive",
+        ),
+        timeout=1,
+    )
+    assert response.headers["content-length"] == "65536"
+    assert response.headers["content-range"] == "bytes 0-65535/132768"
+    first = await anext(response.body_iterator)
+    assert first == download.prefix
+    download.release.set()
+    remainder = b"".join([chunk async for chunk in response.body_iterator])
+    assert first + remainder == (download.prefix + download.tail)[:65536]
+    assert stream_module._spool_waiters == {}
+    assert stream_module._spool_pin_counts == {}
 
 
 @pytest.mark.anyio
@@ -2384,11 +2724,18 @@ async def test_warmup_interface_reports_readable_and_releases_its_lease_on_cance
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    ("purpose", "range_header"),
+    ("purpose", "range_header", "known_length"),
     [
-        ("analysis", None),
-        ("interactive", "bytes=4-"),
-        ("preload", "bytes=0-4"),
+        ("analysis", None, True),
+        ("analysis", "bytes=0-4", True),
+        ("interactive", "bytes=4-", True),
+        ("interactive", "bytes=4-15", True),
+        ("interactive", "bytes=-4", True),
+        ("interactive", "bytes=0-1,4-5", True),
+        ("interactive", "bytes=0-invalid", True),
+        ("interactive", "bytes=0-" + "9" * 30, True),
+        ("preload", "bytes=0-4", False),
+        ("interactive", "bytes=0-1", False),
     ],
 )
 async def test_non_streamable_spool_requests_wait_for_atomic_completion(
@@ -2397,8 +2744,9 @@ async def test_non_streamable_spool_requests_wait_for_atomic_completion(
     tmp_path: Path,
     purpose: str,
     range_header: str | None,
+    known_length: bool,
 ) -> None:
-    download = _GrowingSpoolDownload(tmp_path)
+    download = _GrowingSpoolDownload(tmp_path, known_length=known_length)
     monkeypatch.setattr(stream_module, "_download_ytmusic_spool_bounded", download)
 
     response_task = asyncio.create_task(
@@ -2418,15 +2766,44 @@ async def test_non_streamable_spool_requests_wait_for_atomic_completion(
     response = await asyncio.wait_for(response_task, timeout=1)
     assert isinstance(response, stream_module.FileResponse)
     assert response.path == str(download.completed)
+    response._release_pin()
+    assert stream_module._spool_pin_counts == {}
 
 
 @pytest.mark.anyio
-async def test_progressive_failure_cleans_partial_and_releases_lease(
+async def test_conditional_initial_range_waits_for_completed_file_validators(
     stream_module: Any,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    download = _GrowingSpoolDownload(tmp_path, fail=True)
+    download = _GrowingSpoolDownload(tmp_path, known_length=True)
+    monkeypatch.setattr(stream_module, "_download_ytmusic_spool_bounded", download)
+    request = _ConnectedStreamRequest("bytes=0-1")
+    request.headers["if-range"] = '"previous-file-etag"'
+    response_task = asyncio.create_task(
+        stream_module.proxy_stream(
+            VIDEO_ID, request, user_id="__public__", quality=QUALITY, purpose="interactive"
+        )
+    )
+    await asyncio.wait_for(download.started.wait(), timeout=1)
+    await asyncio.sleep(0)
+    assert not response_task.done()
+    download.release.set()
+    response = await asyncio.wait_for(response_task, timeout=1)
+    assert isinstance(response, stream_module._PinnedFileResponse)
+    response._release_pin()
+    assert stream_module._spool_pin_counts == {}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("range_header", [None, "bytes=0-65535"])
+async def test_progressive_failure_cleans_partial_and_releases_lease(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    range_header: str | None,
+) -> None:
+    download = _GrowingSpoolDownload(tmp_path, fail=True, known_length=True)
     monkeypatch.setattr(stream_module, "_download_ytmusic_spool_bounded", download)
     monkeypatch.setattr(stream_module, "_find_spooled_file", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stream_module.asyncio, "to_thread", _run_inline)
@@ -2434,7 +2811,7 @@ async def test_progressive_failure_cleans_partial_and_releases_lease(
     response_task = asyncio.create_task(
         stream_module.proxy_stream(
             VIDEO_ID,
-            _ConnectedStreamRequest(),
+            _ConnectedStreamRequest(range_header),
             user_id="__public__",
             quality=QUALITY,
             purpose="interactive",
@@ -2455,12 +2832,14 @@ async def test_progressive_failure_cleans_partial_and_releases_lease(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("range_header", [None, "bytes=0-65535"])
 async def test_shared_growing_spool_cancels_only_after_last_reader_closes(
     stream_module: Any,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    range_header: str | None,
 ) -> None:
-    download = _GrowingSpoolDownload(tmp_path)
+    download = _GrowingSpoolDownload(tmp_path, known_length=True)
     monkeypatch.setattr(stream_module, "_download_ytmusic_spool_bounded", download)
     monkeypatch.setattr(stream_module, "_find_spooled_file", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stream_module.asyncio, "to_thread", _run_inline)
@@ -2469,7 +2848,7 @@ async def test_shared_growing_spool_cancels_only_after_last_reader_closes(
         asyncio.create_task(
             stream_module.proxy_stream(
                 VIDEO_ID,
-                _ConnectedStreamRequest(),
+                _ConnectedStreamRequest(range_header),
                 user_id="__public__",
                 quality=QUALITY,
                 purpose="interactive",
@@ -2496,12 +2875,14 @@ async def test_shared_growing_spool_cancels_only_after_last_reader_closes(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("range_header", [None, "bytes=0-65535"])
 async def test_growing_spool_lease_pins_completed_file_until_reader_closes(
     stream_module: Any,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    range_header: str | None,
 ) -> None:
-    download = _GrowingSpoolDownload(tmp_path)
+    download = _GrowingSpoolDownload(tmp_path, known_length=True)
     monkeypatch.setattr(stream_module, "_download_ytmusic_spool_bounded", download)
     monkeypatch.setattr(stream_module, "_find_spooled_file", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stream_module.asyncio, "to_thread", _run_inline)
@@ -2510,7 +2891,7 @@ async def test_growing_spool_lease_pins_completed_file_until_reader_closes(
     response_task = asyncio.create_task(
         stream_module.proxy_stream(
             VIDEO_ID,
-            _ConnectedStreamRequest(),
+            _ConnectedStreamRequest(range_header),
             user_id="__public__",
             quality=QUALITY,
             purpose="interactive",

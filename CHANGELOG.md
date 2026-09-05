@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Serve initial bounded YouTube Music byte ranges from a validated growing audio spool when the full content length is known, instead of waiting for the entire track. Keep exact byte counts and completed-file handling for seek, conditional, multipart and unknown-length requests; let a new reader wait for a retiring writer without inheriting its cancellation or overlapping file writes.
+
 - Retain Audius public track attribution in queue metadata and expose a validated source-page link from the track menu; signed stream URLs are not persisted or shared as attribution.
 
 - Share the bounded remote-analysis hot set across likes, Wave seeds, completed listens, playlists, and repeated tracks so later signals are not crowded out. Likes and seeds lead each selection round, duplicate recordings retain all signal provenance, and analysis budgets remain unchanged.

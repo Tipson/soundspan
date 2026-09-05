@@ -310,6 +310,7 @@ class _SpoolSession:
         self.task: asyncio.Task[tuple[str, str]] | None = None
         self.partial_path: Path | None = None
         self.content_type: str | None = None
+        self.content_length: int | None = None
         self.readable = False
         self.lease_count = 0
         self._changed = asyncio.Event()
@@ -360,21 +361,28 @@ class _SpoolSession:
                 _unpin_spool_path(path)
             self._pinned_paths.clear()
 
-    def publish_readable(self, path: Path, content_type: str) -> None:
+    def publish_readable(
+        self, path: Path, content_type: str, content_length: int | None = None
+    ) -> None:
         """Publish a prefix only after the writer proved it browser-readable."""
         if not self.allow_growing:
             return
         self.pin_path(path)
         self.partial_path = path
         self.content_type = content_type
+        self.content_length = content_length
         self.readable = True
         self._notify()
 
-    def publish_readable_from_worker(self, path: Path, content_type: str) -> None:
+    def publish_readable_from_worker(
+        self, path: Path, content_type: str, content_length: int | None = None
+    ) -> None:
         """Thread-safely publish a proven append-only prefix."""
         self.pin_path(path)
         try:
-            self.loop.call_soon_threadsafe(self.publish_readable, path, content_type)
+            self.loop.call_soon_threadsafe(
+                self.publish_readable, path, content_type, content_length
+            )
         except RuntimeError:
             return
 
@@ -414,8 +422,6 @@ class _SpoolLease:
         _spool_waiters[key] = _spool_waiters.get(key, 0) + 1
         if session is not None:
             session.lease_count += 1
-        if cancel_event is not None:
-            cancel_event.clear()
 
     def close(self) -> None:
         """Release this waiter and cancel only after the final waiter leaves."""
@@ -469,13 +475,20 @@ class _LeaseStreamingResponse(StreamingResponse):
     """Release a growing-spool lease even when ASGI sending is interrupted."""
 
     def __init__(
-        self, content: AsyncIterator[bytes], content_type: str, lease: _SpoolLease
+        self,
+        content: AsyncIterator[bytes],
+        content_type: str,
+        lease: _SpoolLease,
+        *,
+        status_code: int = 200,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self._lease = lease
         super().__init__(
             content,
             media_type=content_type,
-            headers={"Accept-Ranges": "bytes", "Cache-Control": "no-store"},
+            status_code=status_code,
+            headers={"Accept-Ranges": "bytes", "Cache-Control": "no-store", **(headers or {})},
         )
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
@@ -1051,12 +1064,18 @@ def _download_progressive_spool_sync(
                     response.status_code,
                 ) from error
             raise
+        if response.status_code != 200:
+            raise ValueError("Progressive source did not return a complete representation")
         content_encoding = response.headers.get("Content-Encoding", "identity").lower()
         if content_encoding not in {"", "identity"}:
             raise ValueError("Progressive source unexpectedly used content encoding")
         content_length = response.headers.get("Content-Length")
-        if content_length is not None and int(content_length) > byte_limit:
-            raise ValueError("YouTube Music spool file exceeds the per-track byte budget")
+        total_bytes = int(content_length) if content_length is not None else None
+        if total_bytes is not None:
+            if total_bytes <= 0:
+                raise ValueError("Progressive source returned an invalid content length")
+            if total_bytes > byte_limit:
+                raise ValueError("YouTube Music spool file exceeds the per-track byte budget")
 
         downloaded = 0
         with partial_path.open("wb", buffering=0) as spool:
@@ -1068,6 +1087,8 @@ def _download_progressive_spool_sync(
                 downloaded += len(chunk)
                 if downloaded > byte_limit:
                     raise ValueError("YouTube Music spool file exceeds the per-track byte budget")
+                if total_bytes is not None and downloaded > total_bytes:
+                    raise ValueError("Progressive source exceeded its content length")
                 if time.monotonic() - started_at > YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:
                     raise RuntimeError("YouTube Music spool download timeout exceeded")
                 spool.write(chunk)
@@ -1079,12 +1100,16 @@ def _download_progressive_spool_sync(
                     if prefix_state == "pending" and len(prefix) >= _SPOOL_PREFIX_PROBE_BYTES:
                         prefix_state = "rejected"
                     if prefix_state == "readable":
-                        session.publish_readable_from_worker(partial_path, content_type)
+                        session.publish_readable_from_worker(
+                            partial_path, content_type, total_bytes
+                        )
                 if prefix_state == "readable":
                     session.publish_growth_from_worker()
 
     if downloaded == 0:
         raise ValueError("Progressive source returned an empty body")
+    if total_bytes is not None and downloaded != total_bytes:
+        raise ValueError("Progressive source did not match its content length")
     if session.cancel_event.is_set():
         raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
     session.pin_path(completed_path)
@@ -1786,10 +1811,13 @@ async def _find_spooled_result(
     return _spooled_file_result(existing) if existing is not None else None
 
 
-async def _await_spool_task(task: asyncio.Task[tuple[str, str]]) -> tuple[str, str]:
+async def _await_spool_task(
+    task: asyncio.Task[tuple[str, str]], *, deadline: float | None = None
+) -> tuple[str, str]:
     """Await one shared spool task without allowing a waiter to cancel it."""
     try:
-        return await asyncio.wait_for(asyncio.shield(task), timeout=YTMUSIC_SPOOL_TIMEOUT)
+        timeout = YTMUSIC_SPOOL_TIMEOUT if deadline is None else max(0, deadline - time.monotonic())
+        return await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
     except TimeoutError as error:
         raise HTTPException(status_code=504, detail="YouTube Music spool timed out") from error
 
@@ -1800,11 +1828,13 @@ async def _await_spool_task_for_request(
     request: Request,
     *,
     pin_result: bool = False,
+    deadline: float | None = None,
 ) -> tuple[str, str]:
     """Await a shared spool while cancelling work abandoned by every client."""
     cancel_event = _spool_cancel_events.get(key)
     lease = _SpoolLease(key, task, cancel_event, _spool_sessions.get(key))
-    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
+    if deadline is None:
+        deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
     try:
         while not task.done():
             if await request.is_disconnected():
@@ -1826,6 +1856,48 @@ async def _await_spool_task_for_request(
 
 
 async def _find_or_start_spool_task(
+    video_id: str,
+    quality: str,
+    *,
+    purpose: Literal["interactive", "preload", "analysis"] = "interactive",
+    provider_identity: str = _SPOOL_PROVIDER_IDENTITY,
+    pin_completed: bool = False,
+    request: Request | None = None,
+    deadline: float | None = None,
+) -> tuple[tuple[str, str] | None, asyncio.Task[tuple[str, str]] | None]:
+    """Join live work, waiting for an abandoned writer to fully close before retry."""
+    if deadline is None:
+        deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
+    key = f"{video_id}:{quality}"
+    while True:
+        completed, task = await _find_or_start_spool_task_once(
+            video_id,
+            quality,
+            purpose=purpose,
+            provider_identity=provider_identity,
+            pin_completed=pin_completed,
+        )
+        cancel_event = _spool_cancel_events.get(key)
+        if task is None or cancel_event is None or not cancel_event.is_set():
+            return completed, task
+        # Cancellation is irreversible: the worker may already be unwinding
+        # its network context. Never clear it or overlap replacement writers.
+        while not task.done():
+            if request is not None and await request.is_disconnected():
+                raise HTTPException(status_code=499, detail="Client disconnected")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise HTTPException(status_code=504, detail="YouTube Music spool timed out")
+            await asyncio.sleep(min(0.1, remaining))
+        # Its registered completion callback owns cleanup, pins, and counters.
+        await asyncio.sleep(0)
+        if request is not None and await request.is_disconnected():
+            raise HTTPException(status_code=499, detail="Client disconnected")
+        if time.monotonic() >= deadline:
+            raise HTTPException(status_code=504, detail="YouTube Music spool timed out")
+
+
+async def _find_or_start_spool_task_once(
     video_id: str,
     quality: str,
     *,
@@ -1904,11 +1976,14 @@ async def _get_ytmusic_spooled_stream(
     pin_result: bool = False,
 ) -> tuple[str, str]:
     """Return a cached spool entry, coalescing concurrent requests per track."""
+    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
     completed, task = await _find_or_start_spool_task(
         video_id,
         quality,
         purpose=purpose,
         pin_completed=pin_result,
+        request=request,
+        deadline=deadline,
     )
     if completed is not None:
         return completed
@@ -1921,9 +1996,10 @@ async def _get_ytmusic_spooled_stream(
             task,
             request,
             pin_result=pin_result,
+            deadline=deadline,
         )
         if request is not None
-        else await _await_spool_task(task)
+        else await _await_spool_task(task, deadline=deadline)
     )
 
 
@@ -1942,10 +2018,12 @@ async def warm_ytmusic_spool(
     """Warm one shared spool while exposing only readiness, never audio bytes."""
     video_id = _validate_video_id(video_id)
     quality = _validate_stream_quality(quality)
+    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
     completed, task = await _find_or_start_spool_task(
         video_id,
         quality,
         purpose="preload",
+        deadline=deadline,
     )
     if completed is not None:
         return
@@ -1955,11 +2033,10 @@ async def warm_ytmusic_spool(
     key = f"{video_id}:{quality}"
     session = _spool_sessions.get(key)
     if session is None:
-        await _await_spool_task(task)
+        await _await_spool_task(task, deadline=deadline)
         return
 
     lease = _SpoolLease(key, task, session.cancel_event, session)
-    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
     notified_readable = False
     try:
         while not task.done():
@@ -1998,11 +2075,15 @@ async def _stream_growing_spool(
     session: _SpoolSession,
     task: asyncio.Task[tuple[str, str]],
     lease: _SpoolLease,
+    *,
+    byte_limit: int | None = None,
 ) -> AsyncIterator[bytes]:
     """Tail an append-only partial, switching to the atomic final path at EOF."""
     offset = 0
     try:
         while True:
+            if byte_limit is not None and offset >= byte_limit:
+                return
             path: Path | None
             if task.done():
                 path_text, _content_type = task.result()
@@ -2012,6 +2093,8 @@ async def _stream_growing_spool(
             if path is not None:
                 chunk = await asyncio.to_thread(_read_spool_chunk, path, offset)
                 if chunk:
+                    if byte_limit is not None:
+                        chunk = chunk[: byte_limit - offset]
                     offset += len(chunk)
                     yield chunk
                     continue
@@ -2023,6 +2106,8 @@ async def _stream_growing_spool(
                     # over the completed path instead of ending with a 200 and
                     # an empty (or truncated) response.
                     continue
+                if byte_limit is not None and offset < byte_limit:
+                    raise RuntimeError("Completed spool ended before the requested range")
                 return
             await session.wait_for_growth()
     finally:
@@ -2035,13 +2120,17 @@ async def _growing_spool_response(
     request: Request,
     *,
     purpose: Literal["interactive", "preload"],
+    range_end: int | None = None,
 ) -> Response:
     """Return at a proven prefix, or fall back to the completed local file."""
+    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
     completed, task = await _find_or_start_spool_task(
         video_id,
         quality,
         purpose=purpose,
         pin_completed=True,
+        request=request,
+        deadline=deadline,
     )
     if completed is not None:
         return _PinnedFileResponse(*completed, pin_owned=True)
@@ -2055,13 +2144,15 @@ async def _growing_spool_response(
             task,
             request,
             pin_result=True,
+            deadline=deadline,
         )
         return _PinnedFileResponse(path, content_type, pin_owned=True)
 
     lease = _SpoolLease(key, task, session.cancel_event, session)
-    deadline = time.monotonic() + YTMUSIC_SPOOL_TIMEOUT
     try:
-        while not task.done() and not session.readable:
+        while not task.done() and (
+            not session.readable or (range_end is not None and session.content_length is None)
+        ):
             if await request.is_disconnected():
                 raise HTTPException(status_code=499, detail="Client disconnected")
             remaining = deadline - time.monotonic()
@@ -2075,6 +2166,20 @@ async def _growing_spool_response(
             return response
         if session.content_type is None:
             raise RuntimeError("Readable spool session has no content type")
+        if range_end is not None:
+            if session.content_length is None or session.content_length <= 0:
+                raise RuntimeError("Readable ranged spool session has no valid content length")
+            byte_limit = min(range_end + 1, session.content_length)
+            return _LeaseStreamingResponse(
+                _stream_growing_spool(session, task, lease, byte_limit=byte_limit),
+                session.content_type,
+                lease,
+                status_code=206,
+                headers={
+                    "Content-Range": f"bytes 0-{byte_limit - 1}/{session.content_length}",
+                    "Content-Length": str(byte_limit),
+                },
+            )
         return _LeaseStreamingResponse(
             _stream_growing_spool(session, task, lease),
             session.content_type,
@@ -2207,8 +2312,8 @@ async def proxy_stream(
     """Serve YouTube Music audio from a bounded local spool.
 
     Soundspan tails only direct progressive sources whose container prefix has
-    been validated. HLS, analysis, and exact range reads wait for the completed
-    atomic local file, preserving normal local-file Range semantics.
+    been validated. Initial bounded ranges can tail sources with a known length.
+    HLS, analysis, and other range reads wait for the completed atomic local file.
 
     Concurrent requests for the same track share one download.
     """
@@ -2219,12 +2324,23 @@ async def proxy_stream(
         _get_ytmusic(user_id)
 
     range_header = request.headers.get("range", "").strip().lower()
-    if purpose in {"interactive", "preload"} and range_header in {"", "bytes=0-"}:
+    # Keep conditional, suffix, seek, multipart, and unusually large ranges on
+    # FileResponse's completed-file parser and validator handling.
+    initial_range = re.fullmatch(r"bytes=0-([0-9]{1,20})", range_header)
+    range_end = (
+        int(initial_range.group(1))
+        if initial_range is not None and "if-range" not in request.headers
+        else None
+    )
+    if purpose in {"interactive", "preload"} and (
+        range_header in {"", "bytes=0-"} or range_end is not None
+    ):
         return await _growing_spool_response(
             video_id,
             quality,
             request,
             purpose=purpose,
+            range_end=range_end,
         )
 
     # FileResponse consumes completed-file Range from the ASGI scope itself.

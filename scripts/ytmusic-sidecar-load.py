@@ -463,6 +463,7 @@ class _DeterministicStreamResponse:
         self._phase = phase
         self._video_id = video_id
         self._quality = quality
+        self.status_code = 200
         self.headers = {
             "Content-Encoding": "identity",
             "Content-Length": str(len(_MEDIA_PREFIX) + len(_MEDIA_TAIL)),
