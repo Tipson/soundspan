@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Include the service worker's completed-preload helper in release artifacts and evaluate local worker imports before frontend builds, preventing an omitted asset from disabling PWA and offline support.
+
+- Verify retained device audio before reusing a ready download. Missing files can be downloaded again; inaccessible storage and manually retained copies remain protected from automatic replacement, including concurrent preference changes.
+
 - Serve initial bounded YouTube Music byte ranges from a validated growing audio spool when the full content length is known, instead of waiting for the entire track. Keep exact byte counts and completed-file handling for seek, conditional, multipart and unknown-length requests; let a new reader wait for a retiring writer without inheriting its cancellation or overlapping file writes.
 
 - Retain Audius public track attribution in queue metadata and expose a validated source-page link from the track menu; signed stream URLs are not persisted or shared as attribution.

@@ -958,6 +958,15 @@ test("Downloads keeps retained rows in stable creation order when an older trans
     const oldestRow = rows().find((row) =>
         row.textContent?.includes("Oldest download"),
     );
+    view.container.scrollTop = 128;
+    records = [{ ...oldest, bytesReceived: 5, updatedAt: 900 }, newest, middle];
+    await view.rerender(React.createElement(DownloadsList));
+    assert.equal(view.container.scrollTop, 128);
+    assert.strictEqual(rows()[2], oldestRow);
+    assert.deepEqual(
+        rows().map((row) => row.querySelector("p")?.textContent),
+        ["Newest download", "Middle download", "Oldest download"],
+    );
 
     records = [
         {
@@ -979,6 +988,7 @@ test("Downloads keeps retained rows in stable creation order when an older trans
         rows().find((row) => row.textContent?.includes("Oldest download")),
         oldestRow,
     );
+    assert.equal(view.container.scrollTop, 128);
     view.unmount();
 });
 

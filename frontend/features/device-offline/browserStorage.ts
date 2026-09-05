@@ -261,6 +261,18 @@ class BrowserMetadataStore implements DeviceOfflineMetadataStore {
                     ? matchesDeviceOfflineRecordVersion(current, expected)
                     : current === null;
                 if (!canClaim) return;
+                // Inspection happens outside this transaction. Do not replace
+                // another file or demote a copy protected while it was awaited.
+                if (
+                    current &&
+                    expected &&
+                    (current.mediaRef !== expected.mediaRef ||
+                        current.totalBytes !== expected.totalBytes ||
+                        (current.management !== "auto-liked" &&
+                            next.management === "auto-liked"))
+                ) {
+                    return;
+                }
                 claimed = true;
                 if (current) store.delete(current.key);
                 store.put(next);

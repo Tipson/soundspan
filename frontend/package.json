@@ -14,7 +14,7 @@
     "scripts": {
         "predev": "tsc -p ../packages/media-metadata-contract/tsconfig.json",
         "dev": "node server.js",
-        "prebuild": "tsc -p ../packages/media-metadata-contract/tsconfig.json",
+        "prebuild": "tsc -p ../packages/media-metadata-contract/tsconfig.json && node scripts/check-service-worker-runtime.mjs",
         "build": "next build",
         "format": "prettier --write .",
         "format:check": "prettier --check .",

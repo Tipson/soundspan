@@ -2,8 +2,10 @@ import type {
     DeviceOfflineDownloadRecord,
     DeviceOfflineManagement,
 } from "./types";
-import type { DeviceAudioVault } from "./vault";
+import { DeviceAudioVaultError, type DeviceAudioVault } from "./vault";
+import { inspectDeviceAudioRecord } from "./vaultRecordAccess";
 import { deleteDeviceAudioRecordTransaction } from "./vaultRecordDeletion";
+import { StaleDeviceOfflineAttemptError } from "./downloadError";
 
 interface DeviceOfflineRecordManagementStore {
     getByKey(key: string): Promise<DeviceOfflineDownloadRecord | null>;
@@ -108,6 +110,7 @@ interface PromoteDeviceOfflineRecordInput {
 
 interface ReuseReadyDeviceOfflineRecordInput {
     ownerId: string;
+    authGeneration: number;
     previous: DeviceOfflineDownloadRecord | null;
     trackIdentity: string;
     quality: string;
@@ -179,7 +182,50 @@ export async function reuseReadyDeviceOfflineRecord(
             ? "manual"
             : "auto-liked";
     if (input.previous?.status !== "ready") {
+        if (
+            input.previous?.mediaRef &&
+            dependencies.audioVault &&
+            input.requestedManagement !== "manual" &&
+            management === "manual"
+        ) {
+            throw new DeviceAudioVaultError(
+                "io",
+                "Ручная копия недоступна. Повторите загрузку этого трека вручную.",
+                "retry",
+            );
+        }
         return { record: null, management };
+    }
+
+    if (input.previous.mediaRef && dependencies.audioVault) {
+        const inspection = await inspectDeviceAudioRecord(
+            dependencies.audioVault,
+            input.previous,
+            input.authGeneration,
+        );
+        input.assertAuthorized();
+        if (inspection.status === "unavailable") {
+            throw new DeviceAudioVaultError(
+                "io",
+                "Не удалось проверить копию на устройстве. Восстановите доступ к хранилищу и повторите попытку.",
+                "retry",
+            );
+        }
+        if (inspection.status !== "available") {
+            // Automation may repair its own copies, but an existing manual
+            // file requires an explicit manual retry before replacement.
+            if (
+                input.requestedManagement !== "manual" &&
+                management === "manual"
+            ) {
+                throw new DeviceAudioVaultError(
+                    inspection.status === "missing" ? "not_found" : "integrity",
+                    "Ручная копия недоступна. Повторите загрузку этого трека вручную.",
+                    "retry",
+                );
+            }
+            return { record: null, management };
+        }
     }
 
     const promotePrevious = () =>
@@ -213,6 +259,17 @@ export async function reuseReadyDeviceOfflineRecord(
         input.assertAuthorized();
     }
 
+    if (
+        input.previous.mediaRef &&
+        dependencies.audioVault &&
+        current?.status === "ready" &&
+        (current.key !== input.previous.key ||
+            current.attempt !== input.previous.attempt ||
+            current.mediaRef !== input.previous.mediaRef ||
+            current.totalBytes !== input.previous.totalBytes)
+    ) {
+        throw new StaleDeviceOfflineAttemptError();
+    }
     const reusable =
         current?.ownerId === input.ownerId &&
         current.status === "ready" &&

@@ -651,6 +651,7 @@ export class DeviceOfflineDownloadManager {
             {
                 previous,
                 ownerId: input.ownerId,
+                authGeneration: authRuntimeLease.generation,
                 trackIdentity,
                 quality: input.quality,
                 requestedManagement,

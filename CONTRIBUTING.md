@@ -114,6 +114,13 @@ npm --prefix frontend run test:e2e
 npm --prefix frontend run test:predeploy
 ```
 
+The frontend `prebuild` evaluates `public/sw.js` and its local `importScripts`
+dependencies before compiling Next.js. Run it from the release checkout or
+archive, not only a working copy: an untracked public asset can pass local tests
+while being absent from the image. Browser smoke verification must also confirm
+successful service-worker registration; the build check does not run lifecycle
+callbacks or prove device offline playback.
+
 ## Full-Stack Validation Requirements
 
 For features or fixes involving APIs, auth, routing/proxying, or external client integrations:
