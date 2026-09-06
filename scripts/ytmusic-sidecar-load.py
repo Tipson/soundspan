@@ -1404,12 +1404,16 @@ async def run_sidecar_workload(
 
     upstream = _DeterministicUpstream(stream_module, spool_directory)
     original_stream_info_provider = stream_module._get_stream_url_sync
-    original_stream_response = stream_module.requests.get
+    original_stream_response = stream_module.requests.Session.get
     original_search_provider = search_module._search_with_mode_fallback
     original_spool_directory = stream_module.YTMUSIC_SPOOL_DIR
     original_spool_timeout = stream_module.YTMUSIC_SPOOL_TIMEOUT
     stream_module._get_stream_url_sync = upstream.stream_info_provider
-    stream_module.requests.get = upstream.stream_response
+
+    def session_stream_response(_client: object, *args: Any, **kwargs: Any) -> Any:
+        return upstream.stream_response(*args, **kwargs)
+
+    stream_module.requests.Session.get = session_stream_response
     search_module._search_with_mode_fallback = upstream.search_provider
     stream_module.YTMUSIC_SPOOL_DIR = spool_directory
     stream_module.YTMUSIC_SPOOL_TIMEOUT = 0.15
@@ -1569,7 +1573,7 @@ async def run_sidecar_workload(
         with suppress(Exception):
             await search_module.shutdown_search_provider()
         stream_module._get_stream_url_sync = original_stream_info_provider
-        stream_module.requests.get = original_stream_response
+        stream_module.requests.Session.get = original_stream_response
         search_module._search_with_mode_fallback = original_search_provider
         stream_module.YTMUSIC_SPOOL_DIR = original_spool_directory
         stream_module.YTMUSIC_SPOOL_TIMEOUT = original_spool_timeout

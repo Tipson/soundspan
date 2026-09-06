@@ -493,12 +493,16 @@ async def run_playback_workload(
     upstream = base._DeterministicUpstream(stream_module, spool_directory)
     probe = _PlaybackEgressProbe(app_module.app)
     original_stream_info_provider = stream_module._get_stream_url_sync
-    original_stream_response = stream_module.requests.get
+    original_stream_response = stream_module.requests.Session.get
     original_spool_lookup = stream_module._find_spooled_file
     original_spool_directory = stream_module.YTMUSIC_SPOOL_DIR
     original_spool_timeout = stream_module.YTMUSIC_SPOOL_TIMEOUT
     stream_module._get_stream_url_sync = upstream.stream_info_provider
-    stream_module.requests.get = upstream.stream_response
+
+    def session_stream_response(_client: object, *args: Any, **kwargs: Any) -> Any:
+        return upstream.stream_response(*args, **kwargs)
+
+    stream_module.requests.Session.get = session_stream_response
     lookup_profiler = _FilesystemLookupProfiler(original_spool_lookup)
     stream_module._find_spooled_file = lookup_profiler
     stream_module.YTMUSIC_SPOOL_DIR = spool_directory
@@ -692,7 +696,7 @@ async def run_playback_workload(
         with suppress(Exception):
             await stream_module.shutdown_stream_provider()
         stream_module._get_stream_url_sync = original_stream_info_provider
-        stream_module.requests.get = original_stream_response
+        stream_module.requests.Session.get = original_stream_response
         stream_module._find_spooled_file = original_spool_lookup
         stream_module.YTMUSIC_SPOOL_DIR = original_spool_directory
         stream_module.YTMUSIC_SPOOL_TIMEOUT = original_spool_timeout
