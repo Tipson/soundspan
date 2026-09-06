@@ -729,7 +729,14 @@ def _extract_stream_info(
     try:
         _ensure_player_cache()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = _extract_with_manifest_fallback(ydl, url, ydl_opts)
+            if cache_key.startswith("music:"):
+                from ytmusic_anonymous_context import extract_music
+
+                info = extract_music(
+                    ydl, url, ydl_opts, _extract_with_manifest_fallback, _extract_pacer.wait
+                )
+            else:
+                info = _extract_with_manifest_fallback(ydl, url, ydl_opts)
             if not info:
                 raise ValueError("No info extracted")
             selected = _selected_audio_stream(cast(JsonObject, info))
@@ -1220,7 +1227,10 @@ def _iter_progressive_cdn_ranges(
             if current_validator and not current_validator.startswith("W/"):
                 validator = current_validator
             received = 0
-            for chunk in response.iter_content(chunk_size=_SPOOL_READ_CHUNK_BYTES):
+            # Publish the initial playable prefix without waiting for a bulk buffer.
+            # Later ranges retain bulk reads; request count and audio bytes are unchanged.
+            read_size = 8192 if offset == 0 else _SPOOL_READ_CHUNK_BYTES
+            for chunk in response.iter_content(chunk_size=read_size):
                 if not chunk:
                     continue
                 if session.cancel_event.is_set():

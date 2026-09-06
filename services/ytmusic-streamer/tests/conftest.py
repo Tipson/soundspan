@@ -20,6 +20,7 @@ REPOSITORY_ROOT = SERVICE_ROOT.parents[1]
 INTERNAL_API_SECRET = "test-internal-secret-value"
 APP_MODULES = (
     "app",
+    "ytmusic_anonymous_context",
     "ytmusic_auth",
     "ytmusic_album_downloads",
     "ytmusic_browse",

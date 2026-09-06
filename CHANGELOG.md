@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Reuse short-lived anonymous YouTube context for HIGH Opus resolution without refetching the watch page; preserve ordinary extraction for expired/rejected context, other formats and authenticated access.
+
+- Deliver the initial YouTube CDN range in 8 KiB reads so a playable prefix is not held behind the bulk buffer; subsequent ranges retain bulk reads and byte validation.
+
 - Retain lock-screen action handlers across pause/resume and queue updates while dispatching the latest committed controls; release handlers when media is cleared or the player unmounts.
 
 - Avoid an explicit stop/reset before a prepared native background handoff in the installed iOS player. Manual, unprepared, foreground and shared-session switches retain their existing stop behavior; physical-device audibility verification remains pending.

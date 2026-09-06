@@ -638,7 +638,7 @@ async def test_progressive_writer_owns_bytes_and_atomically_completes(
             return None
 
         def iter_content(self, *, chunk_size: int) -> Iterator[bytes]:
-            assert chunk_size == stream_module._SPOOL_READ_CHUNK_BYTES
+            assert chunk_size == 8192
             yield prefix
             yield tail
 
@@ -999,7 +999,7 @@ async def test_cached_progressive_http_rejection_refreshes_once(
                 )
 
         def iter_content(self, *, chunk_size: int) -> Iterator[bytes]:
-            assert chunk_size == stream_module._SPOOL_READ_CHUNK_BYTES
+            assert chunk_size == 8192
             yield payload
 
     def get_source(url: str, **_options: Any) -> FakeResponse:
@@ -1323,7 +1323,7 @@ async def test_slow_progressive_cdn_does_not_hold_heavy_extraction_slot(
             return None
 
         def iter_content(self, *, chunk_size: int) -> Iterator[bytes]:
-            assert chunk_size == stream_module._SPOOL_READ_CHUNK_BYTES
+            assert chunk_size == 8192
             if self.video_id == first_video_id:
                 first_cdn_started.set()
                 if not release_first_cdn.wait(timeout=2):
@@ -1566,7 +1566,7 @@ async def test_cancelled_progressive_transfer_does_not_open_cdn_after_queue_wait
             return None
 
         def iter_content(self, *, chunk_size: int) -> Iterator[bytes]:
-            assert chunk_size == stream_module._SPOOL_READ_CHUNK_BYTES
+            assert chunk_size == 8192
             if self.video_id == first_video_id:
                 first_cdn_started.set()
                 if not release_first_cdn.wait(timeout=2):
@@ -2565,8 +2565,8 @@ async def test_initial_range_http_response_finishes_while_shared_cdn_is_growing(
             return None
 
         def iter_content(self, *, chunk_size: int) -> Iterator[bytes]:
-            assert chunk_size == len(prefix)
-            yield prefix
+            for offset in range(0, len(prefix), chunk_size):
+                yield prefix[offset : offset + chunk_size]
             if not release_cdn.wait(timeout=2):
                 raise TimeoutError("test CDN tail was not released")
             yield tail
