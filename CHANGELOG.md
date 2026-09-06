@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Search device downloads and queued copies by track, artist or album without network requests or changing playback. Preserve the query during background updates and provide a clear empty-result recovery.
+
 - Set the YouTube sidecar's service HOME when dropping root privileges, keeping yt-dlp/Deno cache paths writable while preserving proxy/auth environment variables.
 
 - Honor the configured egress proxy for approved YouTube cover-image origins, preventing direct-CDN timeouts. Preserve per-hop URL checks, bounded streaming, deadlines and the transport of other images and audio.

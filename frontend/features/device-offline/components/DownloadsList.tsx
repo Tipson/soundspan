@@ -13,7 +13,7 @@ import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Track } from "@/lib/audio-state-context";
 import { useDeviceOffline } from "../DeviceOfflineProvider";
 import type { DeviceOfflineQueueItem } from "../offlineQueue";
-import type { DeviceOfflineDownloadRecord } from "../types";
+import type { DeviceOfflineDownloadRecord, DeviceOfflineTrack } from "../types";
 import { ru } from "@/lib/i18n/ru";
 import {
     isTrackActionable,
@@ -139,7 +139,13 @@ function queueStatusCopy(item: DeviceOfflineQueueItem): string {
     return ru.downloads.queued;
 }
 
+function normalizeSearch(value: string): string {
+    return value.normalize("NFKC").toLocaleLowerCase("ru").replaceAll("ё", "е");
+}
+
+/** Search and manage this device's copies without changing the playback queue. */
 export function DownloadsList() {
+    const [search, setSearch] = useState("");
     const [exportingKey, setExportingKey] = useState<string | null>(null);
     const { playNow } = useAudioControls();
     const {
@@ -175,6 +181,16 @@ export function DownloadsList() {
             document.removeEventListener("visibilitychange", verifyWhenVisible);
         };
     }, [refresh]);
+    const searchTerms = normalizeSearch(search)
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    const matchesSearch = (track: DeviceOfflineTrack) => {
+        const text = normalizeSearch(
+            `${track.title} ${track.artist.name} ${track.album.title}`,
+        );
+        return searchTerms.every((term) => text.includes(term));
+    };
     const visibleQueueItems = queueItems.filter(
         (item) =>
             !records.some(
@@ -192,6 +208,13 @@ export function DownloadsList() {
             ),
         [records],
     );
+    const matchingRecords = displayRecords.filter((record) =>
+        matchesSearch(record.track),
+    );
+    const matchingQueueItems = visibleQueueItems.filter((item) =>
+        matchesSearch(item.track),
+    );
+    const matchingCount = matchingRecords.length + matchingQueueItems.length;
     const reconnectRememberedFolder =
         Boolean(storage.directoryName) &&
         (storage.status === "needs-setup" || storage.status === "error");
@@ -313,7 +336,7 @@ export function DownloadsList() {
         );
     }
 
-    if (records.length === 0 && visibleQueueItems.length === 0) {
+    if (records.length === 0 && visibleQueueItems.length === 0 && !search) {
         if (storageErrorNotice) return storageErrorNotice;
         if (storage.status !== "ready") return storageNotice;
         return (
@@ -335,8 +358,35 @@ export function DownloadsList() {
             {storageErrorNotice}
             {storageNotice}
             {legacyStorageNotice}
+            <div className="flex items-center gap-2">
+                <input
+                    type="search"
+                    aria-label="Поиск в загрузках"
+                    placeholder="Трек, исполнитель или альбом"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-base text-white placeholder:text-white/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                />
+                {search && (
+                    <button
+                        type="button"
+                        aria-label="Очистить поиск"
+                        onClick={() => setSearch("")}
+                        className="min-h-11 shrink-0 rounded-lg px-3 text-sm text-white/65 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    >
+                        Сбросить
+                    </button>
+                )}
+            </div>
+            {searchTerms.length > 0 && (
+                <p role="status" className="text-sm text-white/60">
+                    {matchingCount > 0
+                        ? `Найдено: ${matchingCount}`
+                        : "Ничего не найдено. Измените запрос или сбросьте поиск."}
+                </p>
+            )}
             <div className="overflow-hidden rounded-xl border border-white/10">
-                {visibleQueueItems.map((item) => {
+                {matchingQueueItems.map((item) => {
                     const actionable = isTrackActionable(item.track);
                     return (
                         <div
@@ -416,7 +466,7 @@ export function DownloadsList() {
                         </div>
                     );
                 })}
-                {displayRecords.map((record) => {
+                {matchingRecords.map((record) => {
                     const percent = progressPercent(record);
                     const playbackTrack = normalizeActionableAudioTrack(
                         record.track as Track,
