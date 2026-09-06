@@ -1056,6 +1056,7 @@ def _open_progressive_range(
     headers: dict[str, str],
     session: _SpoolSession,
     started_at: float,
+    client: requests.Session,
 ) -> requests.Response:
     """Retry one timed-out connection before headers under the original deadline.
 
@@ -1071,7 +1072,7 @@ def _open_progressive_range(
             raise RuntimeError("YouTube Music spool download timeout exceeded")
         timeout = min(YTDLP_SOCKET_TIMEOUT, remaining)
         try:
-            return requests.get(
+            return client.get(
                 stream_url,
                 headers=headers,
                 stream=True,
@@ -1090,6 +1091,21 @@ def _iter_progressive_cdn_chunks(
     session: _SpoolSession,
     byte_limit: int,
     started_at: float,
+) -> Iterator[tuple[bytes, int | None]]:
+    """Own one connection pool per transfer, closing it on completion or cancellation."""
+    with requests.Session() as client:
+        yield from _iter_progressive_cdn_ranges(
+            stream_url, headers, session, byte_limit, started_at, client
+        )
+
+
+def _iter_progressive_cdn_ranges(
+    stream_url: str,
+    headers: dict[str, str],
+    session: _SpoolSession,
+    byte_limit: int,
+    started_at: float,
+    client: requests.Session,
 ) -> Iterator[tuple[bytes, int | None]]:
     """Read contiguous bounded CDN ranges under one transfer/cancellation budget.
 
@@ -1110,7 +1126,9 @@ def _iter_progressive_cdn_chunks(
         range_headers = {**headers, "Range": f"bytes={offset}-{end}"}
         if validator is not None:
             range_headers["If-Range"] = validator
-        with _open_progressive_range(stream_url, range_headers, session, started_at) as response:
+        with _open_progressive_range(
+            stream_url, range_headers, session, started_at, client
+        ) as response:
             try:
                 response.raise_for_status()
             except requests.HTTPError as error:

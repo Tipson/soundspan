@@ -48,3 +48,17 @@ connection failures as provider rate limits.
 
 `test_cdn_connection_retry.py` includes a real loopback proxy that stalls CONNECT,
 plus retry, cancellation, deadline and byte-continuity cases.
+
+## Transfer-scoped connections
+
+Each progressive download owns a Requests session, reusing its connection for
+fully consumed contiguous ranges instead of reopening proxy CONNECT/TLS for
+every range. The pool closes when iteration completes, fails or is cancelled.
+Sessions and their cookies are not shared across separate transfers. The
+existing transfer admission limits still bound active downloads; no global
+connection pool or additional parallel requests are introduced.
+
+`test_cdn_connection_reuse.py` verifies connection reuse against a real local
+HTTP server, cookie isolation between transfers and pool cleanup on all exits.
+This improves buffer filling, not the first metadata extraction or first
+connection handshake.

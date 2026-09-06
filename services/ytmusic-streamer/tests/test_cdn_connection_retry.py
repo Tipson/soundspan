@@ -35,7 +35,9 @@ def test_stalled_connection_retries_same_range(monkeypatch):
             raise requests.ReadTimeout("proxy CONNECT stalled")
         return response()
 
-    monkeypatch.setattr(stream.requests, "get", get)
+    monkeypatch.setattr(
+        stream.requests.Session, "get", lambda _client, *args, **kwargs: get(*args, **kwargs)
+    )
     session = SimpleNamespace(cancel_event=threading.Event())
     assert list(
         stream._iter_progressive_cdn_chunks(
@@ -65,7 +67,9 @@ def test_retry_respects_attempt_limit_cancellation_and_deadline(monkeypatch, sto
             clock[0] += stream.YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT + 1
         raise requests.ReadTimeout("proxy stalled")
 
-    monkeypatch.setattr(stream.requests, "get", get)
+    monkeypatch.setattr(
+        stream.requests.Session, "get", lambda _client, *args, **kwargs: get(*args, **kwargs)
+    )
     expected = {
         "twice": requests.ReadTimeout,
         "cancelled": stream._SpoolDownloadCancelled,
@@ -92,7 +96,9 @@ def test_body_timeout_after_bytes_is_not_replayed(monkeypatch):
         calls.append(1)
         return upstream
 
-    monkeypatch.setattr(stream.requests, "get", get)
+    monkeypatch.setattr(
+        stream.requests.Session, "get", lambda _client, *args, **kwargs: get(*args, **kwargs)
+    )
     chunks = stream._iter_progressive_cdn_chunks(
         "https://cdn.test/audio",
         {},
@@ -120,7 +126,9 @@ def test_continuation_connection_retry_keeps_offset_and_validator(monkeypatch):
             raise requests.ConnectTimeout("next range tunnel stalled")
         return response(4, 7, 8)
 
-    monkeypatch.setattr(stream.requests, "get", get)
+    monkeypatch.setattr(
+        stream.requests.Session, "get", lambda _client, *args, **kwargs: get(*args, **kwargs)
+    )
     chunks = stream._iter_progressive_cdn_chunks(
         "https://cdn.test/audio",
         {},
@@ -157,7 +165,9 @@ def test_real_proxy_connect_timeout_uses_short_connect_budget(monkeypatch):
     def get(url, **options):
         return real_get(url, proxies={"https": f"http://127.0.0.1:{server.server_port}"}, **options)
 
-    monkeypatch.setattr(stream.requests, "get", get)
+    monkeypatch.setattr(
+        stream.requests.Session, "get", lambda _client, *args, **kwargs: get(*args, **kwargs)
+    )
     monkeypatch.setattr(stream, "_SPOOL_CONNECT_TIMEOUT_SECONDS", 0.1, raising=False)
     before = time.monotonic()
     try:

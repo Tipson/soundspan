@@ -663,7 +663,11 @@ async def test_progressive_writer_owns_bytes_and_atomically_completes(
             "ext": "webm",
         },
     )
-    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    monkeypatch.setattr(
+        stream_module.requests.Session,
+        "get",
+        lambda _client, *args, **kwargs: get_source(*args, **kwargs),
+    )
     monkeypatch.setattr(stream_module.os, "replace", replace_with_one_windows_collision)
     session = stream_module._SpoolSession(
         f"{VIDEO_ID}:{QUALITY}",
@@ -720,7 +724,11 @@ async def test_progressive_writer_downloads_contiguous_bounded_cdn_ranges(
         response._content_consumed = True
         return response
 
-    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    monkeypatch.setattr(
+        stream_module.requests.Session,
+        "get",
+        lambda _client, *args, **kwargs: get_source(*args, **kwargs),
+    )
     session = stream_module._SpoolSession(
         f"{VIDEO_ID}:{QUALITY}",
         asyncio.get_running_loop(),
@@ -781,7 +789,11 @@ async def test_progressive_continuation_rejects_changed_representation(
         response._content_consumed = True
         return response
 
-    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    monkeypatch.setattr(
+        stream_module.requests.Session,
+        "get",
+        lambda _client, *args, **kwargs: get_source(*args, **kwargs),
+    )
     session = stream_module._SpoolSession(
         "test",
         asyncio.get_running_loop(),
@@ -815,7 +827,11 @@ async def test_progressive_cancellation_prevents_next_cdn_range(
         response._content_consumed = True
         return response
 
-    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    monkeypatch.setattr(
+        stream_module.requests.Session,
+        "get",
+        lambda _client, *args, **kwargs: get_source(*args, **kwargs),
+    )
     session = stream_module._SpoolSession(
         "test",
         asyncio.get_running_loop(),
@@ -910,7 +926,7 @@ async def test_progressive_writer_rejects_unreliable_total_length(
     upstream.headers["Content-Length"] = str(declared_length)
     upstream._content = payload
     upstream._content_consumed = True
-    monkeypatch.setattr(stream_module.requests, "get", lambda *_args, **_kwargs: upstream)
+    monkeypatch.setattr(stream_module.requests.Session, "get", lambda *_args, **_kwargs: upstream)
     session = stream_module._SpoolSession(
         f"{VIDEO_ID}:{QUALITY}",
         asyncio.get_running_loop(),
@@ -1000,7 +1016,11 @@ async def test_cached_progressive_http_rejection_refreshes_once(
     }
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
     monkeypatch.setattr(stream_module._extract_pacer, "wait", lambda: None)
-    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    monkeypatch.setattr(
+        stream_module.requests.Session,
+        "get",
+        lambda _client, *args, **kwargs: get_source(*args, **kwargs),
+    )
     session = stream_module._SpoolSession(
         f"{VIDEO_ID}:{QUALITY}",
         asyncio.get_running_loop(),
@@ -1128,7 +1148,11 @@ async def test_non_refreshable_progressive_http_error_keeps_cached_url(
         requested_urls.append(url)
         return NotFoundResponse()
 
-    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    monkeypatch.setattr(
+        stream_module.requests.Session,
+        "get",
+        lambda _client, *args, **kwargs: get_source(*args, **kwargs),
+    )
     session = stream_module._SpoolSession(
         f"{VIDEO_ID}:{QUALITY}",
         asyncio.get_running_loop(),
@@ -1320,7 +1344,11 @@ async def test_slow_progressive_cdn_does_not_hold_heavy_extraction_slot(
 
     monkeypatch.setattr(stream_module, "_extraction_budget", ExtractionBudget(1))
     monkeypatch.setattr(stream_module, "_get_stream_url_sync", resolve_source)
-    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    monkeypatch.setattr(
+        stream_module.requests.Session,
+        "get",
+        lambda _client, *args, **kwargs: get_source(*args, **kwargs),
+    )
 
     first = stream_module._create_spool_task(f"{first_video_id}:{QUALITY}", first_video_id, QUALITY)
     assert await asyncio.to_thread(first_cdn_started.wait, 1)
@@ -1563,7 +1591,11 @@ async def test_cancelled_progressive_transfer_does_not_open_cdn_after_queue_wait
     monkeypatch.setattr(stream_module, "_spool_transfer_executor", transfer_executor, raising=False)
     monkeypatch.setattr(stream_module, "_extraction_budget", ExtractionBudget(1))
     monkeypatch.setattr(stream_module, "_get_stream_url_sync", resolve_source)
-    monkeypatch.setattr(stream_module.requests, "get", get_source)
+    monkeypatch.setattr(
+        stream_module.requests.Session,
+        "get",
+        lambda _client, *args, **kwargs: get_source(*args, **kwargs),
+    )
 
     first = stream_module._create_spool_task(f"{first_video_id}:{QUALITY}", first_video_id, QUALITY)
     try:
@@ -2463,7 +2495,9 @@ async def test_sequential_range_waits_for_cancelled_writer_to_close_before_retry
                 raise TimeoutError("test CDN was not advanced after initial range")
             yield tail
 
-    monkeypatch.setattr(stream_module.requests, "get", lambda *_args, **_kwargs: GatedResponse())
+    monkeypatch.setattr(
+        stream_module.requests.Session, "get", lambda *_args, **_kwargs: GatedResponse()
+    )
     monkeypatch.setattr(
         stream_module,
         "_get_stream_url_sync",
@@ -2537,7 +2571,9 @@ async def test_initial_range_http_response_finishes_while_shared_cdn_is_growing(
                 raise TimeoutError("test CDN tail was not released")
             yield tail
 
-    monkeypatch.setattr(stream_module.requests, "get", lambda *_args, **_kwargs: GatedResponse())
+    monkeypatch.setattr(
+        stream_module.requests.Session, "get", lambda *_args, **_kwargs: GatedResponse()
+    )
     monkeypatch.setattr(
         stream_module,
         "_get_stream_url_sync",
