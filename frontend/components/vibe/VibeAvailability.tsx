@@ -17,6 +17,7 @@ import type {
 } from "@/features/home/types";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAuth } from "@/lib/auth-context";
+import { useWaveStartWarmup } from "@/hooks/useWaveStartWarmup";
 import { BRAND_SLUG } from "@/lib/brand";
 import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { useAudioState } from "@/lib/audio-state-context";
@@ -332,6 +333,11 @@ export function VibeProviderFallback() {
         [data?.shelves, requestedMode],
     );
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
+    const handoffStartWarmup = useWaveStartWarmup(
+        tracks[0]?.youtubeVideoId ?? null,
+        Boolean(ownerId) && !isPlaying && !vibeMode && !isLoading && !isError &&
+            !isListenTogetherActiveOrPending(),
+    );
 
     useEffect(() => {
         if (!pendingRetune) return;
@@ -502,11 +508,13 @@ export function VibeProviderFallback() {
         setWaveMood(activeMood);
         setIsShuffle(false);
         setShuffleIndices([]);
+        handoffStartWarmup();
         playTracks(queue, 0, true);
         setVibeMode(true);
         setVibeSourceFeatures(null);
         setVibeQueueIds(queue.map((track) => track.id));
     }, [
+        handoffStartWarmup,
         playTracks,
         queue,
         activeMode,
