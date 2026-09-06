@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
-import { beforeEach, mock, test } from "node:test";
+import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+
+GlobalRegistrator.register();
+(
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const Icon = () => React.createElement("svg");
 const state = {
     pathname: "/library",
+    routeQuery: "",
     isMobile: true,
     isTablet: false,
+    routerPushes: [] as string[],
 };
 
 mock.module("lucide-react", {
@@ -24,8 +33,15 @@ mock.module("lucide-react", {
 mock.module("next/navigation", {
     namedExports: {
         usePathname: () => state.pathname,
-        useRouter: () => ({ back() {}, push() {} }),
-        useSearchParams: () => ({ get: () => null }),
+        useRouter: () => ({
+            back() {},
+            push(path: string) {
+                state.routerPushes.push(path);
+            },
+        }),
+        useSearchParams: () => ({
+            get: (key: string) => (key === "q" ? state.routeQuery : null),
+        }),
     },
 });
 mock.module("next/link", {
@@ -45,9 +61,12 @@ mock.module("@/hooks/useMediaQuery", {
 
 beforeEach(() => {
     state.pathname = "/library";
+    state.routeQuery = "";
     state.isMobile = true;
     state.isTablet = false;
+    state.routerPushes.length = 0;
 });
+after(() => GlobalRegistrator.unregister());
 mock.module("@/components/layout/ActivityPanel", {
     namedExports: { ActivityPanelToggle: () => null },
 });
@@ -102,6 +121,54 @@ test("mobile search destination expands into the focused result field", async ()
     assert.match(html, /aria-label="Поиск"[^>]*class="[^"]*h-11/);
     assert.match(html, /placeholder="Поиск музыки"/);
     assert.doesNotMatch(html, /data-shell-search="action"/);
+});
+
+test("mobile search keeps newer typed text when an older route update arrives", async () => {
+    state.pathname = "/search";
+    const { TopBar } = await import("../../components/layout/TopBar");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const render = async () => {
+        await act(async () => root.render(React.createElement(TopBar)));
+    };
+    const enter = async (value: string) => {
+        const input = container.querySelector<HTMLInputElement>(
+            'input[aria-label="Поиск"]',
+        );
+        assert.ok(input);
+        await act(async () => {
+            const setter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype,
+                "value",
+            )?.set;
+            assert.ok(setter);
+            setter.call(input, value);
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+    };
+
+    await render();
+    await enter("The");
+    await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 550));
+    });
+    assert.deepEqual(state.routerPushes, ["/search?q=The"]);
+
+    await enter("The Cranberries");
+    state.routeQuery = "The";
+    await render();
+
+    assert.equal(
+        container.querySelector<HTMLInputElement>('input[aria-label="Поиск"]')
+            ?.value,
+        "The Cranberries",
+    );
+
+    await act(async () => root.unmount());
+    container.remove();
 });
 
 test("desktop top bar centers persistent search without duplicating sidebar navigation", async () => {

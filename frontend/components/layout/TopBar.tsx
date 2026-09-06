@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu, Search } from "lucide-react";
 import { ActivityPanelToggle } from "./ActivityPanel";
 import { UserAvatarMenu } from "./UserAvatarMenu";
@@ -33,27 +33,48 @@ export function TopBar({
     const isMobileSearchCanvas = isMobileOrTablet && pathname === "/search";
     const routeSearchQuery =
         pathname === "/search" ? (searchParams.get("q") ?? "") : "";
-    const routeSearchKey = `${pathname}\u0000${routeSearchQuery}`;
-    const [searchDraft, setSearchDraft] = useState(() => ({
-        routeKey: routeSearchKey,
-        value: routeSearchQuery,
-    }));
-    const searchQuery =
-        searchDraft.routeKey === routeSearchKey
-            ? searchDraft.value
-            : routeSearchQuery;
-    const updateSearchQuery = (value: string) => {
-        setSearchDraft({ routeKey: routeSearchKey, value });
-    };
+    const [searchQuery, setSearchQuery] = useState(routeSearchQuery);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
+    const searchNavigationSequenceRef = useRef(0);
+    const pendingSearchRoutesRef = useRef(new Map<string, number>());
+
+    const navigateToSearch = useCallback(
+        (query: string) => {
+            if (pathname === "/search" && routeSearchQuery === query) return;
+            searchNavigationSequenceRef.current += 1;
+            pendingSearchRoutesRef.current.set(
+                query,
+                searchNavigationSequenceRef.current,
+            );
+            router.push(`/search?q=${encodeURIComponent(query)}`);
+        },
+        [pathname, routeSearchQuery, router],
+    );
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        if (searchQuery.trim()) {
-            router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-        }
+        const query = searchQuery.trim();
+        if (!query) return;
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        navigateToSearch(query);
     };
+
+    useEffect(() => {
+        const committedSequence =
+            pendingSearchRoutesRef.current.get(routeSearchQuery);
+        if (pathname === "/search" && committedSequence !== undefined) {
+            for (const [query, sequence] of pendingSearchRoutesRef.current) {
+                if (sequence <= committedSequence) {
+                    pendingSearchRoutesRef.current.delete(query);
+                }
+            }
+            return;
+        }
+
+        pendingSearchRoutesRef.current.clear();
+        queueMicrotask(() => setSearchQuery(routeSearchQuery));
+    }, [pathname, routeSearchQuery]);
 
     // Auto-search with debounce (500ms after user stops typing)
     useEffect(() => {
@@ -76,7 +97,7 @@ export function TopBar({
 
         // Set new timeout to trigger search after 500ms of no typing
         searchTimeoutRef.current = setTimeout(() => {
-            router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+            navigateToSearch(searchQuery.trim());
         }, 500);
 
         // Cleanup timeout on unmount or when searchQuery changes
@@ -85,7 +106,7 @@ export function TopBar({
                 clearTimeout(searchTimeoutRef.current);
             }
         };
-    }, [searchQuery, router, pathname]);
+    }, [navigateToSearch, pathname, searchQuery]);
 
     // Global "/" keyboard shortcut to focus search
     useEffect(() => {
@@ -163,7 +184,7 @@ export function TopBar({
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) =>
-                                        updateSearchQuery(e.target.value)
+                                        setSearchQuery(e.target.value)
                                     }
                                     placeholder={ru.search.mobilePlaceholder}
                                     aria-label={ru.search.aria}
@@ -222,9 +243,7 @@ export function TopBar({
                                 ref={searchInputRef}
                                 type="text"
                                 value={searchQuery}
-                                onChange={(e) =>
-                                    updateSearchQuery(e.target.value)
-                                }
+                                onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder={ru.search.placeholder}
                                 aria-label={ru.search.aria}
                                 autoCapitalize="none"
