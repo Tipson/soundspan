@@ -11,6 +11,7 @@ import {
 } from "@/lib/audio-load-preemption";
 import { api } from "@/lib/api";
 import { resolveNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
+import { detectIosStandalonePwaEnvironment } from "@/lib/audio-engine/iosStandalonePwaBridge";
 import { restartPlaybackProgressConfirmation } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { consumePlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
 import {
@@ -955,8 +956,43 @@ export const AudioPlaybackOrchestrator = memo(
                     audioEngine.getActualCurrentTime() >=
                         MANUAL_YOUTUBE_STABLE_POSITION_SEC);
 
-            if (previousMediaId !== null) {
-                // Stop the previous source while the next source resolves.
+            const loadStartedAtMs = Date.now();
+            const pendingAdvanceStartedAtMs = advancePlayIntentAtMsRef.current;
+            const hasAdvancePlayIntent = isAdvancePlayIntentFresh(
+                pendingAdvanceStartedAtMs,
+                loadStartedAtMs,
+            );
+            const advanceOrigin = consumePlaybackAdvanceOrigin();
+            const currentTrackPreloadWasReady = Boolean(
+                playbackType === "track" &&
+                currentTrack &&
+                consumeReadyCurrentTrackPreload(currentTrack),
+            );
+            const providerFailureKey = currentTrack
+                ? getTrackProviderFailureKey(currentTrack)
+                : null;
+            // A prepared network handoff must not pause/reset the primary
+            // element between sources. Native load replaces src on that SAME
+            // element, so it already prevents overlap. All manual, cold,
+            // in-flight and non-PWA switches retain the eager stop below.
+            const preserveNativeHandoff =
+                hasAdvancePlayIntent &&
+                advanceOrigin === null &&
+                currentTrackPreloadWasReady &&
+                !isLoadingRef.current &&
+                audioEngine.isPlaying() &&
+                audioEngine.getActiveEngineDescriptor() === "native" &&
+                detectIosStandalonePwaEnvironment() &&
+                typeof document !== "undefined" &&
+                document.visibilityState === "hidden" &&
+                !isListenTogetherActiveOrPending() &&
+                !(
+                    providerFailureKey &&
+                    providerFailureCooldown.isCoolingDown(providerFailureKey)
+                );
+
+            if (previousMediaId !== null && !preserveNativeHandoff) {
+                // Stop the previous source while an unprepared source resolves.
                 audioEngine.stop();
                 activeEngineTrackIdRef.current = null;
             }
@@ -1004,14 +1040,7 @@ export const AudioPlaybackOrchestrator = memo(
             const thisLoadId = loadIdRef.current;
             desiredLoadPlayRef.current = null;
             cancelledLoadPlayIdRef.current = null;
-            const loadStartedAtMs = Date.now();
-            const pendingAdvanceStartedAtMs = advancePlayIntentAtMsRef.current;
-            const hasAdvancePlayIntent = isAdvancePlayIntentFresh(
-                pendingAdvanceStartedAtMs,
-                loadStartedAtMs,
-            );
             advancePlayIntentAtMsRef.current = null;
-            const advanceOrigin = consumePlaybackAdvanceOrigin();
             if (advanceOrigin?.origin === "manual") {
                 consecutiveErrorBreakerRef.current.reset();
             }
@@ -1029,9 +1058,6 @@ export const AudioPlaybackOrchestrator = memo(
                 scheduleTrackErrorSkip(currentTrack.id);
                 return;
             }
-            const providerFailureKey = currentTrack
-                ? getTrackProviderFailureKey(currentTrack)
-                : null;
             if (
                 playbackType === "track" &&
                 currentTrack &&
@@ -1073,12 +1099,6 @@ export const AudioPlaybackOrchestrator = memo(
                 clearTimeout(loadTimeoutRef.current);
                 loadTimeoutRef.current = null;
             }
-
-            const currentTrackPreloadWasReady = Boolean(
-                playbackType === "track" &&
-                currentTrack &&
-                consumeReadyCurrentTrackPreload(currentTrack),
-            );
 
             // Transition state machine to LOADING
             playbackStateMachine.forceTransition("LOADING");

@@ -2680,66 +2680,93 @@ test("retiring a pending next source prevents its late device lease from preload
     assert.equal(engine.preloadCalls.length, 0);
 });
 
-test("installed iOS PWA advances a preloaded next track before hidden source end", async (t) => {
-    const navigatorDescriptor = Object.getOwnPropertyDescriptor(
-        globalThis,
-        "navigator",
-    );
-    Object.defineProperty(globalThis, "navigator", {
-        configurable: true,
-        value: {
-            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
-            maxTouchPoints: 5,
-            standalone: true,
-            onLine: true,
-        },
-    });
-    t.after(() => {
-        if (navigatorDescriptor) {
-            Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
-        } else {
-            Reflect.deleteProperty(globalThis, "navigator");
+for (const handoffScenario of ["hidden", "foreground", "manual"] as const) {
+    test(`installed iOS PWA advances a preloaded next track before hidden source end: ${handoffScenario}`, async (t) => {
+        const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+            globalThis,
+            "navigator",
+        );
+        Object.defineProperty(globalThis, "navigator", {
+            configurable: true,
+            value: {
+                userAgent:
+                    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+                maxTouchPoints: 5,
+                standalone: true,
+                onLine: true,
+            },
+        });
+        t.after(() => {
+            if (navigatorDescriptor) {
+                Object.defineProperty(
+                    globalThis,
+                    "navigator",
+                    navigatorDescriptor,
+                );
+            } else {
+                Reflect.deleteProperty(globalThis, "navigator");
+            }
+        });
+        enableWindowMetrics();
+        (
+            globalThis as unknown as {
+                window: { matchMedia: () => { matches: boolean } };
+            }
+        ).window.matchMedia = () => ({ matches: true });
+        const visibility = installVisibilityDocument();
+        visibility.dispatchVisibility("hidden");
+        runtimeEngineMode = "native";
+
+        const currentTrack = makeTrack("ios-background-current", {
+            streamSource: "youtube",
+            youtubeVideoId: "ios-background-01",
+        });
+        const nextTrack = makeTrack("ios-background-next", {
+            streamSource: "youtube",
+            youtubeVideoId: "ios-background-02",
+        });
+        audioState.currentTrack = currentTrack;
+        audioState.queue = [currentTrack, nextTrack];
+        playbackState.isPlaying = true;
+
+        renderOrchestrator();
+        await flushAsync();
+        engine.duration = 210;
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.emit("timeupdate", { timeSec: 1 });
+        await flushAsync();
+        assert.equal(engine.preloadCalls.length, 1);
+
+        engine.emit("timeupdate", { timeSec: 209.8 });
+        await flushAsync();
+        assert.equal(controlCalls.next, 1);
+
+        engine.emit("end");
+        await flushAsync();
+        assert.equal(controlCalls.next, 1);
+
+        // Commit the queue advance too: observing `next()` alone misses a stop
+        // inserted by the following track-load effect.
+        const stopsBeforeHandoff = engine.stopCalls;
+        if (handoffScenario === "foreground") {
+            visibility.dispatchVisibility("visible");
+        } else if (handoffScenario === "manual") {
+            writePlaybackAdvanceOrigin("manual", currentTrack.id);
         }
+        audioState.currentTrack = nextTrack;
+        audioState.currentIndex = 1;
+        rerenderOrchestrator();
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 2);
+        assert.equal(engine.loadCalls[1]?.args[1], true);
+        assert.equal(
+            engine.stopCalls,
+            stopsBeforeHandoff + (handoffScenario === "hidden" ? 0 : 1),
+        );
     });
-    enableWindowMetrics();
-    (
-        globalThis as unknown as {
-            window: { matchMedia: () => { matches: boolean } };
-        }
-    ).window.matchMedia = () => ({ matches: true });
-    installVisibilityDocument().dispatchVisibility("hidden");
-    runtimeEngineMode = "native";
-
-    const currentTrack = makeTrack("ios-background-current", {
-        streamSource: "youtube",
-        youtubeVideoId: "ios-background-01",
-    });
-    const nextTrack = makeTrack("ios-background-next", {
-        streamSource: "youtube",
-        youtubeVideoId: "ios-background-02",
-    });
-    audioState.currentTrack = currentTrack;
-    audioState.queue = [currentTrack, nextTrack];
-    playbackState.isPlaying = true;
-
-    renderOrchestrator();
-    await flushAsync();
-    engine.duration = 210;
-    engine.emit("load", { durationSec: 210 });
-    engine.playing = true;
-    engine.emit("play");
-    engine.emit("timeupdate", { timeSec: 1 });
-    await flushAsync();
-    assert.equal(engine.preloadCalls.length, 1);
-
-    engine.emit("timeupdate", { timeSec: 209.8 });
-    await flushAsync();
-    assert.equal(controlCalls.next, 1);
-
-    engine.emit("end");
-    await flushAsync();
-    assert.equal(controlCalls.next, 1);
-});
+}
 
 test("hidden iOS handoff waits until the engine reports the next track ready", async (t) => {
     const navigatorDescriptor = Object.getOwnPropertyDescriptor(

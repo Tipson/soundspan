@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Retain lock-screen action handlers across pause/resume and queue updates while dispatching the latest committed controls; release handlers when media is cleared or the player unmounts.
+
+- Avoid an explicit stop/reset before a prepared native background handoff in the installed iOS player. Manual, unprepared, foreground and shared-session switches retain their existing stop behavior; physical-device audibility verification remains pending.
+
 - Preserve still-needed, already admitted YouTube preparation across queue advances instead of cancelling and restarting it; deferred preparation never admits new tracks.
 
 - Record bounded monotonic startup checkpoints for shared YouTube audio jobs to distinguish extraction queue, source resolution, transfer wait and first playable prefix without logging signed URLs.
