@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from functools import partial
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Literal, TypeVar, cast
 from urllib.parse import urlsplit
@@ -48,6 +49,32 @@ from services.common.sidecar_runtime_utils import (
 )
 
 T = TypeVar("T")
+
+_player_cache_init_lock = threading.Lock()
+_player_cache_initialized = False
+
+
+def _ensure_player_cache() -> None:
+    """Enable tested EJS reuse once, keeping stock extraction on incompatibility."""
+    global _player_cache_initialized
+    with _player_cache_init_lock:
+        if _player_cache_initialized:
+            return
+        try:
+            # Check before importing private hooks: an upstream update can remove them.
+            if import_module("yt_dlp.version").__version__ != "2026.08.19":
+                log.info("Player preprocessing cache inactive: untested yt-dlp version")
+                return
+            if import_module("ytmusic_player_cache").register_player_cache():
+                log.info("Bounded player preprocessing cache enabled (16 MiB, 2 entries)")
+        except Exception as error:
+            log.warning(
+                "Optional player cache unavailable (%s); using stock extraction",
+                type(error).__name__,
+            )
+        finally:
+            _player_cache_initialized = True
+
 
 # Default cap for regular-YouTube playlist and channel enumeration.
 YT_PLAYLIST_MAX_ENTRIES = max(1, env_int("YT_PLAYLIST_MAX_ENTRIES", "200"))
@@ -660,6 +687,7 @@ def _extract_stream_info(
     _raise_if_provider_challenge_cooldown(video_id)
     _extract_pacer.wait()
     try:
+        _ensure_player_cache()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             if not info:
