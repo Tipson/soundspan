@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Restore back/forward scroll positions even when the Next.js router commits navigation before the application's history listener runs.
+
 - Restore the main content's scroll position on browser back/forward in desktop and mobile layouts. Keep ordinary navigation and background updates unchanged, bound pending restoration, and let manual scrolling cancel it.
 
 - Route YouTube audio CDN connections through IPv4 on the Soundspan egress bridge to avoid selective IPv6 CONNECT stalls. Preserve the existing tunnel, TLS verification, source quality and other origins' routing.

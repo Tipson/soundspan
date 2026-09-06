@@ -5,6 +5,8 @@ than the browser window. `MainScrollRestoration` adapts committed Next.js pathna
 and query changes to `useMainScrollRestoration` for that element.
 
 - Back/forward restores the last recorded position for the destination route.
+- A history traversal schedules its own render. Restoration works whether the
+  router commits the pathname before or after the application's event listener.
 - Ordinary navigation retains the router's behavior; background renders do not
   move the page.
 - The hook ignores the outgoing page's automatic reset after the URL changes.
@@ -20,7 +22,7 @@ and query changes to `useMainScrollRestoration` for that element.
   they do not call `scrollIntoView` on a page ancestor.
 
 The hook's behavioral component tests cover back/forward, query routes, router
-resets, unchanged rerenders, delayed content, manual cancellation, the deadline,
+resets, both history-listener orders, unchanged rerenders, delayed content, manual cancellation, the deadline,
 and account-shell isolation. Test placement includes a separate driver before
 the referenced main element, matching the mobile shell's ref-attachment timing.
 

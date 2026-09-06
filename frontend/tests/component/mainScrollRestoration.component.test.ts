@@ -74,11 +74,13 @@ async function mount() {
             main.dispatchEvent(new Event("scroll"));
         },
         async navigate(route: string, back = false) {
-            window.history.replaceState(null, "", route);
-            if (back) window.dispatchEvent(new PopStateEvent("popstate"));
-            main.scrollTop = 0;
-            main.dispatchEvent(new Event("scroll"));
-            await render(route);
+            await React.act(async () => {
+                window.history.replaceState(null, "", route);
+                if (back) window.dispatchEvent(new PopStateEvent("popstate"));
+                main.scrollTop = 0;
+                main.dispatchEvent(new Event("scroll"));
+                root.render(React.createElement(Harness, { route }));
+            });
         },
         async frame() {
             const callbacks = [...frames.values()];
@@ -139,6 +141,43 @@ test("query routes retain distinct positions", async () => {
         await view.navigate("/library?tab=artists", true);
         await view.frame();
         assert.equal(view.main.scrollTop, 260);
+    } finally {
+        await view.close();
+    }
+});
+
+test("back restores when the router commits before our popstate listener runs", async () => {
+    const view = await mount();
+    try {
+        view.scroll(346);
+        await view.navigate("/playlist/example");
+        // Next's earlier listener can synchronously commit the new pathname.
+        window.history.replaceState(null, "", "/library");
+        await view.render("/library");
+        await React.act(async () =>
+            window.dispatchEvent(new PopStateEvent("popstate")),
+        );
+        await view.frame();
+        assert.equal(view.main.scrollTop, 346);
+    } finally {
+        await view.close();
+    }
+});
+
+test("a popstate render before the router commit retains the pending destination", async () => {
+    const view = await mount();
+    try {
+        view.scroll(346);
+        await view.navigate("/playlist/example");
+        window.history.replaceState(null, "", "/library");
+        await React.act(async () =>
+            window.dispatchEvent(new PopStateEvent("popstate")),
+        );
+        await view.frame();
+        assert.equal(view.main.scrollTop, 0);
+        await view.render("/library");
+        await view.frame();
+        assert.equal(view.main.scrollTop, 346);
     } finally {
         await view.close();
     }

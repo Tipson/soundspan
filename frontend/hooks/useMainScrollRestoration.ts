@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import {
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type RefObject,
+} from "react";
 
 const MAX_SAVED_ROUTES = 50;
 const RESTORE_DEADLINE_MS = 2000;
@@ -16,6 +22,7 @@ export function useMainScrollRestoration(
     const activeRoute = useRef(routeKey);
     const traversal = useRef<string | null>(null);
     const restoring = useRef(false);
+    const [traversalVersion, setTraversalVersion] = useState(0);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -39,8 +46,10 @@ export function useMainScrollRestoration(
             }
         };
         const onTraversal = () => {
-            const target = currentLocation();
-            if (target !== activeRoute.current) traversal.current = target;
+            traversal.current = currentLocation();
+            // Next's earlier popstate listener may already have committed routeKey.
+            // Schedule our own commit so restoration does not depend on listener order.
+            setTraversalVersion((version) => version + 1);
         };
         container.addEventListener("scroll", remember, { passive: true });
         window.addEventListener("popstate", onTraversal, true);
@@ -57,7 +66,7 @@ export function useMainScrollRestoration(
                 ? positions.current.get(routeKey)
                 : undefined;
         activeRoute.current = routeKey;
-        traversal.current = null;
+        if (traversal.current === routeKey) traversal.current = null;
         if (!container || target === undefined) return;
 
         restoring.current = true;
@@ -92,5 +101,5 @@ export function useMainScrollRestoration(
         // Run after the router's commit/scroll effects; bounded retries allow loading content.
         frame = window.requestAnimationFrame(restore);
         return stop;
-    }, [containerRef, routeKey]);
+    }, [containerRef, routeKey, traversalVersion]);
 }
