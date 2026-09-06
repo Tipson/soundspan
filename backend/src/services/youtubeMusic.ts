@@ -1190,14 +1190,14 @@ class YouTubeMusicService {
         const headers: Record<string, string> = {};
         if (rangeHeader) headers["Range"] = rangeHeader;
 
-        const acquire = (timeoutMs: number) =>
+        const acquire = (timeoutMs: number, freshConnection = false) =>
             this.client.get(`/proxy/${encodedId}`, {
                 params,
                 headers,
                 responseType: "stream",
                 timeout: timeoutMs,
-                httpAgent: streamHttpAgent,
-                httpsAgent: streamHttpsAgent,
+                httpAgent: freshConnection ? false : streamHttpAgent,
+                httpsAgent: freshConnection ? false : streamHttpsAgent,
                 ...(options.signal ? { signal: options.signal } : {}),
                 [SIDE_CAR_STREAM_REQUEST]: true,
             } as SidecarStreamRequestConfig);
@@ -1215,7 +1215,24 @@ class YouTubeMusicService {
                     isBackground ? "background" : "interactive",
                 );
             }
-            const response = await acquire(remainingTimeoutMs);
+            const response = await acquire(remainingTimeoutMs).catch((error: unknown) => {
+                const reset = error as {
+                    code?: string;
+                    response?: unknown;
+                    request?: { reusedSocket?: boolean };
+                } | null;
+                // A sidecar can close an idle keep-alive socket just as Node
+                // reuses it. Retry this GET only before any response, once on
+                // a fresh connection, within the same admission and deadline.
+                if (reset?.code !== "ECONNRESET" || reset.response ||
+                    reset.request?.reusedSocket !== true || options.signal?.aborted) {
+                    throw error;
+                }
+                const remaining = Math.ceil(deadlineAtMs - performance.now());
+                if (remaining <= 0) throw error;
+                logger.warn("Retrying reset reused sidecar audio connection", { videoId, purpose });
+                return acquire(remaining, true);
+            });
             holdAdmissionUntilStreamCompletion(response.data, () => {
                 if (
                     !deferAdmissionReleaseUntilTransportReleased(
