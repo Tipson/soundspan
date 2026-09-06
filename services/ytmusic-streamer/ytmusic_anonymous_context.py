@@ -25,6 +25,8 @@ class VisitorContext:
         self._expires = 0.0
         self._blocked_until = 0.0
         self._lock = threading.Lock()
+        self._bootstrap_lock = threading.Lock()
+        self._next_bootstrap = 0.0
 
     def get(self) -> str | None:
         """Return live context without extending its ten-minute lifetime."""
@@ -47,8 +49,38 @@ class VisitorContext:
                 self._value = None
                 self._blocked_until = self._clock() + 60
 
+    def bootstrap(self, load: Callable[[], str | None]) -> None:
+        """Allow one bounded initializer, never a concurrent or retry storm."""
+        if not self._bootstrap_lock.acquire(blocking=False):
+            return
+        try:
+            with self._lock:
+                now = self._clock()
+                if now < max(self._next_bootstrap, self._blocked_until):
+                    return
+                if self._value and now < self._expires:
+                    return
+                self._next_bootstrap = now + 60
+            value = load()
+            if value:
+                self.put(value)
+        finally:
+            self._bootstrap_lock.release()
+
 
 _context = VisitorContext()
+
+
+def _load_public_context() -> str | None:
+    """Fetch lightweight public configuration with a short, owned HTTP session."""
+    from ytmusic_client import _close_owned_ytmusic_session, _create_public_ytmusic
+
+    public = _create_public_ytmusic("native", 1.5)
+    try:
+        value = public.base_headers.get("X-Goog-Visitor-Id")
+        return value if isinstance(value, str) else None
+    finally:
+        _close_owned_ytmusic_session(public)
 
 
 class _CapturingYoutubeIE(YoutubeIE):  # type: ignore[misc,no-any-unimported]  # Upstream is untyped.
@@ -90,6 +122,14 @@ def extract_music(
     capture = _CapturingYoutubeIE()
     ydl.add_info_extractor(capture)
     visitor = _context.get()
+    if visitor is None and options.get("format") == "ba[abr<=256]/ba/b[height<=360]/b":
+        try:
+            _context.bootstrap(_load_public_context)
+        except Exception as error:
+            from ytmusic_runtime import log
+
+            log.info("Anonymous context initialization unavailable (%s)", type(error).__name__)
+        visitor = _context.get()
     if visitor and options.get("format") == "ba[abr<=256]/ba/b[height<=360]/b":
         extractor_args = options.get("extractor_args", {})
         fast_options = {

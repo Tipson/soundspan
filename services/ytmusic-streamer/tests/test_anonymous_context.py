@@ -4,6 +4,75 @@ import pytest
 import yt_dlp
 
 
+def test_bootstrap_is_bounded_and_rejection_does_not_immediately_reload():
+    from ytmusic_anonymous_context import VisitorContext
+
+    now = [0.0]
+    context = VisitorContext(clock=lambda: now[0])
+    calls = []
+
+    def load():
+        calls.append(True)
+        return "anonymous"
+
+    context.bootstrap(load)
+    assert context.get() == "anonymous"
+    context.reject("anonymous")
+    context.bootstrap(load)
+    assert len(calls) == 1
+    now[0] = 61
+    context.bootstrap(load)
+    assert context.get() == "anonymous" and len(calls) == 2
+
+
+def test_bootstrap_failure_releases_lock_without_immediate_retry():
+    from ytmusic_anonymous_context import VisitorContext
+
+    now = [0.0]
+    context = VisitorContext(clock=lambda: now[0])
+
+    def fail():
+        raise TimeoutError("controlled")
+
+    with pytest.raises(TimeoutError):
+        context.bootstrap(fail)
+    context.bootstrap(lambda: pytest.fail("must back off"))
+    now[0] = 61
+    context.bootstrap(lambda: "recovered")
+    assert context.get() == "recovered"
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_public_bootstrap_always_closes_its_scoped_client(monkeypatch, fails):
+    import ytmusic_anonymous_context as module
+    import ytmusic_client as clients
+
+    closed = []
+
+    class Public:
+        @property
+        def base_headers(self):
+            if fails:
+                raise TimeoutError("controlled")
+            return {"X-Goog-Visitor-Id": "public"}
+
+    public = Public()
+    monkeypatch.setattr(
+        clients,
+        "_create_public_ytmusic",
+        lambda strategy, timeout: (
+            public if strategy == "native" and timeout == 1.5 else pytest.fail("wrong budget")
+        ),
+    )
+    monkeypatch.setattr(clients, "_close_owned_ytmusic_session", lambda value: closed.append(value))
+    if fails:
+        with pytest.raises(TimeoutError):
+            module._load_public_context()
+    else:
+        assert module._load_public_context() == "public"
+    assert closed == [public]
+
+
 def test_capture_is_instance_local_and_only_success_is_retained(monkeypatch):
     import ytmusic_anonymous_context as module
 
@@ -66,12 +135,32 @@ def test_context_expiry_and_old_failure_do_not_erase_new_context():
     assert context.get() == "replacement"
 
 
-@pytest.mark.parametrize("mode", ["good", "challenge", "format", "combined", "timeout", "lossless"])
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "good",
+        "challenge",
+        "format",
+        "combined",
+        "timeout",
+        "lossless",
+        "bootstrap",
+        "bootstrap-fail",
+    ],
+)
 def test_fast_context_lookup_keeps_original_fallback(monkeypatch, mode):
     import ytmusic_anonymous_context as module
 
     context = module.VisitorContext()
-    context.put("anonymous-only")
+    if not mode.startswith("bootstrap"):
+        context.put("anonymous-only")
+
+    def bootstrap():
+        if mode == "bootstrap-fail":
+            raise TimeoutError("controlled bootstrap timeout")
+        return "anonymous-only"
+
+    monkeypatch.setattr(module, "_load_public_context", bootstrap)
     monkeypatch.setattr(module, "_context", context)
     options = {"format": "ba[abr<=256]/ba/b[height<=360]/b"}
     if mode == "lossless":
@@ -139,9 +228,9 @@ def test_fast_context_lookup_keeps_original_fallback(monkeypatch, mode):
         )
         == original
     )
-    if mode == "lossless":
+    if mode in ("lossless", "bootstrap-fail"):
         assert calls == ["normal"]
-    elif mode == "good":
+    elif mode in ("good", "bootstrap"):
         assert len(calls) == 1 and not paced
         assert calls[0]["extractor_args"]["youtube"]["visitor_data"] == ["anonymous-only"]
         assert context.get() == "anonymous-only"

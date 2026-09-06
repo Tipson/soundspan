@@ -19,7 +19,13 @@ verify: gated real HTTP test failed before early-prefix change and passed afterw
 
 Verdict: CONCERNS, no blocking finding in the tested boundary. Tested expiry, stale invalidation, rejection fallback, unchanged options, wrong/combined format fallback, no transport retry, anonymous/account isolation, unknown-version bypass, transfer closure and byte continuity. No agents used.
 
-Residual risks: upstream can reject anonymous playback independently of this optimization; the first extraction after expiry still uses the ordinary path. Physical-device audibility and 100 concurrent external listeners are not established by these tests. Production user-flow acceptance must follow deployment.
+Residual risks: upstream can reject anonymous playback independently of this optimization. Physical-device audibility and 100 concurrent external listeners are not established by these tests. Production user-flow acceptance must follow deployment.
+
+## First-context initialization
+
+The empty/expired-context path requests public music configuration with a scoped 1.5-second socket timeout. One initializer is admitted at a time; failure/rejection prevents immediate repeated initialization for one minute. The original extraction path remains available. No account credentials or user-specific catalog state are read.
+
+verify: same cold Gimme Shelter resolution: ordinary 2540 ms, initialized candidate 1664 ms, identical Opus 251 / 132.001 kbps. This includes initialization, not CDN transfer. Full sidecar suite after initialization changes: 553 passed, 4 skipped. Ruff, formatting and targeted mypy passed. Tests cover initialization failure/backoff and owned-session cleanup.
 
 ## Release
 
