@@ -46,3 +46,9 @@ verify: full suite 558 passed, 4 skipped; targeted Ruff/format and mypy passed. 
 ## Production acceptance of priority-f4dbd2b
 
 verify: deployed and healthy. Nine playlist selections and thirteen Wave tracks reached playback without media errors or timeout. Playlist starts ranged 443–3662 ms; nine prepared Wave transitions ranged 44–183 ms. Six rapid skips exposed a remaining 7590 ms start on Demons, including 5072 ms source resolution and roughly 1250 ms client coalescing. P0 is not closed. An isolated fresh-context lookup of the same recording took 1679 ms plus 1074 ms to a readable CDN prefix; this is not an equivalent rapid-switch acceptance run.
+
+## Format-isolation release
+
+verify: `local/soundspan-ytmusic-streamer:format-c9239a9` deployed healthy; frontend, backend, worker, Redis and PostgreSQL container IDs unchanged. Overlay rollback backup: `/srv/music/soundspan-releases/b0-b340a7c/compose-before-format-c9239a9.json`; previous image `local/soundspan-ytmusic-streamer:priority-f4dbd2b` remains available.
+
+verify: two six-skip sequences reached playback at 3314 and 3072 ms with no media errors. They used different tracks, so they are not a controlled Demons before/after comparison. One Wave-start harness action timed out looking for the start button; it is not counted as playback acceptance. The second rapid sequence still spent 1285 ms before media loadstart, consistent with the intentional 1250 ms manual-burst debounce. Reducing that guard without proving cancellation/request-load safety is not included in this release. P0 remains open for the cold/rapid latency tail.
