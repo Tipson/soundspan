@@ -945,14 +945,15 @@ export const AudioPlaybackOrchestrator = memo(
                 return;
             }
 
-            // Snapshot before stop() clears the old engine state. An in-flight
-            // selection cannot inherit the previous track's short delay.
-            const previousPlaybackWasStable =
-                previousMediaId !== null &&
+            // Snapshot before stop() clears the old engine state. Idle/paused
+            // playback has no burst to drain, but an in-flight selection must
+            // retain the long gate even though its engine is not playing yet.
+            const previousPlaybackWasSettled =
                 !isLoadingRef.current &&
-                audioEngine.isPlaying() &&
-                audioEngine.getActualCurrentTime() >=
-                    MANUAL_YOUTUBE_STABLE_POSITION_SEC;
+                (previousMediaId === null ||
+                    !audioEngine.isPlaying() ||
+                    audioEngine.getActualCurrentTime() >=
+                        MANUAL_YOUTUBE_STABLE_POSITION_SEC);
 
             if (previousMediaId !== null) {
                 // Stop the previous source while the next source resolves.
@@ -1542,7 +1543,7 @@ export const AudioPlaybackOrchestrator = memo(
                         return;
                     }
 
-                    const selectionDelayMs = previousPlaybackWasStable
+                    const selectionDelayMs = previousPlaybackWasSettled
                         ? MANUAL_YOUTUBE_STABLE_SWITCH_DEBOUNCE_MS
                         : MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS;
                     const timeout = setTimeout(() => {

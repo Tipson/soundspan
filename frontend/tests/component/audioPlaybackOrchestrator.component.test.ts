@@ -1818,6 +1818,102 @@ test("preparing a verified legacy copy keeps its media identity without shadowin
     assert.equal(engine.loadCalls.length, 1);
 });
 
+for (const initialState of ["empty", "paused"] as const) {
+    test(`a manual YouTube selection from ${initialState} starts in 300ms`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const tracks = ["idle-current", "idle-selection"].map((id) =>
+            makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+        );
+        audioState.currentTrack = initialState === "paused" ? tracks[0] : null;
+        audioState.queue = tracks;
+        playbackState.isPlaying = false;
+        renderOrchestrator();
+        await flushAsync();
+        if (initialState === "paused")
+            engine.emit("load", { durationSec: 210 });
+        engine.playing = false;
+        engine.actualCurrentTime = 0;
+        const before = engine.loadCalls.length;
+
+        writePlaybackAdvanceOrigin(
+            "manual",
+            audioState.currentTrack?.id ?? null,
+        );
+        selectTrack(tracks, 1);
+        await flushAsync();
+        t.mock.timers.tick(299);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, before);
+        t.mock.timers.tick(1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, before + 1);
+        assert.equal(
+            engine.loadCalls.at(-1)?.args[0],
+            "https://stream.test/yt/idle-selection",
+        );
+    });
+}
+
+test("a burst from idle cancels the fast first selection and keeps the long gate", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const tracks = ["idle-first", "idle-last"].map((id) =>
+        makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+    );
+    audioState.currentTrack = null;
+    audioState.queue = tracks;
+    renderOrchestrator();
+    await flushAsync();
+    writePlaybackAdvanceOrigin("manual", null);
+    selectTrack(tracks, 0);
+    await flushAsync();
+    t.mock.timers.tick(250);
+    writePlaybackAdvanceOrigin("manual", tracks[0].id);
+    selectTrack(tracks, 1);
+    await flushAsync();
+    t.mock.timers.tick(1_249);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 0);
+    t.mock.timers.tick(1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(
+        engine.loadCalls[0].args[0],
+        "https://stream.test/yt/idle-last",
+    );
+});
+
+for (const action of ["pause", "clear", "unmount"] as const) {
+    test(`the first manual YouTube selection respects ${action} before loading`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const track = makeTrack("idle-cancel", {
+            streamSource: "youtube",
+            youtubeVideoId: "idle-cancel",
+        });
+        audioState.currentTrack = null;
+        audioState.queue = [track];
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync();
+        writePlaybackAdvanceOrigin("manual", null);
+        selectTrack([track], 0);
+        await flushAsync();
+        t.mock.timers.tick(100);
+        if (action === "unmount") {
+            hookRuntime.unmount();
+        } else {
+            if (action === "clear") audioState.currentTrack = null;
+            playbackState.isPlaying = false;
+            rerenderOrchestrator();
+        }
+        await flushAsync();
+        t.mock.timers.tick(1_500);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, action === "pause" ? 1 : 0);
+        if (action === "pause")
+            assert.equal(engine.loadCalls[0].args[1], false);
+    });
+}
+
 test("an unprepared manual YouTube selection after stable playback starts in 300ms", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const tracks = ["stable-current", "cold-selection"].map((id) =>

@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Reduce the manual YouTube selection gate from idle or paused playback to 300ms, retaining the 1250ms gate for in-flight bursts and existing pause/cancellation behavior.
+
 - Search device downloads and queued copies by track, artist or album without network requests or changing playback. Preserve the query during background updates and provide a clear empty-result recovery.
 
 - Set the YouTube sidecar's service HOME when dropping root privileges, keeping yt-dlp/Deno cache paths writable while preserving proxy/auth environment variables.

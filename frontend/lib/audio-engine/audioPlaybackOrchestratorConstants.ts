@@ -23,7 +23,7 @@ export const AUDIO_LOAD_RETRY_DELAY_MS = 350;
 // client disconnects, so starting every intermediate selection can saturate
 // its bounded queue and starve the track the listener actually chose.
 export const MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS = 1_250;
-// A single choice after audible playback need not pay the full burst delay.
+// A single choice from idle, paused or stable playback need not pay the burst delay.
 // Keep a short cancellation window for double taps; loading/rapid selections
 // still use the conservative provider gate above.
 export const MANUAL_YOUTUBE_STABLE_SWITCH_DEBOUNCE_MS = 300;
