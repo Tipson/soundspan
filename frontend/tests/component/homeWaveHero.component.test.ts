@@ -206,6 +206,9 @@ test("home Wave hero keeps play disabled while no recommendations are ready", as
         'button[aria-label="Включить мою волну"]',
     );
     assert.ok(playButton?.disabled);
+    assert.equal(playButton.dataset.homeWaveState, "loading");
+    assert.match(playButton.className, /disabled:bg-none/);
+    assert.match(playButton.className, /disabled:bg-white\/\[0\.08\]/);
     assert.match(container.textContent ?? "", /Настраиваем мою волну/);
 
     await act(async () => root.unmount());

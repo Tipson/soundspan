@@ -210,7 +210,14 @@ export function HomeWaveHero({
                             onClick={startWave}
                             disabled={!canPlay}
                             aria-label={ru.vibe.play}
-                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-gradient-to-r from-warning to-brand px-6 py-3 text-sm font-black text-white shadow-[0_14px_34px_rgba(163,74,255,0.24)] transition duration-200 active:scale-[0.97] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none"
+                            data-home-wave-state={
+                                isLoading
+                                    ? "loading"
+                                    : canPlay
+                                      ? "ready"
+                                      : "needs-signals"
+                            }
+                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-gradient-to-r from-warning to-brand px-6 py-3 text-sm font-black text-white shadow-[0_14px_34px_rgba(163,74,255,0.24)] transition duration-200 active:scale-[0.97] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:border disabled:border-white/10 disabled:bg-none disabled:bg-white/[0.08] disabled:text-content-secondary disabled:shadow-none motion-reduce:transition-none"
                         >
                             <Play
                                 className="h-5 w-5 fill-current"
