@@ -666,6 +666,39 @@ def _best_audio_stream_url(info: JsonObject) -> str | None:
     return cast(str, selected.get("url")) if selected and selected.get("url") else None
 
 
+def _extract_with_manifest_fallback(ydl: Any, url: str, options: JsonObject) -> Any:
+    """Avoid unused HLS lookup, retaining one full lookup when audio is absent.
+
+    Only the music options opt in. Provider challenges and transport failures
+    are not retries. The fallback stays inside the existing extraction budget.
+    """
+    import yt_dlp
+
+    youtube = options.get("extractor_args", {}).get("youtube", {})
+    fast = "hls" in youtube.get("skip", [])
+    if not fast:
+        return ydl.extract_info(url, download=False)
+    try:
+        info = ydl.extract_info(url, download=False)
+    except yt_dlp.utils.DownloadError as error:
+        if not fast or "requested format is not available" not in str(error).lower():
+            raise
+    else:
+        selected = _selected_audio_stream(info) if info else None
+        if selected and selected.get("vcodec") in (None, "none"):
+            return info
+    fallback_options = {
+        **options,
+        "extractor_args": {
+            **options["extractor_args"],
+            "youtube": {**youtube, "skip": [x for x in youtube["skip"] if x != "hls"]},
+        },
+    }
+    _extract_pacer.wait()
+    with yt_dlp.YoutubeDL(fallback_options) as fallback:
+        return fallback.extract_info(url, download=False)
+
+
 def _extract_stream_info(
     cache_key: str,
     url: str,
@@ -690,7 +723,7 @@ def _extract_stream_info(
     try:
         _ensure_player_cache()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+            info = _extract_with_manifest_fallback(ydl, url, ydl_opts)
             if not info:
                 raise ValueError("No info extracted")
             selected = _selected_audio_stream(cast(JsonObject, info))
@@ -822,7 +855,12 @@ def _build_ytmusic_stream_options(quality: str) -> JsonObject:
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://music.youtube.com/",
         },
-        "extractor_args": {"youtube": {"player_client": _YTMUSIC_PLAYER_CLIENTS}},
+        "extractor_args": {
+            "youtube": {
+                "player_client": _YTMUSIC_PLAYER_CLIENTS,
+                "skip": [] if quality == "LOSSLESS" else ["hls"],
+            }
+        },
     }
 
 
