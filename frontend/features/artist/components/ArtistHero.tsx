@@ -1,13 +1,13 @@
 "use client";
 
 import { Music } from "lucide-react";
-import Image from "next/image";
 import { Artist, ArtistSource, Album } from "../types";
 import { ReactNode, lazy, Suspense } from "react";
 import { useArtistDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { MusicDetailHero } from "@/components/music-detail";
 import { pluralRu, ru } from "@/lib/i18n/ru";
+import { CachedImage } from "@/components/ui/CachedImage";
 
 // Lazy load MetadataEditor - modal component opened on user action
 const MetadataEditor = lazy(() =>
@@ -119,14 +119,18 @@ export function ArtistHero({
             actions={children}
             artwork={
                 heroImage ? (
-                    <Image
+                    <CachedImage
                         src={heroImage}
                         alt={displayData.name}
                         fill
                         sizes="(max-width: 640px) 176px, (max-width: 1024px) 208px, 224px"
                         className="object-cover"
                         priority
-                        unoptimized
+                        fallback={
+                            <div className="flex h-full w-full items-center justify-center">
+                                <Music className="h-16 w-16 text-content-muted" />
+                            </div>
+                        }
                     />
                 ) : (
                     <div className="flex h-full w-full items-center justify-center">

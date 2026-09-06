@@ -146,6 +146,7 @@ const capture = {
     discoverActionBar: null as Record<string, unknown> | null,
     providerAlbums: null as Record<string, unknown> | null,
     providerFallbackEnabled: false,
+    providerCatalogEnabled: false,
     playedTracks: null as Array<Record<string, unknown>> | null,
     queuedTracks: null as Array<Record<string, unknown>> | null,
     playedStartIndex: null as number | null,
@@ -425,16 +426,22 @@ mock.module("@/features/artist/hooks/useArtistTracks", {
 
 mock.module("@/features/artist/hooks/useProviderArtistTracks", {
     namedExports: {
-        useProviderArtistTracks: () => ({
-            tracks: artistState.providerCatalogTracks,
-            isLoading: artistState.providerCatalogLoading,
-            failedReleaseCount: 0,
-            loadedReleaseCount: artistState.providerAlbums.length,
-            totalReleaseCount: artistState.providerAlbums.length,
-            hasNextPage: artistState.providerCatalogHasNextPage,
-            isFetchingNextPage: false,
-            fetchNextPage: () => undefined,
-        }),
+        useProviderArtistTracks: (
+            _releases: Array<Record<string, unknown>>,
+            enabled: boolean,
+        ) => {
+            capture.providerCatalogEnabled = enabled;
+            return {
+                tracks: artistState.providerCatalogTracks,
+                isLoading: artistState.providerCatalogLoading,
+                failedReleaseCount: 0,
+                loadedReleaseCount: artistState.providerAlbums.length,
+                totalReleaseCount: artistState.providerAlbums.length,
+                hasNextPage: artistState.providerCatalogHasNextPage,
+                isFetchingNextPage: false,
+                fetchNextPage: () => undefined,
+            };
+        },
     },
 });
 
@@ -739,6 +746,7 @@ beforeEach(() => {
     capture.discoverActionBar = null;
     capture.providerAlbums = null;
     capture.providerFallbackEnabled = false;
+    capture.providerCatalogEnabled = false;
     capture.playedTracks = null;
     capture.queuedTracks = null;
     capture.playedStartIndex = null;
@@ -1331,6 +1339,53 @@ test("local artist Overview actions use exact provider top tracks", async () => 
     );
     (capture.artistActionBar?.onPlayAll as () => void)();
     assert.equal(capture.playedTracks?.[0]?.youtubeVideoId, "numb");
+});
+
+test("local artist Overview loads provider releases when metadata has no top tracks", async () => {
+    artistState.source = "library";
+    artistState.artist = {
+        id: "local-2cellos",
+        name: "2CELLOS",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerFallbackData = {
+        artist: { topTracks: [] },
+        providerAlbums: [
+            {
+                type: "album",
+                id: "MPREb_score",
+                browseId: "MPREb_score",
+                name: "Score",
+                artist: "2CELLOS",
+                provider: "ytmusic",
+            },
+        ],
+    };
+    artistState.providerCatalogTracks = [
+        {
+            id: "yt:thunderstruck",
+            title: "Thunderstruck",
+            duration: 282,
+            streamSource: "youtube",
+            youtubeVideoId: "thunderstruck",
+            artist: { name: "2CELLOS" },
+            album: { title: "Celloverse" },
+        },
+    ];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.equal(capture.providerCatalogEnabled, true);
+    assert.match(html, /popular-tracks/);
+    assert.deepEqual(
+        (capture.artistPopularTracks?.tracks as Array<{ title: string }>).map(
+            (track) => track.title,
+        ),
+        ["Thunderstruck"],
+    );
 });
 
 test("local artist release views expose the exact provider catalog", async () => {

@@ -83,18 +83,23 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
         };
     }, []);
 
-    // Identify unowned tracks that need matching. Historical TIDAL rows are
-    // deliberately re-matched to the active YouTube provider.
+    // Identify tracks without a usable playback source. Album ownership is
+    // metadata and must not suppress provider matching: catalog-only artist
+    // tracks can have a complete album while still lacking playable audio.
+    // Historical TIDAL rows are deliberately re-matched to YouTube.
     const unownedTracks = useMemo(() => {
         if (!ytMusicAvailable || !topTracks) return [];
 
-        return topTracks.filter(
-            (t) =>
-                !(t.streamSource === "youtube" && !!t.youtubeVideoId) &&
-                (!t.album?.id ||
-                    !t.album?.title ||
-                    t.album.title === "Unknown Album"),
-        );
+        return topTracks.filter((track) => {
+            const hasLocalFile = Boolean(track.filePath?.trim());
+            const hasYouTubeSource =
+                track.streamSource === "youtube" &&
+                Boolean(track.youtubeVideoId);
+            const hasFederatedSource =
+                track.source === "federated" && track.peer?.online === true;
+
+            return !hasLocalFile && !hasYouTubeSource && !hasFederatedSource;
+        });
     }, [topTracks, ytMusicAvailable]);
 
     // Match unowned tracks against YTMusic (single batch call)

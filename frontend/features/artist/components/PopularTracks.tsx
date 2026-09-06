@@ -115,12 +115,13 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                 (track.source === "federated" && track.peer?.online === true) ||
                 hasLocalFile ||
                 isYtMusic;
-            const isUnowned =
-                !track.album?.id ||
-                !track.album?.title ||
-                track.album.title === "Unknown Album";
+            const isFederatedPlayable =
+                track.source === "federated" && track.peer?.online === true;
             const isAwaitingProviderMatch =
-                isProviderMatching && isUnowned && !hasLocalFile && !isYtMusic;
+                isProviderMatching &&
+                !hasLocalFile &&
+                !isYtMusic &&
+                !isFederatedPlayable;
 
             const preferenceTrackId = resolvePreferenceTrackId({
                 ...track,

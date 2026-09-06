@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowUpRight, Music } from "lucide-react";
 import { api } from "@/lib/api";
 import { Artist, DiscoverResult } from "../types";
@@ -7,6 +6,7 @@ import { getArtistHref, getDiscoveryArtistHref } from "@/utils/artistRoute";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import { ru } from "@/lib/i18n/ru";
 import { normalizeArtistName } from "../discoverySelection";
+import { CachedImage } from "@/components/ui/CachedImage";
 interface TopResultProps {
     libraryArtist?: Artist;
     discoveryArtist?: DiscoverResult;
@@ -96,7 +96,7 @@ export function TopResult({
                 />
                 <div className="relative z-10 h-24 w-24 shrink-0 overflow-hidden rounded-full border border-white/10 bg-surface-elevated shadow-2xl shadow-black/40 sm:h-28 sm:w-28">
                     {imageUrl ? (
-                        <Image
+                        <CachedImage
                             src={api.getCoverArtUrl(imageUrl, 200)}
                             alt={name}
                             fill
@@ -104,7 +104,14 @@ export function TopResult({
                             className="object-cover"
                             loading="eager"
                             fetchPriority="high"
-                            unoptimized
+                            fallback={
+                                <span className="grid h-full w-full place-items-center">
+                                    <Music
+                                        className="h-11 w-11 text-content-muted"
+                                        aria-hidden="true"
+                                    />
+                                </span>
+                            }
                         />
                     ) : (
                         <span className="grid h-full w-full place-items-center">

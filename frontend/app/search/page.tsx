@@ -93,6 +93,7 @@ export default function SearchPage() {
         query,
         libraryType: searchCatalogPolicy.libraryType,
         discoverType: searchCatalogPolicy.discoverType,
+        discoverScope: activeView,
         libraryLimit: searchCatalogPolicy.libraryLimit,
         discoverLimit: isTracksView
             ? discoverTrackLimit

@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Music } from "lucide-react";
 import { PeerBadge } from "@/components/ui/PeerBadge";
@@ -13,6 +12,7 @@ import {
     normalizeArtistName,
 } from "../discoverySelection";
 import type { Artist, DiscoverResult } from "../types";
+import { CachedImage } from "@/components/ui/CachedImage";
 
 interface SearchArtistsGridProps {
     libraryArtists: Artist[];
@@ -127,14 +127,16 @@ export function SearchArtistsGrid({
                     >
                         <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-elevated shadow-lg shadow-black/20">
                             {imageUrl ? (
-                                <Image
+                                <CachedImage
                                     src={imageUrl}
                                     alt={artistName}
                                     fill
                                     sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
                                     className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
                                     loading="lazy"
-                                    unoptimized
+                                    fallback={
+                                        <Music className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />
+                                    }
                                 />
                             ) : (
                                 <Music className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />

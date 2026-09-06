@@ -226,6 +226,37 @@ describe("YouTube Music discovery batch", () => {
         );
     });
 
+    it("requests only songs for a track-scoped search", async () => {
+        mockClient.post.mockResolvedValueOnce({
+            data: {
+                results: [{ results: [], total: 0, error: null }],
+            },
+        });
+
+        await searchYtMusicDiscoveryCatalog(
+            ytMusicService,
+            "__public__",
+            "the cranberries",
+            50,
+            { timeoutMs: 8_000, maxRetries: 0 },
+            ["songs"],
+        );
+
+        expect(mockClient.post).toHaveBeenCalledWith(
+            "/search/batch",
+            {
+                queries: [
+                    {
+                        query: "the cranberries",
+                        filter: "songs",
+                        limit: 50,
+                    },
+                ],
+            },
+            expect.any(Object),
+        );
+    });
+
     it("keeps two concurrent discovery calls to two batch requests instead of six singles", async () => {
         const releases: Array<() => void> = [];
         mockClient.post.mockImplementation(

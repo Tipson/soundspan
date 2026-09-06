@@ -178,8 +178,11 @@ export default function ArtistPage() {
     const providerReleases = isDirectYtMusicArtist
         ? providerAlbums
         : (fallbackProviderData?.providerAlbums ?? []);
+    const shouldLoadProviderTracks =
+        activeView === "tracks" ||
+        (activeView === "overview" && (artist?.topTracks?.length ?? 0) === 0);
     const providerCatalogEnabled =
-        activeView === "tracks" &&
+        shouldLoadProviderTracks &&
         (isDirectYtMusicArtist || Boolean(fallbackProviderData));
     const providerArtistTracksQuery = useProviderArtistTracks(
         providerReleases,
@@ -233,7 +236,7 @@ export default function ArtistPage() {
           )
         : [];
     const visibleArtistTracks =
-        isDirectYtMusicArtist && activeView === "tracks"
+        isDirectYtMusicArtist && providerCatalogEnabled
             ? mergeArtistTracks(popularTracks, providerArtistTracksQuery.tracks)
             : libraryArtistTracksEnabled
               ? mergeArtistTracks(

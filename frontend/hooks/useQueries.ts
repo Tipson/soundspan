@@ -650,10 +650,12 @@ export function useDiscoverSearchQuery(
     query: string,
     type: "music" | "podcasts" | "all" = "music",
     limit: number = 20,
+    scope: "all" | "tracks" | "albums" | "artists" = "all",
 ) {
     return useQuery({
-        queryKey: queryKeys.discoverSearch(query, type, limit),
-        queryFn: ({ signal }) => api.discoverSearch(query, type, limit, signal),
+        queryKey: queryKeys.discoverSearch(query, type, limit, scope),
+        queryFn: ({ signal }) =>
+            api.discoverSearch(query, type, limit, signal, scope),
         enabled: query.length >= 2,
         placeholderData: (previousData, previousQuery) =>
             preserveDiscoverPrefixData(

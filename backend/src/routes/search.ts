@@ -19,6 +19,7 @@ import {
     type YtMusicCatalogArtistResult,
 } from "../services/youtubeMusic";
 import { searchYtMusicDiscoveryCatalog } from "../services/ytMusicDiscoveryCatalog";
+import type { YtMusicDiscoveryCatalogFilter } from "../services/ytMusicDiscoveryCatalog";
 import { getSystemSettings } from "../utils/systemSettings";
 import { ytMusicSearchLimiter } from "../middleware/rateLimiter";
 import {
@@ -236,18 +237,29 @@ async function searchYtMusicDiscoverCatalog(
     query: string,
     limit: number,
     signal?: AbortSignal,
+    filters?: YtMusicDiscoveryCatalogFilter[],
 ): Promise<DiscoverYtMusicCatalogResult> {
-    const response = await searchYtMusicDiscoveryCatalog(
-        ytMusicService,
-        "__public__",
-        query,
-        limit,
-        {
-            timeoutMs: YT_MUSIC_DISCOVERY_TIMEOUT_MS,
-            maxRetries: 0,
-            ...(signal ? { signal } : {}),
-        },
-    );
+    const options = {
+        timeoutMs: YT_MUSIC_DISCOVERY_TIMEOUT_MS,
+        maxRetries: 0,
+        ...(signal ? { signal } : {}),
+    };
+    const response = filters
+        ? await searchYtMusicDiscoveryCatalog(
+              ytMusicService,
+              "__public__",
+              query,
+              limit,
+              options,
+              filters,
+          )
+        : await searchYtMusicDiscoveryCatalog(
+              ytMusicService,
+              "__public__",
+              query,
+              limit,
+              options,
+          );
 
     const tracks = response.tracks
         .slice(0, limit)
@@ -885,6 +897,13 @@ router.get("/genres", async (req, res) => {
  *           default: 20
  *           maximum: 500
  *         description: Maximum requested provider prefix; filtered YouTube Music search follows upstream continuations up to this bound
+ *       - in: query
+ *         name: scope
+ *         schema:
+ *           type: string
+ *           enum: [all, tracks, albums, artists]
+ *           default: all
+ *         description: Limit external music discovery to the active result view; scoped views return direct YouTube Music catalog rows without waiting for metadata-only sources
  *     responses:
  *       200:
  *         description: Discovery search results with optional alias info
@@ -913,6 +932,14 @@ router.get("/genres", async (req, res) => {
 router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
     try {
         const { q = "", type = "music", limit = "20" } = req.query;
+        const requestedScope =
+            typeof req.query.scope === "string" ? req.query.scope : "all";
+        const scope =
+            requestedScope === "tracks" ||
+            requestedScope === "albums" ||
+            requestedScope === "artists"
+                ? requestedScope
+                : "all";
 
         const query = (q as string).trim();
         const parsedLimit = parseInt(limit as string, 10);
@@ -947,7 +974,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         }
 
         // Cache TTL: 15 min (900s) -- external API data rarely changes
-        const cacheKey = `search:discover:v8:yt${ytMusicEnabled ? "1" : "0"}:lf${lastFmEnabled ? "1" : "0"}:${type}:${normalizeCacheQuery(query)}:${searchLimit}`;
+        const cacheKey = `search:discover:v9:yt${ytMusicEnabled ? "1" : "0"}:lf${lastFmEnabled ? "1" : "0"}:${type}:${scope}:${normalizeCacheQuery(query)}:${searchLimit}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
@@ -970,7 +997,11 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
             mbid?: string;
         } | null = null;
 
-        if ((type === "music" || type === "all") && lastFmEnabled) {
+        if (
+            (type === "music" || type === "all") &&
+            lastFmEnabled &&
+            scope === "all"
+        ) {
             try {
                 const correction = await withDiscoveryDeadline(
                     () => lastFmService.getArtistCorrection(query),
@@ -1000,7 +1031,7 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         const promiseMap: Record<string, Promise<any>> = {};
 
         if (type === "music" || type === "all") {
-            if (lastFmEnabled) {
+            if (lastFmEnabled && scope === "all") {
                 promiseMap.artists = withDiscoveryDeadline(
                     () =>
                         lastFmService.searchArtists(
@@ -1010,6 +1041,8 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
                     DISCOVERY_SOURCE_DEADLINE_MS,
                     "Last.fm artist search",
                 );
+            }
+            if (lastFmEnabled && scope === "all") {
                 promiseMap.tracks = withDiscoveryDeadline(
                     () => lastFmService.searchTracks(searchQuery, searchLimit),
                     DISCOVERY_SOURCE_DEADLINE_MS,
@@ -1017,12 +1050,23 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
                 );
             }
             if (ytMusicEnabled) {
+                const catalogFilters:
+                    | YtMusicDiscoveryCatalogFilter[]
+                    | undefined =
+                    scope === "tracks"
+                        ? ["songs"]
+                        : scope === "albums"
+                          ? ["albums"]
+                          : scope === "artists"
+                            ? ["artists"]
+                            : undefined;
                 promiseMap.ytMusicCatalog = withDiscoveryDeadline(
                     (signal) =>
                         searchYtMusicDiscoverCatalog(
                             searchQuery,
                             searchLimit,
                             signal,
+                            catalogFilters,
                         ),
                     DISCOVERY_SOURCE_DEADLINE_MS,
                     "YouTube Music discovery batch",

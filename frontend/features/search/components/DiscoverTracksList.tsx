@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Music, Play } from "lucide-react";
 import { DiscoverResult } from "../types";
 import { api } from "@/lib/api";
@@ -10,6 +9,7 @@ import { useAudioControls } from "@/lib/audio-controls-context";
 import { getArtistRouteParam } from "@/utils/artistRoute";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
+import { CachedImage } from "@/components/ui/CachedImage";
 import {
     formatGoToSearchArtistAria,
     formatPlaySearchTrackAria,
@@ -203,13 +203,15 @@ export function DiscoverTracksList({
                     >
                         <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-elevated">
                             {imageUrl ? (
-                                <Image
+                                <CachedImage
                                     src={imageUrl}
                                     alt={track.name}
                                     fill
                                     sizes="40px"
                                     className="object-cover"
-                                    unoptimized
+                                    fallback={
+                                        <Music className="h-5 w-5 text-content-muted" />
+                                    }
                                 />
                             ) : (
                                 <Music className="h-5 w-5 text-content-muted" />

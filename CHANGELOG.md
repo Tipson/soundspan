@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Match every artist track that lacks a playable source even when album metadata is complete; load provider releases for otherwise empty artist overviews, scope expanded search views to their requested YouTube Music category, and replace failed music artwork with stable fallbacks.
+
 - Preserve newer mobile search input when an older debounced URL update commits, while still resynchronizing the field for external navigation.
 
 - Restore each account's saved Wave direction in the shared audio state before Home or `/vibe` consumes it, keeping both entry points synchronized after reloads and account changes.

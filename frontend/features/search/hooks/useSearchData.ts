@@ -18,6 +18,7 @@ interface UseSearchDataProps {
         | "audiobooks"
         | "podcasts";
     discoverType?: "music" | "podcasts" | "all";
+    discoverScope?: "all" | "tracks" | "albums" | "artists";
     libraryLimit?: number;
     discoverLimit?: number;
     similarArtistsLimit?: number;
@@ -45,6 +46,7 @@ export function useSearchData({
     query,
     libraryType = "all",
     discoverType = "all",
+    discoverScope = "all",
     libraryLimit = 20,
     discoverLimit = 20,
     similarArtistsLimit = 6,
@@ -71,7 +73,12 @@ export function useSearchData({
         data: discoverData,
         isLoading: isDiscoverSearching,
         isFetching: isDiscoverFetching,
-    } = useDiscoverSearchQuery(query, discoverType, discoverLimit);
+    } = useDiscoverSearchQuery(
+        query,
+        discoverType,
+        discoverLimit,
+        discoverScope,
+    );
 
     const discoverResults = useMemo(() => {
         return discoverData?.results || [];

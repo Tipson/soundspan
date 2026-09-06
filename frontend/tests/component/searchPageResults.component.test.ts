@@ -360,6 +360,7 @@ test("All opens with the canonical artist, popular tracks, and albums on one edi
     assert.deepEqual(calls.embeddedAlbumGrids, [true, true]);
     assert.equal(calls.searchData[0]?.libraryType, "all");
     assert.equal(calls.searchData[0]?.libraryLimit, 20);
+    assert.equal(calls.searchData[0]?.discoverScope, "all");
 
     const artistIndex = html.indexOf('data-search-primary-result="artist"');
     const tracksIndex = html.indexOf('data-search-tracks-surface="open"');
@@ -384,6 +385,7 @@ test("Tracks renders the complete loaded prefix and offers honest continuation",
     assert.equal(calls.searchData[0]?.libraryType, "tracks");
     assert.equal(calls.searchData[0]?.libraryLimit, 50);
     assert.equal(calls.searchData[0]?.discoverLimit, 50);
+    assert.equal(calls.searchData[0]?.discoverScope, "tracks");
     assert.deepEqual(calls.libraryTrackLimits, [40]);
     assert.deepEqual(calls.discoverTrackLimits, [30]);
     assert.match(html, /Показать ещё \(70 загружено\)/);

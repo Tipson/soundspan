@@ -333,6 +333,7 @@ test("useYtMusicTopTracks preserves exact matches and enriches unowned tracks", 
                 id: "owned-track",
                 title: "Owned",
                 duration: 190,
+                filePath: "/music/owned.flac",
                 album: { id: "owned-1", title: "Owned Album" },
             },
             {
@@ -358,6 +359,41 @@ test("useYtMusicTopTracks preserves exact matches and enriches unowned tracks", 
     assert.equal(result.enrichedTopTracks?.[2].streamSource, undefined);
     assert.equal(result.enrichedTopTracks?.[3].streamSource, "youtube");
     assert.equal(result.enrichedTopTracks?.[3].youtubeVideoId, "already-exact");
+});
+
+test("useYtMusicTopTracks matches metadata-only tracks even when their album is known", async () => {
+    const { useYtMusicTopTracks } =
+        await import("../../features/artist/hooks/useYtMusicTopTracks");
+
+    apiState.ytMatches = [
+        { videoId: "yt-cranberries-zombie", title: "Zombie", duration: 306 },
+    ];
+
+    const result = await settleHook(() =>
+        useYtMusicTopTracks({
+            id: "artist-cranberries",
+            name: "The Cranberries",
+            topTracks: [
+                {
+                    id: "track-zombie",
+                    title: "Zombie",
+                    duration: 306,
+                    album: {
+                        id: "album-no-need-to-argue",
+                        title: "No Need to Argue",
+                    },
+                },
+            ],
+        } as any),
+    );
+
+    assert.equal(apiState.ytPayloads.at(-1)?.length, 1);
+    assert.equal(result.matchCount, 1);
+    assert.equal(result.enrichedTopTracks?.[0].streamSource, "youtube");
+    assert.equal(
+        result.enrichedTopTracks?.[0].youtubeVideoId,
+        "yt-cranberries-zombie",
+    );
 });
 
 test("useDiscoverProviderGapFill retires legacy sources when YouTube is unavailable", async () => {
