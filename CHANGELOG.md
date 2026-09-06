@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Redirect the legacy `/playlists` page and TV navigation to Library's playlist tab, preserving old `create=1` bookmarks while removing the duplicate management surface.
+
 - Return ready YouTube Music search results after a 2.5-second Last.fm metadata budget instead of letting an optional metadata timeout hold the whole search for 9 seconds.
 
 - Resolve a local artist to a provider result whose exact name has an explanatory parenthetical suffix, restoring tracks for catalogs such as `2CELLOS (SULIC & HAUSER)` without accepting loose tribute-name matches.
