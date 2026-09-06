@@ -36,6 +36,13 @@ test("MusicDetailHero keeps artwork, identity, metadata, and actions in one land
     );
 
     assert.match(html, /data-music-detail="hero"/);
+    const hero = html.match(
+        /<header[^>]*data-music-detail="hero"[^>]*class="([^"]*)"[^>]*>/,
+    );
+    assert.ok(hero);
+    assert.match(hero[1], /overflow-visible/);
+    assert.match(hero[1], /\bz-10\b/);
+    assert.doesNotMatch(hero[1], /overflow-hidden/);
     assert.match(html, /<h1[^>]*>From Zero<\/h1>/);
     assert.match(html, /From Zero cover/);
     assert.match(html, /Linkin Park · 2024/);

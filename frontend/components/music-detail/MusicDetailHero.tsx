@@ -51,7 +51,7 @@ export function MusicDetailHero({
         <header
             data-music-detail="hero"
             className={cn(
-                "relative isolate overflow-hidden border-b border-white/[0.07]",
+                "relative z-10 isolate overflow-visible border-b border-white/[0.07]",
                 className,
             )}
         >
