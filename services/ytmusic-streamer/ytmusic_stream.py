@@ -932,8 +932,6 @@ def _resolve_progressive_spool_plan_sync(
     session: _SpoolSession,
 ) -> _ProgressiveSpoolPlan | None:
     """Resolve a direct source without keeping its later byte transfer in this lane."""
-    if not session.allow_growing:
-        return None
     if session.cancel_event.is_set():
         raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
     info = _get_stream_url_sync("__public__", video_id, quality)
@@ -1118,8 +1116,6 @@ def _download_progressive_spool_sync(
     plan: _ProgressiveSpoolPlan | None = None,
 ) -> tuple[str, str, JsonObject] | None:
     """Download a proven direct source into a Soundspan-owned append-only file."""
-    if not session.allow_growing:
-        return None
     if plan is None:
         plan = _resolve_progressive_spool_plan_sync(video_id, quality, session)
     if plan is None:
@@ -1650,7 +1646,9 @@ async def _download_ytmusic_spool_bounded(
 
     # yt-dlp's socket timeout bounds the executor thread between network reads.
     try:
-        if session is not None and session.allow_growing:
+        # Complete-file consumers also release extraction capacity before CDN
+        # transfer. allow_growing controls publication, not the download lane.
+        if session is not None:
             progressive_plan = await resolve_progressive_plan(session)
             if progressive_plan is not None:
                 try:
