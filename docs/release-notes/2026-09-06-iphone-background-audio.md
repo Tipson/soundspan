@@ -1,6 +1,6 @@
 # iPhone background audio: physical-device investigation, 2026-09-06
 
-Status: physical-device failure unresolved; targeted code corrections prepared locally, no production release from these experiments.
+Status: targeted corrections from 333b8f6 deployed to production for the user's iPhone verification; physical-device audibility acceptance pending. Diagnostic prototypes remain unshipped.
 
 ## Observed failure
 
@@ -133,4 +133,24 @@ promise, progressing UI clock or fake-element test does not establish sound.
 Next physical acceptance: three different tracks with natural locked-screen
 transitions, locked pause/resume, then the same sequence without Web Inspector.
 Retain Safari as the working comparison. Do not mark the iPhone issue resolved
-or roll an experimental workaround out to all users without this acceptance.
+without this acceptance. The user authorized deploying the targeted corrections
+to make the physical test possible; no silent-anchor workaround was deployed.
+
+## Production release for physical verification
+
+verify: image local/soundspan-frontend:iphone-333b8f6 built from a clean Git
+archive of 333b8f6, not the dirty working tree. Docker build completed successfully.
+
+verify: frontend is healthy; public /login returns HTTP 200 and contains the
+candidate Next build ID UrLW4a75UgS0OmNRynMmg; public /health returns HTTP 200.
+The release guard confirmed backend, worker, YouTube, database and Redis container
+identities were unchanged. Startup logs report the native engine and no startup
+error. These checks prove delivery and service health, not iPhone audio output.
+
+Rollback image: local/soundspan-frontend:tail-6498a89. Previous compose overlay:
+/srv/music/soundspan-releases/b0-b340a7c/compose-before-iphone-333b8f6.json.
+Restore only the frontend image entry in the active overlay, validate compose,
+and recreate frontend with --no-deps using the existing production compose stack.
+No database migration or backend rollback is required.
+
+Local release log: output/iphone-333b8f6-release.log.
