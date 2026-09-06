@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useAudioState } from "@/lib/audio-context";
 import { api } from "@/lib/api";
-import { getArtistHref } from "@/utils/artistRoute";
+import { getArtistHref, getDiscoveryArtistHref } from "@/utils/artistRoute";
 import { ru } from "@/lib/i18n/ru";
 
 export interface MediaInfo {
@@ -26,14 +26,21 @@ export function useMediaInfo(coverSize: number = 100): MediaInfo {
 
         if (playbackType === "track" && currentTrack) {
             const albumLink = currentTrack.album?.id
-                ? `/album/${currentTrack.album.id}`
+                ? /^MPRE[A-Za-z0-9_-]+$/.test(currentTrack.album.id)
+                    ? `/explore/yt-playlist/${encodeURIComponent(currentTrack.album.id)}?type=album`
+                    : `/album/${encodeURIComponent(currentTrack.album.id)}`
                 : null;
             const artistLink = currentTrack.artist?.id
-                ? getArtistHref({
-                      id: currentTrack.artist.id,
-                      mbid: currentTrack.artist.mbid,
-                      name: currentTrack.artist.name,
-                  })
+                ? /^UC[A-Za-z0-9_-]{22}$/.test(currentTrack.artist.id)
+                    ? getDiscoveryArtistHref({
+                          youtubeChannelId: currentTrack.artist.id,
+                          name: currentTrack.artist.name,
+                      })
+                    : getArtistHref({
+                          id: currentTrack.artist.id,
+                          mbid: currentTrack.artist.mbid,
+                          name: currentTrack.artist.name,
+                      })
                 : null;
             return {
                 title: currentTrack.title,

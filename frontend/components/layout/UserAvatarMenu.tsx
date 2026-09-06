@@ -132,7 +132,7 @@ export function UserAvatarMenu() {
                 {user && !imgError ? (
                     <Image
                         key={imgKey}
-                        src={`${api.getProfilePictureUrl(user.id)}&_k=${imgKey}`}
+                        src={`${api.getProfilePictureUrl(user.id)}?_k=${imgKey}`}
                         alt={displayName}
                         width={36}
                         height={36}

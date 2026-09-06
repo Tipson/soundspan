@@ -84,13 +84,6 @@ mock.module("@/lib/api", {
     },
 });
 
-mock.module("@/utils/artistRoute", {
-    namedExports: {
-        getArtistHref: ({ id }: { id?: string }) =>
-            id ? `/artist/${id}` : null,
-    },
-});
-
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: {
         YouTubeBadge: () => React.createElement("span", null, "YouTube"),

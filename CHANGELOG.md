@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Route player links for YouTube channel and album identities to provider-aware pages, retaining library routes for local entities. Keep the avatar cache revision in the URL query instead of appending it to the user ID.
+
 - Shorten an unprepared manual YouTube selection after stable playback to a 300ms cancellation window. Preserve the longer gate for loading and rapid selections, immediate ready-preload reuse, and pause/cancellation semantics.
 
 - Preserve the playing or paused track when My Wave refreshes recommendations after rapid skips. Update only upcoming tracks instead of aborting the selected audio, resetting its position, and forcing playback on a late response.
