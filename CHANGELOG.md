@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Remove the duplicate desktop Wave playback and up-next panel; the persistent player remains the single playback surface.
+
 - Keep track-specific format fallbacks from disabling accelerated resolution for unrelated listeners.
 
 - Give interactive playback the next paced extraction slot ahead of waiting preloads without increasing the configured request rate; bound and cancel queued waits.

@@ -1,14 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-    AudioWaveform,
-    Loader2,
-    Pause,
-    Play,
-    RotateCcw,
-    SkipForward,
-} from "lucide-react";
+import { AudioWaveform, Loader2, Pause, Play, RotateCcw } from "lucide-react";
 import { usePersonalizedHomeFeed } from "@/features/home/hooks/usePersonalizedHomeFeed";
 import type {
     PersonalizedHomeMode,
@@ -25,7 +18,6 @@ import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
 import { api } from "@/lib/api";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { ru } from "@/lib/i18n/ru";
-import { NowPlayingConnected } from "./NowPlayingConnected";
 import { VibeAmbientMotion } from "./VibeAmbientMotion";
 import {
     WaveDirectionSheet,
@@ -258,7 +250,7 @@ export function VibeProviderFallback() {
         mood: WaveMood | null;
         generation: number;
     } | null>(null);
-    const { advanceQueue, pause, play, playTracks } = useAudioControls();
+    const { pause, play, playTracks } = useAudioControls();
     const { isPlaying } = usePlaybackStatus();
     const {
         currentTrack,
@@ -335,7 +327,11 @@ export function VibeProviderFallback() {
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
     const handoffStartWarmup = useWaveStartWarmup(
         tracks[0]?.youtubeVideoId ?? null,
-        Boolean(ownerId) && !isPlaying && !vibeMode && !isLoading && !isError &&
+        Boolean(ownerId) &&
+            !isPlaying &&
+            !vibeMode &&
+            !isLoading &&
+            !isError &&
             !isListenTogetherActiveOrPending(),
     );
 
@@ -939,139 +935,6 @@ export function VibeProviderFallback() {
                         </div>
                     )}
                 </div>
-
-                {hasActiveWave && (currentTrack || nextTracks.length > 0) && (
-                    <div className="wave-density-bottom wave-material relative hidden shrink-0 border-t border-white/10 bg-black/30 px-4 py-4 backdrop-blur-2xl min-[900px]:block min-[1025px]:px-8">
-                        <div className="wave-density-bottom-grid mx-auto grid max-w-6xl gap-4 min-[900px]:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)] min-[900px]:items-center">
-                            {currentTrack ? (
-                                <section
-                                    data-testid="wave-now-playing-panel"
-                                    aria-labelledby="wave-now-playing-title"
-                                    className="wave-density-now min-w-0 rounded-2xl bg-white/[0.045] p-3 sm:p-4"
-                                >
-                                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
-                                        <div className="min-w-0">
-                                            <h2
-                                                id="wave-now-playing-title"
-                                                className="text-xs font-bold uppercase tracking-[0.16em] text-brand-light"
-                                            >
-                                                {ru.vibe.nowPlaying}
-                                            </h2>
-                                            <p className="mt-1 text-xs text-content-muted">
-                                                {ru.vibe.feedbackHint}
-                                            </p>
-                                        </div>
-                                        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
-                                            <NowPlayingConnected
-                                                track={currentTrack}
-                                                onMapPresent={false}
-                                                moodColor={null}
-                                                onFlyTo={() => undefined}
-                                                appearance="wave"
-                                                showPlaybackToggle={false}
-                                            />
-                                            <button
-                                                data-testid="wave-skip"
-                                                type="button"
-                                                onClick={() =>
-                                                    advanceQueue("manual")
-                                                }
-                                                aria-label={ru.vibe.skipAria}
-                                                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-content-body transition-[transform,background-color,border-color] duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
-                                            >
-                                                <SkipForward
-                                                    className="h-4 w-4"
-                                                    aria-hidden="true"
-                                                />
-                                                {ru.vibe.skip}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </section>
-                            ) : (
-                                <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-left">
-                                    <p className="text-sm font-semibold text-content">
-                                        {ru.vibe.ready}
-                                    </p>
-                                    <p className="mt-1 text-xs leading-5 text-content-muted">
-                                        {ru.vibe.readyDescription}
-                                    </p>
-                                </div>
-                            )}
-
-                            {nextTracks.length > 0 && (
-                                <aside
-                                    data-testid="wave-next-preview"
-                                    aria-label={ru.vibe.upNextAria}
-                                    className="min-w-0"
-                                >
-                                    <div className="flex items-baseline justify-between gap-3">
-                                        <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-content-body">
-                                            {hasActiveWave
-                                                ? ru.vibe.upNext
-                                                : ru.vibe.startsHere}
-                                        </h2>
-                                        <span className="text-xs text-content-muted">
-                                            {ru.vibe.keepsGoing}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 grid gap-1.5">
-                                        {nextTracks.map((track) => {
-                                            const rawCover =
-                                                track.album?.coverArt ?? null;
-                                            const cover =
-                                                rawCover &&
-                                                !rawCover.startsWith("/") &&
-                                                !rawCover.startsWith("data:") &&
-                                                !rawCover.startsWith("blob:")
-                                                    ? api.getCoverArtUrl(
-                                                          rawCover,
-                                                          96,
-                                                      )
-                                                    : rawCover;
-                                            return (
-                                                <div
-                                                    key={track.id}
-                                                    className="wave-density-next-row flex min-w-0 items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/[0.04]"
-                                                >
-                                                    {cover ? (
-                                                        // eslint-disable-next-line @next/next/no-img-element
-                                                        <img
-                                                            src={cover}
-                                                            alt=""
-                                                            loading="lazy"
-                                                            className="h-9 w-9 shrink-0 rounded-lg object-cover"
-                                                        />
-                                                    ) : (
-                                                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.07] text-content-muted">
-                                                            <AudioWaveform
-                                                                className="h-4 w-4"
-                                                                aria-hidden="true"
-                                                            />
-                                                        </span>
-                                                    )}
-                                                    <span className="min-w-0">
-                                                        <span className="block truncate text-sm font-semibold text-content">
-                                                            {track.title}
-                                                        </span>
-                                                        {track.artist?.name && (
-                                                            <span className="block truncate text-xs text-content-muted">
-                                                                {
-                                                                    track.artist
-                                                                        .name
-                                                                }
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </aside>
-                            )}
-                        </div>
-                    </div>
-                )}
             </section>
 
             {isTuneOpen && (

@@ -236,7 +236,7 @@ test.describe("Redesigned application shell", () => {
             );
         });
 
-        test("active Vibe keeps feedback and skip controls inside its locked boundary", async ({
+        test("active Vibe keeps its primary controls inside the locked boundary without duplicate playback panels", async ({
             page,
         }) => {
             const boundary = page.locator(
@@ -250,13 +250,12 @@ test.describe("Redesigned application shell", () => {
             );
 
             await waveToggle.click();
-            const nowPlayingPanel = page.getByTestId("wave-now-playing-panel");
-            const skipButton = page.getByTestId("wave-skip");
-            await expect(nowPlayingPanel).toBeVisible({ timeout: 20_000 });
-            await expect(skipButton).toBeVisible();
-
-            await expectInsideBoundary(boundary, nowPlayingPanel);
-            await expectInsideBoundary(boundary, skipButton);
+            await expect(
+                page.getByTestId("wave-now-playing-panel"),
+            ).toHaveCount(0);
+            await expect(page.getByTestId("wave-next-preview")).toHaveCount(0);
+            await expect(page.getByTestId("wave-skip")).toHaveCount(0);
+            await expectInsideBoundary(boundary, waveToggle);
         });
     });
 

@@ -636,44 +636,29 @@ test("My Wave stays bounded to the app viewport while its tune sheet owns overfl
     await unmountPage(mounted);
 });
 
-test("the Wave stage previews what comes next without presenting a finite queue", async () => {
+test("the Wave stage omits duplicate playback panels but retains its controls", async () => {
     state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
     state.vibeModeEnabled = true;
     const mounted = await mountPage();
-
-    const page = mounted.container.querySelector<HTMLElement>(
-        "main[data-wave-mode]",
+    assert.equal(
+        mounted.container.querySelector(
+            '[data-testid="wave-now-playing-panel"]',
+        ),
+        null,
     );
-    const preview = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="wave-next-preview"]',
+    assert.equal(
+        mounted.container.querySelector('[data-testid="wave-next-preview"]'),
+        null,
     );
-    const nowPlayingPanel = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="wave-now-playing-panel"]',
+    assert.equal(
+        mounted.container.querySelector('[data-testid="wave-skip"]'),
+        null,
     );
-    const skipButton = mounted.container.querySelector<HTMLButtonElement>(
-        '[data-testid="wave-skip"]',
+    assert.ok(
+        mounted.container.querySelector('[data-testid="wave-main-toggle"]'),
     );
-    assert.ok(page);
-    assert.match(
-        page.className,
-        /pb-\[calc\(var\(--app-mini-player-height\)\+var\(--app-bottom-nav-height\)\+var\(--safe-area-bottom\)\+4px\)\]/,
-        "Active mobile Wave must end above both the mini player and bottom navigation",
-    );
-    assert.ok(preview);
-    assert.ok(nowPlayingPanel);
-    assert.ok(skipButton);
-    assert.match(
-        nowPlayingPanel.parentElement?.parentElement?.className ?? "",
-        /\bshrink-0\b/,
-        "Active Wave feedback must remain a non-collapsing bottom region",
-    );
-    assert.match(preview.textContent ?? "", /Далее/i);
-    assert.match(preview.textContent ?? "", /Discovery Track|Shared Pick/i);
-    assert.doesNotMatch(
-        preview.textContent ?? "",
-        /\b\d+\s+(?:tracks?|songs?)\b/i,
-    );
-
+    assert.ok(findButton(mounted.container, "Настроить"));
+    assert.equal(state.playTracksCallCount, 0);
     await unmountPage(mounted);
 });
 
@@ -1328,31 +1313,23 @@ test("Tune My Wave supports arrow-key radio navigation", async () => {
     await unmountPage(mounted);
 });
 
-test("active My Wave keeps feedback on desktop without restoring the redundant mobile block", async () => {
+test("active My Wave relies on the persistent player instead of duplicate desktop feedback", async () => {
     state.currentTrack = { id: "yt:playing-1", title: "Playing Track" };
     state.vibeModeEnabled = true;
     const mounted = await mountPage();
 
-    assert.match(mounted.container.textContent ?? "", /Сейчас играет/i);
-    const inlineNowPlaying = mounted.container.querySelector<HTMLElement>(
-        '[aria-labelledby="wave-now-playing-title"]',
-    );
-    assert.ok(inlineNowPlaying);
-    const desktopFeedbackRegion = inlineNowPlaying.closest<HTMLElement>(
-        ".wave-density-bottom",
-    );
-    assert.ok(desktopFeedbackRegion);
-    assert.match(desktopFeedbackRegion.className, /(?:^|\s)hidden(?:\s|$)/);
-    assert.match(desktopFeedbackRegion.className, /min-\[900px\]:block/);
+    assert.doesNotMatch(mounted.container.textContent ?? "", /Сейчас играет/i);
     assert.equal(
-        mounted.container.querySelector('[data-testid="wave-now-playing"]')
-            ?.textContent,
-        "Playing Track",
+        mounted.container.querySelector(
+            '[aria-labelledby="wave-now-playing-title"]',
+        ),
+        null,
     );
-    const skip = findButton(mounted.container, "Пропустить");
-    assert.ok(skip);
-    await React.act(async () => skip.click());
-    assert.deepEqual(state.advanceOrigins, ["manual"]);
+    assert.equal(mounted.container.querySelector(".wave-density-bottom"), null);
+    assert.equal(findButton(mounted.container, "Пропустить"), null);
+    assert.ok(
+        mounted.container.querySelector('[data-testid="wave-main-toggle"]'),
+    );
 
     await unmountPage(mounted);
 });
