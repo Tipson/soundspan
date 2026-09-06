@@ -4,20 +4,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioWaveform, Loader2, Pause, Play, RotateCcw } from "lucide-react";
 import { usePersonalizedHomeFeed } from "@/features/home/hooks/usePersonalizedHomeFeed";
 import type {
-    PersonalizedHomeMode,
     PersonalizedHomeMood,
     PersonalizedTrack,
 } from "@/features/home/types";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAuth } from "@/lib/auth-context";
 import { useWaveStartWarmup } from "@/hooks/useWaveStartWarmup";
-import { BRAND_SLUG } from "@/lib/brand";
 import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
 import { api } from "@/lib/api";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { ru } from "@/lib/i18n/ru";
+import {
+    persistWaveSelection,
+    readWaveSelection,
+    replaceWaveSelection,
+    type WaveSelectionMode,
+} from "@/lib/waveSelection";
 import { VibeAmbientMotion } from "./VibeAmbientMotion";
 import {
     WaveDirectionSheet,
@@ -27,107 +31,7 @@ import {
     type WaveMood,
 } from "./WaveDirectionSheet";
 
-type SupportedPersonalizedMode = Extract<PersonalizedHomeMode, WaveFeedMode>;
-
-const WAVE_MODE_IDS = new Set<WaveFeedMode>(["for-you", "new", "familiar"]);
-const WAVE_MOOD_IDS = new Set<PersonalizedHomeMood>([
-    "calm",
-    "energetic",
-    "focus",
-    "workout",
-    "favorites",
-    "forgotten",
-]);
-const WAVE_SELECTION_KEY_PREFIX = `${BRAND_SLUG}_wave_selection_v1`;
-
-function waveSelectionStorageKey(ownerId: string): string {
-    return `${WAVE_SELECTION_KEY_PREFIX}:${encodeURIComponent(ownerId)}`;
-}
-
-function readPersistedWaveSelection(ownerId: string | null): {
-    mode: SupportedPersonalizedMode;
-    mood: PersonalizedHomeMood | null;
-} {
-    if (!ownerId || typeof window === "undefined") {
-        return { mode: "for-you", mood: null };
-    }
-    try {
-        const raw = window.localStorage.getItem(
-            waveSelectionStorageKey(ownerId),
-        );
-        if (!raw) return { mode: "for-you", mood: null };
-        const parsed = JSON.parse(raw) as { mode?: unknown; mood?: unknown };
-        return {
-            mode:
-                typeof parsed.mode === "string" &&
-                WAVE_MODE_IDS.has(parsed.mode as WaveFeedMode)
-                    ? (parsed.mode as SupportedPersonalizedMode)
-                    : "for-you",
-            mood:
-                typeof parsed.mood === "string" &&
-                WAVE_MOOD_IDS.has(parsed.mood as PersonalizedHomeMood)
-                    ? (parsed.mood as PersonalizedHomeMood)
-                    : null,
-        };
-    } catch {
-        return { mode: "for-you", mood: null };
-    }
-}
-
-function persistWaveSelection(
-    ownerId: string | null,
-    mode: WaveFeedMode,
-    mood: WaveMood | null,
-): void {
-    if (!ownerId || typeof window === "undefined") return;
-    try {
-        window.localStorage.setItem(
-            waveSelectionStorageKey(ownerId),
-            JSON.stringify({ mode, mood }),
-        );
-    } catch {
-        // The applied in-memory selection remains usable in restricted storage.
-    }
-}
-
-function readWaveSelection(ownerId: string | null): {
-    mode: SupportedPersonalizedMode;
-    mood: PersonalizedHomeMood | null;
-} {
-    const persisted = readPersistedWaveSelection(ownerId);
-    if (typeof window === "undefined") return persisted;
-    const params = new URLSearchParams(window.location.search);
-    const requestedMode = params.get("mode");
-    const requestedMood = params.get("mood");
-    const hasModeOverride = params.has("mode");
-    const hasMoodOverride = params.has("mood");
-    return {
-        mode:
-            requestedMode && WAVE_MODE_IDS.has(requestedMode as WaveFeedMode)
-                ? (requestedMode as SupportedPersonalizedMode)
-                : persisted.mode,
-        mood:
-            hasMoodOverride &&
-            requestedMood &&
-            WAVE_MOOD_IDS.has(requestedMood as PersonalizedHomeMood)
-                ? (requestedMood as PersonalizedHomeMood)
-                : hasModeOverride || hasMoodOverride
-                  ? null
-                  : persisted.mood,
-    };
-}
-
-function replaceWaveSelection(
-    mode: WaveFeedMode,
-    mood: PersonalizedHomeMood | null,
-): void {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("mode", mode);
-    if (mood) url.searchParams.set("mood", mood);
-    else url.searchParams.delete("mood");
-    window.history.replaceState(window.history.state, "", url);
-}
+type SupportedPersonalizedMode = WaveSelectionMode;
 
 function uniqueTracks(tracks: readonly PersonalizedTrack[]) {
     const seen = new Set<string>();

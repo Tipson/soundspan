@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Restore each account's saved Wave direction in the shared audio state before Home or `/vibe` consumes it, keeping both entry points synchronized after reloads and account changes.
+
 - Render the Home Wave loading action on a neutral high-contrast surface instead of leaving muted text over the active pink gradient.
 
 - Keep detail-page action menus above following content instead of clipping them at the artist, album or playlist hero boundary.
