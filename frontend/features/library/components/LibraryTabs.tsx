@@ -28,12 +28,21 @@ const TABS: ReadonlyArray<{
 /** Personal Library navigation; playlists also contains liked and device music. */
 export function LibraryTabs({ activeTab }: LibraryTabsProps) {
     const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
+    const stripRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
-        activeLinkRef.current?.scrollIntoView({
-            block: "nearest",
-            inline: "center",
-        });
+        const link = activeLinkRef.current;
+        const strip = stripRef.current;
+        if (!link || !strip) return;
+        const tabBounds = link.getBoundingClientRect();
+        const stripBounds = strip.getBoundingClientRect();
+        // Reveal only the clipped horizontal edge. scrollIntoView also moves
+        // the main page, overriding restored or manually chosen scroll positions.
+        if (tabBounds.left < stripBounds.left) {
+            strip.scrollLeft += tabBounds.left - stripBounds.left;
+        } else if (tabBounds.right > stripBounds.right) {
+            strip.scrollLeft += tabBounds.right - stripBounds.right;
+        }
     }, [activeTab]);
 
     return (
@@ -49,7 +58,10 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-y-px right-0 z-10 w-10 bg-gradient-to-l from-surface to-transparent sm:hidden"
             />
-            <div className="flex snap-x snap-mandatory gap-1 overflow-x-auto pr-12 scroll-px-1 [scrollbar-width:none] sm:pr-0 [&::-webkit-scrollbar]:hidden">
+            <div
+                ref={stripRef}
+                className="flex snap-x snap-mandatory gap-1 overflow-x-auto pr-12 scroll-px-1 [scrollbar-width:none] sm:pr-0 [&::-webkit-scrollbar]:hidden"
+            >
                 {TABS.map((tab, index) => {
                     const active = tab.id === activeTab;
                     return (

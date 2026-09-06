@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Reveal clipped Library tabs within their horizontal strip without moving the main page or disturbing the listener's scroll position during background updates.
+
 - Bound progressive audio connection/CONNECT setup to three seconds and retry one timed-out opening before response headers. Preserve the exact range, validator, cancellation and transfer deadline; do not replay partially delivered response bodies.
 
 - Reuse bounded public YouTube player preprocessing across stream extractions without reusing listener challenges or signed URLs. Keep the stock extractor on unsupported versions or initialization failure, and retry original player processing when cached execution fails.
