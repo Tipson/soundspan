@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Load protected feature/UI settings only after authentication, stop polling on logout, and ignore delayed responses from an earlier account or request. Keep public pages free of repeated settings authorization errors without relaxing backend access checks.
+
 - Select background audio-analysis accounts by each listener's last activity, preventing one prolific listener from crowding out other active accounts. Preserve the 100-account pass limit and exclusion of test accounts.
 
 - Reduce the manual YouTube selection gate from idle or paused playback to 300ms, retaining the 1250ms gate for in-flight bursts and existing pause/cancellation behavior.

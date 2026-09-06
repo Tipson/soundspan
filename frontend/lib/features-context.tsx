@@ -11,6 +11,7 @@ import {
     useRef,
 } from "react";
 import { api } from "./api";
+import { useAuth } from "./auth-context";
 import { useVisibilityGatedInterval } from "../hooks/useVisibilityGatedInterval";
 import { frontendLogger as sharedFrontendLogger } from "./logger";
 import type { VibeSystemStatus } from "./api/settings";
@@ -63,15 +64,26 @@ const FeaturesContext = createContext<FeaturesState | undefined>(undefined);
  * Renders the FeaturesProvider component.
  */
 export function FeaturesProvider({ children }: { children: ReactNode }) {
-    const [state, setState] = useState<FeaturesState>(defaultState);
+    const { isAuthenticated, isLoading, user } = useAuth();
+    const userId = user?.id;
+    const canFetch = isAuthenticated && !isLoading && Boolean(userId);
+    const [state, setState] = useState<FeaturesState & { accountId?: string }>(
+        defaultState,
+    );
     const isMountedRef = useRef(false);
+    const requestEpochRef = useRef(0);
     const refreshFeatures = useCallback(async () => {
+        const requestEpoch = ++requestEpochRef.current;
+        const isCurrent = () =>
+            isMountedRef.current && requestEpoch === requestEpochRef.current;
         try {
             const [features, uiSettings] = await Promise.all([
                 api.getFeatures(),
                 api.getUiSettings().catch(() => ({ showVersion: false })),
             ]);
+            if (!isCurrent()) return;
             setState({
+                accountId: userId,
                 musicCNN: features.musicCNN,
                 vibeEmbeddings: features.vibeEmbeddings,
                 audioAnalysis: features.audioAnalysis ?? true,
@@ -88,10 +100,12 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
                 loading: false,
             });
         } catch (error) {
+            if (!isCurrent()) return;
             sharedFrontendLogger.error("Failed to fetch features:", error);
             setState((prev) =>
-                prev.loading
+                prev.loading || prev.accountId !== userId
                     ? {
+                          accountId: userId,
                           musicCNN: false,
                           vibeEmbeddings: false,
                           audioAnalysis: true,
@@ -107,24 +121,33 @@ export function FeaturesProvider({ children }: { children: ReactNode }) {
                     : prev,
             );
         }
-    }, []);
+    }, [userId]);
 
     const safeRefresh = useCallback(async () => {
-        if (!isMountedRef.current) return;
+        if (!isMountedRef.current || !canFetch) return;
         await refreshFeatures();
-    }, [refreshFeatures]);
+    }, [canFetch, refreshFeatures]);
 
-    useVisibilityGatedInterval(safeRefresh, FEATURES_REFRESH_INTERVAL_MS);
+    useVisibilityGatedInterval(safeRefresh, FEATURES_REFRESH_INTERVAL_MS, {
+        enabled: canFetch,
+    });
 
     useEffect(() => {
         isMountedRef.current = true;
         void safeRefresh();
         return () => {
             isMountedRef.current = false;
+            requestEpochRef.current += 1;
         };
-    }, [safeRefresh]);
+    }, [safeRefresh, userId, isLoading, canFetch]);
 
-    const value = useMemo(() => state, [state]);
+    const value = useMemo(
+        () =>
+            canFetch && state.accountId === userId
+                ? state
+                : { ...defaultState, loading: isLoading || canFetch },
+        [state, canFetch, userId, isLoading],
+    );
 
     return (
         <FeaturesContext.Provider value={value}>
