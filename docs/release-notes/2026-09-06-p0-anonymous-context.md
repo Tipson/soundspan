@@ -29,4 +29,12 @@ verify: same cold Gimme Shelter resolution: ordinary 2540 ms, initialized candid
 
 ## Release
 
+## Paced queue priority
+
+The previous limiter held its lock while sleeping for the next slot. A preload could therefore occupy that slot before a newly selected track. The extraction limiter uses priority/FIFO selection at admission while preserving the configured inter-request gap (production 0.75–2.5 seconds). Waiting work observes cancellation and an extraction-timeout bound; cancelled waiters do not consume a slot. Session priority is bound to and restored on the resolver thread.
+
+verify: deterministic gate test admits playback before a previously waiting preload at time 10 and the preload at time 20, preserving the ten-second test interval. Cancellation/deadline and thread-context restoration tests passed. Full sidecar suite: 558 passed, 4 skipped; Ruff/format and targeted mypy passed. Self-review retained the same provider rate and bounded pools; real-world load capacity remains separate from this queue correction.
+
+## Release procedure
+
 Deploy only the YouTube sidecar. Keep the previous image and compose overlay backup for rollback. Do not change DNS, credentials, concurrency or the frontend. Record the actual release image and production checks below after execution.

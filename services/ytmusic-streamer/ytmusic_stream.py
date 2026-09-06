@@ -32,6 +32,7 @@ from yt_download import (
 )
 from ytmusic_client import _get_ytmusic
 from ytmusic_extraction_budget import ExtractionAbandoned, ExtractionBudget
+from ytmusic_priority_pacer import PriorityRatePacer
 from ytmusic_runtime import (
     _USER_AGENT,
     JsonObject,
@@ -43,7 +44,6 @@ from ytmusic_runtime import (
 from ytmusic_startup_timing import SpoolStartupTiming
 
 from services.common.sidecar_runtime_utils import (
-    ThreadSafeRatePacer,
     build_full_proxy_response,
     build_range_proxy_response,
     env_float,
@@ -84,8 +84,16 @@ YT_PLAYLIST_MAX_ENTRIES = max(1, env_int("YT_PLAYLIST_MAX_ENTRIES", "200"))
 # Delay range and bounded executor for yt-dlp extraction.
 EXTRACT_DELAY_MIN = env_float("YTMUSIC_EXTRACT_DELAY_MIN", "0.5")
 EXTRACT_DELAY_MAX = env_float("YTMUSIC_EXTRACT_DELAY_MAX", "2.0")
-_extract_pacer = ThreadSafeRatePacer(EXTRACT_DELAY_MIN, EXTRACT_DELAY_MAX)
 EXTRACT_TIMEOUT = env_float("YTMUSIC_EXTRACT_TIMEOUT", "60")
+_extract_pacer = PriorityRatePacer(
+    EXTRACT_DELAY_MIN,
+    EXTRACT_DELAY_MAX,
+    priority=lambda: getattr(
+        getattr(_spool_worker_context, "session", None), "current_priority", lambda: 0
+    ),
+    max_wait=EXTRACT_TIMEOUT,
+    cancelled=lambda: _pacing_cancelled(),
+)
 YTDLP_EXTRACT_CONCURRENCY = max(1, min(16, env_int("YTMUSIC_YTDLP_EXTRACT_CONCURRENCY", "2")))
 _extraction_budget = ExtractionBudget(YTDLP_EXTRACT_CONCURRENCY)
 _metadata_admission = threading.BoundedSemaphore(8)
@@ -160,7 +168,15 @@ _spool_background_pending_jobs = 0
 _spool_reserved_bytes = 0
 _spool_admitting = True
 _spool_prune_lock = threading.Lock()
-_spool_worker_context = threading.local()
+_spool_worker_context: threading.local = threading.local()
+
+
+def _pacing_cancelled() -> bool:
+    """Read cancellation only from the calling extraction thread's session."""
+    session = getattr(_spool_worker_context, "session", None)
+    return bool(session is not None and session.cancel_event.is_set())
+
+
 _provider_challenge_lock = threading.Lock()
 _provider_challenge_cooldown_until = 0.0
 
@@ -1023,7 +1039,12 @@ def _resolve_progressive_spool_plan_sync(
     if session.cancel_event.is_set():
         raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
     session.startup_timing.mark("resolve_start")
-    info = _get_stream_url_sync("__public__", video_id, quality)
+    previous = getattr(_spool_worker_context, "session", None)
+    _spool_worker_context.session = session
+    try:
+        info = _get_stream_url_sync("__public__", video_id, quality)
+    finally:
+        _spool_worker_context.session = previous
     session.startup_timing.mark("resolved")
     if session.cancel_event.is_set():
         raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
