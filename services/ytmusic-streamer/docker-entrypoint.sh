@@ -8,6 +8,9 @@ set -e
 # non-root already and this is a no-op passthrough.
 if [ "$(id -u)" = "0" ]; then
   chown -R ytmusic:ytmusic /data
+  # setpriv changes credentials, not HOME. Keep yt-dlp/Deno caches out of /root
+  # while retaining the configured proxy, secrets and all other runtime env.
+  export HOME=/home/ytmusic
   exec setpriv --reuid=ytmusic --regid=ytmusic --init-groups "$@"
 fi
 exec "$@"

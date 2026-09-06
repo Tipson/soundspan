@@ -39,6 +39,9 @@ ignore = [
   "S105", # Test fixtures intentionally use token-like placeholder strings.
   "S106", # Test calls intentionally pass token-like placeholder strings.
 ]
+"services/**/tests-container/**/*.py" = [
+  "S101", # Executable container tests use the same pytest assertion mechanism.
+]
 "services/*/app.py" = [
   "B008", # FastAPI Depends and Query objects are intentionally constructed as defaults.
 ]
