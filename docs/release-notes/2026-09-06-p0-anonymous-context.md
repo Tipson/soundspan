@@ -27,8 +27,6 @@ The empty/expired-context path requests public music configuration with a scoped
 
 verify: same cold Gimme Shelter resolution: ordinary 2540 ms, initialized candidate 1664 ms, identical Opus 251 / 132.001 kbps. This includes initialization, not CDN transfer. Full sidecar suite after initialization changes: 553 passed, 4 skipped. Ruff, formatting and targeted mypy passed. Tests cover initialization failure/backoff and owned-session cleanup.
 
-## Release
-
 ## Paced queue priority
 
 The previous limiter held its lock while sleeping for the next slot. A preload could therefore occupy that slot before a newly selected track. The extraction limiter uses priority/FIFO selection at admission while preserving the configured inter-request gap (production 0.75–2.5 seconds). Waiting work observes cancellation and an extraction-timeout bound; cancelled waiters do not consume a slot. Session priority is bound to and restored on the resolver thread.
@@ -38,3 +36,13 @@ verify: deterministic gate test admits playback before a previously waiting prel
 ## Release procedure
 
 Deploy only the YouTube sidecar. Keep the previous image and compose overlay backup for rollback. Do not change DNS, credentials, concurrency or the frontend. Record the actual release image and production checks below after execution.
+
+## Track-specific fallback isolation
+
+Missing or combined audio on one recording uses ordinary extraction without rejecting anonymous context for other recordings. Only a bot challenge invalidates the shared context. Regression tests failed for both format cases before this correction and pass afterward; challenge backoff remains covered.
+
+verify: full suite 558 passed, 4 skipped; targeted Ruff/format and mypy passed. Self-review: fallback preserves the original audio selector and paced request budget; no credentials, concurrency or retry-count changes. This fixes a confirmed shared-state defect, but does not by itself establish the cause of every slow upstream response.
+
+## Production acceptance of priority-f4dbd2b
+
+verify: deployed and healthy. Nine playlist selections and thirteen Wave tracks reached playback without media errors or timeout. Playlist starts ranged 443–3662 ms; nine prepared Wave transitions ranged 44–183 ms. Six rapid skips exposed a remaining 7590 ms start on Demons, including 5072 ms source resolution and roughly 1250 ms client coalescing. P0 is not closed. An isolated fresh-context lookup of the same recording took 1679 ms plus 1074 ms to a readable CDN prefix; this is not an equivalent rapid-switch acceptance run.

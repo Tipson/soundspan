@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Keep track-specific format fallbacks from disabling accelerated resolution for unrelated listeners.
+
 - Give interactive playback the next paced extraction slot ahead of waiting preloads without increasing the configured request rate; bound and cancel queued waits.
 
 - Initialize expired anonymous playback context from lightweight public music configuration with a short timeout and single-attempt backoff before falling back to the watch page.

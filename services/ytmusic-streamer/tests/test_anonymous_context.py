@@ -237,5 +237,5 @@ def test_fast_context_lookup_keeps_original_fallback(monkeypatch, mode):
     else:
         assert len(calls) == 2 and calls[-1] == "normal"
         assert paced == [True]
-        assert context.get() is None
+        assert context.get() == (None if mode == "challenge" else "fresh-anonymous")
     assert "extractor_args" not in options

@@ -160,7 +160,9 @@ def extract_music(
             message = str(error).lower()
             if "not a bot" not in message and "requested format is not available" not in message:
                 raise
-        _context.reject(visitor)
+            # A track-specific format mismatch does not invalidate shared context.
+            if "not a bot" in message:
+                _context.reject(visitor)
         pace()
     result = ordinary(ydl, url, options)
     if result and capture.visitor:
