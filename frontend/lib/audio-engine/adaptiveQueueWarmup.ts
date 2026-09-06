@@ -115,6 +115,7 @@ export interface AdaptiveQueueWarmupInput {
     tailVideoIds: readonly string[];
     connection: NetworkConnectionHints;
     immediateLease: AudioPreloadLease | null;
+    retainOnly?: boolean;
 }
 
 /**
@@ -128,6 +129,9 @@ export class AdaptiveQueueWarmupCoordinator {
     private lastLease: AudioPreloadLease | null = null;
     private lastSubmissionAt = 0;
     private completion: Promise<void> = Promise.resolve();
+    private submittedTail: string[] = [];
+    private submittedQuality: string | null = null;
+    private submittedPriority: string[] = [];
 
     constructor(
         private readonly ownerId: string,
@@ -142,6 +146,7 @@ export class AdaptiveQueueWarmupCoordinator {
             input.immediateVideoId,
             input.tailVideoIds,
             resolveAdaptiveTailWarmupCount(input.connection),
+            Boolean(input.retainOnly),
         ]);
         if (this.reusesPlan(planKey, input.immediateLease)) {
             return this.completion;
@@ -150,14 +155,41 @@ export class AdaptiveQueueWarmupCoordinator {
         const controller = new AbortController();
         this.controller = controller;
         const generation = ++this.generation;
+        const tailCount = resolveAdaptiveTailWarmupCount(input.connection);
+        const reserved = new Set([
+            input.currentVideoId,
+            input.immediateVideoId,
+        ]);
+        const tail = [...new Set(input.tailVideoIds.map((id) => id.trim()))]
+            .filter((id) => id.length > 0 && !reserved.has(id))
+            .slice(0, tailCount);
+        // Preserve admitted work still needed by the new queue. New tail work
+        // remains gated on immediate readiness; obsolete work is released.
+        const retainedTail =
+            this.submittedQuality === (input.quality ?? null)
+                ? tail.filter((id) => this.submittedTail.includes(id))
+                : [];
+        const admitted = new Set(
+            this.submittedQuality === (input.quality ?? null)
+                ? [...this.submittedPriority, ...this.submittedTail]
+                : [],
+        );
+        const retainPriority = (id: string | null) =>
+            !input.retainOnly || (id !== null && admitted.has(id)) ? id : null;
+        this.submittedTail = retainedTail;
+        this.submittedQuality = input.quality ?? null;
         const baseRequest: TailWarmupReconcileRequest = {
             ownerId: this.ownerId,
             generation,
             ...(input.quality ? { quality: input.quality } : {}),
-            current: input.currentVideoId,
-            immediate: input.immediateVideoId,
-            tail: [],
+            current: retainPriority(input.currentVideoId),
+            immediate: retainPriority(input.immediateVideoId),
+            tail: retainedTail,
         };
+        this.submittedPriority = [
+            baseRequest.current,
+            baseRequest.immediate,
+        ].filter((id): id is string => id !== null);
         const prioritySubmission = this.submit(baseRequest, controller);
 
         this.completion = (async () => {
@@ -166,6 +198,7 @@ export class AdaptiveQueueWarmupCoordinator {
                 : { state: "cancelled" as const };
             await prioritySubmission;
             if (
+                input.retainOnly ||
                 readiness.state !== "ready" ||
                 controller.signal.aborted ||
                 this.controller !== controller ||
@@ -173,28 +206,10 @@ export class AdaptiveQueueWarmupCoordinator {
             ) {
                 return;
             }
-            const tailCount = resolveAdaptiveTailWarmupCount(input.connection);
-            if (tailCount === 0) {
-                return;
-            }
-            const reserved = new Set(
-                [input.currentVideoId, input.immediateVideoId].filter(
-                    (value): value is string => Boolean(value),
-                ),
-            );
-            const tail = input.tailVideoIds
-                .filter((videoId, index, values) => {
-                    const normalized = videoId.trim();
-                    return (
-                        normalized.length > 0 &&
-                        !reserved.has(normalized) &&
-                        values.indexOf(videoId) === index
-                    );
-                })
-                .slice(0, tailCount);
             if (tail.length === 0) {
                 return;
             }
+            this.submittedTail = tail;
             await this.submit({ ...baseRequest, tail }, controller);
         })();
         return this.completion;
@@ -205,6 +220,9 @@ export class AdaptiveQueueWarmupCoordinator {
             return this.completion;
         }
         this.controller?.abort();
+        this.submittedTail = [];
+        this.submittedQuality = null;
+        this.submittedPriority = [];
         const controller = new AbortController();
         this.controller = controller;
         const generation = ++this.generation;

@@ -31,6 +31,132 @@ const deferredLease = (
     };
 };
 
+test("queue advance retains already admitted overlapping tail while next is loading", async () => {
+    const calls: TailWarmupReconcileRequest[] = [];
+    const coordinator = new AdaptiveQueueWarmupCoordinator(
+        "handoff",
+        async (request) => {
+            calls.push(request);
+        },
+    );
+    const ready = deferredLease();
+    ready.settle({ state: "ready" });
+    await coordinator.reconcile({
+        currentVideoId: "a",
+        immediateVideoId: "b",
+        tailVideoIds: ["c", "d"],
+        connection: {},
+        immediateLease: ready.lease,
+    });
+    const pending = deferredLease();
+    const completion = coordinator.reconcile({
+        currentVideoId: "b",
+        immediateVideoId: "c",
+        tailVideoIds: ["d", "e"],
+        connection: {},
+        immediateLease: pending.lease,
+    });
+    assert.deepEqual(
+        calls.at(-1)?.tail,
+        ["d"],
+        "do not cancel and restart still-needed d; do not start new e yet",
+    );
+    pending.settle({ state: "ready" });
+    await completion;
+    assert.deepEqual(calls.at(-1)?.tail, ["d", "e"]);
+    await coordinator.clear();
+});
+
+test("deferred network preparation retains only previously submitted queue interests", async () => {
+    const calls: TailWarmupReconcileRequest[] = [];
+    const coordinator = new AdaptiveQueueWarmupCoordinator(
+        "deferred",
+        async (request) => {
+            calls.push(request);
+        },
+    );
+    const ready = deferredLease();
+    ready.settle({ state: "ready" });
+    await coordinator.reconcile({
+        currentVideoId: "a",
+        immediateVideoId: "b",
+        tailVideoIds: ["c", "d"],
+        connection: {},
+        immediateLease: ready.lease,
+    });
+    await coordinator.reconcile({
+        currentVideoId: "b",
+        immediateVideoId: "c",
+        tailVideoIds: ["d", "e"],
+        connection: {},
+        immediateLease: null,
+        retainOnly: true,
+    });
+    assert.deepEqual(calls.at(-1), {
+        ownerId: "deferred",
+        generation: 2,
+        current: "b",
+        immediate: "c",
+        tail: ["d"],
+    });
+    await coordinator.reconcile({
+        currentVideoId: "x",
+        immediateVideoId: "y",
+        tailVideoIds: ["d", "z"],
+        connection: {},
+        immediateLease: ready.lease,
+        retainOnly: true,
+    });
+    assert.deepEqual(calls.at(-1), {
+        ownerId: "deferred",
+        generation: 3,
+        current: null,
+        immediate: null,
+        tail: ["d"],
+    });
+    assert.equal(
+        calls.length,
+        4,
+        "even a ready lease cannot admit new work in retain-only mode",
+    );
+    await coordinator.clear();
+});
+
+for (const reason of ["quality", "saveData", "clear"] as const) {
+    test(`retained tail is released after ${reason}`, async () => {
+        const calls: TailWarmupReconcileRequest[] = [];
+        const coordinator = new AdaptiveQueueWarmupCoordinator(
+            "release",
+            async (request) => {
+                calls.push(request);
+            },
+        );
+        const ready = deferredLease();
+        ready.settle({ state: "ready" });
+        const input = {
+            quality: "high",
+            currentVideoId: "a",
+            immediateVideoId: "b",
+            tailVideoIds: ["c", "d"],
+            connection: {},
+            immediateLease: ready.lease,
+        };
+        await coordinator.reconcile(input);
+        if (reason === "clear") await coordinator.clear();
+        const pending = deferredLease();
+        const completion = coordinator.reconcile({
+            ...input,
+            quality: reason === "quality" ? "low" : "high",
+            connection: { saveData: reason === "saveData" },
+            immediateLease: pending.lease,
+        });
+        assert.deepEqual(calls.at(-1)?.tail, []);
+        pending.settle({ state: "cancelled" });
+        await completion;
+        await coordinator.clear();
+    });
+}
+
 test("adaptive tail policy honors constrained and fast connections", () => {
     assert.equal(
         resolveAdaptiveTailWarmupCount({ saveData: true, effectiveType: "4g" }),

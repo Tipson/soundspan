@@ -216,7 +216,7 @@ export function useNextTrackPreload({
     const reconcileAdaptiveWarmup = useCallback(
         (
             immediateTrack: PreloadableTrack,
-            immediateLease: AudioPreloadLease,
+            immediateLease: AudioPreloadLease | null,
         ) => {
             const upcoming = resolveUpcomingQueueTracks(
                 queue,
@@ -242,6 +242,7 @@ export function useNextTrackPreload({
                 tailVideoIds,
                 connection: readConnectionHints(),
                 immediateLease,
+                retainOnly: immediateLease === null,
             });
         },
         [
@@ -349,7 +350,9 @@ export function useNextTrackPreload({
                 leaseController.release();
                 lastPreloadedTrackIdRef.current = null;
                 readyPreloadedTrackIdRef.current = null;
-                void warmupCoordinatorRef.current?.clear();
+                // Keep only existing work needed after this queue change.
+                // Do not admit a new network preload before timing permits it.
+                reconcileAdaptiveWarmup(nextTrack, null);
                 return;
             }
 
