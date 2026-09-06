@@ -313,6 +313,7 @@ class _SpoolSession:
         self.content_type: str | None = None
         self.content_length: int | None = None
         self.readable = False
+        self._proven_prefix: tuple[Path, str, int | None] | None = None
         self.lease_count = 0
         self._changed = asyncio.Event()
         self._pinned_paths: set[Path] = set()
@@ -330,6 +331,12 @@ class _SpoolSession:
         global _spool_background_pending_jobs
 
         self.failure_scopes.add((purpose, provider_identity))
+        if purpose in {"interactive", "preload"} and not self.allow_growing:
+            self.allow_growing = True
+            # The writer may have proved the prefix before this listener joined.
+            # Analysis still awaits task completion through its own response path.
+            if self._proven_prefix is not None:
+                self.publish_readable(*self._proven_prefix)
         promoted_priority = _spool_purpose_priority(purpose)
         if promoted_priority <= self.priority:
             return
@@ -366,6 +373,7 @@ class _SpoolSession:
         self, path: Path, content_type: str, content_length: int | None = None
     ) -> None:
         """Publish a prefix only after the writer proved it browser-readable."""
+        self._proven_prefix = (path, content_type, content_length)
         if not self.allow_growing:
             return
         self.pin_path(path)

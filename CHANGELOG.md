@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Allow playback or preload joining an in-progress audio-analysis download to use its validated audio prefix, including a prefix discovered before the listener joined. Reuse the same download while keeping analysis responses complete-file-only.
+
 - Load protected feature/UI settings only after authentication, stop polling on logout, and ignore delayed responses from an earlier account or request. Keep public pages free of repeated settings authorization errors without relaxing backend access checks.
 
 - Select background audio-analysis accounts by each listener's last activity, preventing one prolific listener from crowding out other active accounts. Preserve the 100-account pass limit and exclusion of test accounts.
