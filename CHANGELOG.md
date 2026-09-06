@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Record bounded monotonic startup checkpoints for shared YouTube audio jobs to distinguish extraction queue, source resolution, transfer wait and first playable prefix without logging signed URLs.
+
 - Retry an internal audio GET once on a fresh connection when a reused sidecar socket resets before headers; preserve Range, cancellation, admission and the original deadline.
 
 - Prepare one visible Wave startup track through the bounded background queue, preserving an in-flight download on Play and respecting data-saving connections.

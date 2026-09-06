@@ -1,6 +1,7 @@
 """Stream extraction, proxying, regular-YouTube metadata, and caches."""
 
 import asyncio
+import json
 import os
 import re
 import tempfile
@@ -39,6 +40,7 @@ from ytmusic_runtime import (
     app,
     log,
 )
+from ytmusic_startup_timing import SpoolStartupTiming
 
 from services.common.sidecar_runtime_utils import (
     ThreadSafeRatePacer,
@@ -333,6 +335,7 @@ class _SpoolSession:
         priority: int = 2,
     ) -> None:
         self.key = key
+        self.startup_timing = SpoolStartupTiming()
         self.loop = loop
         self.cancel_event = cancel_event
         self.allow_growing = allow_growing
@@ -408,6 +411,9 @@ class _SpoolSession:
         self.partial_path = path
         self.content_type = content_type
         self.content_length = content_length
+        if not self.readable:
+            self.startup_timing.mark("readable")
+            log.info("YouTube startup %s %s", self.key, json.dumps(self.startup_timing.snapshot()))
         self.readable = True
         self._notify()
 
@@ -1009,7 +1015,9 @@ def _resolve_progressive_spool_plan_sync(
     """Resolve a direct source without keeping its later byte transfer in this lane."""
     if session.cancel_event.is_set():
         raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+    session.startup_timing.mark("resolve_start")
     info = _get_stream_url_sync("__public__", video_id, quality)
+    session.startup_timing.mark("resolved")
     if session.cancel_event.is_set():
         raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
     source = _progressive_source(info)
@@ -1239,6 +1247,7 @@ def _download_progressive_spool_sync(
     plan: _ProgressiveSpoolPlan | None = None,
 ) -> tuple[str, str, JsonObject] | None:
     """Download a proven direct source into a Soundspan-owned append-only file."""
+    session.startup_timing.mark("transfer_start")
     if plan is None:
         plan = _resolve_progressive_spool_plan_sync(video_id, quality, session)
     if plan is None:
@@ -1270,6 +1279,7 @@ def _download_progressive_spool_sync(
         for chunk, total_bytes in _iter_progressive_cdn_chunks(
             stream_url, headers, session, byte_limit, started_at
         ):
+            session.startup_timing.mark("first_chunk")
             downloaded += len(chunk)
             spool.write(chunk)
             if prefix_state == "pending":
