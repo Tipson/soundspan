@@ -16,6 +16,26 @@ jest.mock("../../../utils/db", () => ({
 
 import { recommendationShadowEvaluation } from "../shadowEvaluation";
 
+test("keeps test accounts out of Hybrid engagement and participation counts", async () => {
+    await recommendationShadowEvaluation.evaluate({
+        since: new Date("2026-09-03T00:00:00Z"),
+        until: new Date("2026-09-04T00:00:00Z"),
+    });
+    for (const query of [
+        mockGenerationFindMany,
+        mockExposureCount,
+        mockExposureFindMany,
+    ]) {
+        expect(query).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    user: { isTestAccount: false },
+                }),
+            }),
+        );
+    }
+});
+
 test("excludes merge aliases from identity and analysis quality counters", async () => {
     await recommendationShadowEvaluation.evaluate({
         since: new Date("2026-09-03T00:00:00Z"),

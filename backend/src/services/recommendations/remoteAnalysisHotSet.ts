@@ -105,6 +105,7 @@ export interface RemoteAnalysisJob {
 
 interface RemoteAnalysisHotSetDependencies {
     enabled: boolean;
+    isAccountEligible?: (userId: string) => Promise<boolean>;
     loadCoveredCanonicalIds: (
         canonicalRecordingIds: string[],
     ) => Promise<ReadonlySet<string>>;
@@ -188,6 +189,11 @@ export class RemoteAnalysisHotSetScheduler {
 
     async schedule(input: ScheduleRecommendationHotSetInput): Promise<void> {
         if (!this.dependencies.enabled) return;
+        if (
+            this.dependencies.isAccountEligible &&
+            !(await this.dependencies.isAccountEligible(input.userId))
+        )
+            return;
         let accountCandidates: RecommendationCandidate[] = [];
         if (this.dependencies.loadAccountCandidates) {
             try {
@@ -779,6 +785,13 @@ export const remoteAnalysisHotSetScheduler = new RemoteAnalysisHotSetScheduler({
         (config.recommendations?.remoteAnalysisEnabled ?? false) &&
         config.features.audioAnalysis,
     loadCoveredCanonicalIds: loadRemoteAnalysisCoveredCanonicalIds,
+    isAccountEligible: async (userId) => {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { isTestAccount: true },
+        });
+        return user?.isTestAccount === false;
+    },
     enqueue: enqueueRemoteAnalysis,
     loadAccountCandidates: loadAccountHotSetCandidates,
     enrichIdentities: (userId, candidates) =>

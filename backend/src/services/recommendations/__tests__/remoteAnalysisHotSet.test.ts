@@ -85,6 +85,28 @@ import {
 import { redisClient } from "../../../utils/redis";
 import type { RecommendationCandidate } from "../types";
 
+test("test-account playback cannot admit analysis or identity enrichment", async () => {
+    const dependencies = {
+        enabled: true,
+        isAccountEligible: jest.fn(async () => false),
+        loadCoveredCanonicalIds: jest.fn(async () => new Set<string>()),
+        loadAccountCandidates: jest.fn(async () => []),
+        enrichIdentities: jest.fn(async () => undefined),
+        enqueue: jest.fn(async () => undefined),
+    };
+    const scheduler = new RemoteAnalysisHotSetScheduler(dependencies);
+    await scheduler.schedule({
+        userId: "test-user",
+        sessionId: "test-session",
+        surface: "wave",
+        candidates: [candidate("test-track")],
+    });
+    expect(dependencies.isAccountEligible).toHaveBeenCalledWith("test-user");
+    expect(dependencies.loadAccountCandidates).not.toHaveBeenCalled();
+    expect(dependencies.enrichIdentities).not.toHaveBeenCalled();
+    expect(dependencies.enqueue).not.toHaveBeenCalled();
+});
+
 function candidate(
     id: string,
     source: "youtube" | "tidal" = "youtube",

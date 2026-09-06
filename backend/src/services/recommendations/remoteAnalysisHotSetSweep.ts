@@ -39,7 +39,7 @@ async function loadActiveUserIds(): Promise<string[]> {
         Date.now() - ACTIVE_ACCOUNT_LOOKBACK_DAYS * 24 * 60 * 60 * 1_000,
     );
     const rows = await prisma.play.findMany({
-        where: { playedAt: { gte: since } },
+        where: { playedAt: { gte: since }, user: { isTestAccount: false } },
         orderBy: { playedAt: "desc" },
         take: MAX_PLAY_ROWS,
         select: { userId: true },

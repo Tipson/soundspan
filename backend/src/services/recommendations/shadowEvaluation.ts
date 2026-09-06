@@ -753,7 +753,10 @@ export const recommendationShadowEvaluation =
     new RecommendationShadowEvaluationService({
         loadGenerations: (since, until) =>
             prisma.recommendationGeneration.findMany({
-                where: { createdAt: { gte: since, lt: until } },
+                where: {
+                    createdAt: { gte: since, lt: until },
+                    user: { isTestAccount: false },
+                },
                 orderBy: { createdAt: "asc" },
                 select: {
                     id: true,
@@ -831,10 +834,16 @@ export const recommendationShadowEvaluation =
                     },
                 }),
                 prisma.recommendationExposure.count({
-                    where: { viewedAt: { gte: since, lt: until } },
+                    where: {
+                        viewedAt: { gte: since, lt: until },
+                        user: { isTestAccount: false },
+                    },
                 }),
                 prisma.recommendationExposure.findMany({
-                    where: { viewedAt: { gte: since, lt: until } },
+                    where: {
+                        viewedAt: { gte: since, lt: until },
+                        user: { isTestAccount: false },
+                    },
                     distinct: ["userId"],
                     select: { userId: true },
                 }),

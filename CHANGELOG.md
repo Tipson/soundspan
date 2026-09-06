@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Isolate operator-created playback test accounts from Hybrid evaluation, participation counts and online-analysis admission. Create test identities without overwriting existing users or sharing their playback history.
+
 - Release provider extraction capacity before downloading direct audio for background analysis, while retaining completed-file delivery, cancellation, and shared transfer limits.
 
 - Route player links for YouTube channel and album identities to provider-aware pages, retaining library routes for local entities. Keep the avatar cache revision in the URL query instead of appending it to the user ID.

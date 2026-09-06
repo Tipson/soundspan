@@ -19,6 +19,8 @@ model User {
   passwordHash              String?
   subsonicPassword          String? // Encrypted plaintext for Subsonic token auth (md5 requires plaintext)
   role                      String                     @default("user")
+  // Operator-created playback fixtures; excluded from recommendation evaluation.
+  isTestAccount             Boolean                    @default(false)
   onboardingComplete        Boolean                    @default(false)
   enrichmentSettings        Json?
   twoFactorEnabled          Boolean                    @default(false)
