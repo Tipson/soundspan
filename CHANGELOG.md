@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Bound progressive audio connection/CONNECT setup to three seconds and retry one timed-out opening before response headers. Preserve the exact range, validator, cancellation and transfer deadline; do not replay partially delivered response bodies.
+
 - Reuse bounded public YouTube player preprocessing across stream extractions without reusing listener challenges or signed URLs. Keep the stock extractor on unsupported versions or initialization failure, and retry original player processing when cached execution fails.
 
 - Allow playback or preload joining an in-progress audio-analysis download to use its validated audio prefix, including a prefix discovered before the listener joined. Reuse the same download while keeping analysis responses complete-file-only.

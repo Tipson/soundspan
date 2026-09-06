@@ -34,3 +34,17 @@ playback latency guarantee or a concurrent-listener capacity result.
 
 The behavioral tests are `test_player_preprocess_cache.py` and
 `test_player_cache_bootstrap.py` under `services/ytmusic-streamer/tests`.
+
+## Independent connection stalls
+
+The progressive audio path caps connection establishment, including proxy
+CONNECT, at three seconds (or the smaller remaining transfer budget). It retries
+one timed-out request opening before receiving response headers. A continuation
+retry keeps the same Range and If-Range values. Response-body timeouts are not
+retried from zero; published bytes are never duplicated. Body-read timeout,
+representation validation, cancellation and the overall transfer deadline are
+preserved. This is distinct from EJS processing and does not diagnose all
+connection failures as provider rate limits.
+
+`test_cdn_connection_retry.py` includes a real loopback proxy that stalls CONNECT,
+plus retry, cancellation, deadline and byte-continuity cases.

@@ -118,6 +118,7 @@ _SPOOL_MAX_PENDING_JOBS = 8
 _SPOOL_MAX_BACKGROUND_PENDING_JOBS = max(0, _SPOOL_MAX_PENDING_JOBS - 1)
 _SPOOL_READ_CHUNK_BYTES = 64 * 1024
 _SPOOL_CDN_RANGE_BYTES = 1024 * 1024
+_SPOOL_CONNECT_TIMEOUT_SECONDS = 3.0
 _SPOOL_PREFIX_PROBE_BYTES = 2 * 1024 * 1024
 _SOUNDSPAN_PART_SUFFIX = ".soundspan-part"
 _SPOOL_DRAIN_SECONDS = 5.0
@@ -1050,6 +1051,39 @@ def _replace_completed_spool(
             time.sleep(_SPOOL_RENAME_RETRY_SECONDS)
 
 
+def _open_progressive_range(
+    stream_url: str,
+    headers: dict[str, str],
+    session: _SpoolSession,
+    started_at: float,
+) -> requests.Response:
+    """Retry one timed-out connection before headers under the original deadline.
+
+    CONNECT/TLS use the short connect budget; body reads retain their existing
+    timeout. No response-body iteration occurs here, so a retry cannot replay
+    bytes already published by this range. The caller owns response cleanup.
+    """
+    for attempt in range(2):
+        if session.cancel_event.is_set():
+            raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+        remaining = YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT - (time.monotonic() - started_at)
+        if remaining <= 0:
+            raise RuntimeError("YouTube Music spool download timeout exceeded")
+        timeout = min(YTDLP_SOCKET_TIMEOUT, remaining)
+        try:
+            return requests.get(
+                stream_url,
+                headers=headers,
+                stream=True,
+                timeout=(min(_SPOOL_CONNECT_TIMEOUT_SECONDS, timeout), timeout),
+            )
+        except requests.Timeout:
+            if attempt:
+                raise
+            log.info("Retrying timed-out CDN connection before response headers")
+    raise RuntimeError("Unreachable CDN connection retry state")
+
+
 def _iter_progressive_cdn_chunks(
     stream_url: str,
     headers: dict[str, str],
@@ -1076,10 +1110,7 @@ def _iter_progressive_cdn_chunks(
         range_headers = {**headers, "Range": f"bytes={offset}-{end}"}
         if validator is not None:
             range_headers["If-Range"] = validator
-        timeout = min(YTDLP_SOCKET_TIMEOUT, remaining)
-        with requests.get(
-            stream_url, headers=range_headers, stream=True, timeout=(timeout, timeout)
-        ) as response:
+        with _open_progressive_range(stream_url, range_headers, session, started_at) as response:
             try:
                 response.raise_for_status()
             except requests.HTTPError as error:
