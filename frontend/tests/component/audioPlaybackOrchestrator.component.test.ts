@@ -1914,42 +1914,45 @@ for (const action of ["pause", "clear", "unmount"] as const) {
     });
 }
 
-test("an unprepared manual YouTube selection after stable playback starts in 300ms", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout"] });
-    const tracks = ["stable-current", "cold-selection"].map((id) =>
-        makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
-    );
-    audioState.currentTrack = tracks[0];
-    audioState.queue = tracks;
-    playbackState.isPlaying = true;
-    renderOrchestrator();
-    await flushAsync();
-    engine.emit("load", { durationSec: 210 });
-    engine.playing = true;
-    engine.actualCurrentTime = 30;
+for (const playedSeconds of [0.49, 0.5, 0.75, 30]) {
+    const expectedDelay = playedSeconds >= 0.5 ? 300 : 1250;
+    test(`an unprepared manual YouTube selection after ${playedSeconds}s of playback starts in ${expectedDelay}ms`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const tracks = ["stable-current", "cold-selection"].map((id) =>
+            makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+        );
+        audioState.currentTrack = tracks[0];
+        audioState.queue = tracks;
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.actualCurrentTime = playedSeconds;
 
-    writePlaybackReplacementIntent(tracks[0].id);
-    selectTrack(tracks, 1);
-    await flushAsync();
-    assert.equal(engine.loadCalls.length, 1);
-    t.mock.timers.tick(299);
-    await flushAsync();
-    assert.equal(engine.loadCalls.length, 1);
-    t.mock.timers.tick(1);
-    await flushAsync();
-    assert.equal(engine.loadCalls.length, 2);
-    assert.equal(
-        engine.loadCalls.at(-1)?.args[0],
-        "https://stream.test/yt/cold-selection",
-    );
-    t.mock.timers.tick(1_250);
-    await flushAsync();
-    assert.equal(
-        engine.loadCalls.length,
-        2,
-        "no second load from an old timer",
-    );
-});
+        writePlaybackReplacementIntent(tracks[0].id);
+        selectTrack(tracks, 1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 1);
+        t.mock.timers.tick(expectedDelay - 1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 1);
+        t.mock.timers.tick(1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 2);
+        assert.equal(
+            engine.loadCalls.at(-1)?.args[0],
+            "https://stream.test/yt/cold-selection",
+        );
+        t.mock.timers.tick(1_250);
+        await flushAsync();
+        assert.equal(
+            engine.loadCalls.length,
+            2,
+            "no second load from an old timer",
+        );
+    });
+}
 
 test("a burst after stable playback cancels the fast selection and coalesces the rest", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });

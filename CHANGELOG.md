@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Shorten manual YouTube switching after a half-second audible preview, retaining the longer coalescing delay for unresolved loading and rapid clicks before playback settles.
+
 - Restore back/forward scroll positions even when the Next.js router commits navigation before the application's history listener runs.
 
 - Restore the main content's scroll position on browser back/forward in desktop and mobile layouts. Keep ordinary navigation and background updates unchanged, bound pending restoration, and let manual scrolling cancel it.

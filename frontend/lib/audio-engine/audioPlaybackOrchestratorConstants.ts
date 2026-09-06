@@ -27,7 +27,9 @@ export const MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS = 1_250;
 // Keep a short cancellation window for double taps; loading/rapid selections
 // still use the conservative provider gate above.
 export const MANUAL_YOUTUBE_STABLE_SWITCH_DEBOUNCE_MS = 300;
-export const MANUAL_YOUTUBE_STABLE_POSITION_SEC = 5;
+// A short audible preview is a deliberate listen, not an unresolved click burst.
+// Loading and sub-half-second selections retain the long coalescing gate.
+export const MANUAL_YOUTUBE_STABLE_POSITION_SEC = 0.5;
 export const TRACK_ERROR_SKIP_DELAY_MS = 1200;
 export const TRANSIENT_TRACK_ERROR_RECOVERY_DELAY_MS = 450;
 export const TRANSIENT_TRACK_ERROR_RECOVERY_WINDOW_MS = 15_000;
