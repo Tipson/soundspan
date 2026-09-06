@@ -12,7 +12,10 @@ const Marker = ({ name }: { name: string }) =>
     React.createElement("div", { "data-marker": name });
 
 mock.module("next/navigation", {
-    namedExports: { usePathname: () => "/" },
+    namedExports: {
+        usePathname: () => "/",
+        useSearchParams: () => new URLSearchParams(),
+    },
 });
 mock.module("@/lib/auth-context", {
     namedExports: {

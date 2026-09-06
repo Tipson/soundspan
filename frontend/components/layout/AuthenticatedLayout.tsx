@@ -3,7 +3,7 @@
 import { useAuth } from "@/lib/auth-context";
 import { ru } from "@/lib/i18n/ru";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { TVLayout } from "./TVLayout";
@@ -21,6 +21,7 @@ import { useIsTV } from "@/lib/tv-utils";
 import { useActivityPanel } from "@/hooks/useActivityPanel";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { TasteProfileOnboardingGate } from "@/features/taste-profile";
+import { MainScrollRestoration } from "./MainScrollRestoration";
 
 const publicPaths = ["/login", "/register", "/onboarding", "/sync"];
 const publicPrefixes = ["/share/"];
@@ -36,6 +37,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
     const isTV = useIsTV();
     const isMobileOrTablet = isMobile || isTablet;
     const activityPanel = useActivityPanel();
+    const mainScrollRef = useRef<HTMLElement | null>(null);
     usePresenceHeartbeat();
 
     // Listen for activity panel events (toggle/open/close/tab)
@@ -153,7 +155,14 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         />
 
                         <PullToRefresh>
+                            <Suspense fallback={null}>
+                                <MainScrollRestoration
+                                    key={user?.id}
+                                    containerRef={mainScrollRef}
+                                />
+                            </Suspense>
                             <main
+                                ref={mainScrollRef}
                                 id="main-content"
                                 tabIndex={-1}
                                 data-app-scroll-container
@@ -215,6 +224,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                                 onActivityPanelToggle={activityPanel.toggle}
                             />
                             <main
+                                ref={mainScrollRef}
                                 id="main-content"
                                 tabIndex={-1}
                                 data-app-scroll-container
@@ -225,6 +235,12 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                                 data-shell-canvas="open"
                                 className={`desktop-content-stage relative min-h-0 min-w-0 flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 ${pathname === "/vibe" ? "overflow-hidden" : "overflow-y-auto"}`}
                             >
+                                <Suspense fallback={null}>
+                                    <MainScrollRestoration
+                                        key={user?.id}
+                                        containerRef={mainScrollRef}
+                                    />
+                                </Suspense>
                                 {children}
                             </main>
                         </div>
