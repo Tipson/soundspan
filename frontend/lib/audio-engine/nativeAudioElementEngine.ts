@@ -659,6 +659,24 @@ export class NativeAudioElementEngine implements AudioEngine {
             sharedFrontendLogger.warn("[NativeAudioEngine] No audio loaded");
             return;
         }
+        // Reassert before each real play, including lock-screen resume and
+        // source handoff. WebKit may have changed its category while paused.
+        // Unsupported/rejected Audio Session API must never prevent play().
+        try {
+            const session =
+                typeof navigator === "undefined"
+                    ? undefined
+                    : (
+                          navigator as Navigator & {
+                              audioSession?: { type: string };
+                          }
+                      ).audioSession;
+            if (session && session.type !== "playback") {
+                session.type = "playback";
+            }
+        } catch {
+            this.telemetry("audio_session_configuration_failed", {});
+        }
         if (this.iosBridgeGate()) {
             this.iosBridge.ensureForElement(
                 element as unknown as HTMLAudioElement,

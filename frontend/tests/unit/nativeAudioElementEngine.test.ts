@@ -15,9 +15,70 @@ import {
 
 type ElementListener = (event: unknown) => void;
 
+test("native playback configures the audio session before start and resume", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    const session = { type: "auto" };
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: { audioSession: session },
+    });
+    const h = createHarness({ isPageHidden: () => true });
+    try {
+        h.engine.load("/first.mp3", { autoplay: true });
+        h.mainElement().fireLoadedMetadata(180);
+        assert.equal(session.type, "playback");
+        h.engine.pause();
+        session.type = "auto";
+        h.engine.play();
+        assert.equal(session.type, "playback");
+        session.type = "auto";
+        h.engine.load("/second.mp3", { autoplay: true });
+        h.mainElement().fireLoadedMetadata(180);
+        assert.equal(session.type, "playback");
+    } finally {
+        h.engine.destroy();
+        if (descriptor)
+            Object.defineProperty(globalThis, "navigator", descriptor);
+        else Reflect.deleteProperty(globalThis, "navigator");
+    }
+});
+
 type PlayBehavior =
     | { kind: "resolve" }
     | { kind: "reject"; name: string; message: string };
+
+test("unsupported audio session configuration does not block native play", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            audioSession: {
+                get type() {
+                    return "auto";
+                },
+                set type(_value: string) {
+                    throw new Error("unsupported");
+                },
+            },
+        },
+    });
+    const h = createHarness();
+    try {
+        h.engine.load("/first.mp3", { autoplay: true });
+        h.mainElement().fireLoadedMetadata(180);
+        assert.equal(h.mainElement().paused, false);
+        assert.ok(
+            h.telemetryEvents.some(
+                (e) => e.event === "audio_session_configuration_failed",
+            ),
+        );
+    } finally {
+        h.engine.destroy();
+        if (descriptor)
+            Object.defineProperty(globalThis, "navigator", descriptor);
+        else Reflect.deleteProperty(globalThis, "navigator");
+    }
+});
 
 class FakeAudioElement implements NativeAudioElementLike {
     currentTime = 0;
