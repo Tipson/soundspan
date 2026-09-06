@@ -59,6 +59,9 @@ const personalizedFeed = {
         seedCount: 1,
     } as Record<string, unknown>,
 };
+const personalizedFeedGate: { current: Promise<void> | null } = {
+    current: null,
+};
 const listenTogetherSession = {
     current: null as {
         groupId: string;
@@ -86,6 +89,7 @@ const listenTogetherSocketMock = {
 };
 
 afterEach(() => {
+    personalizedFeedGate.current = null;
     playbackAdvanceOriginRef.current = null;
     setPlaybackAutoRestartSuppressed(false);
     listenTogetherSession.current = null;
@@ -134,6 +138,8 @@ mock.module("@/lib/api", {
             clearPlaybackState: async () => ({}),
             request: async (path: string) => {
                 apiCalls.personalizedRequests.push(path);
+                if (personalizedFeedGate.current)
+                    await personalizedFeedGate.current;
                 return personalizedFeed.current;
             },
         },
@@ -787,7 +793,7 @@ test("provider radio extends the played shuffle order without replaying old trac
     );
 });
 
-test("three early Wave skips replace the prepared provider tail", async () => {
+test("three early Wave skips refresh only the tail and respect a subsequent pause", async (t) => {
     const currentTrack = {
         ...makeTrack("yt:AAAAAAAAAAA", "provider-artist"),
         streamSource: "youtube" as const,
@@ -797,12 +803,14 @@ test("three early Wave skips replace the prepared provider tail", async () => {
             youtubeVideoId: "AAAAAAAAAAA",
         },
     };
-    const staleTracks = ["BBBBBBBBBBB", "CCCCCCCCCCC"].map((videoId) => ({
-        ...makeTrack(`yt:${videoId}`, `artist-${videoId}`),
-        streamSource: "youtube" as const,
-        youtubeVideoId: videoId,
-        provider: { source: "youtube" as const, youtubeVideoId: videoId },
-    }));
+    const staleTracks = ["BBBBBBBBBBB", "CCCCCCCCCCC", "EEEEEEEEEEE"].map(
+        (videoId) => ({
+            ...makeTrack(`yt:${videoId}`, `artist-${videoId}`),
+            streamSource: "youtube" as const,
+            youtubeVideoId: videoId,
+            provider: { source: "youtube" as const, youtubeVideoId: videoId },
+        }),
+    );
     const freshVideoId = "DDDDDDDDDDD";
     personalizedFeed.current = {
         shelves: {
@@ -842,27 +850,76 @@ test("three early Wave skips replace the prepared provider tail", async () => {
         ],
     });
     const playback = createPlaybackStub({ currentTime: 5, duration: 200 });
-    const controls = await renderControls({ state, playback });
-
-    controls.next();
-    controls.next();
-    controls.next();
-    await flushAsync();
+    let releaseFeed!: () => void;
+    personalizedFeedGate.current = new Promise<void>((resolve) => {
+        releaseFeed = resolve;
+    });
+    stateHolder.current = state;
+    playbackHolder.current = playback;
+    apiCalls.personalizedRequests.length = 0;
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
+    const { createRoot } = await import("react-dom/client");
+    const controlsRef: { current: ReturnType<typeof useAudioControls> | null } =
+        { current: null };
+    function Probe() {
+        controlsRef.current = useAudioControls();
+        return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        releaseFeed();
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    const render = async () =>
+        React.act(async () => {
+            root.render(
+                React.createElement(
+                    AudioControlsProvider,
+                    null,
+                    React.createElement(Probe),
+                ),
+            );
+        });
+    await render();
+    for (let index = 0; index < 3; index++) {
+        assert.ok(controlsRef.current);
+        controlsRef.current.next();
+        state.commit();
+        await render();
+    }
+    // While recommendations are pending, the listener pauses the selection.
+    playback.currentTime = 7;
+    playback.isPlaying = false;
+    await React.act(async () => {
+        releaseFeed();
+        await flushAsync();
+    });
     state.commit();
 
     assert.equal(apiCalls.personalizedRequests.length, 1);
     assert.equal(
         (state.currentTrack as { youtubeVideoId?: string }).youtubeVideoId,
-        freshVideoId,
+        "EEEEEEEEEEE",
     );
     assert.deepEqual(
         (state.queue as Array<{ youtubeVideoId?: string }>).map(
             (track) => track.youtubeVideoId,
         ),
-        ["AAAAAAAAAAA", freshVideoId],
+        [
+            "AAAAAAAAAAA",
+            "BBBBBBBBBBB",
+            "CCCCCCCCCCC",
+            "EEEEEEEEEEE",
+            freshVideoId,
+        ],
     );
-    assert.equal(playback.currentTime, 0);
-    assert.equal(playback.isPlaying, true);
+    assert.equal(state.currentIndex, 3);
+    assert.equal(playback.currentTime, 7);
+    assert.equal(playback.isPlaying, false);
 });
 
 test("provider radio adds rich tracks to a Listen Together queue without local mutation", async () => {

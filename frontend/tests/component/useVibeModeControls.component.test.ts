@@ -561,7 +561,8 @@ test("adaptive provider refresh replaces the stale tail after the latest active 
         committed.queue?.map((track) => track.id),
         [first.id, second.id, freshOne.id, freshTwo.id],
     );
-    assert.equal(committed.currentTrack?.id, freshOne.id);
-    assert.equal(committed.currentIndex, 2);
+    // A late recommendation response must not replace the user's selection.
+    assert.equal(committed.currentTrack, null);
+    assert.equal(committed.currentIndex, null);
     assert.equal(committed.mutation, "replace-upcoming");
 });

@@ -250,8 +250,6 @@ export function useVibeModeControls({
                             ...history,
                             ...freshContinuation,
                         ];
-                        const firstFreshTrack = freshContinuation[0];
-
                         state.setIsShuffle(false);
                         state.setShuffleIndices([]);
                         state.setVibeMode(true);
@@ -260,11 +258,10 @@ export function useVibeModeControls({
                             replacementQueue.map((track) => track.id),
                         );
                         state.setQueue(replacementQueue);
-                        state.setCurrentAudiobook(null);
-                        state.setCurrentPodcast(null);
-                        state.setPlaybackType("track");
-                        state.setCurrentTrack(firstFreshTrack);
-                        state.setCurrentIndex(history.length);
+                        // Adapt only the upcoming tail. The user may already
+                        // be listening to (or have paused) the latest selection.
+                        // Replacing it here aborts healthy playback and discards
+                        // its prepared source when the request finishes late.
                         reportLocalQueueCommit("replace-upcoming");
                         return {
                             success: true,

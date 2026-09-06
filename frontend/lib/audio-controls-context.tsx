@@ -1159,9 +1159,6 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                             return;
                         }
                         adaptiveWaveSkipStreakRef.current = 0;
-                        const currentPlayback = getPlaybackView();
-                        currentPlayback.setCurrentTime(0);
-                        currentPlayback.setIsPlaying(true);
                     },
                 }).finally(() => {
                     if (adaptiveWaveRefreshTokenRef.current === refreshToken) {
