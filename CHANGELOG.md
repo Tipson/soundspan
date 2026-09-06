@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Return ready YouTube Music search results after a 2.5-second Last.fm metadata budget instead of letting an optional metadata timeout hold the whole search for 9 seconds.
+
 - Resolve a local artist to a provider result whose exact name has an explanatory parenthetical suffix, restoring tracks for catalogs such as `2CELLOS (SULIC & HAUSER)` without accepting loose tribute-name matches.
 
 - Match every artist track that lacks a playable source even when album metadata is complete; load provider releases for otherwise empty artist overviews, scope expanded search views to their requested YouTube Music category, and replace failed music artwork with stable fallbacks.

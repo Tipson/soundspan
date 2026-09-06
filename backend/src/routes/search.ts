@@ -90,6 +90,7 @@ const VIDEO_STYLE_TITLE_PATTERN =
     /\b(?:full album|full concert|live\s*stream|official live video)\b/i;
 const YT_MUSIC_DISCOVERY_TIMEOUT_MS = 8_000;
 const DISCOVERY_SOURCE_DEADLINE_MS = 9_000;
+const LASTFM_DISCOVERY_SOURCE_DEADLINE_MS = 2_500;
 const DISCOVERY_CORRECTION_DEADLINE_MS = 1_500;
 
 function withDiscoveryDeadline<T>(
@@ -1038,14 +1039,14 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
                             searchQuery,
                             Math.min(searchLimit, 50),
                         ),
-                    DISCOVERY_SOURCE_DEADLINE_MS,
+                    LASTFM_DISCOVERY_SOURCE_DEADLINE_MS,
                     "Last.fm artist search",
                 );
             }
             if (lastFmEnabled && scope === "all") {
                 promiseMap.tracks = withDiscoveryDeadline(
                     () => lastFmService.searchTracks(searchQuery, searchLimit),
-                    DISCOVERY_SOURCE_DEADLINE_MS,
+                    LASTFM_DISCOVERY_SOURCE_DEADLINE_MS,
                     "Last.fm track search",
                 );
             }

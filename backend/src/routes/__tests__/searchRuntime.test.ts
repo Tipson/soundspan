@@ -1215,6 +1215,55 @@ describe("search route runtime behavior", () => {
         jest.useRealTimers();
     });
 
+    it("does not hold ready YouTube Music results behind slow Last.fm metadata", async () => {
+        jest.useFakeTimers();
+        mockSearchArtists.mockImplementationOnce(
+            () => new Promise(() => undefined),
+        );
+        mockSearchTracks.mockImplementationOnce(
+            () => new Promise(() => undefined),
+        );
+        mockYtMusicSearch.mockResolvedValueOnce({
+            query: "fast catalog",
+            filter: "songs",
+            total: 1,
+            results: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    mediaType: "track",
+                    providerTrackId: "video-fast",
+                    title: "Fast Track",
+                    artistName: "Fast Artist",
+                    albumTitle: null,
+                    thumbnailUrl: null,
+                    durationSec: 180,
+                },
+            ],
+        });
+
+        const req = {
+            query: { q: "fast catalog", type: "music", limit: "5" },
+        } as any;
+        const res = createRes();
+        const responsePromise = discoverHandler(req, res);
+
+        await jest.advanceTimersByTimeAsync(2_500);
+        const returnedWithinMetadataBudget = res.json.mock.calls.length > 0;
+        await jest.advanceTimersByTimeAsync(6_500);
+        await responsePromise;
+
+        expect(res.statusCode).toBe(200);
+        expect(returnedWithinMetadataBudget).toBe(true);
+        expect(res.body.results).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: "video-fast" }),
+            ]),
+        );
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+        jest.useRealTimers();
+    });
+
     it("ranks concise artist matches ahead of long-form video-style rows", async () => {
         mockYtMusicSearch.mockResolvedValueOnce({
             query: "linkin park",
