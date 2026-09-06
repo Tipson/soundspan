@@ -48,6 +48,8 @@ import {
     CURRENT_TIME_KEY,
     CURRENT_TIME_TRACK_ID_KEY,
     FORMAT_TO_CODEC,
+    MANUAL_YOUTUBE_STABLE_POSITION_SEC,
+    MANUAL_YOUTUBE_STABLE_SWITCH_DEBOUNCE_MS,
     MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS,
     STARTUP_AUDIBLE_THRESHOLD_SEC,
     TRACK_END_WATCHDOG_BOUNDARY_SEC,
@@ -943,6 +945,15 @@ export const AudioPlaybackOrchestrator = memo(
                 return;
             }
 
+            // Snapshot before stop() clears the old engine state. An in-flight
+            // selection cannot inherit the previous track's short delay.
+            const previousPlaybackWasStable =
+                previousMediaId !== null &&
+                !isLoadingRef.current &&
+                audioEngine.isPlaying() &&
+                audioEngine.getActualCurrentTime() >=
+                    MANUAL_YOUTUBE_STABLE_POSITION_SEC;
+
             if (previousMediaId !== null) {
                 // Stop the previous source while the next source resolves.
                 audioEngine.stop();
@@ -1531,6 +1542,9 @@ export const AudioPlaybackOrchestrator = memo(
                         return;
                     }
 
+                    const selectionDelayMs = previousPlaybackWasStable
+                        ? MANUAL_YOUTUBE_STABLE_SWITCH_DEBOUNCE_MS
+                        : MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS;
                     const timeout = setTimeout(() => {
                         if (
                             pendingManualProviderLoadRef.current?.loadId !==
@@ -1545,7 +1559,7 @@ export const AudioPlaybackOrchestrator = memo(
                         ) {
                             startAudioEngineLoad(resolvedStreamUrl);
                         }
-                    }, MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS);
+                    }, selectionDelayMs);
                     pendingManualProviderLoadRef.current = {
                         loadId: thisLoadId,
                         timeout,

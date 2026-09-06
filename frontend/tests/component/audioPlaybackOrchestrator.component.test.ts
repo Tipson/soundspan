@@ -1818,6 +1818,110 @@ test("preparing a verified legacy copy keeps its media identity without shadowin
     assert.equal(engine.loadCalls.length, 1);
 });
 
+test("an unprepared manual YouTube selection after stable playback starts in 300ms", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const tracks = ["stable-current", "cold-selection"].map((id) =>
+        makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+    );
+    audioState.currentTrack = tracks[0];
+    audioState.queue = tracks;
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.actualCurrentTime = 30;
+
+    writePlaybackReplacementIntent(tracks[0].id);
+    selectTrack(tracks, 1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    t.mock.timers.tick(299);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    t.mock.timers.tick(1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "https://stream.test/yt/cold-selection",
+    );
+    t.mock.timers.tick(1_250);
+    await flushAsync();
+    assert.equal(
+        engine.loadCalls.length,
+        2,
+        "no second load from an old timer",
+    );
+});
+
+test("a burst after stable playback cancels the fast selection and coalesces the rest", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const tracks = ["burst-current", "burst-first", "burst-last"].map((id) =>
+        makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+    );
+    audioState.currentTrack = tracks[0];
+    audioState.queue = tracks;
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.actualCurrentTime = 30;
+    writePlaybackReplacementIntent(tracks[0].id);
+    selectTrack(tracks, 1);
+    await flushAsync();
+    t.mock.timers.tick(250);
+    writePlaybackReplacementIntent(tracks[1].id);
+    selectTrack(tracks, 2);
+    await flushAsync();
+    t.mock.timers.tick(1_249);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    t.mock.timers.tick(1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "https://stream.test/yt/burst-last",
+    );
+});
+
+for (const action of ["pause", "clear", "unmount"] as const) {
+    test(`a stable manual YouTube selection respects ${action} during its short timer`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const tracks = ["cancel-stable", "cancel-next"].map((id) =>
+            makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+        );
+        audioState.currentTrack = tracks[0];
+        audioState.queue = tracks;
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.actualCurrentTime = 30;
+        writePlaybackReplacementIntent(tracks[0].id);
+        selectTrack(tracks, 1);
+        await flushAsync();
+        t.mock.timers.tick(100);
+        if (action === "unmount") {
+            hookRuntime.unmount();
+        } else {
+            if (action === "clear") audioState.currentTrack = null;
+            playbackState.isPlaying = false;
+            rerenderOrchestrator();
+        }
+        await flushAsync();
+        t.mock.timers.tick(1_500);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, action === "pause" ? 2 : 1);
+        if (action === "pause") {
+            assert.equal(engine.loadCalls.at(-1)?.args[1], false);
+        }
+    });
+}
+
 test("rapid manual YouTube selections start only the latest remote stream", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const tracks = Array.from({ length: 6 }, (_, index) =>
