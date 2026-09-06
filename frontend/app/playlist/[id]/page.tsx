@@ -370,7 +370,7 @@ export default function PlaylistDetailPage() {
 
             // Optionally navigate away if hiding
             if (!playlist.isHidden) {
-                router.push("/playlists");
+                router.push("/library");
             }
         } catch (error) {
             sharedFrontendLogger.error(
@@ -502,7 +502,7 @@ export default function PlaylistDetailPage() {
                 new CustomEvent("playlist-deleted", { detail: { playlistId } }),
             );
 
-            router.push("/playlists");
+            router.push("/library");
         } catch (error) {
             sharedFrontendLogger.error("Failed to delete playlist:", error);
         }

@@ -182,6 +182,8 @@ test("keeps primary navigation outside the account drawer", async () => {
     assert.doesNotMatch(html, />Коллекция</);
     assert.doesNotMatch(html, />Моя волна</);
     assert.match(html, />Любимые треки</);
+    assert.match(html, /href="\/library"/);
+    assert.doesNotMatch(html, /href="\/playlists"/);
     assert.match(html, />Загрузки</);
     assert.match(html, />Импорт плейлиста</);
     assert.match(html, />Ваша музыка</);

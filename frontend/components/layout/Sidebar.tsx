@@ -13,6 +13,7 @@ import {
     ListMusic,
     Plus,
     RotateCcw,
+    Upload,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { BRAND_NAME } from "@/lib/brand";
@@ -325,7 +326,7 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
 
                     {hiddenPlaylistShortcutCount > 0 && (
                         <Link
-                            href="/playlists"
+                            href="/library"
                             prefetch={false}
                             data-shell-playlist-overflow="true"
                             className="group flex min-h-11 shrink-0 items-center gap-3 rounded-xl px-3 text-xs font-semibold text-content-muted transition-colors duration-200 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
@@ -344,7 +345,7 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                     )}
 
                     <Link
-                        href="/playlists?create=1"
+                        href="/library?create=1"
                         prefetch={false}
                         aria-label={ru.nav.createPlaylist}
                         className="group flex min-h-11 shrink-0 items-center gap-3 rounded-xl px-3 text-xs font-semibold text-content-muted transition-colors duration-200 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
@@ -354,6 +355,18 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                             aria-hidden="true"
                         />
                         <span>{ru.nav.createPlaylist}</span>
+                    </Link>
+                    <Link
+                        href="/import"
+                        prefetch={false}
+                        aria-label={ru.nav.importPlaylist}
+                        className="group flex min-h-11 shrink-0 items-center gap-3 rounded-xl px-3 text-xs font-semibold text-content-muted transition-colors duration-200 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                    >
+                        <Upload
+                            className="h-[18px] w-[18px] shrink-0"
+                            aria-hidden="true"
+                        />
+                        <span>{ru.nav.importPlaylist}</span>
                     </Link>
                 </div>
             </div>

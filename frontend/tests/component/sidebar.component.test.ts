@@ -363,8 +363,11 @@ test("desktop sidebar exposes liked tracks, playlist creation, and direct playli
     assert.doesNotMatch(html, /Скрытый/);
     assert.doesNotMatch(html, /Чужой плейлист/);
     assert.doesNotMatch(html, /href="\/playlists"/);
+    assert.match(html, /href="\/library\?create=1"/);
+    assert.match(html, /href="\/import"/);
     assert.match(html, /aria-label="Создать плейлист"/);
     assert.match(html, />Создать плейлист</);
+    assert.match(html, />Импорт плейлиста</);
     assert.doesNotMatch(html, /Сортировка и фильтры|Все плейлисты/);
     assert.match(html, /data-shell-playlist-list="personal"/);
     const playlistList = html.match(
@@ -393,12 +396,12 @@ test("limits permanent playlist shortcuts and shows All playlists only for overf
     );
     assert.match(html, /href="\/playlist\/playlist-50"/);
     assert.doesNotMatch(html, /href="\/playlist\/playlist-51"/);
-    assert.match(html, /href="\/playlists"/);
+    assert.match(html, /href="\/library"/);
     assert.match(html, />Все плейлисты</);
 
     state.playlists = state.playlists.slice(0, 4);
     const compactHtml = renderSidebarToStaticMarkup(Sidebar);
-    assert.doesNotMatch(compactHtml, /href="\/playlists"/);
+    assert.doesNotMatch(compactHtml, />Все плейлисты</);
     assert.doesNotMatch(compactHtml, />Все плейлисты</);
 });
 

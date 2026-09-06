@@ -31,7 +31,7 @@ interface MobileSidebarProps {
 
 const personalLinks = [
     { name: ru.library.likedSongs, href: "/playlist/my-liked", icon: Heart },
-    { name: ru.library.playlists, href: "/playlists", icon: ListMusic },
+    { name: ru.library.playlists, href: "/library", icon: ListMusic },
     {
         name: ru.nav.downloads,
         href: "/library?tab=downloads",

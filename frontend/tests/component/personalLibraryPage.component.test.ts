@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { LucideProps } from "lucide-react";
 
 let tab: string | null = null;
+let create: string | null = null;
 
 const Icon = React.forwardRef<SVGSVGElement, LucideProps>((props, ref) =>
     React.createElement("svg", { ...props, ref }),
@@ -21,16 +22,35 @@ mock.module("lucide-react", {
         ListMusic: Icon,
         Loader2: Icon,
         Music2: Icon,
+        Plus: Icon,
         RotateCcw: Icon,
         Search: Icon,
         Sparkles: Icon,
+        Upload: Icon,
         UserRound: Icon,
     },
 });
 
 mock.module("next/navigation", {
     namedExports: {
-        useSearchParams: () => ({ get: () => tab }),
+        useRouter: () => ({
+            push: () => undefined,
+            replace: () => undefined,
+        }),
+        useSearchParams: () => ({
+            get: (name: string) => (name === "create" ? create : tab),
+        }),
+    },
+});
+
+mock.module("@/features/playlist/components/CreatePlaylistDialog", {
+    namedExports: {
+        CreatePlaylistDialog: ({ isOpen }: { isOpen: boolean }) =>
+            isOpen
+                ? React.createElement("div", {
+                      "data-testid": "create-playlist-dialog",
+                  })
+                : null,
     },
 });
 
@@ -225,6 +245,7 @@ mock.module("@/features/device-offline/components/DownloadsList", {
 test("Library opens one Playlists flow for liked tracks, personal playlists, and device downloads", async () => {
     const { default: LibraryPage } = await import("../../app/library/page");
     tab = null;
+    create = null;
     const html = renderToStaticMarkup(React.createElement(LibraryPage));
 
     assert.match(html, /Моя коллекция/);
@@ -239,6 +260,9 @@ test("Library opens one Playlists flow for liked tracks, personal playlists, and
     assert.match(html, /href="\/playlist\/my-liked"/);
     assert.match(html, /href="\/library\?tab=downloads"/);
     assert.match(html, /Evening mix/);
+    assert.match(html, /href="\/import"/);
+    assert.match(html, />Импортировать плейлист</);
+    assert.match(html, />Создать плейлист</);
     assert.doesNotMatch(html, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
     assert.match(html, /24 трека/);
     assert.match(html, /1 трек/);
@@ -256,6 +280,15 @@ test("Library opens one Playlists flow for liked tracks, personal playlists, and
     assert.doesNotMatch(html, /Shuffle Library/);
     assert.doesNotMatch(html, />Owned</);
     assert.doesNotMatch(html, />Discovery</);
+});
+
+test("Library owns the playlist creation deep link", async () => {
+    const { default: LibraryPage } = await import("../../app/library/page");
+    tab = null;
+    create = "1";
+    const html = renderToStaticMarkup(React.createElement(LibraryPage));
+    assert.match(html, /data-testid="create-playlist-dialog"/);
+    create = null;
 });
 
 test("Library tabs keep saved albums and artists while Downloads opens its own collection", async () => {
