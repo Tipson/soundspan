@@ -346,6 +346,19 @@ test("FullPlayer exposes a three-zone, two-level desktop player", async () => {
     assert.match(html, /data-player-time="duration"[^>]*>3:20</);
 });
 
+test("FullPlayer exposes an edge-safe horizontal volume popover", async () => {
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const html = renderToStaticMarkup(React.createElement(FullPlayer));
+
+    assert.match(html, /data-player-volume-control="desktop"/);
+    assert.match(html, /data-player-volume-popover="horizontal"/);
+    assert.match(html, /aria-hidden="true"[^>]*data-player-volume-popover/);
+    assert.match(html, /data-orientation="horizontal"/);
+    assert.doesNotMatch(html, /-rotate-90/);
+    assert.match(html, />Громкость</);
+    assert.match(html, />100%<\/output>/);
+});
+
 test("FullPlayer shuffle and repeat controls call the audio actions", async () => {
     const { FullPlayer } = await import("../../components/player/FullPlayer");
     const container = document.createElement("div");

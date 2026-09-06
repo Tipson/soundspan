@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Replace the narrow edge-clipped desktop volume control with a right-aligned horizontal popover, readable percentage and keyboard-visible focus behavior.
+
 - Make Library the primary playlist-management surface with create and import actions, and point desktop/mobile playlist navigation back to it.
 
 - Remove the duplicate desktop Wave playback and up-next panel; the persistent player remains the single playback surface.
