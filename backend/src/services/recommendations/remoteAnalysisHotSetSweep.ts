@@ -4,7 +4,6 @@ import { remoteAnalysisHotSetScheduler } from "./remoteAnalysisHotSet";
 
 const log = logger.child("RemoteAnalysisHotSetSweep");
 const ACTIVE_ACCOUNT_LOOKBACK_DAYS = 90;
-const MAX_PLAY_ROWS = 1_000;
 const MAX_ACTIVE_ACCOUNTS = 100;
 const SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 
@@ -38,16 +37,15 @@ async function loadActiveUserIds(): Promise<string[]> {
     const since = new Date(
         Date.now() - ACTIVE_ACCOUNT_LOOKBACK_DAYS * 24 * 60 * 60 * 1_000,
     );
-    const rows = await prisma.play.findMany({
+    // Limit accounts after aggregation so one listener's plays cannot crowd
+    // other active accounts out of the background analysis pass.
+    const rows = await prisma.play.groupBy({
+        by: ["userId"],
         where: { playedAt: { gte: since }, user: { isTestAccount: false } },
-        orderBy: { playedAt: "desc" },
-        take: MAX_PLAY_ROWS,
-        select: { userId: true },
+        orderBy: [{ _max: { playedAt: "desc" } }, { userId: "asc" }],
+        take: MAX_ACTIVE_ACCOUNTS,
     });
-    return Array.from(new Set(rows.map(({ userId }) => userId))).slice(
-        0,
-        MAX_ACTIVE_ACCOUNTS,
-    );
+    return rows.map(({ userId }) => userId);
 }
 
 const runtimeSweep = new RemoteAnalysisHotSetSweep({

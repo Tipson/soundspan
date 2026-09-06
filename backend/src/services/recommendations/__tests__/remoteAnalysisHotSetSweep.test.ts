@@ -1,5 +1,5 @@
 jest.mock("../../../utils/db", () => ({
-    prisma: { play: { findMany: jest.fn() } },
+    prisma: { play: { groupBy: jest.fn() } },
 }));
 jest.mock("../../../utils/logger", () => ({
     logger: { child: () => ({ warn: jest.fn(), info: jest.fn() }) },
@@ -56,8 +56,7 @@ describe("remote analysis account hot-set sweep", () => {
         const clearIntervalSpy = jest
             .spyOn(global, "clearInterval")
             .mockImplementation(() => undefined);
-        (prisma.play.findMany as jest.Mock).mockResolvedValue([
-            { userId: "alice" },
+        (prisma.play.groupBy as jest.Mock).mockResolvedValue([
             { userId: "alice" },
             { userId: "bob" },
         ]);
@@ -72,11 +71,11 @@ describe("remote analysis account hot-set sweep", () => {
         expect(setIntervalSpy).toHaveBeenCalledTimes(1);
         expect(interval.unref).toHaveBeenCalledTimes(1);
         expect(remoteAnalysisHotSetScheduler.schedule).toHaveBeenCalledTimes(2);
-        expect(prisma.play.findMany).toHaveBeenCalledWith(
+        expect(prisma.play.groupBy).toHaveBeenCalledWith(
             expect.objectContaining({
-                orderBy: { playedAt: "desc" },
-                take: 1_000,
-                select: { userId: true },
+                by: ["userId"],
+                orderBy: [{ _max: { playedAt: "desc" } }, { userId: "asc" }],
+                take: 100,
             }),
         );
 
@@ -89,7 +88,7 @@ describe("remote analysis account hot-set sweep", () => {
         const interval = { unref: jest.fn() } as unknown as NodeJS.Timeout;
         jest.spyOn(global, "setInterval").mockReturnValue(interval);
         jest.spyOn(global, "clearInterval").mockImplementation(() => undefined);
-        (prisma.play.findMany as jest.Mock).mockRejectedValue(
+        (prisma.play.groupBy as jest.Mock).mockRejectedValue(
             new Error("database unavailable"),
         );
 
@@ -106,7 +105,7 @@ describe("remote analysis account hot-set sweep", () => {
             .mockReturnValue(interval);
         jest.spyOn(global, "clearInterval").mockImplementation(() => undefined);
         let resolveRows!: (rows: Array<{ userId: string }>) => void;
-        (prisma.play.findMany as jest.Mock).mockReturnValue(
+        (prisma.play.groupBy as jest.Mock).mockReturnValue(
             new Promise((resolve) => {
                 resolveRows = resolve;
             }),
@@ -118,7 +117,7 @@ describe("remote analysis account hot-set sweep", () => {
         if (typeof intervalHandler === "function") intervalHandler();
         await Promise.resolve();
 
-        expect(prisma.play.findMany).toHaveBeenCalledTimes(1);
+        expect(prisma.play.groupBy).toHaveBeenCalledTimes(1);
         resolveRows([]);
         await new Promise<void>((resolve) => setImmediate(resolve));
     });
