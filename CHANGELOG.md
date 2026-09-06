@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Route YouTube audio CDN connections through IPv4 on the Soundspan egress bridge to avoid selective IPv6 CONNECT stalls. Preserve the existing tunnel, TLS verification, source quality and other origins' routing.
+
 - Reuse the CDN connection across contiguous ranges within one progressive audio download. Close the transfer-owned pool on completion, cancellation or failure without sharing session cookies across downloads or changing audio quality.
 
 - Reveal clipped Library tabs within their horizontal strip without moving the main page or disturbing the listener's scroll position during background updates.
