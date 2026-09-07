@@ -73,7 +73,8 @@ try {
     const unavailable = await fetch(`${base}/api/health`, {
         signal: AbortSignal.timeout(10_000),
     });
-    assert.equal(unavailable.status, 502, "Proxy handles unavailable backend");
+    assert.equal(unavailable.status, 503, "Proxy handles unavailable backend");
+    assert.equal((await unavailable.json()).code, "API_PROXY_UNAVAILABLE");
     docker("stop", "--time", "15", id);
     assert.equal(JSON.parse(docker("inspect", id))[0].State.ExitCode, 0);
     console.log(
