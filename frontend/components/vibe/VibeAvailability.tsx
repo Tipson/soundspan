@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioWaveform, Loader2, Pause, Play, RotateCcw } from "lucide-react";
 import { usePersonalizedHomeFeed } from "@/features/home/hooks/usePersonalizedHomeFeed";
-import type {
-    PersonalizedHomeMood,
-    PersonalizedTrack,
-} from "@/features/home/types";
+import { selectWaveTracks } from "@/features/home/selectWaveTracks";
+import type { PersonalizedHomeMood } from "@/features/home/types";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAuth } from "@/lib/auth-context";
 import { useWaveStartWarmup } from "@/hooks/useWaveStartWarmup";
@@ -32,96 +30,6 @@ import {
 } from "./WaveDirectionSheet";
 
 type SupportedPersonalizedMode = WaveSelectionMode;
-
-function uniqueTracks(tracks: readonly PersonalizedTrack[]) {
-    const seen = new Set<string>();
-    return tracks.filter((track) => {
-        const key = track.youtubeVideoId || track.id;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-}
-
-function balancedUniqueTracks(
-    shelves: readonly (readonly PersonalizedTrack[])[],
-): PersonalizedTrack[] {
-    const positions = shelves.map(() => 0);
-    const seen = new Set<string>();
-    const result: PersonalizedTrack[] = [];
-    let addedTrack = true;
-
-    while (addedTrack) {
-        addedTrack = false;
-        shelves.forEach((shelf, shelfIndex) => {
-            while (positions[shelfIndex] < shelf.length) {
-                const track = shelf[positions[shelfIndex]];
-                positions[shelfIndex] += 1;
-                const key = track.youtubeVideoId || track.id;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                result.push(track);
-                addedTrack = true;
-                break;
-            }
-        });
-    }
-
-    return result;
-}
-
-function mixSparseRecentTracks(
-    freshTracks: readonly PersonalizedTrack[],
-    recentTracks: readonly PersonalizedTrack[],
-): PersonalizedTrack[] {
-    const fresh = uniqueTracks(freshTracks);
-    if (fresh.length === 0) return uniqueTracks(recentTracks);
-
-    const freshKeys = new Set(
-        fresh.map((track) => track.youtubeVideoId || track.id),
-    );
-    const recent = uniqueTracks(recentTracks).filter(
-        (track) => !freshKeys.has(track.youtubeVideoId || track.id),
-    );
-    const recentLimit = Math.min(recent.length, Math.floor(fresh.length / 5));
-    if (recentLimit === 0) return fresh;
-
-    const result: PersonalizedTrack[] = [];
-    let recentIndex = 0;
-    fresh.forEach((track, index) => {
-        result.push(track);
-        if ((index + 1) % 5 === 0 && recentIndex < recentLimit) {
-            result.push(recent[recentIndex]);
-            recentIndex += 1;
-        }
-    });
-    return result;
-}
-
-function selectWaveTracks(
-    shelves:
-        | {
-              quickPicks: PersonalizedTrack[];
-              discovery: PersonalizedTrack[];
-              listenAgain: PersonalizedTrack[];
-          }
-        | undefined,
-    mode: WaveFeedMode,
-): PersonalizedTrack[] {
-    if (!shelves) return [];
-    if (mode === "new") return uniqueTracks(shelves.discovery);
-    if (mode === "familiar") {
-        return uniqueTracks(
-            shelves.listenAgain.length > 0
-                ? shelves.listenAgain
-                : shelves.quickPicks,
-        );
-    }
-    return mixSparseRecentTracks(
-        balancedUniqueTracks([shelves.quickPicks, shelves.discovery]),
-        shelves.listenAgain,
-    );
-}
 
 // A Wave retune can fan out into several provider radio requests and a fresh
 // stream extraction. Keep rapid successive Apply actions latest-wins before

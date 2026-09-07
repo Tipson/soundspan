@@ -166,6 +166,7 @@ export class UnifiedRecommendationService {
                 {
                     cursor: input.cursor,
                     mode: input.direction,
+                    surface: input.surface,
                     ...(input.mood ? { mood: input.mood } : {}),
                     ...(input.excludeVideoIds.length > 0
                         ? { excludeVideoIds: input.excludeVideoIds }

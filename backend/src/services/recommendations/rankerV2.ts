@@ -110,7 +110,8 @@ function stableUnitInterval(value: string): number {
     return (hash >>> 0) / 4_294_967_295;
 }
 
-function moodFeatureScore(
+/** Score a listening context from measured features, without changing candidate sources. */
+export function moodFeatureScore(
     candidate: RecommendationCandidate,
     mood: RecommendationMood | null,
 ): number {

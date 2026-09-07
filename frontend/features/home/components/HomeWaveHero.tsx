@@ -8,12 +8,9 @@ import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
-import type {
-    PersonalizedHomeFeed,
-    PersonalizedHomeMode,
-    PersonalizedHomeMood,
-    PersonalizedTrack,
-} from "../types";
+import type { PersonalizedHomeFeed } from "../types";
+import { usePersonalizedHomeFeed } from "../hooks/usePersonalizedHomeFeed";
+import { selectWaveTracks } from "../selectWaveTracks";
 import { ru } from "@/lib/i18n/ru";
 import { getRecommendationSessionId } from "@/lib/recommendationSession";
 import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
@@ -24,48 +21,10 @@ interface HomeWaveHeroProps {
     isLoading: boolean;
 }
 
-function balancedUniqueTracks(
-    shelves: PersonalizedHomeFeed["shelves"] | undefined,
-    mode: PersonalizedHomeMode,
-    mood: PersonalizedHomeMood | null,
-): PersonalizedTrack[] {
-    if (!shelves) return [];
-    const sources =
-        mood === "favorites"
-            ? [shelves.quickPicks, shelves.listenAgain, shelves.discovery]
-            : mood === "forgotten" || mode === "familiar"
-              ? [shelves.listenAgain, shelves.quickPicks, shelves.discovery]
-              : mood !== null || mode === "new"
-                ? [shelves.discovery, shelves.quickPicks, shelves.listenAgain]
-                : [shelves.quickPicks, shelves.discovery, shelves.listenAgain];
-    const positions = sources.map(() => 0);
-    const seen = new Set<string>();
-    const result: PersonalizedTrack[] = [];
-    let foundTrack = true;
-
-    while (foundTrack) {
-        foundTrack = false;
-        sources.forEach((source, sourceIndex) => {
-            while (positions[sourceIndex] < source.length) {
-                const track = source[positions[sourceIndex]];
-                positions[sourceIndex] += 1;
-                const key = recommendationTrackKey(track);
-                if (seen.has(key)) continue;
-                seen.add(key);
-                result.push(track);
-                foundTrack = true;
-                break;
-            }
-        });
-    }
-
-    return result;
-}
-
 /** Compact personal-radio quick start for the first Home viewport. */
 export function HomeWaveHero({
     personalizedFeed,
-    isLoading,
+    isLoading: isHomeLoading,
 }: HomeWaveHeroProps) {
     const { playTracks } = useAudioControls();
     const {
@@ -77,12 +36,14 @@ export function HomeWaveHero({
         setVibeQueueIds,
         setVibeSourceFeatures,
     } = useAudioState();
+    const { data: waveFeed, isLoading: isWaveLoading } =
+        usePersonalizedHomeFeed(12, true, waveMode, waveMood, "wave");
+    const isLoading = isHomeLoading || isWaveLoading;
     const tracks = useMemo(
-        () =>
-            balancedUniqueTracks(personalizedFeed?.shelves, waveMode, waveMood),
-        [personalizedFeed?.shelves, waveMode, waveMood],
+        () => selectWaveTracks(waveFeed?.shelves, waveMode),
+        [waveFeed?.shelves, waveMode],
     );
-    const generationId = personalizedFeed?.generationId;
+    const generationId = waveFeed?.generationId;
     const queue = useMemo(
         () =>
             tracks.map((track) =>
@@ -94,12 +55,16 @@ export function HomeWaveHero({
         [generationId, tracks],
     );
     const focusTrack = useMemo(
-        () => tracks.find((track) => track.album.coverArt) ?? tracks[0] ?? null,
-        [tracks],
+        () =>
+            tracks.find((track) => track.album.coverArt) ??
+            tracks[0] ??
+            personalizedFeed?.shelves.discovery[0] ??
+            null,
+        [tracks, personalizedFeed?.shelves.discovery],
     );
     const visibleTracks = useMemo(
-        () => (focusTrack ? [focusTrack] : []),
-        [focusTrack],
+        () => (waveFeed && focusTrack ? [focusTrack] : []),
+        [waveFeed, focusTrack],
     );
     const impressionRef = useRecommendationImpressions(
         generationId,

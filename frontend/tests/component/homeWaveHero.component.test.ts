@@ -11,6 +11,7 @@ GlobalRegistrator.register();
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const calls = {
+    feedQueries: [] as unknown[][],
     playTracks: [] as unknown[][],
     images: [] as Array<Record<string, unknown>>,
     isShuffle: [] as unknown[],
@@ -20,6 +21,16 @@ const calls = {
     vibeSourceFeatures: [] as unknown[],
     waveMode: [] as unknown[],
 };
+let waveFeed: unknown = undefined;
+let waveLoading = false;
+mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
+    namedExports: {
+        usePersonalizedHomeFeed: (...args: unknown[]) => {
+            calls.feedQueries.push(args);
+            return { data: waveFeed, isLoading: waveLoading };
+        },
+    },
+});
 
 const Icon = () => React.createElement("i");
 
@@ -97,6 +108,15 @@ const track = (id: string, title: string, coverArt: string | null = null) => ({
 });
 
 beforeEach(() => {
+    calls.feedQueries.length = 0;
+    waveLoading = false;
+    waveFeed = {
+        shelves: {
+            quickPicks: [track("wave-quick", "Quick", "/quick.jpg")],
+            discovery: [track("wave-fresh", "Fresh", "/fresh.jpg")],
+            listenAgain: [track("wave-again", "Again", "/again.jpg")],
+        },
+    };
     calls.playTracks.length = 0;
     calls.images.length = 0;
     calls.isShuffle.length = 0;
@@ -165,14 +185,15 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
         (calls.playTracks[0]?.[0] as Array<{ id: string }>).map(
             (item) => item.id,
         ),
-        ["fresh", "quick", "again"],
+        ["wave-fresh"],
     );
     assert.deepEqual(calls.playTracks[0]?.slice(1), [0, true]);
     assert.deepEqual(calls.isShuffle, [false]);
     assert.deepEqual(calls.shuffleIndices, [[]]);
     assert.deepEqual(calls.vibeMode, [true]);
     assert.deepEqual(calls.vibeSourceFeatures, [null]);
-    assert.deepEqual(calls.vibeQueueIds, [["fresh", "quick", "again"]]);
+    assert.deepEqual(calls.vibeQueueIds, [["wave-fresh"]]);
+    assert.deepEqual(calls.feedQueries[0], [12, true, "new", "focus", "wave"]);
     assert.deepEqual(calls.waveMode, []);
     assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
     assert.match(container.textContent ?? "", /Моя волна/i);
@@ -187,6 +208,8 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
 });
 
 test("home Wave hero keeps play disabled while no recommendations are ready", async () => {
+    waveFeed = undefined;
+    waveLoading = true;
     const { HomeWaveHero } =
         await import("../../features/home/components/HomeWaveHero");
     const container = document.createElement("div");

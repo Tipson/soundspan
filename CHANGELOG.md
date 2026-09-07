@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Keep Wave personal when selecting a mood: rank personal candidates using available audio features instead of inserting generic mood-search videos. Exclude hour-long/background compilations from automatic Wave selection, without restricting manual playback.
+- Apply account-scoped daily repeat protection and artist diversity to both Wave experiment arms; do not refill sparse queues with recent exposures. Include actual playback history, not only recommendation impressions.
+- Read up to 2,000 liked and playlist records, distribute equal-strength Wave likes independently of import order, and cap radio seeds at three distinct artists.
+- Use the dedicated Wave query and shared queue-selection rules for both Home quick start and the Wave page.
+
 - Recognize provider-matched artist and album rows by canonical playback identity even when their catalogue id differs from the player's track id; do not confuse local files with provider fallback metadata.
 
 - Share a title-adjacent animated playback marker across Downloads and standard album, artist and track rows, with a stationary paused state and reduced-motion support.

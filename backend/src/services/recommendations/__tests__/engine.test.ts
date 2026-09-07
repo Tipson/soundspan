@@ -72,6 +72,75 @@ describe("unified recommendation engine", () => {
         exclude: [],
     };
 
+    it.each(["baseline", "active"] as const)(
+        "keeps Wave cooldown strict in %s even when lanes cannot be filled",
+        async (mode) => {
+            const deps = dependencies(mode);
+            const result = await new RecommendationEngine(deps).recommend({
+                ...request,
+                perLaneLimit: 12,
+                limit: 36,
+            });
+            expect(result.tracks.map((track) => track.id)).toEqual([
+                "yt:fresh",
+            ]);
+        },
+    );
+
+    it("does not auto-select hour-long mixes but preserves an ordinary long song", async () => {
+        const deps = dependencies("baseline");
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [
+                candidate("mix", {
+                    title: "The Gym Beats Vol.4 NONSTOP MEGAMIX",
+                    duration: 3522,
+                }),
+                candidate("background", {
+                    title: "Attract Positive Energy, Peace & Success",
+                    duration: 3629,
+                }),
+                candidate("song", {
+                    title: "Shine On You Crazy Diamond",
+                    duration: 810,
+                }),
+            ],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend(request);
+        expect(result.tracks.map((track) => track.id)).toEqual(["yt:song"]);
+    });
+
+    it("applies mood audio features inside personal candidates in baseline too", async () => {
+        const deps = dependencies("baseline");
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [
+                candidate("loud", {
+                    audioFeatures: {
+                        energy: 1,
+                        danceability: 1,
+                        instrumentalness: 0,
+                    },
+                }),
+                candidate("quiet", {
+                    audioFeatures: {
+                        energy: 0.2,
+                        danceability: 0.2,
+                        instrumentalness: 1,
+                    },
+                }),
+            ],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            limit: 1,
+            intent: { ...request.intent, mood: "calm" },
+        });
+        expect(result.tracks[0].id).toBe("yt:quiet");
+    });
+
     it("serves one account-scoped ranked result with persistent anti-repeat", async () => {
         const deps = dependencies();
         const engine = new RecommendationEngine(deps);

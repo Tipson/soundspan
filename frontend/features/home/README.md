@@ -31,6 +31,7 @@ Start-here guide for `frontend/features/home`.
 | `components/StaticPlaylistCard.tsx` | components |
 | `hooks/useHomeData.ts` | hooks |
 | `hooks/usePersonalizedHomeFeed.ts` | personalized provider feed |
+| `selectWaveTracks.ts` | shared Home/Wave queue selection from server-ranked Wave shelves |
 | `hooks/useRecommendationImpressions.ts` | viewport-confirmed recommendation impression reporting |
 | `personalizedHomeRequestPolicy.ts` | shared bounded request and retry policy |
 | `recommendationIdentity.ts` | stable provider identity for playback lineage and impressions |

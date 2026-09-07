@@ -166,7 +166,7 @@ describe("unified recommendation compatibility facade", () => {
         expect(exposures).toHaveLength(72);
     });
 
-    it("backfills Wave shelves when only one reserved candidate remains fresh", async () => {
+    it("returns the remaining fresh Wave candidate without backfilling today's repeats", async () => {
         const now = new Date("2026-09-01T12:00:00Z");
         const exposures: Array<{ canonicalKey: string; exposedAt: Date }> = [];
         const recordGeneration = jest.fn(
@@ -246,12 +246,10 @@ describe("unified recommendation compatibility facade", () => {
             items.map(({ id }) => id),
         );
 
-        for (const shelf of Object.values(wave.shelves)) {
-            expect(shelf).toHaveLength(12);
-        }
+        expect(waveIds).toHaveLength(1);
         expect(waveIds.filter((id) => !homeIds.has(id))).toHaveLength(1);
-        expect(waveIds.filter((id) => homeIds.has(id))).toHaveLength(35);
-        expect(exposures).toHaveLength(72);
+        expect(waveIds.filter((id) => homeIds.has(id))).toHaveLength(0);
+        expect(exposures).toHaveLength(37);
     });
 });
 
