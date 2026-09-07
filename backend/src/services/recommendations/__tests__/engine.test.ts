@@ -180,6 +180,47 @@ describe("unified recommendation engine", () => {
         expect(result.nextCursor).toBe(2);
     });
 
+    it("keeps playable tracks and dislikes when analysis and taste enrichment fail", async () => {
+        const deps = {
+            ...dependencies(),
+            enrichCandidates: jest
+                .fn()
+                .mockRejectedValue(new Error("analysis unavailable")),
+        };
+        deps.loadRecentExposures.mockResolvedValue([]);
+        deps.loadTasteContext.mockRejectedValue(new Error("taste unavailable"));
+        deps.loadDislikedCanonicalKeys.mockResolvedValue(
+            new Set(["meta:artist-recent:recent:180"]),
+        );
+
+        const result = await new RecommendationEngine(deps).recommend(request);
+
+        expect(result.tracks.map((track) => track.id)).toEqual(["yt:fresh"]);
+        expect(result.degradedSources).toEqual(
+            expect.arrayContaining(["canonical-features", "taste-profile"]),
+        );
+        expect(result.tracks[0].embedding).toBeUndefined();
+    });
+
+    it("serves both arms at fifty percent without excluding tracks lacking embeddings", async () => {
+        const algorithms = new Set<string>();
+        for (let index = 0; index < 32; index++) {
+            const deps = dependencies();
+            deps.hybridRolloutPercent = 50;
+            deps.loadRecentExposures.mockResolvedValue([]);
+            const result = await new RecommendationEngine(deps).recommend({
+                ...request,
+                sessionId: `rollout-${index}`,
+            });
+            expect(result.tracks).toHaveLength(2);
+            expect(
+                result.tracks.every((track) => track.embedding === undefined),
+            ).toBe(true);
+            algorithms.add(deps.recordGeneration.mock.calls[0]?.[0]?.algorithm);
+        }
+        expect(algorithms).toEqual(new Set(["baseline-v1", "hybrid-v2"]));
+    });
+
     it("keeps the served result available when telemetry rejects it", async () => {
         const deps = dependencies();
         deps.loadRecentExposures.mockResolvedValue([]);
