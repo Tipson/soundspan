@@ -425,7 +425,9 @@ function findButton(
 ): HTMLButtonElement | null {
     return (
         Array.from(container.querySelectorAll("button")).find(
-            (button) => button.textContent?.trim() === label,
+            (button) =>
+                button.textContent?.trim() === label ||
+                button.getAttribute("aria-label") === label,
         ) ?? null
     );
 }
@@ -614,7 +616,8 @@ test("My Wave stays bounded to the app viewport while its tune sheet owns overfl
     );
     const mainToggleLabel = mainToggle?.querySelector("span");
     assert.ok(mainToggleLabel);
-    assert.match(mainToggleLabel.className, /\[text-wrap:balance\]/);
+    assert.equal(mainToggleLabel.textContent, "Слушать");
+    assert.match(mainToggleLabel.className, /whitespace-nowrap/);
     assert.match(mainToggleLabel.className, /leading-\[1\.05\]/);
 
     const tune = findButton(mounted.container, "Настроить");

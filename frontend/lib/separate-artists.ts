@@ -1,8 +1,8 @@
 /**
  * Round-robin interleave to spread same-artist tracks apart.
  *
- * Guarantees zero adjacent same-artist pairs whenever the largest
- * single-artist bucket ≤ ⌈n/2⌉.
+ * Preserves each artist's input order; a dominant artist may still repeat
+ * after other buckets are exhausted.
  */
 export function separateArtists<T>(
     items: T[],
@@ -29,9 +29,9 @@ export function separateArtists<T>(
     const maxLen = buckets[0].length;
     for (let round = 0; round < maxLen; round++) {
         for (const bucket of buckets) {
-            if (round < bucket.length) {
-                result.push(bucket[round]);
-            }
+            // Descending lengths mean every remaining bucket is exhausted too.
+            if (round >= bucket.length) break;
+            result.push(bucket[round]);
         }
     }
 

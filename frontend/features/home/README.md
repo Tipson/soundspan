@@ -16,7 +16,6 @@ Start-here guide for `frontend/features/home`.
 | Path | Kind |
 | --- | --- |
 | `components/ArtistsGrid.tsx` | components |
-| `components/AudiobooksGrid.tsx` | components |
 | `components/ContinueListening.tsx` | components |
 | `components/FeaturedPlaylistsGrid.tsx` | components |
 | `components/HomeHero.tsx` | components |
@@ -25,8 +24,6 @@ Start-here guide for `frontend/features/home`.
 | `components/HomeMadeForYou.tsx` | bounded set of distinct account-backed and generated mixes |
 | `components/LibraryRadioStations.tsx` | components |
 | `components/libraryRadioStationsGenreSelection.ts` | components |
-| `components/MixesGrid.tsx` | components |
-| `components/PodcastsGrid.tsx` | components |
 | `components/PopularArtistsGrid.tsx` | components |
 | `components/PersonalizedTrackShelf.tsx` | personalized provider tracks |
 | `components/PersonalizedMixCard.tsx` | playable card backed by one real personalized feed shelf |
