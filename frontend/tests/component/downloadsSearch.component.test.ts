@@ -10,6 +10,16 @@ GlobalRegistrator.register();
 ).IS_REACT_ACT_ENVIRONMENT = true;
 let records: DeviceOfflineDownloadRecord[] = [];
 let plays = 0;
+let currentTrack: { id: string } | null = null;
+let isPlaying = false;
+let pauses = 0;
+let resumes = 0;
+mock.module("@/lib/audio-state-context", {
+    namedExports: { useAudioState: () => ({ currentTrack }) },
+});
+mock.module("@/lib/audio-playback-context", {
+    namedExports: { usePlaybackStatus: () => ({ isPlaying }) },
+});
 const refresh = async () => undefined;
 const context = {
     isHydrated: true,
@@ -34,6 +44,12 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
+            pause: () => {
+                pauses += 1;
+            },
+            resume: () => {
+                resumes += 1;
+            },
             playNow: () => {
                 plays += 1;
             },
@@ -121,6 +137,54 @@ async function mount() {
 }
 
 after(() => GlobalRegistrator.unregister());
+
+test("download row follows player selection and pause without replacing the queue", async () => {
+    records = [
+        record("a", "Numb", "Linkin Park", "Meteora"),
+        record("b", "Faint", "Linkin Park", "Meteora"),
+    ];
+    currentTrack = { id: "a" };
+    isPlaying = true;
+    const view = await mount();
+    try {
+        const pause = view.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Пауза: Numb"]',
+        );
+        assert.ok(pause);
+        assert.match(
+            pause.closest("[data-download-status]")!.textContent!,
+            /Играет/,
+        );
+        await React.act(async () => pause.click());
+        assert.equal(pauses, 1);
+        isPlaying = false;
+        await view.render();
+        const play = view.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Воспроизвести: Numb"]',
+        );
+        assert.ok(play);
+        assert.match(
+            play.closest("[data-download-status]")!.textContent!,
+            /На паузе/,
+        );
+        await React.act(async () => play.click());
+        assert.equal(resumes, 1);
+        currentTrack = { id: "b" };
+        isPlaying = true;
+        await view.render();
+        assert.ok(
+            view.container.querySelector('button[aria-label="Пауза: Faint"]'),
+        );
+        assert.equal(
+            view.container.querySelectorAll('[aria-current="true"]').length,
+            1,
+        );
+    } finally {
+        currentTrack = null;
+        isPlaying = false;
+        view.close();
+    }
+});
 
 test("downloads search combines artist, title and album without starting playback", async () => {
     records = [

@@ -144,6 +144,7 @@ mock.module("lucide-react", {
     namedExports: {
         Music: Icon,
         Play: Icon,
+        Pause: Icon,
         Radio: Icon,
         HardDriveDownload: Icon,
         RotateCcw: Icon,
@@ -204,6 +205,12 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
         useOptionalDeviceOffline: () => offlineContext,
         useDeviceOffline: () => offlineContext,
     },
+});
+mock.module("@/lib/audio-state-context", {
+    namedExports: { useAudioState: () => ({ currentTrack: null }) },
+});
+mock.module("@/lib/audio-playback-context", {
+    namedExports: { usePlaybackStatus: () => ({ isPlaying: false }) },
 });
 mock.module("@/lib/audio-controls-context", {
     namedExports: {

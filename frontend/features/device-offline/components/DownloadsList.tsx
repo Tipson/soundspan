@@ -5,12 +5,14 @@ import {
     Download,
     HardDriveDownload,
     Play,
+    Pause,
     RotateCcw,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAudioControls } from "@/lib/audio-controls-context";
-import type { Track } from "@/lib/audio-state-context";
+import { useAudioState, type Track } from "@/lib/audio-state-context";
+import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { useDeviceOffline } from "../DeviceOfflineProvider";
 import type { DeviceOfflineQueueItem } from "../offlineQueue";
 import type { DeviceOfflineDownloadRecord, DeviceOfflineTrack } from "../types";
@@ -147,7 +149,9 @@ function normalizeSearch(value: string): string {
 export function DownloadsList() {
     const [search, setSearch] = useState("");
     const [exportingKey, setExportingKey] = useState<string | null>(null);
-    const { playTracks } = useAudioControls();
+    const { playTracks, pause, resume: resumePlayback } = useAudioControls();
+    const { currentTrack } = useAudioState();
+    const { isPlaying } = usePlaybackStatus();
     const {
         isHydrated,
         isQueueHydrated,
@@ -472,10 +476,16 @@ export function DownloadsList() {
                         record.track as Track,
                     );
                     const actionable = playbackTrack !== null;
+                    const isCurrent =
+                        record.status === "ready" &&
+                        actionable &&
+                        playbackTrack.id === currentTrack?.id;
+                    const playing = isCurrent && isPlaying;
                     return (
                         <div
                             key={record.key}
                             data-download-status={record.status}
+                            aria-current={isCurrent ? "true" : undefined}
                             className="flex min-h-16 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-3 py-2 last:border-b-0"
                         >
                             {record.status === "ready" && actionable ? (
@@ -483,6 +493,11 @@ export function DownloadsList() {
                                     type="button"
                                     onClick={() => {
                                         if (!playbackTrack) return;
+                                        if (isCurrent) {
+                                            if (isPlaying) pause();
+                                            else resumePlayback();
+                                            return;
+                                        }
                                         const seen = new Set<string>();
                                         const tracks = matchingRecords.flatMap(
                                             (candidate) => {
@@ -525,9 +540,13 @@ export function DownloadsList() {
                                             );
                                     }}
                                     className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand text-black transition hover:brightness-110"
-                                    aria-label={`${ru.common.play}: ${record.track.title}`}
+                                    aria-label={`${playing ? ru.common.pause : ru.common.play}: ${record.track.title}`}
                                 >
-                                    <Play className="h-4 w-4 fill-current" />
+                                    {playing ? (
+                                        <Pause className="h-4 w-4 fill-current" />
+                                    ) : (
+                                        <Play className="h-4 w-4 fill-current" />
+                                    )}
                                 </button>
                             ) : record.status === "downloading" ? (
                                 <button
@@ -550,6 +569,11 @@ export function DownloadsList() {
                                 <p className="truncate text-sm font-semibold text-white">
                                     {record.track.title}
                                 </p>
+                                {isCurrent && (
+                                    <p className="text-xs font-semibold text-brand">
+                                        {playing ? "Играет" : "На паузе"}
+                                    </p>
+                                )}
                                 <p className="truncate text-xs text-white/50">
                                     {managementCopy(record.management)} ·{" "}
                                     {record.track.artist.name}
