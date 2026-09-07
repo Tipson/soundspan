@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Keep the visible page underneath an open player/modal when browser Back skips its same-document history guard; close only the top layer and restore the page's router snapshot.
+
 - Synchronize download rows with the current player selection and playing/paused state. Toggle the current track without resetting its position or replacing the queue.
 
 - Start Downloads playback with a fresh queue of ready local copies instead of continuing an unrelated online Wave queue. Keep search and background-download updates from changing a queue already playing.

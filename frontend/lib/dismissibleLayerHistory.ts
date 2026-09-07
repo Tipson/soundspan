@@ -4,7 +4,7 @@ const MARKER = "__soundspanDismissibleLayer";
 export interface LayerHistoryRuntime {
     url(): string;
     state(): Record<string, unknown> | null;
-    push(state: Record<string, unknown>): void;
+    push(state: Record<string, unknown>, url?: string): void;
     back(): void;
 }
 
@@ -17,6 +17,7 @@ export class DismissibleLayerHistory {
     private sequence = 0;
     private readonly marker = `layer-${Date.now()}-${Math.random()}`;
     private baseUrl: string | null = null;
+    private baseState: Record<string, unknown> = {};
     private pendingBack = false;
     private consumePendingBack = true;
 
@@ -31,6 +32,8 @@ export class DismissibleLayerHistory {
 
     private pushGuard(): void {
         this.baseUrl = this.runtime.url();
+        this.baseState = { ...this.runtime.state() };
+        delete this.baseState[MARKER];
         this.runtime.push({
             ...this.runtime.state(),
             [MARKER]: `${this.marker}:${this.baseUrl}`,
@@ -81,6 +84,14 @@ export class DismissibleLayerHistory {
             return true;
         }
         if (this.runtime.url() !== this.baseUrl) {
+            if (this.layers.size && !this.pendingBack && this.baseUrl) {
+                // Browser UI traversal can skip same-document guard entries.
+                // Restore the visible page's own router snapshot before the
+                // router sees popstate; never copy the destination's tree.
+                this.runtime.push(this.baseState, this.baseUrl);
+                if (this.layers.size > 1) this.pushGuard();
+                return this.dismiss();
+            }
             this.pendingBack = false;
             return false;
         }

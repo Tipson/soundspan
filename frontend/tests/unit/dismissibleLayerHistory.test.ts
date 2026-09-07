@@ -12,9 +12,9 @@ function fixture() {
     const runtime = {
         url: () => entries[index].url,
         state: () => entries[index].state,
-        push: (state: Record<string, unknown>) => {
+        push: (state: Record<string, unknown>, url?: string) => {
             entries.splice(++index);
-            entries.push({ url: entries[index - 1].url, state });
+            entries.push({ url: url ?? entries[index - 1].url, state });
         },
         back: () => {
             pending++;
@@ -25,8 +25,8 @@ function fixture() {
         layers,
         runtime,
         entries,
-        pop: () => {
-            index--;
+        pop: (steps = 1) => {
+            index -= steps;
             return layers.onPop();
         },
         flush: () => {
@@ -56,6 +56,34 @@ test("Back closes the upper layer before the player without navigating the base 
     assert.equal(f.runtime.url(), "/library");
     assert.equal(f.pop(), false);
     assert.equal(f.runtime.url(), "/");
+});
+
+test("Back skipping a guard restores the visible route and closes the player", () => {
+    const f = fixture();
+    let closed = 0;
+    f.layers.add(() => closed++, 10);
+    assert.equal(f.pop(2), true);
+    assert.equal(closed, 1);
+    assert.equal(f.runtime.url(), "/library");
+    assert.equal(f.runtime.state().__NA, true);
+    assert.equal(f.runtime.state().tree, "library");
+    f.flush();
+    assert.equal(f.runtime.url(), "/library");
+    assert.equal(f.pop(), false);
+    assert.equal(f.runtime.url(), "/");
+});
+
+test("Back skipping a guard still closes only the upper nested window", () => {
+    const f = fixture();
+    const closed: string[] = [];
+    f.layers.add(() => closed.push("player"), 10);
+    f.layers.add(() => closed.push("modal"), 100);
+    assert.equal(f.pop(2), true);
+    assert.deepEqual(closed, ["modal"]);
+    assert.equal(f.runtime.url(), "/library");
+    assert.equal(f.pop(), true);
+    assert.deepEqual(closed, ["modal", "player"]);
+    assert.equal(f.runtime.url(), "/library");
 });
 
 test("closing by a button removes the sentinel and preserves Next history state", () => {

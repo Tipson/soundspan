@@ -10,8 +10,8 @@ function getManager(): DismissibleLayerHistory {
     const history = new DismissibleLayerHistory({
         url: () => window.location.href,
         state: () => window.history.state,
-        push: (state) =>
-            window.history.pushState(state, "", window.location.href),
+        push: (state, url) =>
+            window.history.pushState(state, "", url ?? window.location.href),
         back: () => window.history.back(),
     });
     window.addEventListener(
