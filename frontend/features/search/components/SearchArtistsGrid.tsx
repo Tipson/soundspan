@@ -48,7 +48,15 @@ function mergeSearchArtists(
         const duplicateIndex = cardIndexByName.get(key);
         if (duplicateIndex !== undefined) {
             if (hasCanonicalProviderArtistIdentity(artist)) {
-                cards[duplicateIndex] = { kind: "discovery", artist };
+                const existing = cards[duplicateIndex];
+                const savedImage =
+                    existing.kind === "library"
+                        ? existing.artist.heroUrl
+                        : existing.artist.image;
+                cards[duplicateIndex] = {
+                    kind: "discovery",
+                    artist: { ...artist, image: artist.image || savedImage },
+                };
             }
             continue;
         }

@@ -17,7 +17,21 @@ const state = {
     isMobile: true,
     isTablet: false,
     routerPushes: [] as string[],
+    overlayCloses: 0,
 };
+
+mock.module("@/lib/audio-controls-context", {
+    namedExports: {
+        useAudioControls: () => ({
+            returnToPreviousMode: () => {
+                state.overlayCloses++;
+            },
+        }),
+    },
+});
+mock.module("@/lib/audio-volume-mode-context", {
+    namedExports: { useAudioVolumeMode: () => ({ playerMode: "overlay" }) },
+});
 
 mock.module("lucide-react", {
     namedExports: {
@@ -65,8 +79,23 @@ beforeEach(() => {
     state.isMobile = true;
     state.isTablet = false;
     state.routerPushes.length = 0;
+    state.overlayCloses = 0;
 });
 after(() => GlobalRegistrator.unregister());
+
+test("focusing desktop search dismisses the queue overlay without playback commands", async () => {
+    state.isMobile = false;
+    const { TopBar } = await import("../../components/layout/TopBar");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(React.createElement(TopBar)));
+    await act(async () => container.querySelector("input")!.focus());
+    assert.equal(state.overlayCloses, 1);
+    await act(async () => root.unmount());
+    container.remove();
+});
 mock.module("@/components/layout/ActivityPanel", {
     namedExports: { ActivityPanelToggle: () => null },
 });

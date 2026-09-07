@@ -11,6 +11,8 @@ import Image from "next/image";
 
 import { BRAND_NAME } from "@/lib/brand";
 import { ru } from "@/lib/i18n/ru";
+import { useAudioControls } from "@/lib/audio-controls-context";
+import { useAudioVolumeMode } from "@/lib/audio-volume-mode-context";
 
 interface TopBarProps {
     isActivityPanelOpen?: boolean;
@@ -27,6 +29,11 @@ export function TopBar({
     const pathname = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { playerMode } = useAudioVolumeMode();
+    const { returnToPreviousMode } = useAudioControls();
+    const dismissPlayerOverlay = useCallback(() => {
+        if (playerMode === "overlay") returnToPreviousMode();
+    }, [playerMode, returnToPreviousMode]);
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -41,6 +48,7 @@ export function TopBar({
 
     const navigateToSearch = useCallback(
         (query: string) => {
+            dismissPlayerOverlay();
             if (pathname === "/search" && routeSearchQuery === query) return;
             searchNavigationSequenceRef.current += 1;
             pendingSearchRoutesRef.current.set(
@@ -49,7 +57,7 @@ export function TopBar({
             );
             router.push(`/search?q=${encodeURIComponent(query)}`);
         },
-        [pathname, routeSearchQuery, router],
+        [pathname, routeSearchQuery, router, dismissPlayerOverlay],
     );
 
     const handleSearch = (e: React.FormEvent) => {
@@ -124,13 +132,14 @@ export function TopBar({
                 if (searchInputRef.current) {
                     searchInputRef.current.focus();
                 } else if (isMobileOrTablet) {
+                    dismissPlayerOverlay();
                     router.push("/search");
                 }
             }
         };
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [isMobileOrTablet, router]);
+    }, [isMobileOrTablet, router, dismissPlayerOverlay]);
 
     return (
         <header
@@ -181,6 +190,7 @@ export function TopBar({
                                 <input
                                     ref={searchInputRef}
                                     autoFocus
+                                    onFocus={dismissPlayerOverlay}
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) =>
@@ -215,6 +225,7 @@ export function TopBar({
                             </Link>
                             <Link
                                 href="/search"
+                                onClick={dismissPlayerOverlay}
                                 data-shell-search="action"
                                 className="shell-control ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none"
                                 aria-label={ru.search.aria}
@@ -242,6 +253,7 @@ export function TopBar({
                             <input
                                 ref={searchInputRef}
                                 type="text"
+                                onFocus={dismissPlayerOverlay}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder={ru.search.placeholder}

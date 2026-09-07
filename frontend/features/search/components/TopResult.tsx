@@ -69,6 +69,34 @@ export function TopResult({
     const imageUrl = isLibrary
         ? libraryArtist?.heroUrl
         : discoveryArtist?.image;
+    const alternativeImage =
+        isLibrary &&
+        discoveryArtist &&
+        normalizeArtistName(discoveryArtist.name) === normalizeArtistName(name)
+            ? discoveryArtist.image
+            : undefined;
+    const artworkPlaceholder = (
+        <span className="grid h-full w-full place-items-center">
+            <Music
+                className="h-11 w-11 text-content-muted"
+                aria-hidden="true"
+            />
+        </span>
+    );
+    const artworkFallback =
+        alternativeImage && alternativeImage !== imageUrl ? (
+            <CachedImage
+                src={api.getCoverArtUrl(alternativeImage, 200)}
+                alt={name}
+                fill
+                sizes="(min-width: 640px) 112px, 96px"
+                className="object-cover"
+                loading="eager"
+                fallback={artworkPlaceholder}
+            />
+        ) : (
+            artworkPlaceholder
+        );
 
     return (
         <section
@@ -104,22 +132,10 @@ export function TopResult({
                             className="object-cover"
                             loading="eager"
                             fetchPriority="high"
-                            fallback={
-                                <span className="grid h-full w-full place-items-center">
-                                    <Music
-                                        className="h-11 w-11 text-content-muted"
-                                        aria-hidden="true"
-                                    />
-                                </span>
-                            }
+                            fallback={artworkFallback}
                         />
                     ) : (
-                        <span className="grid h-full w-full place-items-center">
-                            <Music
-                                className="h-11 w-11 text-content-muted"
-                                aria-hidden="true"
-                            />
-                        </span>
+                        artworkFallback
                     )}
                 </div>
                 <div className="relative z-10 min-w-0 flex-1 px-4 sm:px-6">
