@@ -1,7 +1,7 @@
 "use client";
 
 import type { SyntheticEvent } from "react";
-import { AudioLines, Download, Music, Play } from "lucide-react";
+import { Download, Music, Play } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { CachedImage } from "@/components/ui/CachedImage";
@@ -147,14 +147,7 @@ export function TrackRow({
                         )}
                         style={isPlaying ? { color: accentColor } : undefined}
                     >
-                        {isPlaying ? (
-                            <AudioLines
-                                className="w-4 h-4"
-                                style={{ color: accentColor }}
-                            />
-                        ) : (
-                            index + 1
-                        )}
+                        {index + 1}
                     </span>
                     <Play className="w-4 h-4 text-white hidden group-hover:block fill-current" />
                 </div>
@@ -210,7 +203,7 @@ export function TrackRow({
                                 variant="muted"
                             />
                         )}
-                        {isInQueue && <InQueueBadge />}
+                        {isInQueue && !isPlaying && <InQueueBadge />}
                     </h3>
                     {artistContent !== undefined ? (
                         artistContent

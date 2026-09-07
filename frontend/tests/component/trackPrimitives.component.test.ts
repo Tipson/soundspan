@@ -179,7 +179,8 @@ test("current title retains its playback indicator with custom album leading cel
             React.createElement(TrackRow, {
                 item: toRowItem(sampleItems[0]),
                 index: 0,
-                isPlaying: current,
+            isPlaying: current,
+            isInQueue: true,
                 slots: {
                     leadingColumn: React.createElement("span", null, "1"),
                 },
@@ -187,10 +188,12 @@ test("current title retains its playback indicator with custom album leading cel
         );
     assert.match(render(true), /<h3[^>]*>.*data-playback-state="playing"/);
     assert.match(render(true), /motion-safe:animate-bounce/);
+    assert.doesNotMatch(render(true), /В ОЧЕРЕДИ/);
     runtimeState.playing = false;
     assert.match(render(true), /data-playback-state="paused"/);
     assert.doesNotMatch(render(true), /animate-bounce/);
     assert.doesNotMatch(render(false), /data-playback-state/);
+    assert.match(render(false), /В ОЧЕРЕДИ/);
 });
 
 test("TrackList renders loadingState and emptyState branches deterministically", async () => {
@@ -332,7 +335,7 @@ test("TrackListHeader renders provided columns with shared header classes", asyn
     assert.match(html, /Album/);
 });
 
-test("TrackRow renders queue badge, duration, preferences, and overflow actions", async () => {
+test("current TrackRow renders playback marker, duration, preferences, and overflow actions", async () => {
     const { TrackRow } = await loadTrackExports();
 
     const html = renderToStaticMarkup(
@@ -361,7 +364,7 @@ test("TrackRow renders queue badge, duration, preferences, and overflow actions"
         }),
     );
 
-    assert.match(html, /В ОЧЕРЕДИ/);
+    assert.match(html, /data-playback-state="playing"/);
     assert.match(html, /t:181/);
     assert.match(html, /prefs:track-1/);
     assert.match(html, /overflow-menu/);
