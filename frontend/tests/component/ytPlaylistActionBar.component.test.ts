@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { renderExpandedDetailActions } from "./renderExpandedDetailActions";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as realTrackRef from "../../lib/trackRef";
 
@@ -20,6 +21,7 @@ const Icon = (props: Record<string, unknown> = {}) =>
 
 mock.module("lucide-react", {
     namedExports: {
+        X: Icon,
         ArrowLeft: Icon,
         Play: Icon,
         Pause: Icon,
@@ -317,7 +319,7 @@ test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonic
         onToggleLikeAll: () => undefined,
         onBack: () => undefined,
     });
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(EditorialSurface, {
             playlist,
             isAlbumType: false,
@@ -333,7 +335,8 @@ test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonic
     assert.ok(hero);
     assert.match(hero, /data-music-detail="actions"/);
     assert.match(hero, /data-detail-action-tier="primary"/);
-    assert.match(hero, /data-detail-action-tier="secondary"/);
+    assert.doesNotMatch(hero, /data-detail-action-tier="secondary"/);
+    assert.match(html, /data-detail-action-tier="secondary"/);
     assert.match(hero, /Очень длинное название плейлиста YouTube Music/);
     assert.match(html, /data-music-detail="tracks"/);
     assert.match(html, /track-list/);

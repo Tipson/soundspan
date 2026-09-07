@@ -73,6 +73,7 @@ mock.module("lucide-react", {
         Plus: icon("plus"),
         Radio: icon("radio"),
         Shuffle: icon("shuffle"),
+        X: icon("close"),
     },
 });
 
@@ -113,6 +114,10 @@ mock.module("@/lib/audio-state-context", {
             currentTrack: state.currentTrack,
         }),
     },
+});
+
+mock.module("@/lib/audio-playback-context", {
+    namedExports: { usePlaybackStatus: () => ({ isPlaying: state.isPlaying }) },
 });
 
 mock.module("@/hooks/useQueuedTrackIds", {
@@ -205,6 +210,7 @@ mock.module(
 mock.module("@/lib/logger", {
     namedExports: {
         frontendLogger: {
+            child: () => ({ info() {}, warn() {}, error() {}, debug() {} }),
             info: () => undefined,
             warn: () => undefined,
             error: () => undefined,
@@ -417,6 +423,32 @@ test("renders empty-state copy and hides action buttons when there are no tracks
     assert.doesNotMatch(html, /title="Добавить всё в очередь/);
 });
 
+test("keeps only playback, shuffle and More in the liked toolbar", async () => {
+    state.likedData = {
+        playlist: { id: "my-liked", name: "My Liked" },
+        tracks: [makeTrack("track-1", "First"), makeTrack("track-2", "Second")],
+        total: 2,
+    };
+    const mod = await import("../../app/playlist/my-liked/page");
+    const rendered = document.createElement("div");
+    rendered.innerHTML = renderWithQueryClient(mod.default);
+    const dock = rendered.querySelector('[data-music-detail="actions"]');
+    assert.equal(dock?.querySelectorAll("button").length, 3);
+    assert.ok(dock?.querySelector('[aria-label="Ещё действия"]'));
+});
+
+async function renderWithExpandedActions(Component: React.ComponentType) {
+    const { renderExpandedDetailActions } =
+        await import("./renderExpandedDetailActions");
+    return renderExpandedDetailActions(
+        React.createElement(
+            QueryClientProvider,
+            { client: new QueryClient() },
+            React.createElement(Component),
+        ),
+    );
+}
+
 test("renders consolidated action bar buttons when tracks exist", async () => {
     state.likedData = {
         playlist: { id: "my-liked", name: "My Liked" },
@@ -425,7 +457,7 @@ test("renders consolidated action bar buttons when tracks exist", async () => {
     };
 
     const mod = await import("../../app/playlist/my-liked/page");
-    const html = renderWithQueryClient(mod.default);
+    const html = await renderWithExpandedActions(mod.default);
 
     // Canonical order: Play, Shuffle, Add to Queue, Add to Playlist, Radio
     const rendered = document.createElement("div");
@@ -457,7 +489,8 @@ test("renders consolidated action bar buttons when tracks exist", async () => {
     assert.ok(hero);
     assert.match(hero, /data-music-detail="actions"/);
     assert.match(hero, /data-detail-action-tier="primary"/);
-    assert.match(hero, /data-detail-action-tier="secondary"/);
+    assert.doesNotMatch(hero, /data-detail-action-tier="secondary"/);
+    assert.match(html, /data-detail-action-tier="secondary"/);
 });
 
 test("My Liked offers a manual device download for downloadable tracks only", async () => {
@@ -489,7 +522,7 @@ test("My Liked offers a manual device download for downloadable tracks only", as
     };
 
     const mod = await import("../../app/playlist/my-liked/page");
-    const html = renderWithQueryClient(mod.default);
+    const html = await renderWithExpandedActions(mod.default);
 
     assert.match(html, /data-testid="device-collection-download"/);
     assert.match(html, /data-collection-id="playlist:my-liked"/);
@@ -542,7 +575,12 @@ test("My Liked batch playlist add preserves actionable source identity", async (
         );
     });
 
-    const openSelector = container.querySelector(
+    const more = container.querySelector<HTMLButtonElement>(
+        '[aria-label="Ещё действия"]',
+    );
+    assert.ok(more);
+    await React.act(async () => more.click());
+    const openSelector = document.querySelector(
         'button[title="Добавить всё в плейлист"]',
     ) as HTMLButtonElement | null;
     assert.ok(openSelector);

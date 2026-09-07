@@ -821,6 +821,32 @@ test("FullPlayer: skip buttons are disabled and inert while canSeek is false; Pr
 // OverlayPlayer
 // ---------------------------------------------------------------------------
 
+test("OverlayPlayer reserves only its mobile drag header from browser scrolling", async () => {
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+    try {
+        const header = mounted.container.querySelector<HTMLElement>(
+            ".overlay-player-chrome",
+        );
+        assert.ok(header);
+        assert.equal(header.style.touchAction, "none");
+        const content = mounted.container.querySelector<HTMLElement>(
+            ".overlay-player-layout",
+        );
+        assert.ok(content);
+        assert.notEqual(
+            content.style.touchAction,
+            "none",
+            "content keeps ordinary touch scrolling",
+        );
+    } finally {
+        await unmount(mounted);
+    }
+});
+
 test("OverlayPlayer leaves desktop chrome and the player dock uncovered", async () => {
     isMobileViewport = false;
     const { OverlayPlayer } =

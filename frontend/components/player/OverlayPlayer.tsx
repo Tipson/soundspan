@@ -540,7 +540,12 @@ export function OverlayPlayer() {
             {/* Header */}
             <div
                 className="overlay-player-chrome relative z-10 flex-shrink-0 px-4 pt-3 pb-2"
-                style={{ paddingTop: "calc(12px + env(safe-area-inset-top))" }}
+                style={{
+                    paddingTop: "calc(12px + env(safe-area-inset-top))",
+                    // Claim this drag before Chrome can start pull-to-refresh.
+                    // The player content and queue keep native scrolling.
+                    touchAction: isMobileOrTablet ? "none" : undefined,
+                }}
                 onTouchStart={
                     isMobileOrTablet
                         ? overlayHeaderHandlers.onTouchStart

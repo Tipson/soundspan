@@ -18,6 +18,7 @@ const Icon = (props: Record<string, unknown> = {}) =>
 
 mock.module("lucide-react", {
     namedExports: {
+        X: Icon,
         Eye: Icon,
         EyeOff: Icon,
         Globe: Icon,
@@ -101,117 +102,84 @@ function createDockProps({
     };
 }
 
-test("playlist detail action dock keeps secondary actions in one touch-friendly menu at every width", async () => {
+test("playlist toolbar is compact and mounts secondary controls outside its hero", async () => {
     const { PlaylistDetailActionDock } =
         await import("@/features/playlist/components/PlaylistDetailActionDock");
     const html = renderToStaticMarkup(
         React.createElement(PlaylistDetailActionDock, createDockProps()),
     );
-
-    assert.match(html, /data-music-detail="actions"/);
-    assert.match(html, /data-detail-action-tier="primary"/);
-    assert.match(html, /data-detail-action-tier="secondary"/);
-    assert.match(html, /data-playlist-actions-overflow/);
-    assert.match(html, /aria-label="Ещё действия с плейлистом"/);
-    const overflowTrigger = html.match(
-        /<button[^>]*data-playlist-actions-overflow[^>]*class="([^"]*)"[^>]*>/,
-    );
-    const secondaryActions = html.match(
-        /<div[^>]*id="playlist-secondary-actions"[^>]*class="([^"]*)"[^>]*>/,
-    );
-    assert.ok(overflowTrigger);
-    assert.ok(secondaryActions);
-    assert.match(overflowTrigger[1], /\bh-11\b/);
-    assert.match(overflowTrigger[1], /\bw-11\b/);
-    assert.doesNotMatch(overflowTrigger[1], /sm:hidden/);
-    assert.match(secondaryActions[1], /\bhidden\b/);
-    assert.doesNotMatch(secondaryActions[1], /sm:flex/);
-    assert.match(secondaryActions[1], /max-h-/);
-    assert.match(secondaryActions[1], /overflow-y-auto/);
-    assert.match(secondaryActions[1], /overscroll-contain/);
-    assert.match(html, /data-radio-actions="true"/);
-    assert.match(html, /aria-label="Воспроизвести всё"/);
-    assert.match(html, /data-playlist-primary-label="compact"[^>]*>Слушать</);
-    assert.match(
-        html,
-        /data-playlist-primary-label="full"[^>]*>Воспроизвести всё</,
-    );
-
-    for (const match of html.matchAll(/<button[^>]*>/g)) {
-        assert.match(match[0], /(h-11 w-11|min-h-11)/);
-    }
+    assert.equal([...html.matchAll(/<button\b/g)].length, 3);
+    assert.doesNotMatch(html, /data-detail-action-tier="secondary"/);
 });
 
-test("playlist detail overflow remains operable and closes after a secondary action", async () => {
+test("playlist sheet preserves callbacks, ownership and focus when opening another dialog", async () => {
     const { PlaylistDetailActionDock } =
         await import("@/features/playlist/components/PlaylistDetailActionDock");
     const { createRoot } = await import("react-dom/client");
-    const container = document.createElement("div");
-    const modalFocusTarget = document.createElement("button");
-    document.body.appendChild(container);
-    document.body.appendChild(modalFocusTarget);
-    const root = createRoot(container);
-    let addAllCalls = 0;
-
-    await React.act(async () => {
+    const host = document.createElement("div");
+    const target = document.createElement("button");
+    document.body.append(host, target);
+    const root = createRoot(host);
+    let calls = 0;
+    await React.act(async () =>
         root.render(
             React.createElement(
                 PlaylistDetailActionDock,
                 createDockProps({
                     onAddAllToQueue: () => {
-                        addAllCalls += 1;
+                        calls++;
                     },
-                    onOpenShare: () => modalFocusTarget.focus(),
+                    onOpenShare: () => target.focus(),
                 }),
             ),
-        );
-    });
-
-    const trigger = container.querySelector<HTMLButtonElement>(
-        "[data-playlist-actions-overflow]",
+        ),
     );
-    const secondaryActions = container.querySelector<HTMLElement>(
-        "#playlist-secondary-actions",
+    const trigger = host.querySelector<HTMLButtonElement>(
+        '[aria-label="Ещё действия"]',
     );
     assert.ok(trigger);
-    assert.ok(secondaryActions);
-    assert.equal(trigger.getAttribute("aria-expanded"), "false");
-    assert.match(secondaryActions.className, /\bhidden\b/);
-
-    await React.act(async () => trigger.click());
-    assert.equal(trigger.getAttribute("aria-expanded"), "true");
-    assert.match(secondaryActions.className, /\bflex\b/);
-    assert.doesNotMatch(secondaryActions.className, /\bhidden\b/);
-
-    const addAll = container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Добавить всё в очередь"]',
-    );
-    assert.ok(addAll);
-    await React.act(async () => addAll.click());
-    assert.equal(addAllCalls, 1);
-    assert.equal(trigger.getAttribute("aria-expanded"), "false");
-    assert.match(secondaryActions.className, /\bhidden\b/);
-
-    await React.act(async () => trigger.click());
-    addAll.focus();
-    assert.equal(document.activeElement, addAll);
     await React.act(async () => {
-        document.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-        );
+        trigger.focus();
+        trigger.click();
     });
-    assert.equal(trigger.getAttribute("aria-expanded"), "false");
-    assert.equal(document.activeElement, trigger);
-
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog);
+    assert.equal(host.contains(dialog), false);
+    const add = dialog.querySelector<HTMLButtonElement>(
+        '[aria-label="Добавить всё в очередь"]',
+    );
+    assert.ok(add);
+    await React.act(async () => add.click());
+    assert.equal(calls, 1);
+    assert.equal(document.querySelector('[role="dialog"]'), null);
     await React.act(async () => trigger.click());
-    const share = container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Создать ссылку для доступа"]',
+    const share = document.querySelector<HTMLButtonElement>(
+        '[aria-label="Создать ссылку для доступа"]',
     );
     assert.ok(share);
     await React.act(async () => share.click());
-    assert.equal(document.activeElement, modalFocusTarget);
-
+    assert.ok(
+        document.activeElement === target,
+        "closing actions must not steal focus from the opened dialog",
+    );
+    await React.act(async () =>
+        root.render(
+            React.createElement(PlaylistDetailActionDock, {
+                ...createDockProps(),
+                isOwner: false,
+            }),
+        ),
+    );
+    await React.act(async () => trigger.click());
+    assert.equal(
+        document.querySelector('[aria-label="Создать ссылку для доступа"]'),
+        null,
+    );
+    assert.equal(
+        document.querySelector('[aria-label="Удалить плейлист"]'),
+        null,
+    );
     await React.act(async () => root.unmount());
-    container.remove();
-    modalFocusTarget.remove();
+    host.remove();
+    target.remove();
 });

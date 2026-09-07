@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-    ArrowLeft,
     Play,
     Pause,
     Music2,
@@ -41,6 +40,7 @@ import { TrackList, TrackListHeader } from "@/components/track";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { SaveMusicEntityButton } from "@/features/library/components/SaveMusicEntityButton";
 import { DeviceCollectionDownloadButton } from "@/features/device-offline/components/DeviceCollectionDownloadButton";
+import { MusicDetailSecondaryActions } from "@/components/music-detail/MusicDetailSecondaryActions";
 import {
     MusicDetailActionDock,
     MusicDetailHero,
@@ -343,7 +343,6 @@ interface YtPlaylistActionDockProps {
     onAddToQueue: () => void;
     onAddToPlaylist: () => void;
     onToggleLikeAll: () => void;
-    onBack: () => void;
 }
 
 /** Action hierarchy shared by YouTube Music album and playlist details. */
@@ -364,7 +363,6 @@ export function YtPlaylistActionDock({
     onAddToQueue,
     onAddToPlaylist,
     onToggleLikeAll,
-    onBack,
 }: YtPlaylistActionDockProps) {
     const downloadableTracks = tracks
         .filter((track) => Boolean(track.videoId))
@@ -377,7 +375,7 @@ export function YtPlaylistActionDock({
         <MusicDetailActionDock label={`${collectionLabel}: действия`}>
             <div
                 data-detail-action-tier="primary"
-                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none"
             >
                 <button
                     type="button"
@@ -392,9 +390,16 @@ export function YtPlaylistActionDock({
                         <Play className="ml-0.5 h-5 w-5 fill-current" />
                     )}
                     <span>
-                        {isThisPlaylistPlaying && isPlaying
-                            ? searchExtrasRu.youtubePlaylist.pause
-                            : searchExtrasRu.youtubePlaylist.playAll}
+                        {isThisPlaylistPlaying && isPlaying ? (
+                            searchExtrasRu.youtubePlaylist.pause
+                        ) : (
+                            <>
+                                <span className="sm:hidden">Слушать</span>
+                                <span className="hidden sm:inline">
+                                    {searchExtrasRu.youtubePlaylist.playAll}
+                                </span>
+                            </>
+                        )}
                     </span>
                 </button>
                 {tracks.length > 1 && (
@@ -410,73 +415,90 @@ export function YtPlaylistActionDock({
                 )}
             </div>
 
-            <div
-                data-detail-action-tier="secondary"
-                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
-            >
-                <button
-                    type="button"
-                    onClick={onAddToQueue}
-                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                    title={searchExtrasRu.youtubePlaylist.addAllToQueue}
-                    aria-label={searchExtrasRu.youtubePlaylist.addAllToQueue}
-                >
-                    <ListMusic className="h-5 w-5" />
-                </button>
-                <button
-                    type="button"
-                    onClick={onAddToPlaylist}
-                    className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                    title={searchExtrasRu.youtubePlaylist.addAllToPlaylist}
-                    aria-label={searchExtrasRu.youtubePlaylist.addAllToPlaylist}
-                >
-                    <Plus className="h-5 w-5" />
-                </button>
-                {likeableTrackCount > 0 && (
-                    <button
-                        type="button"
-                        onClick={onToggleLikeAll}
-                        disabled={isApplyingLikeAll}
-                        className={cn(
-                            "flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
-                            isApplyingLikeAll
-                                ? "cursor-not-allowed text-content-muted opacity-50"
-                                : isAllLiked
-                                  ? "text-brand hover:bg-white/10"
-                                  : "text-content-secondary hover:bg-white/10 hover:text-content",
-                        )}
-                        title={likeLabel}
-                        aria-label={likeLabel}
-                    >
-                        {isApplyingLikeAll ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Heart
+            <MusicDetailSecondaryActions>
+                {(close) => (
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                close();
+                                onAddToQueue();
+                            }}
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            title={searchExtrasRu.youtubePlaylist.addAllToQueue}
+                            aria-label={
+                                searchExtrasRu.youtubePlaylist.addAllToQueue
+                            }
+                        >
+                            <ListMusic className="h-5 w-5" />
+                            <span>
+                                {searchExtrasRu.youtubePlaylist.addAllToQueue}
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                close();
+                                onAddToPlaylist();
+                            }}
+                            className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            title={
+                                searchExtrasRu.youtubePlaylist.addAllToPlaylist
+                            }
+                            aria-label={
+                                searchExtrasRu.youtubePlaylist.addAllToPlaylist
+                            }
+                        >
+                            <Plus className="h-5 w-5" />
+                            <span>
+                                {
+                                    searchExtrasRu.youtubePlaylist
+                                        .addAllToPlaylist
+                                }
+                            </span>
+                        </button>
+                        {likeableTrackCount > 0 && (
+                            <button
+                                type="button"
+                                onClick={onToggleLikeAll}
+                                disabled={isApplyingLikeAll}
                                 className={cn(
-                                    "h-4 w-4",
-                                    isAllLiked && "fill-current",
+                                    "flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
+                                    isApplyingLikeAll
+                                        ? "cursor-not-allowed text-content-muted opacity-50"
+                                        : isAllLiked
+                                          ? "text-brand hover:bg-white/10"
+                                          : "text-content-secondary hover:bg-white/10 hover:text-content",
                                 )}
+                                title={likeLabel}
+                                aria-label={likeLabel}
+                            >
+                                {isApplyingLikeAll ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Heart
+                                        className={cn(
+                                            "h-4 w-4",
+                                            isAllLiked && "fill-current",
+                                        )}
+                                    />
+                                )}
+                                <span>{likeLabel}</span>
+                            </button>
+                        )}
+                        {isAlbumType && (
+                            <SaveMusicEntityButton
+                                entity={providerAlbumEntity}
                             />
                         )}
-                    </button>
+                        <DeviceCollectionDownloadButton
+                            tracks={downloadableTracks}
+                            collectionId={`ytmusic:${collectionId}`}
+                            collectionLabel={collectionLabel}
+                        />
+                    </>
                 )}
-                {isAlbumType && (
-                    <SaveMusicEntityButton entity={providerAlbumEntity} />
-                )}
-                <DeviceCollectionDownloadButton
-                    tracks={downloadableTracks}
-                    collectionId={`ytmusic:${collectionId}`}
-                    collectionLabel={collectionLabel}
-                />
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                >
-                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                    <span>{searchExtrasRu.youtubePlaylist.back}</span>
-                </button>
-            </div>
+            </MusicDetailSecondaryActions>
         </MusicDetailActionDock>
     );
 }
@@ -861,7 +883,6 @@ function YtMusicPlaylistDetailPageContent() {
                         onAddToQueue={handleAddToQueue}
                         onAddToPlaylist={() => setShowPlaylistSelector(true)}
                         onToggleLikeAll={() => void toggleLikeAll()}
-                        onBack={() => router.back()}
                     />
                 }
             />

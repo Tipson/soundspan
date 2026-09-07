@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased UI density fixes
+
+- Collapse album, artist, playlist, Liked Songs and YouTube Music collection management into a shared labelled actions sheet. Keep playback and shuffle visible, shorten mobile play labels, and remove the redundant Back action from the YouTube collection toolbar.
+- Render the actions sheet outside hero stacking contexts; preserve download/preference progress and close it before opening another action dialog.
+- Reserve the mobile player's drag header for swipe-to-close so pulling its handle does not trigger the browser's pull-to-refresh; leave content scrolling unchanged.
+
 All notable changes to soundspan are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

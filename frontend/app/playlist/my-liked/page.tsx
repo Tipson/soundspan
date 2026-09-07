@@ -54,6 +54,7 @@ import {
     MusicDetailTrackSurface,
 } from "@/components/music-detail";
 import { pluralRu, ru } from "@/lib/i18n/ru";
+import { MusicDetailSecondaryActions } from "@/components/music-detail/MusicDetailSecondaryActions";
 
 const EMPTY_TRACKS: LikedPlaylistTrack[] = [];
 
@@ -486,7 +487,7 @@ export default function MyLikedPlaylistPage() {
                         >
                             <div
                                 data-detail-action-tier="primary"
-                                className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-none"
+                                className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none"
                             >
                                 <button
                                     type="button"
@@ -528,46 +529,68 @@ export default function MyLikedPlaylistPage() {
                                     </button>
                                 )}
                             </div>
-                            <div
-                                data-detail-action-tier="secondary"
-                                className="flex w-full min-w-0 flex-wrap items-center gap-1 sm:w-auto sm:flex-none sm:gap-2"
-                            >
-                                <DeviceCollectionDownloadButton
-                                    tracks={deviceDownloadTracks}
-                                    collectionId="playlist:my-liked"
-                                    collectionLabel={ru.library.likedSongs}
-                                />
-                                <button
-                                    onClick={handleAddAllToQueue}
-                                    disabled={audioTracks.length === 0}
-                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                                    title={ru.playlist.addAllQueue}
-                                    aria-label={ru.playlist.addAllQueue}
-                                >
-                                    <ListMusic className="h-5 w-5" />
-                                </button>
-                                <button
-                                    onClick={() =>
-                                        setShowPlaylistSelector(true)
-                                    }
-                                    disabled={
-                                        actionableLikedTracks.length === 0
-                                    }
-                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                                    title={ru.playlist.addAllPlaylist}
-                                    aria-label={ru.playlist.addAllPlaylist}
-                                >
-                                    <Plus className="h-5 w-5" />
-                                </button>
-                                <button
-                                    onClick={handleStartRadio}
-                                    className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                                    title={ru.playlist.startRadio}
-                                    aria-label={ru.playlist.startRadio}
-                                >
-                                    <Radio className="h-5 w-5" />
-                                </button>
-                            </div>
+                            <MusicDetailSecondaryActions>
+                                {(close) => (
+                                    <>
+                                        <DeviceCollectionDownloadButton
+                                            tracks={deviceDownloadTracks}
+                                            collectionId="playlist:my-liked"
+                                            collectionLabel={
+                                                ru.library.likedSongs
+                                            }
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                close();
+                                                handleAddAllToQueue();
+                                            }}
+                                            disabled={audioTracks.length === 0}
+                                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                            title={ru.playlist.addAllQueue}
+                                            aria-label={ru.playlist.addAllQueue}
+                                        >
+                                            <ListMusic className="h-5 w-5" />
+                                            <span>
+                                                {ru.playlist.addAllQueue}
+                                            </span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                close();
+                                                setShowPlaylistSelector(true);
+                                            }}
+                                            disabled={
+                                                actionableLikedTracks.length ===
+                                                0
+                                            }
+                                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                            title={ru.playlist.addAllPlaylist}
+                                            aria-label={
+                                                ru.playlist.addAllPlaylist
+                                            }
+                                        >
+                                            <Plus className="h-5 w-5" />
+                                            <span>
+                                                {ru.playlist.addAllPlaylist}
+                                            </span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                close();
+                                                void handleStartRadio();
+                                            }}
+                                            className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                            title={ru.playlist.startRadio}
+                                            aria-label={ru.playlist.startRadio}
+                                        >
+                                            <Radio className="h-5 w-5" />
+                                            <span>
+                                                {ru.playlist.startRadio}
+                                            </span>
+                                        </button>
+                                    </>
+                                )}
+                            </MusicDetailSecondaryActions>
                         </MusicDetailActionDock>
                     ) : undefined
                 }
