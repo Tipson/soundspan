@@ -220,7 +220,7 @@ test("Wave loading remains legible, announced, and single-line while playback is
     assert.ok(status);
     assert.equal(toggle.contains(status), false);
     assert.match(visibleLabel.className, /whitespace-nowrap/);
-    assert.equal(visibleLabel.textContent?.trim(), "Настраиваем…");
+    assert.equal(visibleLabel.textContent?.trim(), "Загрузка…");
     assert.equal(status.textContent?.trim(), "Настраиваем мою волну");
 
     await React.act(async () => root.unmount());
@@ -254,6 +254,13 @@ test("Vibe starts its ranked queue with shuffle explicitly disabled", async () =
         'button[aria-label="Включить мою волну"]',
     ) as HTMLButtonElement | null;
     assert.ok(playButton);
+
+    assert.equal(
+        playButton
+            .querySelector('[data-testid="wave-main-label"]')
+            ?.textContent?.trim(),
+        "Слушать",
+    );
 
     await React.act(async () => playButton.click());
 

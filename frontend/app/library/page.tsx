@@ -145,7 +145,7 @@ export default function LibraryPage() {
         <div className="relative min-h-screen bg-surface">
             <LibraryHeader />
 
-            <main className="relative mx-auto max-w-[1800px] space-y-8 px-4 pt-8 sm:space-y-10 sm:px-6 sm:pt-10 lg:px-8">
+            <main className="relative mx-auto max-w-[1800px] space-y-5 px-4 pt-4 sm:space-y-10 sm:px-6 sm:pt-10 lg:px-8">
                 <LibraryTabs
                     activeTab={
                         activeView === "downloads" ? "playlists" : activeView
@@ -163,29 +163,37 @@ export default function LibraryPage() {
                                 title={ru.library.playlists}
                                 description="Любимые треки, ваши плейлисты и музыка, сохранённая на этом устройстве"
                             />
-                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
                                 <button
                                     type="button"
+                                    aria-label="Создать плейлист"
                                     onClick={() =>
                                         setIsCreateDialogOpenManually(true)
                                     }
-                                    className="inline-flex min-h-11 items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    className="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                 >
                                     <Plus
                                         className="h-4 w-4"
                                         aria-hidden="true"
                                     />
-                                    Создать плейлист
+                                    <span className="sm:hidden">Создать</span>
+                                    <span className="hidden sm:inline">
+                                        Создать плейлист
+                                    </span>
                                 </button>
                                 <Link
                                     href="/import"
-                                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-bold text-content transition-colors hover:border-white/25 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                    aria-label="Импортировать плейлист"
+                                    className="inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-bold text-content transition-colors hover:border-white/25 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                                 >
                                     <Upload
                                         className="h-4 w-4"
                                         aria-hidden="true"
                                     />
-                                    Импортировать плейлист
+                                    <span className="sm:hidden">Импорт</span>
+                                    <span className="hidden sm:inline">
+                                        Импортировать плейлист
+                                    </span>
                                 </Link>
                             </div>
                         </div>

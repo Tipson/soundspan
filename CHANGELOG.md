@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Compact the mobile Library header and create/import actions, shorten Wave control labels, and redirect uncached offline navigation to the cached homepage instead of displaying its document under an unrelated URL. Preserve exact-route offline documents and audio caches.
+
 - Recover missing search artist artwork from an exact provider match without replacing valid saved pictures; retain saved artwork when a provider identity has no image. Dismiss the expanded player when activating search without changing playback or the queue.
 
 - Redirect the legacy `/playlists` page and TV navigation to Library's playlist tab, preserving old `create=1` bookmarks while removing the duplicate management surface.

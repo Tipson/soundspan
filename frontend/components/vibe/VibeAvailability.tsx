@@ -725,11 +725,13 @@ export function VibeProviderFallback() {
                             )}
                             <span
                                 data-testid="wave-main-label"
-                                className={`max-w-full leading-[1.05] ${!hasActiveWave && isLoading ? "whitespace-nowrap" : "[text-wrap:balance]"}`}
+                                className="max-w-full whitespace-nowrap leading-[1.05]"
                             >
                                 {!hasActiveWave && isLoading
-                                    ? "Настраиваем…"
-                                    : primaryControlLabel}
+                                    ? "Загрузка…"
+                                    : hasActiveWave && isPlaying
+                                      ? "Пауза"
+                                      : "Слушать"}
                             </span>
                         </button>
                         {!hasActiveWave && isLoading && (

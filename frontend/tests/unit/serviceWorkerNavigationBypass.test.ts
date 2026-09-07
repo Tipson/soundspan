@@ -1301,6 +1301,33 @@ test("one rejected client navigation does not block the remaining clients", asyn
     assert.equal(harness.claimCalls, 1);
 });
 
+test("an uncached route redirects to the cached homepage instead of serving it under the wrong URL", async () => {
+    const harness = createHarness();
+    const cache = await harness.caches.open("soundspan-v4");
+    await cache.put(`${ORIGIN}/`, new Response("<html>Home only</html>"));
+    const response = await harness.dispatch("fetch", {
+        request: {
+            method: "GET",
+            mode: "navigate",
+            url: `${ORIGIN}/library`,
+            headers: new Headers(),
+        },
+    });
+    assert.equal(response?.status, 302);
+    assert.equal(response?.headers.get("Location"), `${ORIGIN}/`);
+    assert.doesNotMatch(await response!.text(), /Home only/);
+    const landing = await harness.dispatch("fetch", {
+        request: {
+            method: "GET",
+            mode: "navigate",
+            url: response!.headers.get("Location")!,
+            headers: new Headers(),
+        },
+    });
+    assert.equal(landing?.status, 200);
+    assert.match(await landing!.text(), /Home only/);
+});
+
 test("cold offline navigation to Library Downloads returns its cached app shell", async () => {
     const harness = createHarness();
     const shellCache = await harness.caches.open("soundspan-v4");

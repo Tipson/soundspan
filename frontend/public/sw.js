@@ -863,7 +863,14 @@ self.addEventListener("fetch", (event) => {
                     const root = await cache.match(
                         new URL("/", self.location.origin).toString(),
                     );
-                    if (root) return root;
+                    // Keep the document and address in sync: a cached homepage
+                    // is not the HTML for an uncached library or artist route.
+                    if (root) {
+                        return Response.redirect(
+                            new URL("/", self.location.origin).toString(),
+                            302,
+                        );
+                    }
                 }
                 return new Response("Нет подключения к интернету", {
                     status: 503,

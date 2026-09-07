@@ -282,6 +282,17 @@ test("Library opens one Playlists flow for liked tracks, personal playlists, and
     assert.doesNotMatch(html, />Discovery</);
 });
 
+test("Library uses compact mobile actions while preserving their accessible purpose", async () => {
+    const { default: LibraryPage } = await import("../../app/library/page");
+    tab = null;
+    create = null;
+    const html = renderToStaticMarkup(React.createElement(LibraryPage));
+    assert.match(html, /aria-label="Создать плейлист"/);
+    assert.match(html, /aria-label="Импортировать плейлист"/);
+    assert.match(html, />Создать</);
+    assert.match(html, />Импорт</);
+});
+
 test("Library owns the playlist creation deep link", async () => {
     const { default: LibraryPage } = await import("../../app/library/page");
     tab = null;
