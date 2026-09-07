@@ -1,6 +1,6 @@
 # P4/P5 analysis and Wave quality
 
-Status: implementation; baseline 8ece0883, production not changed by this package.
+Status: scoped corrections released; baseline8ece0883, runtime revision0431e5c2ea3977d2591522f4c67a52b73a459901. Organic quality expansion remains an observation gate.
 
 ## Acceptance sequence
 
@@ -43,3 +43,18 @@ Missing-measurement skipped exposures in this production window:0. The taste fix
 Scope: selection-before-limit, retry/cooldown boundaries, null evidence, account isolation and release rollback. Verdict:CLEAN for the scoped corrections. No new writes in selection, no enlarged query result limits, no schema change, no fixture taste admitted to organic analysis/evaluation. Existing cooldown and in-flight gates preserved and PostgreSQL-tested.
 
 Residual: daily budget exhaustion and continuous catalog growth are operational limits, not fixed by this package. Three accounts cannot justify a broad recommendation-quality claim. Device playback/P0 is outside this release.
+
+## Production release (2026-09-07)
+
+- API `local/soundspan-backend:analysis-wave-0431e5c2`; worker `local/soundspan-backend-worker:analysis-wave-0431e5c2`. Both healthy; frontend container identity unchanged. External `/api/health`:200.
+- Archive542924800bytes, SHA256`31bc33e3d2a55ae343212e85fe22b1a09634639e859a028e39b7b455fe86ece5` matched desktop, Proxmox staging and CT121 before load.
+- Production checks pass for both roles: missing telemetry neutral, measured skip retained, budget250/concurrency2/Hybrid25 unchanged, valid shared analysis counts. Read-only admission found81ready canonical recordings across11active accounts at09:55UTC (83at09:57as catalog continued changing).
+- CLI `node dist/scripts/evaluateRecommendationShadow.js --hours24` succeeds **without** config-preload workaround. Counts reconcile:1545scalar/1548active embeddings. No new completion claimed after deployment: today's budget was already exhausted.
+- Rollback configuration: `/srv/music/soundspan-releases/b0-b340a7c/compose-before-analysis-wave-0431e5c2.json`; restore as `compose.json` and run the existing split Compose command with `up -d --no-deps backend backend-worker`. Previous images retained: backend`search-995842d`, worker`package-e5baf93`; no schema rollback needed.
+- Git commit0431e5c2 local; owner performs git push.
+
+## Non-blocking observations for the next maintenance pass
+
+- Startup warns that retired Vibe consumer-group cleanup cannot destroy an already-absent Redis stream. `runLegacyCleanup` catches this independently of `runLoop`; it does not stop the active embedding consumer. Handle missing-stream cleanup idempotently in a separate maintenance correction.
+- MusicBrainz timeouts/503 and a Wikidata502 observed in optional artist enrichment; do not label these as a clean external-provider log or playback failures.
+- Full Linux test process reports listener-count warnings and expected mocked-cache warnings; all suites still pass. No warning suppression was added.
