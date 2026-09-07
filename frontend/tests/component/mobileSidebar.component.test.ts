@@ -49,10 +49,14 @@ test("mobile install action closes the drawer and requests the existing installa
 
 const state: {
     pathname: string;
+    query: string;
+    standalone: boolean;
     hasActiveSessions: boolean;
     user: { id: string; role: string } | undefined;
 } = {
     pathname: "/discover",
+    query: "",
+    standalone: false,
     hasActiveSessions: false,
     user: undefined,
 };
@@ -62,7 +66,12 @@ const Icon = () => React.createElement("i");
 mock.module("next/navigation", {
     namedExports: {
         usePathname: () => state.pathname,
+        useSearchParams: () => new URLSearchParams(state.query),
     },
+});
+
+mock.module("@/hooks/useMediaQuery", {
+    namedExports: { useMediaQuery: () => state.standalone },
 });
 
 mock.module("next/link", {
@@ -143,6 +152,8 @@ mock.module("@/components/ui/EqBars", {
 
 beforeEach(() => {
     state.pathname = "/discover";
+    state.query = "";
+    state.standalone = false;
     state.hasActiveSessions = false;
     state.user = undefined;
 });
@@ -262,4 +273,58 @@ test("marks settings as the current route when viewing settings", async () => {
 
     assert.match(html, /href="\/settings"/);
     assert.match(html, /aria-current="page"/);
+});
+
+test("only downloads is active on the downloads tab and installed PWA hides install", async () => {
+    state.pathname = "/library";
+    state.query = "tab=downloads";
+    state.standalone = true;
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
+    const html = renderToStaticMarkup(
+        React.createElement(MobileSidebar, {
+            isOpen: true,
+            onClose: () => undefined,
+            hasActiveSessions: false,
+        }),
+    );
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    assert.deepEqual(
+        [...container.querySelectorAll('[aria-current="page"]')].map((e) =>
+            e.getAttribute("href"),
+        ),
+        ["/library?tab=downloads"],
+    );
+    assert.doesNotMatch(html, /Установить приложение/);
+});
+
+test("changing only the Library tab closes the mobile drawer", async () => {
+    state.pathname = "/library";
+    const { MobileSidebar } =
+        await import("../../components/layout/MobileSidebar");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    let closes = 0;
+    const onClose = () => {
+        closes++;
+    };
+    const tree = () =>
+        React.createElement(MobileSidebar, {
+            isOpen: true,
+            onClose,
+            hasActiveSessions: false,
+        });
+    try {
+        await React.act(async () => root.render(tree()));
+        closes = 0;
+        state.query = "tab=downloads";
+        await React.act(async () => root.render(tree()));
+        assert.equal(closes, 1);
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
 });

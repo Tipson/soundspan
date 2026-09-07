@@ -38,6 +38,8 @@ export interface AudioControlsContextType {
         tracks: Track[],
         startIndex?: number,
         isVibeQueue?: boolean,
+        /** Explicit collection start replaces the queue even for the current track. */
+        options?: { replaceQueue?: boolean },
     ) => void;
     playAudiobook: (audiobook: Audiobook) => void;
     playPodcast: (

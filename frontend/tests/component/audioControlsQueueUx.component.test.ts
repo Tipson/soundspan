@@ -1132,3 +1132,26 @@ test("clicking the playing occurrence toggles pause and resume without rebuildin
     );
     assert.notEqual(state.queue, queue);
 });
+
+test("explicit offline queue replacement works even when the selected track is already current", async () => {
+    const currentTrack = makeTrack("downloaded", "artist-1");
+    const localNext = makeTrack("also-downloaded", "artist-2");
+    const state = createDeferredAudioState({
+        queue: [currentTrack, makeTrack("online-only", "artist-3")],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        vibeMode: true,
+    });
+    const playback = createPlaybackStub({ currentTime: 42, duration: 200 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+    controls.playTracks([currentTrack, localNext], 0, false, {
+        replaceQueue: true,
+    });
+    state.commit();
+    assert.deepEqual(state.queue, [currentTrack, localNext]);
+    assert.equal(state.vibeMode, false);
+    assert.equal(playback.isPlaying, true);
+    assert.equal(playback.currentTime, 0);
+});

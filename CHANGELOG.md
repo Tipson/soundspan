@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Start Downloads playback with a fresh queue of ready local copies instead of continuing an unrelated online Wave queue. Keep search and background-download updates from changing a queue already playing.
+- Highlight only the selected Library destination in the mobile drawer, close it when switching Library tabs, and hide installation inside an installed PWA.
+
 - Close the uppermost player, drawer, modal, track menu, or mobile sidebar on Back/Escape without navigating the page underneath. Preserve playback and the router's history state.
 - Copy verified legacy public-folder downloads into Android private storage after access is granted, preserving original files and owner-scoped metadata on failure or cancellation. Copied tracks do not request folder permission on subsequent launches.
 

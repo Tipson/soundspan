@@ -16,6 +16,11 @@ const calls = {
     prepares: [] as string[],
     exports: [] as string[],
     plays: [] as string[],
+    playbackQueues: [] as Array<{
+        ids: string[];
+        startIndex: number;
+        replaceQueue?: boolean;
+    }>,
     playedTrackInputs: [] as Array<Record<string, unknown>>,
     settingUpdates: [] as Array<Record<string, unknown>>,
     collectionEnqueues: [] as Array<Record<string, unknown>>,
@@ -203,7 +208,20 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
-            playTracks() {},
+            playTracks(
+                tracks: Array<Record<string, unknown> & { id: string }>,
+                startIndex = 0,
+                _vibe = false,
+                options?: { replaceQueue?: boolean },
+            ) {
+                calls.playbackQueues.push({
+                    ids: tracks.map((track) => track.id),
+                    startIndex,
+                    replaceQueue: options?.replaceQueue,
+                });
+                calls.plays.push(tracks[startIndex].id);
+                calls.playedTrackInputs.push(tracks[startIndex]);
+            },
             playNow: (track: Record<string, unknown> & { id: string }) => {
                 calls.plays.push(track.id);
                 calls.playedTrackInputs.push(track);
@@ -251,6 +269,7 @@ beforeEach(() => {
     calls.prepares.length = 0;
     calls.exports.length = 0;
     calls.plays.length = 0;
+    calls.playbackQueues.length = 0;
     calls.playedTrackInputs.length = 0;
     calls.settingUpdates.length = 0;
     calls.collectionEnqueues.length = 0;
@@ -989,6 +1008,60 @@ test("Downloads keeps retained rows in stable creation order when an older trans
         oldestRow,
     );
     assert.equal(view.container.scrollTop, 128);
+    view.unmount();
+});
+
+test("Downloads starts a fresh queue containing only ready copies in displayed order", async () => {
+    records = [
+        {
+            key: "a",
+            status: "ready",
+            createdAt: 3,
+            track: {
+                ...track,
+                id: "a",
+                youtubeVideoId: "AAAAAAAAAAA",
+                title: "First",
+            },
+        },
+        {
+            key: "b",
+            status: "ready",
+            createdAt: 2,
+            track: {
+                ...track,
+                id: "b",
+                youtubeVideoId: "BBBBBBBBBBB",
+                title: "Second",
+            },
+        },
+        {
+            key: "error",
+            status: "error",
+            createdAt: 4,
+            track: { ...track, id: "error", title: "Not saved" },
+        },
+        {
+            key: "pending",
+            status: "downloading",
+            createdAt: 5,
+            track: { ...track, id: "pending", title: "Pending" },
+        },
+    ];
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+    await React.act(async () =>
+        (
+            view.container.querySelector(
+                'button[aria-label="Воспроизвести: Second"]',
+            ) as HTMLButtonElement
+        ).click(),
+    );
+    assert.deepEqual(calls.prepares, ["b"]);
+    assert.deepEqual(calls.playbackQueues, [
+        { ids: ["a", "b"], startIndex: 1, replaceQueue: true },
+    ]);
     view.unmount();
 });
 

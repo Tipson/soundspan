@@ -66,6 +66,11 @@ the final destination for a new download.
 - Playback opens a short-lived revocable URL from the device file. The player
   owns that lease and releases it on replacement, error, account rotation, or
   unmount, so an offline play does not require the Soundspan server.
+  Starting a track from Downloads replaces the queue with the ready playable
+  copies in the displayed order, respecting the current search and collapsing
+  duplicate qualities of one track. Later searches and download progress do
+  not mutate that queue. Offline listening does not resume an unrelated online
+  Wave tail after the selected download finishes.
 - OPFS requests durable browser retention before it is used. A denied or failed
   persistence request does not disable verified foreground playback, but the
   Downloads and Settings surfaces warn that browser data may be cleared and

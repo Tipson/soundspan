@@ -147,7 +147,7 @@ function normalizeSearch(value: string): string {
 export function DownloadsList() {
     const [search, setSearch] = useState("");
     const [exportingKey, setExportingKey] = useState<string | null>(null);
-    const { playNow } = useAudioControls();
+    const { playTracks } = useAudioControls();
     const {
         isHydrated,
         isQueueHydrated,
@@ -483,8 +483,40 @@ export function DownloadsList() {
                                     type="button"
                                     onClick={() => {
                                         if (!playbackTrack) return;
+                                        const seen = new Set<string>();
+                                        const tracks = matchingRecords.flatMap(
+                                            (candidate) => {
+                                                if (
+                                                    candidate.status !== "ready"
+                                                )
+                                                    return [];
+                                                const track =
+                                                    normalizeActionableAudioTrack(
+                                                        candidate.track as Track,
+                                                    );
+                                                if (
+                                                    !track ||
+                                                    seen.has(track.id)
+                                                )
+                                                    return [];
+                                                seen.add(track.id);
+                                                return [track];
+                                            },
+                                        );
+                                        const index = tracks.findIndex(
+                                            (track) =>
+                                                track.id === playbackTrack.id,
+                                        );
+                                        if (index < 0) return;
                                         void preparePlayback(record)
-                                            .then(() => playNow(playbackTrack))
+                                            .then(() =>
+                                                playTracks(
+                                                    tracks,
+                                                    index,
+                                                    false,
+                                                    { replaceQueue: true },
+                                                ),
+                                            )
                                             .catch(() =>
                                                 toast.error(
                                                     ru.downloads

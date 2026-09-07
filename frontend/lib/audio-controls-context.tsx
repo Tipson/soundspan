@@ -62,7 +62,10 @@ import {
 } from "@/lib/audio-playback-normalization";
 import { resetPersistedTrackStartPosition } from "@/lib/persisted-playback-position";
 import { resolveListenTogetherNavigationIndex } from "@/lib/listen-together-navigation";
-import { writePlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    writePlaybackAdvanceOrigin,
+    writePlaybackReplacementIntent,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 import type { PlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
 import { toAddToPlaylistRef } from "@/lib/trackRef";
 import {
@@ -595,7 +598,12 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     );
 
     const playTracks = useCallback(
-        (tracks: Track[], startIndex = 0, isVibeQueue = false) => {
+        (
+            tracks: Track[],
+            startIndex = 0,
+            isVibeQueue = false,
+            options?: { replaceQueue?: boolean },
+        ) => {
             const playbackState = getPlaybackView();
             if (tracks.length === 0) {
                 return;
@@ -669,7 +677,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
             const startTrack = tracks[normalizedStartIndex];
             if (!startTrack?.id) return;
-            if (applyTrackClick(state, playbackState, startTrack)) return;
+            if (options?.replaceQueue) {
+                writePlaybackReplacementIntent(state.currentTrack?.id ?? null);
+            } else if (applyTrackClick(state, playbackState, startTrack))
+                return;
 
             queueDebugLog("playTracks()", {
                 tracksLen: tracks.length,
