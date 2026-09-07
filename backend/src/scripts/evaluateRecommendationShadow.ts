@@ -1,3 +1,5 @@
+// Resolve split-deployment POSTGRES_* configuration before creating Prisma.
+import "../config";
 import { prisma } from "../utils/db";
 import {
     recommendationShadowEvaluation,

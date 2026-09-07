@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../utils/db";
+import { isEarlyRecommendationSkip as isEarlySkip } from "./playbackEvidence";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
@@ -256,17 +257,6 @@ function isCompleted(
     return (
         exposure.outcome === "completed" ||
         (exposure.completionRatio ?? 0) >= 0.85
-    );
-}
-
-function isEarlySkip(
-    exposure: RecommendationEvaluationExposureSample,
-): boolean {
-    if (exposure.outcome !== "skipped") return false;
-    return (
-        (exposure.completionRatio ?? 0) <= 0.2 ||
-        (typeof exposure.listenedSeconds === "number" &&
-            exposure.listenedSeconds < 30)
     );
 }
 

@@ -1,6 +1,7 @@
 import { prisma } from "../../utils/db";
 import { parseEmbedding } from "../../utils/embedding";
 import { buildTasteCentroids } from "./rankerV2";
+import { isEarlyRecommendationSkip } from "./playbackEvidence";
 import type { RecommendationCandidate } from "./types";
 import type {
     RecommendationRequestContext,
@@ -59,10 +60,7 @@ interface RecommendationFeatureStoreDependencies {
 
 function tasteDelta(row: RecommendationTasteRow): number {
     if (row.outcome === "failed") return 0;
-    if (
-        row.outcome === "skipped" &&
-        ((row.completionRatio ?? 0) <= 0.2 || (row.listenedSeconds ?? 0) < 30)
-    ) {
+    if (isEarlyRecommendationSkip(row)) {
         return -1;
     }
     if (row.outcome === "completed" || (row.completionRatio ?? 0) >= 0.85) {
@@ -175,7 +173,9 @@ export class RecommendationFeatureStore {
                 this.dependencies.now(),
                 -1,
             ),
-            sessionSignalCount: sessionRows.length,
+            sessionSignalCount: sessionRows.filter(
+                (row) => tasteDelta(row) !== 0,
+            ).length,
             contextCentroids: buildTasteCentroids(
                 contextRows
                     .filter((row) => tasteDelta(row) > 0)

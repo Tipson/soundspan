@@ -414,6 +414,35 @@ const completedAnalysisWhere: Prisma.CanonicalRecordingWhereInput = {
     },
 };
 
+function temporarilyUnavailableAnalysisWhere(
+    now: Date,
+    includeFailedCooldown = true,
+): Prisma.CanonicalRecordingWhereInput[] {
+    const cooldownStart = new Date(now.getTime() - FAILED_ANALYSIS_COOLDOWN_MS);
+    return [
+        ...(includeFailedCooldown
+            ? [
+                  {
+                      analysisStatus: "failed",
+                      updatedAt: { gte: cooldownStart },
+                  },
+                  {
+                      embeddingStatus: "failed",
+                      embeddingAnalyzedAt: { gte: cooldownStart },
+                  },
+              ]
+            : []),
+        {
+            analysisLeases: {
+                some: {
+                    status: { in: [...ACTIVE_LEASE_STATUSES] },
+                    expiresAt: { gt: now },
+                },
+            },
+        },
+    ];
+}
+
 async function loadHotSetWorkMappings(
     where: Prisma.TrackMappingWhereInput,
 ): Promise<HotSetMapping[]> {
@@ -475,7 +504,17 @@ async function loadHotSetWorkMappings(
         }));
     };
     const [analysis, identity] = await Promise.all([
-        query({ NOT: completedAnalysisWhere }, MAX_ANALYSIS_PER_SIGNAL),
+        query(
+            {
+                NOT: {
+                    OR: [
+                        completedAnalysisWhere,
+                        ...temporarilyUnavailableAnalysisWhere(new Date()),
+                    ],
+                },
+            },
+            MAX_ANALYSIS_PER_SIGNAL,
+        ),
         query(
             {
                 AND: [
@@ -718,7 +757,6 @@ export async function loadRemoteAnalysisCoveredCanonicalIds(
     includeFailedCooldown = true,
 ): Promise<Set<string>> {
     const now = new Date();
-    const cooldownStart = new Date(now.getTime() - FAILED_ANALYSIS_COOLDOWN_MS);
     const rows = await prisma.canonicalRecording.findMany({
         where: {
             id: { in: canonicalRecordingIds },
@@ -743,26 +781,10 @@ export async function loadRemoteAnalysisCoveredCanonicalIds(
                         },
                     ],
                 },
-                ...(includeFailedCooldown
-                    ? [
-                          {
-                              analysisStatus: "failed",
-                              updatedAt: { gte: cooldownStart },
-                          },
-                          {
-                              embeddingStatus: "failed",
-                              embeddingAnalyzedAt: { gte: cooldownStart },
-                          },
-                      ]
-                    : []),
-                {
-                    analysisLeases: {
-                        some: {
-                            status: { in: [...ACTIVE_LEASE_STATUSES] },
-                            expiresAt: { gt: now },
-                        },
-                    },
-                },
+                ...temporarilyUnavailableAnalysisWhere(
+                    now,
+                    includeFailedCooldown,
+                ),
             ],
         },
         select: { id: true },

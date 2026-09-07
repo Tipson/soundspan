@@ -1,3 +1,6 @@
+// Argument/report tests do not boot production configuration or open a database.
+jest.mock("../../config", () => ({}));
+
 import {
     parseShadowEvaluationWindow,
     runShadowEvaluationCli,
