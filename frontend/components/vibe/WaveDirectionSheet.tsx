@@ -10,6 +10,7 @@ import {
 import { AudioWaveform, Check, X } from "lucide-react";
 import type { PersonalizedHomeMood } from "@/features/home/types";
 import { ru } from "@/lib/i18n/ru";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 
 /** Provider-backed ranking directions currently supported by My Wave. */
 export type WaveFeedMode = "for-you" | "new" | "familiar";
@@ -124,6 +125,7 @@ export function WaveDirectionSheet({
     onApply,
     onClose,
 }: WaveDirectionSheetProps) {
+    useDismissibleLayer(true, onClose);
     const [draftMode, setDraftMode] = useState(activeMode);
     const [draftMood, setDraftMood] = useState<WaveMood | null>(activeMood);
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -141,11 +143,6 @@ export function WaveDirectionSheet({
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                onClose();
-                return;
-            }
             if (event.key !== "Tab" || !dialogRef.current) return;
 
             const focusable = focusableElements(dialogRef.current);

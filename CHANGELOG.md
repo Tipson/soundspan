@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Close the uppermost player, drawer, modal, track menu, or mobile sidebar on Back/Escape without navigating the page underneath. Preserve playback and the router's history state.
+- Copy verified legacy public-folder downloads into Android private storage after access is granted, preserving original files and owner-scoped metadata on failure or cancellation. Copied tracks do not request folder permission on subsequent launches.
+
 - Keep remote-analysis admission slots available for ready recordings instead of filling them with in-flight work or failures still in cooldown. Preserve retry limits and the separate identity-enrichment lane.
 - Keep missing skip measurements neutral in Wave taste and evaluation; count only effective session taste signals, while retaining measured early-skip feedback. Bootstrap the recommendation evaluation CLI with the same database configuration as the deployed application.
 

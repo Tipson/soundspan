@@ -40,6 +40,7 @@ import {
     removeDeviceAudioRecord,
 } from "./vaultRecordAccess";
 import { migrateLegacyDeviceAudioCache } from "./legacyCacheMigration";
+import { migrateLegacyDirectoryAudio } from "./legacyDirectoryMigration";
 import {
     deleteManagedDeviceOfflineRecord,
     promoteReadyDeviceOfflineRecord,
@@ -261,7 +262,7 @@ export class DeviceOfflineDownloadManager {
         return records.sort((left, right) => right.updatedAt - left.updatedAt);
     }
 
-    /** Move prior CacheStorage copies after the user explicitly selects a folder. */
+    /** Retain legacy cache/folder copies in the active vault after access is ready. */
     async migrateLegacyCache(ownerId: string): Promise<number> {
         const vault = this.dependencies.audioVault;
         if (!vault) return 0;
@@ -270,7 +271,7 @@ export class DeviceOfflineDownloadManager {
         this.assertCurrentAuthRuntime(ownerId, lease);
         const records = await this.list(ownerId);
         this.assertCurrentAuthRuntime(ownerId, lease);
-        const migrated = await migrateLegacyDeviceAudioCache({
+        const migrationInput = {
             ownerId,
             authGeneration: lease.generation,
             records,
@@ -279,13 +280,19 @@ export class DeviceOfflineDownloadManager {
             origin: this.dependencies.origin,
             signal: lease.signal,
             now: this.dependencies.now,
-            publish: (expected, next) =>
+            publish: (
+                expected: DeviceOfflineDownloadRecord,
+                next: DeviceOfflineDownloadRecord,
+            ) =>
                 this.dependencies.metadataStore.putIfCurrent(
                     expected,
                     next,
                     isAuthorized,
                 ),
-        });
+        };
+        const migrated =
+            (await migrateLegacyDeviceAudioCache(migrationInput)) +
+            (await migrateLegacyDirectoryAudio(migrationInput));
         if (migrated > 0) this.notify();
         return migrated;
     }

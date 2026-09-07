@@ -30,6 +30,12 @@ const stubState: {
 
 const media = { isMobile: false, isTablet: false };
 
+mock.module("@/lib/audio-controls-context", {
+    namedExports: {
+        useAudioControls: () => ({ returnToPreviousMode: () => undefined }),
+    },
+});
+
 mock.module("@/lib/audio-volume-mode-context", {
     namedExports: {
         useAudioVolumeMode: () => ({

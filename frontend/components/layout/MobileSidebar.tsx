@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 import {
     Bell,
     Download,
@@ -45,6 +46,7 @@ const personalLinks = [
  * bottom bar; this drawer adds library shortcuts and account administration.
  */
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
+    useDismissibleLayer(isOpen, onClose, 5);
     const pathname = usePathname();
     const { user, logout } = useAuth();
     const { toast } = useToast();

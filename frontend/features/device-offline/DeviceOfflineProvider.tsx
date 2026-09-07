@@ -790,8 +790,14 @@ export function DeviceOfflineProvider({
         const access = await vault.requestLegacyAccess();
         const next = access ? toDeviceOfflineStorageState(access) : null;
         setLegacyStorage(next);
+        if (next?.status === "ready") {
+            await legacyMigrationRunRef.current?.promise;
+            if (legacyMigrationRunRef.current)
+                legacyMigrationRunRef.current.complete = false;
+            await resumeLegacyMigration();
+        }
         return next;
-    }, [vault]);
+    }, [resumeLegacyMigration, vault]);
 
     const requireManualStorage = useCallback(async () => {
         const next =

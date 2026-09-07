@@ -24,6 +24,7 @@ import {
     Loader2,
 } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import type { Track } from "@/lib/audio-state-context";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
@@ -101,6 +102,7 @@ export function TrackOverflowMenu({
     menuClassName,
 }: TrackOverflowMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
+    useDismissibleLayer(isOpen, () => setIsOpen(false), 200);
     const [isPlaylistSelectorOpen, setIsPlaylistSelectorOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);

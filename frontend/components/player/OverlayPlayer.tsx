@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayGestures } from "./hooks/useOverlayGestures";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 import { useOverlayPlayerAudio } from "./hooks/useOverlayPlayerAudio";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
 import { resolvePlaybackQualityBadgeFromStreamSource } from "@/hooks/useStreamBitrate";
@@ -124,6 +125,11 @@ export function OverlayPlayer() {
     const [isRadioLoading, setIsRadioLoading] = useState(false);
     const [isPlaylistSelectorOpen, setIsPlaylistSelectorOpen] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    useDismissibleLayer(
+        isDrawerOpen && isMobileOrTablet,
+        () => setIsDrawerOpen(false),
+        20,
+    );
     const [activeTab, setActiveTab] = useState<"queue" | "lyrics" | "related">(
         "queue",
     );
@@ -278,12 +284,6 @@ export function OverlayPlayer() {
                     tag === "select");
 
             if (isEditable) return;
-
-            if (event.key === "Escape") {
-                event.preventDefault();
-                returnToPreviousMode();
-                return;
-            }
 
             if (event.code === "Space") {
                 event.preventDefault();

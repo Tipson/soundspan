@@ -34,8 +34,12 @@ the final destination for a new download.
   was persisted. Older browsers without either writable route remain
   unsupported. Existing Android `fsa1` records remain readable through their
   original directory adapter; Downloads exposes a separate reconnect action
-  when the browser has forgotten that older folder permission, without moving
-  new writes back into public storage.
+  when the browser has forgotten that older folder permission. With private
+  storage ready, granting access starts a sequential, owner-scoped copy of
+  verified legacy files into OPFS. Metadata switches through compare-and-swap
+  only after each file is retained successfully; failed or cancelled copies
+  keep their original reference. Public-folder originals are never deleted.
+  Successfully copied tracks do not depend on renewed folder permission.
 - `downloadManager.ts` streams each new response into the active vault,
   publishes measured-byte progress, and marks metadata ready only after the
   retained file passes integrity checks. Metadata and the owner-scoped work

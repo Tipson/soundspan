@@ -122,6 +122,11 @@ mock.module("@/features/device-offline/vault", {
                 operationOrder.push("request-access");
                 return Promise.resolve(vaultRequestState);
             },
+            requestLegacyAccess: async () => ({
+                status: "ready",
+                storageKind: "desktop-directory",
+                directoryName: "Music",
+            }),
             open: async () => {
                 throw new Error("unused");
             },
@@ -834,6 +839,41 @@ test("ready device storage resumes legacy migration once per owner activation an
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
     assert.deepEqual(legacyMigrations, ["user-1", "user-2", "user-2"]);
+});
+
+test("granting old-folder access retries a completed boot migration", async () => {
+    const { DeviceOfflineProvider, useDeviceOffline } =
+        await import("../../features/device-offline/DeviceOfflineProvider");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const contextRef = {
+        current: null as ReturnType<typeof useDeviceOffline> | null,
+    };
+    function Probe() {
+        contextRef.current = useDeviceOffline();
+        return null;
+    }
+    try {
+        await React.act(async () =>
+            root.render(
+                React.createElement(
+                    DeviceOfflineProvider,
+                    null,
+                    React.createElement(Probe),
+                ),
+            ),
+        );
+        assert.deepEqual(legacyMigrations, ["user-1"]);
+        await React.act(async () => {
+            await contextRef.current!.setupLegacyStorage();
+        });
+        assert.deepEqual(legacyMigrations, ["user-1", "user-1"]);
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
 });
 
 test("initial hydration does not expose a stale ready record before cache reconciliation", async () => {
