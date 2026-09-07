@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Recognize provider-matched artist and album rows by canonical playback identity even when their catalogue id differs from the player's track id; do not confuse local files with provider fallback metadata.
+
 - Share a title-adjacent animated playback marker across Downloads and standard album, artist and track rows, with a stationary paused state and reduced-motion support.
 - Stamp the service worker with each frontend build so its offline shell refreshes after frontend-only releases without clearing downloaded audio or forcing an active player to reload.
 

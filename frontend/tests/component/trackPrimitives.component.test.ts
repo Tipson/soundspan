@@ -265,6 +265,52 @@ test("TrackList computes row state for current and queued items", async () => {
     );
 });
 
+test("provider-matched artist and album rows follow the canonical player identity, not their Last.fm id", async () => {
+    const { TrackList } = await loadTrackExports();
+    runtimeState.currentTrackId = "yt:video-a";
+    const rows = [
+        {
+            ...toRowItem(sampleItems[0]),
+            id: "lastfm-recording",
+            streamSource: "youtube",
+            youtubeVideoId: "video-a",
+        },
+        {
+            ...toRowItem(sampleItems[0]),
+            id: "lastfm-other",
+            streamSource: "youtube",
+            youtubeVideoId: "video-b",
+        },
+        {
+            ...toRowItem(sampleItems[0]),
+            id: "local-recording",
+            streamSource: "local",
+            youtubeVideoId: "video-a",
+        },
+    ];
+    const selected: string[] = [];
+    const html = renderToStaticMarkup(
+        React.createElement(TrackList, {
+            items: rows,
+            toRowItem: (row: unknown) => row,
+            onPlay: () => undefined,
+            rowSlots: (
+                row: { id: string },
+                _index: number,
+                state: { isPlaying: boolean },
+            ) => {
+                if (state.isPlaying) selected.push(row.id);
+                return {};
+            },
+        }),
+    );
+    assert.deepEqual(selected, ["lastfm-recording"]);
+    assert.equal(
+        (html.match(/data-playback-state="playing"/g) ?? []).length,
+        1,
+    );
+});
+
 test("TrackListHeader renders provided columns with shared header classes", async () => {
     const { TrackListHeader } = await loadTrackExports();
 

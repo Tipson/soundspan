@@ -13,6 +13,7 @@ import { GripVertical } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useAudioState } from "@/lib/audio-state-context";
 import { useQueuedTrackIds } from "@/hooks/useQueuedTrackIds";
+import { resolvePreferenceTrackId } from "@/lib/trackRef";
 import { TrackRow } from "./TrackRow";
 import {
     resolveDropPosition,
@@ -81,6 +82,9 @@ export function TrackList<T>({
     const { currentTrack } = useAudioState();
     const queuedTrackIds = useQueuedTrackIds();
     const currentTrackId = currentTrack?.id;
+    const currentPlaybackIdentity = currentTrack
+        ? resolvePreferenceTrackId(currentTrack)
+        : undefined;
 
     const dragIndexRef = useRef<number | null>(null);
     const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -147,7 +151,13 @@ export function TrackList<T>({
         const item = items[index];
         const rowItem = toRowItem(item, index);
         const key = getKey ? getKey(item, index) : rowItem.id;
-        const isPlaying = currentTrackId === rowItem.id;
+        // Matched catalogue rows retain a Last.fm/album id while the player
+        // uses yt:<videoId>. Never match local files by fallback metadata.
+        const isPlaying =
+            currentTrackId === rowItem.id ||
+            (rowItem.streamSource === "youtube" &&
+                currentPlaybackIdentity !== undefined &&
+                resolvePreferenceTrackId(rowItem) === currentPlaybackIdentity);
         const isInQueue = queuedTrackIds.has(rowItem.id);
         const state = { isPlaying, isInQueue };
 
