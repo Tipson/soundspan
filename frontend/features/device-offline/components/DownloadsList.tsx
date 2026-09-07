@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState, type Track } from "@/lib/audio-state-context";
 import { usePlaybackStatus } from "@/lib/audio-playback-context";
+import { TrackPlaybackIndicator } from "@/components/track/TrackPlaybackIndicator";
 import { useDeviceOffline } from "../DeviceOfflineProvider";
 import type { DeviceOfflineQueueItem } from "../offlineQueue";
 import type { DeviceOfflineDownloadRecord, DeviceOfflineTrack } from "../types";
@@ -571,8 +572,17 @@ export function DownloadsList() {
                                 </div>
                             )}
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-white">
-                                    {record.track.title}
+                                <p
+                                    className={`flex min-w-0 items-center gap-2 text-sm font-semibold ${isCurrent ? "text-brand" : "text-white"}`}
+                                >
+                                    {isCurrent && (
+                                        <TrackPlaybackIndicator
+                                            playing={playing}
+                                        />
+                                    )}
+                                    <span className="truncate">
+                                        {record.track.title}
+                                    </span>
                                 </p>
                                 {isCurrent && (
                                     <p className="text-xs font-semibold text-brand">

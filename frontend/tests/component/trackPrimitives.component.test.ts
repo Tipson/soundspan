@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const runtimeState = {
+    playing: true,
     currentTrackId: null as string | null,
     queuedTrackIds: new Set<string>(),
     overflowCalls: [] as Array<Record<string, unknown>>,
@@ -14,6 +15,12 @@ const runtimeState = {
         youtubeVideoId?: string;
     }>,
 };
+
+mock.module("@/lib/audio-playback-context", {
+    namedExports: {
+        usePlaybackStatus: () => ({ isPlaying: runtimeState.playing }),
+    },
+});
 
 const Icon = (props: Record<string, unknown> = {}) =>
     React.createElement("svg", props);
@@ -96,6 +103,7 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
 });
 
 beforeEach(() => {
+    runtimeState.playing = true;
     runtimeState.currentTrackId = null;
     runtimeState.queuedTrackIds = new Set();
     runtimeState.overflowCalls = [];
@@ -163,6 +171,27 @@ function toRowItem(item: (typeof sampleItems)[number]) {
         coverArtUrl: item.cover,
     };
 }
+
+test("current title retains its playback indicator with custom album leading cells and stops on pause", async () => {
+    const { TrackRow } = await loadTrackExports();
+    const render = (current: boolean) =>
+        renderToStaticMarkup(
+            React.createElement(TrackRow, {
+                item: toRowItem(sampleItems[0]),
+                index: 0,
+                isPlaying: current,
+                slots: {
+                    leadingColumn: React.createElement("span", null, "1"),
+                },
+            }),
+        );
+    assert.match(render(true), /<h3[^>]*>.*data-playback-state="playing"/);
+    assert.match(render(true), /motion-safe:animate-bounce/);
+    runtimeState.playing = false;
+    assert.match(render(true), /data-playback-state="paused"/);
+    assert.doesNotMatch(render(true), /animate-bounce/);
+    assert.doesNotMatch(render(false), /data-playback-state/);
+});
 
 test("TrackList renders loadingState and emptyState branches deterministically", async () => {
     const { TrackList } = await loadTrackExports();

@@ -16,6 +16,7 @@
         "dev": "node server.js",
         "prebuild": "tsc -p ../packages/media-metadata-contract/tsconfig.json && node scripts/check-service-worker-runtime.mjs",
         "build": "next build",
+        "postbuild": "node scripts/stamp-service-worker-build.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "start": "node server.js",

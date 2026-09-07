@@ -151,6 +151,11 @@ test("download row follows player selection and pause without replacing the queu
             'button[aria-label="Пауза: Numb"]',
         );
         assert.ok(pause);
+        assert.ok(
+            pause
+                .closest("[data-download-status]")!
+                .querySelector('p [data-playback-state="playing"]'),
+        );
         assert.match(
             pause.closest("[data-download-status]")!.textContent!,
             /Играет/,
@@ -163,6 +168,11 @@ test("download row follows player selection and pause without replacing the queu
             'button[aria-label="Воспроизвести: Numb"]',
         );
         assert.ok(play);
+        assert.ok(
+            play
+                .closest("[data-download-status]")!
+                .querySelector('p [data-playback-state="paused"]'),
+        );
         assert.match(
             play.closest("[data-download-status]")!.textContent!,
             /На паузе/,
@@ -265,7 +275,7 @@ test("queued downloads are searchable and remain deduplicated against stored cop
         assert.doesNotMatch(view.container.textContent ?? "", /Numb/);
         await view.search("numb");
         assert.equal(
-            view.container.querySelectorAll("p.truncate.text-sm").length,
+            view.container.querySelectorAll("[data-download-status]").length,
             1,
         );
     } finally {

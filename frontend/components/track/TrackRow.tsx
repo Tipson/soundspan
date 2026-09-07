@@ -12,6 +12,7 @@ import { InQueueBadge, UnplayableBadge } from "./badges";
 import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
 import type { DeviceOfflineTrack } from "@/features/device-offline/types";
 import type { TrackRowProps } from "./types";
+import { CurrentTrackPlaybackIndicator } from "./TrackPlaybackIndicator";
 
 const DEFAULT_ACCENT = "#3b82f6";
 const INTERACTIVE_DESCENDANT_SELECTOR = [
@@ -184,6 +185,7 @@ export function TrackRow({
                         )}
                         style={isPlaying ? { color: accentColor } : undefined}
                     >
+                        {isPlaying && <CurrentTrackPlaybackIndicator />}
                         <span className="truncate">
                             {item.displayTitle ?? item.title}
                         </span>
