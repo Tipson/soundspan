@@ -21,6 +21,12 @@ Language selection is not shipped: the catalog does not contain reliable sung-la
 
 ## Release and rollback
 
+Release status, 8 September 2026: executable changes are committed as `e268daf1`; production has not been changed. Backend recommendation/API checks passed (333 tests), frontend component checks passed (15 tests), local backend compilation and the production frontend image build passed. The separate complete frontend typecheck has not run yet.
+
+Backend image assembly is blocked on external dependency downloads: npm timed out, Prisma engine postinstall connections reset, and one install stalled. A build-only host-network attempt also returned `ECONNRESET`; repeated attempts were stopped under the repository debugging rule. API/worker package manifests, lockfile, Prisma schema/configuration and the shared contract have no differences from the deployed `0431e5c2` revision. A proposed next step is to reuse those unchanged installed dependencies in derived images, with compilation and runtime checks; this has not been executed.
+
+The connected Android disappeared from the USB device list before release verification. Its acceptance check remains open. All three existing production roles were verified healthy and retain their prior tags (`analysis-wave-0431e5c2` API/worker, `android-ba4889cc` frontend).
+
 Build the backend API, worker and frontend from one revision. No schema migration, recommendation-rollout change, analysis-budget change, new dependency, or credentials are part of this package.
 
 Preserve the deployed compose overlay and all three previous image tags. Change only these image references; verify compose configuration, container health, frontend-to-API health, Wave playback and retuning. Restore the overlay and recreate only these three services if checks fail. Existing likes, history and downloaded files are not deleted.
