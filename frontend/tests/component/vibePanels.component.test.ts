@@ -486,7 +486,7 @@ test("NowPlayingCard disables fly-to when the track isn't on the map", async () 
     assert.doesNotMatch(html, /Найти на карте/);
 });
 
-test("NowPlayingCard can defer playback to the single primary Wave control", async () => {
+test("NowPlayingCard retains its own playback control for an off-map track", async () => {
     const NowPlayingCard = await nowPlayingCard();
     const html = renderToStaticMarkup(
         React.createElement(NowPlayingCard, {
@@ -501,12 +501,11 @@ test("NowPlayingCard can defer playback to the single primary Wave control", asy
             moodColor: null,
             onFlyTo: noop,
             onTogglePlay: noop,
-            showPlaybackToggle: false,
         }),
     );
 
     assert.match(html, /Wave Song/);
-    assert.doesNotMatch(html, /aria-label="Пауза"/);
+    assert.match(html, /aria-label="Пауза"/);
     assert.doesNotMatch(html, /aria-label="Воспроизвести"/);
 });
 

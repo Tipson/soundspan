@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Remove unused Wave-panel presentation switches from the map's now-playing card; retain map playback, progress, navigation and preference controls.
+
 - Compact the mobile Library header and create/import actions, shorten Wave control labels, and redirect uncached offline navigation to the cached homepage instead of displaying its document under an unrelated URL. Preserve exact-route offline documents and audio caches.
 
 - Recover missing search artist artwork from an exact provider match without replacing valid saved pictures; retain saved artwork when a provider identity has no image. Dismiss the expanded player when activating search without changing playback or the queue.
