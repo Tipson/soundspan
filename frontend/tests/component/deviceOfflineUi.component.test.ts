@@ -1412,6 +1412,16 @@ test("browser-private Downloads offers an explicit normal-file export without re
         view.container.textContent ?? "",
         /Личное хранилище Soundspan/i,
     );
+    const storageDetails = view.container.querySelector("details");
+    assert.ok(
+        storageDetails,
+        "storage explanations must not occupy the track list by default",
+    );
+    assert.equal(storageDetails.open, false);
+    assert.equal(
+        storageDetails.querySelector("summary")?.textContent,
+        "О хранении загрузок",
+    );
     assert.match(
         view.container.textContent ?? "",
         /browser data may be cleared/i,

@@ -232,25 +232,30 @@ export function DownloadsList() {
         legacyStorage.status !== "ready";
     const storageNotice =
         storage.status === "ready" ? (
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
-                {usesPrivateStorage ? (
-                    <>
-                        <span className="font-medium text-white/85">
-                            Личное хранилище Soundspan.
-                        </span>{" "}
-                        {storage.explanation} {capability.explanation}
-                    </>
-                ) : (
-                    <>
-                        Папка на устройстве:{" "}
-                        <span className="font-medium text-white/85">
-                            {storage.directoryName ??
-                                "выбранная папка Soundspan"}
-                        </span>
-                        . {capability.explanation}
-                    </>
-                )}
-            </div>
+            <details className="text-xs text-content-muted">
+                <summary className="w-fit cursor-pointer py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                    О хранении загрузок
+                </summary>
+                <div className="mt-1 rounded-xl border border-white/10 px-4 py-3 text-sm">
+                    {usesPrivateStorage ? (
+                        <>
+                            <span className="font-medium text-white/85">
+                                Личное хранилище Soundspan.
+                            </span>{" "}
+                            {storage.explanation} {capability.explanation}
+                        </>
+                    ) : (
+                        <>
+                            Папка на устройстве:{" "}
+                            <span className="font-medium text-white/85">
+                                {storage.directoryName ??
+                                    "выбранная папка Soundspan"}
+                            </span>
+                            . {capability.explanation}
+                        </>
+                    )}
+                </div>
+            </details>
         ) : (
             <div className="flex flex-col gap-3 rounded-xl border border-warning/25 bg-warning/10 px-4 py-4 text-sm text-content-body sm:flex-row sm:items-center sm:justify-between">
                 <div>

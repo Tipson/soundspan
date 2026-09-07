@@ -245,7 +245,7 @@ export default function LibraryPage() {
                         <SectionHeading
                             id="device-downloads-title"
                             title="Загруженное"
-                            description="Музыка для офлайн-прослушивания на этом устройстве. На телефонах Soundspan хранит её в закрытом хранилище приложения; отдельный обычный файл можно сохранить вручную."
+                            description="Слушайте без интернета на этом устройстве."
                         />
                         <DownloadsList />
                     </section>

@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Shorten the Downloads heading copy and collapse storage explanations behind an optional disclosure. Keep actionable storage errors and permission requests visible.
+
 - Show device downloads on the offline homepage and keep Library tab switches local instead of requesting an unavailable page. Explain the unavailable full collection without redirecting its tabs to Home.
 - Replace misleading radio failure copy with a connection hint and a Downloads link. Hide inline track removal crosses in the player queue; retain removal in the track menu.
 
