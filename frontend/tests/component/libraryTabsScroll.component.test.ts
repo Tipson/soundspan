@@ -8,6 +8,22 @@ GlobalRegistrator.register();
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 after(() => GlobalRegistrator.unregister());
+
+test("library tab changes use local history instead of network navigation", async () => {
+    const view = await mount();
+    const push = mock.method(window.history, "pushState", () => {});
+    try {
+        const event = new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+        });
+        await React.act(async () => view.artist.dispatchEvent(event));
+        assert.equal(event.defaultPrevented, true);
+        assert.equal(push.mock.calls[0]?.arguments[2], "/library?tab=artists");
+    } finally {
+        await view.close();
+    }
+});
 mock.module("next/link", {
     defaultExport: React.forwardRef<
         HTMLAnchorElement,

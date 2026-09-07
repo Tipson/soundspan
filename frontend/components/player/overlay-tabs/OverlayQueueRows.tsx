@@ -298,12 +298,6 @@ export const OverlayQueueTrackRow = memo(function OverlayQueueTrackRow({
                         ) : undefined
                     }
                 />
-                {!isCurrentTrack && (
-                    <QueueRemoveButton
-                        queueIndex={queueIndex}
-                        onRemoveFromQueue={onRemoveFromQueue}
-                    />
-                )}
             </div>
         </div>
     );

@@ -188,7 +188,7 @@ test("a manual jump does not label skipped queue positions as listened", async (
     await unmount(mounted);
 });
 
-test("row actions dispatch play, remove, and clear callbacks", async () => {
+test("track rows dispatch play and clear without an inline removal button", async () => {
     const played: number[] = [];
     const removed: number[] = [];
     let cleared = 0;
@@ -223,7 +223,11 @@ test("row actions dispatch play, remove, and clear callbacks", async () => {
     });
 
     assert.deepEqual(played, [2]);
-    assert.deepEqual(removed, [2]);
+    assert.deepEqual(removed, []);
+    assert.equal(
+        secondRow.querySelector('button[title="Удалить из очереди"]'),
+        null,
+    );
     assert.equal(cleared, 1);
     await unmount(mounted);
 });

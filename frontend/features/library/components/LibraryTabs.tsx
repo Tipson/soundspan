@@ -69,6 +69,19 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
                             key={tab.id}
                             ref={active ? activeLinkRef : undefined}
                             href={tab.href}
+                            onClick={(event) => {
+                                if (
+                                    event.button !== 0 ||
+                                    event.metaKey ||
+                                    event.ctrlKey ||
+                                    event.shiftKey ||
+                                    event.altKey
+                                )
+                                    return;
+                                event.preventDefault();
+                                // Query-only tabs share this mounted page; no RSC request is needed.
+                                window.history.pushState(null, "", tab.href);
+                            }}
                             data-tv-card
                             data-tv-card-index={index}
                             data-library-tab={tab.id}

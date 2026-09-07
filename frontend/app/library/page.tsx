@@ -23,6 +23,7 @@ import type {
 import { CreatePlaylistDialog } from "@/features/playlist/components/CreatePlaylistDialog";
 import { shouldOpenCreatePlaylist } from "@/features/playlist/createPlaylistRoute";
 import { ru } from "@/lib/i18n/ru";
+import { useNetworkOnline } from "@/hooks/useNetworkOnline";
 
 type LibraryView = LibraryTab | "downloads";
 
@@ -107,6 +108,7 @@ export default function LibraryPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const activeView = activeLibraryView(searchParams.get("tab"));
+    const online = useNetworkOnline();
     const albumCollection = useSavedMusicEntities("album");
     const artistCollection = useSavedMusicEntities("artist");
     const playlistsQuery = usePlaylistsQuery();
@@ -152,7 +154,16 @@ export default function LibraryPage() {
                     }
                 />
 
-                {activeView === "playlists" && (
+                {!online && activeView !== "downloads" && (
+                    <section className="space-y-4">
+                        <p role="status" className="text-sm text-content-muted">
+                            Для просмотра полной коллекции нужен интернет. Ниже
+                            — музыка, скачанная на это устройство.
+                        </p>
+                        <DownloadsList />
+                    </section>
+                )}
+                {online && activeView === "playlists" && (
                     <section
                         data-library-view="playlists"
                         aria-labelledby="playlist-library-title"
@@ -240,7 +251,7 @@ export default function LibraryPage() {
                     </section>
                 )}
 
-                {activeView === "albums" && (
+                {online && activeView === "albums" && (
                     <section>
                         <SectionHeading
                             title={ru.library.savedAlbums}
@@ -261,7 +272,7 @@ export default function LibraryPage() {
                     </section>
                 )}
 
-                {activeView === "artists" && (
+                {online && activeView === "artists" && (
                     <section>
                         <SectionHeading
                             title={ru.library.savedArtists}
