@@ -2387,10 +2387,18 @@ async def _growing_spool_response(
             return response
         if session.content_type is None:
             raise RuntimeError("Readable spool session has no content type")
-        if range_end is not None:
+        open_initial_range = (
+            request.headers.get("range", "").strip().lower() == "bytes=0-"
+            and "if-range" not in request.headers
+        )
+        if range_end is not None or (open_initial_range and session.content_length is not None):
             if session.content_length is None or session.content_length <= 0:
                 raise RuntimeError("Readable ranged spool session has no valid content length")
-            byte_limit = min(range_end + 1, session.content_length)
+            byte_limit = (
+                min(range_end + 1, session.content_length)
+                if range_end is not None
+                else session.content_length
+            )
             return _LeaseStreamingResponse(
                 _stream_growing_spool(session, task, lease, byte_limit=byte_limit),
                 session.content_type,
@@ -2405,6 +2413,15 @@ async def _growing_spool_response(
             _stream_growing_spool(session, task, lease),
             session.content_type,
             lease,
+            # Browsers need the representation size to expose a seekable VOD
+            # timeline. Chunked 200 + Accept-Ranges alone can leave WebM at
+            # seekable=[0,0], making every currentTime assignment jump to zero.
+            # Only advertise the exact length proved by the upstream response.
+            headers=(
+                {"Content-Length": str(session.content_length)}
+                if session.content_length is not None
+                else None
+            ),
         )
     except BaseException:
         lease.close()
