@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect } from "react";
 import { api } from "@/lib/api";
+import { playbackStateMachine } from "@/lib/audio";
 import type { Podcast, Track } from "@/lib/audio-state-context";
 import { AUTOPLAY_INTENT_CONFLICT_WINDOW_MS } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
 import {
@@ -206,6 +207,37 @@ export function usePlaybackControlSync({
             }
             if (isPlaybackAutoRestartSuppressed()) return;
             applyCurrentOutputState();
+            if (
+                playbackType === "track" &&
+                currentTrack?.streamSource === "youtube" &&
+                playbackStateMachine.getState() === "ERROR"
+            ) {
+                // play() cannot revive a media element with a terminal source
+                // error. Reload on explicit retry, without advancing the queue.
+                const expectedLoadId = loadIdRef.current;
+                const expectedTrack = currentTrack;
+                const onRetryLoaded = () => {
+                    audioEngine.off("load", onRetryLoaded);
+                    const activeTrack = refs.currentTrackRef.current;
+                    const session = getListenTogetherSessionSnapshot();
+                    if (
+                        !lastPlayingStateRef.current ||
+                        loadIdRef.current !== expectedLoadId ||
+                        activeTrack?.id !== expectedTrack.id ||
+                        activeTrack?.playlistItemId !==
+                            expectedTrack.playlistItemId ||
+                        (session?.groupId && !session.isHost) ||
+                        isPlaybackAutoRestartSuppressed()
+                    )
+                        return;
+                    if (!audioEngine.isPlaying()) audioEngine.play();
+                };
+                playbackStateMachine.forceTransition("LOADING");
+                audioEngine.on("load", onRetryLoaded);
+                scheduleStartupPlaybackRecovery(currentTrack.id);
+                audioEngine.reload();
+                return () => audioEngine.off("load", onRetryLoaded);
+            }
             audioEngine.play();
             if (playbackType === "track" && currentTrack?.id) {
                 scheduleStartupPlaybackRecovery(currentTrack.id);

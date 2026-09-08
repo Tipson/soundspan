@@ -281,6 +281,7 @@ export function createPlaybackErrorHandler({
         clearTransientTrackRecovery(true);
 
         if (playbackType === "track" && preserveProviderQueue) {
+            isLoadingRef.current = false;
             clearPendingTrackErrorSkip();
             clearStartupPlaybackRecovery();
             return;
