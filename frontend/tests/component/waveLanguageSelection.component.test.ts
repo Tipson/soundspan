@@ -6,6 +6,7 @@ import {
     readWaveSelection,
     readPersistedWaveSelection,
     replaceWaveSelection,
+    waveSelectionStorageKey,
 } from "@/lib/waveSelection";
 import { queryKeys } from "@/lib/queryKeys";
 import {
@@ -16,17 +17,34 @@ import { buildProviderRadioContinuationPath } from "@/lib/audio/providerRadioCon
 
 GlobalRegistrator.register({ url: "https://soundspan.test/vibe" });
 after(() => GlobalRegistrator.unregister());
-test("language survives direction changes and remains scoped to the account", () => {
-    persistWaveSelection("one", "new", "focus", "ru");
-    assert.equal(readPersistedWaveSelection("one").language, "ru");
+test("retired language restrictions are ignored without losing direction or mood", () => {
+    window.localStorage.setItem(
+        waveSelectionStorageKey("one"),
+        JSON.stringify({ mode: "new", mood: "focus", language: "ru" }),
+    );
+    assert.deepEqual(readPersistedWaveSelection("one"), {
+        mode: "new",
+        mood: "focus",
+        language: "any",
+    });
     assert.equal(readPersistedWaveSelection("two").language, "any");
     window.history.replaceState({ overlay: true }, "", "/vibe?mode=familiar");
-    assert.equal(readWaveSelection("one").language, "ru");
+    assert.equal(readWaveSelection("one").language, "any");
     replaceWaveSelection("new", "focus", "foreign");
-    assert.equal(readWaveSelection("one").language, "foreign");
+    assert.equal(readWaveSelection("one").language, "any");
+    assert.equal(
+        new URL(window.location.href).searchParams.has("language"),
+        false,
+    );
     assert.deepEqual(window.history.state, { overlay: true });
-    window.history.replaceState(null, "", "/vibe?language=invalid");
-    assert.equal(readWaveSelection("one").language, "ru");
+    window.history.replaceState(null, "", "/vibe?language=ru");
+    assert.equal(readWaveSelection("one").language, "any");
+    persistWaveSelection("one", "new", "focus", "ru");
+    assert.equal(
+        JSON.parse(window.localStorage.getItem(waveSelectionStorageKey("one"))!)
+            .language,
+        "any",
+    );
 });
 test("each language has a separate cache and travels with the original mood and direction", () => {
     assert.notDeepEqual(

@@ -27,11 +27,6 @@ const WAVE_MOOD_IDS = new Set<PersonalizedHomeMood>([
     "forgotten",
 ]);
 const WAVE_SELECTION_KEY_PREFIX = `${BRAND_SLUG}_wave_selection_v1`;
-const WAVE_LANGUAGE_IDS = new Set<PersonalizedHomeLanguage>([
-    "any",
-    "ru",
-    "foreign",
-]);
 const DEFAULT_WAVE_SELECTION: WaveSelection = {
     mode: "for-you",
     mood: null,
@@ -59,13 +54,9 @@ export function readPersistedWaveSelection(
             language?: unknown;
         };
         return {
-            language:
-                typeof parsed?.language === "string" &&
-                WAVE_LANGUAGE_IDS.has(
-                    parsed.language as PersonalizedHomeLanguage,
-                )
-                    ? (parsed.language as PersonalizedHomeLanguage)
-                    : "any",
+            // Language selection is retired until catalog coverage is sufficient.
+            // Keep mode/mood, but never restore a hidden restrictive filter.
+            language: "any",
             mode:
                 typeof parsed.mode === "string" &&
                 WAVE_MODE_IDS.has(parsed.mode as WaveSelectionMode)
@@ -86,13 +77,13 @@ export function persistWaveSelection(
     ownerId: string | null,
     mode: WaveSelectionMode,
     mood: WaveSelectionMood,
-    language: PersonalizedHomeLanguage = "any",
+    _language: PersonalizedHomeLanguage = "any",
 ): void {
     if (!ownerId || typeof window === "undefined") return;
     try {
         window.localStorage.setItem(
             waveSelectionStorageKey(ownerId),
-            JSON.stringify({ mode, mood, language }),
+            JSON.stringify({ mode, mood, language: "any" }),
         );
     } catch {
         // The applied in-memory selection remains usable in restricted storage.
@@ -105,15 +96,10 @@ export function readWaveSelection(ownerId: string | null): WaveSelection {
     const params = new URLSearchParams(window.location.search);
     const requestedMode = params.get("mode");
     const requestedMood = params.get("mood");
-    const requestedLanguage = params.get("language");
     const hasModeOverride = params.has("mode");
     const hasMoodOverride = params.has("mood");
     return {
-        language:
-            requestedLanguage &&
-            WAVE_LANGUAGE_IDS.has(requestedLanguage as PersonalizedHomeLanguage)
-                ? (requestedLanguage as PersonalizedHomeLanguage)
-                : persisted.language,
+        language: "any",
         mode:
             requestedMode &&
             WAVE_MODE_IDS.has(requestedMode as WaveSelectionMode)
@@ -133,13 +119,12 @@ export function readWaveSelection(ownerId: string | null): WaveSelection {
 export function replaceWaveSelection(
     mode: WaveSelectionMode,
     mood: WaveSelectionMood,
-    language: PersonalizedHomeLanguage = "any",
+    _language: PersonalizedHomeLanguage = "any",
 ): void {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.set("mode", mode);
-    if (language !== "any") url.searchParams.set("language", language);
-    else url.searchParams.delete("language");
+    url.searchParams.delete("language");
     if (mood) url.searchParams.set("mood", mood);
     else url.searchParams.delete("mood");
     window.history.replaceState(window.history.state, "", url);

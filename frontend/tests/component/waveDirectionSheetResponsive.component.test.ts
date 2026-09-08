@@ -19,13 +19,17 @@ test("Wave keeps long mood labels readable on one line without shortening access
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
+    let applied: unknown[] | null = null;
 
     await React.act(async () => {
         root.render(
             React.createElement(WaveDirectionSheet, {
                 activeMode: "for-you",
                 activeMood: null,
-                onApply: () => undefined,
+                activeLanguage: "ru",
+                onApply: (...selection) => {
+                    applied = selection;
+                },
                 onClose: () => undefined,
             }),
         );
@@ -52,15 +56,13 @@ test("Wave keeps long mood labels readable on one line without shortening access
     const languageGroup = container.querySelector(
         '[role="radiogroup"][aria-label="Язык исполнения"]',
     );
-    assert.ok(languageGroup);
-    const russian = languageGroup.querySelector<HTMLButtonElement>(
-        '[aria-label="Русское"]',
+    assert.equal(languageGroup, null);
+    const apply = container.querySelector<HTMLButtonElement>(
+        'button[aria-label^="Сохранить настройку:"]',
     );
-    assert.ok(russian);
-    await React.act(async () => {
-        russian.click();
-    });
-    assert.equal(russian.getAttribute("aria-checked"), "true");
+    assert.ok(apply);
+    await React.act(async () => apply.click());
+    assert.deepEqual(applied, ["for-you", null, "any"]);
     assert.equal(
         container
             .querySelector('[role="radio"][aria-label="Для вас"]')
