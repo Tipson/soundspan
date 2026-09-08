@@ -11,6 +11,9 @@ import type { RecommendationMood } from "./types";
 const CACHE_TTL_MS = 60_000;
 const FAILURE_COOLDOWN_MS = 5 * 60 * 1_000;
 const MOOD_DEADLINE_MS = 750;
+// The process owns at most four coalesced fills. A caller's short latency budget
+// must not discard a healthy provider response arriving just after that budget.
+const FILL_DEADLINE_MS = 15_000;
 
 const MOOD_PROMPTS = {
     calm: "calm relaxed peaceful low energy music",
@@ -93,22 +96,36 @@ export class RecommendationMoodEmbeddingStore {
         if ((this.failures.get(selected) ?? 0) > now) {
             return { embedding: null, degraded: true };
         }
-        const active = this.inFlight.get(selected);
-        if (active) return active;
-
-        const load = this.loadFresh(selected).finally(() => {
-            if (this.inFlight.get(selected) === load) {
-                this.inFlight.delete(selected);
-            }
-        });
-        this.inFlight.set(selected, load);
-        return load;
+        let active = this.inFlight.get(selected);
+        if (!active) {
+            const load = this.loadFresh(selected).finally(() => {
+                if (this.inFlight.get(selected) === load) {
+                    this.inFlight.delete(selected);
+                }
+            });
+            this.inFlight.set(selected, load);
+            active = load;
+        }
+        try {
+            const result = await beforeDeadline(
+                active,
+                Date.now() + this.dependencies.timeoutMs,
+            );
+            return {
+                ...result,
+                embedding: result.embedding ? [...result.embedding] : null,
+            };
+        } catch {
+            // Only this caller timed out. loadFresh observes the bounded fill,
+            // caches a late success and applies cooldown only to a real failure.
+            return { embedding: null, degraded: true };
+        }
     }
 
     private async loadFresh(
         mood: SemanticMood,
     ): Promise<RecommendationMoodEmbeddingResult> {
-        const deadline = Date.now() + this.dependencies.timeoutMs;
+        const deadline = Date.now() + FILL_DEADLINE_MS;
         try {
             const space = await beforeDeadline(
                 this.dependencies.loadSpace(),
@@ -130,9 +147,12 @@ export class RecommendationMoodEmbeddingStore {
             ) {
                 throw new TypeError("Mood embedding has an invalid vector");
             }
+            const previousKey = this.latestCacheKey.get(mood);
+            if (previousKey && previousKey !== cacheKey)
+                this.cache.delete(previousKey);
             this.cache.set(cacheKey, {
                 embedding: [...embedding],
-                expiresAt: now + CACHE_TTL_MS,
+                expiresAt: this.dependencies.now().getTime() + CACHE_TTL_MS,
             });
             this.latestCacheKey.set(mood, cacheKey);
             this.failures.delete(mood);

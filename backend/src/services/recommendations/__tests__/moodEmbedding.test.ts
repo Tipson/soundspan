@@ -11,6 +11,7 @@ jest.mock("../../vibeProvider", () => ({
 import { RecommendationMoodEmbeddingStore } from "../moodEmbedding";
 
 describe("recommendation mood embedding store", () => {
+    afterEach(() => jest.useRealTimers());
     function dependencies() {
         return {
             enabled: true,
@@ -41,7 +42,7 @@ describe("recommendation mood embedding store", () => {
         );
     });
 
-    it("bounds a missing provider and negative-caches the degraded result", async () => {
+    it("bounds callers, coalesces slow work and negative-caches a failed fill", async () => {
         jest.useFakeTimers();
         const deps = dependencies();
         deps.embedText.mockImplementation(() => new Promise(() => undefined));
@@ -54,12 +55,120 @@ describe("recommendation mood embedding store", () => {
             embedding: null,
             degraded: true,
         });
+        const second = store.load("calm");
+        await jest.advanceTimersByTimeAsync(50);
+        await expect(second).resolves.toEqual({
+            embedding: null,
+            degraded: true,
+        });
+        expect(deps.embedText).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(15_000);
         await expect(store.load("calm")).resolves.toEqual({
             embedding: null,
             degraded: true,
         });
         expect(deps.embedText).toHaveBeenCalledTimes(1);
-        jest.useRealTimers();
+    });
+
+    it("keeps a valid late vector for the next request instead of disabling mood for five minutes", async () => {
+        jest.useFakeTimers();
+        const deps = dependencies();
+        let finish!: (value: number[]) => void;
+        deps.embedText.mockImplementation(
+            () =>
+                new Promise<number[]>((resolve) => {
+                    finish = resolve;
+                }),
+        );
+        const store = new RecommendationMoodEmbeddingStore(deps);
+        const callers = Array.from({ length: 10 }, () => store.load("focus"));
+        await jest.advanceTimersByTimeAsync(50);
+        expect(await Promise.all(callers)).toEqual(
+            Array.from({ length: 10 }, () => ({
+                embedding: null,
+                degraded: true,
+            })),
+        );
+        expect(deps.embedText).toHaveBeenCalledTimes(1);
+        finish([1, 0]);
+        await jest.advanceTimersByTimeAsync(1);
+        await expect(store.load("focus")).resolves.toEqual({
+            embedding: [1, 0],
+            degraded: false,
+        });
+        expect(deps.embedText).toHaveBeenCalledTimes(1);
+    });
+
+    it("observes late provider rejection without starting duplicate work", async () => {
+        jest.useFakeTimers();
+        const deps = dependencies();
+        let fail!: (error: Error) => void;
+        deps.embedText.mockImplementation(
+            () =>
+                new Promise<number[]>((_resolve, reject) => {
+                    fail = reject;
+                }),
+        );
+        const store = new RecommendationMoodEmbeddingStore(deps);
+        const pending = store.load("focus");
+        await jest.advanceTimersByTimeAsync(50);
+        await expect(pending).resolves.toEqual({
+            embedding: null,
+            degraded: true,
+        });
+        fail(new Error("provider unavailable"));
+        await jest.advanceTimersByTimeAsync(1);
+        await expect(store.load("focus")).resolves.toEqual({
+            embedding: null,
+            degraded: true,
+        });
+        expect(deps.embedText).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects invalid vectors even when they arrive after the caller deadline", async () => {
+        jest.useFakeTimers();
+        const deps = dependencies();
+        let finish!: (value: number[]) => void;
+        deps.embedText.mockImplementation(
+            () =>
+                new Promise<number[]>((resolve) => {
+                    finish = resolve;
+                }),
+        );
+        const store = new RecommendationMoodEmbeddingStore(deps);
+        const pending = store.load("energetic");
+        await jest.advanceTimersByTimeAsync(50);
+        await pending;
+        finish([Number.NaN, 0]);
+        await jest.advanceTimersByTimeAsync(1);
+        await expect(store.load("energetic")).resolves.toEqual({
+            embedding: null,
+            degraded: true,
+        });
+        expect(deps.embedText).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not install a vector after the fill's hard deadline", async () => {
+        jest.useFakeTimers();
+        const deps = dependencies();
+        let finish!: (value: number[]) => void;
+        deps.embedText.mockImplementation(
+            () =>
+                new Promise<number[]>((resolve) => {
+                    finish = resolve;
+                }),
+        );
+        const store = new RecommendationMoodEmbeddingStore(deps);
+        const pending = store.load("workout");
+        await jest.advanceTimersByTimeAsync(15_001);
+        await pending;
+        finish([1, 0]);
+        await jest.advanceTimersByTimeAsync(1);
+        await expect(store.load("workout")).resolves.toEqual({
+            embedding: null,
+            degraded: true,
+        });
+        expect(deps.embedText).toHaveBeenCalledTimes(1);
     });
 
     it("does not call DCLAP for preference-only moments", async () => {

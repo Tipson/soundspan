@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+- Retain validated mood vectors that finish after the short Wave response budget; coalesce concurrent requests and reserve failure cooldown for actual provider failures rather than a slow first response.
 - Keep Wave personal when selecting a mood: rank personal candidates using available audio features instead of inserting generic mood-search videos. Exclude hour-long/background compilations from automatic Wave selection, without restricting manual playback.
 - Apply account-scoped daily repeat protection and artist diversity to both Wave experiment arms; do not refill sparse queues with recent exposures. Include actual playback history, not only recommendation impressions.
 - Read up to 2,000 liked and playlist records, distribute equal-strength Wave likes independently of import order, and cap radio seeds at three distinct artists.
