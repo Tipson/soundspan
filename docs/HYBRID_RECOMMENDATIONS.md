@@ -88,7 +88,7 @@ Set `RECOMMENDATION_ENGINE_MODE` to one of:
 | ---------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `baseline` | baseline-v1                                                    | baseline only                                                              |
 | `shadow`   | baseline-v1                                                    | the same candidate batch is also ranked and stored as non-served hybrid-v2 |
-| `active`   | hybrid-v2 for the stable account canary, baseline-v1 elsewhere | the non-served alternative while the canary is below 100%                  |
+| `active`   | hybrid-v2 for the assigned account session, baseline-v1 elsewhere | the non-served alternative while the rollout is below 100%                  |
 
 `shadow` is the application default and the safe production rollout mode.
 Do not switch to `active` merely because the build is healthy. Promotion needs

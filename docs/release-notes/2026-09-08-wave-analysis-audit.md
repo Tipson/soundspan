@@ -49,10 +49,11 @@ Neutral ordering is unchanged. Calm versus energetic differs for Laurisoul (0.55
 
 ## Remaining work
 
-- Repair the confirmed stale scalar result through the fenced canonical-analysis pipeline; measure useful coverage growth after rollout.
-- Audit explicit saved-music signals in Hybrid and broaden useful personalized mood candidates; validate discoveries, repeats and multiple-account behavior.
-- Validate one challenge-only PO fallback and staged load separately. A successful no-challenge download does not prove CAPTCHA recovery.
-- AI direction: a text music request mapped into validated listening intent and existing personal ranking, not invented track titles or a paid service enabled without agreement.
+- Restore reliable cold CDN delivery before accepting cold-source concurrency. New download timeouts are not neural-model failures and are not evidence of a bot challenge.
+- Reduce measured recommendation-request latency under concurrency. Do not reuse cached-audio capacity as recommendation or cold-source capacity.
+- Observe post-release listening outcomes separately by account and algorithm before widening Hybrid. Same-input ranking checks do not prove subjective satisfaction.
+- Validate the PO branch during a naturally occurring bot challenge; a simulated first refusal followed by real audio is only a recovery-path test.
+- Product proposal only: [text-controlled personal Wave](../designs/AI_WAVE_REQUESTS.md). No paid model or fabricated recommendation history was added.
 
 ## Follow-up: saved taste and effective mood supply
 
@@ -101,3 +102,91 @@ lyric-free quiet music when the personal catalog does not contain it.
 ## Risk review
 
 One self-contained adversarial pass, no additional agents. Scope: authenticated diagnostic isolation, decoder containment/deadlines, partial-failure handling, compatible ranking, release rollback. The saved-profile follow-up also checks account filters, bounded candidate/vector reads, preservation of lane priority and Redis admission concurrency. No unresolved P0/P1 found in these changes. Remaining risks: a center excerpt is still a sample, old prefix analyses persist until targeted reanalysis, and captured-pool checks do not replace listening acceptance or load tests.
+
+## Published packages and useful analysis growth
+
+`dc306c09` is deployed to backend and worker. The admitted-analysis daily budget
+is 750 with the same two-worker concurrency. The old Redis counter was reconciled
+from 857 attempts to 500 admitted jobs using a compare-and-set guard, preserving
+all admitted reservations and the previous state in
+`/app/logs/wave-budget-2026-09-08-backup.json`. Denied attempts accounted for the
+357 difference. Normal hot-set scheduling was requested for 12 active accounts;
+there was no fabricated listening or mass reset of analysis/history.
+
+verify: the saved-taste release passed 35 targeted backend suites / 405 tests,
+including admission concurrency against isolated real Redis; backend build exit0.
+Its rollback compose is
+`/srv/music/soundspan-releases/b0-b340a7c/compose-before-wave-dc306c09.json`.
+
+At 20:12 UTC, scalar completion was 2,161 versus 2,109 at the audit start; 53
+completed records used v4-center, including the repaired existing recording.
+At a later account lookup, Dartum had 181 completed liked canonical records.
+The linked canonical population changed during enrichment, so this is not a
+fixed-denominator cohort percentage. Someclade had95, Laurisoul14 and agentik00725.
+
+The extra budget also exposed at least57 remote-analysis failures during the
+release window. Streamer logs show connection/read timeouts to the audio CDN
+before decoding; these are not failed model predictions. A same signed-URL
+bounded byte request timed out with both 3s and 10s connection limits. Merely
+raising a timeout is not a demonstrated fix. Existing Soundspan proxy/tunnel
+services remained active and their routing configuration was not changed.
+
+DCLAP uses 10s windows with 5s stride over the decoded ordinary song, with a
+1,800s cap, rather than the scalar analyzer's old first-90s excerpt. Its active
+embedding space was preserved; unrelated vectors were not invalidated.
+
+## PO recovery deployment and proof boundary
+
+`70e6720f` is deployed as `local/soundspan-ytmusic:po-70e6720f` with the pinned
+bgutil2.0.0 companion on namespace-local loopback, no host port and no account
+cookies. Ordinary extraction does not automatically fetch PO tokens. Only a
+recognized bot challenge admits one mweb recovery attempt under the existing
+worker/deadline, cancellation, serialized admission and failed-attempt cooldown.
+Quality and byte limits remain intact; generic403 does not trigger this branch.
+
+verify: 587 streamer tests passed,4 skipped; changed-module Ruff and mypy passed.
+A probe injected the initial challenge, then performed real mweb extraction,
+full audio retrieval and decoding: Your Woman, 3,875,453 bytes, Opus119.29kbps,
+25.48s total. This is neither a naturally occurring CAPTCHA recovery nor
+time-to-audible playback. The provider bootstrap warning in the probe was traced
+to loading the optional provider before yt-dlp's plugin loader; the probe was
+corrected without repeating a full download solely for that warning.
+
+Rollback compose:
+`/srv/music/soundspan-releases/b0-b340a7c/compose-before-po-70e6720f.json`.
+Backend, worker, frontend, streamer, PO companion, analyzer and DCLAP were all
+healthy in the final container check. Frontend and DCLAP were not redeployed.
+
+## Production capacity measurements
+
+Real HTTP requests crossed frontend proxy, backend and streamer. Four authorized
+accounts were used with explicit diagnostic isolation; no play/impression writes.
+The cached-audio test used20 already cached tracks and two65,536-byte ranges per
+concurrent client. It is not100 distinct people, full playback or device decoding.
+
+| Workload | Concurrent clients | Requests | Errors | p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Cached audio | 10 | 20 | 0 | 116ms |
+| Cached audio | 25 | 50 | 0 | 233ms |
+| Cached audio | 50 | 100 | 0 | 460ms |
+| Cached audio | 100 | 200 | 0 | 861ms |
+| Recommendation generation | 10 | 20 | 0 | 5,483ms |
+
+Recommendation escalation stopped at10 because p95 exceeded the5s stop threshold;
+25/50/100 recommendation clients were not accepted. Cold audio escalation was
+not started while CDN timeouts were already present. Full report:
+`/app/logs/wave-load-70e6720f.json` in the backend persistent logs volume.
+
+A real isolated facade timing sample took4,365ms: source feed2,558ms, saved mood
+reserve94ms, language preparation22ms, taste context570ms, and102 individual
+canonical resolutions (batched by8). Canonical call-time sum is not wall time.
+An experimental parallel-context change preserved all24 returned track positions
+in six alternating before/after requests, but warmed timings overlapped
+(before448–484ms; after390–559ms, excluding each variant's first request).
+There was no stable measured gain; this runtime change was discarded, not shipped.
+The existing canonical transaction retry recovered one write conflict in the
+probe; no uncaught request failure occurred. This is a profiling lead, not a
+claim that concurrency capacity has been fixed.
+
+The task-owned local Redis test container was removed after verification. No
+user volumes, existing production caches or rollback images were deleted.
