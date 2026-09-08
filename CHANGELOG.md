@@ -2,6 +2,7 @@
 
 ## Unreleased Wave language filter
 
+- Match language metadata across album/single editions using the same artist, versioned title and duration, without an album restriction or additional provider requests.
 - Add an account-scoped vocal-language selection independent of Wave direction and mood. Share it across Home, Wave, saved settings and queue continuation; reject late continuation responses after a selection change.
 - Classify matched recording lyrics locally and cache only language labels. Keep uncertain, mixed-language and instrumental recordings in Any; do not silently backfill strict selections. Bound optional preparation, coalesce repeated requests and preserve the current queue when a retune has no matches.
 - Separate playlist route entrypoints from their testable page content so Next.js route type checking does not reject helper exports.

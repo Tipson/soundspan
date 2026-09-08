@@ -73,6 +73,35 @@ describe("language metadata HTTP boundary", () => {
         expect(await lookupRecordingLanguage(track)).toBe("unknown");
         expect(urls).toHaveLength(1);
     });
+    it("finds the same recording across album editions with one metadata request", async () => {
+        // The catalog names The Gift Of Game, while the matched lyrics record
+        // belongs to the Butterfly single. Album must not turn this into a miss.
+        body = JSON.stringify({
+            trackName: "Butterfly (Re-Recorded / Remastered )",
+            artistName: "Crazy Town",
+            albumName: "Butterfly",
+            duration: 218,
+            instrumental: false,
+            plainLyrics:
+                "This is a story about a person who returns home every evening. He looks at the stars and remembers his childhood and his friends. Today he writes another letter about love, hope and the long road ahead.",
+            syncedLyrics: null,
+        });
+        expect(
+            await lookupRecordingLanguage({
+                title: "Butterfly (Re-Recorded / Remastered )",
+                artist: { name: "Crazy Town" },
+                album: { title: "The Gift Of Game" },
+                duration: 218,
+            }),
+        ).toBe("foreign");
+        const params = new URL(urls[0], origin).searchParams;
+        expect(params.has("album_name")).toBe(false);
+        expect(params.get("duration")).toBe("218");
+        expect(params.get("track_name")).toBe(
+            "Butterfly (Re-Recorded / Remastered )",
+        );
+        expect(urls).toHaveLength(1);
+    });
     it.each([302, 429, 503])(
         "rejects HTTP %i without following redirects or retrying",
         async (code) => {

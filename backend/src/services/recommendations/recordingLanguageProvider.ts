@@ -62,15 +62,14 @@ export async function lookupRecordingLanguage(
         track.duration >= 1800
     )
         return "unknown";
-    const album = track.album.title;
     const response = await axios.get<unknown>("https://lrclib.net/api/get", {
         params: {
+            // A recording may belong to a single, compilation or album edition
+            // with different metadata. Match vocals by artist, exact versioned
+            // title and duration; an album restriction can hide the same song.
             artist_name: track.artist.name,
             track_name: titleForLookup(track.title),
             duration: Math.round(track.duration),
-            ...(!/^(?:unknown album|single|)$/i.test(album.trim())
-                ? { album_name: album }
-                : {}),
         },
         headers: { "User-Agent": BRAND_USER_AGENT },
         // This fixed public metadata origin is reachable directly. The

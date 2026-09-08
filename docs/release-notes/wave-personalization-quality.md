@@ -49,6 +49,12 @@ The previous core package contained no schema migration, recommendation-rollout 
 
 ## Risk review
 
+### Album-edition matching follow-up
+
+A bounded eight-request comparison of four previously unknown records reproduced an avoidable miss: Crazy Town's `Butterfly (Re-Recorded / Remastered )`, 218 seconds, is labelled `The Gift Of Game` in our catalog and `Butterfly` by LRCLIB. Supplying the album returned 404; omitting it returned 200 with exactly matching artist, versioned title and duration, classified foreign. The other three examples stayed unknown; this is not a general coverage percentage.
+
+The metadata adapter omits the album constraint, but still validates artist, versioned title and duration within three seconds. It makes one request, not a fallback chain; transport/rate limits and existing positive classifications are unchanged. Existing negative cache entries expire within their original 24-hour TTL rather than causing a catalog-wide refetch. verify: failing-first HTTP regression caught the old request; 340 backend tests / 31 suites and backend build pass. Frontend, dependencies, schema and budgets are unchanged. A scoped adversarial check retains rejection of other artists, live versions, different durations, invalid payloads and redirects; no unresolved P0/P1 in this delta. Production rollout is recorded below once verified.
+
 - Checked account-scoped queries, finite candidate/seed limits, fallback failures, strict cooldown with sparse lanes, Home compatibility, old liked tracks and failed starts, manual long-track playback scope, and continuation with short pages.
 - The Home launcher bypass discovered during review is covered by a component regression test and corrected to use the dedicated Wave feed.
 - One scoped adversarial pass of the mood/deployment delta: no unresolved P0/P1 found. Verified caller deadlines, coalescing ten callers, late rejection/invalid values/hard timeout, space changes and bounded four-mood cache; deployment changes only API/worker image references. The 15-second fill deadline does not cancel the provider transport, which retains its own timeout; the failure cooldown prevents repeated fills during that remaining request.
