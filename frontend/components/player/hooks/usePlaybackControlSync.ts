@@ -232,6 +232,8 @@ export function usePlaybackControlSync({
                         isPlaybackAutoRestartSuppressed()
                     )
                         return;
+                    refs.activeEngineTrackIdRef.current = expectedTrack.id;
+                    refs.activeEngineLoadIdRef.current = expectedLoadId;
                     if (!audioEngine.isPlaying()) audioEngine.play();
                 };
                 playbackStateMachine.forceTransition("LOADING");
