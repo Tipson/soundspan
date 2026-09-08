@@ -181,4 +181,25 @@ describe("recommendation mood embedding store", () => {
         });
         expect(deps.loadSpace).not.toHaveBeenCalled();
     });
+
+    it("revalidates the model space without recomputing its unchanged mood vector every minute", async () => {
+        const deps = dependencies();
+        const store = new RecommendationMoodEmbeddingStore(deps);
+        await store.load("focus");
+        deps.now.mockReturnValue(new Date("2026-09-01T12:01:01.000Z"));
+        await expect(store.load("focus")).resolves.toEqual({
+            embedding: [1, 0],
+            degraded: false,
+        });
+        expect(deps.loadSpace).toHaveBeenCalledTimes(2);
+        expect(deps.embedText).toHaveBeenCalledTimes(1);
+        deps.now.mockReturnValue(new Date("2026-09-01T12:02:02.000Z"));
+        deps.loadSpace.mockResolvedValue({ id: "space-2", dim: 2 });
+        deps.embedText.mockResolvedValue([0, 1]);
+        await expect(store.load("focus")).resolves.toEqual({
+            embedding: [0, 1],
+            degraded: false,
+        });
+        expect(deps.embedText).toHaveBeenCalledTimes(2);
+    });
 });

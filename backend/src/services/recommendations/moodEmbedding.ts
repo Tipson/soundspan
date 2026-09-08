@@ -134,7 +134,10 @@ export class RecommendationMoodEmbeddingStore {
             const cacheKey = `${space.id}:${mood}`;
             const now = this.dependencies.now().getTime();
             const cached = this.cache.get(cacheKey);
-            if (cached && cached.expiresAt > now) {
+            if (cached) {
+                // Space identity was just revalidated; the fixed prompt's vector
+                // does not expire while that model space remains unchanged.
+                cached.expiresAt = now + CACHE_TTL_MS;
                 return { embedding: [...cached.embedding], degraded: false };
             }
             const embedding = await beforeDeadline(
