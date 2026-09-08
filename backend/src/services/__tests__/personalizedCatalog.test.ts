@@ -962,7 +962,7 @@ describe("PersonalizedCatalogService", () => {
         expect(getRadio.mock.calls[0][0]).toBe("repeat");
     });
 
-    it("applies distinct for-you, new, and familiar ranking policies", async () => {
+    it("keeps unheard songs by liked artists eligible without an unknown-artist bonus", async () => {
         const affinityTrack = storedTrack("affinity-seed", {
             artist: "Affinity Artist",
         });
@@ -993,7 +993,10 @@ describe("PersonalizedCatalogService", () => {
         ]);
 
         expect(forYou.shelves.discovery[0].id).toBe("yt:familiar");
-        expect(fresh.shelves.discovery[0].id).toBe("yt:unseen");
+        expect(fresh.shelves.discovery.map((track) => track.id)).toEqual([
+            "yt:familiar",
+            "yt:unseen",
+        ]);
         expect(familiar.shelves.discovery[0].id).toBe("yt:familiar");
     });
 
@@ -1024,8 +1027,8 @@ describe("PersonalizedCatalogService", () => {
         });
 
         expect(result.shelves.discovery.map((track) => track.id)).toEqual([
-            "yt:unseen",
             "yt:familiar",
+            "yt:unseen",
         ]);
     });
 

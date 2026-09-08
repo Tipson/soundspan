@@ -2,6 +2,7 @@
 
 ## Unreleased provider recovery and analysis admission
 
+- Keep unheard songs by familiar liked artists competitive in Discoveries; remove the fixed unknown-artist bonus while retaining personal affinity and song exclusions.
 - Reload a failed YouTube source on explicit retry, retaining the selected queue entry and cancelling late resume after pause or a different selection.
 - Preserve the current track and queue when YouTube requests verification or a recovery probe fails, instead of cascading through subsequent tracks. Coalesce the source-unavailable notification and ignore failed probes that arrive after another track is selected.
 - Give liked and saved-playlist recordings a separate fair admission lane for audio analysis, retaining the existing total capacity, daily budget and concurrency.
