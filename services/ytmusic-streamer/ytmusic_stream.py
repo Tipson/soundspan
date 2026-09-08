@@ -32,6 +32,7 @@ from yt_download import (
 )
 from ytmusic_client import _get_ytmusic
 from ytmusic_extraction_budget import ExtractionAbandoned, ExtractionBudget
+from ytmusic_po_fallback import FallbackDeferred, PoFallback, primary_options, token_options
 from ytmusic_priority_pacer import PriorityRatePacer
 from ytmusic_runtime import (
     _USER_AGENT,
@@ -179,6 +180,8 @@ def _pacing_cancelled() -> bool:
 
 _provider_challenge_lock = threading.Lock()
 _provider_challenge_cooldown_until = 0.0
+_po_fallback = PoFallback()
+_metadata_worker_context = threading.local()
 
 
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -721,6 +724,49 @@ def _extract_with_manifest_fallback(ydl: Any, url: str, options: JsonObject) -> 
         return fallback.extract_info(url, download=False)
 
 
+def _extract_with_po_fallback(
+    operation: Callable[[], T],
+    url: str,
+    options: JsonObject,
+    video_id: str,
+    *,
+    download: bool,
+    cancel_event: threading.Event | None = None,
+) -> T:
+    """Keep the optional single PO probe within existing deadlines and worker slots."""
+    import yt_dlp
+
+    deadline = time.monotonic() + (YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT if download else EXTRACT_TIMEOUT)
+
+    def check() -> None:
+        if (cancel_event is not None and cancel_event.is_set()) or _pacing_cancelled():
+            raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+        metadata_cancel = getattr(_metadata_worker_context, "cancelled", None)
+        if (
+            metadata_cancel is not None and metadata_cancel.is_set()
+        ) or time.monotonic() >= deadline:
+            raise ExtractionAbandoned("Stream extraction deadline exceeded")
+
+    def probe() -> T:
+        _extract_pacer.wait()
+        check()
+        log.info("Trying one anonymous PO recovery for %s", video_id)
+        with yt_dlp.YoutubeDL(token_options(options)) as fallback:
+            result = fallback.extract_info(url, download=download)
+        check()
+        if not result:
+            raise ValueError("Empty PO recovery result")
+        log.info("Anonymous PO extraction recovered for %s", video_id)
+        return cast(T, result)
+
+    try:
+        result = _po_fallback.run(operation, probe, check=check)
+        check()
+        return result
+    except FallbackDeferred as error:
+        raise _provider_challenge_http_error(video_id, error.retry_after) from None
+
+
 def _extract_stream_info(
     cache_key: str,
     url: str,
@@ -744,15 +790,19 @@ def _extract_stream_info(
     _extract_pacer.wait()
     try:
         _ensure_player_cache()
+        ydl_opts = primary_options(ydl_opts)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            if cache_key.startswith("music:"):
-                from ytmusic_anonymous_context import extract_music
 
-                info = extract_music(
-                    ydl, url, ydl_opts, _extract_with_manifest_fallback, _extract_pacer.wait
-                )
-            else:
-                info = _extract_with_manifest_fallback(ydl, url, ydl_opts)
+            def primary() -> Any:
+                if cache_key.startswith("music:"):
+                    from ytmusic_anonymous_context import extract_music
+
+                    return extract_music(
+                        ydl, url, ydl_opts, _extract_with_manifest_fallback, _extract_pacer.wait
+                    )
+                return _extract_with_manifest_fallback(ydl, url, ydl_opts)
+
+            info = _extract_with_po_fallback(primary, url, ydl_opts, video_id, download=False)
             if not info:
                 raise ValueError("No info extracted")
             selected = _selected_audio_stream(cast(JsonObject, info))
@@ -785,6 +835,8 @@ def _extract_stream_info(
                 result["abr"],
             )
             return result
+    except (HTTPException, ExtractionAbandoned, _SpoolDownloadCancelled):
+        raise
     except Exception as error:
         raise _stream_extraction_http_error(video_id, error_label, error) from error
 
@@ -916,10 +968,18 @@ async def _extract_yt_dlp_bounded(
     if not _metadata_admission.acquire(blocking=False):
         raise HTTPException(status_code=503, detail="YouTube metadata queue is full")
     cancelled = threading.Event()
+
+    def operation() -> JsonObject:
+        _metadata_worker_context.cancelled = cancelled
+        try:
+            return func(*args)
+        finally:
+            _metadata_worker_context.cancelled = None
+
     try:
         worker = _yt_dlp_extract_executor.submit(
             _extraction_budget.run,
-            partial(func, *args),
+            operation,
             cancel_event=cancelled,
             deadline=time.monotonic() + EXTRACT_TIMEOUT,
         )
@@ -1615,6 +1675,21 @@ def _remove_failed_spool_partials(video_id: str, quality: str) -> None:
 
 
 def _extract_spool_with_retry(
+    video_id: str, options: JsonObject, cancel_event: threading.Event | None
+) -> JsonObject:
+    """Wrap the format retry with at most one challenge recovery, not nested retries."""
+    options = primary_options(options)
+    return _extract_with_po_fallback(
+        lambda: _extract_spool_format_retry(video_id, options, cancel_event),
+        f"https://music.youtube.com/watch?v={video_id}",
+        options,
+        video_id,
+        download=True,
+        cancel_event=cancel_event,
+    )
+
+
+def _extract_spool_format_retry(
     video_id: str, options: JsonObject, cancel_event: threading.Event | None
 ) -> JsonObject:
     """Retry a transient missing-format table once within the same worker slot."""

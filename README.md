@@ -39,6 +39,9 @@ soundspan is built for people who want streaming convenience without giving up o
 
 For the full feature list and release notes, see [`CHANGELOG.md`](CHANGELOG.md).
 
+Optional anonymous YouTube challenge recovery and its operational limits are
+documented in [YouTube PO recovery](docs/YOUTUBE_PO_RECOVERY.md).
+
 ---
 
 ## Quick Start
@@ -177,16 +180,16 @@ graph TD
     BE --> RD
 ```
 
-| Component           | Purpose                                           | Default Port         |
-| ------------------- | ------------------------------------------------- | -------------------- |
-| Frontend            | Web interface (Next.js)                           | 3030                 |
-| Backend             | API server (Express.js)                           | 3006                 |
-| Backend Worker      | Background queues, processors, and scheduled jobs | 3010 health endpoint |
-| PostgreSQL          | Primary database (with pgvector and pg_trgm)      | 5432                 |
-| Redis               | Cache and queue backend                           | 6379                 |
-| YT Music Streamer   | YouTube Music streaming proxy                     | 8586                 |
+| Component           | Purpose                                                                       | Default Port         |
+| ------------------- | ----------------------------------------------------------------------------- | -------------------- |
+| Frontend            | Web interface (Next.js)                                                       | 3030                 |
+| Backend             | API server (Express.js)                                                       | 3006                 |
+| Backend Worker      | Background queues, processors, and scheduled jobs                             | 3010 health endpoint |
+| PostgreSQL          | Primary database (with pgvector and pg_trgm)                                  | 5432                 |
+| Redis               | Cache and queue backend                                                       | 6379                 |
+| YT Music Streamer   | YouTube Music streaming proxy                                                 | 8586                 |
 | Audio Analyzer      | MusiCNN analysis and local Chromaprint fingerprints; optional AcoustID lookup | —                    |
-| DCLAP Vibe Provider | ONNX text/audio embedding service                 | 8092 (internal)      |
+| DCLAP Vibe Provider | ONNX text/audio embedding service                                             | 8092 (internal)      |
 
 ---
 

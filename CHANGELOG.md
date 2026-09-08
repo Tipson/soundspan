@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased bounded PO recovery
+
+- Allow one optional, serialized anonymous PO-token attempt after a YouTube bot challenge, preserving quality limits, cancellation, worker capacity and failure cooldown. Ordinary extraction does not fetch tokens automatically.
+- Keep a timed-out metadata request from launching recovery after its listener has left. Optional provider packaging is documented; token recovery is not a CAPTCHA guarantee.
+
 ## Unreleased saved taste and mood coverage
 
 - Include distinct current likes as separate bounded Hybrid audio-profile anchors, without inventing listening events.
