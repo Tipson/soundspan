@@ -116,6 +116,30 @@ function createService(
 }
 
 describe("PersonalizedCatalogService", () => {
+    it("does not amplify taste when the same song is copied into multiple playlists", async () => {
+        const playlistTrack = storedTrack("playlist-song");
+        const build = (copies: number) =>
+            createService({
+                loadSignals: async () => ({
+                    ...emptySignals(),
+                    likedTracks: [storedTrack("liked-song")],
+                    playlistTracks: Array.from(
+                        { length: copies },
+                        () => playlistTrack,
+                    ),
+                }),
+                getRadio: async (seedVideoId) => ({
+                    seedVideoId,
+                    playlistId: null,
+                    tracks: [],
+                }),
+            }).getHomeFeed("user-1", 12);
+        const [one, many] = await Promise.all([build(1), build(10)]);
+        expect(many.shelves.quickPicks.map((track) => track.id)).toEqual(
+            one.shelves.quickPicks.map((track) => track.id),
+        );
+    });
+
     it("keeps equal-strength Wave likes independent of bulk import order", async () => {
         const likes = Array.from({ length: 343 }, (_, i) =>
             storedTrack(`like-${i}`),

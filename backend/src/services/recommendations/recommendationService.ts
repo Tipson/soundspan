@@ -33,6 +33,11 @@ type CommonEngineDependencies = Omit<
 >;
 
 export interface UnifiedRecommendationDependencies extends CommonEngineDependencies {
+    /** Bounded personal, already-analyzed reserve for explicit listening moods. */
+    loadSavedMoodCandidates?: (
+        userId: string,
+        mood: RecommendationMood,
+    ) => Promise<RecommendationCandidate[]>;
     prepareLanguages?: (
         tracks: LanguageRecording[],
     ) => Promise<PreparedRecordingLanguages>;
@@ -204,6 +209,35 @@ export class UnifiedRecommendationService {
             );
             sourceState.feed = sourceFeed;
             let candidates = flattenPersonalizedFeed(sourceFeed);
+            const reserveDegraded: string[] = [];
+            if (
+                input.surface === "wave" &&
+                input.direction !== "new" &&
+                input.mood &&
+                ["calm", "energetic", "focus", "workout"].includes(
+                    input.mood,
+                ) &&
+                this.dependencies.loadSavedMoodCandidates
+            ) {
+                try {
+                    const saved =
+                        await this.dependencies.loadSavedMoodCandidates(
+                            input.userId,
+                            input.mood,
+                        );
+                    candidates.push(
+                        ...saved.map((candidate) => ({
+                            ...candidate,
+                            lane:
+                                input.direction === "familiar"
+                                    ? ("listenAgain" as const)
+                                    : ("quickPicks" as const),
+                        })),
+                    );
+                } catch {
+                    reserveDegraded.push("saved-mood-candidates");
+                }
+            }
             if (input.surface === "wave") {
                 const selection = input.language ?? "any";
                 const prepared = this.dependencies.prepareLanguages
@@ -227,12 +261,14 @@ export class UnifiedRecommendationService {
             return {
                 candidates,
                 nextCursor: sourceFeed.nextCursor,
-                degradedSources:
-                    (sourceFeed.degradedSources?.length ?? 0) > 0
+                degradedSources: [
+                    ...reserveDegraded,
+                    ...((sourceFeed.degradedSources?.length ?? 0) > 0
                         ? (sourceFeed.degradedSources ?? [])
                         : sourceFeed.degraded && sourceFeed.reason
                           ? [sourceFeed.reason]
-                          : [],
+                          : []),
+                ],
             };
         }, input.diagnostic);
         const result = await engine.recommend({

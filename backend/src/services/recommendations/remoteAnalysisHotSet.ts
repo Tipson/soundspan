@@ -78,22 +78,19 @@ local reservation = redis.call("GET", KEYS[1])
 if reservation == "allowed" then
     return 1
 end
-if reservation == "denied" then
+-- Count admissions, not rejected attempts. A previous denial may be
+-- reconsidered after an operator raises the daily limit.
+local count = tonumber(redis.call("GET", KEYS[2]) or "0")
+if count >= tonumber(ARGV[1]) then
     return 0
 end
 
-local count = redis.call("INCR", KEYS[2])
+count = redis.call("INCR", KEYS[2])
 if count == 1 then
     redis.call("EXPIRE", KEYS[2], ARGV[2])
 end
-
-if count <= tonumber(ARGV[1]) then
-    redis.call("SET", KEYS[1], "allowed", "EX", ARGV[2])
-    return 1
-end
-
-redis.call("SET", KEYS[1], "denied", "EX", ARGV[2])
-return 0
+redis.call("SET", KEYS[1], "allowed", "EX", ARGV[2])
+return 1
 `;
 
 export interface RemoteAnalysisJob {

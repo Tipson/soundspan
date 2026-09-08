@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased saved taste and mood coverage
+
+- Include distinct current likes as separate bounded Hybrid audio-profile anchors, without inventing listening events.
+- Let explicit Wave moods rank a bounded analyzed saved-music reserve before provider shelf truncation; keep Discoveries and neutral Home candidate supply unchanged.
+- Prevent copied playlist membership from multiplying a song's taste weight.
+- Count admitted analysis records rather than denied requests in the daily budget; allow retries after an approved limit increase.
+
 ## Unreleased Wave evidence and analysis excerpt
 
 - Analyze the center of long remote recordings instead of only their first 90 seconds; retain bounded decoding, safe duration fallback and versioned results. Feature extraction exceptions cannot silently mark partial analysis completed.

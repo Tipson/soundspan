@@ -54,6 +54,50 @@ Neutral ordering is unchanged. Calm versus energetic differs for Laurisoul (0.55
 - Validate one challenge-only PO fallback and staged load separately. A successful no-challenge download does not prove CAPTCHA recovery.
 - AI direction: a text music request mapped into validated listening intent and existing personal ranking, not invented track titles or a paid service enabled without agreement.
 
+## Follow-up: saved taste and effective mood supply
+
+The scalar/diagnostic package `91c984b0` was released. API, worker and analyzer are
+healthy; frontend-to-API health returned 200. Frontend, YouTube and DCLAP container
+identities were unchanged. Rollback compose is
+`/srv/music/soundspan-releases/b0-b340a7c/compose-before-wave-91c984b0.json`.
+The one confirmed Short Change Hero recording was reprocessed by a normal fenced
+lease using the already downloaded full file: completed, v4-center, arousal 0.370,
+instrumentalness 0.035. Previous fields are backed up in the backend logs volume
+as `wave-center-91c984b0-backup.json`. No extra YouTube download or history edit.
+
+Further reproduced defects:
+
+- Hybrid's positive audio profile omitted current likes unless those tracks were
+  played through recommendation telemetry. Separate saved-recording centroids
+  retain that preference without multiplying the ranker coefficient or generating
+  synthetic listening history. Real read-only lookup: Dartum158 vectors,
+  Someclade95, Laurisoul14, agentik00725; accounts without eligible likes return0.
+- Pre-truncating saved candidates prevented moods from reaching suitable analyzed
+  tracks outside25 entries. The bounded saved reserve does not add liked tracks
+  into Discoveries or bypass final exclusions.
+- Copying the same track into ten playlists could move it above an explicitly
+  liked song. Collection membership now contributes once per provider song.
+- The Redis budget was857 with a limit500 because denied work incremented it.
+  Denials also remained cached after limit increases. The corrected Lua counts
+  admissions only; real isolated Redis tests cover concurrent admission,
+  idempotency, rejection and a limit increase.
+
+Same-data first12 queue replay, after the scalar correction and before/after the
+saved-profile/reserve change (canonical deduplication retains original lane
+priority, exactly as the facade does):
+
+| Account    | Calm before → after | Energetic before → after | Focus before → after |
+| ---------- | ------------------- | ------------------------ | -------------------- |
+| Dartum     | 0.473 → 0.288       | 0.473 → 0.756            | 0.473 → 0.318        |
+| Laurisoul  | 0.551 → 0.551       | 0.670 → 0.670            | 0.558 → 0.551        |
+| agentik007 | 0.684 → 0.666       | 0.797 → 0.791            | 0.674 → 0.674        |
+
+Values are mean measured arousal, not a listening-quality score. All queues
+contained12 tracks and at least11 distinct artists except Laurisoul's baseline
+neutral queue. Dartum's sample still includes3 unmeasured discovery tracks;
+improved analyzed coverage remains necessary. A Focus mode cannot guarantee
+lyric-free quiet music when the personal catalog does not contain it.
+
 ## Risk review
 
-One self-contained adversarial pass, no additional agents. Scope: authenticated diagnostic isolation, decoder containment/deadlines, partial-failure handling, compatible ranking, release rollback. No unresolved P0/P1 found in this package. Remaining risks: a center excerpt is still a sample, old prefix analyses persist until targeted reanalysis, and captured-pool checks do not replace listening acceptance or load tests.
+One self-contained adversarial pass, no additional agents. Scope: authenticated diagnostic isolation, decoder containment/deadlines, partial-failure handling, compatible ranking, release rollback. The saved-profile follow-up also checks account filters, bounded candidate/vector reads, preservation of lane priority and Redis admission concurrency. No unresolved P0/P1 found in these changes. Remaining risks: a center excerpt is still a sample, old prefix analyses persist until targeted reanalysis, and captured-pool checks do not replace listening acceptance or load tests.

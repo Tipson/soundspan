@@ -3,6 +3,7 @@ const mockDislikedFindMany = jest.fn();
 const mockMappingFindMany = jest.fn();
 const mockMappingFindFirst = jest.fn();
 const mockPlayFindMany = jest.fn();
+const mockCanonicalFindMany = jest.fn();
 
 jest.mock("../../../utils/db", () => ({
     prisma: {
@@ -13,10 +14,15 @@ jest.mock("../../../utils/db", () => ({
             findFirst: mockMappingFindFirst,
         },
         play: { findMany: mockPlayFindMany },
+        canonicalRecording: { findMany: mockCanonicalFindMany },
     },
 }));
 
-import { recommendationFeatureStore } from "../featureStore";
+import {
+    recommendationFeatureStore,
+    loadLikedTasteEmbeddings,
+    loadSavedMoodCandidates,
+} from "../featureStore";
 import type { RecommendationCandidate } from "../types";
 
 function candidate(
@@ -59,10 +65,72 @@ describe("default recommendation feature-store persistence", () => {
         mockMappingFindMany.mockReset();
         mockMappingFindFirst.mockReset();
         mockPlayFindMany.mockReset();
+        mockCanonicalFindMany.mockReset().mockResolvedValue([]);
     });
 
     afterEach(() => {
         jest.useRealTimers();
+    });
+
+    it("bounds saved-vector lookup to the account's current canonical likes", async () => {
+        mockCanonicalFindMany.mockResolvedValue([{ id: "alice-liked" }]);
+        mockQueryRaw.mockResolvedValue([rawFeature("alice-liked", "[0,1]")]);
+        expect(await loadLikedTasteEmbeddings("alice")).toEqual([[0, 1]]);
+        const query = mockCanonicalFindMany.mock.calls[0][0];
+        expect(query.take).toBe(500);
+        expect(query.where.mergedIntoId).toBeNull();
+        expect(query.where.embeddings.some.space).toEqual({
+            status: "active",
+            cleaningAt: null,
+        });
+        for (const branch of query.where.mappings.some.OR) {
+            const relation = Object.values(branch)[0] as {
+                is: { likedBy: { some: { userId: string } } };
+            };
+            expect(relation.is.likedBy.some.userId).toBe("alice");
+        }
+    });
+
+    it("ranks bounded saved moods without admitting long mixes or another account's mapping", async () => {
+        mockCanonicalFindMany.mockResolvedValue(
+            Array.from({ length: 80 }, (_, i) => ({
+                id: `c${i}`,
+                canonicalKey: `c${i}`,
+                arousal: i / 100,
+                energy: 1,
+                valence: 0.5,
+                danceability: 0.5,
+                instrumentalness: 0.5,
+                bpm: 100,
+                mappings: [
+                    {
+                        trackYtMusic: {
+                            videoId: `v${i}`,
+                            title: i === 0 ? "Long mix" : "Song",
+                            artist: `Artist${Math.floor(i / 5)}`,
+                            album: "Album",
+                            duration: i === 0 ? 3600 : 180,
+                            thumbnailUrl: null,
+                        },
+                    },
+                ],
+            })),
+        );
+        const result = await loadSavedMoodCandidates("alice", "calm");
+        expect(result).toHaveLength(48);
+        expect(result[0].youtubeVideoId).toBe("v1");
+        expect(result.every((x) => x.duration < 1800)).toBe(true);
+        const counts = new Map<string, number>();
+        result.forEach((x) =>
+            counts.set(x.artist.name, (counts.get(x.artist.name) ?? 0) + 1),
+        );
+        expect(Math.max(...counts.values())).toBeLessThanOrEqual(4);
+        const query = mockCanonicalFindMany.mock.calls[0][0];
+        expect(query.where.mappings.some).toEqual(query.select.mappings.where);
+        expect(
+            query.where.mappings.some.trackYtMusic.is.likedBy.some.userId,
+        ).toBe("alice");
+        expect(query.take).toBe(500);
     });
 
     it("returns untouched candidates when canonical identities are absent", async () => {

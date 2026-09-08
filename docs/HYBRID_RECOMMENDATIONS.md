@@ -31,6 +31,45 @@ service facade. Candidate acquisition remains replaceable, while canonical
 identity, ranking, experiment semantics, exposure persistence, and hot-set
 admission stay behind the same module boundary.
 
+Explicit Calm, Energetic, Focus and Workout requests can also consider a saved-
+music reserve before shelf truncation: at most 500 analyzed canonical records
+from the current account's likes, reduced to 48 mood-ranked candidates with at
+most four per artist. Final engine exclusions and two-per-artist/album caps
+still apply. This reserve belongs to familiar/quick-pick lanes, never Discoveries,
+and does not run for neutral Home requests. A failed reserve degrades to ordinary
+candidates. No external music query or new analysis is required for this lookup.
+
+## Taste signal weights
+
+Catalog seed scores and vector-ranking coefficients have different units; their
+numbers are not interchangeable.
+
+| Action                                                   | Catalog seed effect                                | Audio-profile effect                                                                                           |
+| -------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Current like                                             | +12 once per provider song                         | Up to five separate centroids from distinct liked canonical recordings with active vectors; no fabricated play |
+| Playlist membership                                      | +2 once per provider song, not per copied playlist | Indirect seed/candidate supply; not a strong like                                                              |
+| Onboarding track                                         | +4 once                                            | Seed supply                                                                                                    |
+| Completed or at least 85% heard                          | +6                                                 | Positive listening evidence, delta +1                                                                          |
+| Meaningful listening                                     | +3                                                 | Delta +0.5; session weighting preserves magnitude                                                              |
+| Early explicit skip (measured below 30 s or at most 20%) | -8                                                 | Delta -1                                                                                                       |
+| Late or unmeasured skip                                  | Neutral unless near-completion qualifies           | Neutral unless sufficient measured listening qualifies                                                         |
+| Playback/network failure                                 | Neutral                                            | Neutral; retained only as availability telemetry                                                               |
+| Repeated positive listens                                | Logarithmic bonus, capped at +4                    | Listening history plus a time-decayed session profile                                                          |
+| Explicit dislike                                         | Hard exclusion                                     | Hard canonical exclusion; no automatic artist-wide ban                                                         |
+| Pause, seek, navigation, opening a card, download        | No independent taste reward/penalty                | Not reinterpreted as a like or dislike                                                                         |
+| Diagnostic playback                                      | No recorded taste event                            | No recorded generation/impression/outcome when the diagnostic request header is used                           |
+
+Saved-music centroids are kept separate from the up-to-five listening centroids:
+hundreds of passive plays cannot remove an unplayed imported preference direction.
+The ranker takes the best positive-vector match with coefficient 1.35, not the
+sum of all saved anchors. Negative long-term similarity has coefficient 0.4;
+session positive/negative similarities use 1.8/0.9 with a 45-minute half-life.
+Context similarity uses 0.45, the optional mood vector 0.9 and explicit scalar
+mood score 2.4. Diversity is 0.42; recent-track penalties are bounded at 2 and
+recent-artist penalties at 0.6. Wave's one-day repeat exclusion is applied before
+ranking in either rollout arm. Artist seed contribution is bounded per song
+and capped per artist; collection copying does not multiply membership weight.
+
 The authenticated endpoints are:
 
 - `GET /api/personalized/home` for Home, Wave, and Made For You;
@@ -45,11 +84,11 @@ for a non-empty response.
 
 Set `RECOMMENDATION_ENGINE_MODE` to one of:
 
-| Mode | Served result | Persisted comparison |
-| --- | --- | --- |
-| `baseline` | baseline-v1 | baseline only |
-| `shadow` | baseline-v1 | the same candidate batch is also ranked and stored as non-served hybrid-v2 |
-| `active` | hybrid-v2 for the stable account canary, baseline-v1 elsewhere | the non-served alternative while the canary is below 100% |
+| Mode       | Served result                                                  | Persisted comparison                                                       |
+| ---------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `baseline` | baseline-v1                                                    | baseline only                                                              |
+| `shadow`   | baseline-v1                                                    | the same candidate batch is also ranked and stored as non-served hybrid-v2 |
+| `active`   | hybrid-v2 for the stable account canary, baseline-v1 elsewhere | the non-served alternative while the canary is below 100%                  |
 
 `shadow` is the application default and the safe production rollout mode.
 Do not switch to `active` merely because the build is healthy. Promotion needs
@@ -168,8 +207,12 @@ The bounded flow is:
    canonical recording and admitted to the Bull hot-set queue. A six-hour sweep
    revisits the same bounded hot set for recently active accounts, so analysis
    progresses without requiring a recommendation request to remain open.
-2. A Redis Lua reservation enforces one global per-recording decision and the
-   configured UTC daily budget atomically across worker replicas.
+2. A Redis Lua reservation counts admitted canonical recordings and enforces the
+   configured UTC daily budget atomically across worker replicas. Repeating an
+   allowed claim does not spend another slot. Rejected work does not consume a
+   slot and can be reconsidered after an approved budget increase. A legacy
+   counter that included denials needs a guarded operator reconciliation against
+   its allowed reservations, or the next UTC day; do not reset it to zero.
 3. The worker streams at most 64 MiB into a unique direct child of
    `/music/.soundspan-analysis-spool` and creates an `AnalysisAssetLease`. A
    partial unique index permits only one active lease per canonical recording,

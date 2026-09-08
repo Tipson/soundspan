@@ -409,9 +409,19 @@ function buildPreferenceProfile(
         if (videoId && explicitlyObservedVideoIds.has(videoId)) continue;
         register(track, 0.25);
     }
-    for (const track of signals.playlistTracks) register(track, 2);
-    for (const track of signals.tasteSeedTracks ?? []) register(track, 4);
-    for (const track of signals.likedTracks) register(track, 12);
+    // Collection membership is one signal, not a vote per copied playlist.
+    const registerCollection = (tracks: readonly unknown[], score: number) => {
+        const seen = new Set<string>();
+        for (const candidate of tracks) {
+            const track = toPersonalizedTrack(candidate);
+            if (!track || seen.has(track.youtubeVideoId)) continue;
+            seen.add(track.youtubeVideoId);
+            register(candidate, score);
+        }
+    };
+    registerCollection(signals.playlistTracks, 2);
+    registerCollection(signals.tasteSeedTracks ?? [], 4);
+    registerCollection(signals.likedTracks, 12);
     for (const signal of playbackSignals) {
         const score = playbackSignalScore(signal);
         register(signal.track, score, score > 0);
