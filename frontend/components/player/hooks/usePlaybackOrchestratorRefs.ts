@@ -112,6 +112,7 @@ export function usePlaybackOrchestratorRefs({
     const engineEventHandlersRef =
         useRef<OrchestratorEngineEventHandlers | null>(null);
     const recoverablePlayErrorPendingRef = useRef<boolean>(false);
+    const providerFailedLoadIdRef = useRef<number | null>(null);
     const startupRecoveryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const startupRecoveryLoadListenerRef = useRef<(() => void) | null>(null);
     const startupRecoveryAttemptedTrackIdRef = useRef<string | null>(null);
@@ -276,6 +277,7 @@ export function usePlaybackOrchestratorRefs({
         activeEngineLoadIdRef,
         engineEventHandlersRef,
         recoverablePlayErrorPendingRef,
+        providerFailedLoadIdRef,
         startupRecoveryTimeoutRef,
         startupRecoveryLoadListenerRef,
         startupRecoveryAttemptedTrackIdRef,

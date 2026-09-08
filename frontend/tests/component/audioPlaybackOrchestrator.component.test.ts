@@ -3469,6 +3469,8 @@ for (const wasLoaded of [false, true]) {
         rerenderOrchestrator();
         await flushAsync();
         const playsBeforeRetry = engine.playCalls;
+        // The real Retry button clears the visible error before resume().
+        transitionPlaybackMachine("IDLE");
         playbackState.isPlaying = true;
         rerenderOrchestrator();
         await flushAsync();

@@ -210,11 +210,13 @@ export function usePlaybackControlSync({
             if (
                 playbackType === "track" &&
                 currentTrack?.streamSource === "youtube" &&
-                playbackStateMachine.getState() === "ERROR"
+                (playbackStateMachine.getState() === "ERROR" ||
+                    refs.providerFailedLoadIdRef.current === loadIdRef.current)
             ) {
                 // play() cannot revive a media element with a terminal source
                 // error. Reload on explicit retry, without advancing the queue.
                 const expectedLoadId = loadIdRef.current;
+                refs.providerFailedLoadIdRef.current = null;
                 const expectedTrack = currentTrack;
                 const onRetryLoaded = () => {
                     audioEngine.off("load", onRetryLoaded);
