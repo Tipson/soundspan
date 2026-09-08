@@ -8,6 +8,7 @@ import { ytMusicService, type YtMusicRadioTrack } from "../youtubeMusic";
 import {
     buildCanonicalRecordingKey,
     canonicalIdentityResolver,
+    findMappedCanonicalCandidates,
 } from "./canonicalIdentity";
 import { recommendationExposureStore } from "./exposureStore";
 import {
@@ -130,6 +131,7 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
     loadSimilarCandidates,
     resolveCanonical: (candidate) =>
         canonicalIdentityResolver.resolve(candidate),
+    loadCanonicalMappings: findMappedCanonicalCandidates,
     enrichCandidates: (candidates) =>
         recommendationFeatureStore.enrichCandidates(candidates),
     loadRecentExposures: (userId, now) =>

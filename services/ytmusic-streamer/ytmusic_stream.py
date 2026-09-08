@@ -15,7 +15,7 @@ from functools import partial
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Literal, TypeVar, cast
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 import requests
 from fastapi import HTTPException, Query, Request, Response
@@ -1250,6 +1250,8 @@ def _iter_progressive_cdn_ranges(
     offset = 0
     total: int | None = None
     validator: str | None = None
+    request_url = stream_url
+    origin = urlsplit(stream_url)
     while total is None or offset < total:
         if session.cancel_event.is_set():
             raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
@@ -1261,7 +1263,7 @@ def _iter_progressive_cdn_ranges(
         if validator is not None:
             range_headers["If-Range"] = validator
         with _open_progressive_range(
-            stream_url, range_headers, session, started_at, client
+            request_url, range_headers, session, started_at, client
         ) as response:
             try:
                 response.raise_for_status()
@@ -1329,6 +1331,25 @@ def _iter_progressive_cdn_ranges(
                 raise ValueError("Progressive source returned an incomplete byte range")
             if response.status_code == 200:
                 return
+            # Reuse the successful CDN redirect for subsequent ranges.
+            # Restarting at the pre-redirect URL costs another CDN round trip
+            # per range. A byte-specific URL cannot serve the next range safely.
+            if isinstance(response.url, str) and response.url:
+                redirected = urlsplit(response.url)
+                same_origin = (redirected.scheme, redirected.netloc) == (
+                    origin.scheme,
+                    origin.netloc,
+                )
+                trusted_cdn_hop = all(
+                    url.scheme == "https"
+                    and (url.hostname or "").endswith(".googlevideo.com")
+                    and url.netloc.lower() in {url.hostname, f"{url.hostname}:443"}
+                    for url in (origin, redirected)
+                )
+                if (same_origin or trusted_cdn_hop) and not any(
+                    key.lower() == "range" for key, _ in parse_qsl(redirected.query)
+                ):
+                    request_url = response.url
 
 
 def _download_progressive_spool_sync(
@@ -2219,6 +2240,15 @@ async def _find_or_start_spool_task_once(
     )
     if existing is not None:
         return existing, None
+
+    # Analysis accepts the already-downloaded original at higher quality.
+    # Keep interactive/preload quality contracts exact, and never use a partial
+    # or lower-quality rendition. Pin the actual file against concurrent eviction.
+    if purpose == "analysis" and quality == "MEDIUM":
+        higher_quality = await _find_spooled_result(video_id, "HIGH", pin=pin_completed)
+        if higher_quality is not None:
+            log.info("Reusing completed HIGH spool for analysis of %s", video_id)
+            return higher_quality, None
 
     failure_key = _spool_failure_key(
         video_id,

@@ -402,6 +402,108 @@ async function findProviderMapping(
     return resolveCanonicalSurvivor(prisma, mapping.canonicalRecording);
 }
 
+/**
+ * Read known provider identities in bounded batches, preserving input positions.
+ * Misses, ambiguous mappings and invalid aliases use the ordinary resolver.
+ * The result is request-local: merges and stale flags are never globally cached.
+ */
+export async function findMappedCanonicalCandidates(
+    candidates: readonly RecommendationCandidate[],
+): Promise<Array<ResolvedCanonicalRecording | null>> {
+    const result: Array<ResolvedCanonicalRecording | null> = [];
+    for (let offset = 0; offset < candidates.length; offset += 250) {
+        const batch = candidates.slice(offset, offset + 250);
+        const ids = (source: RecommendationCandidate["source"]) => [
+            ...new Set(
+                batch
+                    .filter((c) => c.source === source)
+                    .map(providerTrackId)
+                    .filter((id): id is string => Boolean(id)),
+            ),
+        ];
+        const youtube = ids("youtube");
+        const tidal = ids("tidal").map(Number).filter(Number.isSafeInteger);
+        const library = ids("library");
+        const filters: Prisma.TrackMappingWhereInput[] = [
+            ...(youtube.length
+                ? [{ trackYtMusic: { is: { videoId: { in: youtube } } } }]
+                : []),
+            ...(tidal.length
+                ? [{ trackTidal: { is: { tidalId: { in: tidal } } } }]
+                : []),
+            ...(library.length
+                ? [{ track: { is: { id: { in: library } } } }]
+                : []),
+        ];
+        if (!filters.length) {
+            result.push(...batch.map(() => null));
+            continue;
+        }
+        const bound = batch.length * 4;
+        const rows = await prisma.trackMapping.findMany({
+            where: {
+                OR: filters,
+                stale: false,
+                canonicalRecordingId: { not: null },
+            },
+            take: bound,
+            select: {
+                trackYtMusic: { select: { videoId: true } },
+                trackTidal: { select: { tidalId: true } },
+                track: { select: { id: true } },
+                canonicalRecording: { select: canonicalAliasSelect },
+            },
+        });
+        // A truncated duplicate set cannot prove an unambiguous identity.
+        if (rows.length === bound) {
+            result.push(...batch.map(() => null));
+            continue;
+        }
+        const mapped = new Map<string, CanonicalAliasRow | null>();
+        for (const row of rows) {
+            if (!row.canonicalRecording) continue;
+            const keys = [
+                row.trackYtMusic ? `youtube:${row.trackYtMusic.videoId}` : null,
+                row.trackTidal ? `tidal:${row.trackTidal.tidalId}` : null,
+                row.track ? `library:${row.track.id}` : null,
+            ];
+            for (const key of keys) {
+                if (!key) continue;
+                const existing = mapped.get(key);
+                mapped.set(
+                    key,
+                    existing !== undefined &&
+                        existing?.id !== row.canonicalRecording.id
+                        ? null
+                        : row.canonicalRecording,
+                );
+            }
+        }
+        const survivors = new Map<string, ResolvedCanonicalRecording | null>();
+        for (const candidate of batch) {
+            const row = mapped.get(
+                `${candidate.source}:${providerTrackId(candidate)}`,
+            );
+            if (!row) {
+                result.push(null);
+                continue;
+            }
+            if (!survivors.has(row.id)) {
+                try {
+                    survivors.set(
+                        row.id,
+                        await resolveCanonicalSurvivor(prisma, row),
+                    );
+                } catch {
+                    survivors.set(row.id, null);
+                }
+            }
+            result.push(survivors.get(row.id) ?? null);
+        }
+    }
+    return result;
+}
+
 async function findCanonical(
     candidate: RecommendationCandidate,
     canonicalKey: string,

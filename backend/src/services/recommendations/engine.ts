@@ -72,6 +72,10 @@ export interface RecommendationEngineDependencies {
     resolveCanonical: (
         candidate: RecommendationCandidate,
     ) => Promise<CanonicalRecommendationIdentity>;
+    /** Request-local prefetch; null slots retain ordinary canonical resolution. */
+    loadCanonicalMappings?: (
+        candidates: readonly RecommendationCandidate[],
+    ) => Promise<readonly (CanonicalRecommendationIdentity | null)[]>;
     enrichCandidates?: (
         candidates: RecommendationCandidate[],
     ) => Promise<RecommendationCandidate[]>;
@@ -449,6 +453,18 @@ export class RecommendationEngine {
         degradedSources: string[],
     ): Promise<RecommendationCandidate[]> {
         const resolved: RecommendationCandidate[] = [];
+        let mapped: readonly (CanonicalRecommendationIdentity | null)[] = [];
+        if (this.dependencies.loadCanonicalMappings && candidates.length > 0) {
+            try {
+                mapped =
+                    await this.dependencies.loadCanonicalMappings(candidates);
+            } catch (error) {
+                recommendationLogger.warn(
+                    "Canonical batch lookup failed; resolving individually",
+                    { error },
+                );
+            }
+        }
         for (
             let offset = 0;
             offset < candidates.length;
@@ -459,8 +475,10 @@ export class RecommendationEngine {
                 offset + CANONICAL_RESOLUTION_BATCH_SIZE,
             );
             const identities = await Promise.allSettled(
-                batch.map((candidate) =>
-                    this.dependencies.resolveCanonical(candidate),
+                batch.map((candidate, index) =>
+                    mapped[offset + index]
+                        ? Promise.resolve(mapped[offset + index]!)
+                        : this.dependencies.resolveCanonical(candidate),
                 ),
             );
             identities.forEach((identity, index) => {

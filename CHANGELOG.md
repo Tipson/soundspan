@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased Wave delivery and analysis reuse
+
+- Resolve existing provider-to-recording mappings in bounded request-local batches. Preserve candidate order, aliases, stale mapping checks and individual fallback without changing recommendation weights.
+- Reuse successful HTTPS Googlevideo redirects across validated progressive byte ranges, avoiding a repeated redirect for every fragment.
+- Let background audio analysis reuse a completed HIGH-quality spool when MEDIUM is absent. Keep playback quality selection exact and pin the actual file against eviction; incomplete and lower-quality files remain ineligible.
+
 ## Unreleased bounded PO recovery
 
 - Allow one optional, serialized anonymous PO-token attempt after a YouTube bot challenge, preserving quality limits, cancellation, worker capacity and failure cooldown. Ordinary extraction does not fetch tokens automatically.

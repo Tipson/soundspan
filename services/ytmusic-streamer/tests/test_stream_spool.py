@@ -699,13 +699,35 @@ async def test_progressive_writer_owns_bytes_and_atomically_completes(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("redirect_target", "reuse"),
+    [
+        ("https://rr1.googlevideo.com/audio?edge=ready", True),
+        ("https://rr2.googlevideo.com/audio?edge=ready", True),
+        ("https://rr1.googlevideo.com/audio?range=0-1048575", False),
+        ("https://rr1.googlevideo.com/audio?r%61nge=0-1048575", False),
+        ("https://other.test/audio?edge=ready", False),
+        ("https://rr2.googlevideo.com.attacker.test/audio", False),
+        ("https://notgooglevideo.com/audio", False),
+        ("https://user:pass@rr2.googlevideo.com/audio", False),
+        ("https://rr2.googlevideo.com:8443/audio", False),
+        ("http://rr1.googlevideo.com/audio?edge=ready", False),
+        (None, False),
+    ],
+)
 async def test_progressive_writer_downloads_contiguous_bounded_cdn_ranges(
-    stream_module: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    redirect_target: str | None,
+    reuse: bool,
 ) -> None:
     payload = b"\x1aE\xdf\xa3metadata\x1fC\xb6u" + b"x" * (2 * 1024 * 1024)
     ranges: list[str] = []
+    urls: list[str] = []
 
     def get_source(_url: str, **options: Any) -> Any:
+        urls.append(_url)
         header = options["headers"].get("Range")
         assert header is not None, "unbounded CDN request reproduces slow delivery"
         ranges.append(header)
@@ -713,6 +735,7 @@ async def test_progressive_writer_downloads_contiguous_bounded_cdn_ranges(
         assert end - start < 1024 * 1024
         end = min(end, len(payload) - 1)
         response = stream_module.requests.Response()
+        response.url = redirect_target
         response.status_code = 206
         response.headers.update(
             {
@@ -735,7 +758,9 @@ async def test_progressive_writer_downloads_contiguous_bounded_cdn_ranges(
         threading.Event(),
         allow_growing=True,
     )
-    plan = stream_module._ProgressiveSpoolPlan("https://cdn.test/audio", "webm", "audio/webm", {})
+    plan = stream_module._ProgressiveSpoolPlan(
+        "https://rr1.googlevideo.com/audio", "webm", "audio/webm", {}
+    )
     try:
         result = await asyncio.to_thread(
             stream_module._download_progressive_spool_sync, VIDEO_ID, QUALITY, session, plan
@@ -743,6 +768,7 @@ async def test_progressive_writer_downloads_contiguous_bounded_cdn_ranges(
         assert result is not None
         assert await asyncio.to_thread(Path(result[0]).read_bytes) == payload
         assert len(ranges) == 3
+        assert urls == [plan.stream_url] + [redirect_target if reuse else plan.stream_url] * 2
         assert session.content_length == len(payload)
     finally:
         session.release_pins()
@@ -857,9 +883,17 @@ async def test_progressive_ranges_over_real_http_preserve_audio_bytes(
 
     payload = b"\x1aE\xdf\xa3metadata\x1fC\xb6u" + b"audio" * 40000
     observed: list[str] = []
+    redirected: list[str] = []
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
+            if self.path == "/audio":
+                redirected.append(self.headers.get("Range", ""))
+                self.send_response(302)
+                self.send_header("Location", "/audio?edge=ready")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             header = self.headers.get("Range", "")
             observed.append(header)
             first, end = map(int, header.removeprefix("bytes=").split("-"))
@@ -895,6 +929,7 @@ async def test_progressive_ranges_over_real_http_preserve_audio_bytes(
         )
         assert result is not None
         assert await asyncio.to_thread(Path(result[0]).read_bytes) == payload
+        assert redirected == ["bytes=0-65535"], "each range repeated the CDN redirect"
         assert observed == [
             "bytes=0-65535",
             "bytes=65536-131071",
@@ -2025,6 +2060,56 @@ def test_sync_spool_deletes_completed_file_over_total_budget(
         stream_module._download_ytmusic_spool_sync(VIDEO_ID, QUALITY)
 
     assert not completed.exists()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("purpose", "cached_quality", "partial", "reuse"),
+    [
+        ("analysis", "HIGH", False, True),
+        ("interactive", "HIGH", False, False),
+        ("preload", "HIGH", False, False),
+        ("analysis", "LOW", False, False),
+        ("analysis", "HIGH", True, False),
+        ("analysis", "MEDIUM", False, True),
+    ],
+)
+async def test_analysis_reuses_completed_higher_quality_without_downloading(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    purpose: str,
+    cached_quality: str,
+    partial: bool,
+    reuse: bool,
+) -> None:
+    cached = stream_module.YTMUSIC_SPOOL_DIR / (
+        f"{VIDEO_ID}-{cached_quality}.webm" + (".part" if partial else "")
+    )
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_bytes(b"already validated completed audio")
+    created: list[str] = []
+    task = asyncio.get_running_loop().create_future()
+    task.set_result(("downloaded.webm", "audio/webm"))
+
+    def create(key: str, *_args: Any, **_kwargs: Any) -> Any:
+        created.append(key)
+        return task
+
+    monkeypatch.setattr(stream_module, "_try_get_or_create_spool_task", create)
+    completed, work = await stream_module._find_or_start_spool_task_once(
+        VIDEO_ID, "MEDIUM", purpose=purpose, pin_completed=True
+    )
+    if reuse:
+        assert completed == (str(cached), "audio/webm")
+        assert work is None
+        assert created == []
+        assert stream_module._spool_pin_counts == {cached: 1}
+        stream_module._unpin_spool_path(cached)
+        assert stream_module._spool_pin_counts == {}
+    else:
+        assert completed is None
+        assert work is task
+        assert created == [f"{VIDEO_ID}:MEDIUM"]
 
 
 @pytest.mark.anyio
