@@ -1,6 +1,7 @@
 import type {
     PersonalizedHomeFeed,
     PersonalizedHomeMood,
+    PersonalizedHomeLanguage,
     PersonalizedTrack,
 } from "@/features/home/types";
 import type { Track, WaveMode } from "@/lib/audio-state-context";
@@ -56,6 +57,7 @@ export function buildProviderRadioContinuationPath(
     mode: WaveMode,
     mood: PersonalizedHomeMood | null = null,
     context: RecommendationClientContext | null = getRecommendationClientContext(),
+    language: PersonalizedHomeLanguage = "any",
 ): string {
     const excludedTrackIds = Array.from(
         new Set(existingQueue.map(providerQueueIdentity).filter(Boolean)),
@@ -68,6 +70,7 @@ export function buildProviderRadioContinuationPath(
         sessionId: getRecommendationSessionId(),
     });
     if (mood) params.set("mood", mood);
+    if (language !== "any") params.set("language", language);
     appendRecommendationClientContext(params, context);
     if (excludedTrackIds.length > 0) {
         params.set("exclude", excludedTrackIds.join(","));

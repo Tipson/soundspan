@@ -21,7 +21,11 @@ let feedResult: {
     isError: boolean;
 };
 let feedResolver:
-    | ((mode: string, mood: string | null) => typeof feedResult)
+    | ((
+          mode: string,
+          mood: string | null,
+          language: string,
+      ) => typeof feedResult)
     | null = null;
 const feedCalls: Array<[string, string | null]> = [];
 const calls = {
@@ -34,6 +38,7 @@ const calls = {
     vibeSourceFeatures: [] as unknown[],
     waveMode: [] as unknown[],
     waveMood: [] as unknown[],
+    waveLanguage: [] as unknown[],
 };
 const audioState = {
     currentTrack: null as { id: string } | null,
@@ -81,9 +86,13 @@ mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
             _enabled: boolean,
             mode: string,
             mood: string | null,
+            _surface: string,
+            language: string,
         ) => {
             feedCalls.push([mode, mood]);
-            const result = feedResolver ? feedResolver(mode, mood) : feedResult;
+            const result = feedResolver
+                ? feedResolver(mode, mood, language)
+                : feedResult;
             return {
                 ...result,
                 refetch: async () => {
@@ -123,6 +132,7 @@ mock.module("@/lib/audio-state-context", {
                 calls.vibeSourceFeatures.push(value),
             setWaveMode: (value: unknown) => calls.waveMode.push(value),
             setWaveMood: (value: unknown) => calls.waveMood.push(value),
+            setWaveLanguage: (value: unknown) => calls.waveLanguage.push(value),
         }),
     },
 });
@@ -399,3 +409,53 @@ for (const recommendationState of ["error", "empty"] as const) {
         container.remove();
     });
 }
+
+test("language retune preserves direction and mood, and replaces the old queue only with matching results", async () => {
+    window.history.replaceState(
+        {},
+        "",
+        "https://music.test/vibe?mode=new&mood=focus&language=ru",
+    );
+    audioState.currentTrack = { id: "old-foreign" };
+    audioState.vibeMode = true;
+    feedResolver = (mode, mood, language) => ({
+        data: {
+            shelves: {
+                quickPicks: [],
+                listenAgain: [],
+                discovery:
+                    mode === "new" && mood === "focus" && language === "ru"
+                        ? [{ id: "russian-personalized" }]
+                        : [],
+            },
+        },
+        isLoading: false,
+        isError: false,
+    });
+    const { VibeProviderFallback } =
+        await import("../../components/vibe/VibeAvailability");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await React.act(async () => {
+        root.render(React.createElement(VibeProviderFallback));
+        await Promise.resolve();
+    });
+    assert.deepEqual(calls.playTracks, []);
+    await React.act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 340));
+    });
+    assert.deepEqual(calls.playTracks, [
+        [[{ id: "russian-personalized" }], 0, true],
+    ]);
+    assert.deepEqual(calls.waveLanguage, ["ru"]);
+    assert.equal(
+        container
+            .querySelector("[data-wave-language]")
+            ?.getAttribute("data-wave-language"),
+        "ru",
+    );
+    await React.act(async () => root.unmount());
+    container.remove();
+});

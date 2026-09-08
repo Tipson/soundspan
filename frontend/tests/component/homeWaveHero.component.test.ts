@@ -193,7 +193,14 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
     assert.deepEqual(calls.vibeMode, [true]);
     assert.deepEqual(calls.vibeSourceFeatures, [null]);
     assert.deepEqual(calls.vibeQueueIds, [["wave-fresh"]]);
-    assert.deepEqual(calls.feedQueries[0], [12, true, "new", "focus", "wave"]);
+    assert.deepEqual(calls.feedQueries[0], [
+        12,
+        true,
+        "new",
+        "focus",
+        "wave",
+        "any",
+    ]);
     assert.deepEqual(calls.waveMode, []);
     assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
     assert.match(container.textContent ?? "", /Моя волна/i);

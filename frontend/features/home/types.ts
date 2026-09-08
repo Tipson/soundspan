@@ -75,6 +75,9 @@ export interface PopularArtist {
 /** Direction policy for one account's personalized Wave. */
 export type PersonalizedHomeMode = "for-you" | "new" | "familiar";
 
+/** Language of a matched recording's vocals; independent of genre and mood. */
+export type PersonalizedHomeLanguage = "any" | "ru" | "foreign";
+
 export type PersonalizedRecommendationSurface =
     | "home"
     | "wave"
@@ -112,6 +115,12 @@ export interface PersonalizedTrack {
 }
 
 export interface PersonalizedHomeFeed {
+    languageStatus?: {
+        selection: PersonalizedHomeLanguage;
+        pending: boolean;
+        classified: number;
+        total: number;
+    };
     shelves: {
         listenAgain: PersonalizedTrack[];
         quickPicks: PersonalizedTrack[];

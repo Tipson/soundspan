@@ -130,10 +130,21 @@ export const queryKeys = {
             | "forgotten"
             | null = null,
         surface: "home" | "wave" | "made-for-you" = "home",
+        language: "any" | "ru" | "foreign" = "any",
     ) =>
-        mood
-            ? (["home", "personalized", surface, limit, mode, mood] as const)
-            : (["home", "personalized", surface, limit, mode] as const),
+        language !== "any"
+            ? ([
+                  "home",
+                  "personalized",
+                  surface,
+                  limit,
+                  mode,
+                  mood,
+                  language,
+              ] as const)
+            : mood
+              ? (["home", "personalized", surface, limit, mode, mood] as const)
+              : (["home", "personalized", surface, limit, mode] as const),
     tasteProfile: (accountId: string) =>
         ["taste-profile", accountId.trim()] as const,
 

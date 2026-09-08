@@ -30,6 +30,7 @@ export function HomeWaveHero({
     const {
         waveMode,
         waveMood,
+        waveLanguage = "any",
         setIsShuffle,
         setShuffleIndices,
         setVibeMode,
@@ -37,7 +38,14 @@ export function HomeWaveHero({
         setVibeSourceFeatures,
     } = useAudioState();
     const { data: waveFeed, isLoading: isWaveLoading } =
-        usePersonalizedHomeFeed(12, true, waveMode, waveMood, "wave");
+        usePersonalizedHomeFeed(
+            12,
+            true,
+            waveMode,
+            waveMood,
+            "wave",
+            waveLanguage,
+        );
     const isLoading = isHomeLoading || isWaveLoading;
     const tracks = useMemo(
         () => selectWaveTracks(waveFeed?.shelves, waveMode),
@@ -97,7 +105,11 @@ export function HomeWaveHero({
         ? ru.vibe.tuning
         : canPlay
           ? ru.home.startWave
-          : ru.home.moreSignals;
+          : waveLanguage !== "any"
+            ? waveFeed?.languageStatus?.pending
+                ? "Уточняем язык треков"
+                : "Нет подходящих треков"
+            : ru.home.moreSignals;
 
     return (
         <section

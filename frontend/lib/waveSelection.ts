@@ -1,5 +1,8 @@
 import { BRAND_SLUG } from "@/lib/brand";
-import type { PersonalizedHomeMood } from "@/features/home/types";
+import type {
+    PersonalizedHomeMood,
+    PersonalizedHomeLanguage,
+} from "@/features/home/types";
 
 export type WaveSelectionMode = "for-you" | "new" | "familiar";
 export type WaveSelectionMood = PersonalizedHomeMood | null;
@@ -7,6 +10,7 @@ export type WaveSelectionMood = PersonalizedHomeMood | null;
 export interface WaveSelection {
     mode: WaveSelectionMode;
     mood: WaveSelectionMood;
+    language: PersonalizedHomeLanguage;
 }
 
 const WAVE_MODE_IDS = new Set<WaveSelectionMode>([
@@ -23,9 +27,15 @@ const WAVE_MOOD_IDS = new Set<PersonalizedHomeMood>([
     "forgotten",
 ]);
 const WAVE_SELECTION_KEY_PREFIX = `${BRAND_SLUG}_wave_selection_v1`;
+const WAVE_LANGUAGE_IDS = new Set<PersonalizedHomeLanguage>([
+    "any",
+    "ru",
+    "foreign",
+]);
 const DEFAULT_WAVE_SELECTION: WaveSelection = {
     mode: "for-you",
     mood: null,
+    language: "any",
 };
 
 export function waveSelectionStorageKey(ownerId: string): string {
@@ -43,8 +53,19 @@ export function readPersistedWaveSelection(
             waveSelectionStorageKey(ownerId),
         );
         if (!raw) return DEFAULT_WAVE_SELECTION;
-        const parsed = JSON.parse(raw) as { mode?: unknown; mood?: unknown };
+        const parsed = JSON.parse(raw) as {
+            mode?: unknown;
+            mood?: unknown;
+            language?: unknown;
+        };
         return {
+            language:
+                typeof parsed?.language === "string" &&
+                WAVE_LANGUAGE_IDS.has(
+                    parsed.language as PersonalizedHomeLanguage,
+                )
+                    ? (parsed.language as PersonalizedHomeLanguage)
+                    : "any",
             mode:
                 typeof parsed.mode === "string" &&
                 WAVE_MODE_IDS.has(parsed.mode as WaveSelectionMode)
@@ -65,12 +86,13 @@ export function persistWaveSelection(
     ownerId: string | null,
     mode: WaveSelectionMode,
     mood: WaveSelectionMood,
+    language: PersonalizedHomeLanguage = "any",
 ): void {
     if (!ownerId || typeof window === "undefined") return;
     try {
         window.localStorage.setItem(
             waveSelectionStorageKey(ownerId),
-            JSON.stringify({ mode, mood }),
+            JSON.stringify({ mode, mood, language }),
         );
     } catch {
         // The applied in-memory selection remains usable in restricted storage.
@@ -83,9 +105,15 @@ export function readWaveSelection(ownerId: string | null): WaveSelection {
     const params = new URLSearchParams(window.location.search);
     const requestedMode = params.get("mode");
     const requestedMood = params.get("mood");
+    const requestedLanguage = params.get("language");
     const hasModeOverride = params.has("mode");
     const hasMoodOverride = params.has("mood");
     return {
+        language:
+            requestedLanguage &&
+            WAVE_LANGUAGE_IDS.has(requestedLanguage as PersonalizedHomeLanguage)
+                ? (requestedLanguage as PersonalizedHomeLanguage)
+                : persisted.language,
         mode:
             requestedMode &&
             WAVE_MODE_IDS.has(requestedMode as WaveSelectionMode)
@@ -105,10 +133,13 @@ export function readWaveSelection(ownerId: string | null): WaveSelection {
 export function replaceWaveSelection(
     mode: WaveSelectionMode,
     mood: WaveSelectionMood,
+    language: PersonalizedHomeLanguage = "any",
 ): void {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     url.searchParams.set("mode", mode);
+    if (language !== "any") url.searchParams.set("language", language);
+    else url.searchParams.delete("language");
     if (mood) url.searchParams.set("mood", mood);
     else url.searchParams.delete("mood");
     window.history.replaceState(window.history.state, "", url);

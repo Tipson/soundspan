@@ -251,7 +251,7 @@ async function renderPage() {
     // loading state works and write a note about the limitation.
 
     const queryClient = new QueryClient();
-    const mod = await import("../../app/explore/yt-playlist/[id]/page");
+    const mod = await import("../../app/explore/yt-playlist/[id]/pageContent");
     const Page = mod.default;
     return renderToStaticMarkup(
         React.createElement(
@@ -281,7 +281,7 @@ test("yt-playlist page explains the initial loading state in Russian", async () 
 });
 
 test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonical track surface", async () => {
-    const mod = await import("../../app/explore/yt-playlist/[id]/page");
+    const mod = await import("../../app/explore/yt-playlist/[id]/pageContent");
     const ActionDock = (
         mod as unknown as {
             YtPlaylistActionDock: React.ComponentType<Record<string, unknown>>;

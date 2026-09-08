@@ -49,6 +49,24 @@ test("Wave keeps long mood labels readable on one line without shortening access
     assert.ok(workout);
     assert.match(workout.textContent ?? "", /Тренировка/);
     assert.doesNotMatch(workout.textContent ?? "", /Для тренировки/);
+    const languageGroup = container.querySelector(
+        '[role="radiogroup"][aria-label="Язык исполнения"]',
+    );
+    assert.ok(languageGroup);
+    const russian = languageGroup.querySelector<HTMLButtonElement>(
+        '[aria-label="Русское"]',
+    );
+    assert.ok(russian);
+    await React.act(async () => {
+        russian.click();
+    });
+    assert.equal(russian.getAttribute("aria-checked"), "true");
+    assert.equal(
+        container
+            .querySelector('[role="radio"][aria-label="Для вас"]')
+            ?.getAttribute("aria-checked"),
+        "true",
+    );
 
     await React.act(async () => root.unmount());
     container.remove();

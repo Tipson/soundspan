@@ -70,6 +70,7 @@ export function useVibeModeControls({
         vibeMode: state.vibeMode,
         waveMode: state.waveMode,
         waveMood: state.waveMood,
+        waveLanguage: state.waveLanguage,
     });
 
     useLayoutEffect(() => {
@@ -81,6 +82,7 @@ export function useVibeModeControls({
             vibeMode: state.vibeMode,
             waveMode: state.waveMode,
             waveMood: state.waveMood,
+            waveLanguage: state.waveLanguage,
         };
     }, [
         state.currentIndex,
@@ -89,6 +91,7 @@ export function useVibeModeControls({
         state.vibeMode,
         state.waveMode,
         state.waveMood,
+        state.waveLanguage,
     ]);
 
     const startVibeMode = useCallback(
@@ -108,17 +111,28 @@ export function useVibeModeControls({
                 queue: state.queue,
                 waveMode: state.waveMode,
                 waveMood: state.waveMood,
+                waveLanguage: state.waveLanguage,
+                vibeMode: state.vibeMode,
             };
             const requestIsCurrent = () => {
                 const currentContext = playbackContextRef.current;
                 if (requestGenerationRef.current !== requestGeneration) {
                     return false;
                 }
+                if (
+                    currentContext.vibeMode !== requestContext.vibeMode ||
+                    currentContext.waveMode !== requestContext.waveMode ||
+                    currentContext.waveMood !== requestContext.waveMood ||
+                    currentContext.waveLanguage !== requestContext.waveLanguage
+                )
+                    return false;
                 if (replaceUpcoming) {
                     return (
                         currentContext.vibeMode &&
                         currentContext.waveMode === requestContext.waveMode &&
                         currentContext.waveMood === requestContext.waveMood &&
+                        currentContext.waveLanguage ===
+                            requestContext.waveLanguage &&
                         Boolean(
                             currentContext.track &&
                             isProviderRadioTrack(currentContext.track),
@@ -160,6 +174,8 @@ export function useVibeModeControls({
                                 25,
                                 state.waveMode,
                                 state.vibeMode ? state.waveMood : null,
+                                undefined,
+                                state.vibeMode ? state.waveLanguage : "any",
                             ),
                             {
                                 timeoutMs: PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,

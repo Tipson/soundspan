@@ -8,7 +8,10 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { AudioWaveform, Check, X } from "lucide-react";
-import type { PersonalizedHomeMood } from "@/features/home/types";
+import type {
+    PersonalizedHomeMood,
+    PersonalizedHomeLanguage,
+} from "@/features/home/types";
 import { ru } from "@/lib/i18n/ru";
 import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 
@@ -84,11 +87,16 @@ export const WAVE_MOODS: readonly {
 ];
 
 interface WaveDirectionSheetProps {
+    activeLanguage?: PersonalizedHomeLanguage;
     activeMode: WaveFeedMode;
     activeMood: WaveMood | null;
     isWaveActive?: boolean;
     isRetunePending?: boolean;
-    onApply: (mode: WaveFeedMode, mood: WaveMood | null) => void;
+    onApply: (
+        mode: WaveFeedMode,
+        mood: WaveMood | null,
+        language: PersonalizedHomeLanguage,
+    ) => void;
     onClose: () => void;
 }
 
@@ -99,6 +107,13 @@ function focusableElements(container: HTMLElement): HTMLElement[] {
         ),
     );
 }
+
+/** Vocal-language options; unknown and instrumental recordings belong to Any. */
+export const WAVE_LANGUAGES = [
+    { id: "any", label: "Любое" },
+    { id: "ru", label: "Русское" },
+    { id: "foreign", label: "Иностранное" },
+] as const;
 
 function nextRadioIndex(
     key: string,
@@ -120,6 +135,7 @@ function nextRadioIndex(
 export function WaveDirectionSheet({
     activeMode,
     activeMood,
+    activeLanguage = "any",
     isWaveActive = false,
     isRetunePending = false,
     onApply,
@@ -128,6 +144,7 @@ export function WaveDirectionSheet({
     useDismissibleLayer(true, onClose);
     const [draftMode, setDraftMode] = useState(activeMode);
     const [draftMood, setDraftMood] = useState<WaveMood | null>(activeMood);
+    const [draftLanguage, setDraftLanguage] = useState(activeLanguage);
     const dialogRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -170,7 +187,10 @@ export function WaveDirectionSheet({
         [draftMood],
     );
     const hasDraftChanges =
-        draftMode !== activeMode || draftMood !== activeMood || isRetunePending;
+        draftMode !== activeMode ||
+        draftMood !== activeMood ||
+        draftLanguage !== activeLanguage ||
+        isRetunePending;
     const applyLabel = isWaveActive ? "Обновить волну" : "Сохранить настройку";
     const handleRadioKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
         const currentIndex = WAVE_MODES.findIndex(
@@ -391,11 +411,62 @@ export function WaveDirectionSheet({
                     </div>
                 </div>
 
+                <section className="mt-6 border-t border-white/8 pt-5">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-content-muted">
+                        Язык исполнения
+                    </p>
+                    <div
+                        role="radiogroup"
+                        aria-label="Язык исполнения"
+                        tabIndex={-1}
+                        className="mt-3 flex flex-wrap gap-2"
+                        onKeyDown={(event) => {
+                            const next = nextRadioIndex(
+                                event.key,
+                                WAVE_LANGUAGES.findIndex(
+                                    (item) => item.id === draftLanguage,
+                                ),
+                                WAVE_LANGUAGES.length,
+                            );
+                            if (next === null) return;
+                            event.preventDefault();
+                            setDraftLanguage(WAVE_LANGUAGES[next].id);
+                            event.currentTarget
+                                .querySelectorAll<HTMLButtonElement>(
+                                    '[role="radio"]',
+                                )
+                                [next]?.focus();
+                        }}
+                    >
+                        {WAVE_LANGUAGES.map((item) => (
+                            <button
+                                key={item.id}
+                                type="button"
+                                role="radio"
+                                aria-label={item.label}
+                                aria-checked={draftLanguage === item.id}
+                                tabIndex={draftLanguage === item.id ? 0 : -1}
+                                onClick={() => setDraftLanguage(item.id)}
+                                className={`min-h-11 flex-1 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light ${draftLanguage === item.id ? "border-brand/50 bg-brand/12 text-content" : "border-white/8 text-content-secondary"}`}
+                            >
+                                {item.label}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-content-muted">
+                        Инструментальные треки и записи без определённого языка
+                        — в «Любое».
+                    </p>
+                </section>
+
                 <div className="mt-6 grid gap-4 border-t border-white/8 pt-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                     <p className="text-sm leading-5 text-content-secondary">
                         <span className="block font-semibold text-content-body">
                             {ru.vibe.selected}: {selectedDefinition.shortLabel}{" "}
                             · {selectedMoodDefinition.label}
+                            {draftLanguage !== "any"
+                                ? ` · ${WAVE_LANGUAGES.find((item) => item.id === draftLanguage)?.label}`
+                                : ""}
                         </span>
                         <span className="mt-1 block">
                             {isWaveActive && hasDraftChanges
@@ -415,7 +486,9 @@ export function WaveDirectionSheet({
                         </button>
                         <button
                             type="button"
-                            onClick={() => onApply(draftMode, draftMood)}
+                            onClick={() =>
+                                onApply(draftMode, draftMood, draftLanguage)
+                            }
                             aria-label={`${applyLabel}: ${selectedDefinition.label}, ${selectedMoodDefinition.label}`}
                             className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
                         >

@@ -15,6 +15,7 @@ const state = {
     ownerId: "listener-1" as string | null,
     waveMode: "for-you",
     waveMood: null as string | null,
+    waveLanguage: "any",
     appliedModes: [] as string[],
     appliedMoods: [] as Array<string | null>,
 };
@@ -30,6 +31,10 @@ mock.module("@/lib/audio-state-context", {
         useAudioState: () => ({
             waveMode: state.waveMode,
             waveMood: state.waveMood,
+            waveLanguage: state.waveLanguage,
+            setWaveLanguage: (language: string) => {
+                state.waveLanguage = language;
+            },
             setWaveMode: (mode: string) => {
                 state.waveMode = mode;
                 state.appliedModes.push(mode);
@@ -56,7 +61,7 @@ after(() => GlobalRegistrator.unregister());
 test("wave selection is restored before Home and Vibe consume shared audio state", async () => {
     window.localStorage.setItem(
         `${BRAND_SLUG}_wave_selection_v1:listener-1`,
-        JSON.stringify({ mode: "new", mood: "focus" }),
+        JSON.stringify({ mode: "new", mood: "focus", language: "ru" }),
     );
     const { WaveSelectionSynchronizer } =
         await import("@/components/providers/WaveSelectionSynchronizer");
@@ -71,6 +76,7 @@ test("wave selection is restored before Home and Vibe consume shared audio state
 
     assert.deepEqual(state.appliedModes, ["new"]);
     assert.deepEqual(state.appliedMoods, ["focus"]);
+    assert.equal(state.waveLanguage, "ru");
 
     await act(async () => root.unmount());
     container.remove();

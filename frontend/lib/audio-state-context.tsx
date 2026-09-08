@@ -234,6 +234,12 @@ interface AudioStateContextType {
     vibeMode: boolean;
     waveMode: WaveMode;
     waveMood: WaveMood;
+    waveLanguage: import("@/features/home/types").PersonalizedHomeLanguage;
+    setWaveLanguage: React.Dispatch<
+        React.SetStateAction<
+            import("@/features/home/types").PersonalizedHomeLanguage
+        >
+    >;
     vibeSourceFeatures: AudioFeatures | null;
     vibeQueueIds: string[];
 
@@ -365,6 +371,10 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     const [vibeMode, setVibeMode] = useState(false);
     const [waveMode, setWaveMode] = useState<WaveMode>("for-you");
     const [waveMood, setWaveMood] = useState<WaveMood>(null);
+    const [waveLanguage, setWaveLanguage] =
+        useState<import("@/features/home/types").PersonalizedHomeLanguage>(
+            "any",
+        );
     const [vibeSourceFeatures, setVibeSourceFeatures] =
         useState<AudioFeatures | null>(null);
     const [vibeQueueIds, setVibeQueueIds] = useState<string[]>([]);
@@ -1198,6 +1208,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             vibeMode,
             waveMode,
             waveMood,
+            waveLanguage,
             vibeSourceFeatures,
             vibeQueueIds,
             isHydrated,
@@ -1217,6 +1228,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             setVibeMode,
             setWaveMode,
             setWaveMood,
+            setWaveLanguage,
             setVibeSourceFeatures,
             setVibeQueueIds,
         }),
@@ -1233,6 +1245,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             vibeMode,
             waveMode,
             waveMood,
+            waveLanguage,
             vibeSourceFeatures,
             vibeQueueIds,
             isHydrated,

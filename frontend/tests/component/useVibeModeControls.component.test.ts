@@ -179,6 +179,7 @@ function makeAudioState(
             vibeMode,
             waveMode,
             waveMood,
+            waveLanguage: "ru",
             setIsShuffle: () => mutations.push("shuffle"),
             setShuffleIndices: () => mutations.push("shuffle-indices"),
             setVibeMode: () => mutations.push("vibe-mode"),
@@ -212,6 +213,7 @@ test("provider continuation keeps the active Wave mood outside the Vibe route", 
     const requestUrl = new URL(feedRequestPaths[0], "https://soundspan.test");
     assert.equal(requestUrl.searchParams.get("mode"), "new");
     assert.equal(requestUrl.searchParams.get("mood"), "workout");
+    assert.equal(requestUrl.searchParams.get("language"), "ru");
 
     feedRequests[0].resolve({
         shelves: {
@@ -414,6 +416,36 @@ test("manual duplicate selection is committed before a matching Vibe token can e
     assert.deepEqual(queueCommits, []);
     assert.deepEqual(original.mutations, []);
     assert.deepEqual(manuallySelected.mutations, []);
+});
+
+test("an in-flight continuation cannot append tracks after language changes", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const harness = new HookLifecycleHarness();
+    const track = makeProviderTrack("AAAAAAAAAAA");
+    const initial = makeAudioState(track, [track], 0, true);
+    function HookProbe(state: typeof initial.state) {
+        harness.beginRender();
+        activeHarness = harness;
+        const controls = useVibeModeControls({
+            state: state as never,
+            getActiveListenTogetherSession: () => null,
+            showQueueMutationToasts: () => undefined,
+        });
+        harness.commitRender();
+        return controls;
+    }
+    const pending = HookProbe(initial.state).startVibeMode();
+    HookProbe({ ...initial.state, waveLanguage: "foreign" });
+    feedRequests[0].resolve({
+        shelves: {
+            discovery: [makeProviderTrack("BBBBBBBBBBB")],
+            quickPicks: [],
+            listenAgain: [],
+        },
+    });
+    assert.deepEqual(await pending, { success: false, trackCount: 0 });
+    assert.deepEqual(initial.mutations, []);
 });
 
 test("late provider radio response is ignored after the active track changes", async () => {

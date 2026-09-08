@@ -722,7 +722,7 @@ test("overflow menu for remote liked tracks enables Go to Artist and Start Radio
 
 test("resolveLikedTrackCoverUrl rejects retired provider artwork and keeps active sources", async () => {
     const { resolveLikedTrackCoverUrl } =
-        await import("../../app/playlist/my-liked/page");
+        await import("../../app/playlist/my-liked/pageContent");
 
     const tidalTrack = {
         ...makeTrack("tidal-track", "Tidal Track"),

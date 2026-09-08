@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased Wave language filter
+
+- Add an account-scoped vocal-language selection independent of Wave direction and mood. Share it across Home, Wave, saved settings and queue continuation; reject late continuation responses after a selection change.
+- Classify matched recording lyrics locally and cache only language labels. Keep uncertain, mixed-language and instrumental recordings in Any; do not silently backfill strict selections. Bound optional preparation, coalesce repeated requests and preserve the current queue when a retune has no matches.
+- Separate playlist route entrypoints from their testable page content so Next.js route type checking does not reject helper exports.
+
 ## Unreleased UI density fixes
 
 - Collapse album, artist, playlist, Liked Songs and YouTube Music collection management into a shared labelled actions sheet. Keep playback and shuffle visible, shorten mobile play labels, and remove the redundant Back action from the YouTube collection toolbar.

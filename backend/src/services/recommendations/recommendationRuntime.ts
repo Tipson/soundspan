@@ -12,6 +12,7 @@ import {
 import { recommendationExposureStore } from "./exposureStore";
 import { recommendationFeatureStore } from "./featureStore";
 import { recommendationMoodEmbeddingStore } from "./moodEmbedding";
+import { recordingLanguageStore } from "./recordingLanguageRuntime";
 import { remoteAnalysisHotSetScheduler } from "./remoteAnalysisHotSet";
 import { UnifiedRecommendationService } from "./recommendationService";
 import type { RecommendRequest, RecommendationCandidate } from "./types";
@@ -112,6 +113,7 @@ async function loadSimilarCandidates(request: RecommendRequest) {
 }
 
 export const unifiedRecommendationService = new UnifiedRecommendationService({
+    prepareLanguages: (tracks) => recordingLanguageStore.prepare(tracks),
     mode: config.recommendations.mode,
     hybridRolloutPercent: config.recommendations.hybridRolloutPercent,
     explorationRate: config.recommendations.explorationRate,

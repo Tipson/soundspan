@@ -5,6 +5,12 @@ import type {
 } from "../personalizedCatalog";
 import { buildCanonicalRecordingKey } from "./canonicalIdentity";
 import {
+    matchesWaveLanguage,
+    type LanguageRecording,
+    type WaveLanguage,
+} from "./recordingLanguage";
+import type { PreparedRecordingLanguages } from "./recordingLanguageStore";
+import {
     RecommendationEngine,
     type RecommendationCandidateBatch,
     type RecommendationEngineDependencies,
@@ -27,6 +33,9 @@ type CommonEngineDependencies = Omit<
 >;
 
 export interface UnifiedRecommendationDependencies extends CommonEngineDependencies {
+    prepareLanguages?: (
+        tracks: LanguageRecording[],
+    ) => Promise<PreparedRecordingLanguages>;
     loadPersonalizedFeed: (
         userId: string,
         limit: number,
@@ -45,11 +54,18 @@ export interface PersonalizedRecommendationInput {
     cursor: number;
     direction: "for-you" | "new" | "familiar";
     mood: RecommendationMood | null;
+    language?: WaveLanguage;
     excludeVideoIds: string[];
     context?: RecommendationRequestContext;
 }
 
 export type PersonalizedRecommendationFeed = PersonalizedHomeFeed & {
+    languageStatus?: {
+        selection: WaveLanguage;
+        pending: boolean;
+        classified: number;
+        total: number;
+    };
     generationId: string;
     degradedSources: string[];
 };
@@ -159,6 +175,7 @@ export class UnifiedRecommendationService {
         input: PersonalizedRecommendationInput,
     ): Promise<PersonalizedRecommendationFeed> {
         const sourceState: { feed?: PersonalizedHomeFeed } = {};
+        let languageStatus: PersonalizedRecommendationFeed["languageStatus"];
         const engine = this.engine(async () => {
             const sourceFeed = await this.dependencies.loadPersonalizedFeed(
                 input.userId,
@@ -174,8 +191,29 @@ export class UnifiedRecommendationService {
                 },
             );
             sourceState.feed = sourceFeed;
+            let candidates = flattenPersonalizedFeed(sourceFeed);
+            if (input.surface === "wave") {
+                const selection = input.language ?? "any";
+                const prepared = this.dependencies.prepareLanguages
+                    ? await this.dependencies.prepareLanguages(candidates)
+                    : { languages: candidates.map(() => null), pending: false };
+                languageStatus = {
+                    selection,
+                    pending: prepared.pending,
+                    classified: prepared.languages.filter(
+                        (value) => value === "ru" || value === "foreign",
+                    ).length,
+                    total: candidates.length,
+                };
+                candidates = candidates.filter((_candidate, index) =>
+                    matchesWaveLanguage(
+                        prepared.languages[index] ?? null,
+                        selection,
+                    ),
+                );
+            }
             return {
-                candidates: flattenPersonalizedFeed(sourceFeed),
+                candidates,
                 nextCursor: sourceFeed.nextCursor,
                 degradedSources:
                     (sourceFeed.degradedSources?.length ?? 0) > 0
@@ -191,6 +229,7 @@ export class UnifiedRecommendationService {
                 surface: input.surface,
                 direction: input.direction,
                 mood: input.mood,
+                language: input.language,
             },
             sessionId: input.sessionId,
             cursor: input.cursor,
@@ -227,6 +266,7 @@ export class UnifiedRecommendationService {
             nextCursor: result.nextCursor,
             generationId: result.generationId,
             degradedSources: result.degradedSources,
+            ...(languageStatus ? { languageStatus } : {}),
         };
     }
 

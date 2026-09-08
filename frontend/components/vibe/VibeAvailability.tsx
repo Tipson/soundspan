@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AudioWaveform, Loader2, Pause, Play, RotateCcw } from "lucide-react";
 import { usePersonalizedHomeFeed } from "@/features/home/hooks/usePersonalizedHomeFeed";
 import { selectWaveTracks } from "@/features/home/selectWaveTracks";
-import type { PersonalizedHomeMood } from "@/features/home/types";
+import type {
+    PersonalizedHomeMood,
+    PersonalizedHomeLanguage,
+} from "@/features/home/types";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAuth } from "@/lib/auth-context";
 import { useWaveStartWarmup } from "@/hooks/useWaveStartWarmup";
@@ -25,6 +28,7 @@ import {
     WaveDirectionSheet,
     WAVE_MOODS,
     WAVE_MODES,
+    WAVE_LANGUAGES,
     type WaveFeedMode,
     type WaveMood,
 } from "./WaveDirectionSheet";
@@ -48,6 +52,10 @@ export function VibeProviderFallback() {
     );
     const [requestedMode, setRequestedMode] =
         useState<SupportedPersonalizedMode>("for-you");
+    const [activeLanguage, setActiveLanguage] =
+        useState<PersonalizedHomeLanguage>("any");
+    const [requestedLanguage, setRequestedLanguage] =
+        useState<PersonalizedHomeLanguage>("any");
     const [requestedMood, setRequestedMood] =
         useState<PersonalizedHomeMood | null>(null);
     const [isTuneOpen, setIsTuneOpen] = useState(false);
@@ -60,6 +68,7 @@ export function VibeProviderFallback() {
     const [pendingRetune, setPendingRetune] = useState<{
         mode: WaveFeedMode;
         mood: WaveMood | null;
+        language: PersonalizedHomeLanguage;
         generation: number;
     } | null>(null);
     const { pause, play, playTracks } = useAudioControls();
@@ -69,6 +78,7 @@ export function VibeProviderFallback() {
         vibeMode,
         waveMode,
         waveMood,
+        waveLanguage = "any",
         setIsShuffle,
         setShuffleIndices,
         setVibeMode,
@@ -76,6 +86,7 @@ export function VibeProviderFallback() {
         setVibeSourceFeatures,
         setWaveMode,
         setWaveMood,
+        setWaveLanguage,
     } = useAudioState();
     const { data, isLoading, isError, refetch } = usePersonalizedHomeFeed(
         12,
@@ -83,6 +94,7 @@ export function VibeProviderFallback() {
         requestedMode,
         requestedMood,
         "wave",
+        requestedLanguage,
     );
 
     useEffect(() => {
@@ -99,7 +111,9 @@ export function VibeProviderFallback() {
             const selection = readWaveSelection(ownerId);
             const shouldRetuneActiveWave =
                 vibeMode &&
-                (selection.mode !== waveMode || selection.mood !== waveMood);
+                (selection.mode !== waveMode ||
+                    selection.mood !== waveMood ||
+                    selection.language !== waveLanguage);
             if (shouldRetuneActiveWave) {
                 retuneGenerationRef.current += 1;
                 setPendingRetune({
@@ -110,18 +124,30 @@ export function VibeProviderFallback() {
                 setPendingRetune(null);
                 setRequestedMode(selection.mode);
                 setRequestedMood(selection.mood);
+                setRequestedLanguage(selection.language);
             }
             setActiveMode(selection.mode);
             setActiveMood(selection.mood);
+            setActiveLanguage(selection.language);
             if (!shouldRetuneActiveWave) {
                 setWaveMode(selection.mode);
                 setWaveMood(selection.mood);
+                setWaveLanguage(selection.language);
             }
         });
         return () => {
             mounted = false;
         };
-    }, [ownerId, setWaveMode, setWaveMood, vibeMode, waveMode, waveMood]);
+    }, [
+        ownerId,
+        setWaveMode,
+        setWaveMood,
+        setWaveLanguage,
+        vibeMode,
+        waveMode,
+        waveMood,
+        waveLanguage,
+    ]);
     useEffect(() => {
         if (!pendingRetune) return;
         const generation = pendingRetune.generation;
@@ -129,6 +155,7 @@ export function VibeProviderFallback() {
             if (retuneGenerationRef.current !== generation) return;
             setRequestedMode(pendingRetune.mode);
             setRequestedMood(pendingRetune.mood);
+            setRequestedLanguage(pendingRetune.language);
         }, RETUNE_REQUEST_DEBOUNCE_MS);
         return () => window.clearTimeout(timeout);
     }, [pendingRetune]);
@@ -157,6 +184,7 @@ export function VibeProviderFallback() {
             pendingRetune.generation !== retuneGenerationRef.current ||
             pendingRetune.mode !== requestedMode ||
             pendingRetune.mood !== requestedMood ||
+            pendingRetune.language !== requestedLanguage ||
             isLoading
         ) {
             return;
@@ -199,6 +227,7 @@ export function VibeProviderFallback() {
         setVibeQueueIds(retunedQueue.map((track) => track.id));
         setWaveMode(pendingRetune.mode);
         setWaveMood(pendingRetune.mood);
+        setWaveLanguage(pendingRetune.language);
         queueMicrotask(() => setRetuneNotice("updated"));
     }, [
         currentTrack?.id,
@@ -209,6 +238,7 @@ export function VibeProviderFallback() {
         queue,
         requestedMode,
         requestedMood,
+        requestedLanguage,
         setIsShuffle,
         setShuffleIndices,
         setVibeMode,
@@ -216,6 +246,7 @@ export function VibeProviderFallback() {
         setVibeSourceFeatures,
         setWaveMode,
         setWaveMood,
+        setWaveLanguage,
         vibeMode,
     ]);
     useEffect(() => {
@@ -314,6 +345,7 @@ export function VibeProviderFallback() {
         }
         setWaveMode(activeMode);
         setWaveMood(activeMood);
+        setWaveLanguage(activeLanguage);
         setIsShuffle(false);
         setShuffleIndices([]);
         handoffStartWarmup();
@@ -327,6 +359,7 @@ export function VibeProviderFallback() {
         queue,
         activeMode,
         activeMood,
+        activeLanguage,
         setVibeMode,
         setVibeQueueIds,
         setVibeSourceFeatures,
@@ -334,6 +367,7 @@ export function VibeProviderFallback() {
         setShuffleIndices,
         setWaveMode,
         setWaveMood,
+        setWaveLanguage,
     ]);
     const hasActiveWave = vibeMode && currentTrack !== null;
     const toggleWavePlayback = useCallback(() => {
@@ -351,36 +385,48 @@ export function VibeProviderFallback() {
         queueMicrotask(() => tuneButtonRef.current?.focus());
     }, []);
     const applyDirection = useCallback(
-        (mode: WaveFeedMode, mood: WaveMood | null) => {
+        (
+            mode: WaveFeedMode,
+            mood: WaveMood | null,
+            language: PersonalizedHomeLanguage,
+        ) => {
             const shouldRetune =
-                vibeMode && (mode !== waveMode || mood !== waveMood);
+                vibeMode &&
+                (mode !== waveMode ||
+                    mood !== waveMood ||
+                    language !== waveLanguage);
             const shouldRefetchPending =
                 shouldRetune &&
                 pendingRetune?.mode === mode &&
-                pendingRetune.mood === mood;
+                pendingRetune.mood === mood &&
+                pendingRetune.language === language;
             if (shouldRetune) {
                 retuneGenerationRef.current += 1;
                 setPendingRetune({
                     mode,
                     mood,
+                    language,
                     generation: retuneGenerationRef.current,
                 });
             } else {
                 setPendingRetune(null);
                 setRequestedMode(mode);
                 setRequestedMood(mood);
+                setRequestedLanguage(language);
             }
             if (shouldRetune) setRetuneNotice(null);
             else if (!vibeMode) setRetuneNotice("saved");
             else setRetuneNotice(null);
             setActiveMode(mode);
             setActiveMood(mood);
+            setActiveLanguage(language);
             if (!vibeMode) {
                 setWaveMode(mode);
                 setWaveMood(mood);
+                setWaveLanguage(language);
             }
-            persistWaveSelection(ownerId, mode, mood);
-            replaceWaveSelection(mode, mood);
+            persistWaveSelection(ownerId, mode, mood, language);
+            replaceWaveSelection(mode, mood, language);
             setIsTuneOpen(false);
             queueMicrotask(() => tuneButtonRef.current?.focus());
             if (shouldRefetchPending) void refetch();
@@ -391,9 +437,11 @@ export function VibeProviderFallback() {
             refetch,
             setWaveMode,
             setWaveMood,
+            setWaveLanguage,
             vibeMode,
             waveMode,
             waveMood,
+            waveLanguage,
         ],
     );
 
@@ -405,6 +453,7 @@ export function VibeProviderFallback() {
     return (
         <main
             data-wave-mode={activeMode}
+            data-wave-language={activeLanguage}
             className={`relative h-full min-h-0 overflow-hidden bg-surface px-0 pt-0 ${currentTrack ? "pb-[calc(var(--app-mini-player-height)+var(--app-bottom-nav-height)+var(--safe-area-bottom)+4px)]" : "pb-[calc(var(--app-bottom-nav-height)+var(--safe-area-bottom))]"} sm:p-3 lg:p-5`}
         >
             <style>{`
@@ -674,6 +723,17 @@ export function VibeProviderFallback() {
                             <span className="font-medium text-content-secondary">
                                 {activeMoodDefinition.label}
                             </span>
+                            {activeLanguage !== "any" && (
+                                <span>
+                                    ·{" "}
+                                    {
+                                        WAVE_LANGUAGES.find(
+                                            (item) =>
+                                                item.id === activeLanguage,
+                                        )?.label
+                                    }
+                                </span>
+                            )}
                         </p>
                         <button
                             ref={tuneButtonRef}
@@ -726,9 +786,15 @@ export function VibeProviderFallback() {
                             role={isError ? "alert" : "status"}
                         >
                             <p>
-                                {isError ? ru.vibe.loadFailed : ru.vibe.empty}
+                                {isError
+                                    ? ru.vibe.loadFailed
+                                    : requestedLanguage !== "any"
+                                      ? data?.languageStatus?.pending
+                                          ? "Определяем язык подходящих вам треков. Повторите чуть позже или выберите «Любое»."
+                                          : "Пока нет подходящих треков с этим языком. Попробуйте «Любое»."
+                                      : ru.vibe.empty}
                             </p>
-                            {isError && (
+                            {(isError || requestedLanguage !== "any") && (
                                 <button
                                     type="button"
                                     onClick={
@@ -755,6 +821,7 @@ export function VibeProviderFallback() {
                 <WaveDirectionSheet
                     activeMode={activeMode}
                     activeMood={activeMood}
+                    activeLanguage={activeLanguage}
                     isWaveActive={vibeMode}
                     isRetunePending={Boolean(pendingRetune)}
                     onApply={applyDirection}

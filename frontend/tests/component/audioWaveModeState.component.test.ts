@@ -43,6 +43,11 @@ test("audio state exposes a typed Wave mode with a for-you default", async () =>
             );
         });
         assert.equal(stateRef.current?.waveMode, "for-you");
+        assert.equal(stateRef.current?.waveLanguage, "any");
+        await React.act(async () => {
+            stateRef.current?.setWaveLanguage("ru");
+        });
+        assert.equal(stateRef.current?.waveLanguage, "ru");
 
         await React.act(async () => {
             stateRef.current?.setWaveMode("new");

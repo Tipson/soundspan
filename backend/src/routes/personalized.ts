@@ -30,6 +30,7 @@ const personalizedHomeQuerySchema = z
             .optional(),
         exclude: z.string().max(5_280).optional(),
         mode: z.enum(["for-you", "new", "familiar"]).optional(),
+        language: z.enum(["any", "ru", "foreign"]).optional(),
         mood: z
             .enum([
                 "calm",
@@ -51,7 +52,11 @@ const personalizedHomeQuerySchema = z
             .optional(),
         deviceClass: z.enum(["mobile", "tablet", "desktop", "tv"]).optional(),
     })
-    .strict();
+    .strict()
+    .refine((value) => !value.language || value.surface === "wave", {
+        message: "Language selection requires Wave",
+        path: ["language"],
+    });
 const recommendationImpressionsSchema = z
     .object({
         generationId: z.string().trim().min(1).max(128),
@@ -180,6 +185,22 @@ router.use(requireAuthOrToken);
  *                 $ref: '#/components/schemas/PersonalizedTrack'
  *         degraded:
  *           type: boolean
+ *         languageStatus:
+ *           type: object
+ *           description: Optional Wave vocal-language classification coverage; unknown tracks are excluded from strict filters.
+ *           required: [selection, pending, classified, total]
+ *           properties:
+ *             selection:
+ *               type: string
+ *               enum: [any, ru, foreign]
+ *             pending:
+ *               type: boolean
+ *             classified:
+ *               type: integer
+ *               minimum: 0
+ *             total:
+ *               type: integer
+ *               minimum: 0
  *         reason:
  *           type: string
  *           nullable: true
@@ -224,6 +245,12 @@ router.use(requireAuthOrToken);
  *           type: string
  *           enum: [calm, energetic, focus, workout, favorites, forgotten]
  *         description: Independent mood or listening context applied to the Wave ranking policy
+ *       - in: query
+ *         name: language
+ *         schema:
+ *           type: string
+ *           enum: [any, ru, foreign]
+ *         description: Wave-only vocal-language filter. Unknown, mixed and instrumental recordings are excluded from ru/foreign; any preserves all candidates.
  *       - in: query
  *         name: cursor
  *         schema:
@@ -305,6 +332,9 @@ async function handlePersonalizedHome(req: Request, res: Response) {
         cursor: parsedQuery.data.cursor ?? 0,
         direction: parsedQuery.data.mode ?? "for-you",
         mood: parsedQuery.data.mood ?? null,
+        ...(parsedQuery.data.language
+            ? { language: parsedQuery.data.language }
+            : {}),
         excludeVideoIds,
         context:
             parsedQuery.data.localHour === undefined &&

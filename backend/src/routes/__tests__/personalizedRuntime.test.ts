@@ -68,6 +68,35 @@ describe("GET /api/personalized/home", () => {
         expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
     });
 
+    it.each(["any", "ru", "foreign"])(
+        "forwards Wave language %s independently",
+        async (language) => {
+            const response = await request(app)
+                .get(
+                    `/api/personalized/home?surface=wave&mode=new&mood=focus&language=${language}`,
+                )
+                .set("x-test-auth", "ok");
+            expect(response.status).toBe(200);
+            expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    language,
+                    mood: "focus",
+                    direction: "new",
+                }),
+            );
+        },
+    );
+    it.each(["language=invalid&surface=wave", "language=ru&surface=home"])(
+        "rejects invalid language scope %s",
+        async (query) => {
+            const response = await request(app)
+                .get(`/api/personalized/home?${query}`)
+                .set("x-test-auth", "ok");
+            expect(response.status).toBe(400);
+            expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
+        },
+    );
+
     it("uses the authenticated user and default shelf limit", async () => {
         const payload = {
             shelves: {

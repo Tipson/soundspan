@@ -12,7 +12,14 @@ import {
 export function WaveSelectionSynchronizer() {
     const { user } = useAuth();
     const ownerId = user?.id ?? null;
-    const { waveMode, waveMood, setWaveMode, setWaveMood } = useAudioState();
+    const {
+        waveMode,
+        waveMood,
+        waveLanguage,
+        setWaveMode,
+        setWaveMood,
+        setWaveLanguage,
+    } = useAudioState();
     const hydratedOwnerIdRef = useRef<string | null>(null);
 
     useEffect(() => {
@@ -27,11 +34,20 @@ export function WaveSelectionSynchronizer() {
                 if (hydratedOwnerIdRef.current !== ownerId) return;
                 setWaveMode(selection.mode);
                 setWaveMood(selection.mood);
+                setWaveLanguage(selection.language);
             });
             return;
         }
-        persistWaveSelection(ownerId, waveMode, waveMood);
-    }, [ownerId, setWaveMode, setWaveMood, waveMode, waveMood]);
+        persistWaveSelection(ownerId, waveMode, waveMood, waveLanguage);
+    }, [
+        ownerId,
+        setWaveMode,
+        setWaveMood,
+        setWaveLanguage,
+        waveMode,
+        waveMood,
+        waveLanguage,
+    ]);
 
     return null;
 }

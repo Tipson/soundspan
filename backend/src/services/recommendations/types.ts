@@ -74,6 +74,7 @@ export interface RecommendRequest {
         surface: RecommendationSurface;
         direction: RecommendationDirection;
         mood?: RecommendationMood | null;
+        language?: import("./recordingLanguage").WaveLanguage;
     };
     sessionId: string;
     context?: RecommendationRequestContext;

@@ -110,6 +110,9 @@ function requestContext(request: RecommendRequest): Record<string, unknown> {
                   : "evening";
     return {
         ...request.context,
+        ...(request.intent.language
+            ? { language: request.intent.language }
+            : {}),
         ...(timeBucket ? { timeBucket } : {}),
     };
 }
