@@ -137,6 +137,55 @@ describe("plays routes integration", () => {
         expect(historyRes.body).toEqual({ error: "Not authenticated" });
     });
 
+    it("isolates explicitly marked diagnostic playback without changing taste or scrobbles", async () => {
+        const res = await request(app)
+            .post("/api/plays")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .set("X-Soundspan-Diagnostic", "playback")
+            .send({ trackId: "track-1", playContext: "wave" });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+            id: "diagnostic-playback",
+            diagnostic: true,
+        });
+        const engagement = await request(app)
+            .patch(`/api/plays/${res.body.id}/engagement`)
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .set("X-Soundspan-Diagnostic", "playback")
+            .send({
+                listenedSeconds: 2,
+                completionRatio: 0.01,
+                outcome: "skipped",
+            });
+        expect(engagement.body).toEqual({ success: true, diagnostic: true });
+        expect(mockPlayCreate).not.toHaveBeenCalled();
+        expect(mockPlayUpdateMany).not.toHaveBeenCalled();
+        expect(mockAttributePlayback).not.toHaveBeenCalled();
+        expect(mockForwardScrobbleIsolated).not.toHaveBeenCalled();
+        expect(mockForwardTrackReferenceIsolated).not.toHaveBeenCalled();
+    });
+
+    it("keeps auth and validation for diagnostic requests", async () => {
+        const unauth = await request(app)
+            .post("/api/plays")
+            .set("X-Soundspan-Diagnostic", "playback")
+            .send({ trackId: "track-1" });
+        expect(unauth.status).toBe(401);
+        const invalid = await request(app)
+            .post("/api/plays")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .set("X-Soundspan-Diagnostic", "playback")
+            .send({});
+        expect(invalid.status).toBe(400);
+        const invalidEngagement = await request(app)
+            .patch("/api/plays/diagnostic-playback/engagement")
+            .set(AUTH_HEADER, AUTH_VALUE)
+            .set("X-Soundspan-Diagnostic", "playback")
+            .send({ listenedSeconds: -1 });
+        expect(invalidEngagement.status).toBe(400);
+        expect(mockPlayCreate).not.toHaveBeenCalled();
+    });
+
     it("POST /api/plays creates a play record with trackId", async () => {
         const res = await request(app)
             .post("/api/plays")

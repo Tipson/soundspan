@@ -403,6 +403,13 @@ router.delete("/history", async (req, res) => {
  * /api/plays:
  *   post:
  *     summary: Log a new play for a track
+ *     description: X-Soundspan-Diagnostic playback validates the payload but returns a diagnostic ID without storing playback or forwarding scrobbles.
+ *     parameters:
+ *       - in: header
+ *         name: X-Soundspan-Diagnostic
+ *         schema:
+ *           type: string
+ *           enum: [playback]
  *     tags: [Plays]
  *     security:
  *       - apiKeyAuth: []
@@ -492,6 +499,11 @@ router.post("/", async (req, res) => {
             return res.status(400).json({ error: "retired_provider" });
         }
         const payload = playSchema.parse(req.body);
+        // Explicit per-request diagnostics, never infer testing from fast skips.
+        // Do not create a Play, attribute exposure, resolve metadata or scrobble.
+        if (req.headers?.["x-soundspan-diagnostic"] === "playback") {
+            return res.json({ id: "diagnostic-playback", diagnostic: true });
+        }
         const recommendationContext = await recommendationContextData(
             userId,
             payload,
@@ -617,10 +629,16 @@ router.post("/", async (req, res) => {
  * /api/plays/{playId}/engagement:
  *   patch:
  *     summary: Record the final playback outcome used by recommendations
+ *     description: X-Soundspan-Diagnostic playback validates the payload and acknowledges it without changing engagement or recommendation attribution.
  *     tags: [Plays]
  *     security:
  *       - apiKeyAuth: []
  *     parameters:
+ *       - in: header
+ *         name: X-Soundspan-Diagnostic
+ *         schema:
+ *           type: string
+ *           enum: [playback]
  *       - in: path
  *         name: playId
  *         required: true
@@ -671,6 +689,10 @@ router.patch("/:playId/engagement", async (req, res) => {
                 ...(!engagement.success ? engagement.error.issues : []),
             ],
         });
+    }
+
+    if (req.headers?.["x-soundspan-diagnostic"] === "playback") {
+        return res.json({ success: true, diagnostic: true });
     }
 
     try {

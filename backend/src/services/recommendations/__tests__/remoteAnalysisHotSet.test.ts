@@ -822,6 +822,8 @@ describe("remote recommendation hot set", () => {
             { trackYtMusicId: "yt-row", trackTidalId: null },
             { trackYtMusicId: "yt-row", trackTidalId: null },
             { trackYtMusicId: "single-row", trackTidalId: null },
+            { trackYtMusicId: "failed-row", outcome: "failed" },
+            { trackYtMusicId: "failed-row", outcome: "failed" },
         ]);
         mockPrisma.canonicalRecording.findMany
             .mockResolvedValueOnce([])
@@ -958,7 +960,11 @@ describe("remote recommendation hot set", () => {
         }
         expect(mockPrisma.play.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: { userId: "alice", trackYtMusicId: { not: null } },
+                where: {
+                    userId: "alice",
+                    trackYtMusicId: { not: null },
+                    OR: [{ outcome: null }, { outcome: { not: "failed" } }],
+                },
                 take: 500,
             }),
         );

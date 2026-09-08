@@ -360,7 +360,14 @@ export async function loadAccountHotSetCandidates(
                 trackYtMusic: {
                     is: {
                         plays: {
-                            some: { userId, playContext: "wave" },
+                            some: {
+                                userId,
+                                playContext: "wave",
+                                OR: [
+                                    { outcome: null },
+                                    { outcome: { not: "failed" } },
+                                ],
+                            },
                         },
                     },
                 },
@@ -374,6 +381,14 @@ export async function loadAccountHotSetCandidates(
                         plays: {
                             some: {
                                 userId,
+                                AND: [
+                                    {
+                                        OR: [
+                                            { outcome: null },
+                                            { outcome: { not: "failed" } },
+                                        ],
+                                    },
+                                ],
                                 OR: [
                                     { outcome: "completed" },
                                     { completionRatio: { gte: 0.85 } },
@@ -557,13 +572,15 @@ async function loadRepeatedHotSetMappings(
         where: {
             userId,
             trackYtMusicId: { not: null },
+            OR: [{ outcome: null }, { outcome: { not: "failed" } }],
         },
         orderBy: { playedAt: "desc" },
         take: MAX_REPEAT_SIGNAL_PLAYS,
-        select: { trackYtMusicId: true },
+        select: { trackYtMusicId: true, outcome: true },
     });
     const counts = new Map<string, number>();
     for (const play of plays) {
+        if (play.outcome === "failed") continue;
         const identity = play.trackYtMusicId
             ? `youtube:${play.trackYtMusicId}`
             : null;

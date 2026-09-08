@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased diagnostic playback isolation
+
+- Explicit `X-Soundspan-Diagnostic: playback` requests to play creation and engagement validate authentication and payloads without writing listening history, recommendation playback attribution or scrobbles. Ordinary skips are not reclassified as tests.
+- Failed playback attempts do not qualify as Wave, completed or repeated-listening signals for background audio analysis; liked and saved recordings remain eligible independently.
+
 ## Unreleased provider recovery and analysis admission
 
 - Keep unheard songs by familiar liked artists competitive in Discoveries; remove the fixed unknown-artist bonus while retaining personal affinity and song exclusions.
