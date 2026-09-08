@@ -261,9 +261,9 @@ test("provider radio advances its cursor and sends the bounded queue exclusions 
     await Promise.resolve();
     feedRequests[0].resolve({
         shelves: {
-            discovery: [firstFresh],
+            discovery: [makeProviderTrack("discovery-decoy")],
             quickPicks: [],
-            listenAgain: [],
+            listenAgain: [firstFresh],
         },
         degraded: false,
         reason: null,
@@ -285,9 +285,9 @@ test("provider radio advances its cursor and sends the bounded queue exclusions 
 
     feedRequests[1].resolve({
         shelves: {
-            discovery: [makeProviderTrack("CCCCCCCCCCC")],
+            discovery: [makeProviderTrack("another-discovery-decoy")],
             quickPicks: [],
-            listenAgain: [],
+            listenAgain: [makeProviderTrack("CCCCCCCCCCC")],
         },
         degraded: false,
         reason: null,

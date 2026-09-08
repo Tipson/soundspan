@@ -410,7 +410,7 @@ for (const recommendationState of ["error", "empty"] as const) {
     });
 }
 
-test("language retune preserves direction and mood, and replaces the old queue only with matching results", async () => {
+test("a retired language URL preserves direction and mood without a hidden language restriction", async () => {
     window.history.replaceState(
         {},
         "",
@@ -424,8 +424,8 @@ test("language retune preserves direction and mood, and replaces the old queue o
                 quickPicks: [],
                 listenAgain: [],
                 discovery:
-                    mode === "new" && mood === "focus" && language === "ru"
-                        ? [{ id: "russian-personalized" }]
+                    mode === "new" && mood === "focus" && language === "any"
+                        ? [{ id: "personalized-discovery" }]
                         : [],
             },
         },
@@ -447,14 +447,14 @@ test("language retune preserves direction and mood, and replaces the old queue o
         await new Promise((resolve) => window.setTimeout(resolve, 340));
     });
     assert.deepEqual(calls.playTracks, [
-        [[{ id: "russian-personalized" }], 0, true],
+        [[{ id: "personalized-discovery" }], 0, true],
     ]);
-    assert.deepEqual(calls.waveLanguage, ["ru"]);
+    assert.deepEqual(calls.waveLanguage, ["any"]);
     assert.equal(
         container
             .querySelector("[data-wave-language]")
             ?.getAttribute("data-wave-language"),
-        "ru",
+        "any",
     );
     await React.act(async () => root.unmount());
     container.remove();

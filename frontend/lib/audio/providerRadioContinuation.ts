@@ -5,6 +5,7 @@ import type {
     PersonalizedTrack,
 } from "@/features/home/types";
 import type { Track, WaveMode } from "@/lib/audio-state-context";
+import { selectWaveTracks } from "@/features/home/selectWaveTracks";
 import {
     appendRecommendationClientContext,
     getRecommendationClientContext,
@@ -127,20 +128,18 @@ export function toProviderPlaybackTrack(
     };
 }
 
-/** Selects fresh, directly playable continuation rows across provider shelves. */
+/** Continues the selected Wave mode using the same lane policy as its first page. */
 export function collectProviderRadioContinuation(
     feed: PersonalizedHomeFeed,
     existingQueue: ProviderQueueEntry[],
     limit: number,
+    mode: WaveMode = "for-you",
 ): Track[] {
     const excludedTrackIds = new Set(existingQueue.map(providerQueueIdentity));
     const selected: Track[] = [];
     const boundedLimit = Math.max(0, Math.floor(limit));
-    const candidates = [
-        ...feed.shelves.discovery,
-        ...feed.shelves.quickPicks,
-        ...feed.shelves.listenAgain,
-    ];
+    if (boundedLimit === 0) return [];
+    const candidates = selectWaveTracks(feed.shelves, mode);
 
     for (const candidate of candidates) {
         if (

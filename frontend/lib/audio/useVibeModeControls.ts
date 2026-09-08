@@ -191,6 +191,7 @@ export function useVibeModeControls({
                                 ? playbackContextRef.current.queue
                                 : state.queue,
                             25,
+                            state.waveMode,
                         );
                         cursor =
                             typeof feed.nextCursor === "number"
@@ -247,6 +248,7 @@ export function useVibeModeControls({
                                 feed,
                                 latestContext.queue,
                                 25,
+                                latestContext.waveMode,
                             );
                         if (freshContinuation.length === 0) {
                             return { success: false, trackCount: 0 };
@@ -307,6 +309,7 @@ export function useVibeModeControls({
                                 feed,
                                 previousQueue,
                                 25,
+                                state.waveMode,
                             );
                         return freshContinuation.length > 0
                             ? [...previousQueue, ...freshContinuation]

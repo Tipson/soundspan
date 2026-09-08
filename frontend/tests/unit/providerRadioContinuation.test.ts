@@ -25,7 +25,77 @@ const personalized = (videoId: string, title = videoId) => ({
     youtubeVideoId: videoId,
 });
 
-test("builds fresh provider continuation with discovery first and no repeats", () => {
+test("keeps Discoveries continuation in the selected lane, without saved backfill", () => {
+    const feed: PersonalizedHomeFeed = {
+        shelves: {
+            discovery: [personalized("new-a"), personalized("new-b")],
+            quickPicks: [personalized("liked-a")],
+            listenAgain: [personalized("known-a")],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
+    assert.deepEqual(
+        collectProviderRadioContinuation(feed, [], 25, "new").map(
+            (t) => t.youtubeVideoId,
+        ),
+        ["new-a", "new-b"],
+    );
+    assert.deepEqual(
+        collectProviderRadioContinuation(
+            feed,
+            [personalized("new-a"), personalized("new-b")],
+            25,
+            "new",
+        ),
+        [],
+    );
+});
+
+test("keeps Familiar continuation out of the discovery lane", () => {
+    const feed: PersonalizedHomeFeed = {
+        shelves: {
+            discovery: [personalized("new")],
+            quickPicks: [personalized("liked")],
+            listenAgain: [personalized("known")],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
+    assert.deepEqual(
+        collectProviderRadioContinuation(feed, [], 25, "familiar").map(
+            (t) => t.youtubeVideoId,
+        ),
+        ["known"],
+    );
+    assert.deepEqual(
+        collectProviderRadioContinuation(
+            { ...feed, shelves: { ...feed.shelves, listenAgain: [] } },
+            [],
+            25,
+            "familiar",
+        ).map((t) => t.youtubeVideoId),
+        ["liked"],
+    );
+});
+
+test("respects an empty continuation budget", () => {
+    const feed: PersonalizedHomeFeed = {
+        shelves: {
+            discovery: [personalized("new")],
+            quickPicks: [],
+            listenAgain: [],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
+    assert.deepEqual(collectProviderRadioContinuation(feed, [], 0, "new"), []);
+});
+
+test("uses the same interleaved For You selection as the first Wave page", () => {
     const feed: PersonalizedHomeFeed = {
         shelves: {
             discovery: [personalized("seen"), personalized("fresh-a")],
@@ -50,10 +120,10 @@ test("builds fresh provider continuation with discovery first and no repeats", (
 
     assert.deepEqual(
         tracks.map((track) => track.youtubeVideoId),
-        ["fresh-a", "fresh-b", "fresh-c"],
+        ["fresh-b", "fresh-a"],
     );
     assert.equal(tracks[0].provider?.source, "youtube");
-    assert.equal(tracks[0].album?.coverArt, "https://img.test/fresh-a.jpg");
+    assert.equal(tracks[0].album?.coverArt, "https://img.test/fresh-b.jpg");
 });
 
 test("recognizes only directly playable YouTube provider tracks", () => {

@@ -2,6 +2,8 @@
 
 ## Unreleased Wave delivery and analysis reuse
 
+- Preserve the selected Wave mode during queue continuation and adaptive refresh: Discoveries stays in its discovery lane, Familiar stays familiar, and For You uses the initial-page interleaving policy. Empty continuation budgets return no tracks.
+- Allow a bounded 30-second FFmpeg startup-version probe on cold storage, preserving unsupported-version and execution-failure checks. Playback timeouts are unchanged.
 - Resolve existing provider-to-recording mappings in bounded request-local batches. Preserve candidate order, aliases, stale mapping checks and individual fallback without changing recommendation weights.
 - Reuse successful HTTPS Googlevideo redirects across validated progressive byte ranges, avoiding a repeated redirect for every fragment.
 - Let background audio analysis reuse a completed HIGH-quality spool when MEDIUM is absent. Keep playback quality selection exact and pin the actual file against eviction; incomplete and lower-quality files remain ineligible.
