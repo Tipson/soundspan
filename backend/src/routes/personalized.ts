@@ -224,6 +224,12 @@ router.use(requireAuthOrToken);
  *     security:
  *       - apiKeyAuth: []
  *     parameters:
+ *       - in: header
+ *         name: X-Soundspan-Diagnostic
+ *         schema:
+ *           type: string
+ *           enum: [playback]
+ *         description: Compute the same personalized feed without persisting generations, impressions, analysis admission or recommendation metrics.
  *       - in: query
  *         name: limit
  *         schema:
@@ -326,6 +332,9 @@ async function handlePersonalizedHome(req: Request, res: Response) {
     const limit = parsedQuery.data.limit ?? DEFAULT_SHELF_LIMIT;
     const feed = await unifiedRecommendationService.getPersonalizedFeed({
         userId,
+        ...(req.headers["x-soundspan-diagnostic"] === "playback"
+            ? { diagnostic: true }
+            : {}),
         sessionId: parsedQuery.data.sessionId ?? randomUUID(),
         surface: parsedQuery.data.surface ?? "home",
         limit,
@@ -367,6 +376,13 @@ router.get("/home", asyncHandler(handlePersonalizedHome));
  *     tags: [Personalized]
  *     security:
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Soundspan-Diagnostic
+ *         schema:
+ *           type: string
+ *           enum: [playback]
+ *         description: Validate the batch without recording viewed impressions.
  *     requestBody:
  *       required: true
  *       content:
@@ -417,6 +433,9 @@ router.post(
             return sendRouteError(res, 401, "Authentication required", {
                 code: "AUTH_REQUIRED",
             });
+        }
+        if (req.headers["x-soundspan-diagnostic"] === "playback") {
+            return res.json({ recorded: 0, diagnostic: true });
         }
         const recorded = await recommendationExposureStore.markViewed({
             userId,

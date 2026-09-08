@@ -2,6 +2,60 @@ import { UnifiedRecommendationService } from "../recommendationService";
 import type { RecordEngineGenerationInput } from "../engine";
 
 describe("unified recommendation compatibility facade", () => {
+    it.each(["baseline", "shadow", "active"] as const)(
+        "isolates diagnostic Wave generations in %s mode",
+        async (mode) => {
+            const recordGeneration = jest.fn().mockResolvedValue("ordinary");
+            const scheduleHotSet = jest.fn().mockResolvedValue(undefined);
+            const service = new UnifiedRecommendationService({
+                mode,
+                hybridRolloutPercent: 50,
+                explorationRate: 0,
+                loadPersonalizedFeed: async () => ({
+                    shelves: {
+                        listenAgain: [],
+                        quickPicks: [],
+                        discovery: [track("one")],
+                    },
+                    degraded: false,
+                    reason: null,
+                    seedCount: 1,
+                    nextCursor: 1,
+                }),
+                resolveCanonical: async (c) => ({
+                    id: c.id,
+                    canonicalKey: c.canonicalKey,
+                }),
+                loadRecentExposures: async () => [],
+                loadDislikedCanonicalKeys: async () => new Set(),
+                loadTasteContext: async () => ({
+                    positiveCentroids: [],
+                    negativeCentroids: [],
+                }),
+                recordGeneration,
+                scheduleHotSet,
+                loadSimilarCandidates: jest.fn(),
+                now: () => new Date(),
+            });
+            const input = {
+                userId: "alice",
+                sessionId: "probe",
+                surface: "wave" as const,
+                limit: 12,
+                cursor: 0,
+                direction: "for-you" as const,
+                mood: null,
+                excludeVideoIds: [],
+                diagnostic: true,
+            };
+            const feed = await service.getPersonalizedFeed(input);
+            await new Promise((resolve) => setImmediate(resolve));
+            expect(feed.generationId).toBe("diagnostic-recommendation");
+            expect(feed.shelves.discovery).toHaveLength(1);
+            expect(recordGeneration).not.toHaveBeenCalled();
+            expect(scheduleHotSet).not.toHaveBeenCalled();
+        },
+    );
     it.each(["baseline", "active"] as const)(
         "applies strict language before %s ranking and exposure persistence",
         async (mode) => {
@@ -12,29 +66,25 @@ describe("unified recommendation compatibility facade", () => {
                 mode,
                 hybridRolloutPercent: 100,
                 explorationRate: 0,
-                loadPersonalizedFeed: jest
-                    .fn()
-                    .mockResolvedValue({
-                        shelves: {
-                            listenAgain: [],
-                            quickPicks: [],
-                            discovery: [
-                                track("ru"),
-                                track("foreign"),
-                                track("unknown"),
-                            ],
-                        },
-                        degraded: false,
-                        reason: null,
-                        seedCount: 3,
-                        nextCursor: 1,
-                    }),
-                prepareLanguages: jest
-                    .fn()
-                    .mockResolvedValue({
-                        languages: ["ru", "foreign", null],
-                        pending: true,
-                    }),
+                loadPersonalizedFeed: jest.fn().mockResolvedValue({
+                    shelves: {
+                        listenAgain: [],
+                        quickPicks: [],
+                        discovery: [
+                            track("ru"),
+                            track("foreign"),
+                            track("unknown"),
+                        ],
+                    },
+                    degraded: false,
+                    reason: null,
+                    seedCount: 3,
+                    nextCursor: 1,
+                }),
+                prepareLanguages: jest.fn().mockResolvedValue({
+                    languages: ["ru", "foreign", null],
+                    pending: true,
+                }),
                 resolveCanonical: async (candidate) => ({
                     id: candidate.id,
                     canonicalKey: candidate.canonicalKey,

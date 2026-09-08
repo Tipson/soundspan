@@ -57,6 +57,8 @@ export interface PersonalizedRecommendationInput {
     language?: WaveLanguage;
     excludeVideoIds: string[];
     context?: RecommendationRequestContext;
+    /** Authenticated playback probe: compute normally without user-signal writes. */
+    diagnostic?: boolean;
 }
 
 export type PersonalizedRecommendationFeed = PersonalizedHomeFeed & {
@@ -164,11 +166,21 @@ export class UnifiedRecommendationService {
 
     private engine(
         loadCandidates: RecommendationEngineDependencies["loadCandidates"],
+        diagnostic = false,
     ): RecommendationEngine {
-        return new RecommendationEngine({
+        const dependencies = {
             ...this.dependencies,
             loadCandidates,
-        });
+        };
+        if (!diagnostic) return new RecommendationEngine(dependencies);
+        return new RecommendationEngine(
+            {
+                ...dependencies,
+                recordGeneration: async () => "diagnostic-recommendation",
+                scheduleHotSet: async () => {},
+            },
+            { recordGeneration: () => {} },
+        );
     }
 
     async getPersonalizedFeed(
@@ -222,7 +234,7 @@ export class UnifiedRecommendationService {
                           ? [sourceFeed.reason]
                           : [],
             };
-        });
+        }, input.diagnostic);
         const result = await engine.recommend({
             userId: input.userId,
             intent: {

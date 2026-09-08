@@ -11,6 +11,7 @@ import { logger } from "../utils/logger";
 import { parseStoredTasteProfile } from "./tasteProfile";
 import { listenBrainzRecommendationAdapter } from "./recommendations/listenBrainzAdapter";
 import { isWaveMusicCandidate } from "./recommendations/wavePolicy";
+import { isEarlyRecommendationSkip } from "./recommendations/playbackEvidence";
 
 const PLAY_SIGNAL_READ_LIMIT = 1_000;
 const TASTE_PLAY_SIGNAL_LIMIT = 100;
@@ -347,13 +348,14 @@ function addScore(scores: Map<string, number>, key: string, delta: number) {
 function playbackSignalScore(signal: PersonalizedPlaybackSignal): number {
     const ratio = signal.completionRatio ?? 0;
     const listenedSeconds = signal.listenedSeconds ?? 0;
-    if (signal.outcome === "skipped") {
-        return ratio <= 0.2 || listenedSeconds < 30 ? -8 : -2;
-    }
     // Provider/network failures are availability telemetry, never evidence of
     // dislike. Penalizing them made transient YouTube failures distort taste.
     if (signal.outcome === "failed") return 0;
+    if (isEarlyRecommendationSkip(signal)) return -8;
     if (signal.outcome === "completed" || ratio >= 0.85) return 6;
+    // A late or unmeasured Next action is not a dislike. Match the Hybrid
+    // interpretation; retain near-complete listening as a positive signal.
+    if (signal.outcome === "skipped") return 0;
     if (
         signal.outcome === "meaningful" ||
         ratio >= 0.5 ||

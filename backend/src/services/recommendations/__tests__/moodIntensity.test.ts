@@ -34,6 +34,18 @@ test("equally loud songs separate by perceptual intensity, not mastering volume"
     );
 });
 
+test("focus does not prefer aggressive instrumental music over a gentle vocal song", () => {
+    const gentle = track(0.2);
+    gentle.audioFeatures!.instrumentalness = 0.1;
+    gentle.audioFeatures!.danceability = 0.2;
+    const aggressive = track(0.95);
+    aggressive.audioFeatures!.instrumentalness = 0.95;
+    aggressive.audioFeatures!.danceability = 0.6;
+    expect(moodFeatureScore(gentle, "focus")).toBeGreaterThan(
+        moodFeatureScore(aggressive, "focus"),
+    );
+});
+
 test("zero intensity is a valid calm measurement and missing intensity uses energy", () => {
     expect(moodFeatureScore(track(0), "calm")).toBeCloseTo(0.76);
     expect(moodFeatureScore(track(null), "energetic")).toBeCloseTo(0.85);

@@ -917,6 +917,64 @@ describe("PersonalizedCatalogService", () => {
         expect(result.shelves.listenAgain).toEqual([]);
     });
 
+    it.each([
+        [null, null],
+        [null, 100],
+        [0.6, null],
+    ])(
+        "does not invent an early skip from ratio=%s seconds=%s",
+        async (completionRatio, listenedSeconds) => {
+            const track = storedTrack("playlist-seed");
+            const getRadio = jest.fn(async (seedVideoId: string) => ({
+                playlistId: null,
+                seedVideoId,
+                tracks: [],
+            }));
+            const service = createService({
+                loadSignals: async () => ({
+                    ...emptySignals(),
+                    playlistTracks: [track],
+                    playbackSignals: [
+                        playbackSignal(track.videoId, "skipped", {
+                            track,
+                            completionRatio,
+                            listenedSeconds,
+                        }),
+                    ],
+                }),
+                getRadio,
+            });
+            await service.getHomeFeed("user-1", 12);
+            expect(getRadio).toHaveBeenCalledWith(
+                track.videoId,
+                expect.any(Number),
+            );
+        },
+    );
+
+    it("treats a measured near-complete skip as positive listening", async () => {
+        const getRadio = jest.fn(async (seedVideoId: string) => ({
+            playlistId: null,
+            seedVideoId,
+            tracks: [],
+        }));
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                recentPlays: [storedTrack("finished")],
+                playbackSignals: [
+                    playbackSignal("finished", "skipped", {
+                        completionRatio: 0.95,
+                        listenedSeconds: 171,
+                    }),
+                ],
+            }),
+            getRadio,
+        });
+        await service.getHomeFeed("user-1", 12);
+        expect(getRadio).toHaveBeenCalledWith("finished", expect.any(Number));
+    });
+
     it("does not treat a provider playback failure as evidence of user taste", async () => {
         const failedTrack = storedTrack("failed-start");
         const loadSignals = jest.fn(async () => ({

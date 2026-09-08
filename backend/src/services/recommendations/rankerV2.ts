@@ -144,10 +144,12 @@ export function moodFeatureScore(
         case "energetic":
             return energy * 0.7 + danceability * 0.3;
         case "focus":
+            // Low distraction matters more than absence of vocals: heavy
+            // instrumental tracks must not outrank gentle personal music.
             return (
-                instrumentalness * 0.6 +
-                (1 - danceability) * 0.2 +
-                (1 - Math.abs(energy - 0.45)) * 0.2
+                (1 - energy) * 0.5 +
+                instrumentalness * 0.35 +
+                (1 - danceability) * 0.15
             );
         case "workout":
             return energy * 0.55 + danceability * 0.45;

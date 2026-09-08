@@ -37,6 +37,18 @@ asset name, emits bounded mono float32 PCM, discards decoder stderr, and returns
 safe failures to canonical persistence and cleanup without first invoking
 Essentia's codec runtime. Ordinary library paths continue to use MonoLoader.
 
+Remote scalar analysis uses at most 90 contiguous seconds from the center of
+the decoded file, so a long musical/video introduction does not represent the
+entire recording. FFprobe duration inspection shares the decoder's total time
+budget; short files use their available audio. Unavailable duration metadata
+falls back to a bounded prefix with a warning. Scalar version
+`2.1b6-enhanced-v4-center` distinguishes these results from prefix analysis;
+older completed results are retained until a scoped reanalysis is requested.
+This is excerpt analysis, not proof that every section has the same mood.
+Canonical DCLAP embeddings retain their own full-file, bounded segment recipe
+and embedding-space identity. Feature extraction exceptions produce a failed
+result instead of persisting partially filled fields as completed.
+
 Set `ACOUSTID_API_KEY` to enable claim-based AcoustID lookups. One shared client
 limits requests to three per second and uses bounded timeouts and retries. Local
 track fingerprints retain their recording and release-group lookup, while

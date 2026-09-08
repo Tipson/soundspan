@@ -68,6 +68,17 @@ describe("GET /api/personalized/home", () => {
         expect(mockGetPersonalizedFeed).not.toHaveBeenCalled();
     });
 
+    it("passes explicit playback diagnostics to the recommendation engine", async () => {
+        const response = await request(app)
+            .get("/api/personalized/home?surface=wave")
+            .set("x-test-auth", "ok")
+            .set("x-soundspan-diagnostic", "playback");
+        expect(response.status).toBe(200);
+        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect.objectContaining({ diagnostic: true }),
+        );
+    });
+
     it.each(["any", "ru", "foreign"])(
         "forwards Wave language %s independently",
         async (language) => {
@@ -292,6 +303,27 @@ describe("POST /api/personalized/impressions", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockMarkViewed.mockResolvedValue(2);
+    });
+
+    it("validates diagnostics without recording viewed impressions", async () => {
+        const send = (body: Record<string, unknown>) =>
+            request(app)
+                .post("/api/personalized/impressions")
+                .set("x-test-auth", "ok")
+                .set("x-soundspan-diagnostic", "playback")
+                .send(body);
+        expect(
+            (
+                await send({
+                    generationId: "diagnostic-recommendation",
+                    tracks: [{ provider: "youtube", providerTrackId: "one" }],
+                })
+            ).body,
+        ).toEqual({ recorded: 0, diagnostic: true });
+        expect(
+            (await send({ generationId: "invalid", tracks: [] })).status,
+        ).toBe(400);
+        expect(mockMarkViewed).not.toHaveBeenCalled();
     });
 
     it("records only authenticated explicit recommendation impressions", async () => {

@@ -11,11 +11,17 @@ Authentication and body validation remain required. Creation returns
 stored and no scrobble is forwarded. No schema migration or history deletion is
 involved. Requests without the exact header retain ordinary behavior.
 
-This isolates listening and skip evidence, not the whole account: likes,
-playlist edits, settings, playback-state sync, recommendation generation and
-viewed impressions are separate writes. Use a dedicated `isTestAccount` fixture
-for whole-platform tests; read-only recommendation audits must override the
-generation recorder and analysis scheduler. Do not infer testing from short
+Send the same header with `GET /api/personalized/home` and
+`POST /api/personalized/impressions` for Home/Wave tests. The feed computes its
+ordinary personalized ranking but returns `generationId=diagnostic-recommendation`
+without storing served or shadow generations, recommendation metrics or hot-set
+analysis jobs. Impressions validate auth/body and return `{ recorded: 0, diagnostic: true }`.
+Canonical identity and shared provider/feature caches can still be populated.
+
+This isolates listening, skip and Home/Wave recommendation evidence, not the
+whole account: likes, playlist edits, settings, playback-state sync and other
+recommendation endpoints remain separate writes. Use a dedicated `isTestAccount`
+fixture for whole-platform tests. Do not infer testing from short
 listening duration or erase a real listener's historical skips.
 
 An acknowledged diagnostic request is not evidence of successful audio output.

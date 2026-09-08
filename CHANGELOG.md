@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased Wave evidence and analysis excerpt
+
+- Analyze the center of long remote recordings instead of only their first 90 seconds; retain bounded decoding, safe duration fallback and versioned results. Feature extraction exceptions cannot silently mark partial analysis completed.
+- Align baseline catalog skip evidence with Hybrid: missing measurements and late Next actions are neutral; near-complete listening remains positive and measured early skips still demote taste.
+- Focus favors low perceived intensity over the absence of vocals, avoiding the automatic preference for aggressive instrumental music. Other mood and taste weights are unchanged.
+- Extend explicit playback diagnostics to Home/Wave generation and viewed impressions without recommendation-history, metrics or analysis-job writes; normal authenticated behavior remains unchanged.
+
 ## Unreleased diagnostic playback isolation
 
 - Explicit `X-Soundspan-Diagnostic: playback` requests to play creation and engagement validate authentication and payloads without writing listening history, recommendation playback attribution or scrobbles. Ordinary skips are not reclassified as tests.
@@ -16,7 +23,6 @@
 ## Unreleased Wave mood intensity
 
 - Use the already analysed perceptual arousal in Wave mood ranking instead of saturated RMS energy, retaining energy as the legacy fallback. Give explicit calm, energetic, focus and workout choices a stronger bounded influence in both rollout arms; neutral and favorites modes retain their ranking weights.
-
 
 ## Unreleased Wave language filter
 
@@ -37,6 +43,7 @@ All notable changes to soundspan are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [Unreleased]
 
 - Preserve browser seeking during progressive YouTube Music playback by advertising the validated full byte length and returning a proper partial response for an open initial range, without waiting for the complete download.
