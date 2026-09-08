@@ -206,9 +206,23 @@ export class RemoteAnalysisHotSetScheduler {
                 });
             }
         }
+        const collectionCandidates: RecommendationCandidate[] = [];
+        const listeningCandidates: RecommendationCandidate[] = [];
+        for (const candidate of accountCandidates) {
+            const isCollection = candidate.candidateSources.some(
+                (source) => source === "hot-liked" || source === "hot-playlist",
+            );
+            (isCollection ? collectionCandidates : listeningCandidates).push(
+                candidate,
+            );
+        }
+        // Give saved music its own fair lane, instead of making it compete
+        // with four listening signals inside half of the admission capacity.
+        // Empty lanes yield their slots; the global 48-record cap is unchanged.
         let prioritizedCandidates = selectFairHotSetCandidates([
             input.candidates,
-            accountCandidates,
+            collectionCandidates,
+            listeningCandidates,
         ]);
         try {
             await this.dependencies.enrichIdentities?.(

@@ -179,6 +179,7 @@ export function createPlaybackErrorHandler({
         }
 
         let confirmedProviderUnavailableFailureKey: string | null = null;
+        let preserveProviderQueue = providerStartupFailure;
         if (playbackType === "track") {
             logPlaybackClientMetric("player.playback_error", {
                 trackId: currentTrack?.id ?? null,
@@ -205,13 +206,23 @@ export function createPlaybackErrorHandler({
                 setIsBuffering(true);
                 return;
             }
-            const unavailableOutcome =
-                await attemptUnavailableYtMusicRecovery(currentTrack);
+            const unavailableOutcome = providerStartupFailure
+                ? "failed"
+                : await attemptUnavailableYtMusicRecovery(currentTrack);
             if (
                 unavailableOutcome === "replaced" ||
                 unavailableOutcome === "stale"
             ) {
                 return;
+            }
+            // A failed provider probe (including HTTP 503 during verification)
+            // is not evidence that this song, or the next song, is unavailable.
+            if (
+                sourceType === "ytmusic" &&
+                (unavailableOutcome === "failed" ||
+                    unavailableOutcome === "original_available")
+            ) {
+                preserveProviderQueue = true;
             }
             // `no_candidate` is the only terminal provider outcome backed by
             // the server contract: the original returned 404/451 and no exact
@@ -243,8 +254,15 @@ export function createPlaybackErrorHandler({
                     ? "YouTube"
                     : "YouTube Music";
             toast.error(
-                `Не удалось воспроизвести «${currentTrack.title}» через ${source}. ${queueLength > 1 ? "Пробуем следующий трек." : "Повторите попытку или выберите другую версию."}`,
-                { duration: 5000 },
+                preserveProviderQueue
+                    ? `${source} временно недоступен. Очередь сохранена — повторите воспроизведение чуть позже.`
+                    : `Не удалось воспроизвести «${currentTrack.title}» через ${source}. ${queueLength > 1 ? "Пробуем следующий трек." : "Повторите попытку или выберите другую версию."}`,
+                {
+                    duration: 5000,
+                    ...(preserveProviderQueue
+                        ? { id: "provider-playback-unavailable" }
+                        : {}),
+                },
             );
         }
 
@@ -261,6 +279,12 @@ export function createPlaybackErrorHandler({
         isUserInitiatedRef.current = false;
         heartbeatRef.current?.stop();
         clearTransientTrackRecovery(true);
+
+        if (playbackType === "track" && preserveProviderQueue) {
+            clearPendingTrackErrorSkip();
+            clearStartupPlaybackRecovery();
+            return;
+        }
 
         if (playbackType === "track") {
             const failedTrackId = currentTrack?.id ?? null;

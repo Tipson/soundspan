@@ -154,20 +154,21 @@ export function createUnavailableYtMusicRecoveryCoordinator(
         try {
             rawResponse = await dependencies.request(request);
         } catch {
-            return "failed";
+            // Correlate failures too: a late 503 must not stop a new selection.
+            rawResponse = undefined;
         }
-        if (!isRecoveryResponse(rawResponse)) return "failed";
-        const response = rawResponse;
 
         try {
-            if (response.originalVideoId !== request.originalVideoId) {
-                return "failed";
-            }
             if (dependencies.isActive?.() === false) return "stale";
             if (
                 !isSameProviderIdentity(dependencies.getCurrentTrack(), track)
             ) {
                 return "stale";
+            }
+            if (!isRecoveryResponse(rawResponse)) return "failed";
+            const response = rawResponse;
+            if (response.originalVideoId !== request.originalVideoId) {
+                return "failed";
             }
             if (response.status !== "replaced") return response.status;
 

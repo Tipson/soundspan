@@ -95,6 +95,28 @@ test("late recovery response cannot replace a newly selected track", async () =>
     assert.equal(applyCount, 0);
 });
 
+test("late failed provider probe is stale after the user changes tracks", async () => {
+    const track = makeTrack();
+    let currentTrack = track;
+    let rejectRequest!: (error: Error) => void;
+    const coordinator = createUnavailableYtMusicRecoveryCoordinator({
+        request: () =>
+            new Promise((_resolve, reject) => {
+                rejectRequest = reject;
+            }),
+        getCurrentTrack: () => currentTrack,
+        applyReplacement: () =>
+            assert.fail("failed request must not replace a track"),
+    });
+    const pending = coordinator.recover(track);
+    currentTrack = {
+        ...makeTrack("next", "nextvideo01"),
+        playlistItemId: "next-item",
+    };
+    rejectRequest(new Error("HTTP 503"));
+    assert.equal(await pending, "stale");
+});
+
 test("late recovery response cannot replace another occurrence of the same provider track", async () => {
     const failedTrack = makeTrack();
     const duplicateOccurrence = {

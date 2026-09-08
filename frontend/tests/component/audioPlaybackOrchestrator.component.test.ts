@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import * as realPlaybackRecoveryPolicy from "../../lib/audio-engine/playbackRecoveryPolicy";
 import {
     isPlaybackAutoRestartSuppressed,
@@ -554,6 +555,7 @@ const preemptChecks: Array<{
 }> = [];
 
 const toastErrors: string[] = [];
+const toastErrorIds = new Map<string | number, number>();
 const listenTogetherHostTrackOperations: string[] = [];
 const listenTogetherResyncCalls: string[] = [];
 const migratingStorageItems = new Map<string, string>();
@@ -736,6 +738,7 @@ const resetHarnessState = (): void => {
     }
     preemptChecks.length = 0;
     toastErrors.length = 0;
+    toastErrorIds.clear();
     listenTogetherHostTrackOperations.length = 0;
     listenTogetherResyncCalls.length = 0;
     migratingStorageItems.clear();
@@ -1309,15 +1312,22 @@ mock.module("@/lib/lyrics-cache-policy", {
     },
 });
 
-mock.module("sonner", {
-    namedExports: {
-        toast: {
-            error: (message: string) => {
+const notificationMock = {
+    toast: {
+        error: (message: string, options?: { id?: string | number }) => {
+            const existing = options?.id === undefined ? undefined : toastErrorIds.get(options.id);
+            if (existing !== undefined) toastErrors[existing] = message;
+            else {
+                if (options?.id !== undefined) toastErrorIds.set(options.id, toastErrors.length);
                 toastErrors.push(message);
-            },
+            }
         },
     },
-});
+};
+// Sonner exports separate ESM/CommonJS entrypoints. tsx-loaded handlers use
+// the latter; both must hit the same observable notification boundary.
+mock.module("sonner", { namedExports: notificationMock });
+mock.method(createRequire(import.meta.url)("sonner").toast, "error", notificationMock.toast.error);
 
 mock.module("@/lib/logger", {
     namedExports: {
@@ -3327,13 +3337,13 @@ test("offline playback failure pauses once without cascading through the queue",
     assert.equal(playbackState.isBuffering, false);
     assert.ok(toastErrors.length <= 1);
     if (toastErrors[0]) {
-        assert.match(toastErrors[0], /offline/i);
-        assert.doesNotMatch(toastErrors[0], /trying the next track/i);
+        assert.match(toastErrors[0], /не в сети/i);
+        assert.doesNotMatch(toastErrors[0], /Пробуем следующий трек/i);
     }
     assert.doesNotMatch(toastErrors.join(" "), /multiple tracks failed/i);
 });
 
-test("temporary YouTube source rejection advances to a non-provider track without stopping the queue", async () => {
+test("YouTube provider challenge preserves the queue without probing more tracks", async () => {
     mock.timers.enable();
     enableWindowMetrics();
     playbackState.isPlaying = true;
@@ -3356,7 +3366,7 @@ test("temporary YouTube source rejection advances to a non-provider track withou
     mock.timers.tick(10_000);
     await flushAsync();
 
-    assert.equal(controlCalls.next, 1);
+    assert.equal(controlCalls.next, 0);
     assert.equal(engine.reloadCalls, 0);
     assert.equal(engine.stopCalls, 1);
     assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
@@ -3364,7 +3374,8 @@ test("temporary YouTube source rejection advances to a non-provider track withou
     assert.equal(playbackState.isBuffering, false);
     assert.ok(toastErrors.length <= 1);
     if (toastErrors[0]) {
-        assert.match(toastErrors[0], /Пробуем следующий трек/i);
+        assert.doesNotMatch(toastErrors[0], /Пробуем следующий трек/i);
+        assert.match(toastErrors[0], /очередь сохранена/i);
     }
     assert.ok(
         getServerSignalEvents("player.playback_error").some(
@@ -3382,6 +3393,40 @@ test("temporary YouTube source rejection advances to a non-provider track withou
         ),
         "playback signals must be correlatable within one browser tab",
     );
+});
+
+test("generic media error plus failed provider probe preserves the YouTube queue", async () => {
+    mock.timers.enable();
+    enableWindowMetrics();
+    const notificationModule = await import("sonner");
+    notificationModule.toast.error("harness-probe");
+    assert.deepEqual(toastErrors, ["harness-probe"], "notification mock must intercept the loaded module");
+    toastErrors.length = 0;
+    createRequire(import.meta.url)("sonner").toast.error("commonjs-probe");
+    assert.deepEqual(toastErrors, ["commonjs-probe"], "CommonJS notification mock must intercept the loaded module");
+    toastErrors.length = 0;
+    const track = makeTrack("probe-failed", {
+        streamSource: "youtube", youtubeVideoId: "challenge01",
+        artist: { name: "Test artist" },
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [track, makeTrack("next-provider", {
+        streamSource: "youtube", youtubeVideoId: "challenge02",
+    })];
+    playbackState.isPlaying = true;
+    recoverUnavailableYtMusicTrackImpl = async () => { throw new Error("HTTP 503"); };
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("loaderror", {error: new Error("MEDIA_ERR_SRC_NOT_SUPPORTED"), code: "4", recoverable: false});
+    await flushAsync(40);
+    mock.timers.tick(10_000);
+    await flushAsync();
+    assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 1);
+    assert.equal(controlCalls.next, 0);
+    assert.equal(audioState.currentTrack?.id, track.id);
+    assert.equal(playbackState.isPlaying, false);
+    assert.equal(playbackState.isBuffering, false);
+    assert.match(toastErrors.join(" "), /очередь сохранена/i);
 });
 
 test("offline load timeout stops without retrying or advancing the queue", async (t) => {

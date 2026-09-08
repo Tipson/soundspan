@@ -666,6 +666,40 @@ describe("remote recommendation hot set", () => {
         expect({ current, account }).toEqual(snapshot);
     });
 
+    it("reserves collection admission while retaining fresh recommendations and listening signals", async () => {
+        const batch = (prefix: string, source: string, count: number) =>
+            Array.from({ length: count }, (_, index) => ({
+                ...candidate(`${prefix}-${index}`),
+                candidateSources: [source],
+            }));
+        const collections = batch("liked", "hot-liked", 16);
+        const history = batch("history", "hot-wave-seed", 32);
+        const account = history.flatMap((item, index) =>
+            index < collections.length ? [item, collections[index]] : [item],
+        );
+        const enqueue = jest.fn().mockResolvedValue(undefined);
+        const scheduler = new RemoteAnalysisHotSetScheduler({
+            enabled: true,
+            loadAccountCandidates: async () => account,
+            loadCoveredCanonicalIds: async () => new Set<string>(),
+            enqueue,
+        });
+        await scheduler.schedule({
+            userId: "alice",
+            sessionId: "collection-budget",
+            surface: "wave",
+            candidates: batch("response", "youtube-radio", 48),
+        });
+        const ids = enqueue.mock.calls.map(
+            ([job]) => job.providerTrackId as string,
+        );
+        expect(ids).toHaveLength(48);
+        expect(ids.filter((id) => id.startsWith("liked-"))).toHaveLength(16);
+        expect(ids.filter((id) => id.startsWith("response-"))).toHaveLength(16);
+        expect(ids.filter((id) => id.startsWith("history-"))).toHaveLength(16);
+        expect(new Set(ids).size).toBe(48);
+    });
+
     it("prioritizes current seeds while retaining durable account signals and canonical refresh", async () => {
         const callOrder: string[] = [];
         const dependencies = {

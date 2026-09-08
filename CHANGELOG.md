@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased provider recovery and analysis admission
+
+- Preserve the current track and queue when YouTube requests verification or a recovery probe fails, instead of cascading through subsequent tracks. Coalesce the source-unavailable notification and ignore failed probes that arrive after another track is selected.
+- Give liked and saved-playlist recordings a separate fair admission lane for audio analysis, retaining the existing total capacity, daily budget and concurrency.
+
 ## Unreleased Wave mood intensity
 
 - Use the already analysed perceptual arousal in Wave mood ranking instead of saturated RMS energy, retaining energy as the legacy fallback. Give explicit calm, energetic, focus and workout choices a stronger bounded influence in both rollout arms; neutral and favorites modes retain their ranking weights.
