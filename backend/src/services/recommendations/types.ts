@@ -46,6 +46,8 @@ export interface RecommendationCandidate {
     audioFeatures?: {
         bpm?: number | null;
         energy?: number | null;
+        /** Perceived intensity; unlike RMS energy, not just mastering volume. */
+        arousal?: number | null;
         valence?: number | null;
         danceability?: number | null;
         instrumentalness?: number | null;

@@ -17,6 +17,7 @@ export interface CanonicalFeatureRow {
     embedding: number[] | null;
     bpm: number | null;
     energy: number | null;
+    arousal?: number | null;
     valence: number | null;
     danceability: number | null;
     instrumentalness: number | null;
@@ -109,6 +110,7 @@ export class RecommendationFeatureStore {
                     ...candidate.audioFeatures,
                     bpm: row.bpm,
                     energy: row.energy,
+                    arousal: row.arousal,
                     valence: row.valence,
                     danceability: row.danceability,
                     instrumentalness: row.instrumentalness,
@@ -238,6 +240,7 @@ interface RawCanonicalFeatureRow {
     embedding: string | null;
     bpm: number | null;
     energy: number | null;
+    arousal: number | null;
     valence: number | null;
     danceability: number | null;
     instrumentalness: number | null;
@@ -269,6 +272,7 @@ async function loadCanonicalFeatures(
             active_embedding.embedding,
             cr.bpm,
             cr.energy,
+            cr.arousal,
             cr.valence,
             cr.danceability,
             cr.instrumentalness

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { logger } from "../../utils/logger";
 import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
-import { moodFeatureScore, rankRecommendationCandidates } from "./rankerV2";
+import { moodRankingScore, rankRecommendationCandidates } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
 import { isWaveMusicCandidate } from "./wavePolicy";
 import type {
@@ -190,8 +190,8 @@ function baselineRank(
         ? [...candidates].sort(
               (left, right) =>
                   right.providerPrior +
-                  moodFeatureScore(right, waveMood) * 0.8 -
-                  (left.providerPrior + moodFeatureScore(left, waveMood) * 0.8),
+                  moodRankingScore(right, waveMood) -
+                  (left.providerPrior + moodRankingScore(left, waveMood)),
           )
         : candidates;
     for (const candidate of ordered) {

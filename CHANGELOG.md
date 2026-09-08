@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Wave mood intensity
+
+- Use the already analysed perceptual arousal in Wave mood ranking instead of saturated RMS energy, retaining energy as the legacy fallback. Give explicit calm, energetic, focus and workout choices a stronger bounded influence in both rollout arms; neutral and favorites modes retain their ranking weights.
+
+
 ## Unreleased Wave language filter
 
 - Remove the language selector until it can provide sufficiently diverse personal discovery. Ignore stored and URL language restrictions while preserving direction/mood; retain bounded background metadata classification.

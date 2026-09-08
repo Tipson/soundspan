@@ -28,6 +28,7 @@ describe("canonical recommendation feature store", () => {
                     embedding: [1, 0],
                     bpm: 128,
                     energy: 0.9,
+                    arousal: 0.3,
                     valence: 0.7,
                     danceability: 0.8,
                     instrumentalness: 0.1,
@@ -57,6 +58,7 @@ describe("canonical recommendation feature store", () => {
                 audioFeatures: expect.objectContaining({
                     bpm: 128,
                     energy: 0.9,
+                    arousal: 0.3,
                 }),
             }),
         );

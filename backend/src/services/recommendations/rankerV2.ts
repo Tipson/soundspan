@@ -120,7 +120,21 @@ export function moodFeatureScore(
     if (mood === "favorites") return candidate.accountAffinity ?? 0;
     const features = candidate.audioFeatures;
     if (!features) return 0;
-    const energy = features.energy ?? 0.5;
+    // Pending canonical rows also have a feature object, but no measurements.
+    // Do not reward them as an invented 0.5 mood match.
+    if (
+        mood !== "forgotten" &&
+        [
+            features.arousal,
+            features.energy,
+            features.danceability,
+            features.instrumentalness,
+        ].every((value) => value == null)
+    )
+        return 0;
+    // Canonical energy is RMS-derived and saturates on loud masters. Arousal
+    // captures perceptual intensity; retain energy for older/unanalysed rows.
+    const energy = features.arousal ?? features.energy ?? 0.5;
     const valence = features.valence ?? 0.5;
     const danceability = features.danceability ?? 0.5;
     const instrumentalness = features.instrumentalness ?? 0.5;
@@ -140,6 +154,19 @@ export function moodFeatureScore(
         case "forgotten":
             return valence * 0.1;
     }
+}
+
+/** Explicit listening intent matters in both rollout arms; neutral mode is unchanged. */
+export function moodRankingScore(
+    candidate: RecommendationCandidate,
+    mood: RecommendationMood | null,
+): number {
+    const explicitContext =
+        mood === "calm" ||
+        mood === "energetic" ||
+        mood === "focus" ||
+        mood === "workout";
+    return moodFeatureScore(candidate, mood) * (explicitContext ? 2.4 : 0.8);
 }
 
 function latestCanonicalExposureTimes(
@@ -241,7 +268,7 @@ function baseScore(
     latestAlbumExposures: ReadonlyMap<string, number>,
 ): number {
     let score = candidate.providerPrior + (candidate.accountAffinity ?? 0);
-    score += moodFeatureScore(candidate, options.mood) * 0.8;
+    score += moodRankingScore(candidate, options.mood);
     const vector = candidate.embedding
         ? normalizeVector(candidate.embedding)
         : null;
