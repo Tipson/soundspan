@@ -7,6 +7,25 @@ export function parseEmbedding(text: string): number[] {
         throw new Error("Invalid embedding: expected non-empty string");
     }
 
+    // pgvector's decimal array syntax can be parsed without allocating a
+    // trimmed string for each coordinate. Keep the legacy fallback for other
+    // numeric spellings accepted by existing callers.
+    try {
+        const parsed: unknown = JSON.parse(text);
+        if (
+            Array.isArray(parsed) &&
+            parsed.length > 0 &&
+            parsed.every(
+                (value: unknown) =>
+                    typeof value === "number" && Number.isFinite(value),
+            )
+        ) {
+            return parsed;
+        }
+    } catch {
+        // Non-JSON numeric input is validated by the compatibility path below.
+    }
+
     const values = text
         .trim()
         .split("[")

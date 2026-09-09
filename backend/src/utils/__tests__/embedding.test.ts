@@ -49,6 +49,34 @@ describe("blendEmbeddings", () => {
 });
 
 describe("parseEmbedding", () => {
+    it("avoids per-coordinate string transformations for pgvector data", () => {
+        const values = Array.from({ length: 512 }, (_, index) => index / 1024);
+        const text = `[${values.join(",")}]`;
+        const trim = jest.spyOn(String.prototype, "trim");
+        let result: number[];
+        let trimCalls: number;
+        try {
+            result = parseEmbedding(text);
+            trimCalls = trim.mock.calls.length;
+        } finally {
+            trim.mockRestore();
+        }
+        expect(result!).toEqual(values);
+        expect(trimCalls!).toBeLessThanOrEqual(2);
+    });
+
+    it("retains legacy numeric syntax and rejects non-numeric JSON values", () => {
+        expect(parseEmbedding("[+1,.5,0x10]")).toEqual([1, 0.5, 16]);
+        expect(parseEmbedding("1,2,3")).toEqual([1, 2, 3]);
+        expect(parseEmbedding("[[1],2]")).toEqual([1, 2]);
+        expect(Object.is(parseEmbedding("[-0]")[0], -0)).toBe(true);
+        for (const value of ["[null]", "[true]", '["1"]', "[]", "[1e999]"]) {
+            expect(() => parseEmbedding(value)).toThrow(
+                "Invalid embedding: contains non-numeric values",
+            );
+        }
+    });
+
     it("parses valid embedding strings across numeric formats", () => {
         expect(parseEmbedding("[0.1,0.2,0.3]")).toEqual([0.1, 0.2, 0.3]);
         expect(parseEmbedding("[-1,2.5,3e-4]")).toEqual([-1, 2.5, 0.0003]);

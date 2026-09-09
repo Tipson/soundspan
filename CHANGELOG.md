@@ -2,6 +2,7 @@
 
 ## Unreleased recommendation efficiency
 
+- Parse standard pgvector arrays through the native numeric parser, avoiding per-coordinate string allocations while preserving finite-number validation and legacy input compatibility.
 - Normalize diversity vectors once per ranking pass and update similarity only against each newly selected track. Preserve recommendation scores, ordering, cooldowns and artist/album quotas without caching account results.
 - Share concurrent optional MusicBrainz identity work for the same canonical recording and cap admitted work across account batches. Defer excess recordings to a later hot-set pass without marking them resolved.
 - Give background MusicBrainz metadata enrichment lower queue priority and defer failed lookups through the existing short cache, preserving interactive retries and strict identity matching.
