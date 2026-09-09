@@ -9,6 +9,7 @@ Baseline: `dea87114`. This package does not claim prior Wave ranking changes as 
 - Reuse a completed HIGH spool for MEDIUM analysis requests, using the existing pin/eviction contract. Playback/preload quality contracts and partial-file exclusion remain unchanged.
 - Preserve the selected Wave lane policy on every continuation: Discoveries uses discovery tracks, Familiar uses familiar tracks, For You uses the same interleaving as the first page. Late responses remain fenced by the active playback context.
 - Allow up to 30 seconds for the startup-only FFmpeg version probe. Host backup I/O reproduced a 12-second executable startup and a five-second application startup crash. Unsupported versions and probes with no valid output still fail; playback deadlines are unchanged.
+- Discoveries excludes known source tracks even when the provider pool is short, and excludes alternate uploads of a liked canonical recording in both ranking arms. Familiar artists remain allowed. Saved identity lookup is account-scoped, bounded to 250 candidate IDs per query and does not run for For You; lookup failure degrades Discoveries instead of showing unchecked saved songs.
 
 ## Verification before release
 
@@ -34,3 +35,13 @@ Routing rollback: `/srv/music/soundspan-releases/wave-cdn-redirect-5ii3xpy6/priv
 No natural YouTube CAPTCHA occurred during these measurements. Neither PO tokens nor CDN routing constitute proof of CAPTCHA recovery. Cold metadata extraction, simultaneous distinct cold downloads and sustained user-perceived playback must be reported separately from cache throughput. Hybrid observational outcomes are not randomized causal evidence.
 
 Post-release acceptance is recorded with the actual image revision and fresh measurements, not inferred from a successful build.
+
+## Production results and remaining limits
+
+- verify: backend, worker, streamer and frontend `stability-fdf429fe` are healthy; CDN routing and runtime fixes are deployed. Neighboring containers were unchanged. Overlay backups accompany each release.
+- verify: final backend gate including Discoveries: 597 suites, 8,482 passed, 7 skipped, zero failed; backend build passed. Frontend lint: zero errors, 102 warnings, below the existing 181-warning ceiling.
+- verify: frozen original production inputs: someclade Discoveries included one liked canonical recording before the guard and zero afterwards, with 12 results retained in both baseline and Hybrid. Dartum remained zero before/after in this replay. Earlier account replay independently found a liked alternate upload for Dartum. This is identity correctness, not a causal taste-preference trial.
+- verify: 144 selected-queue scenarios across 12 non-test-flagged accounts, including the technical predeploy account: zero previous-day exposures, dislikes, duplicate IDs or tracks longer than 15 minutes; at most two tracks per artist. First-five analyzed arousal for calm/energetic: Dartum 0.182/0.811, Laurisoul 0.601/0.773. Low analysis coverage still limits two small accounts.
+- Hybrid decision: retain the existing 50% experiment, neither delete nor promote to 100%. In the post-weight-change observation window there were five generations per arm, no comparable within-account samples, and no attributed Hybrid plays. No synthetic feedback is used to fill this gap.
+- verify: cached-audio HTTP stages 10/25/50/100 produced no errors, p95 120/227/486/953 ms. Recommendation stages 10/25 produced no errors but p95 3,090/6,803 ms; stopped before 50/100 on the 5-second latency gate.
+- verify: ten distinct uncached audio requests produced two HTTP 503 responses and one 12-second timeout; stopped escalation. This does not meet the 100-cold-listener goal. Internal admission capacity is a hypothesis for the early 503 responses, not proof of a YouTube block. Audio quality and concurrency limits were not relaxed to hide the failures.

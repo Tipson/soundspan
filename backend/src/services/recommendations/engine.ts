@@ -84,6 +84,11 @@ export interface RecommendationEngineDependencies {
         now: Date,
     ) => Promise<RecommendationExposureSignal[]>;
     loadDislikedCanonicalKeys: (userId: string) => Promise<ReadonlySet<string>>;
+    /** Saved originals for Discoveries, including another upload of the same recording. */
+    loadSavedCanonicalKeys?: (
+        userId: string,
+        candidates: readonly RecommendationCandidate[],
+    ) => Promise<ReadonlySet<string>>;
     loadTasteContext: (
         userId: string,
         request: RecommendRequest,
@@ -312,6 +317,25 @@ export class RecommendationEngine {
                 ) {
                     excludes.add(exposure.canonicalKey);
                 }
+            }
+        }
+        if (
+            request.intent.direction === "new" &&
+            this.dependencies.loadSavedCanonicalKeys
+        ) {
+            try {
+                const savedKeys =
+                    await this.dependencies.loadSavedCanonicalKeys(
+                        request.userId,
+                        candidates,
+                    );
+                for (const key of savedKeys) excludes.add(key);
+            } catch (error) {
+                appendDegradedSource(degradedSources, "saved-recordings");
+                recommendationLogger.warn("Saved recording lookup failed", {
+                    error,
+                });
+                candidates = [];
             }
         }
         const baseline = baselineRank(

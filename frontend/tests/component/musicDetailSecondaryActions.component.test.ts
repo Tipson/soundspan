@@ -18,9 +18,9 @@ test("secondary actions stay behind More, escape the hero stacking context, and 
     let calls = 0;
     await act(async () =>
         root.render(
+            // Render-prop functions are not ReactNode positional children.
+            // eslint-disable-next-line react/no-children-prop
             React.createElement(MusicDetailSecondaryActions, {
-                // Render-prop functions are not ReactNode positional children.
-                // eslint-disable-next-line react/no-children-prop
                 children: (close) =>
                     React.createElement(
                         React.Fragment,

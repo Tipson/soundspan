@@ -5,6 +5,7 @@ const mockResolveCanonical = jest.fn();
 const mockEnrichCandidates = jest.fn();
 const mockLoadRecent = jest.fn();
 const mockLoadDislikedCanonicalKeys = jest.fn();
+const mockLoadSavedCanonicalKeys = jest.fn();
 const mockLoadTasteContext = jest.fn();
 const mockLoadSeedEmbedding = jest.fn();
 const mockLoadMood = jest.fn();
@@ -57,6 +58,9 @@ jest.mock("../featureStore", () => ({
 jest.mock("../moodEmbedding", () => ({
     recommendationMoodEmbeddingStore: { load: mockLoadMood },
 }));
+jest.mock("../savedRecordings", () => ({
+    loadSavedCanonicalKeys: mockLoadSavedCanonicalKeys,
+}));
 jest.mock("../remoteAnalysisHotSet", () => ({
     remoteAnalysisHotSetScheduler: { schedule: mockScheduleHotSet },
 }));
@@ -92,6 +96,7 @@ describe("recommendation runtime adapters", () => {
         mockEnrichCandidates.mockReset();
         mockLoadRecent.mockReset();
         mockLoadDislikedCanonicalKeys.mockReset();
+        mockLoadSavedCanonicalKeys.mockReset();
         mockLoadTasteContext.mockReset();
         mockLoadSeedEmbedding.mockReset();
         mockLoadMood.mockReset();
@@ -115,6 +120,9 @@ describe("recommendation runtime adapters", () => {
         const now = new Date("2026-09-01T12:00:00Z");
         await capturedDependencies.loadRecentExposures("user-1", now);
         await capturedDependencies.loadDislikedCanonicalKeys("user-1");
+        await capturedDependencies.loadSavedCanonicalKeys("user-1", [
+            candidate,
+        ]);
         await capturedDependencies.recordGeneration({ id: "generation" });
         await capturedDependencies.scheduleHotSet({ id: "candidate" });
 
@@ -122,6 +130,9 @@ describe("recommendation runtime adapters", () => {
         expect(mockEnrichCandidates).toHaveBeenCalledWith([candidate]);
         expect(mockLoadRecent).toHaveBeenCalledWith("user-1", now);
         expect(mockLoadDislikedCanonicalKeys).toHaveBeenCalledWith("user-1");
+        expect(mockLoadSavedCanonicalKeys).toHaveBeenCalledWith("user-1", [
+            candidate,
+        ]);
         expect(mockRecordGeneration).toHaveBeenCalledWith({ id: "generation" });
         expect(mockScheduleHotSet).toHaveBeenCalledWith({ id: "candidate" });
         expect(capturedDependencies.now()).toBeInstanceOf(Date);

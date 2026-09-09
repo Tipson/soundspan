@@ -531,6 +531,13 @@ function rankDiscoveryTracks(
     limit: number,
 ): PersonalizedTrack[] {
     const remaining = candidates
+        // A lower score still backfills known songs when the provider pool is
+        // short. Discoveries excludes known recordings, not familiar artists.
+        .filter(
+            (track) =>
+                mode !== "new" ||
+                !profile.knownVideoIds.has(track.youtubeVideoId),
+        )
         .map((track, originalIndex) => ({
             track,
             originalIndex,

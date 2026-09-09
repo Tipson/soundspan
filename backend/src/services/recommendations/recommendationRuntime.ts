@@ -18,6 +18,7 @@ import {
 import { recommendationMoodEmbeddingStore } from "./moodEmbedding";
 import { recordingLanguageStore } from "./recordingLanguageRuntime";
 import { remoteAnalysisHotSetScheduler } from "./remoteAnalysisHotSet";
+import { loadSavedCanonicalKeys } from "./savedRecordings";
 import { UnifiedRecommendationService } from "./recommendationService";
 import type { RecommendRequest, RecommendationCandidate } from "./types";
 
@@ -117,6 +118,7 @@ async function loadSimilarCandidates(request: RecommendRequest) {
 }
 
 export const unifiedRecommendationService = new UnifiedRecommendationService({
+    loadSavedCanonicalKeys,
     loadSavedMoodCandidates,
     prepareLanguages: (tracks) => recordingLanguageStore.prepare(tracks),
     mode: config.recommendations.mode,

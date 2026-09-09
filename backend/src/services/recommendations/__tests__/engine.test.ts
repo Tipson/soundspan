@@ -337,4 +337,60 @@ describe("unified recommendation engine", () => {
             }),
         );
     });
+
+    it.each(["baseline", "active"] as const)(
+        "excludes alternate uploads of a saved recording from Discoveries in %s",
+        async (mode) => {
+            const deps = {
+                ...dependencies(mode),
+                loadSavedCanonicalKeys: jest
+                    .fn()
+                    .mockResolvedValue(new Set(["saved-recording"])),
+            };
+            deps.loadCandidates.mockResolvedValue({
+                candidates: [
+                    candidate("alternate-upload", {
+                        canonicalKey: "saved-recording",
+                        lane: "discovery",
+                    }),
+                    candidate("unheard", {
+                        artist: { id: null, name: "Artist of saved recording" },
+                        lane: "discovery",
+                    }),
+                ],
+                nextCursor: 1,
+                degradedSources: [],
+            });
+            const result = await new RecommendationEngine(deps).recommend({
+                ...request,
+                intent: { ...request.intent, direction: "new" },
+            });
+            expect(result.tracks.map((t) => t.id)).toEqual(["yt:unheard"]);
+            expect(deps.loadSavedCanonicalKeys).toHaveBeenCalledWith(
+                "alice",
+                expect.any(Array),
+            );
+        },
+    );
+
+    it("does not query saved exclusions for the ordinary mix", async () => {
+        const deps = { ...dependencies(), loadSavedCanonicalKeys: jest.fn() };
+        await new RecommendationEngine(deps).recommend(request);
+        expect(deps.loadSavedCanonicalKeys).not.toHaveBeenCalled();
+    });
+
+    it("does not present unchecked discoveries when saved identity lookup fails", async () => {
+        const deps = {
+            ...dependencies("baseline"),
+            loadSavedCanonicalKeys: jest
+                .fn()
+                .mockRejectedValue(new Error("DB unavailable")),
+        };
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            intent: { ...request.intent, direction: "new" },
+        });
+        expect(result.tracks).toEqual([]);
+        expect(result.degradedSources).toContain("saved-recordings");
+    });
 });
