@@ -182,6 +182,9 @@ _spool_background_pending_jobs = 0
 _spool_reserved_bytes = 0
 _spool_admitting = True
 _spool_prune_lock = threading.Lock()
+# Reader leases also run on the event loop. Never make them wait for a full
+# directory scan, budget reservation or LRU sort performed by a worker.
+_spool_pin_lock = threading.Lock()
 _spool_worker_context: threading.local = threading.local()
 
 
@@ -333,25 +336,37 @@ def _notify_spool_priority_change() -> None:
 
 def _pin_spool_path(path: Path) -> None:
     """Reference-count one completed or in-progress path against pruning."""
-    with _spool_prune_lock:
+    with _spool_pin_lock:
         _pin_spool_path_locked(path)
 
 
 def _pin_spool_path_locked(path: Path) -> None:
-    """Pin a path while the caller owns ``_spool_prune_lock``."""
+    """Pin a path while the caller owns the short ``_spool_pin_lock``."""
     _spool_pin_counts[path] = _spool_pin_counts.get(path, 0) + 1
     _spool_pinned_paths.add(path)
 
 
 def _unpin_spool_path(path: Path) -> None:
     """Release one prune pin without disturbing concurrent readers."""
-    with _spool_prune_lock:
+    with _spool_pin_lock:
         remaining = _spool_pin_counts.get(path, 1) - 1
         if remaining > 0:
             _spool_pin_counts[path] = remaining
         else:
             _spool_pin_counts.pop(path, None)
             _spool_pinned_paths.discard(path)
+
+
+def _unlink_unpinned_spool_file(path: Path) -> bool:
+    """Recheck ownership atomically at eviction, after the directory snapshot."""
+    with _spool_pin_lock:
+        if path in _spool_pinned_paths:
+            return False
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return False
+        return True
 
 
 class _SpoolSession:
@@ -1531,7 +1546,7 @@ def _find_spooled_file(video_id: str, quality: str, *, pin: bool = False) -> Pat
                 if path.stat().st_size > 0:
                     os.utime(path, None)
                     if pin:
-                        _pin_spool_path_locked(path)
+                        _pin_spool_path(path)
                     return path
             except FileNotFoundError:
                 continue
@@ -1552,31 +1567,34 @@ def _collect_spool_entries() -> tuple[int, list[tuple[float, int, Path]]]:
     entries: list[tuple[float, int, Path]] = []
     total = 0
     now = time.time()
-    for path in YTMUSIC_SPOOL_DIR.iterdir():
-        if not path.is_file() or not _SPOOL_OWNED_NAME_RE.match(path.name):
-            continue
-        try:
-            stat = path.stat()
-        except FileNotFoundError:
-            continue
-        is_partial = (
-            ".part" in path.name
-            or path.name.endswith(".ytdl")
-            or path.name.endswith(_SOUNDSPAN_PART_SUFFIX)
-        )
-        if is_partial:
-            if (
-                path not in _spool_pinned_paths
-                and now - stat.st_mtime > _SPOOL_PARTIAL_STALE_SECONDS
-            ):
-                try:
-                    path.unlink()
-                except FileNotFoundError:
+    # DirEntry reuses inode metadata instead of stat-ing every Path twice.
+    # The snapshot is local to this sweep: accounting never relies on stale
+    # process-wide sizes after a writer finishes or an operator removes a file.
+    with os.scandir(YTMUSIC_SPOOL_DIR) as directory:
+        for entry in directory:
+            if not _SPOOL_OWNED_NAME_RE.match(entry.name):
+                continue
+            try:
+                if not entry.is_file():
                     continue
-                log.debug("Removed stale YouTube Music spool partial %s", path.name)
-            continue
-        total += stat.st_size
-        entries.append((stat.st_mtime, stat.st_size, path))
+                stat = entry.stat()
+            except FileNotFoundError:
+                continue
+            path = Path(entry.path)
+            is_partial = (
+                ".part" in entry.name
+                or entry.name.endswith(".ytdl")
+                or entry.name.endswith(_SOUNDSPAN_PART_SUFFIX)
+            )
+            if is_partial:
+                if (
+                    now - stat.st_mtime > _SPOOL_PARTIAL_STALE_SECONDS
+                    and _unlink_unpinned_spool_file(path)
+                ):
+                    log.debug("Removed stale YouTube Music spool partial %s", path.name)
+                continue
+            total += stat.st_size
+            entries.append((stat.st_mtime, stat.st_size, path))
     return total, entries
 
 
@@ -1596,14 +1614,9 @@ def _reserve_spool_bytes() -> int:
         for _modified_at, size, path in sorted(entries):
             if total + _spool_reserved_bytes + reserved <= YTMUSIC_SPOOL_MAX_BYTES:
                 break
-            if path in _spool_pinned_paths:
-                continue
-            try:
-                path.unlink()
+            if _unlink_unpinned_spool_file(path):
                 total -= size
                 log.debug("Evicted YouTube Music spool file %s for writer capacity", path.name)
-            except FileNotFoundError:
-                continue
         if total + _spool_reserved_bytes + reserved > YTMUSIC_SPOOL_MAX_BYTES:
             raise HTTPException(status_code=503, detail="YouTube Music spool byte capacity is full")
         _spool_reserved_bytes += reserved
@@ -1660,18 +1673,13 @@ def _prune_spool(exclude: Path | None = None) -> None:
                 break
             if exclude is not None and path == exclude:
                 continue
-            if path in _spool_pinned_paths:
-                continue
             # Young files may transiently push the spool over budget while a
             # completed download is about to be served or was just cache-hit.
             if now - modified_at < _SPOOL_EVICT_MIN_AGE_SECONDS:
                 continue
-            try:
-                path.unlink()
+            if _unlink_unpinned_spool_file(path):
                 total -= size
                 log.debug("Evicted YouTube Music spool file %s", path.name)
-            except FileNotFoundError:
-                continue
 
 
 def _build_spool_progress_hook(

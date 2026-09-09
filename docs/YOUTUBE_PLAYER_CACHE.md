@@ -89,6 +89,12 @@ buffered tails yield priority to new playback prefixes. Representation and
 contiguous-byte checks, cancellation, atomic completion and reader pins apply
 throughout; no transcoding or lower-quality substitution is introduced.
 
+Directory sweeps and byte reservations use a worker-only maintenance lock.
+Reader pin counts use a separate short lock so publishing audio and closing
+responses do not wait for a full directory scan or LRU sort. Eviction rechecks
+pins under that short lock immediately before unlinking each file. Accounting
+reuses metadata within one directory sweep, never a stale global size cache.
+
 An egress proxy changes network routing, not provider access rights or capacity
 guarantees. Use an owned, source- and destination-restricted proxy, preserve TLS
 verification and retain a rollback route. Do not expose an open proxy. Compare

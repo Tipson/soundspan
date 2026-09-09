@@ -6,6 +6,7 @@
 - Prioritize each listener's initial 64 KiB CDN range before already buffered tails, retaining contiguous Range/If-Range validation and original audio bytes.
 - Restrict playback extraction to YouTube and omit unused subtitle expansion. Resolve unambiguous original HIGH Opus from the pinned anonymous player response; ambiguous formats, language tracks, live streams and URL transforms retain full extraction.
 - Isolate anonymous player work in a bounded process pool at higher configured concurrency, initialize it before HTTP readiness and keep shared pacing, cancellation, challenge recovery and quality policy in the parent.
+- Keep event-loop reader leases independent of full spool-directory sweeps. Reuse directory-entry metadata during byte accounting and recheck reader pins atomically immediately before eviction.
 
 ## Unreleased server memory stability
 
