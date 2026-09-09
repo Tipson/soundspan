@@ -1489,7 +1489,6 @@ def _materialize_progressive_spool_sync(
         path, content_type, info = progressive
         progressive_completed = Path(path)
         completed_size = progressive_completed.stat().st_size
-        _prune_spool(exclude=progressive_completed)
         _cache_spool_info(video_id, quality, info)
         log.info(
             "Spooled progressive YouTube Music track %s (%s, %.1f MiB)",
@@ -1506,21 +1505,26 @@ def _spool_candidates(video_id: str, quality: str) -> list[Path]:
         return []
     prefix = f"{video_id}-{quality}."
     candidates: list[tuple[float, Path]] = []
-    for path in YTMUSIC_SPOOL_DIR.iterdir():
-        if (
-            not path.name.startswith(prefix)
-            or ".part" in path.name
-            or path.name.endswith(".ytdl")
-            or path.name.endswith(_SOUNDSPAN_PART_SUFFIX)
-            or not path.is_file()
-        ):
-            continue
-        try:
-            stat = path.stat()
-        except FileNotFoundError:
-            continue
-        if stat.st_size > 0:
-            candidates.append((stat.st_mtime, path))
+    with os.scandir(YTMUSIC_SPOOL_DIR) as directory:
+        for entry in directory:
+            if (
+                not entry.name.startswith(prefix)
+                or ".part" in entry.name
+                or entry.name.endswith(".ytdl")
+                or entry.name.endswith(_SOUNDSPAN_PART_SUFFIX)
+            ):
+                continue
+            # Do not construct a Path (or read inode metadata) for unrelated
+            # cached tracks. This lookup runs several times per cold request.
+            path = Path(entry.path)
+            if not path.is_file():
+                continue
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                continue
+            if stat.st_size > 0:
+                candidates.append((stat.st_mtime, path))
     return [path for _, path in sorted(candidates, reverse=True)]
 
 
@@ -1633,7 +1637,12 @@ def _release_spool_bytes(reserved: int) -> None:
 
 @contextmanager
 def _spool_byte_reservation() -> Iterator[int]:
-    """Own one active writer's disk allowance through success or failure."""
+    """Own one active writer's disk allowance through success or failure.
+
+    Reservation performs the authoritative sweep and eviction. Writers enforce
+    its byte limit, so repeating a full prune before or after them adds a
+    serialized cache-size-dependent delay without strengthening the bound.
+    """
     session = getattr(_spool_worker_context, "session", None)
     deadline = time.monotonic() + YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT
     while True:
@@ -1816,8 +1825,6 @@ def _download_ytmusic_spool_sync(
     import yt_dlp
 
     YTMUSIC_SPOOL_DIR.mkdir(parents=True, exist_ok=True)
-    _prune_spool()
-
     existing = _find_spooled_file(video_id, quality)
     if existing is not None:
         return str(existing), _spool_content_type(existing)
@@ -1857,7 +1864,6 @@ def _download_ytmusic_spool_sync(
                     completed.unlink()
                 raise ValueError("YouTube Music spool file exceeds the total spool byte budget")
 
-            _prune_spool(exclude=completed)
             _cache_spool_info(video_id, quality, info)
             log.info(
                 "Spooled YouTube Music track %s (%s, %.1f MiB)",
