@@ -17,6 +17,29 @@ const MAX_RECENT_ARTIST_PENALTY = 0.6;
 const DIVERSITY_PENALTY = 0.42;
 const MAX_TRACKS_PER_ARTIST = 2;
 const MAX_TRACKS_PER_ALBUM = 2;
+const MAX_CACHED_CENTROID_SETS = 32;
+// Count UTF-16 code units conservatively as two bytes; values add < 1 MiB.
+const MAX_CENTROID_KEY_UNITS = 16 * 1024 * 1024;
+const centroidSets = new Map<string, number[][]>();
+let centroidKeyUnits = 0;
+
+function centroidContentKey(vectors: number[][], count: number): string | null {
+    if (vectors.length > 500 || !Number.isInteger(count) || count > 5)
+        return null;
+    if (vectors.some((vector) => vector.length !== 512)) return null;
+    const packed = new Float64Array(vectors.length * 512);
+    for (let row = 0; row < vectors.length; row += 1) {
+        const vector = vectors[row];
+        for (let axis = 0; axis < vector.length; axis += 1) {
+            // Sparse/invalid legacy input retains the uncached path.
+            if (!Number.isFinite(vector[axis])) return null;
+        }
+        packed.set(vector, row * 512);
+    }
+    // Full IEEE-754 bytes preserve ordering, duplicates and negative zero.
+    // No hash collision, account key or time-based freshness decision is used.
+    return `${count}:${Buffer.from(packed.buffer).toString("base64")}`;
+}
 
 function normalizeVector(vector: readonly number[]): number[] | null {
     if (vector.length === 0) return null;
@@ -55,6 +78,13 @@ export function buildTasteCentroids(
         Math.max(1, maxCentroids),
         Math.max(1, Math.ceil(vectors.length / 2)),
     );
+    const cacheKey = centroidContentKey(vectors, clusterCount);
+    const cached = cacheKey === null ? undefined : centroidSets.get(cacheKey);
+    if (cached && cacheKey !== null) {
+        centroidSets.delete(cacheKey);
+        centroidSets.set(cacheKey, cached);
+        return cached.map((center) => [...center]);
+    }
     const centers: number[][] = [[...vectors[0]]];
     while (centers.length < clusterCount) {
         let bestVector = vectors[0];
@@ -98,6 +128,21 @@ export function buildTasteCentroids(
             );
             if (normalized) centers[index] = normalized;
         });
+    }
+    if (cacheKey !== null) {
+        while (
+            centroidSets.size >= MAX_CACHED_CENTROID_SETS ||
+            centroidKeyUnits + cacheKey.length > MAX_CENTROID_KEY_UNITS
+        ) {
+            const oldest = centroidSets.keys().next().value!;
+            centroidSets.delete(oldest);
+            centroidKeyUnits -= oldest.length;
+        }
+        centroidSets.set(
+            cacheKey,
+            centers.map((center) => [...center]),
+        );
+        centroidKeyUnits += cacheKey.length;
     }
     return centers;
 }

@@ -29,6 +29,68 @@ function candidate(
 describe("recommendation ranker v2", () => {
     const now = new Date("2026-09-01T12:00:00.000Z");
 
+    it.each([2, 500])(
+        "bounds centroid reuse by entry count and key storage (%i vectors)",
+        (size) => {
+            jest.isolateModules(() => {
+                const build = (
+                    require("../rankerV2") as typeof import("../rankerV2")
+                ).buildTasteCentroids;
+                const input = (variant: number) =>
+                    Array.from({ length: size }, () =>
+                        Array.from({ length: 512 }, (_, axis) =>
+                            axis === 0 ? variant + 1 : axis === 1 ? 1 : 0,
+                        ),
+                    );
+                const entries = size === 2 ? 33 : 7;
+                for (let variant = 0; variant < entries; variant += 1)
+                    build(input(variant), 1);
+                const forEach = jest.spyOn(Array.prototype, "forEach");
+                try {
+                    build(input(entries - 1), 1);
+                    expect(forEach).not.toHaveBeenCalled();
+                    build(input(0), 1);
+                    expect(forEach).toHaveBeenCalled();
+                } finally {
+                    forEach.mockRestore();
+                }
+            });
+        },
+    );
+
+    it("reuses identical centroid arithmetic with copy isolation and content invalidation", () => {
+        jest.isolateModules(() => {
+            const build = (
+                require("../rankerV2") as typeof import("../rankerV2")
+            ).buildTasteCentroids;
+            const vectors = Array.from({ length: 20 }, (_, row) =>
+                Array.from({ length: 512 }, (_, axis) =>
+                    Math.sin(row + axis + 1),
+                ),
+            );
+            const expected = build(vectors, 3);
+            const forEach = jest.spyOn(Array.prototype, "forEach");
+            let actual: number[][];
+            let calls = 0;
+            try {
+                actual = build(
+                    vectors.map((v) => [...v]),
+                    3,
+                );
+                calls = forEach.mock.calls.length;
+            } finally {
+                forEach.mockRestore();
+            }
+            expect(actual!).toEqual(expected);
+            expect(calls).toBe(0);
+            actual![0][0] = 999;
+            expect(build(vectors, 3)).toEqual(expected);
+            expect(build(vectors, 2)).toHaveLength(2);
+            vectors[0][0] += 10;
+            expect(build(vectors, 3)).not.toEqual(expected);
+        });
+    });
+
     it("normalizes shared mood and session vectors once for the entire rank", () => {
         const dimension = 32;
         let reads = 0;

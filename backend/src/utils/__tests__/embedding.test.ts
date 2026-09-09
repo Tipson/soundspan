@@ -49,6 +49,54 @@ describe("blendEmbeddings", () => {
 });
 
 describe("parseEmbedding", () => {
+    it("reuses identical standard vectors without sharing mutable result arrays", () => {
+        jest.isolateModules(() => {
+            const parse = (
+                require("../embedding") as typeof import("../embedding")
+            ).parseEmbedding;
+            const text = JSON.stringify(
+                Array.from({ length: 512 }, (_, i) => i / 999),
+            );
+            const jsonParse = jest.spyOn(JSON, "parse");
+            try {
+                const first = parse(text);
+                first[0] = 99;
+                const second = parse(text);
+                expect(second[0]).toBe(0);
+                expect(second).not.toBe(first);
+                expect(jsonParse).toHaveBeenCalledTimes(1);
+                const changed = parse(text.replace("[0,", "[1,"));
+                expect(changed[0]).toBe(1);
+                expect(jsonParse).toHaveBeenCalledTimes(2);
+            } finally {
+                jsonParse.mockRestore();
+            }
+        });
+    });
+
+    it("evicts old vector parses after the bounded working set fills", () => {
+        jest.isolateModules(() => {
+            const parse = (
+                require("../embedding") as typeof import("../embedding")
+            ).parseEmbedding;
+            const vector = Array.from({ length: 512 }, () => 0);
+            const first = JSON.stringify(vector);
+            for (let i = 0; i <= 2048; i += 1) {
+                vector[0] = i;
+                parse(JSON.stringify(vector));
+            }
+            const jsonParse = jest.spyOn(JSON, "parse");
+            try {
+                parse(JSON.stringify(vector));
+                expect(jsonParse).not.toHaveBeenCalled();
+                parse(first);
+                expect(jsonParse).toHaveBeenCalledTimes(1);
+            } finally {
+                jsonParse.mockRestore();
+            }
+        });
+    });
+
     it("avoids per-coordinate string transformations for pgvector data", () => {
         const values = Array.from({ length: 512 }, (_, index) => index / 1024);
         const text = `[${values.join(",")}]`;

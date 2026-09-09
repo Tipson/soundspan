@@ -29,4 +29,16 @@ verify: RED/GREEN tests reduced raw-vector reads 1,536→1,024 for 512 dimension
 
 verify: all fixed cohorts completed scalar analysis and embeddings: 22/22, 13/13 and 15/15, with no new failures. This is 30 newly analyzed account/canonical entries in the same saved cohort, not a percentage derived from a changing catalog. A subsequent 36-scenario replay retained the checked exclusion/diversity invariants; two requests degraded on optional DCLAP mood lookup. New candidate supply still limits mood differentiation in two sparse accounts. Analysis completion is not subjective listening acceptance or full coverage of newly arriving recommendations.
 
-Final release and HTTP acceptance follow below.
+## Normalization release and repeated-work profile
+
+verify: `ec99f78f` passed the full Linux gate (597 suites, 8,490 passed, 7 skipped, zero failures; line coverage 94.55%) and was released only to API/worker after a checked database backup. All 13 neighbors were preserved. HTTP p95 at 10 / 25 / 50 was 1,599 / 3,809 / 7,880 ms, without measured-stage errors or degraded sources. The 50-request threshold still failed; 100 was not run. A real audio range returned HTTP 206, audio/webm and 65,536 bytes in 92 ms. Diagnostic requests left recommendation generation/exposure counts unchanged.
+
+Profiling the actual API process during 25 concurrent requests identified repeated parsing (1,577 ms sampled CPU) and taste-centroid construction (1,492 ms, plus 214 ms in its callback). The temporary inspector bound only to container loopback and was closed after collection; port closure was checked.
+
+## Exact-content computational reuse
+
+Standard 512-dimensional vector parsing now retains up to 2,048 exact text inputs, each at most 16,384 characters. Taste-centroid results retain at most 32 normalized input matrices, with a combined key budget of 16,777,216 UTF-16 code units. The latter key contains every IEEE-754 coordinate in order and the actual cluster count, rather than a hash or an account identifier. Legacy dimensions and unusual inputs keep the uncached path. Ranking scores, candidate selection and centroid arithmetic remain unchanged.
+
+Both stores return independent copies and use least-recently-used eviction. Re-analysis, preference changes, ordering changes and changed cluster counts naturally produce the appropriate new input. No recommendation response, session state or account history is reused. Conservative retained payload bounds are about 72 MiB for parsed vectors and 33 MiB for centroids, excluding object/map overhead; actual retention depends on the working set.
+
+verify: resource tests were RED before reuse and GREEN afterward. Checks cover modified returned arrays, changed inputs/counts, parser eviction after 2,049 distinct inputs, centroid eviction by both 32-entry and total-key limits, and uncached legacy behavior. The current focused run passed 359 tests with 4 skipped; backend build passed. Full gate, exact compiled-artifact comparisons and final HTTP acceptance follow below.

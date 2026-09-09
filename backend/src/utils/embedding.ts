@@ -1,3 +1,7 @@
+const MAX_CACHED_EMBEDDINGS = 2_048;
+const MAX_CACHED_EMBEDDING_TEXT_LENGTH = 16_384;
+const parsedEmbeddings = new Map<string, number[]>();
+
 /**
  * Parse a pgvector embedding from its text representation "[0.1,0.2,...]"
  * into a number array.
@@ -5,6 +9,12 @@
 export function parseEmbedding(text: string): number[] {
     if (typeof text !== "string" || text.trim() === "") {
         throw new Error("Invalid embedding: expected non-empty string");
+    }
+    const cached = parsedEmbeddings.get(text);
+    if (cached) {
+        parsedEmbeddings.delete(text);
+        parsedEmbeddings.set(text, cached);
+        return [...cached];
     }
 
     // pgvector's decimal array syntax can be parsed without allocating a
@@ -20,6 +30,19 @@ export function parseEmbedding(text: string): number[] {
                     typeof value === "number" && Number.isFinite(value),
             )
         ) {
+            // Exact content is immutable even when a recording is re-analyzed.
+            // Cache only bounded standard vectors; callers always own a copy.
+            if (
+                parsed.length === 512 &&
+                text.length <= MAX_CACHED_EMBEDDING_TEXT_LENGTH
+            ) {
+                if (parsedEmbeddings.size >= MAX_CACHED_EMBEDDINGS) {
+                    parsedEmbeddings.delete(
+                        parsedEmbeddings.keys().next().value!,
+                    );
+                }
+                parsedEmbeddings.set(text, [...parsed]);
+            }
             return parsed;
         }
     } catch {
