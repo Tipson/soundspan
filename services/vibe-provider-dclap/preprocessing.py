@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
@@ -21,6 +21,7 @@ MEL_HOP_SAMPLES = 480
 N_MELS = 128
 FMIN_HZ = 0
 FMAX_HZ = 14000
+QUANTIZATION_CHUNK_SAMPLES = 262144
 
 
 class AudioDecodeError(RuntimeError):
@@ -71,9 +72,16 @@ def _load_librosa() -> LibrosaBackend:
 
 def int16_round_trip(audio: object) -> object:
     """Apply the teacher-compatible int16 quantization round trip exactly."""
-    waveform = np.asarray(audio, dtype=np.float32)
-    waveform = np.clip(waveform, -1.0, 1.0)
-    return (waveform * 32767.0).astype(np.int16).astype(np.float32) / 32767.0
+    waveform = np.array(audio, dtype=np.float32, copy=True, order="C")
+    samples = waveform.reshape(-1)
+    # Only the result scales with track length; the int16 temporary stays small.
+    for start in range(0, samples.size, QUANTIZATION_CHUNK_SAMPLES):
+        chunk = samples[start : start + QUANTIZATION_CHUNK_SAMPLES]
+        np.clip(chunk, -1.0, 1.0, out=chunk)
+        chunk *= 32767.0
+        chunk[:] = chunk.astype(np.int16)
+        chunk /= 32767.0
+    return waveform
 
 
 def segment_audio(audio: object) -> Iterator[object]:
@@ -151,7 +159,7 @@ def load_audio(
 def segmented_log_mels(
     decoded: DecodedAudio,
     check_cancelled: Callable[[], None] | None = None,
-) -> Iterator[object]:
+) -> Generator[object, None, None]:
     """Yield log-mel tensors lazily from one bounded decoded waveform."""
     for segment in segment_audio(decoded.waveform):
         if check_cancelled is not None:

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased server memory stability
+
+- Keep DCLAP waveform memory reserved through decoding, queue wait and inference; cancel or failed requests release their buffer before admitting another audio decode.
+- Quantize audio in bounded chunks with bit-identical samples instead of multiple full-track temporary arrays. Keep the model, 30-minute cap, segmentation and embedding-space identity unchanged.
+- Give single-host DCLAP deployments a 4 GiB memory limit with a 6 GiB combined memory/swap ceiling, bounded log rotation and shutdown grace covering admitted inference.
+
 ## Unreleased Wave delivery and analysis reuse
 
 - Keep known songs out of Discoveries even when the provider returns a short pool; unheard songs by saved artists remain eligible.

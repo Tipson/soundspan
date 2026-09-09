@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+import tracemalloc
 from collections.abc import Iterator
 
 import numpy as np
@@ -223,6 +224,31 @@ def test_int16_round_trip_clips_overshoot_before_quantization() -> None:
 
     assert quantized[1] >= 0.0
     assert quantized[1] == quantized[0]
+
+
+def test_quantization_matches_recipe_without_mutating_readonly_strided_input() -> None:
+    """Memory optimization must not alter samples or the caller-owned waveform."""
+    source = np.random.default_rng(42).uniform(-1.1, 1.1, 1_100_000).astype(np.float32)[::2]
+    source.flags.writeable = False
+    before = source.copy()
+    expected = (np.clip(source, -1.0, 1.0) * 32767.0).astype(np.int16).astype(np.float32)
+    expected /= 32767.0
+    actual = int16_round_trip(source)
+    np.testing.assert_array_equal(actual, expected)
+    np.testing.assert_array_equal(source, before)
+
+
+def test_quantization_does_not_allocate_several_full_length_temporaries() -> None:
+    """Limit additional arrays to the result plus small quantization chunks."""
+    source = np.ones(4_000_000, dtype=np.float32)
+    tracemalloc.start()
+    try:
+        result = int16_round_trip(source)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    np.testing.assert_array_equal(result, source)
+    assert peak < source.nbytes * 1.5
 
 
 def test_create_log_mel_uses_pinned_recipe_and_shape() -> None:

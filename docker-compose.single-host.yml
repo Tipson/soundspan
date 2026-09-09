@@ -54,6 +54,18 @@ services:
             - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool
 
     vibe-provider-dclap:
+        # Leave headroom for both ONNX towers and one capped decoded waveform.
+        memswap_limit: 6G
+        stop_grace_period: 120s
+        logging:
+            driver: json-file
+            options:
+                max-size: "10m"
+                max-file: "3"
+        deploy:
+            resources:
+                limits:
+                    memory: 4G
         volumes: !override
             - ${MUSIC_PATH:?MUSIC_PATH is required}:/music:ro
             - ${ANALYSIS_SPOOL_PATH:?ANALYSIS_SPOOL_PATH is required}:/music/.soundspan-analysis-spool:ro

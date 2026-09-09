@@ -27,7 +27,7 @@ IDLE_POLL_SECONDS = 5.0
 MAX_IDLE_MONITOR_POLLS = 2**63 - 1
 MAX_QUEUED_INFERENCE_REQUESTS = 4
 MAX_CONFIGURED_QUEUED_REQUESTS = 64
-MAX_CONCURRENT_AUDIO_DECODES = 2
+MAX_RESIDENT_AUDIO_BUFFERS = 1
 INFERENCE_LOCK_POLL_SECONDS = 0.1
 MAX_INFERENCE_LOCK_POLLS = 1_102
 ResultT = TypeVar("ResultT")
@@ -144,7 +144,7 @@ class DclapProvider:
         self._last_work_at = clock()
         self._lock = threading.RLock()
         self._admission = threading.BoundedSemaphore(max_queued_requests + 1)
-        self._decode_slots = threading.BoundedSemaphore(MAX_CONCURRENT_AUDIO_DECODES)
+        self._audio_slots = threading.BoundedSemaphore(MAX_RESIDENT_AUDIO_BUFFERS)
         self._stop_event = threading.Event()
         self._monitor_thread: threading.Thread | None = None
 
@@ -191,25 +191,16 @@ class DclapProvider:
         finally:
             self._lock.release()
 
-    def _decode_audio(
+    def _reserve_audio_buffer(
         self,
-        audio_path: str,
         cancellation: InferenceCancellation,
-    ) -> DecodedAudio:
-        """Decode one bounded waveform under its own concurrency limit."""
+    ) -> None:
+        """Reserve waveform memory until inference finishes, not just decoding."""
         for _poll in range(MAX_INFERENCE_LOCK_POLLS):
             cancellation.raise_if_cancelled()
-            if self._decode_slots.acquire(timeout=INFERENCE_LOCK_POLL_SECONDS):
-                break
-        else:
-            raise InferenceDeadlineExceededError("Audio decode wait exceeded")
-        try:
-            return load_audio(
-                audio_path,
-                check_cancelled=cancellation.raise_if_cancelled,
-            )
-        finally:
-            self._decode_slots.release()
+            if self._audio_slots.acquire(timeout=INFERENCE_LOCK_POLL_SECONDS):
+                return
+        raise InferenceDeadlineExceededError("Audio buffer wait exceeded")
 
     def get_text_embedding(
         self,
@@ -232,22 +223,36 @@ class DclapProvider:
     ) -> object:
         """Return one normalized, chunk-aggregated student audio embedding."""
         control = cancellation or InferenceCancellation(deadline=None)
-        decoded_audio = self._decode_audio(audio_path, control)
-        control.raise_if_cancelled()
-
-        def infer() -> object:
-            models = self._models_locked()
-            mel_tensors = segmented_log_mels(
-                decoded_audio,
-                check_cancelled=control.raise_if_cancelled,
+        self._reserve_audio_buffer(control)
+        try:
+            control.raise_if_cancelled()
+            decoded_audio: DecodedAudio | None = load_audio(
+                audio_path, check_cancelled=control.raise_if_cancelled
             )
-            return run_audio_chunks(
-                models.audio_session,
-                mel_tensors,
-                control.raise_if_cancelled,
-            )
+            try:
+                control.raise_if_cancelled()
 
-        return self._run_serialized(infer, control)
+                def infer() -> object:
+                    models = self._models_locked()
+                    mel_tensors = segmented_log_mels(
+                        cast(DecodedAudio, decoded_audio),
+                        check_cancelled=control.raise_if_cancelled,
+                    )
+                    try:
+                        return run_audio_chunks(
+                            models.audio_session,
+                            mel_tensors,
+                            control.raise_if_cancelled,
+                        )
+                    finally:
+                        # Closing a cancelled generator releases its waveform reference.
+                        mel_tensors.close()
+
+                return self._run_serialized(infer, control)
+            finally:
+                decoded_audio = None
+        finally:
+            self._audio_slots.release()
 
     def unload_if_idle(self) -> bool:
         """Release loaded models once the configured idle timeout expires."""
