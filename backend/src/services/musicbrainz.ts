@@ -223,6 +223,7 @@ class MusicBrainzService {
         requestFn: () => Promise<T>,
         ttlSeconds = 2592000, // 30 days
         fallbackValue?: T,
+        backgroundIdentity = false,
     ): Promise<T> {
         try {
             const cached = await redisClient.get(cacheKey);
@@ -236,7 +237,15 @@ class MusicBrainzService {
         let data: T;
         try {
             // Use global rate limiter instead of local rate limiting
-            data = await rateLimiter.execute("musicbrainz", requestFn);
+            // Optional enrichment yields to interactive metadata and defers a
+            // failed lookup to its short fallback TTL instead of filling the
+            // shared provider queue with retries during an upstream outage.
+            data = backgroundIdentity
+                ? await rateLimiter.execute("musicbrainz", requestFn, {
+                      priority: -1,
+                      skipRetry: true,
+                  })
+                : await rateLimiter.execute("musicbrainz", requestFn);
         } catch (error: any) {
             logger.warn(
                 `[MusicBrainz] Request failed for key "${cacheKey}": ${error.message}`,
@@ -336,6 +345,7 @@ class MusicBrainzService {
             },
             2592000,
             null,
+            true,
         );
         if (!identity || identity.isrc) return identity;
         const isrc = await this.lookupRecordingIsrc(identity.recordingMbid);
@@ -357,6 +367,7 @@ class MusicBrainzService {
             },
             2592000,
             null,
+            true,
         );
     }
 

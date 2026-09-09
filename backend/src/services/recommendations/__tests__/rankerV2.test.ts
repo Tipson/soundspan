@@ -29,6 +29,41 @@ function candidate(
 describe("recommendation ranker v2", () => {
     const now = new Date("2026-09-01T12:00:00.000Z");
 
+    it("reads each audio vector a bounded number of times while diversifying a full queue", () => {
+        let reads = 0;
+        const dimension = 64;
+        const tracks = Array.from({ length: 60 }, (_, index) =>
+            candidate(`bounded-${index}`, `artist-${index}`, {
+                embedding: new Proxy(
+                    Array.from({ length: dimension }, (_, axis) =>
+                        Math.sin(index * dimension + axis + 1),
+                    ),
+                    {
+                        get(target, key, receiver) {
+                            if (typeof key === "string" && /^\d+$/.test(key))
+                                reads += 1;
+                            return Reflect.get(target, key, receiver);
+                        },
+                    },
+                ),
+            }),
+        );
+        const ranked = rankRecommendationCandidates(tracks, {
+            now,
+            limit: 36,
+            sessionId: "bounded-audio",
+            direction: "for-you",
+            mood: null,
+            dislikedCanonicalKeys: new Set(),
+            exposures: [],
+            positiveCentroids: [],
+            negativeCentroids: [],
+        });
+        expect(ranked).toHaveLength(36);
+        expect(new Set(ranked.map(({ track }) => track.id)).size).toBe(36);
+        expect(reads).toBeLessThanOrEqual(tracks.length * dimension * 12);
+    });
+
     it("indexes canonical exposure history once across cooldown, scoring and exploration", () => {
         let canonicalReads = 0;
         const exposures = Array.from({ length: 500 }, (_, index) => ({

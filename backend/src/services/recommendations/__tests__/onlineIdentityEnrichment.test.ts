@@ -30,6 +30,46 @@ const youtubeCandidate = (id: string): RecommendationCandidate => ({
 });
 
 describe("online canonical identity enrichment", () => {
+    it("shares pending recordings across accounts and bounds optional lookups across batches", async () => {
+        let release!: () => void;
+        const pending = new Promise<null>((resolve) => {
+            release = () => resolve(null);
+        });
+        const lookup = jest.fn().mockReturnValue(pending);
+        const enricher = new OnlineIdentityEnricher({
+            lookupRecordingIdentityByMetadata: lookup,
+            persistIdentity: jest.fn(),
+        });
+        const first = Array.from({ length: 25 }, (_, i) =>
+            youtubeCandidate(`first-${i}`),
+        );
+        const a = enricher.enrich("alice", first);
+        const b = enricher.enrich("bob", [...first]);
+        const c = enricher.enrich("bob", [youtubeCandidate("later")]);
+        try {
+            expect(lookup).toHaveBeenCalledTimes(25);
+        } finally {
+            release();
+            await Promise.all([a, b, c]);
+        }
+        await enricher.enrich("bob", [youtubeCandidate("later")]);
+        expect(lookup).toHaveBeenCalledTimes(26);
+    });
+
+    it("releases the optional lookup slot after a provider failure", async () => {
+        const lookup = jest
+            .fn()
+            .mockRejectedValueOnce(new Error("provider unavailable"))
+            .mockResolvedValue(null);
+        const enricher = new OnlineIdentityEnricher({
+            lookupRecordingIdentityByMetadata: lookup,
+            persistIdentity: jest.fn(),
+        });
+        await enricher.enrich("alice", [youtubeCandidate("retry")]);
+        await enricher.enrich("bob", [youtubeCandidate("retry")]);
+        expect(lookup).toHaveBeenCalledTimes(2);
+    });
+
     it("serializes durable identity merges and preserves analyzed features", async () => {
         const transaction = {
             $executeRaw: jest.fn().mockResolvedValue(1),

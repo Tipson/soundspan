@@ -29,6 +29,8 @@ interface OnlineIdentityDependencies {
 
 /** Background-only durable identity enrichment for online provider tracks. */
 export class OnlineIdentityEnricher {
+    private readonly inFlight = new Map<string, Promise<void>>();
+
     constructor(private readonly dependencies: OnlineIdentityDependencies) {}
 
     async enrich(
@@ -46,36 +48,51 @@ export class OnlineIdentityEnricher {
             .slice(0, MAX_IDENTITY_BATCH);
         if (youtubeEligible.length === 0) return;
         await Promise.allSettled(
-            youtubeEligible.map(async (candidate) => {
-                let metadata: Awaited<
-                    ReturnType<
-                        OnlineIdentityDependencies["lookupRecordingIdentityByMetadata"]
-                    >
-                > = null;
-                try {
-                    metadata =
-                        await this.dependencies.lookupRecordingIdentityByMetadata(
-                            {
-                                title: candidate.title,
-                                artist: candidate.artist.name,
-                                duration: candidate.duration,
-                            },
-                        );
-                } catch (error) {
-                    log.warn("MusicBrainz metadata identity lookup degraded", {
-                        candidateId: candidate.id,
-                        error,
-                    });
-                    return;
-                }
-                if (!metadata) return;
-                await this.dependencies.persistIdentity(candidate, {
-                    tidalTrackId: null,
-                    ...metadata,
-                    source: "musicbrainz-metadata",
+            youtubeEligible.map((candidate) => {
+                const key = candidate.canonicalRecordingId!;
+                const existing = this.inFlight.get(key);
+                if (existing) return existing;
+                // Optional metadata must not grow an unbounded provider queue
+                // across simultaneous account requests. Deferred recordings are
+                // eligible on the next hot-set pass; no state is marked complete.
+                if (this.inFlight.size >= MAX_IDENTITY_BATCH) return;
+                const work = this.enrichCandidate(candidate).finally(() => {
+                    this.inFlight.delete(key);
                 });
+                this.inFlight.set(key, work);
+                return work;
             }),
         );
+    }
+
+    private async enrichCandidate(
+        candidate: RecommendationCandidate,
+    ): Promise<void> {
+        let metadata: Awaited<
+            ReturnType<
+                OnlineIdentityDependencies["lookupRecordingIdentityByMetadata"]
+            >
+        > = null;
+        try {
+            metadata =
+                await this.dependencies.lookupRecordingIdentityByMetadata({
+                    title: candidate.title,
+                    artist: candidate.artist.name,
+                    duration: candidate.duration,
+                });
+        } catch (error) {
+            log.warn("MusicBrainz metadata identity lookup degraded", {
+                candidateId: candidate.id,
+                error,
+            });
+            return;
+        }
+        if (!metadata) return;
+        await this.dependencies.persistIdentity(candidate, {
+            tidalTrackId: null,
+            ...metadata,
+            source: "musicbrainz-metadata",
+        });
     }
 }
 

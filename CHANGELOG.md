@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased recommendation efficiency
+
+- Normalize diversity vectors once per ranking pass and update similarity only against each newly selected track. Preserve recommendation scores, ordering, cooldowns and artist/album quotas without caching account results.
+- Share concurrent optional MusicBrainz identity work for the same canonical recording and cap admitted work across account batches. Defer excess recordings to a later hot-set pass without marking them resolved.
+- Give background MusicBrainz metadata enrichment lower queue priority and defer failed lookups through the existing short cache, preserving interactive retries and strict identity matching.
+
 ## Unreleased offline startup
 
 - Open the last validated local account immediately when the browser reports offline, without waiting for session or refresh requests. URL-token replacement and logout still revoke the previous account before local playback is exposed.

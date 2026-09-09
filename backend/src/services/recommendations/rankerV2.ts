@@ -243,21 +243,22 @@ function latestArtistExposureAge(
         : Math.max(0, now.getTime() - exposedAt);
 }
 
+interface DiversityCandidate {
+    canonicalKey: string;
+    artist: string;
+    album: string;
+    embedding: number[] | null;
+}
+
 function candidateSimilarity(
-    left: RecommendationCandidate,
-    right: RecommendationCandidate,
+    left: DiversityCandidate,
+    right: DiversityCandidate,
 ): number {
     if (left.canonicalKey === right.canonicalKey) return 1;
-    const leftArtist = normalizeRecommendationArtistKey(left.artist.name);
-    const rightArtist = normalizeRecommendationArtistKey(right.artist.name);
-    if (leftArtist && leftArtist === rightArtist) return 0.82;
-    const leftAlbum = left.album.title.trim().toLocaleLowerCase();
-    const rightAlbum = right.album.title.trim().toLocaleLowerCase();
-    if (leftAlbum && leftAlbum === rightAlbum) return 0.9;
+    if (left.artist && left.artist === right.artist) return 0.82;
+    if (left.album && left.album === right.album) return 0.9;
     if (left.embedding && right.embedding) {
-        const a = normalizeVector(left.embedding);
-        const b = normalizeVector(right.embedding);
-        if (a && b) return Math.max(0, cosine(a, b));
+        return Math.max(0, cosine(left.embedding, right.embedding));
     }
     return 0;
 }
@@ -613,6 +614,38 @@ function rankRecommendationCandidatePool(
                 left.track.canonicalKey.localeCompare(right.track.canonicalKey),
         );
     const selected: ScoredRecommendation[] = [...initialSelections];
+    // Request-local preparation preserves exact scoring and sees mutations on
+    // the next call. Each vector is normalized once for this diversity pass.
+    const prepared = new Map<RecommendationCandidate, DiversityCandidate>();
+    const prepare = (track: RecommendationCandidate): DiversityCandidate => {
+        let value = prepared.get(track);
+        if (!value) {
+            value = {
+                canonicalKey: track.canonicalKey,
+                artist: normalizeRecommendationArtistKey(track.artist.name),
+                album: track.album.title.trim().toLocaleLowerCase(),
+                embedding: track.embedding
+                    ? normalizeVector(track.embedding)
+                    : null,
+            };
+            prepared.set(track, value);
+        }
+        return value;
+    };
+    const redundancy = new Map<RecommendationCandidate, number>();
+    const includeSimilarity = (picked: RecommendationCandidate) => {
+        const right = prepare(picked);
+        for (const entry of scored) {
+            redundancy.set(
+                entry.track,
+                Math.max(
+                    redundancy.get(entry.track) ?? 0,
+                    candidateSimilarity(prepare(entry.track), right),
+                ),
+            );
+        }
+    };
+    for (const picked of initialSelections) includeSimilarity(picked.track);
     const artistCounts = new Map<string, number>();
     const albumCounts = new Map<string, number>();
     const laneCounts = new Map<
@@ -646,12 +679,9 @@ function rankRecommendationCandidatePool(
         let bestIndex = -1;
         let bestMmr = Number.NEGATIVE_INFINITY;
         scored.forEach((entry, index) => {
-            const artistKey = normalizeRecommendationArtistKey(
-                entry.track.artist.name,
-            );
-            const albumKey = `${artistKey}:${entry.track.album.title
-                .trim()
-                .toLocaleLowerCase()}`;
+            const identity = prepare(entry.track);
+            const artistKey = identity.artist;
+            const albumKey = `${artistKey}:${identity.album}`;
             if ((artistCounts.get(artistKey) ?? 0) >= MAX_TRACKS_PER_ARTIST) {
                 return;
             }
@@ -665,14 +695,9 @@ function rankRecommendationCandidatePool(
             ) {
                 return;
             }
-            const redundancy = selected.length
-                ? Math.max(
-                      ...selected.map((picked) =>
-                          candidateSimilarity(entry.track, picked.track),
-                      ),
-                  )
-                : 0;
-            const mmr = entry.score - redundancy * DIVERSITY_PENALTY;
+            const mmr =
+                entry.score -
+                (redundancy.get(entry.track) ?? 0) * DIVERSITY_PENALTY;
             if (mmr > bestMmr) {
                 bestMmr = mmr;
                 bestIndex = index;
@@ -681,6 +706,7 @@ function rankRecommendationCandidatePool(
         if (bestIndex < 0) break;
         const [winner] = scored.splice(bestIndex, 1);
         selected.push(winner);
+        if (selected.length < options.limit) includeSimilarity(winner.track);
         const artistKey = normalizeRecommendationArtistKey(
             winner.track.artist.name,
         );

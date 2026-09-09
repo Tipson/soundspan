@@ -159,6 +159,27 @@ describe("musicBrainzService", () => {
         expect(mockRateLimiterExecute).toHaveBeenCalledTimes(2);
     });
 
+    it("defers failed background identity lookups instead of retrying ahead of interactive requests", async () => {
+        mockHttpGet.mockRejectedValueOnce(new Error("upstream unavailable"));
+        const result =
+            await musicBrainzService.lookupRecordingIdentityByMetadata({
+                artist: "Artist",
+                title: "Optional",
+                duration: 180,
+            });
+        expect(result).toBeNull();
+        expect(mockRateLimiterExecute).toHaveBeenCalledWith(
+            "musicbrainz",
+            expect.any(Function),
+            { priority: -1, skipRetry: true },
+        );
+        expect(mockRedisSetEx).toHaveBeenCalledWith(
+            "mb:identity:v1:Artist:Optional:180",
+            120,
+            "null",
+        );
+    });
+
     it("keeps free-text searches in Axios query params instead of the request path", async () => {
         const query = "../artist?fmt=xml & alias";
         mockHttpGet.mockResolvedValueOnce({ data: { artists: [] } });
