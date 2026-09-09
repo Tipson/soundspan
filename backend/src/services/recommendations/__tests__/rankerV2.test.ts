@@ -29,6 +29,63 @@ function candidate(
 describe("recommendation ranker v2", () => {
     const now = new Date("2026-09-01T12:00:00.000Z");
 
+    it("normalizes shared mood and session vectors once for the entire rank", () => {
+        const dimension = 32;
+        let reads = 0;
+        const shared = () =>
+            new Proxy(
+                Array.from({ length: dimension }, (_, i) => i + 1),
+                {
+                    get(target, key, receiver) {
+                        if (typeof key === "string" && /^\d+$/.test(key))
+                            reads += 1;
+                        return Reflect.get(target, key, receiver);
+                    },
+                },
+            );
+        const tracks = Array.from({ length: 30 }, (_, index) =>
+            candidate(`shared-${index}`, `artist-${index}`, {
+                embedding: Array.from({ length: dimension }, (_, i) =>
+                    Math.sin(index + i + 1),
+                ),
+            }),
+        );
+        const ranked = rankRecommendationCandidates(tracks, {
+            now,
+            limit: 12,
+            sessionId: "shared-audio",
+            direction: "for-you",
+            mood: "calm",
+            dislikedCanonicalKeys: new Set(),
+            exposures: [],
+            positiveCentroids: [],
+            negativeCentroids: [],
+            moodEmbedding: shared(),
+            sessionPositiveEmbedding: shared(),
+            sessionNegativeEmbedding: shared(),
+        });
+        expect(ranked).toHaveLength(12);
+        expect(reads).toBeLessThanOrEqual(3 * dimension * 2);
+    });
+
+    it("validates and normalizes a taste vector in at most two coordinate passes", () => {
+        const values = Array.from({ length: 512 }, (_, index) => index + 1);
+        let reads = 0;
+        const vector = new Proxy(values, {
+            get(target, key, receiver) {
+                if (typeof key === "string" && /^\d+$/.test(key)) reads += 1;
+                return Reflect.get(target, key, receiver);
+            },
+        });
+        const centers = buildTasteCentroids([vector], 1);
+        expect(centers).toHaveLength(1);
+        expect(centers[0]).toHaveLength(values.length);
+        expect(Math.hypot(...centers[0])).toBeCloseTo(1, 12);
+        expect(reads).toBeLessThanOrEqual(values.length * 2);
+        expect(values[0]).toBe(1);
+        expect(values[511]).toBe(512);
+    });
+
     it("reads each audio vector a bounded number of times while diversifying a full queue", () => {
         let reads = 0;
         const dimension = 64;

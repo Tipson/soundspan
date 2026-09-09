@@ -19,15 +19,16 @@ const MAX_TRACKS_PER_ARTIST = 2;
 const MAX_TRACKS_PER_ALBUM = 2;
 
 function normalizeVector(vector: readonly number[]): number[] | null {
-    if (
-        vector.length === 0 ||
-        vector.some((value) => !Number.isFinite(value))
-    ) {
-        return null;
+    if (vector.length === 0) return null;
+    let squaredNorm = 0;
+    for (let index = 0; index < vector.length; index += 1) {
+        // Preserve the callbacks' treatment of sparse legacy vectors.
+        if (!(index in vector)) continue;
+        const value = vector[index];
+        if (!Number.isFinite(value)) return null;
+        squaredNorm += value * value;
     }
-    const norm = Math.sqrt(
-        vector.reduce((sum, value) => sum + value * value, 0),
-    );
+    const norm = Math.sqrt(squaredNorm);
     if (norm <= Number.EPSILON) return null;
     return vector.map((value) => value / norm);
 }
@@ -292,21 +293,15 @@ function baseScore(
                 ),
             ) * 0.4;
     }
-    const moodVector = options.moodEmbedding
-        ? normalizeVector(options.moodEmbedding)
-        : null;
+    const moodVector = options.moodEmbedding;
     if (vector && moodVector && vector.length === moodVector.length) {
         score += cosine(vector, moodVector) * 0.9;
     }
-    const sessionPositive = options.sessionPositiveEmbedding
-        ? normalizeVector(options.sessionPositiveEmbedding)
-        : null;
+    const sessionPositive = options.sessionPositiveEmbedding;
     if (vector && sessionPositive && vector.length === sessionPositive.length) {
         score += cosine(vector, sessionPositive) * 1.8;
     }
-    const sessionNegative = options.sessionNegativeEmbedding
-        ? normalizeVector(options.sessionNegativeEmbedding)
-        : null;
+    const sessionNegative = options.sessionNegativeEmbedding;
     if (vector && sessionNegative && vector.length === sessionNegative.length) {
         score -= Math.max(0, cosine(vector, sessionNegative)) * 0.9;
     }
@@ -380,6 +375,20 @@ export function rankRecommendationCandidates(
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
 ): ScoredRecommendation[] {
+    // These vectors are common to every candidate, including fallback and
+    // exploration. Normalize once without mutating the caller's options.
+    const preparedOptions: RankRecommendationOptions = {
+        ...options,
+        moodEmbedding: options.moodEmbedding
+            ? normalizeVector(options.moodEmbedding)
+            : null,
+        sessionPositiveEmbedding: options.sessionPositiveEmbedding
+            ? normalizeVector(options.sessionPositiveEmbedding)
+            : null,
+        sessionNegativeEmbedding: options.sessionNegativeEmbedding
+            ? normalizeVector(options.sessionNegativeEmbedding)
+            : null,
+    };
     const latestArtistExposures = latestArtistExposureTimes(options.exposures);
     const latestAlbumExposures = latestAlbumExposureTimes(options.exposures);
     const latestCanonicalExposures = latestCanonicalExposureTimes(
@@ -387,7 +396,7 @@ export function rankRecommendationCandidates(
     );
     const fresh = rankRecommendationCandidatePool(
         candidates,
-        options,
+        preparedOptions,
         latestArtistExposures,
         latestCanonicalExposures,
         latestAlbumExposures,
@@ -400,7 +409,7 @@ export function rankRecommendationCandidates(
         ? fresh
         : rankRecommendationCandidatePool(
               candidates,
-              options,
+              preparedOptions,
               latestArtistExposures,
               latestCanonicalExposures,
               latestAlbumExposures,
@@ -410,7 +419,7 @@ export function rankRecommendationCandidates(
     return applyExplorationQuota(
         ranked,
         candidates,
-        options,
+        preparedOptions,
         latestArtistExposures,
         latestCanonicalExposures,
         latestAlbumExposures,
