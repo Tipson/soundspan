@@ -121,11 +121,13 @@ YTMUSIC_SPOOL_TRACK_MAX_BYTES = max(
 )
 # Stay below the backend's 120-second timeout so callers receive this sidecar's 504.
 YTMUSIC_SPOOL_TIMEOUT = env_float("YTMUSIC_SPOOL_TIMEOUT", "110")
-YTMUSIC_SPOOL_CONCURRENCY = max(1, min(4, env_int("YTMUSIC_SPOOL_CONCURRENCY", "2")))
+YTMUSIC_SPOOL_CONCURRENCY = max(1, min(16, env_int("YTMUSIC_SPOOL_CONCURRENCY", "2")))
 _PROVIDER_CHALLENGE_COOLDOWN_SECONDS = 90.0
 _SPOOL_PARTIAL_STALE_SECONDS = 900
 _SPOOL_EVICT_MIN_AGE_SECONDS = 60
-_SPOOL_MAX_PENDING_JOBS = 8
+# Bound burst admission separately from active work (8..128 jobs). Queueing a
+# cold burst must not multiply active extractors, CDN requests or disk writers.
+_SPOOL_MAX_PENDING_JOBS = 8 * YTDLP_EXTRACT_CONCURRENCY
 _SPOOL_MAX_BACKGROUND_PENDING_JOBS = max(0, _SPOOL_MAX_PENDING_JOBS - 1)
 _SPOOL_READ_CHUNK_BYTES = 64 * 1024
 _SPOOL_CDN_RANGE_BYTES = 1024 * 1024
@@ -156,6 +158,17 @@ _spool_transfer_executor = ThreadPoolExecutor(
     thread_name_prefix="ytmusic-spool-transfer",
 )
 _spool_transfer_budget = ExtractionBudget(YTMUSIC_SPOOL_CONCURRENCY)
+# Disk reservations cover whole writers even though network slots cover ranges.
+# Queue writers outside the disk reservation instead of failing a cold burst.
+_spool_writer_budget = ExtractionBudget(
+    max(
+        1,
+        min(
+            _SPOOL_MAX_PENDING_JOBS,
+            YTMUSIC_SPOOL_MAX_BYTES // min(YTMUSIC_SPOOL_TRACK_MAX_BYTES, YTMUSIC_SPOOL_MAX_BYTES),
+        ),
+    )
+)
 # The event loop owns all access, with no await between lookup and insertion.
 _spool_tasks: dict[str, asyncio.Task[tuple[str, str]]] = {}
 _spool_cancel_events: dict[str, threading.Event] = {}
@@ -311,8 +324,8 @@ def _spool_purpose_priority(purpose: str) -> int:
 
 
 def _notify_spool_priority_change() -> None:
-    """Wake both phase queues when a shared task gains an interactive owner."""
-    for budget in (_extraction_budget, _spool_transfer_budget):
+    """Wake resolver, writer and CDN queues when a task gains an interactive owner."""
+    for budget in (_extraction_budget, _spool_transfer_budget, _spool_writer_budget):
         notify = getattr(budget, "notify_priority_change", None)
         if callable(notify):
             notify()
@@ -890,6 +903,7 @@ def _get_yt_stream_url_sync(video_id: str, quality: str = "HIGH") -> JsonObject:
     """Extract a cached audio stream URL for a regular YouTube video."""
     fmt = PROXY_AUDIO_FORMAT_SELECTORS.get(quality, PROXY_AUDIO_FORMAT_SELECTORS["HIGH"])
     ydl_opts = {
+        "allowed_extractors": ["youtube"],
         "format": fmt,
         "quiet": True,
         "no_warnings": True,
@@ -926,6 +940,9 @@ def _build_ytmusic_stream_options(quality: str) -> JsonObject:
     }
     fmt = format_map.get(quality, format_map["HIGH"])
     return {
+        # The caller builds a validated video URL; loading every supported site
+        # adds CPU work per listener and serializes cold bursts under the GIL.
+        "allowed_extractors": ["youtube"],
         "format": fmt,
         "quiet": True,
         "no_warnings": True,
@@ -1228,9 +1245,16 @@ def _iter_progressive_cdn_chunks(
 ) -> Iterator[tuple[bytes, int | None]]:
     """Own one connection pool per transfer, closing it on completion or cancellation."""
     with requests.Session() as client:
-        yield from _iter_progressive_cdn_ranges(
-            stream_url, headers, session, byte_limit, started_at, client
-        )
+        try:
+            yield from _iter_progressive_cdn_ranges(
+                stream_url, headers, session, byte_limit, started_at, client
+            )
+        except ExtractionAbandoned as error:
+            if session.cancel_event.is_set():
+                raise _SpoolDownloadCancelled(
+                    "YouTube Music spool request was abandoned"
+                ) from error
+            raise RuntimeError("YouTube Music spool download timeout exceeded") from error
 
 
 def _iter_progressive_cdn_ranges(
@@ -1258,13 +1282,31 @@ def _iter_progressive_cdn_ranges(
         remaining = YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT - (time.monotonic() - started_at)
         if remaining <= 0:
             raise RuntimeError("YouTube Music spool download timeout exceeded")
-        end = min(offset + _SPOOL_CDN_RANGE_BYTES, total or byte_limit) - 1
+        # A first network lease covers only a playable prefix. Holding it for
+        # a megabyte would serialize new listeners behind buffered audio.
+        range_bytes = (
+            min(_SPOOL_CDN_RANGE_BYTES, 64 * 1024) if offset == 0 else _SPOOL_CDN_RANGE_BYTES
+        )
+        end = min(offset + range_bytes, total or byte_limit) - 1
         range_headers = {**headers, "Range": f"bytes={offset}-{end}"}
         if validator is not None:
             range_headers["If-Range"] = validator
-        with _open_progressive_range(
-            request_url, range_headers, session, started_at, client
-        ) as response:
+
+        def range_priority(range_offset: int = offset) -> int:
+            return max(0, session.current_priority() - int(range_offset > 0))
+
+        # Re-enter admission between ranges: a buffered file tail must not hold
+        # the lane while another listener still needs their very first bytes.
+        with (
+            _spool_transfer_budget.lease(
+                cancel_event=session.cancel_event,
+                deadline=started_at + YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT,
+                priority=range_priority,
+            ),
+            _open_progressive_range(
+                request_url, range_headers, session, started_at, client
+            ) as response,
+        ):
             try:
                 response.raise_for_status()
             except requests.HTTPError as error:
@@ -1579,7 +1621,26 @@ def _release_spool_bytes(reserved: int) -> None:
 @contextmanager
 def _spool_byte_reservation() -> Iterator[int]:
     """Own one active writer's disk allowance through success or failure."""
-    reserved = _reserve_spool_bytes()
+    session = getattr(_spool_worker_context, "session", None)
+    deadline = time.monotonic() + YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT
+    while True:
+        if session is not None and session.cancel_event.is_set():
+            raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+        try:
+            reserved = _reserve_spool_bytes()
+            break
+        except HTTPException as error:
+            # Existing readers may still pin a recently completed file while
+            # another writer holds a worst-case reservation. Wait for that
+            # reservation to shrink; a genuinely full, idle spool still fails.
+            if (
+                error.status_code != 503
+                or session is None
+                or _spool_reserved_bytes <= 0
+                or time.monotonic() >= deadline
+            ):
+                raise
+            session.cancel_event.wait(0.05)
     try:
         yield reserved
     finally:
@@ -1653,6 +1714,7 @@ def _build_ytmusic_spool_options(
     fmt = _build_ytmusic_spool_format(quality, _spool_track_byte_limit())
     outtmpl = str(YTMUSIC_SPOOL_DIR / f"{video_id}-{quality}.%(ext)s")
     return {
+        "allowed_extractors": ["youtube"],
         "format": fmt,
         "outtmpl": outtmpl,
         "quiet": True,
@@ -1890,7 +1952,7 @@ async def _download_ytmusic_spool_bounded(
         return await loop.run_in_executor(
             _spool_transfer_executor,
             partial(
-                _spool_transfer_budget.run,
+                _spool_writer_budget.run,
                 partial(
                     _run_spool_download_sync,
                     video_id,
@@ -2557,6 +2619,9 @@ async def shutdown_stream_provider() -> None:
     global _spool_admitting
 
     _spool_admitting = False
+    from ytmusic_fast_probe import shutdown_fast_probes
+
+    shutdown_fast_probes()
     for cancel_event in tuple(_spool_cancel_events.values()):
         cancel_event.set()
 

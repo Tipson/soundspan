@@ -66,7 +66,9 @@ async def test_local_tcp_workload_exercises_real_sidecar_boundaries(tmp_path: Pa
     assert stream["sameTrackCold"]["peakProviderWorkers"] == 1
     assert stream["warmDistinct"]["successes"] == 12
     assert stream["warmDistinct"]["failures"] == 0
-    assert stream["coldDistinct"]["errors"]["capacity"] == 4
+    assert stream["coldDistinct"]["successes"] == 12
+    assert stream["coldDistinct"]["failures"] == 0
+    assert stream["coldDistinct"]["upstreamCalls"] == 12
     assert stream["rapidSkip"]["cancelled"] == 12
     assert stream["rapidSkip"]["final"]["successes"] == 12
     assert stream["faults"]["unavailable"]["errors"] == {"unavailable": 12}

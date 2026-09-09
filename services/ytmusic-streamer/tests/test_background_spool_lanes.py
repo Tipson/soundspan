@@ -3,6 +3,7 @@
 import asyncio
 import threading
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -32,13 +33,18 @@ async def test_background_direct_transfer_releases_extraction_lane(
             self.lane = lane
 
         def run(self, operation: Callable[[], Any], **kwargs: Any) -> Any:
+            with self.lease(**kwargs):
+                return operation()
+
+        @contextmanager
+        def lease(self, **kwargs: Any) -> Iterator[None]:
             assert not active, "Transfer retained extraction capacity"
             assert kwargs["cancel_event"] is cancel
             assert kwargs["priority"]() == priority
             active.append(self.lane)
             calls.append(self.lane)
             try:
-                return operation()
+                yield
             finally:
                 active.pop()
 
@@ -48,10 +54,27 @@ async def test_background_direct_transfer_releases_extraction_lane(
         assert active == ["extraction"]
         return {"url": "https://test.googlevideo.com/audio", "protocol": "https", "ext": "webm"}
 
-    def chunks(*_args: Any) -> Iterator[tuple[bytes, int]]:
-        assert active == ["transfer"]
-        yield body[:14], len(body)
-        yield body[14:], len(body)
+    class Response:
+        status_code = 200
+        url = "https://test.googlevideo.com/audio"
+
+        def __init__(self):
+            self.headers = {"Content-Length": str(len(body))}
+
+        def __enter__(self):
+            assert active == ["transfer"]
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, **_kwargs):
+            assert active == ["transfer"]
+            yield body[:14]
+            yield body[14:]
 
     def legacy(*_args: Any) -> Any:
         raise AssertionError("Background download still occupies extraction lane")
@@ -60,7 +83,7 @@ async def test_background_direct_transfer_releases_extraction_lane(
     monkeypatch.setattr(stream, "_extraction_budget", Budget("extraction"))
     monkeypatch.setattr(stream, "_spool_transfer_budget", Budget("transfer"))
     monkeypatch.setattr(stream, "_get_stream_url_sync", resolve)
-    monkeypatch.setattr(stream, "_iter_progressive_cdn_chunks", chunks)
+    monkeypatch.setattr(stream.requests.Session, "get", lambda *_a, **_k: Response())
     monkeypatch.setattr(stream, "_extract_spool_with_retry", legacy)
     stream._spool_cancel_events[session.key] = cancel
     try:

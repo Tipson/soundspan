@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased concurrent cold playback
+
+- Scale bounded cold-track admission with configured resolver capacity, retaining single-flight downloads and separate active-work limits. Queue disk writers within the spool budget instead of rejecting temporary reservation pressure.
+- Prioritize each listener's initial 64 KiB CDN range before already buffered tails, retaining contiguous Range/If-Range validation and original audio bytes.
+- Restrict playback extraction to YouTube and omit unused subtitle expansion. Resolve unambiguous original HIGH Opus from the pinned anonymous player response; ambiguous formats, language tracks, live streams and URL transforms retain full extraction.
+- Isolate anonymous player work in a bounded process pool at higher configured concurrency, initialize it before HTTP readiness and keep shared pacing, cancellation, challenge recovery and quality policy in the parent.
+
 ## Unreleased server memory stability
 
 - Keep DCLAP waveform memory reserved through decoding, queue wait and inference; cancel or failed requests release their buffer before admitting another audio decode.

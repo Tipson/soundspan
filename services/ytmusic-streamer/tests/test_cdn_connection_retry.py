@@ -38,7 +38,7 @@ def test_stalled_connection_retries_same_range(monkeypatch):
     monkeypatch.setattr(
         stream.requests.Session, "get", lambda _client, *args, **kwargs: get(*args, **kwargs)
     )
-    session = SimpleNamespace(cancel_event=threading.Event())
+    session = SimpleNamespace(cancel_event=threading.Event(), current_priority=lambda: 2)
     assert list(
         stream._iter_progressive_cdn_chunks(
             "https://cdn.test/audio", {}, session, 4, time.monotonic()
@@ -54,7 +54,7 @@ def test_stalled_connection_retries_same_range(monkeypatch):
 def test_retry_respects_attempt_limit_cancellation_and_deadline(monkeypatch, stop):
     import ytmusic_stream as stream
 
-    session = SimpleNamespace(cancel_event=threading.Event())
+    session = SimpleNamespace(cancel_event=threading.Event(), current_priority=lambda: 2)
     clock = [100.0]
     calls = []
     monkeypatch.setattr(stream.time, "monotonic", lambda: clock[0])
@@ -102,7 +102,7 @@ def test_body_timeout_after_bytes_is_not_replayed(monkeypatch):
     chunks = stream._iter_progressive_cdn_chunks(
         "https://cdn.test/audio",
         {},
-        SimpleNamespace(cancel_event=threading.Event()),
+        SimpleNamespace(cancel_event=threading.Event(), current_priority=lambda: 2),
         8,
         time.monotonic(),
     )
@@ -132,7 +132,7 @@ def test_continuation_connection_retry_keeps_offset_and_validator(monkeypatch):
     chunks = stream._iter_progressive_cdn_chunks(
         "https://cdn.test/audio",
         {},
-        SimpleNamespace(cancel_event=threading.Event()),
+        SimpleNamespace(cancel_event=threading.Event(), current_priority=lambda: 2),
         8,
         time.monotonic(),
     )
@@ -176,7 +176,7 @@ def test_real_proxy_connect_timeout_uses_short_connect_budget(monkeypatch):
                 stream._iter_progressive_cdn_chunks(
                     "https://example.invalid/audio",
                     {},
-                    SimpleNamespace(cancel_event=threading.Event()),
+                    SimpleNamespace(cancel_event=threading.Event(), current_priority=lambda: 2),
                     4,
                     before,
                 )

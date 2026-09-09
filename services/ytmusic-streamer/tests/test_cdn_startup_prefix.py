@@ -43,7 +43,7 @@ def test_first_prefix_arrives_before_cdn_releases_bulk_body(monkeypatch):
     chunks = stream._iter_progressive_cdn_chunks(
         f"http://127.0.0.1:{server.server_port}/audio",
         {},
-        SimpleNamespace(cancel_event=threading.Event()),
+        SimpleNamespace(cancel_event=threading.Event(), current_priority=lambda: 2),
         len(payload),
         time.monotonic(),
     )

@@ -42,7 +42,7 @@ def test_ranges_reuse_connection_but_next_transfer_has_no_cookies(monkeypatch):
             chunks = stream._iter_progressive_cdn_chunks(
                 f"http://127.0.0.1:{server.server_port}/audio",
                 {},
-                SimpleNamespace(cancel_event=threading.Event()),
+                SimpleNamespace(cancel_event=threading.Event(), current_priority=lambda: 2),
                 len(payload),
                 time.monotonic(),
             )
@@ -88,7 +88,11 @@ def test_transfer_closes_its_pool_on_every_exit(monkeypatch, outcome):
     if outcome == "cancel":
         cancel.set()
     chunks = stream._iter_progressive_cdn_chunks(
-        "https://cdn.test/audio", {}, SimpleNamespace(cancel_event=cancel), 4, time.monotonic()
+        "https://cdn.test/audio",
+        {},
+        SimpleNamespace(cancel_event=cancel, current_priority=lambda: 2),
+        4,
+        time.monotonic(),
     )
     if outcome == "error":
         with pytest.raises(requests.ConnectionError):

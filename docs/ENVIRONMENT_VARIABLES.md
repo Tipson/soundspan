@@ -244,6 +244,14 @@ See the [`OIDC_SSO.md` topology matrix](OIDC_SSO.md#deployment-topology) for pro
 
 ## Sidecar Variables
 
+Cold spool admission is bounded to eight jobs per configured resolver (8–128,
+default 16), independently of active provider work. Anonymous HIGH player probes
+use up to eight spawned workers when resolver concurrency is at least four,
+with half as many processes as configured resolvers. Module initialization runs
+before HTTP readiness without fetching tracks. Budget memory for these workers
+as well as ordinary extraction and Deno. Pacing and challenge recovery remain
+process-wide in the parent; raising queue capacity alone does not shorten starts.
+
 `YTMUSIC_YTDLP_EXTRACT_CONCURRENCY` (default `2`, clamped to 1–16) is the combined
 heavy-worker limit for stream metadata, playback spooling and library downloads, not a separate
 allowance for each pool. Waiting playback has priority over metadata. Slots stay
@@ -269,7 +277,7 @@ and a corresponding memory budget. `cached_only` metadata reads do not start yt-
 | `YTMUSIC_SPOOL_DIR`             | `ytmusic-streamer`                                        | Optional | `<tmpdir>/soundspan-ytmusic-spool` | Directory for the YouTube Music download spool. yt-dlp downloads complete tracks here; the sidecar serves player Range requests from these local files.                                                                     |
 | `YTMUSIC_SPOOL_MAX_BYTES`       | `ytmusic-streamer`                                        | Optional | `268435456`                | Disk budget (bytes) for completed spool files; least-recently-used tracks are evicted past this bound. Clamped to a 16 MiB minimum.                                                                                                |
 | `YTMUSIC_SPOOL_TIMEOUT`         | `ytmusic-streamer`                                        | Optional | `110`                      | Per-request deadline (seconds) a client waits for a spool download before HTTP 504. Must stay below the backend's 120 s proxy timeout. Same-track waiters share one job; after the last waiter disconnects or times out, its obsolete download is cancelled at the next yt-dlp progress event. |
-| `YTMUSIC_SPOOL_CONCURRENCY`     | `ytmusic-streamer`                                        | Optional | `2`                        | Max concurrent yt-dlp spool downloads (clamped to 1–4). Requests for the same track always share one download.                                                                                                                     |
+| `YTMUSIC_SPOOL_CONCURRENCY`     | `ytmusic-streamer`                                        | Optional | `2`                        | Max concurrent progressive CDN range requests (clamped to 1–16). Writers have a separate disk-reservation limit. Requests for the same track share one download.                                                                                                                     |
 | `YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT` | `ytmusic-streamer`                                       | Optional | `300`                      | Progress-based deadline (seconds) for one yt-dlp spool download; enforced at each download progress event, with `YTMUSIC_YTDLP_SOCKET_TIMEOUT` bounding individual stalled reads during extraction and download. Live streams are rejected outright. |
 | `YTMUSIC_SPOOL_TRACK_MAX_BYTES` | `ytmusic-streamer`                                        | Optional | `67108864`                 | Per-track downloaded-bytes cap for one spool job (64 MiB default, 1 MiB minimum); the download aborts past this, bounding disk use by any single title.                                                                            |
 | `YTMUSIC_SEARCH_CACHE_TTL`      | `ytmusic-streamer`                                        | Optional | `300`                      | Search cache TTL in seconds (`0` disables cache).                                                                                                                                                                                  |

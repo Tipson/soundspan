@@ -693,7 +693,7 @@ async def test_progressive_writer_owns_bytes_and_atomically_completes(
     assert session.content_length == len(prefix + tail)
     assert request_options["stream"] is True
     assert request_options["headers"]["Accept-Encoding"] == "identity"
-    assert request_options["headers"]["Range"] == "bytes=0-1048575"
+    assert request_options["headers"]["Range"] == "bytes=0-65535"
     assert replace_attempts == 2
     session.release_pins()
 
@@ -1495,12 +1495,19 @@ async def test_two_preloads_leave_a_transfer_slot_for_current_playback(
     second_started = threading.Event()
     current_started = threading.Event()
 
-    def resolve_source(video_id: str, _quality: str, _session: Any) -> object:
+    payload = _mp4_box(b"ftyp") + _mp4_box(b"moov") + _mp4_box(b"mdat", b"audio")
+
+    def resolve_source(_user: str, video_id: str, _quality: str) -> dict[str, Any]:
         if video_id == second_preload:
             second_resolved.set()
-        return object()
+        return {
+            "url": f"https://test.googlevideo.com/{video_id}",
+            "protocol": "https",
+            "ext": "m4a",
+        }
 
-    def transfer(video_id: str, *_args: Any) -> tuple[str, str]:
+    def transfer(_client: Any, url: str, **_kwargs: Any) -> Any:
+        video_id = url.rsplit("/", 1)[-1]
         if video_id == first_preload:
             first_started.set()
             if not release_first.wait(timeout=2):
@@ -1509,12 +1516,31 @@ async def test_two_preloads_leave_a_transfer_slot_for_current_playback(
             second_started.set()
         elif video_id == current:
             current_started.set()
-        return f"{video_id}.m4a", "audio/mp4"
+
+        class Response:
+            status_code = 200
+
+            def __init__(self):
+                self.headers = {"Content-Length": str(len(payload))}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                pass
+
+            def raise_for_status(self):
+                pass
+
+            def iter_content(self, **_kwargs):
+                yield payload
+
+        return Response()
 
     monkeypatch.setattr(stream_module, "_extraction_budget", ExtractionBudget(2))
     monkeypatch.setattr(stream_module, "_spool_transfer_budget", ExtractionBudget(2))
-    monkeypatch.setattr(stream_module, "_resolve_progressive_spool_plan_sync", resolve_source)
-    monkeypatch.setattr(stream_module, "_run_spool_download_sync", transfer)
+    monkeypatch.setattr(stream_module, "_get_stream_url_sync", resolve_source)
+    monkeypatch.setattr(stream_module.requests.Session, "get", transfer)
     extraction_executor = ThreadPoolExecutor(max_workers=3)
     transfer_executor = ThreadPoolExecutor(max_workers=3)
     monkeypatch.setattr(stream_module, "_yt_dlp_spool_executor", extraction_executor)

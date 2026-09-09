@@ -1,5 +1,8 @@
 """Anonymous extraction reuse preserves fallback, expiry, and audio quality."""
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 import yt_dlp
 
@@ -40,6 +43,56 @@ def test_bootstrap_failure_releases_lock_without_immediate_retry():
     now[0] = 61
     context.bootstrap(lambda: "recovered")
     assert context.get() == "recovered"
+
+
+def test_concurrent_first_tracks_share_bootstrap_before_falling_back():
+    from ytmusic_anonymous_context import VisitorContext
+
+    context = VisitorContext()
+    loading = threading.Event()
+    release = threading.Event()
+    following = threading.Event()
+
+    def load():
+        loading.set()
+        assert release.wait(2)
+        return "shared-anonymous"
+
+    def follow():
+        following.set()
+        context.bootstrap(lambda: pytest.fail("duplicate bootstrap"))
+        return context.get()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(context.bootstrap, load)
+        assert loading.wait(1)
+        second = pool.submit(follow)
+        assert following.wait(1)
+        try:
+            # A follower must not immediately proceed to the expensive fallback.
+            with pytest.raises(TimeoutError):
+                second.result(timeout=0.05)
+        finally:
+            release.set()
+        first.result(timeout=1)
+        assert second.result(timeout=1) == "shared-anonymous"
+
+
+def test_bootstrap_follower_has_a_bounded_wait():
+    from ytmusic_anonymous_context import VisitorContext
+
+    context = VisitorContext()
+    # Simulate a stuck loader; timeout must not start another upstream request.
+    assert context._bootstrap_lock.acquire(blocking=False)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            context.bootstrap, lambda: pytest.fail("must not start a duplicate loader")
+        )
+        try:
+            future.result(timeout=2)
+            assert context.get() is None
+        finally:
+            context._bootstrap_lock.release()
 
 
 @pytest.mark.parametrize("fails", [False, True])
@@ -135,6 +188,21 @@ def test_context_expiry_and_old_failure_do_not_erase_new_context():
     assert context.get() == "replacement"
 
 
+def test_audio_extractor_omits_caption_work_without_altering_audio(monkeypatch):
+    import ytmusic_anonymous_context as module
+    from yt_dlp.extractor.youtube import YoutubeIE
+
+    original = {
+        "streamingData": {"adaptiveFormats": [{"itag": 251, "url": "https://cdn.test/a"}]},
+        "videoDetails": {"title": "Original", "lengthSeconds": "220"},
+        "captions": {"playerCaptionsTracklistRenderer": {"translationLanguages": ["many"]}},
+    }
+    monkeypatch.setattr(YoutubeIE, "_extract_player_response", lambda *_a, **_k: original)
+    result = module._CapturingYoutubeIE()._extract_player_response()
+    assert result == {key: value for key, value in original.items() if key != "captions"}
+    assert "captions" in original, "Upstream response must not be mutated"
+
+
 @pytest.mark.parametrize(
     "mode",
     [
@@ -207,6 +275,11 @@ def test_fast_context_lookup_keeps_original_fallback(monkeypatch, mode):
         return original
 
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeDL)
+    import ytmusic_fast_probe as probe
+
+    monkeypatch.setattr(
+        probe, "extract_fast", lambda url, opts, **_kw: FakeDL(opts).extract_info(url)
+    )
     if mode == "timeout":
         with pytest.raises(yt_dlp.utils.DownloadError):
             module.extract_music(

@@ -2,7 +2,8 @@
 
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import TypeVar
 
 T = TypeVar("T")
@@ -46,6 +47,21 @@ class ExtractionBudget:
         deadline: float | None = None,
         priority: Callable[[], int] | None = None,
     ) -> T:
+        """Run one operation while holding a cancellable, prioritized work slot."""
+        with self.lease(
+            playback=playback, cancel_event=cancel_event, deadline=deadline, priority=priority
+        ):
+            return operation()
+
+    @contextmanager
+    def lease(
+        self,
+        *,
+        playback: bool = False,
+        cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
+        priority: Callable[[], int] | None = None,
+    ) -> Iterator[None]:
         """Run work with a cancellable, dynamically promotable priority wait.
 
         Priority zero is background work, one is speculative preload, and two
@@ -99,7 +115,7 @@ class ExtractionBudget:
                     self._playback_waiters = self._priority_waiters[2]
                     self._condition.notify_all()
         try:
-            return operation()
+            yield
         finally:
             with self._condition:
                 self._active -= 1

@@ -50,8 +50,10 @@ class VisitorContext:
                 self._blocked_until = self._clock() + 60
 
     def bootstrap(self, load: Callable[[], str | None]) -> None:
-        """Allow one bounded initializer, never a concurrent or retry storm."""
-        if not self._bootstrap_lock.acquire(blocking=False):
+        """Share one initializer, with a bounded wait before ordinary fallback."""
+        # Cold followers used to bypass the initializer immediately, each doing
+        # the full webpage/player extraction. Wait at most its network budget.
+        if not self._bootstrap_lock.acquire(timeout=1.5):
             return
         try:
             with self._lock:
@@ -83,12 +85,24 @@ def _load_public_context() -> str | None:
         _close_owned_ytmusic_session(public)
 
 
-class _CapturingYoutubeIE(YoutubeIE):  # type: ignore[misc,no-any-unimported]  # Upstream is untyped.
-    visitor: str | None = None
+class _AudioOnlyYoutubeIE(YoutubeIE):  # type: ignore[misc,no-any-unimported]  # Upstream is untyped.
+    """Skip caption URL expansion on the pinned music-only extraction path."""
 
     @classmethod
     def ie_key(cls) -> str:
         return "Youtube"
+
+    def _extract_player_response(self, *args: Any, **kwargs: Any) -> Any:
+        response = super()._extract_player_response(*args, **kwargs)
+        # This path never consumes subtitles. Keep all audio/video details and
+        # format selection intact; do not mutate the upstream response object.
+        if isinstance(response, dict):
+            return {key: value for key, value in response.items() if key != "captions"}
+        return response
+
+
+class _CapturingYoutubeIE(_AudioOnlyYoutubeIE):
+    visitor: str | None = None
 
     def _extract_visitor_data(self, *args: Any) -> Any:
         value = super()._extract_visitor_data(*args)
@@ -145,8 +159,15 @@ def extract_music(
             },
         }
         try:
-            with yt_dlp.YoutubeDL(fast_options) as fast:
-                info = fast.extract_info(url, download=False)
+            from ytmusic_fast_probe import extract_fast
+
+            from services.common.sidecar_runtime_utils import env_int
+
+            info = extract_fast(
+                url,
+                fast_options,
+                workers=max(1, min(8, env_int("YTMUSIC_YTDLP_EXTRACT_CONCURRENCY", "2") // 2)),
+            )
             if (
                 info
                 and info.get("format_id") == "251"

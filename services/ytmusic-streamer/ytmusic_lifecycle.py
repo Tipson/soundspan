@@ -1,5 +1,7 @@
 """Health and process lifecycle routes for the assembled sidecar."""
 
+import asyncio
+
 from ytmusic_browse import YTMUSIC_HOME_FILTERED_SHELVES
 from ytmusic_client import (
     SEARCH_MODE,
@@ -21,6 +23,7 @@ from ytmusic_search import (
 from ytmusic_stream import (
     EXTRACT_DELAY_MAX,
     EXTRACT_DELAY_MIN,
+    YTDLP_EXTRACT_CONCURRENCY,
     _clean_stream_cache,
     shutdown_stream_provider,
 )
@@ -42,6 +45,9 @@ async def health() -> JsonObject:
 
 @app.on_event("startup")
 async def startup() -> None:
+    from ytmusic_fast_probe import warm_fast_probes
+
+    await asyncio.to_thread(warm_fast_probes, workers=max(1, YTDLP_EXTRACT_CONCURRENCY // 2))
     log.info("YouTube Music Streamer starting up (multi-user mode)")
     log.info(
         f"Search admission config: provider_concurrency={SEARCH_PROVIDER_CONCURRENCY}, "
