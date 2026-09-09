@@ -18,6 +18,8 @@ Frontend-only correction for startup blocked before downloaded music becomes acc
 - Auth rotation, layout, device-offline provider and worker-registration component suites: 36 passing.
 - Production webpack build, standalone TypeScript check and targeted ESLint: exit 0.
 - Browser fault injection into the existing production worker: a stalled configuration left the downloads document at `Загрузка…` after four seconds. This controlled reproduction is not a measured minute-long phone startup.
+- Released worker under the same stalled-configuration injection: downloads controls accessible after 1,988 ms.
+- Released app with blocked network and explicit airplane-mode navigator hint: a verified 3.6 MB track downloaded through the normal UI survived reload. Downloads became usable after 164 ms at `/library?tab=downloads` and 146 ms at `/`; real detached media playback used `blob:`, readyState 4 and advancing playback time, with zero auth requests. The browser adapter used Android's OPFS selection; this is desktop Chromium emulation, not a physical-phone timing claim.
 
 ## Adversarial review
 
@@ -30,3 +32,5 @@ Residual: a first-ever visit without an installed offline shell cannot work offl
 Package the verified `.next` and stamped `public` output on top of the current frontend image. Back up the current compose overlay before changing only `services.frontend.image`. Recreate frontend alone, verify health and unchanged neighboring container IDs. Restore that saved overlay and recreate frontend to roll back. Do not restore an older unrelated music-service overlay.
 
 Users must open the app online once to receive and precache the updated worker and bundle before testing an offline restart. Existing audio copies must not be cleared.
+
+Released frontend image: `local/soundspan-frontend:offline-boot-qDBiOOhs`, build `qDBiOOhs7fNRsvqJPtPGh`. Internal health, downloads document and proxied API health returned 200; external `/sw.js` served the expected build and deadline. All 14 neighboring container IDs were preserved. Rollback overlay: `/srv/music/soundspan-releases/offline-boot-rdwm4hye/compose-before.json`.
