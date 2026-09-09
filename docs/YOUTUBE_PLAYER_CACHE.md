@@ -94,6 +94,9 @@ Reader pin counts use a separate short lock so publishing audio and closing
 responses do not wait for a full directory scan or LRU sort. Eviction rechecks
 pins under that short lock immediately before unlinking each file. Accounting
 reuses metadata within one directory sweep, never a stale global size cache.
+One authoritative sweep runs when a writer reserves space; its byte ceiling
+covers the entire write, so no extra whole-cache prune runs before or after it.
+Ready-file lookup filters directory-entry names before allocating file paths.
 
 An egress proxy changes network routing, not provider access rights or capacity
 guarantees. Use an owned, source- and destination-restricted proxy, preserve TLS
