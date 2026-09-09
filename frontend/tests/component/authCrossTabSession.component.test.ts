@@ -101,6 +101,10 @@ mock.module("@/lib/logger", {
 });
 
 beforeEach(() => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+    });
     localStorage.clear();
     window.history.replaceState({}, "", "/");
     state.token = "token-a";
@@ -198,6 +202,48 @@ async function dispatchSessionChange(): Promise<void> {
         await Promise.resolve();
     });
 }
+
+test("known-offline startup opens the cached owner's runtime without waiting for auth", async () => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+    });
+    writeCachedAuthUser(state.currentUser);
+    let calls = 0;
+    state.getCurrentUser = () => {
+        calls += 1;
+        return new Promise<TestUser>(() => undefined);
+    };
+    const { container, unmount } = await renderAuthState();
+    try {
+        assert.equal(container.textContent, "user-a");
+        assert.equal(calls, 0);
+        assert.equal(
+            localStorage.getItem("soundspan_playback_owner_id"),
+            "user-a",
+        );
+    } finally {
+        unmount();
+    }
+});
+
+test("offline cached identity is not restored without a credential", async () => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+    });
+    writeCachedAuthUser(state.currentUser);
+    state.token = null;
+    state.getCurrentUser = async () => {
+        throw new TypeError("offline");
+    };
+    const { container, unmount } = await renderAuthState();
+    try {
+        assert.equal(container.textContent, "signed-out");
+    } finally {
+        unmount();
+    }
+});
 
 test("logout in another tab immediately revokes this tab's user and runtime", async () => {
     const { container, unmount } = await renderAuthState();
@@ -369,6 +415,10 @@ test("mount validation cannot publish a user from a superseded API session", asy
 });
 
 test("a replacement URL token clears cached user A before pending auth validation can fail offline", async () => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+    });
     writeCachedAuthUser(state.currentUser);
     localStorage.setItem("soundspan_playback_owner_id", "user-a");
     localStorage.setItem("soundspan_current_track", '{"id":"track-a"}');

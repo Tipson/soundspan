@@ -439,6 +439,7 @@ function createHarness(
 
     const self = {
         location: { origin: ORIGIN },
+        navigator: { onLine: true },
         registration: {
             backgroundFetch: {
                 async getIds() {
@@ -545,6 +546,7 @@ function createHarness(
     }
 
     return {
+        navigator: self.navigator,
         caches,
         indexedDB,
         clientMessages,
@@ -1386,6 +1388,96 @@ test(
         assert.equal(timeoutDelayMs, 5_000);
         assert.ok(response);
         assert.match(await response.text(), /Timed fallback/);
+    },
+);
+
+test("offline bootstrap uses cached configuration and document without starting network", async () => {
+    let calls = 0;
+    const harness = createHarness(async () => {
+        calls += 1;
+        throw new TypeError("offline");
+    });
+    harness.navigator.onLine = false;
+    const cache = await harness.caches.open("soundspan-v4");
+    for (const path of ["/runtime-config", "/library?tab=downloads"]) {
+        await cache.put(`${ORIGIN}${path}`, new Response(`cached:${path}`));
+        const response = await harness.dispatch("fetch", {
+            request: {
+                method: "GET",
+                mode: path === "/runtime-config" ? "no-cors" : "navigate",
+                url: `${ORIGIN}${path}`,
+                headers: new Headers(),
+            },
+        });
+        assert.equal(await response?.text(), `cached:${path}`);
+    }
+    assert.equal(calls, 0);
+});
+
+test(
+    "stalled bootstrap configuration falls back within its deadline",
+    { timeout: 500 },
+    async () => {
+        let deadline: number | undefined;
+        const harness = createHarness(
+            () => new Promise<Response>(() => undefined),
+            {
+                setTimeout: (callback, delay) => {
+                    deadline = delay;
+                    queueMicrotask(callback);
+                    return 1;
+                },
+                clearTimeout: () => undefined,
+            },
+        );
+        const cache = await harness.caches.open("soundspan-v4");
+        await cache.put(
+            `${ORIGIN}/runtime-config`,
+            new Response("cached-config"),
+        );
+        const response = await harness.dispatch("fetch", {
+            request: new Request(`${ORIGIN}/runtime-config`),
+        });
+        assert.equal(await response?.text(), "cached-config");
+        assert.ok(deadline !== undefined && deadline <= 1500);
+    },
+);
+
+test("online bootstrap configuration refreshes the cached value", async () => {
+    const harness = createHarness(async () => new Response("fresh-config"));
+    const cache = await harness.caches.open("soundspan-v4");
+    await cache.put(`${ORIGIN}/runtime-config`, new Response("old-config"));
+    const response = await harness.dispatch("fetch", {
+        request: new Request(`${ORIGIN}/runtime-config`),
+    });
+    assert.equal(await response?.text(), "fresh-config");
+    assert.equal(
+        await (await cache.match(`${ORIGIN}/runtime-config`))?.text(),
+        "fresh-config",
+    );
+});
+
+test(
+    "bootstrap deadline also bounds a response whose headers arrive but body stalls",
+    { timeout: 500 },
+    async () => {
+        const harness = createHarness(
+            async () => new Response(new ReadableStream()),
+            {
+                setTimeout: (callback) => setTimeout(callback, 10),
+                clearTimeout: (handle) =>
+                    clearTimeout(handle as ReturnType<typeof setTimeout>),
+            },
+        );
+        const cache = await harness.caches.open("soundspan-v4");
+        await cache.put(
+            `${ORIGIN}/runtime-config`,
+            new Response("complete-config"),
+        );
+        const response = await harness.dispatch("fetch", {
+            request: new Request(`${ORIGIN}/runtime-config`),
+        });
+        assert.equal(await response?.text(), "complete-config");
     },
 );
 

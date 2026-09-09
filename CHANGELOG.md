@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased offline startup
+
+- Open the last validated local account immediately when the browser reports offline, without waiting for session or refresh requests. URL-token replacement and logout still revoke the previous account before local playback is exposed.
+- Serve cached navigation and bootstrap configuration immediately offline. Bound configuration fetches, including their body, to 1.5 seconds when connectivity is uncertain; retain network-first refresh online and preserve downloaded audio during worker updates.
+
 ## Unreleased concurrent cold playback
 
 - Scale bounded cold-track admission with configured resolver capacity, retaining single-flight downloads and separate active-work limits. Queue disk writers within the spool budget instead of rejecting temporary reservation pressure.

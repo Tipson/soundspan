@@ -83,6 +83,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 sessionGeneration === api.getSessionGeneration();
 
             try {
+                // Local downloads belong to the last validated account. When
+                // the browser is offline, do not put a network/refresh timeout
+                // in front of that local session. URL-token replacement above
+                // has already revoked any previous account's cached identity.
+                const offlineUser =
+                    navigator.onLine === false && api.getToken()
+                        ? readCachedAuthUser()
+                        : null;
+                if (offlineUser) {
+                    activateUserPlaybackStorage(offlineUser.id);
+                    setUser(offlineUser);
+                    setIsAuthenticated(true);
+                    return;
+                }
                 const userData = await api.getCurrentUser();
                 if (!isCurrentAuthAttempt()) return;
                 activateUserPlaybackStorage(userData.id);

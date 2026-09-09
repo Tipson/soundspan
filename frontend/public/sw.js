@@ -26,6 +26,7 @@ const MAX_CONCURRENT_IMAGE_REQUESTS = 4;
 const REQUEST_DELAY_MS = 10;
 const IMAGE_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const NAVIGATION_NETWORK_TIMEOUT_MS = 5_000;
+const BOOTSTRAP_NETWORK_TIMEOUT_MS = 1_500;
 const LEGACY_BACKGROUND_OPERATION_TIMEOUT_MS = 3_000;
 
 const CRITICAL_PRECACHE_DOCUMENTS = ["/", "/library?tab=downloads"];
@@ -192,20 +193,28 @@ function queueImageRequest(request, cacheKey) {
     });
 }
 
-async function fetchNavigationWithTimeout(request) {
+async function fetchWithTimeout(request, timeoutMs, waitForBody = false) {
     const controller = new AbortController();
     let timeoutHandle;
     const timeout = new Promise((_, reject) => {
         timeoutHandle = setTimeout(() => {
             controller.abort();
             reject(
-                new Error("Истекло время ожидания сетевого запроса навигации"),
+                new Error("Истекло время ожидания сетевого запроса запуска"),
             );
-        }, NAVIGATION_NETWORK_TIMEOUT_MS);
+        }, timeoutMs);
     });
     try {
         return await Promise.race([
-            fetch(request, { signal: controller.signal }),
+            fetch(request, { signal: controller.signal }).then(
+                async (response) => {
+                    // beforeInteractive cannot execute headers alone. Keep its
+                    // tiny configuration body inside the same cancellation budget.
+                    if (waitForBody && response.ok)
+                        await response.clone().arrayBuffer();
+                    return response;
+                },
+            ),
             timeout,
         ]);
     } finally {
@@ -846,10 +855,30 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
         (async () => {
             try {
+                // These resources gate hydration. A known-offline launch must
+                // not wait for the browser's network failure detection.
+                const isBootstrap =
+                    url.origin === self.location.origin &&
+                    url.pathname === "/runtime-config";
+                if (
+                    self.navigator?.onLine === false &&
+                    (request.mode === "navigate" || isBootstrap)
+                ) {
+                    throw new TypeError("offline");
+                }
                 const response =
                     request.mode === "navigate"
-                        ? await fetchNavigationWithTimeout(request)
-                        : await fetch(request);
+                        ? await fetchWithTimeout(
+                              request,
+                              NAVIGATION_NETWORK_TIMEOUT_MS,
+                          )
+                        : isBootstrap
+                          ? await fetchWithTimeout(
+                                request,
+                                BOOTSTRAP_NETWORK_TIMEOUT_MS,
+                                true,
+                            )
+                          : await fetch(request);
                 if (response.status === 200) {
                     const cache = await caches.open(CACHE_NAME);
                     await cache.put(request, response.clone());
