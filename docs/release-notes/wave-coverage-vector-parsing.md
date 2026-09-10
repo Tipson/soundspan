@@ -42,3 +42,35 @@ Standard 512-dimensional vector parsing now retains up to 2,048 exact text input
 Both stores return independent copies and use least-recently-used eviction. Re-analysis, preference changes, ordering changes and changed cluster counts naturally produce the appropriate new input. No recommendation response, session state or account history is reused. Conservative retained payload bounds are about 72 MiB for parsed vectors and 33 MiB for centroids, excluding object/map overhead; actual retention depends on the working set.
 
 verify: resource tests were RED before reuse and GREEN afterward. Checks cover modified returned arrays, changed inputs/counts, parser eviction after 2,049 distinct inputs, centroid eviction by both 32-entry and total-key limits, and uncached legacy behavior. The current focused run passed 359 tests with 4 skipped; backend build passed. Full gate, exact compiled-artifact comparisons and final HTTP acceptance follow below.
+
+## Final verification and release
+
+verify: final code `67eb3990` passed the full Linux coverage gate: 597 suites, 8,495 passed, 7 skipped, zero failures; line coverage 94.55%. Gate artifacts: `/srv/music/soundspan-releases/coverage-reuse-verify-f93saquc`. Ordinary and separate adversarial reviews found no blocking defect. Exact comparisons include 544 production vector parses, 201 centroid cases, 300 ranking cases, eight complete production rankings, and 426 additional cache-boundary/mutation comparisons against `ec99f78f`.
+
+verify: images `local/soundspan-backend:reuse-67eb3990` and `local/soundspan-backend-worker:reuse-67eb3990` were deployed on 10 September 2026 MSK. The two runtime hashes match the packaged local build in both containers:
+
+- `utils/embedding.js`: `1ff13adce9d79fe93629ae71df7b3b4b5ea25b4ccd1812bd5100ace709ef7ab9`
+- `services/recommendations/rankerV2.js`: `37ffaf847081db9f3dc822525c97ff5d85d8a7f19e972d33c49b2c78f7a6971b`
+
+verify: all 15 containers are healthy, with the 13 neighboring container IDs preserved. Public HTTPS health returned 200 and healthy dependencies. A real prepared HIGH audio range through frontend returned 206/audio-webm, 65,536 bytes in 121 ms. This checks byte delivery, not physical listening or new cold-playback capacity. Hybrid remains 50%.
+
+Rollback artifacts are under `/srv/music/soundspan-releases/coverage-reuse-67eb3990-h95m_caq/backup`: `compose-before.json`, `soundspan.dump`, and its SHA-256 file. The 21,735,538-byte custom-format archive passed `pg_restore --list`; no full restore drill was performed. Restore the saved overlay, validate the existing compose configuration and recreate only `backend backend-worker` with `--no-deps` to return to the retained `centroids-ec99f78f` images. Application rollback requires no database restore or deletion of completed analysis results.
+
+## HTTP acceptance and remaining work
+
+verify: the final run used the same diagnostic HTTP path through frontend, four account contexts, fixed session identifiers and two bursts per stage. No isolated test container or additional analysis batch ran during either benchmark.
+
+| Simultaneous requests | Initial p95 | Final p95 | Final HTTP errors |
+| --- | --- | --- | --- |
+| 10 | 2,458 ms | 1,663 ms | 0/20 |
+| 25 | 4,312 ms | 3,404 ms | 0/50 |
+| 50 | 9,780 ms | 6,855 ms | 0/100 |
+| 100 | Not run | Not run | — |
+
+The 50-request p95 improved by about 30%, but still fails the 5-second target. Its measured stage also reported optional `canonical-identity` degradation; the first warmup reported `dclap-mood`, then recovered. Therefore the accepted stage remains 25, and load was not escalated to 100. This is a short internal HTTP benchmark across four accounts, not 50 distinct listeners, sustained throughput, or public TLS capacity. Generation/exposure counts stayed at 2,000/61,133 throughout both benchmark runs.
+
+verify: the final 36-scenario replay for the three sparse accounts has no checked exclusion/diversity violations and no degraded sources. However, current discovery candidates may differ from the saved analysis cohort: Attela7's new Hybrid discovery selection has 0/12 analyzed, while all 22 saved cohort entries remain analyzed. Completing the fixed cohort does not ensure coverage of a continuously changing catalog. TochnoRatatyi and Pivozavr454 still have identical Calm/Energetic mean intensity, so subjective quality and broader candidate supply remain open.
+
+Three successive latency changes reduced duplicated work but did not make the 50-request stage pass: parser `1d48d2fb` = 7,912 ms; normalization `ec99f78f` = 7,880 ms; bounded reuse `67eb3990` = 6,855 ms. At the repository's three-attempt escalation checkpoint (`AGENTS.md`, Debugging Protocol), the user explicitly authorized continued optimization. The next investigation will separately measure remaining API CPU, database waits and canonical-identity timeouts on the current release before choosing another change. No cause for the residual latency is claimed as proven.
+
+Consolidated local evidence: `soundspan/output/coverage-final-acceptance.json`; detailed diagnostic logs remain under backend `/app/logs/coverage-*`. Code is committed locally; no git push was performed.
