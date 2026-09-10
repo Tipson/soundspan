@@ -20,6 +20,8 @@ const LOCK_TTL_MS = 180_000;
 const CURSOR_TTL_SECONDS = 7 * 24 * 3600;
 const RELEASE_LOCK =
     'if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) else return 0 end';
+const SAVE_CURSOR =
+    'if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end; redis.call("SET", KEYS[2], ARGV[2], "EX", ARGV[3]); return 1';
 let interval: ReturnType<typeof setInterval> | null = null;
 let running: Promise<void> | null = null;
 let controller: AbortController | null = null;
@@ -88,6 +90,14 @@ async function run(signal: AbortSignal): Promise<void> {
                 Math.floor(config.recommendations.remoteAnalysisDailyBudget / 2)
         );
     };
+    const saveCursor = async (key: string, value: string): Promise<boolean> => {
+        if (!(await isCurrent())) return false;
+        const saved = await redisClient.eval(SAVE_CURSOR, {
+            keys: [lockKey, key],
+            arguments: [token, value, String(CURSOR_TTL_SECONDS)],
+        });
+        return saved === 1 && !signal.aborted;
+    };
     const scheduler = new RemoteAnalysisHotSetScheduler({
         enabled: true,
         isAccountEligible: async (userId) =>
@@ -123,25 +133,36 @@ async function run(signal: AbortSignal): Promise<void> {
     try {
         const prefetch = new DiscoveryAnalysisPrefetch({
             loadUsers: async () => {
+                const last = await redisClient.get(`${PREFIX}:last-user`);
+                const where = {
+                    playedAt: {
+                        gte: new Date(Date.now() - 90 * 86_400_000),
+                    },
+                    user: { isTestAccount: false },
+                };
                 const rows = await prisma.play.groupBy({
                     by: ["userId"],
                     where: {
-                        playedAt: {
-                            gte: new Date(Date.now() - 90 * 86_400_000),
-                        },
-                        user: { isTestAccount: false },
+                        ...where,
+                        ...(last ? { userId: { gt: last } } : {}),
                     },
                     orderBy: { userId: "asc" },
-                    take: 100,
+                    take: 4,
                 });
-                const last = await redisClient.get(`${PREFIX}:last-user`);
-                const users = rows.map((row) => row.userId);
-                const index = last ? users.findIndex((id) => id > last) : 0;
-                return index > 0
-                    ? [...users.slice(index), ...users.slice(0, index)]
-                    : users;
+                if (last && rows.length < 4) {
+                    rows.push(
+                        ...(await prisma.play.groupBy({
+                            by: ["userId"],
+                            where: { ...where, userId: { lte: last } },
+                            orderBy: { userId: "asc" },
+                            take: 4 - rows.length,
+                        })),
+                    );
+                }
+                return rows.map((row) => row.userId);
             },
             canContinue,
+            visit: (userId) => saveCursor(`${PREFIX}:last-user`, userId),
             loadCandidates: loadDiscoveryPrefetchCandidates,
             admit: (userId, candidates) =>
                 scheduler.schedule({
@@ -151,15 +172,7 @@ async function run(signal: AbortSignal): Promise<void> {
                     candidates,
                 }),
             advance: async (userId, cursor) => {
-                if (!(await isCurrent())) return;
-                await redisClient.set(
-                    `${PREFIX}:cursor:${userId}`,
-                    String(cursor),
-                    { EX: CURSOR_TTL_SECONDS },
-                );
-                await redisClient.set(`${PREFIX}:last-user`, userId, {
-                    EX: CURSOR_TTL_SECONDS,
-                });
+                await saveCursor(`${PREFIX}:cursor:${userId}`, String(cursor));
             },
             failed: (userId, error) =>
                 log.warn("Discovery preparation failed for account", {

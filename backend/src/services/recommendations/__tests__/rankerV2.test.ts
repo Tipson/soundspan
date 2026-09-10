@@ -130,6 +130,43 @@ describe("recommendation ranker v2", () => {
         expect(reads).toBeLessThanOrEqual(3 * dimension * 2);
     });
 
+    it("keeps zero and non-unit vectors correct across cached calls and input edits", () => {
+        const axis = (first: number, second: number) =>
+            Array.from({ length: 512 }, (_, i) =>
+                i === 0 ? first : i === 1 ? second : 0,
+            );
+        const input = [axis(0, 0), axis(3, 4), axis(4, -3)];
+        const expected = buildTasteCentroids(input, 1);
+        expect(expected).toHaveLength(1);
+        expect(Math.hypot(...expected[0])).toBeCloseTo(1, 12);
+        expect(
+            buildTasteCentroids(
+                input.map((row) => [...row]),
+                1,
+            ),
+        ).toEqual(expected);
+        input[2][511] = 100;
+        expect(buildTasteCentroids(input, 1)).not.toEqual(expected);
+        input[2][511] = NaN;
+        expect(buildTasteCentroids(input, 1)).toEqual(
+            buildTasteCentroids([axis(3, 4)], 1),
+        );
+    });
+
+    it("preserves sparse legacy collections and sparse individual vectors", () => {
+        const dense = Array.from({ length: 512 }, (_, axis) => axis + 1);
+        const collection = new Array<number[]>(3);
+        collection[1] = dense;
+        expect(buildTasteCentroids(collection, 1)).toEqual(
+            buildTasteCentroids([dense], 1),
+        );
+        const sparse = new Array<number>(512);
+        sparse[3] = 2;
+        const result = buildTasteCentroids([sparse], 1);
+        expect(result).toHaveLength(1);
+        expect(result[0][3]).toBe(1);
+    });
+
     it("validates and normalizes a taste vector in at most two coordinate passes", () => {
         const values = Array.from({ length: 512 }, (_, index) => index + 1);
         let reads = 0;

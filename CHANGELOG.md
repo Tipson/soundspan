@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased Discovery fairness and taste calculation
+
+- Advance the Discovery account rotation before provider work, so failing accounts keep their candidate cursor without delaying other listeners. Read bounded keyset pages across all eligible accounts and fence cursor writes with the active Redis lease.
+- Reuse taste-centroid results from exact raw vector contents before normalization, preserving numeric results, bounded storage, input changes and independent result copies.
+- Check the opening songs as well as whole-queue intensity when comparing listening moods in small personal catalogs.
+
 ## Unreleased Discovery preparation and settings
 
 - Prepare bounded batches of upcoming Discovery candidates every fifteen minutes through the existing analysis queue, with lower priority, shared job identities, quota headroom, cancellation and no synthetic listening or exposure history.

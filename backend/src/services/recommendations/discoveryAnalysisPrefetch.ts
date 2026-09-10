@@ -3,6 +3,8 @@ import type { RecommendationCandidate } from "./types";
 export interface DiscoveryAnalysisPrefetchDependencies {
     loadUsers(): Promise<string[]>;
     canContinue(): Promise<boolean>;
+    /** Persist the account turn before provider I/O; false means ownership was lost. */
+    visit(userId: string): Promise<boolean>;
     loadCandidates(
         userId: string,
     ): Promise<{ candidates: RecommendationCandidate[]; nextCursor: number }>;
@@ -28,6 +30,8 @@ export class DiscoveryAnalysisPrefetch {
             if (signal.aborted || !(await this.dependencies.canContinue()))
                 break;
             try {
+                if (!(await this.dependencies.visit(userId)) || signal.aborted)
+                    break;
                 const batch = await this.dependencies.loadCandidates(userId);
                 if (signal.aborted || !(await this.dependencies.canContinue()))
                     break;

@@ -79,7 +79,14 @@ beforeEach(() => {
         stored.set(key, value);
         return "OK";
     });
-    mockRedis.eval.mockResolvedValue(1);
+    mockRedis.eval.mockImplementation(
+        async (_script, { keys, arguments: args }) => {
+            if (stored.get(keys[0]) !== args[0]) return 0;
+            if (keys.length === 1) stored.delete(keys[0]);
+            else stored.set(keys[1], args[1]);
+            return 1;
+        },
+    );
     mockPrisma.play.groupBy.mockResolvedValue([{ userId: "listener" }]);
     mockPrisma.user.findUnique.mockResolvedValue({ isTestAccount: false });
     mockQueue.getJobCounts.mockResolvedValue({
@@ -190,4 +197,83 @@ it("rechecks cancellation after a delayed Redis lease response at the final enqu
     release(stored.get("recommendation:discovery-prefetch:lock")!);
     await stopped;
     expect(mockQueue.add).not.toHaveBeenCalled();
+});
+
+it("visits later accounts over three cycles after failures, including accounts past the first hundred", async () => {
+    const users = Array.from(
+        { length: 108 },
+        (_, i) => `user-${String(i).padStart(3, "0")}`,
+    );
+    stored.set("recommendation:discovery-prefetch:last-user", "user-099");
+    mockPrisma.play.groupBy.mockImplementation(async ({ where, take }) =>
+        users
+            .filter(
+                (id) =>
+                    (!where.userId?.gt || id > where.userId.gt) &&
+                    (!where.userId?.lte || id <= where.userId.lte),
+            )
+            .slice(0, take)
+            .map((userId) => ({ userId })),
+    );
+    mockFeed.mockRejectedValue(new Error("provider unavailable"));
+    for (let cycle = 0; cycle < 3; cycle++) {
+        startDiscoveryAnalysisPrefetch();
+        await settle();
+        await stopDiscoveryAnalysisPrefetch();
+    }
+    expect(mockFeed.mock.calls.map(([input]) => input.userId)).toEqual([
+        ...users.slice(100),
+        ...users.slice(0, 4),
+    ]);
+    expect(stored.get("recommendation:discovery-prefetch:last-user")).toBe(
+        "user-003",
+    );
+    expect(
+        [...stored.keys()].filter((key) => key.includes(":cursor:")),
+    ).toEqual([]);
+    expect(mockQueue.add).not.toHaveBeenCalled();
+});
+
+it("fills the final short page from the start without visiting anyone twice", async () => {
+    stored.set("recommendation:discovery-prefetch:last-user", "b");
+    mockPrisma.play.groupBy.mockImplementation(async ({ where, take }) =>
+        ["a", "b", "c"]
+            .filter(
+                (id) =>
+                    (!where.userId?.gt || id > where.userId.gt) &&
+                    (!where.userId?.lte || id <= where.userId.lte),
+            )
+            .slice(0, take)
+            .map((userId) => ({ userId })),
+    );
+    startDiscoveryAnalysisPrefetch();
+    await settle();
+    expect(mockFeed.mock.calls.map(([input]) => input.userId)).toEqual([
+        "c",
+        "a",
+        "b",
+    ]);
+    expect(
+        mockPrisma.play.groupBy.mock.calls.map(([input]) => input.take),
+    ).toEqual([4, 3]);
+});
+
+it("cannot overwrite a successor's rotation cursor when the lease changes before the atomic write", async () => {
+    const evaluate = mockRedis.eval.getMockImplementation()!;
+    mockRedis.eval.mockImplementation(async (script, options) => {
+        if (options.keys.length === 2) {
+            stored.set(options.keys[0], "successor");
+            stored.set(options.keys[1], "successor-account");
+        }
+        return evaluate(script, options);
+    });
+    startDiscoveryAnalysisPrefetch();
+    await settle();
+    expect(mockFeed).not.toHaveBeenCalled();
+    expect(stored.get("recommendation:discovery-prefetch:last-user")).toBe(
+        "successor-account",
+    );
+    expect(stored.get("recommendation:discovery-prefetch:lock")).toBe(
+        "successor",
+    );
 });

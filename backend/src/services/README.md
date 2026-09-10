@@ -175,7 +175,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/recommendations/recommendationService.ts` | Unified Home, Wave, Made For You, and Similar Tracks recommendation facade |
 | `backend/src/services/recommendations/recommendationRuntime.ts` | Production composition of playable candidate adapters, canonical feature/exposure stores, and hot-set scheduling |
 | `backend/src/services/recommendations/engine.ts` | Baseline, shadow, and active experiment semantics plus canonical resolution and supervised persistence |
-| `backend/src/services/recommendations/rankerV2.ts` | Multi-centroid account taste, mood/audio scoring, repeat cooldown, MMR, caps, and deterministic exploration |
+| `backend/src/services/recommendations/rankerV2.ts` | Multi-centroid account taste with bounded exact-input reuse before normalization, mood/audio scoring, repeat cooldown, MMR, caps, and deterministic exploration |
 | `backend/src/services/recommendations/canonicalIdentity.ts` | Global MBID, ISRC, fingerprint, and bounded metadata/duration identity resolution |
 | `backend/src/services/recommendations/featureStore.ts` | Canonical DCLAP/Essentia enrichment and account-scoped taste/dislike reads |
 | `backend/src/services/recommendations/exposureStore.ts` | Persisted generation/exposure attribution and cross-session repeat history |
@@ -184,8 +184,8 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/recommendations/onlineIdentityEnrichment.ts` | Background TIDAL ISRC and MusicBrainz MBID enrichment for online canonical recordings |
 | `backend/src/services/recommendations/remoteAnalysisHotSet.ts` | Bounded canonical remote-analysis admission, durable spool leases, budget, and expiry cleanup |
 | `backend/src/services/recommendations/remoteAnalysisHotSetSweep.ts` | Periodic bounded hot-set admission for recently active accounts |
-| `backend/src/services/recommendations/discoveryAnalysisPrefetch.ts` | Serial cancellable Discovery preparation pass with bounded accounts and candidates |
-| `backend/src/services/recommendations/discoveryAnalysisPrefetchRuntime.ts` | Diagnostic Discovery feed adapter, Redis lease/cursors and low-priority analysis admission |
+| `backend/src/services/recommendations/discoveryAnalysisPrefetch.ts` | Serial cancellable Discovery preparation pass with bounded accounts/candidates and rotation before each provider attempt |
+| `backend/src/services/recommendations/discoveryAnalysisPrefetchRuntime.ts` | Diagnostic Discovery feed adapter, bounded account keyset pages, lease-fenced Redis cursors and low-priority analysis admission |
 | `backend/src/services/recommendations/remoteAnalysisRecovery.ts` | Single-flight startup and periodic TTL enforcement for remote-analysis assets |
 | `backend/src/services/recommendations/shadowEvaluation.ts` | Read-only baseline-vs-hybrid quality, latency, impression-sample, identity, and analysis-coverage evaluator |
 | `backend/src/services/youtubeMusicRetry.ts` | Abort-aware bounded YouTube Music retry and backoff shared by browse and stream calls |

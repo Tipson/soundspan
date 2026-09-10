@@ -23,11 +23,11 @@ global daily budget. A cancelled pass cannot enqueue after its lease check
 returns. Successful admission is not proof that audio analysis has completed;
 verify the resulting canonical analysis/embedding rows separately.
 
-The account discovery query is bounded to the first hundred recently active
-accounts in ID order. Deployments exceeding that population need keyset
-pagination. A failing account keeps its candidate cursor; repeated failures
-across the first batch can delay later accounts and should be investigated
-through the failure logs.
+The account discovery query reads four recently active account IDs after the
+rotation cursor and fills a short final page from the beginning. Rotation is
+persisted before provider work; a failing account keeps its candidate cursor
+while later accounts receive their turns. Cursor writes check the active lease
+atomically. See `discovery-fairness-taste-calculation.md` for its verification.
 
 YouTube Radio warnings report seed ID, reason and optional HTTP status, without
 Axios headers or upstream bodies. Reasons distinguish empty, invalid, timeout,

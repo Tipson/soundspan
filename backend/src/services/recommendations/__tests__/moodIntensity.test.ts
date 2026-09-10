@@ -98,3 +98,45 @@ test("explicit calm mood outweighs a modest taste advantage without losing the p
         })[0].track.id,
     ).toBe("intense");
 });
+
+test("a small personal pool separates the opening songs even when the whole-queue means match", () => {
+    const pool = Array.from({ length: 12 }, (_, i) => ({
+        ...track((i + 1) / 13),
+        id: `yt:small-${i}`,
+        canonicalKey: `small-${i}`,
+        artist: { id: null, name: `Personal artist ${i}` },
+        provider: { tidalTrackId: null, youtubeVideoId: `small-${i}` },
+    }));
+    const options = {
+        now: new Date("2026-09-10T12:00:00Z"),
+        limit: 12,
+        sessionId: "small-personal-pool",
+        direction: "for-you" as const,
+        dislikedCanonicalKeys: new Set<string>(),
+        exposures: [],
+        positiveCentroids: [],
+        negativeCentroids: [],
+    };
+    const calm = rankRecommendationCandidates(pool, {
+        ...options,
+        mood: "calm",
+    });
+    const energetic = rankRecommendationCandidates(pool, {
+        ...options,
+        mood: "energetic",
+    });
+    const intensity = (items: typeof calm) =>
+        items.reduce(
+            (sum, item) => sum + item.track.audioFeatures!.arousal!,
+            0,
+        ) / items.length;
+    expect(calm).toHaveLength(12);
+    expect(energetic).toHaveLength(12);
+    expect(intensity(calm)).toBeCloseTo(intensity(energetic));
+    expect(
+        intensity(energetic.slice(0, 6)) - intensity(calm.slice(0, 6)),
+    ).toBeGreaterThan(0.4);
+    expect(new Set(calm.map((item) => item.track.id))).toEqual(
+        new Set(pool.map((item) => item.id)),
+    );
+});
