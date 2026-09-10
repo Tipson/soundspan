@@ -341,36 +341,45 @@ async function loadTasteRows(
 export async function loadLikedTasteEmbeddings(
     userId: string,
 ): Promise<number[][]> {
-    const recordings = await prisma.canonicalRecording.findMany({
-        where: {
-            mergedIntoId: null,
-            identitySource: { not: "identity-merged" },
-            mappings: {
-                some: {
-                    stale: false,
-                    OR: [
-                        { track: { is: { likedBy: { some: { userId } } } } },
-                        {
-                            trackYtMusic: {
-                                is: { likedBy: { some: { userId } } },
-                            },
-                        },
-                        {
-                            trackTidal: {
-                                is: { likedBy: { some: { userId } } },
-                            },
-                        },
-                    ],
-                },
-            },
-            embeddings: {
-                some: { space: { status: "active", cleaningAt: null } },
-            },
-        },
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-        take: MAX_TASTE_ROWS,
-        select: { id: true },
-    });
+    // Start at the account's indexed likes instead of checking every analyzed
+    // recording through three correlated provider predicates. UNION keeps one
+    // taste anchor when multiple saved providers map to the same recording.
+    const recordings = await prisma.$queryRaw<{ id: string }[]>`
+        WITH liked_recordings AS (
+            SELECT tm."canonicalRecordingId" AS id
+            FROM "LikedTrack" liked
+            JOIN "Track" track ON track.id = liked."trackId"
+            JOIN "TrackMapping" tm ON tm."trackId" = track.id
+            WHERE liked."userId" = ${userId} AND tm.stale = false
+            UNION
+            SELECT tm."canonicalRecordingId" AS id
+            FROM "LikedRemoteTrack" liked
+            JOIN "TrackYtMusic" track ON track.id = liked."trackYtMusicId"
+            JOIN "TrackMapping" tm ON tm."trackYtMusicId" = track.id
+            WHERE liked."userId" = ${userId} AND tm.stale = false
+            UNION
+            SELECT tm."canonicalRecordingId" AS id
+            FROM "LikedRemoteTrack" liked
+            JOIN "TrackTidal" track ON track.id = liked."trackTidalId"
+            JOIN "TrackMapping" tm ON tm."trackTidalId" = track.id
+            WHERE liked."userId" = ${userId} AND tm.stale = false
+        )
+        SELECT cr.id
+        FROM liked_recordings liked
+        JOIN "CanonicalRecording" cr ON cr.id = liked.id
+        WHERE cr."mergedIntoId" IS NULL
+          AND cr."identitySource" <> 'identity-merged'
+          AND EXISTS (
+              SELECT 1
+              FROM canonical_recording_embeddings cre
+              JOIN embedding_spaces es ON es.id = cre.space_id
+              WHERE cre.canonical_recording_id = cr.id
+                AND es.status = 'active'
+                AND es.cleaning_at IS NULL
+          )
+        ORDER BY cr."createdAt" DESC, cr.id ASC
+        LIMIT ${MAX_TASTE_ROWS}
+    `;
     const rows = await loadCanonicalFeatures(recordings.map((row) => row.id));
     return rows.flatMap((row) => (row.embedding ? [row.embedding] : []));
 }

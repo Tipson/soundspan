@@ -73,22 +73,34 @@ describe("default recommendation feature-store persistence", () => {
     });
 
     it("bounds saved-vector lookup to the account's current canonical likes", async () => {
-        mockCanonicalFindMany.mockResolvedValue([{ id: "alice-liked" }]);
-        mockQueryRaw.mockResolvedValue([rawFeature("alice-liked", "[0,1]")]);
-        expect(await loadLikedTasteEmbeddings("alice")).toEqual([[0, 1]]);
-        const query = mockCanonicalFindMany.mock.calls[0][0];
-        expect(query.take).toBe(500);
-        expect(query.where.mergedIntoId).toBeNull();
-        expect(query.where.embeddings.some.space).toEqual({
-            status: "active",
-            cleaningAt: null,
-        });
-        for (const branch of query.where.mappings.some.OR) {
-            const relation = Object.values(branch)[0] as {
-                is: { likedBy: { some: { userId: string } } };
-            };
-            expect(relation.is.likedBy.some.userId).toBe("alice");
-        }
+        mockQueryRaw
+            .mockResolvedValueOnce([{ id: "alice-liked" }])
+            .mockResolvedValueOnce([rawFeature("alice-liked", "[0,1]")]);
+        const userId = "alice' OR true --";
+        expect(await loadLikedTasteEmbeddings(userId)).toEqual([[0, 1]]);
+        expect(mockCanonicalFindMany).not.toHaveBeenCalled();
+        const [parts, ...parameters] = mockQueryRaw.mock.calls[0];
+        const sql = parts.join("?");
+        expect(parameters).toEqual([userId, userId, userId, 500]);
+        expect(sql).not.toContain(userId);
+        expect(sql.match(/UNION/g)).toHaveLength(2);
+        expect(sql).not.toContain("UNION ALL");
+        expect(sql).toContain('FROM "LikedTrack"');
+        expect(sql.match(/FROM "LikedRemoteTrack"/g)).toHaveLength(2);
+        expect(sql.match(/tm\.stale = false/g)).toHaveLength(3);
+        expect(sql).toContain('cr."mergedIntoId" IS NULL');
+        expect(sql).toContain("cr.\"identitySource\" <> 'identity-merged'");
+        expect(sql).toContain("es.status = 'active'");
+        expect(sql).toContain("es.cleaning_at IS NULL");
+        expect(sql).toContain('ORDER BY cr."createdAt" DESC, cr.id ASC');
+        expect(mockQueryRaw.mock.calls[1][1]).toEqual(["alice-liked"]);
+    });
+
+    it("skips vector reads when the current account has no eligible likes", async () => {
+        mockQueryRaw.mockResolvedValue([]);
+        expect(await loadLikedTasteEmbeddings("empty")).toEqual([]);
+        expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+        expect(mockCanonicalFindMany).not.toHaveBeenCalled();
     });
 
     it("ranks bounded saved moods without admitting long mixes or another account's mapping", async () => {
@@ -179,7 +191,7 @@ describe("default recommendation feature-store persistence", () => {
     });
 
     it("derives positive and negative taste only from valid active vectors", async () => {
-        mockQueryRaw.mockResolvedValue([
+        mockQueryRaw.mockResolvedValueOnce([
             {
                 embedding: "[1,0]",
                 outcome: "completed",
@@ -235,19 +247,21 @@ describe("default recommendation feature-store persistence", () => {
                 listenedSeconds: 500,
             },
         ]);
+        mockQueryRaw.mockResolvedValueOnce([]);
 
         const result =
             await recommendationFeatureStore.loadTasteContext("taste-user");
 
         expect(result.positiveCentroids.length).toBeGreaterThan(0);
         expect(result.negativeCentroids.length).toBeGreaterThan(0);
-        expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+        expect(mockQueryRaw).toHaveBeenCalledTimes(2);
     });
 
     it("builds the fast session profile from session-tagged plays", async () => {
         const now = new Date("2026-09-01T12:00:00Z");
         jest.useFakeTimers().setSystemTime(now);
         mockQueryRaw
+            .mockResolvedValueOnce([])
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([rawFeature("canonical-session", "[1,0]")]);
         mockPlayFindMany.mockResolvedValue([

@@ -2,6 +2,7 @@
 
 ## Unreleased recommendation efficiency
 
+- Resolve saved audio-profile anchors from indexed account likes, avoiding a catalog-wide correlated provider scan while retaining distinct canonical identities, active-space checks and the existing 500-record limit.
 - Reuse parsed standard vectors and taste-centroid calculations by their complete numeric input, with bounded process-local storage and independent result copies; changed inputs still take effect immediately.
 - Parse standard pgvector arrays through the native numeric parser, avoiding per-coordinate string allocations while preserving finite-number validation and legacy input compatibility.
 - Combine vector validation and norm calculation in one pass and normalize shared mood/session vectors once per ranking call, retaining exact scores and centroid arithmetic.
