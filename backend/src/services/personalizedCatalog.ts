@@ -46,17 +46,17 @@ export type PersonalizedPlaybackOutcome =
     | "failed"
     | null;
 
-interface StoredSignalTrackRow {
-    trackYtMusic: UnifiedTrackYtMusicRecord | null;
-}
-
-interface StoredPlaybackSignalRow extends StoredSignalTrackRow {
-    listenedSeconds: number | null;
-    completionRatio: number | null;
-    outcome: string | null;
-    playedAt: Date;
-    waveMode: string | null;
-}
+const YOUTUBE_TRACK_SELECT = {
+    id: true,
+    videoId: true,
+    title: true,
+    artist: true,
+    album: true,
+    duration: true,
+    thumbnailUrl: true,
+    artistId: true,
+    albumId: true,
+} as const;
 
 /** Remote-only user signals consumed by the personalized catalog engine. */
 export interface PersonalizedCatalogSignals {
@@ -690,71 +690,84 @@ async function loadSignalsFromPrisma(
     userId: string,
 ): Promise<PersonalizedCatalogSignals> {
     const [recentRows, likedRows, playlistRows, settings] = await Promise.all([
-        // Project each bounded relation in PostgreSQL instead of loading and
-        // joining thousands of parent/track objects again in the ORM runtime.
-        // A missing related track remains null, preserving the parent limit.
-        prisma.$queryRaw<StoredPlaybackSignalRow[]>`
-            SELECT p."listenedSeconds", p."completionRatio", p.outcome,
-                   p."playedAt", p."waveMode",
-                   (SELECT row_to_json(track) FROM (
-                       SELECT yt.id, yt."videoId", yt.title, yt.artist,
-                              yt.album, yt.duration, yt."thumbnailUrl",
-                              yt."artistId", yt."albumId"
-                       FROM "TrackYtMusic" yt WHERE yt.id = p."trackYtMusicId"
-                   ) track) AS "trackYtMusic"
-            FROM "Play" p
-            WHERE p."userId" = ${userId} AND p."trackYtMusicId" IS NOT NULL
-            ORDER BY p."playedAt" DESC
-            LIMIT ${PLAY_SIGNAL_READ_LIMIT}
-        `,
-        prisma.$queryRaw<StoredSignalTrackRow[]>`
-            SELECT (SELECT row_to_json(track) FROM (
-                       SELECT yt.id, yt."videoId", yt.title, yt.artist,
-                              yt.album, yt.duration, yt."thumbnailUrl",
-                              yt."artistId", yt."albumId"
-                       FROM "TrackYtMusic" yt WHERE yt.id = liked."trackYtMusicId"
-                   ) track) AS "trackYtMusic"
-            FROM "LikedRemoteTrack" liked
-            WHERE liked."userId" = ${userId} AND liked."trackYtMusicId" IS NOT NULL
-            ORDER BY liked."likedAt" DESC, liked.id ASC
-            LIMIT ${COLLECTION_SIGNAL_READ_LIMIT}
-        `,
-        prisma.$queryRaw<StoredSignalTrackRow[]>`
-            SELECT (SELECT row_to_json(track) FROM (
-                       SELECT yt.id, yt."videoId", yt.title, yt.artist,
-                              yt.album, yt.duration, yt."thumbnailUrl",
-                              yt."artistId", yt."albumId"
-                       FROM "TrackYtMusic" yt WHERE yt.id = item."trackYtMusicId"
-                   ) track) AS "trackYtMusic"
-            FROM "PlaylistItem" item
-            JOIN "Playlist" playlist ON playlist.id = item."playlistId"
-            WHERE playlist."userId" = ${userId} AND item."trackYtMusicId" IS NOT NULL
-            ORDER BY item."playlistId" ASC, item.sort ASC
-            LIMIT ${COLLECTION_SIGNAL_READ_LIMIT}
-        `,
+        prisma.play.findMany({
+            where: { userId, trackYtMusicId: { not: null } },
+            orderBy: { playedAt: "desc" },
+            take: PLAY_SIGNAL_READ_LIMIT,
+            select: {
+                listenedSeconds: true,
+                completionRatio: true,
+                outcome: true,
+                playedAt: true,
+                waveMode: true,
+                trackYtMusicId: true,
+            },
+        }),
+        prisma.likedRemoteTrack.findMany({
+            where: { userId, trackYtMusicId: { not: null } },
+            orderBy: [{ likedAt: "desc" }, { id: "asc" }],
+            take: COLLECTION_SIGNAL_READ_LIMIT,
+            select: {
+                trackYtMusicId: true,
+            },
+        }),
+        prisma.playlistItem.findMany({
+            where: {
+                trackYtMusicId: { not: null },
+                playlist: { is: { userId } },
+            },
+            orderBy: [{ playlistId: "asc" }, { sort: "asc" }],
+            take: COLLECTION_SIGNAL_READ_LIMIT,
+            select: {
+                trackYtMusicId: true,
+            },
+        }),
         prisma.userSettings.findUnique({
             where: { userId },
             select: { tasteProfile: true },
         }),
     ]);
 
+    // The three bounded signal sets frequently share tracks. Fetch their
+    // distinct metadata once, retaining parent ordering and limits even when
+    // a referenced track is absent. This map lives only for this request.
+    const trackIds = [
+        ...new Set(
+            [...recentRows, ...likedRows, ...playlistRows].flatMap((row) =>
+                row.trackYtMusicId !== null ? [row.trackYtMusicId] : [],
+            ),
+        ),
+    ];
+    const tracks =
+        trackIds.length > 0
+            ? await prisma.trackYtMusic.findMany({
+                  where: { id: { in: trackIds } },
+                  select: YOUTUBE_TRACK_SELECT,
+              })
+            : [];
+    const trackById = new Map(tracks.map((track) => [track.id, track]));
+    const trackFor = (row: { trackYtMusicId: string | null }) => {
+        const track =
+            row.trackYtMusicId !== null
+                ? trackById.get(row.trackYtMusicId)
+                : undefined;
+        return track ? [{ ...track }] : [];
+    };
+
     const recentPlays = recentRows
         .slice(0, TASTE_PLAY_SIGNAL_LIMIT)
-        .flatMap((row) => (row.trackYtMusic ? [row.trackYtMusic] : []));
+        .flatMap(trackFor);
     const tasteSeedTracks =
         parseStoredTasteProfile(settings?.tasteProfile)?.seedTracks ?? [];
     return {
         recentPlays,
-        likedTracks: likedRows.flatMap((row) =>
-            row.trackYtMusic ? [row.trackYtMusic] : [],
-        ),
-        playlistTracks: playlistRows.flatMap((row) =>
-            row.trackYtMusic ? [row.trackYtMusic] : [],
-        ),
+        likedTracks: likedRows.flatMap(trackFor),
+        playlistTracks: playlistRows.flatMap(trackFor),
         tasteSeedTracks,
         dislikedEntityIds: [],
         playbackSignals: recentRows.flatMap((row) => {
-            if (!row.trackYtMusic) return [];
+            const [track] = trackFor(row);
+            if (!track) return [];
             const outcome =
                 row.outcome === "meaningful" ||
                 row.outcome === "completed" ||
@@ -770,7 +783,7 @@ async function loadSignalsFromPrisma(
                     : null;
             return [
                 {
-                    track: row.trackYtMusic,
+                    track,
                     listenedSeconds: row.listenedSeconds,
                     completionRatio: row.completionRatio,
                     outcome,

@@ -1,7 +1,10 @@
 const mockDefaultGetRadio = jest.fn();
 const mockDefaultSearch = jest.fn();
 const mockPrisma = {
-    $queryRaw: jest.fn(),
+    trackYtMusic: { findMany: jest.fn() },
+    play: { findMany: jest.fn() },
+    likedRemoteTrack: { findMany: jest.fn() },
+    playlistItem: { findMany: jest.fn() },
     dislikedEntity: { findMany: jest.fn() },
     scrobbleConnection: { findUnique: jest.fn() },
     userSettings: { findUnique: jest.fn() },
@@ -273,13 +276,15 @@ describe("PersonalizedCatalogService", () => {
 
     it("reads older likes beyond a bulk-imported hundred instead of truncating the taste profile", async () => {
         const rows = Array.from({ length: 343 }, (_, i) => ({
-            trackYtMusic: storedTrack(`like-${i}`),
+            trackYtMusicId: `row-like-${i}`,
         }));
-        mockPrisma.$queryRaw.mockImplementation(
-            async (parts: string[], _userId: string, take: number) =>
-                parts.join("").includes('FROM "LikedRemoteTrack"')
-                    ? rows.slice(0, take)
-                    : [],
+        mockPrisma.play.findMany.mockResolvedValue([]);
+        mockPrisma.likedRemoteTrack.findMany.mockImplementation(
+            async ({ take }: { take: number }) => rows.slice(0, take),
+        );
+        mockPrisma.playlistItem.findMany.mockResolvedValue([]);
+        mockPrisma.trackYtMusic.findMany.mockResolvedValue(
+            Array.from({ length: 343 }, (_, i) => storedTrack(`like-${i}`)),
         );
         mockPrisma.userSettings.findUnique.mockResolvedValue(null);
         mockPrisma.dislikedEntity.findMany.mockResolvedValue([]);
@@ -297,7 +302,7 @@ describe("PersonalizedCatalogService", () => {
                 }),
             }),
         );
-        mockPrisma.$queryRaw.mockReset();
+        mockPrisma.likedRemoteTrack.findMany.mockReset();
         mockDefaultGetRadio.mockClear();
     });
     it("builds a playable remote-only home feed from plays, likes, playlists, and provider radio", async () => {
@@ -592,13 +597,21 @@ describe("PersonalizedCatalogService", () => {
     });
 
     it("scopes every persisted signal query to the requested user", async () => {
-        mockPrisma.$queryRaw
+        mockPrisma.play.findMany.mockResolvedValueOnce([]);
+        mockPrisma.likedRemoteTrack.findMany.mockResolvedValueOnce([
+            { trackYtMusicId: "row-isolated-signal" },
+        ]);
+        mockPrisma.playlistItem.findMany.mockResolvedValueOnce([
+            { trackYtMusicId: "row-isolated-signal" },
+            { trackYtMusicId: "missing" },
+            { trackYtMusicId: "" },
+        ]);
+        mockPrisma.trackYtMusic.findMany
             .mockReset()
-            .mockResolvedValueOnce([])
-            .mockResolvedValueOnce([
-                { trackYtMusic: storedTrack("isolated-signal") },
-            ])
-            .mockResolvedValueOnce([]);
+            .mockResolvedValue([
+                storedTrack("isolated-signal"),
+                storedTrack("legacy-empty-id", { id: "" }),
+            ]);
         mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
             tasteProfile: {
                 genres: ["Rock"],
@@ -619,21 +632,30 @@ describe("PersonalizedCatalogService", () => {
             surface: "wave",
         });
         expect(mockDefaultSearch).not.toHaveBeenCalled();
-
-        expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(3);
-        const queries = mockPrisma.$queryRaw.mock.calls.map(
-            ([parts, ...parameters]) => ({ sql: parts.join("?"), parameters }),
+        expect(mockPrisma.trackYtMusic.findMany).toHaveBeenCalledTimes(1);
+        expect(mockPrisma.trackYtMusic.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: { in: ["row-isolated-signal", "missing", ""] } },
+            }),
         );
-        expect(queries.map(({ parameters }) => parameters)).toEqual([
-            ["isolated-user", 1000],
-            ["isolated-user", 2000],
-            ["isolated-user", 2000],
-        ]);
-        for (const { sql } of queries) {
-            expect(sql).toContain("row_to_json");
-            expect(sql).not.toContain("isolated-user");
-            expect(sql).toContain('FROM "TrackYtMusic"');
-        }
+
+        expect(mockPrisma.play.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ userId: "isolated-user" }),
+            }),
+        );
+        expect(mockPrisma.likedRemoteTrack.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ userId: "isolated-user" }),
+            }),
+        );
+        expect(mockPrisma.playlistItem.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    playlist: { is: { userId: "isolated-user" } },
+                }),
+            }),
+        );
         expect(mockPrisma.userSettings.findUnique).toHaveBeenCalledWith({
             where: { userId: "isolated-user" },
             select: { tasteProfile: true },
@@ -646,6 +668,7 @@ describe("PersonalizedCatalogService", () => {
                     entityId: {
                         in: expect.arrayContaining([
                             "yt:isolated-signal",
+                            "yt:legacy-empty-id",
                             "yt:profile-seed",
                         ]),
                     },
