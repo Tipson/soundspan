@@ -73,28 +73,47 @@ describe("default recommendation feature-store persistence", () => {
     });
 
     it("bounds saved-vector lookup to the account's current canonical likes", async () => {
-        mockCanonicalFindMany.mockResolvedValue([{ id: "alice-liked" }]);
+        mockCanonicalFindMany
+            .mockResolvedValueOnce([{ id: "shared" }, { id: "local" }])
+            .mockResolvedValueOnce([{ id: "shared" }, { id: "youtube" }])
+            .mockResolvedValueOnce([{ id: "tidal" }])
+            .mockResolvedValueOnce([{ id: "alice-liked" }]);
         mockQueryRaw.mockResolvedValue([rawFeature("alice-liked", "[0,1]")]);
         expect(await loadLikedTasteEmbeddings("alice")).toEqual([[0, 1]]);
-        const query = mockCanonicalFindMany.mock.calls[0][0];
-        expect(query.take).toBe(500);
-        expect(query.where.mergedIntoId).toBeNull();
-        expect(query.where.embeddings.some.space).toEqual({
-            status: "active",
-            cleaningAt: null,
-        });
-        for (const branch of query.where.mappings.some.OR) {
-            const relation = Object.values(branch)[0] as {
-                is: { likedBy: { some: { userId: string } } };
-            };
-            expect(relation.is.likedBy.some.userId).toBe("alice");
+        expect(mockCanonicalFindMany).toHaveBeenCalledTimes(4);
+        for (const [index, provider] of [
+            "track",
+            "trackYtMusic",
+            "trackTidal",
+        ].entries()) {
+            const query = mockCanonicalFindMany.mock.calls[index][0];
+            expect(query.where.mappings.some).toEqual({
+                stale: false,
+                [provider]: { is: { likedBy: { some: { userId: "alice" } } } },
+            });
         }
+        for (const [query] of mockCanonicalFindMany.mock.calls) {
+            expect(query.take).toBe(500);
+            expect(query.orderBy).toEqual([
+                { createdAt: "desc" },
+                { id: "asc" },
+            ]);
+            expect(query.where.mergedIntoId).toBeNull();
+            expect(query.where.embeddings.some.space).toEqual({
+                status: "active",
+                cleaningAt: null,
+            });
+        }
+        expect(mockCanonicalFindMany.mock.calls[3][0].where.id).toEqual({
+            in: ["shared", "local", "youtube", "tidal"],
+        });
+        expect(mockQueryRaw.mock.calls[0][1]).toEqual(["alice-liked"]);
     });
 
     it("skips vector reads when the current account has no eligible likes", async () => {
         expect(await loadLikedTasteEmbeddings("empty")).toEqual([]);
         expect(mockQueryRaw).not.toHaveBeenCalled();
-        expect(mockCanonicalFindMany).toHaveBeenCalledTimes(1);
+        expect(mockCanonicalFindMany).toHaveBeenCalledTimes(3);
     });
 
     it("ranks bounded saved moods without admitting long mixes or another account's mapping", async () => {

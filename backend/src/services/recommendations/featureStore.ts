@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/db";
 import { parseEmbedding } from "../../utils/embedding";
 import { buildTasteCentroids, moodFeatureScore } from "./rankerV2";
@@ -341,32 +342,41 @@ async function loadTasteRows(
 export async function loadLikedTasteEmbeddings(
     userId: string,
 ): Promise<number[][]> {
-    const recordings = await prisma.canonicalRecording.findMany({
-        where: {
-            mergedIntoId: null,
-            identitySource: { not: "identity-merged" },
-            mappings: {
-                some: {
-                    stale: false,
-                    OR: [
-                        { track: { is: { likedBy: { some: { userId } } } } },
-                        {
-                            trackYtMusic: {
-                                is: { likedBy: { some: { userId } } },
-                            },
-                        },
-                        {
-                            trackTidal: {
-                                is: { likedBy: { some: { userId } } },
-                            },
-                        },
-                    ],
-                },
-            },
-            embeddings: {
-                some: { space: { status: "active", cleaningAt: null } },
-            },
+    const eligible: Prisma.CanonicalRecordingWhereInput = {
+        mergedIntoId: null,
+        identitySource: { not: "identity-merged" },
+        embeddings: {
+            some: { space: { status: "active", cleaningAt: null } },
         },
+    };
+    // Separate provider predicates let PostgreSQL start from indexed likes
+    // instead of probing every analyzed recording through a correlated OR.
+    const providerFilters: Prisma.TrackMappingWhereInput[] = [
+        { track: { is: { likedBy: { some: { userId } } } } },
+        { trackYtMusic: { is: { likedBy: { some: { userId } } } } },
+        { trackTidal: { is: { likedBy: { some: { userId } } } } },
+    ];
+    const providerRows = await Promise.all(
+        providerFilters.map((provider) =>
+            prisma.canonicalRecording.findMany({
+                where: {
+                    ...eligible,
+                    mappings: { some: { stale: false, ...provider } },
+                },
+                orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+                take: MAX_TASTE_ROWS,
+                select: { id: true },
+            }),
+        ),
+    );
+    const canonicalIds = [
+        ...new Set(providerRows.flatMap((rows) => rows.map((row) => row.id))),
+    ];
+    if (canonicalIds.length === 0) return [];
+    // The global top 500 is contained in the union of each provider's top 500.
+    // Keep final ordering in PostgreSQL, including its text collation on ties.
+    const recordings = await prisma.canonicalRecording.findMany({
+        where: { ...eligible, id: { in: canonicalIds } },
         orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take: MAX_TASTE_ROWS,
         select: { id: true },
