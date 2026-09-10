@@ -1,10 +1,10 @@
 # Wave coverage and vector parsing
 
-verify: final retained production artifact is `keys-dfb61aa8`. In the identical four-account HTTP benchmark, p95 at 10/25/50 simultaneous requests changed from **1,698/3,074/5,681 ms** to **1,387/2,935/5,509 ms**. Measured stages had zero HTTP errors or degraded sources. The first release warmup reported optional DCLAP mood degradation, then recovered. The measured gain at 50 is about 3%; two short bursts do not establish significance or sustained capacity. The <=5-second target remains unmet; 100 was not attempted.
+verify: final retained production artifact is `prefix-a815af55`. The **50-request target is met**: p95 **4,510 ms**, versus this cycle's fresh keys-dfb61aa8 baseline of **5,760 ms** (about 22% lower in this run). At 10/25 requests, p95 is 1,330/2,737 ms versus 1,311/2,961 ms. The next 100-request stage completed without HTTP errors but had p95 **10,068 ms**, so it is not accepted at the <=5-second threshold. All measured stages had zero degraded sources. These are two short bursts per stage, through the internal frontend in four account contexts with fixed request parameters; they do not establish sustained capacity or 50 distinct listeners. Production data changed between checkpoints, and returned candidate counts varied; exact computation parity was checked separately in read-only snapshots.
 
-verify: the retained backend passed build and the final full gate: **598 suites, 8,517 passed, 7 skipped, zero failures, 94.56% lines**. Gate: `/srv/music/soundspan-releases/coverage-keys-final-verify-6q7btcj4`. Both API/worker runtime hashes match; all 15 containers are healthy and the release preserved 13 neighbors. Public HTTPS health returned 200. Four diagnostic Wave feeds returned 200; prepared audio returned 206/audio-webm/65,536 bytes in 31 ms. No final smoke feed reported degradation. Diagnostic generation/exposure counts stayed 2,004/61,193; Hybrid remains 50%. The inspector is closed. No push.
+verify: backend build and the full gate passed: **598 suites, 8,519 passed, 7 skipped, zero failures, 94.56% lines** at `/srv/music/soundspan-releases/coverage-prefix-verify-q70xmciz`. Runtime hashes match in API/worker; all 15 containers are healthy, and release preserved 13 neighbors. Public health returned 200, four final diagnostic Wave feeds returned 200 without degradation, and prepared audio returned 206/audio-webm/65,536 bytes in 33 ms. The first release warmup reported optional DCLAP mood degradation, then recovered. Generation/exposure counts stayed 2,016/61,495 during the accepted load and final smoke. Hybrid remains 50%, API/worker pools remain 8/4, and the inspector is closed. No push.
 
-The fourth authorized cycle checked grouped vector transfer, exact identity-string reuse and linked recency for parsed vectors. Only identity-string reuse is retained; grouped transfer and linked recency showed no useful measured computation gain and were rejected before deployment. The fixed analysis cohort remains an earlier 50/50 result; dynamic discovery coverage and subjective listening acceptance remain open. The three-attempt checkpoint pauses further hypotheses pending user direction. A next cycle should separate database execution, pool wait and API CPU under the same workload before choosing another implementation or pool experiment.
+This cycle rejected the pool increase and retained the vector-cache lookup change. The agreed 50-request checkpoint is complete; 100-request latency, changing discovery coverage and subjective listening acceptance remain open. No third optimization attempt was needed for the 50-request target. Historical results below describe their own checkpoints, not the current deployment.
 
 Baseline: `681680db`, deployed runtime `20608c8e`. Scope: measured analysis coverage for sparse Wave accounts and the next recommendation latency bottleneck. Hybrid remains 50%; no recommendation-weight, schema or listening-history change.
 
@@ -189,3 +189,20 @@ verify: an API-only pool override 8→12 passed the existing adapter/config chec
 The next candidate changes only vector-cache lookup. It chooses a bucket from text length and a 64-character prefix, then requires exact full-text equality before returning a private copy. A collision is parsed and replaces that bucket; it never shares another vector's result. Storage remains at most 2048 vectors of 512 finite coordinates and at most 16384 characters per input. Invalid, oversized and legacy input paths retain their existing behavior. Prefix collisions can reduce cache hits, so the short key is not treated as a unique identity.
 
 verify: the resource test was RED with a 10064-character Map lookup key, then GREEN with the bounded key. Equal-length inputs sharing their prefix, differing final coordinates, invalid tails and mutated output arrays remain isolated. Focused tests passed 383 tests, four skipped; build passed. Exact values/errors matched 20558 comparisons, and complete taste contexts matched all 13 real accounts in a read-only repeatable-read transaction. For 3000 calls on 544 real vector strings, eight alternating server rounds measured 43–59 ms before versus 8–24 ms after; all 544 sampled bucket keys were distinct. Ordinary/adversarial review and full HTTP acceptance remain separate from this computation result.
+
+## Fifth-cycle acceptance
+
+verify: the vector-cache candidate passed 24,000 additional collision/copy-isolation checks with retained storage bounded at 2048 entries. Ordinary and separate adversarial review found no correctness blocker. Full-text equality remains mandatory; prefix collisions only reduce reuse and cannot substitute another vector's values. The complete full gate passed before the release.
+
+verify: release root `/srv/music/soundspan-releases/coverage-prefix-a815af55-b51sy3gb` contains the saved compose overlay and checked database archive (21,803,509 bytes; SHA-256 `12340f403cb846de5dffb7028467dd09aa57f8d5907f5060e634804e66fdd48e`). The previous keys-dfb61aa8 API/worker images remain the code rollback target. The deployed embedding.js SHA-256 is `8485605a4829c700d6889122b2bab61e5203b35945d61cc220f757441081671e`. No database restore or schema change was needed. The pool experiment's overlay had already been restored before this release.
+
+| Simultaneous requests | Fresh baseline p95 | Retained vector lookup p95 |
+| --- | --- | --- |
+| 10 | 1,311 ms | 1,330 ms |
+| 25 | 2,961 ms | 2,737 ms |
+| 50 | 5,760 ms | 4,510 ms |
+| 100 | Not run | 10,068 ms |
+
+The 50-request threshold is accepted in this short benchmark. The 100-request threshold remains unmet despite zero HTTP errors/degraded sources. A sustained run and broader distinct-account cohort would be separate acceptance work, not conclusions from these two bursts.
+
+Cycle-only evidence: `soundspan/output/coverage-cycle5-final-acceptance.json`; consolidated history: `soundspan/output/coverage-final-acceptance.json`.
