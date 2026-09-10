@@ -46,17 +46,17 @@ export type PersonalizedPlaybackOutcome =
     | "failed"
     | null;
 
-const YOUTUBE_TRACK_SELECT = {
-    id: true,
-    videoId: true,
-    title: true,
-    artist: true,
-    album: true,
-    duration: true,
-    thumbnailUrl: true,
-    artistId: true,
-    albumId: true,
-} as const;
+interface StoredSignalTrackRow {
+    trackYtMusic: UnifiedTrackYtMusicRecord | null;
+}
+
+interface StoredPlaybackSignalRow extends StoredSignalTrackRow {
+    listenedSeconds: number | null;
+    completionRatio: number | null;
+    outcome: string | null;
+    playedAt: Date;
+    waveMode: string | null;
+}
 
 /** Remote-only user signals consumed by the personalized catalog engine. */
 export interface PersonalizedCatalogSignals {
@@ -690,38 +690,48 @@ async function loadSignalsFromPrisma(
     userId: string,
 ): Promise<PersonalizedCatalogSignals> {
     const [recentRows, likedRows, playlistRows, settings] = await Promise.all([
-        prisma.play.findMany({
-            where: { userId, trackYtMusicId: { not: null } },
-            orderBy: { playedAt: "desc" },
-            take: PLAY_SIGNAL_READ_LIMIT,
-            select: {
-                listenedSeconds: true,
-                completionRatio: true,
-                outcome: true,
-                playedAt: true,
-                waveMode: true,
-                trackYtMusic: { select: YOUTUBE_TRACK_SELECT },
-            },
-        }),
-        prisma.likedRemoteTrack.findMany({
-            where: { userId, trackYtMusicId: { not: null } },
-            orderBy: [{ likedAt: "desc" }, { id: "asc" }],
-            take: COLLECTION_SIGNAL_READ_LIMIT,
-            select: {
-                trackYtMusic: { select: YOUTUBE_TRACK_SELECT },
-            },
-        }),
-        prisma.playlistItem.findMany({
-            where: {
-                trackYtMusicId: { not: null },
-                playlist: { is: { userId } },
-            },
-            orderBy: [{ playlistId: "asc" }, { sort: "asc" }],
-            take: COLLECTION_SIGNAL_READ_LIMIT,
-            select: {
-                trackYtMusic: { select: YOUTUBE_TRACK_SELECT },
-            },
-        }),
+        // Project each bounded relation in PostgreSQL instead of loading and
+        // joining thousands of parent/track objects again in the ORM runtime.
+        // A missing related track remains null, preserving the parent limit.
+        prisma.$queryRaw<StoredPlaybackSignalRow[]>`
+            SELECT p."listenedSeconds", p."completionRatio", p.outcome,
+                   p."playedAt", p."waveMode",
+                   (SELECT row_to_json(track) FROM (
+                       SELECT yt.id, yt."videoId", yt.title, yt.artist,
+                              yt.album, yt.duration, yt."thumbnailUrl",
+                              yt."artistId", yt."albumId"
+                       FROM "TrackYtMusic" yt WHERE yt.id = p."trackYtMusicId"
+                   ) track) AS "trackYtMusic"
+            FROM "Play" p
+            WHERE p."userId" = ${userId} AND p."trackYtMusicId" IS NOT NULL
+            ORDER BY p."playedAt" DESC
+            LIMIT ${PLAY_SIGNAL_READ_LIMIT}
+        `,
+        prisma.$queryRaw<StoredSignalTrackRow[]>`
+            SELECT (SELECT row_to_json(track) FROM (
+                       SELECT yt.id, yt."videoId", yt.title, yt.artist,
+                              yt.album, yt.duration, yt."thumbnailUrl",
+                              yt."artistId", yt."albumId"
+                       FROM "TrackYtMusic" yt WHERE yt.id = liked."trackYtMusicId"
+                   ) track) AS "trackYtMusic"
+            FROM "LikedRemoteTrack" liked
+            WHERE liked."userId" = ${userId} AND liked."trackYtMusicId" IS NOT NULL
+            ORDER BY liked."likedAt" DESC, liked.id ASC
+            LIMIT ${COLLECTION_SIGNAL_READ_LIMIT}
+        `,
+        prisma.$queryRaw<StoredSignalTrackRow[]>`
+            SELECT (SELECT row_to_json(track) FROM (
+                       SELECT yt.id, yt."videoId", yt.title, yt.artist,
+                              yt.album, yt.duration, yt."thumbnailUrl",
+                              yt."artistId", yt."albumId"
+                       FROM "TrackYtMusic" yt WHERE yt.id = item."trackYtMusicId"
+                   ) track) AS "trackYtMusic"
+            FROM "PlaylistItem" item
+            JOIN "Playlist" playlist ON playlist.id = item."playlistId"
+            WHERE playlist."userId" = ${userId} AND item."trackYtMusicId" IS NOT NULL
+            ORDER BY item."playlistId" ASC, item.sort ASC
+            LIMIT ${COLLECTION_SIGNAL_READ_LIMIT}
+        `,
         prisma.userSettings.findUnique({
             where: { userId },
             select: { tasteProfile: true },

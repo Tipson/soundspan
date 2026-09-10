@@ -1,9 +1,7 @@
 const mockDefaultGetRadio = jest.fn();
 const mockDefaultSearch = jest.fn();
 const mockPrisma = {
-    play: { findMany: jest.fn() },
-    likedRemoteTrack: { findMany: jest.fn() },
-    playlistItem: { findMany: jest.fn() },
+    $queryRaw: jest.fn(),
     dislikedEntity: { findMany: jest.fn() },
     scrobbleConnection: { findUnique: jest.fn() },
     userSettings: { findUnique: jest.fn() },
@@ -277,11 +275,12 @@ describe("PersonalizedCatalogService", () => {
         const rows = Array.from({ length: 343 }, (_, i) => ({
             trackYtMusic: storedTrack(`like-${i}`),
         }));
-        mockPrisma.play.findMany.mockResolvedValue([]);
-        mockPrisma.likedRemoteTrack.findMany.mockImplementation(
-            async ({ take }: { take: number }) => rows.slice(0, take),
+        mockPrisma.$queryRaw.mockImplementation(
+            async (parts: string[], _userId: string, take: number) =>
+                parts.join("").includes('FROM "LikedRemoteTrack"')
+                    ? rows.slice(0, take)
+                    : [],
         );
-        mockPrisma.playlistItem.findMany.mockResolvedValue([]);
         mockPrisma.userSettings.findUnique.mockResolvedValue(null);
         mockPrisma.dislikedEntity.findMany.mockResolvedValue([]);
         mockPrisma.scrobbleConnection.findUnique.mockResolvedValue(null);
@@ -298,7 +297,7 @@ describe("PersonalizedCatalogService", () => {
                 }),
             }),
         );
-        mockPrisma.likedRemoteTrack.findMany.mockReset();
+        mockPrisma.$queryRaw.mockReset();
         mockDefaultGetRadio.mockClear();
     });
     it("builds a playable remote-only home feed from plays, likes, playlists, and provider radio", async () => {
@@ -593,11 +592,13 @@ describe("PersonalizedCatalogService", () => {
     });
 
     it("scopes every persisted signal query to the requested user", async () => {
-        mockPrisma.play.findMany.mockResolvedValueOnce([]);
-        mockPrisma.likedRemoteTrack.findMany.mockResolvedValueOnce([
-            { trackYtMusic: storedTrack("isolated-signal") },
-        ]);
-        mockPrisma.playlistItem.findMany.mockResolvedValueOnce([]);
+        mockPrisma.$queryRaw
+            .mockReset()
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([
+                { trackYtMusic: storedTrack("isolated-signal") },
+            ])
+            .mockResolvedValueOnce([]);
         mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
             tasteProfile: {
                 genres: ["Rock"],
@@ -619,23 +620,20 @@ describe("PersonalizedCatalogService", () => {
         });
         expect(mockDefaultSearch).not.toHaveBeenCalled();
 
-        expect(mockPrisma.play.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({ userId: "isolated-user" }),
-            }),
+        expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(3);
+        const queries = mockPrisma.$queryRaw.mock.calls.map(
+            ([parts, ...parameters]) => ({ sql: parts.join("?"), parameters }),
         );
-        expect(mockPrisma.likedRemoteTrack.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({ userId: "isolated-user" }),
-            }),
-        );
-        expect(mockPrisma.playlistItem.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({
-                    playlist: { is: { userId: "isolated-user" } },
-                }),
-            }),
-        );
+        expect(queries.map(({ parameters }) => parameters)).toEqual([
+            ["isolated-user", 1000],
+            ["isolated-user", 2000],
+            ["isolated-user", 2000],
+        ]);
+        for (const { sql } of queries) {
+            expect(sql).toContain("row_to_json");
+            expect(sql).not.toContain("isolated-user");
+            expect(sql).toContain('FROM "TrackYtMusic"');
+        }
         expect(mockPrisma.userSettings.findUnique).toHaveBeenCalledWith({
             where: { userId: "isolated-user" },
             select: { tasteProfile: true },
