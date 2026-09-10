@@ -20,6 +20,7 @@ import {
 } from "./browserStorage";
 import {
     isLikedPlaylistTrackDownloadable,
+    loadAllDeviceOfflineLikes,
     likedPlaylistTrackToDeviceTrack,
     subscribeToDeviceOfflineLikedChanges,
 } from "./likedAutomation";
@@ -173,6 +174,8 @@ export interface DeviceOfflineContextValue {
     records: DeviceOfflineDownloadRecord[];
     queueItems: DeviceOfflineQueueItem[];
     automationSettings: DeviceOfflineAutomationSettings | null;
+    automationError: string | null;
+    retryAutomation(): Promise<void>;
     capability: ReturnType<typeof resolveDeviceOfflineTransferCapability>;
     download(
         input: Omit<DeviceOfflineDownloadInput, "ownerId">,
@@ -280,6 +283,14 @@ export function DeviceOfflineProvider({
     const autoSyncPromises = useRef(
         new Map<string, { dirty: boolean; promise: Promise<void> }>(),
     );
+    const [automationFailure, setAutomationFailure] = useState<{
+        ownerId: string;
+        message: string;
+    } | null>(null);
+    const automationError =
+        automationFailure?.ownerId === ownerId
+            ? automationFailure.message
+            : null;
     const reconciledOwnerRef = useRef<string | null>(null);
     const reconcileRequestRef = useRef<{
         ownerId: string;
@@ -834,9 +845,15 @@ export function DeviceOfflineProvider({
                 }
                 const settings = await queueManager.getSettings(ownerId);
                 if (!settings.autoDownloadLiked || !isCurrentSession()) return;
-                const liked = await api.getLikedPlaylist({ limit: 10_000 });
+                const liked = await loadAllDeviceOfflineLikes(
+                    (params) => api.getLikedPlaylist(params),
+                    () =>
+                        isCurrentSession() &&
+                        navigator.onLine !== false &&
+                        document.visibilityState !== "hidden",
+                );
                 if (!isCurrentSession()) return;
-                const newestLiked = [...liked.tracks].sort(
+                const newestLiked = [...liked].sort(
                     (left, right) =>
                         Date.parse(right.likedAt) - Date.parse(left.likedAt),
                 );
@@ -859,15 +876,30 @@ export function DeviceOfflineProvider({
                     });
                 await queueManager.syncAutoLiked(ownerId, requests);
                 if (!isCurrentSession()) return;
-                await queueManager.resume(ownerId);
+                setAutomationFailure(null);
+                // A long download queue must not delay a later like/unlike refresh.
+                void queueManager
+                    .resume(ownerId)
+                    .catch(() => undefined)
+                    .finally(loadQueue);
                 await loadQueue();
             } while (entry.dirty && isCurrentSession());
         };
-        entry.promise = execute().finally(() => {
-            if (autoSyncPromises.current.get(ownerId) === entry) {
-                autoSyncPromises.current.delete(ownerId);
-            }
-        });
+        entry.promise = execute()
+            .catch((error) => {
+                if (isCurrentSession())
+                    setAutomationFailure({
+                        ownerId,
+                        message:
+                            "Не удалось обновить список любимых треков для загрузки. Проверьте интернет и повторите попытку.",
+                    });
+                throw error;
+            })
+            .finally(() => {
+                if (autoSyncPromises.current.get(ownerId) === entry) {
+                    autoSyncPromises.current.delete(ownerId);
+                }
+            });
         autoSyncPromises.current.set(ownerId, entry);
         return entry.promise;
     }, [
@@ -1244,6 +1276,16 @@ export function DeviceOfflineProvider({
 
     const refresh = useCallback(() => load(true), [load]);
 
+    const retryAutomation = useCallback(async () => {
+        if (!queueManager || !ownerId) return;
+        await queueManager.retryAutomaticDownloads(ownerId);
+        await syncAutoLiked();
+        void queueManager
+            .resume(ownerId)
+            .catch(() => undefined)
+            .finally(loadQueue);
+    }, [loadQueue, ownerId, queueManager, syncAutoLiked]);
+
     const value = useMemo<DeviceOfflineContextValue>(
         () => ({
             isHydrated,
@@ -1254,6 +1296,8 @@ export function DeviceOfflineProvider({
             records,
             queueItems,
             automationSettings,
+            automationError,
+            retryAutomation,
             capability,
             download,
             resume,
@@ -1281,7 +1325,6 @@ export function DeviceOfflineProvider({
             exportDownload,
             isHydrated,
             isQueueHydrated,
-            load,
             preparePlayback,
             readyRecordForTrack,
             recordForTrack,
@@ -1296,6 +1339,8 @@ export function DeviceOfflineProvider({
             legacyStorage,
             storageError,
             automationSettings,
+            automationError,
+            retryAutomation,
             updateAutomationSettings,
         ],
     );

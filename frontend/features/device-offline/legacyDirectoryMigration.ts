@@ -5,6 +5,7 @@ import type {
     DeviceAudioVault,
 } from "./vault";
 import { frontendLogger } from "@/lib/logger";
+import { api } from "@/lib/api";
 
 const migrationLogger = frontendLogger.child("LegacyDirectoryMigration");
 
@@ -60,7 +61,8 @@ export async function migrateLegacyDirectoryAudio(
             if (!source.url.startsWith("blob:"))
                 throw new Error("Expected local device file");
             response = await (
-                input.read ?? ((url, signal) => fetch(url, { signal }))
+                input.read ??
+                ((url, signal) => api.readLocalDeviceFile(url, signal))
             )(source.url, input.signal);
             if (!response.ok || !response.body)
                 throw new Error("Local device file unavailable");

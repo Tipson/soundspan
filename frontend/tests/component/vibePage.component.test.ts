@@ -239,6 +239,7 @@ mock.module("@/lib/audio-state-context", {
             setWaveMood: (mood: string | null) => {
                 state.waveMood = mood;
             },
+            setWaveLanguage: () => undefined,
             setVibeSourceFeatures: () => undefined,
             setVibeQueueIds: (ids: string[]) => {
                 state.vibeQueueIds = ids;

@@ -25,6 +25,7 @@ const calls = {
     settingUpdates: [] as Array<Record<string, unknown>>,
     collectionEnqueues: [] as Array<Record<string, unknown>>,
     storageRetries: 0,
+    automationRetries: 0,
     storageSetups: 0,
     refreshes: 0,
     confirmations: [] as string[],
@@ -113,10 +114,14 @@ const offlineContext = {
     queueItems: [] as Array<Record<string, unknown>>,
     automationSettings: {
         ownerId: "user-1",
-        autoDownloadLiked: false,
+        autoDownloadLiked: true,
         autoDownloadLikedLimit: 100,
         autoDownloadMaxBytes: 2 * 1024 * 1024 * 1024,
         updatedAt: 0,
+    },
+    automationError: null as string | null,
+    retryAutomation: async () => {
+        calls.automationRetries += 1;
     },
     enqueueCollection: async (input: Record<string, unknown>) => {
         calls.collectionEnqueues.push(input);
@@ -281,6 +286,8 @@ beforeEach(() => {
     calls.settingUpdates.length = 0;
     calls.collectionEnqueues.length = 0;
     calls.storageRetries = 0;
+    calls.automationRetries = 0;
+    offlineContext.automationError = null;
     calls.storageSetups = 0;
     calls.refreshes = 0;
     calls.confirmations.length = 0;
@@ -292,7 +299,7 @@ beforeEach(() => {
         processing: 0,
         errors: 0,
     };
-    offlineContext.automationSettings.autoDownloadLiked = false;
+    offlineContext.automationSettings.autoDownloadLiked = true;
     offlineContext.automationSettings.autoDownloadLikedLimit = 100;
     offlineContext.queueItems.length = 0;
     resumeFailure = null;
@@ -589,7 +596,7 @@ test("album device action batches playable tracks and exposes truthful collectio
     protect.unmount();
 });
 
-test("ordinary settings expose an opt-in auto-liked policy for this device only", async () => {
+test("ordinary settings show automatic likes enabled without artificial limits", async () => {
     const { DeviceOfflineSettingsSection } =
         await import("../../features/settings/components/sections/DeviceOfflineSettingsSection");
     const view = await render(
@@ -603,21 +610,57 @@ test("ordinary settings expose an opt-in auto-liked policy for this device only"
         view.container.textContent ?? "",
         /Автоматически скачивать любимые треки на это устройство/i,
     );
-    assert.match(view.container.textContent ?? "", /2 ГБ/i);
+    assert.doesNotMatch(
+        view.container.textContent ?? "",
+        /2 ГБ|Лимит автоматических загрузок/i,
+    );
+    assert.match(view.container.textContent ?? "", /без ограничения/i);
+    assert.equal(
+        view.container.querySelector("a")?.getAttribute("href"),
+        "/library?tab=downloads",
+    );
     assert.match(view.container.textContent ?? "", /Soundspan Music/i);
     assert.doesNotMatch(view.container.textContent ?? "", /browser storage/i);
     const toggle = view.container.querySelector(
         "#device-auto-download-liked",
     ) as HTMLInputElement;
-    assert.equal(toggle.checked, false);
+    assert.equal(toggle.checked, true);
     assert.match(toggle.parentElement?.className ?? "", /min-h-11/);
 
     await React.act(async () => {
         toggle.click();
         await Promise.resolve();
     });
-    assert.deepEqual(calls.settingUpdates, [{ autoDownloadLiked: true }]);
+    assert.deepEqual(calls.settingUpdates, [{ autoDownloadLiked: false }]);
     view.unmount();
+});
+
+test("offline settings explain a storage pause and offer an explicit retry", async () => {
+    offlineContext.queueItems.push({
+        management: "auto-liked",
+        status: "error",
+        requiresStorageAction: true,
+        errorMessage: "Недостаточно места. Освободите место на устройстве.",
+    });
+    const { DeviceOfflineSettingsSection } =
+        await import("../../features/settings/components/sections/DeviceOfflineSettingsSection");
+    const view = await render(
+        React.createElement(DeviceOfflineSettingsSection),
+    );
+    try {
+        assert.match(view.container.textContent ?? "", /Недостаточно места/);
+        const retry = [...view.container.querySelectorAll("button")].find(
+            (button) => button.textContent?.includes("Повторить загрузку"),
+        )!;
+        assert.ok(retry);
+        await React.act(async () => {
+            retry.click();
+            await Promise.resolve();
+        });
+        assert.equal(calls.automationRetries, 1);
+    } finally {
+        view.unmount();
+    }
 });
 
 test("offline settings require an explicit device folder before enabling automatic downloads", async () => {
@@ -637,7 +680,7 @@ test("offline settings require an explicit device folder before enabling automat
     const toggle = view.container.querySelector(
         "#device-auto-download-liked",
     ) as HTMLInputElement;
-    assert.equal(toggle.disabled, true);
+    assert.equal(toggle.disabled, false);
     const setup = view.container.querySelector(
         'button[aria-label="Выбрать папку с музыкой"]',
     ) as HTMLButtonElement;
@@ -708,7 +751,7 @@ test("unsupported browsers explain that a plain PWA cannot save managed files ou
                 "#device-auto-download-liked",
             ) as HTMLInputElement
         ).disabled,
-        true,
+        false,
     );
     view.unmount();
 });

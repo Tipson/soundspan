@@ -42,6 +42,83 @@ mock.module("next/image", {
 });
 after(() => GlobalRegistrator.unregister());
 
+test("avatar menu supports keyboard navigation and returns focus on Escape", async () => {
+    (
+        globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
+    const { createRoot } = await import("react-dom/client");
+    const { UserAvatarMenu } =
+        await import("../../components/layout/UserAvatarMenu");
+    const client = new QueryClient();
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+        await React.act(async () =>
+            root.render(
+                React.createElement(
+                    QueryClientProvider,
+                    { client },
+                    React.createElement(UserAvatarMenu),
+                ),
+            ),
+        );
+        const trigger = container.querySelector<HTMLButtonElement>(
+            "button[aria-haspopup]",
+        )!;
+        await React.act(async () =>
+            trigger.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "ArrowDown",
+                    bubbles: true,
+                }),
+            ),
+        );
+        const items = [
+            ...container.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+        ];
+        assert.ok(items.length >= 2, "menu opens with actionable items");
+        assert.ok(
+            document.activeElement === items[0],
+            "first item receives focus",
+        );
+        await React.act(async () =>
+            items[0].dispatchEvent(
+                new KeyboardEvent("keydown", { key: "End", bubbles: true }),
+            ),
+        );
+        assert.ok(
+            document.activeElement === items.at(-1),
+            "End moves to last item",
+        );
+        await React.act(async () =>
+            items.at(-1)!.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "Escape",
+                    bubbles: true,
+                }),
+            ),
+        );
+        assert.equal(trigger.getAttribute("aria-expanded"), "false");
+        assert.ok(
+            document.activeElement === trigger,
+            "Escape restores avatar focus",
+        );
+        await React.act(async () => trigger.click());
+        await React.act(async () => trigger.focus());
+        await React.act(async () => trigger.click());
+        assert.equal(
+            trigger.getAttribute("aria-expanded"),
+            "false",
+            "a second avatar click closes the menu after focus moves back to it",
+        );
+    } finally {
+        await React.act(async () => root.unmount());
+        client.clear();
+        container.remove();
+    }
+});
+
 async function links(track: Track) {
     state.currentTrack = track;
     const { useMediaInfo } = await import("../../hooks/useMediaInfo");

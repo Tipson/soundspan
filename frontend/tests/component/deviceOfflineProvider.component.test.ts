@@ -1564,7 +1564,7 @@ test("return-to-app signals coalesce and retry auto-liked after an API failure",
     );
 });
 
-test("device automation settings are owner-scoped, local, and default off", async () => {
+test("device automation settings are owner-scoped and can resume an explicitly paused policy", async () => {
     const { DeviceOfflineProvider, useDeviceOffline } =
         await import("../../features/device-offline/DeviceOfflineProvider");
     const { createRoot } = await import("react-dom/client");

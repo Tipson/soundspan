@@ -827,7 +827,7 @@ async function enqueueRemoteAnalysis(
     const { remoteAnalysisQueue } = await import("../../workers/queues");
     const existing = await remoteAnalysisQueue.getJob(jobId);
     if (existing) return;
-    await remoteAnalysisQueue.add("analyze", job, { jobId });
+    await remoteAnalysisQueue.add("analyze", job, { jobId, priority: 1 });
 }
 
 export const remoteAnalysisHotSetScheduler = new RemoteAnalysisHotSetScheduler({

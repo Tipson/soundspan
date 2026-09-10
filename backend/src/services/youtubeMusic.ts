@@ -22,6 +22,10 @@ import {
 } from "./ytMusicPlayableAlternate";
 import { retryYtMusicRequest as retryWithBackoff } from "./youtubeMusicRetry";
 import { encodeProviderPathSegment } from "./youtubeMusicInput";
+import {
+    classifyYouTubeRadioFailure,
+    YouTubeRadioResponseError,
+} from "./youtubeRadioDiagnostics";
 export type {
     YtMusicPlayableAlternate,
     YtMusicPlayableAlternateInput,
@@ -1215,24 +1219,35 @@ class YouTubeMusicService {
                     isBackground ? "background" : "interactive",
                 );
             }
-            const response = await acquire(remainingTimeoutMs).catch((error: unknown) => {
-                const reset = error as {
-                    code?: string;
-                    response?: unknown;
-                    request?: { reusedSocket?: boolean };
-                } | null;
-                // A sidecar can close an idle keep-alive socket just as Node
-                // reuses it. Retry this GET only before any response, once on
-                // a fresh connection, within the same admission and deadline.
-                if (reset?.code !== "ECONNRESET" || reset.response ||
-                    reset.request?.reusedSocket !== true || options.signal?.aborted) {
-                    throw error;
-                }
-                const remaining = Math.ceil(deadlineAtMs - performance.now());
-                if (remaining <= 0) throw error;
-                logger.warn("Retrying reset reused sidecar audio connection", { videoId, purpose });
-                return acquire(remaining, true);
-            });
+            const response = await acquire(remainingTimeoutMs).catch(
+                (error: unknown) => {
+                    const reset = error as {
+                        code?: string;
+                        response?: unknown;
+                        request?: { reusedSocket?: boolean };
+                    } | null;
+                    // A sidecar can close an idle keep-alive socket just as Node
+                    // reuses it. Retry this GET only before any response, once on
+                    // a fresh connection, within the same admission and deadline.
+                    if (
+                        reset?.code !== "ECONNRESET" ||
+                        reset.response ||
+                        reset.request?.reusedSocket !== true ||
+                        options.signal?.aborted
+                    ) {
+                        throw error;
+                    }
+                    const remaining = Math.ceil(
+                        deadlineAtMs - performance.now(),
+                    );
+                    if (remaining <= 0) throw error;
+                    logger.warn(
+                        "Retrying reset reused sidecar audio connection",
+                        { videoId, purpose },
+                    );
+                    return acquire(remaining, true);
+                },
+            );
             holdAdmissionUntilStreamCompletion(response.data, () => {
                 if (
                     !deferAdmissionReleaseUntilTransportReleased(
@@ -1925,14 +1940,36 @@ class YouTubeMusicService {
         let loader = this.radioLoaders.get(cacheKey);
         if (!loader) {
             loader = cachedSingleflight(async () => {
-                const { data } = await this.client.get("/radio", {
-                    params: {
-                        video_id: normalizedVideoId,
-                        limit: boundedLimit,
-                    },
-                    timeout: 13_000,
-                });
-                return data;
+                try {
+                    const { data } = await this.client.get("/radio", {
+                        params: {
+                            video_id: normalizedVideoId,
+                            limit: boundedLimit,
+                        },
+                        timeout: 13_000,
+                    });
+                    if (!data || !Array.isArray(data.tracks))
+                        throw new YouTubeRadioResponseError("invalid");
+                    const tracks = data.tracks
+                        .slice(0, boundedLimit)
+                        .filter(
+                            (track: unknown) =>
+                                track !== null &&
+                                typeof track === "object" &&
+                                "videoId" in track &&
+                                typeof track.videoId === "string" &&
+                                track.videoId.trim().length > 0,
+                        );
+                    if (tracks.length === 0)
+                        throw new YouTubeRadioResponseError("empty");
+                    return { ...data, tracks };
+                } catch (error) {
+                    logger.warn("YouTube Music radio unavailable", {
+                        seedVideoId: normalizedVideoId.slice(0, 128),
+                        ...classifyYouTubeRadioFailure(error),
+                    });
+                    throw error;
+                }
             }, RADIO_CACHE_TTL_MS);
             if (this.radioLoaders.size >= RADIO_CACHE_MAX_KEYS) {
                 const oldestKey = this.radioLoaders.keys().next().value;

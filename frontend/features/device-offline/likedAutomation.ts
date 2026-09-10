@@ -1,4 +1,9 @@
-import type { LikedPlaylistTrack, TrackPreferenceSignal } from "@/lib/api";
+import type {
+    LikedPlaylistTrack,
+    LikedPlaylistResponse,
+    LikedPlaylistCursor,
+    TrackPreferenceSignal,
+} from "@/lib/api";
 import {
     hasLocalTrackBacking,
     isTrackActionable,
@@ -9,6 +14,45 @@ import type { DeviceOfflineTrack } from "./types";
 
 export const DEVICE_OFFLINE_LIKED_CHANGE_EVENT =
     "soundspan:device-offline-liked-change";
+
+/** Follow the API cursor without silently truncating the user's collection. */
+export async function loadAllDeviceOfflineLikes(
+    fetchPage: (params: {
+        limit: number;
+        cursorLikedAt?: string;
+        cursorTrackId?: string;
+    }) => Promise<LikedPlaylistResponse>,
+    isCurrent: () => boolean,
+): Promise<LikedPlaylistTrack[]> {
+    const tracks = new Map<string, LikedPlaylistTrack>();
+    const cursors = new Set<string>();
+    let cursor: LikedPlaylistCursor | null = null;
+    do {
+        if (!isCurrent())
+            throw new Error("Сеанс загрузки любимых треков изменился");
+        const page = await fetchPage({
+            limit: 500,
+            ...(cursor
+                ? {
+                      cursorLikedAt: cursor.likedAt,
+                      cursorTrackId: cursor.trackId,
+                  }
+                : {}),
+        });
+        if (!isCurrent())
+            throw new Error("Сеанс загрузки любимых треков изменился");
+        for (const track of page.tracks) tracks.set(track.id, track);
+        if (!page.pagination?.hasMore) return [...tracks.values()];
+        cursor = page.pagination.nextCursor;
+        const key = cursor ? `${cursor.likedAt}\u0000${cursor.trackId}` : "";
+        if (!key || cursors.has(key))
+            throw new Error(
+                "Не удалось продолжить список любимых треков: некорректный курсор",
+            );
+        cursors.add(key);
+    } while (cursor);
+    return [...tracks.values()];
+}
 
 export interface DeviceOfflineLikedEventTarget {
     addEventListener(type: string, listener: EventListener): void;

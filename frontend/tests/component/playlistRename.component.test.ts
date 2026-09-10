@@ -257,6 +257,12 @@ mock.module("@/utils/formatTime", {
 mock.module("@/lib/logger", {
     namedExports: {
         frontendLogger: {
+            child: () => ({
+                error: () => undefined,
+                warn: () => undefined,
+                info: () => undefined,
+                debug: () => undefined,
+            }),
             error: () => undefined,
             warn: () => undefined,
             info: () => undefined,

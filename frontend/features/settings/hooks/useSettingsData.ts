@@ -30,6 +30,8 @@ export function useSettingsData() {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [settings, setSettings] = useState<UserSettings>(defaultSettings);
+    const [savedSettings, setSavedSettings] =
+        useState<UserSettings>(defaultSettings);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [loadError, setLoadError] = useState(false);
@@ -44,13 +46,15 @@ export function useSettingsData() {
                     setIsLoading(true);
                 }
                 const data = await api.getSettings();
-                setSettings({
+                const loadedSettings: UserSettings = {
                     ...data,
                     displayName: data.displayName ?? "",
                     shareOnlinePresence: data.shareOnlinePresence ?? false,
                     shareListeningStatus: data.shareListeningStatus ?? false,
                     showYtMusicExplore: data.showYtMusicExplore ?? true,
-                });
+                };
+                setSettings(loadedSettings);
+                setSavedSettings(loadedSettings);
                 setLoadError(false);
             } catch (error) {
                 logger.error("Failed to load user settings", { error });
@@ -103,10 +107,12 @@ export function useSettingsData() {
     }, [isAuthenticated, loadError, loadSettings]);
 
     const saveSettings = async (newSettings: UserSettings) => {
+        const submittedSettings = { ...newSettings };
         try {
             setIsSaving(true);
-            await api.updateSettings(newSettings);
-            setSettings(newSettings);
+            await api.updateSettings(submittedSettings);
+            // A response acknowledges the submitted snapshot, not later edits.
+            setSavedSettings(submittedSettings);
             // Invalidate shared settings query so other consumers (e.g. Explore page) pick up changes immediately
             queryClient.invalidateQueries({
                 queryKey: queryKeys.userSettings(),
@@ -129,6 +135,11 @@ export function useSettingsData() {
 
     return {
         settings,
+        hasChanges: Object.keys(settings).some(
+            (key) =>
+                settings[key as keyof UserSettings] !==
+                savedSettings[key as keyof UserSettings],
+        ),
         isLoading,
         isSaving,
         setSettings,

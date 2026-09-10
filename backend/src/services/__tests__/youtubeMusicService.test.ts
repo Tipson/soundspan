@@ -2227,7 +2227,9 @@ describe("youtubeMusic service", () => {
                 data: {
                     playlistId: "RDrecovered",
                     seedVideoId: "seed-retry",
-                    tracks: [],
+                    tracks: [
+                        { videoId: "recovered-track", title: "Recovered" },
+                    ],
                 },
             });
 
@@ -2240,5 +2242,48 @@ describe("youtubeMusic service", () => {
             expect.objectContaining({ playlistId: "RDrecovered" }),
         );
         expect(mockClient.get).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not cache empty radio responses and records a bounded failure reason", async () => {
+        mockClient.get
+            .mockResolvedValueOnce({ data: { tracks: [] } })
+            .mockResolvedValueOnce({
+                data: { tracks: [{ videoId: "recovered" }] },
+            });
+        await expect(ytMusicService.getRadio("empty-seed", 12)).rejects.toThrow(
+            /empty/i,
+        );
+        await expect(
+            ytMusicService.getRadio("empty-seed", 12),
+        ).resolves.toEqual({ tracks: [{ videoId: "recovered" }] });
+        expect(mockClient.get).toHaveBeenCalledTimes(2);
+        expect(logger.warn).toHaveBeenCalledWith(
+            "YouTube Music radio unavailable",
+            expect.objectContaining({
+                reason: "empty",
+                seedVideoId: "empty-seed",
+            }),
+        );
+    });
+
+    it("logs transport reasons without response bodies or credentials", async () => {
+        mockClient.get.mockRejectedValueOnce({
+            code: "ECONNABORTED",
+            config: { headers: { Authorization: "secret-value" } },
+            response: { status: 504, data: "private-response" },
+        });
+        await expect(
+            ytMusicService.getRadio("timeout-seed", 12),
+        ).rejects.toBeDefined();
+        const entry = (logger.warn as jest.Mock).mock.calls.find(
+            ([message]) => message === "YouTube Music radio unavailable",
+        );
+        expect(entry?.[1]).toMatchObject({
+            reason: "timeout",
+            upstreamStatus: 504,
+        });
+        expect(JSON.stringify(entry)).not.toMatch(
+            /secret-value|private-response|Authorization/,
+        );
     });
 });

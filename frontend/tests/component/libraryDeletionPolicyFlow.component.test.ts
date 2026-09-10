@@ -30,6 +30,7 @@ mock.module("lucide-react", {
         Check: icon("check"),
         Send: icon("send"),
         Trash2: icon("trash2"),
+        X: icon("x"),
     },
 });
 
@@ -118,8 +119,13 @@ test("an admin can enable a default-off deletion policy and reveal local album d
         );
         assert.ok(policyToggle);
         assert.equal(policyToggle.checked, false);
+        const more = container.querySelector<HTMLButtonElement>(
+            '[aria-label="Ещё действия"]',
+        );
+        assert.ok(more);
+        await React.act(async () => more.click());
         assert.equal(
-            container.querySelector(
+            document.querySelector(
                 '[aria-label="Удалить альбом из медиатеки сервера"]',
             ),
             null,
@@ -129,7 +135,7 @@ test("an admin can enable a default-off deletion policy and reveal local album d
 
         assert.equal(policyToggle.checked, true);
         assert.ok(
-            container.querySelector(
+            document.querySelector(
                 '[aria-label="Удалить альбом из медиатеки сервера"]',
             ),
         );

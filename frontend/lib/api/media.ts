@@ -11,6 +11,17 @@ function preferWideYouTubeThumbnail(coverId: string): string {
 /** Add media-domain operations to an API client base class. */
 export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class MediaApi extends Base {
+        /** Read a revocable device-file URL without attaching server credentials. */
+        async readLocalDeviceFile(
+            url: string,
+            signal: AbortSignal,
+        ): Promise<Response> {
+            signal.throwIfAborted();
+            if (!url.startsWith("blob:"))
+                throw new Error("Expected local device file");
+            return fetch(url, { signal });
+        }
+
         // Streaming
         getStreamUrl(trackId: string, quality?: string): string {
             const baseUrl =

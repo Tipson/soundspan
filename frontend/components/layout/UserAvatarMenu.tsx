@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useId } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Settings, LogOut, RefreshCw, Shield, Inbox } from "lucide-react";
@@ -27,6 +27,12 @@ export function UserAvatarMenu() {
     const [scanJobId, setScanJobId] = useState<string | null>(null);
     const [lastScanTime, setLastScanTime] = useState(0);
     const menuRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const menuId = useId();
+    const initialFocus = useRef<"first" | "last">("first");
+    const itemClass =
+        "grid min-h-11 w-full grid-cols-[1rem_minmax(0,1fr)] items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50";
 
     const { isPolling: isScanPolling } = useJobStatus(scanJobId, "scan", {
         onComplete: () => {
@@ -76,8 +82,20 @@ export function UserAvatarMenu() {
     // Close on Escape
     useEffect(() => {
         if (!isOpen) return;
+        const items = dropdownRef.current?.querySelectorAll<HTMLElement>(
+            '[role="menuitem"]:not(:disabled)',
+        );
+        const first =
+            initialFocus.current === "last"
+                ? items?.[items.length - 1]
+                : items?.[0];
+        first?.focus();
         const handleKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") setIsOpen(false);
+            if (e.key === "Escape") {
+                e.preventDefault();
+                setIsOpen(false);
+                triggerRef.current?.focus();
+            }
         };
         document.addEventListener("keydown", handleKey);
         return () => document.removeEventListener("keydown", handleKey);
@@ -117,7 +135,20 @@ export function UserAvatarMenu() {
     return (
         <div ref={menuRef} className="relative">
             <button
-                onClick={() => setIsOpen((v) => !v)}
+                ref={triggerRef}
+                type="button"
+                onClick={() => {
+                    initialFocus.current = "first";
+                    setIsOpen((v) => !v);
+                }}
+                onKeyDown={(event) => {
+                    if (event.key !== "ArrowDown" && event.key !== "ArrowUp")
+                        return;
+                    event.preventDefault();
+                    initialFocus.current =
+                        event.key === "ArrowUp" ? "last" : "first";
+                    setIsOpen(true);
+                }}
                 className={cn(
                     "w-9 h-9 rounded-full flex items-center justify-center overflow-hidden transition-all ring-2",
                     isOpen
@@ -125,7 +156,8 @@ export function UserAvatarMenu() {
                         : "ring-transparent hover:ring-white/20",
                 )}
                 aria-label={ru.nav.userMenu}
-                aria-haspopup="true"
+                aria-haspopup="menu"
+                aria-controls={isOpen ? menuId : undefined}
                 aria-expanded={isOpen}
                 title={displayName}
             >
@@ -148,16 +180,62 @@ export function UserAvatarMenu() {
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-surface-hover border border-white/10 rounded-lg shadow-xl shadow-black/40 py-1 z-[100]">
+                <div
+                    ref={dropdownRef}
+                    id={menuId}
+                    role="menu"
+                    tabIndex={-1}
+                    aria-label={ru.nav.userMenu}
+                    onBlur={(event) => {
+                        if (event.relatedTarget === triggerRef.current) return;
+                        if (
+                            !event.currentTarget.contains(
+                                event.relatedTarget as Node | null,
+                            )
+                        )
+                            setIsOpen(false);
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === "Tab") {
+                            setIsOpen(false);
+                            return;
+                        }
+                        const items = [
+                            ...event.currentTarget.querySelectorAll<HTMLElement>(
+                                '[role="menuitem"]:not(:disabled)',
+                            ),
+                        ];
+                        const index = items.indexOf(
+                            document.activeElement as HTMLElement,
+                        );
+                        const next =
+                            event.key === "Home"
+                                ? 0
+                                : event.key === "End"
+                                  ? items.length - 1
+                                  : event.key === "ArrowDown"
+                                    ? (index + 1) % items.length
+                                    : event.key === "ArrowUp"
+                                      ? (index + items.length - 1) %
+                                        items.length
+                                      : null;
+                        if (next === null) return;
+                        event.preventDefault();
+                        items[next]?.focus();
+                    }}
+                    className="absolute right-0 top-full z-[100] mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-surface-elevated p-1.5 shadow-xl shadow-black/40"
+                >
                     <div className="px-3 py-2 border-b border-white/10">
                         <p className="text-sm font-medium text-white truncate">
                             {displayName}
                         </p>
                     </div>
                     <button
+                        role="menuitem"
+                        tabIndex={-1}
                         onClick={handleSync}
                         disabled={isScanPolling}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50"
+                        className={itemClass}
                     >
                         <RefreshCw
                             className={cn(
@@ -168,18 +246,22 @@ export function UserAvatarMenu() {
                         {isScanPolling ? ru.nav.scanning : ru.nav.scanLibrary}
                     </button>
                     <Link
+                        role="menuitem"
+                        tabIndex={-1}
                         href="/settings"
                         onClick={() => setIsOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+                        className={itemClass}
                     >
                         <Settings className="w-4 h-4" />
                         {ru.nav.settings}
                     </Link>
                     {user?.role === "admin" && (
                         <Link
+                            role="menuitem"
+                            tabIndex={-1}
                             href="/requests"
                             onClick={() => setIsOpen(false)}
-                            className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+                            className={itemClass}
                         >
                             <Inbox className="w-4 h-4" />
                             {ru.nav.requests}
@@ -187,17 +269,24 @@ export function UserAvatarMenu() {
                     )}
                     {user?.role === "admin" && (
                         <Link
+                            role="menuitem"
+                            tabIndex={-1}
                             href="/admin"
                             onClick={() => setIsOpen(false)}
-                            className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+                            className={itemClass}
                         >
                             <Shield className="w-4 h-4" />
                             {ru.nav.admin}
                         </Link>
                     )}
                     <button
+                        role="menuitem"
+                        tabIndex={-1}
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                        className={cn(
+                            itemClass,
+                            "mt-1 border-t border-line text-red-400 hover:bg-red-500/10 hover:text-red-300",
+                        )}
                     >
                         <LogOut className="w-4 h-4" />
                         {ru.nav.logout}

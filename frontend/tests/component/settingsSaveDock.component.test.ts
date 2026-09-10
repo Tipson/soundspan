@@ -14,6 +14,52 @@ after(() => {
     GlobalRegistrator.unregister();
 });
 
+test("pristine user settings have no save button and successful saves retain feedback", async () => {
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const props = {
+        isSaving: false,
+        hasChanges: false,
+        placement: "inline" as const,
+        onSave: () => undefined,
+    };
+    await React.act(async () =>
+        root.render(
+            React.createElement(SettingsSaveDock, { ...props, status: "idle" }),
+        ),
+    );
+    assert.ok(
+        container.querySelector("button") === null,
+        "Pristine settings must not render a save button",
+    );
+    await React.act(async () =>
+        root.render(
+            React.createElement(SettingsSaveDock, {
+                ...props,
+                status: "success",
+                message: "Настройки сохранены",
+            }),
+        ),
+    );
+    assert.ok(
+        container.querySelector("button") === null,
+        "A saved result must not keep the save button visible",
+    );
+    assert.match(container.textContent ?? "", /Настройки сохранены/);
+    await React.act(async () =>
+        root.render(
+            React.createElement(SettingsSaveDock, {
+                ...props,
+                hasChanges: true,
+                status: "idle",
+            }),
+        ),
+    );
+    assert.ok(container.querySelector("button"));
+    await React.act(async () => root.unmount());
+});
+
 test("settings save status and action stay above player chrome without overlapping", async () => {
     const { createRoot } = await import("react-dom/client");
     const container = document.createElement("div");

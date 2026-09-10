@@ -4,6 +4,8 @@ import { InlineStatus, type StatusType } from "@/components/ui/InlineStatus";
 import { ru } from "@/lib/i18n/ru";
 
 interface SettingsSaveDockProps {
+    hasChanges?: boolean;
+    placement?: "sticky" | "inline";
     isSaving: boolean;
     status: StatusType;
     message?: string;
@@ -13,16 +15,33 @@ interface SettingsSaveDockProps {
 
 /** Keeps the settings save result and action clear of fixed player controls. */
 export function SettingsSaveDock({
+    hasChanges = true,
+    placement = "sticky",
     isSaving,
     status,
     message,
     onStatusClear,
     onSave,
 }: SettingsSaveDockProps) {
+    if (!hasChanges && !isSaving) {
+        return status === "idle" ? null : (
+            <div className="mt-4" role="status">
+                <InlineStatus
+                    status={status}
+                    message={message}
+                    onClear={onStatusClear}
+                />
+            </div>
+        );
+    }
     return (
         <div
             data-testid="settings-save-dock"
-            className="sticky bottom-[calc(var(--app-mini-player-height)+var(--app-bottom-nav-height)+var(--safe-area-bottom)+0.75rem)] z-20 pt-4 md:bottom-[calc(var(--app-player-height-desktop)+var(--safe-area-bottom)+1rem)] md:pt-6"
+            className={
+                placement === "inline"
+                    ? "pt-5"
+                    : "sticky bottom-[calc(var(--app-mini-player-height)+var(--app-bottom-nav-height)+var(--safe-area-bottom)+0.75rem)] z-20 pt-4 md:bottom-[calc(var(--app-player-height-desktop)+var(--safe-area-bottom)+1rem)] md:pt-6"
+            }
         >
             <div
                 data-testid="settings-save-panel"

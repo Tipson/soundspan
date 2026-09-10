@@ -86,10 +86,21 @@ the final destination for a new download.
   Shared collection buttons use compact single-line visible labels; their
   accessible name and linked status retain the complete action, collection,
   progress, and storage explanation.
-- Settings can opt in to gradual liked-song downloads after storage setup. The
-  default is off. Automatic copies are capped by the selected 25, 50, 100, or
-  200 newest liked songs and by 2 GiB; eviction removes only the oldest
-  `auto-liked` files. A manually selected copy is promoted to `manual`.
+- Liked-song downloads default to enabled and wait for storage readiness.
+  Policy version 2 normalizes the former default-off settings to enabled;
+  an explicit pause saved under this policy survives reloads for that owner.
+  The legacy count/byte fields store zero and impose no application limit.
+  The complete liked collection is read in cursor pages of 500 with account,
+  visibility and network checks around each request. Download work remains
+  sequential and de-duplicated. Removing a like cancels pending automatic work
+  without deleting retained files. A manually selected copy is promoted to
+  `manual`. Automatic size/count eviction is not performed.
+- A storage quota or permission failure persists `requiresStorageAction` and
+  pauses owner-scoped queue admission across tabs. Settings explains the
+  failure and offers an explicit retry after space or access is restored.
+  A per-track provider failure remains separate so other tracks can finish.
+  Settings also exposes failed liked-list refreshes rather than reporting a
+  completed automatic queue. Retry retains existing files and ownership.
 
 Transfers in the web app are foreground-only: keep Soundspan open until the
 current file finishes. Every browser profile or native installation has its own

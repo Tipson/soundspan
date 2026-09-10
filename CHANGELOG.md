@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased Discovery preparation and settings
+
+- Prepare bounded batches of upcoming Discovery candidates every fifteen minutes through the existing analysis queue, with lower priority, shared job identities, quota headroom, cancellation and no synthetic listening or exposure history.
+- Classify YouTube Radio failures without logging request credentials or upstream bodies. Reject empty and malformed responses before caching, allowing the next request to recover.
+- Organize user settings into Profile, Listening, Offline and Security; remove Scrobbling and Integrations from this screen. Keep drafts across sections and show the save action in normal page flow only when values change.
+- Align avatar menu icons and labels, support keyboard navigation, and close reliably on the second avatar click or Escape.
+- Enable liked-song downloads by default on each device, including the former default-off policy. Retain an explicit pause, paginate the entire liked collection, remove application count/byte caps and automatic quota eviction, and show storage, network and per-track failure states with an explicit retry.
+- Route legacy local-file copy reads through the API boundary without server credentials, retaining blob-only validation and cancellation.
+
 ## Unreleased recommendation efficiency
 
 - Use short lookup keys for the bounded vector parser cache while verifying complete input text before reuse; collisions are reparsed and result arrays remain independent.

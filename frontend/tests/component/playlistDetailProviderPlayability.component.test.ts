@@ -1,8 +1,48 @@
 import assert from "node:assert/strict";
-import { beforeEach, mock, test } from "node:test";
+import { after, beforeEach, mock, test } from "node:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+GlobalRegistrator.register({
+    url: "https://soundspan.test/playlist/playlist-1",
+});
+(
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+after(() => GlobalRegistrator.unregister());
+
+async function renderWithActions(Page: React.ComponentType): Promise<string> {
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const client = new QueryClient();
+    try {
+        await React.act(async () =>
+            root.render(
+                React.createElement(
+                    QueryClientProvider,
+                    { client },
+                    React.createElement(Page),
+                ),
+            ),
+        );
+        const more = container.querySelector<HTMLButtonElement>(
+            '[aria-label="Ещё действия"]',
+        );
+        assert.ok(more);
+        await React.act(async () => more.click());
+        const dialog = document.querySelector('[role="dialog"]');
+        assert.ok(dialog);
+        return container.innerHTML + dialog.outerHTML;
+    } finally {
+        await React.act(async () => root.unmount());
+        client.clear();
+        container.remove();
+    }
+}
 
 const state = {
     isLoading: false,
@@ -294,6 +334,12 @@ mock.module("@/utils/formatTime", {
 mock.module("@/lib/logger", {
     namedExports: {
         frontendLogger: {
+            child: () => ({
+                error: () => undefined,
+                warn: () => undefined,
+                info: () => undefined,
+                debug: () => undefined,
+            }),
             error: () => undefined,
             warn: () => undefined,
             info: () => undefined,
@@ -481,14 +527,7 @@ test("playlist detail renders consolidated action bar buttons", async () => {
     const mod = await import("../../app/playlist/[id]/page");
     const PlaylistDetailPage = mod.default;
 
-    const queryClient = new QueryClient();
-    const html = renderToStaticMarkup(
-        React.createElement(
-            QueryClientProvider,
-            { client: queryClient },
-            React.createElement(PlaylistDetailPage),
-        ),
-    );
+    const html = await renderWithActions(PlaylistDetailPage);
 
     // Canonical order: Play, Shuffle, Add to Queue, Like All, Radio
     assert.match(html, /aria-label="Воспроизвести всё"/);
@@ -510,20 +549,15 @@ test("playlist detail renders consolidated action bar buttons", async () => {
     assert.ok(hero);
     assert.match(hero, /data-music-detail="actions"/);
     assert.match(hero, /data-detail-action-tier="primary"/);
-    assert.match(hero, /data-detail-action-tier="secondary"/);
+    assert.match(hero, /aria-label="Ещё действия"/);
+    assert.doesNotMatch(hero, /data-detail-action-tier="secondary"/);
+    assert.match(html, /data-detail-action-tier="secondary"/);
 });
 
 test("playlist detail offers a device download for playable tracks only", async () => {
     const mod = await import("../../app/playlist/[id]/page");
     const PlaylistDetailPage = mod.default;
-    const queryClient = new QueryClient();
-    const html = renderToStaticMarkup(
-        React.createElement(
-            QueryClientProvider,
-            { client: queryClient },
-            React.createElement(PlaylistDetailPage),
-        ),
-    );
+    const html = await renderWithActions(PlaylistDetailPage);
 
     assert.match(html, /data-testid="device-collection-download"/);
     assert.match(html, /data-collection-id="playlist:playlist-1"/);
@@ -540,14 +574,7 @@ test("generated radio playlist detail adds append and regenerate actions", async
     };
     const mod = await import("../../app/playlist/[id]/page");
     const PlaylistDetailPage = mod.default;
-    const queryClient = new QueryClient();
-    const html = renderToStaticMarkup(
-        React.createElement(
-            QueryClientProvider,
-            { client: queryClient },
-            React.createElement(PlaylistDetailPage),
-        ),
-    );
+    const html = await renderWithActions(PlaylistDetailPage);
 
     assert.match(html, /Добавить ещё треки/);
     assert.match(html, /Собрать заново/);

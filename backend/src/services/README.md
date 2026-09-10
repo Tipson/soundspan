@@ -184,6 +184,8 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/services/recommendations/onlineIdentityEnrichment.ts` | Background TIDAL ISRC and MusicBrainz MBID enrichment for online canonical recordings |
 | `backend/src/services/recommendations/remoteAnalysisHotSet.ts` | Bounded canonical remote-analysis admission, durable spool leases, budget, and expiry cleanup |
 | `backend/src/services/recommendations/remoteAnalysisHotSetSweep.ts` | Periodic bounded hot-set admission for recently active accounts |
+| `backend/src/services/recommendations/discoveryAnalysisPrefetch.ts` | Serial cancellable Discovery preparation pass with bounded accounts and candidates |
+| `backend/src/services/recommendations/discoveryAnalysisPrefetchRuntime.ts` | Diagnostic Discovery feed adapter, Redis lease/cursors and low-priority analysis admission |
 | `backend/src/services/recommendations/remoteAnalysisRecovery.ts` | Single-flight startup and periodic TTL enforcement for remote-analysis assets |
 | `backend/src/services/recommendations/shadowEvaluation.ts` | Read-only baseline-vs-hybrid quality, latency, impression-sample, identity, and analysis-coverage evaluator |
 | `backend/src/services/youtubeMusicRetry.ts` | Abort-aware bounded YouTube Music retry and backoff shared by browse and stream calls |
@@ -269,6 +271,7 @@ Start-here guide for business logic modules in `backend/src/services`.
 | `backend/src/workers/remoteAnalysisWorker.ts` | Optional remote-analysis queue registration, processor events, and recovery lifecycle |
 | `backend/src/services/youtubeDownload.ts` | Core |
 | `backend/src/services/youtubeMusic.ts` | Core |
+| `backend/src/services/youtubeRadioDiagnostics.ts` | Safe Radio failure classification and invalid/empty response errors |
 
 ## Update Rule
 
