@@ -2,6 +2,7 @@
 
 ## Unreleased recommendation efficiency
 
+- Load recommendation candidates and their independent account context concurrently, observing both failures immediately while keeping Wave exclusions, ranking and baseline Home behavior intact.
 - Load the distinct track metadata shared by bounded playback and collection signals once per request through Prisma, reducing seven round trips to five while preserving account scope, parent limits and signal ordering.
 - Reuse parsed standard vectors and taste-centroid calculations by their complete numeric input, with bounded process-local storage and independent result copies; changed inputs still take effect immediately.
 - Parse standard pgvector arrays through the native numeric parser, avoiding per-coordinate string allocations while preserving finite-number validation and legacy input compatibility.

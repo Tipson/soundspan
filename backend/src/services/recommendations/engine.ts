@@ -273,8 +273,15 @@ export class RecommendationEngine {
         const startedAt = this.dependencies.now();
         const cursor = request.cursor ?? 0;
         const limit = Math.max(0, Math.floor(request.limit));
-        const loaded = await this.dependencies.loadCandidates(request);
         const isWave = request.intent.surface === "wave";
+        // Candidate adapters and account context do not depend on each other.
+        // Observe both promises immediately, including an early adapter failure.
+        const [loaded, context] = await Promise.all([
+            this.dependencies.loadCandidates(request),
+            isWave || this.dependencies.mode !== "baseline"
+                ? this.loadHybridContext(request, startedAt)
+                : null,
+        ]);
         const degradedSources = [...new Set(loaded.degradedSources)];
         let candidates = await this.resolveCanonicalCandidates(
             isWave
@@ -302,9 +309,7 @@ export class RecommendationEngine {
         );
         // Safety/variety policy belongs to Wave itself, not only the hybrid
         // experiment arm. Never refill a short Wave with today's exposures.
-        const sharedContext = isWave
-            ? await this.loadHybridContext(request, startedAt)
-            : null;
+        const sharedContext = isWave ? context : null;
         if (sharedContext) {
             for (const source of sharedContext.degradedSources)
                 appendDegradedSource(degradedSources, source);
@@ -366,8 +371,8 @@ export class RecommendationEngine {
             };
         }
 
-        const hybridContext =
-            sharedContext ?? (await this.loadHybridContext(request, startedAt));
+        // Every non-baseline mode loaded context above; baseline already returned.
+        const hybridContext = context!;
         for (const source of hybridContext.degradedSources) {
             appendDegradedSource(degradedSources, source);
         }
