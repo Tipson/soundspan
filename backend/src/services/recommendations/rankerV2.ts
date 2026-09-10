@@ -23,34 +23,22 @@ const MAX_CENTROID_KEY_UNITS = 16 * 1024 * 1024;
 const centroidSets = new Map<string, number[][]>();
 let centroidKeyUnits = 0;
 
-function prepareCentroidCacheInput(
-    vectors: readonly (readonly number[])[],
-    count: number,
-): { key: string; packed: Float64Array } | null {
-    if (
-        vectors.length > 500 ||
-        !Number.isInteger(count) ||
-        count < 1 ||
-        count > 5
-    )
+function centroidContentKey(vectors: number[][], count: number): string | null {
+    if (vectors.length > 500 || !Number.isInteger(count) || count > 5)
         return null;
+    if (vectors.some((vector) => vector.length !== 512)) return null;
     const packed = new Float64Array(vectors.length * 512);
     for (let row = 0; row < vectors.length; row += 1) {
         const vector = vectors[row];
-        if (!vector || vector.length !== 512) return null;
         for (let axis = 0; axis < vector.length; axis += 1) {
             // Sparse/invalid legacy input retains the uncached path.
-            const value = vector[axis];
-            if (!Number.isFinite(value)) return null;
-            packed[row * 512 + axis] = value;
+            if (!Number.isFinite(vector[axis])) return null;
         }
+        packed.set(vector, row * 512);
     }
     // Full IEEE-754 bytes preserve ordering, duplicates and negative zero.
     // No hash collision, account key or time-based freshness decision is used.
-    return {
-        key: `${count}:${Buffer.from(packed.buffer).toString("base64")}`,
-        packed,
-    };
+    return `${count}:${Buffer.from(packed.buffer).toString("base64")}`;
 }
 
 function normalizeVector(vector: readonly number[]): number[] | null {
@@ -82,25 +70,7 @@ export function buildTasteCentroids(
     rawVectors: readonly (readonly number[])[],
     maxCentroids = 5,
 ): number[][] {
-    // Check the complete raw input before paying for normalization again.
-    // Packed coordinates also avoid a second read of callers' input on a miss.
-    const prepared = prepareCentroidCacheInput(rawVectors, maxCentroids);
-    const cacheKey = prepared?.key ?? null;
-    const cached = cacheKey === null ? undefined : centroidSets.get(cacheKey);
-    if (cached && cacheKey !== null) {
-        centroidSets.delete(cacheKey);
-        centroidSets.set(cacheKey, cached);
-        return cached.map((center) => [...center]);
-    }
-    const input = prepared
-        ? Array.from({ length: rawVectors.length }, (_, row) => {
-              const vector = new Array<number>(512);
-              for (let axis = 0; axis < 512; axis += 1)
-                  vector[axis] = prepared.packed[row * 512 + axis];
-              return vector;
-          })
-        : rawVectors;
-    const vectors = input
+    const vectors = rawVectors
         .map(normalizeVector)
         .filter((vector): vector is number[] => vector !== null);
     if (vectors.length === 0) return [];
@@ -108,6 +78,13 @@ export function buildTasteCentroids(
         Math.max(1, maxCentroids),
         Math.max(1, Math.ceil(vectors.length / 2)),
     );
+    const cacheKey = centroidContentKey(vectors, clusterCount);
+    const cached = cacheKey === null ? undefined : centroidSets.get(cacheKey);
+    if (cached && cacheKey !== null) {
+        centroidSets.delete(cacheKey);
+        centroidSets.set(cacheKey, cached);
+        return cached.map((center) => [...center]);
+    }
     const centers: number[][] = [[...vectors[0]]];
     while (centers.length < clusterCount) {
         let bestVector = vectors[0];
