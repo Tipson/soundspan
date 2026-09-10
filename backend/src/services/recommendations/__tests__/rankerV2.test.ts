@@ -91,6 +91,38 @@ describe("recommendation ranker v2", () => {
         });
     });
 
+    it("reuses a complete raw taste input before repeating normalization", () => {
+        jest.isolateModules(() => {
+            const build = (
+                require("../rankerV2") as typeof import("../rankerV2")
+            ).buildTasteCentroids;
+            const vectors = Array.from({ length: 20 }, (_, row) =>
+                Array.from({ length: 512 }, (_, axis) => Math.cos(row + axis)),
+            );
+            const expected = build(vectors, 3);
+            const sqrt = jest.spyOn(Math, "sqrt");
+            try {
+                expect(
+                    build(
+                        vectors.map((vector) => [...vector]),
+                        3,
+                    ),
+                ).toEqual(expected);
+                expect(sqrt).not.toHaveBeenCalled();
+            } finally {
+                sqrt.mockRestore();
+            }
+        });
+    });
+
+    it("keeps sparse outer taste arrays on the compatible normalization path", () => {
+        const vectors = new Array<number[]>(2);
+        vectors[1] = Array.from({ length: 512 }, (_, axis) => axis + 1);
+        expect(buildTasteCentroids(vectors, 1)).toEqual(
+            buildTasteCentroids([vectors[1]], 1),
+        );
+    });
+
     it("normalizes shared mood and session vectors once for the entire rank", () => {
         const dimension = 32;
         let reads = 0;

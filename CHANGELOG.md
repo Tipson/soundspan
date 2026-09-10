@@ -4,7 +4,7 @@
 
 - Resolve saved taste vectors through bounded Prisma queries for each provider and merge their canonical IDs in PostgreSQL, preserving account scope, deduplication, ordering and the 500-record limit.
 - Load the distinct track metadata shared by bounded playback and collection signals once per request through Prisma, reducing seven round trips to five while preserving account scope, parent limits and signal ordering.
-- Reuse parsed standard vectors and taste-centroid calculations by their complete numeric input, with bounded process-local storage and independent result copies; changed inputs still take effect immediately.
+- Reuse parsed standard vectors and taste-centroid calculations by their complete numeric input, checking raw taste vectors before normalization, with bounded process-local storage and independent result copies; changed inputs still take effect immediately.
 - Parse standard pgvector arrays through the native numeric parser, avoiding per-coordinate string allocations while preserving finite-number validation and legacy input compatibility.
 - Combine vector validation and norm calculation in one pass and normalize shared mood/session vectors once per ranking call, retaining exact scores and centroid arithmetic.
 - Normalize diversity vectors once per ranking pass and update similarity only against each newly selected track. Preserve recommendation scores, ordering, cooldowns and artist/album quotas without caching account results.
