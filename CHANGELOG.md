@@ -2,6 +2,7 @@
 
 ## Unreleased recommendation efficiency
 
+- Reuse exact short artist/album normalization inputs with bounded storage, preserving Unicode normalization, English-locale casing and persisted identity keys.
 - Resolve saved taste vectors through bounded Prisma queries for each provider and merge their canonical IDs in PostgreSQL, preserving account scope, deduplication, ordering and the 500-record limit.
 - Load the distinct track metadata shared by bounded playback and collection signals once per request through Prisma, reducing seven round trips to five while preserving account scope, parent limits and signal ordering.
 - Reuse parsed standard vectors and taste-centroid calculations by their complete numeric input, with bounded process-local storage and independent result copies; changed inputs still take effect immediately.
