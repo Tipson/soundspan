@@ -1,5 +1,11 @@
 # Wave coverage and vector parsing
 
+Final retained production artifact: `batch-b00035a9`; source restoration is committed as `e250dc5d`. The latest accepted performance measurement for this artifact is p95 **1,475 / 2,938 / 5,624 ms at 10 / 25 / 50 simultaneous requests**, with no measured-stage HTTP errors or degraded sources. The <=5-second target at 50 is **not met**; 100 was not attempted. These are two short bursts through the internal frontend in four account contexts. The concurrent-read experiment was rejected and rolled back. Historical checkpoints below are retained as evidence, not current deployment claims.
+
+verify: after restoration, backend build and the complete Linux gate passed again: **597 suites, 8,496 passed, 7 skipped, zero failures; 94.56% lines**. Gate: `/srv/music/soundspan-releases/coverage-restored-verify-a11fwf0s`. The final backend source has no diff from `b00035a9`, and the compiled engine hash matches both restored containers. All 15 containers are healthy; 13 neighbors were preserved. Public HTTPS health200 and prepared audio 206/audio-webm/65,536 bytes passed after rollback. Hybrid remains 50%; diagnostic generation/exposure counts are 2,000/61,133. No git push was performed.
+
+The fixed analysis cohort reached 50/50 from 20/50. Coverage of changing discovery candidates and subjective listening acceptance remain separate open work. Further optimization awaits user direction at the second three-attempt checkpoint required by `AGENTS.md`.
+
 Baseline: `681680db`, deployed runtime `20608c8e`. Scope: measured analysis coverage for sparse Wave accounts and the next recommendation latency bottleneck. Hybrid remains 50%; no recommendation-weight, schema or listening-history change.
 
 ## Findings and change
