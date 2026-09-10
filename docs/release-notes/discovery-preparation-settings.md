@@ -52,3 +52,56 @@ this release. Retained device queue fields are additive. An old frontend can
 apply its former automatic caps if it runs after rollback; do not keep old
 client tabs active while validating the unlimited-download policy. Database
 backup restoration is not needed for an image-only rollback.
+
+## Verified rollout: 2026-09-10
+
+Code revision `a5de3eb4` was released as
+`local/soundspan-{backend,backend-worker,frontend}:discovery-settings-a5de3eb4`.
+The frontend build is `Q6jmU-vtGaoYzDMTcvEbV`. Runtime hashes of all six backend
+modules match the local build in both processes. All three services became
+healthy and the twelve neighboring containers retained their IDs.
+
+The checked database dump is 22,264,208 bytes, SHA-256
+`4f4fb96ad4ea424723d721a47c33f1b839faf2ce937692dca3eeb7390a91b982`.
+The dump and prior overlay are retained under
+`/srv/music/soundspan-releases/discovery-settings-a5de3eb4-detp7ybw/backup`.
+No database restore or migration was performed.
+
+verify: backend build and full Linux coverage passed: 8,531 tests, seven
+skipped, 600 passed suites, zero failures, 94.56% line coverage. Frontend
+typecheck, webpack build, 1,619 unit tests, 1,272 component tests and strict
+targeted native coverage passed. ESLint reported zero errors and 101 warnings
+within the repository limit. The default Turbopack build cannot traverse the
+existing external node_modules junction; the supported webpack build was used.
+
+verify: public health and API health returned 200; authenticated public Range
+playback returned 206, audio/webm and 65,536 bytes in 155 ms. Four real-account
+Wave requests returned 200 without history changes; the first calm request
+used the optional dclap-mood fallback. The post-release Radio replay completed
+twelve calls and four Discovery pages without Radio degradation. Concurrent
+mapping attempts logged retried Prisma write conflicts; the replay completed.
+The final repeated four-account smoke at 15:32 UTC returned 200 without any
+degraded sources and again left generation, exposure and play counts unchanged.
+
+verify: a separate Chromium test account exercised draft persistence, save and
+reload, restoration of original settings, desktop/mobile layouts, menu focus,
+default automatic download of a liked 3.3 MB track and playback from a blob URL
+after network blocking. Its temporary like was removed through the UI and
+confirmed after reload. The public deployment exposes the same four settings
+sections and enabled download default. Physical-phone acceptance remains open.
+
+verify: the startup preparation advanced two account cursors and admitted
+priority-10 jobs alongside priority-1 foreground jobs. The budget stayed at
+750/day and concurrency at two; no synthetic generations were recorded.
+At 15:32:25 UTC, all eleven observed preparation candidates had completed both
+analysis and embeddings, and their asset leases were completed. The transfer
+queue was empty. Daily admissions stood at 113, including ordinary foreground
+work; this is not a separate count of preparation jobs.
+
+The separate 48-scenario quality replay found no disliked tracks, duplicate
+IDs, tracks over fifteen minutes, repeats from the previous day's exposures or
+liked tracks in Discoveries. Dartum's active calm/energetic mean arousal was
+0.292/0.774. Two smaller accounts did not obtain meaningful mood separation;
+full changing-catalog coverage and subjective listening acceptance remain open.
+The local artifact `soundspan/output/soundspan-wave-listening-comparison.md`
+contains the per-account results and a short baseline/active listening list.
