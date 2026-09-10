@@ -49,6 +49,49 @@ describe("blendEmbeddings", () => {
 });
 
 describe("parseEmbedding", () => {
+    it("keeps repeated-vector map keys short while checking the full input", () => {
+        jest.isolateModules(() => {
+            const parse = (
+                require("../embedding") as typeof import("../embedding")
+            ).parseEmbedding;
+            const values = Array.from({ length: 512 }, (_, i) => i / 999);
+            const text = JSON.stringify(values);
+            parse(text);
+            const lookup = jest.spyOn(Map.prototype, "get");
+            let actual: number[];
+            let keyLengths: number[];
+            try {
+                actual = parse(Buffer.from(text).toString("utf8"));
+                keyLengths = lookup.mock.calls.map(([key]) =>
+                    typeof key === "string" ? key.length : 0,
+                );
+            } finally {
+                lookup.mockRestore();
+            }
+            expect(actual!).toEqual(values);
+            expect(keyLengths!.length).toBeGreaterThan(0);
+            expect(Math.max(...keyLengths!)).toBeLessThanOrEqual(128);
+        });
+    });
+
+    it("does not confuse equal-length vectors or invalid input sharing a prefix", () => {
+        jest.isolateModules(() => {
+            const parse = (
+                require("../embedding") as typeof import("../embedding")
+            ).parseEmbedding;
+            const prefix = `[${Array.from({ length: 511 }, () => 0).join(",")},`;
+            const first = `${prefix}1]`,
+                second = `${prefix}2]`;
+            parse(first)[511] = 99;
+            expect(parse(second)[511]).toBe(2);
+            expect(parse(first)[511]).toBe(1);
+            expect(() => parse(`${prefix}x]`)).toThrow(
+                "Invalid embedding: contains non-numeric values",
+            );
+            expect(parse(first)[511]).toBe(1);
+        });
+    });
+
     it("reuses identical standard vectors without sharing mutable result arrays", () => {
         jest.isolateModules(() => {
             const parse = (
