@@ -32,6 +32,8 @@ let exchangeBehavior: "success" | "failure" | "pending" = "success";
 let confirmBehavior: "success" | "requires2FA" = "success";
 let inviteFailuresRemaining = 0;
 
+let existingSession = false;
+const replace = mock.fn((_path: string) => undefined);
 const login = mock.fn(async () => undefined);
 const exchangeOidcCode = mock.fn(async (_code: string) => {
     if (exchangeBehavior === "failure") {
@@ -70,13 +72,19 @@ const redeemOidcInvite = mock.fn(
 
 mock.module("next/navigation", {
     namedExports: {
-        useRouter: () => ({ replace: () => undefined, push: () => undefined }),
+        useRouter: () => ({ replace, push: () => undefined }),
         useSearchParams: () => new URLSearchParams(window.location.search),
     },
 });
 
 mock.module("@/lib/auth-context", {
-    namedExports: { useAuth: () => ({ login }) },
+    namedExports: {
+        useAuth: () => ({
+            login,
+            isAuthenticated: existingSession,
+            isLoading: false,
+        }),
+    },
 });
 
 mock.module("@/lib/api", {
@@ -137,6 +145,8 @@ after(() => {
 });
 
 beforeEach(() => {
+    existingSession = false;
+    replace.mock.resetCalls();
     authConfig = {
         localLoginEnabled: true,
         oidcEnabled: true,
@@ -437,4 +447,17 @@ test("maps and strips SSO callback errors", async (t) => {
         await harness.unmount();
     }
     t.after(() => document.body.replaceChildren());
+});
+
+test("an existing session opens the platform without another password prompt", async (t) => {
+    existingSession = true;
+    const harness = await mountLoginPage();
+    t.after(harness.unmount);
+    await waitFor(() => replace.mock.callCount() > 0);
+    assert.equal(replace.mock.calls[0].arguments[0], "/");
+});
+test("login provides an application path for visitors without an invite", async (t) => {
+    const harness = await mountLoginPage();
+    t.after(harness.unmount);
+    await waitFor(() => document.querySelector('a[href="/welcome"]') !== null);
 });

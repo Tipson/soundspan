@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased testing access
+
+- Publish the interactive listening-room landing at `/welcome`, with direct platform login and the existing registration flow.
+- Persist testing applications in PostgreSQL; expose a paginated administrator queue with idempotent approval, single-use invitations, and activation status. Public submission never returns invitation secrets.
+- Reload the authenticated document after registration and skip a second password prompt when a valid login session already exists.
+
 ## Unreleased Discovery fairness and taste calculation
 
 - Advance the Discovery account rotation before provider work, so failing accounts keep their candidate cursor without delaying other listeners. Read bounded keyset pages across all eligible accounts and fence cursor writes with the active Redis lease.

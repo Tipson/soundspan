@@ -199,6 +199,7 @@ single top-level route stack composed from these concern modules:
 | `backend/src/routes/auth/appPasswords.ts`                | App-password listing, creation, and revocation                     |
 | `backend/src/routes/auth/linkedIdentities.ts`            | External-identity listing and unlinking                            |
 | `backend/src/routes/auth/adminUserInvites.ts`            | User administration, invite administration, and registration      |
+| `backend/src/routes/auth/testApplications.ts`            | Public testing applications and administrator approval            |
 | `backend/src/routes/auth/shared.ts`                      | Shared auth schemas and credential-verification helpers            |
 
 ### Subsonic Submodules

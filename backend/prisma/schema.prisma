@@ -117,19 +117,33 @@ model ScrobbleConnection {
 }
 
 model InviteCode {
-  id        String            @id @default(cuid())
-  code      String            @unique
-  createdBy String
-  expiresAt DateTime?
-  maxUses   Int               @default(1)
-  useCount  Int               @default(0)
-  revoked   Boolean           @default(false)
-  createdAt DateTime          @default(now())
-  creator   User              @relation("InviteCodesCreated", fields: [createdBy], references: [id], onDelete: Cascade)
-  usages    InviteCodeUsage[]
+  id              String            @id @default(cuid())
+  code            String            @unique
+  createdBy       String
+  expiresAt       DateTime?
+  maxUses         Int               @default(1)
+  useCount        Int               @default(0)
+  revoked         Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  creator         User              @relation("InviteCodesCreated", fields: [createdBy], references: [id], onDelete: Cascade)
+  usages          InviteCodeUsage[]
+  testApplication TestApplication?
 
   @@index([code])
   @@index([createdBy])
+}
+
+/// A public testing application linked to one administrator-approved invitation.
+model TestApplication {
+  id           String      @id @default(cuid())
+  telegram     String      @unique
+  device       String      @default("")
+  createdAt    DateTime    @default(now())
+  approvedAt   DateTime?
+  inviteCodeId String?     @unique
+  inviteCode   InviteCode? @relation(fields: [inviteCodeId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt, id])
 }
 
 model InviteCodeUsage {

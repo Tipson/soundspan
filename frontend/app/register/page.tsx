@@ -82,7 +82,8 @@ export default function RegisterPage() {
                 confirmPassword,
                 email,
             });
-            router.push("/");
+            // Recreate AuthProvider after the registration API replaces its session.
+            window.location.assign("/");
         } catch (err) {
             setError(
                 err instanceof Error ? err.message : ru.auth.registrationFailed,

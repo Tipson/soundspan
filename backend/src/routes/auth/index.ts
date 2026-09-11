@@ -8,6 +8,7 @@ import {
     registerSecondFactorAndSubsonicRoutes,
 } from "./accountSecurity";
 import registerAdminUserInviteRoutes from "./adminUserInvites";
+import registerTestApplicationRoutes from "./testApplications";
 
 const router = Router();
 
@@ -17,6 +18,7 @@ registerLinkedIdentityRoutes(router);
 registerLocalCredentialRoutes(router);
 registerAccountProfileRoutes(router);
 registerAdminUserInviteRoutes(router);
+registerTestApplicationRoutes(router);
 registerSecondFactorAndSubsonicRoutes(router);
 
 export default router;

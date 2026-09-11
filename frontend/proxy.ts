@@ -108,6 +108,32 @@ function setContentSecurityPolicyHeaders(
  */
 export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
+    if (pathname === "/welcome" || pathname.startsWith("/welcome/")) {
+        const target = new URL(request.url);
+        const isDocument = pathname === "/welcome" || pathname === "/welcome/";
+        if (isDocument) target.pathname = "/welcome/index.html";
+        const response = isDocument
+            ? NextResponse.rewrite(target)
+            : NextResponse.next();
+        response.headers.set(
+            CSP_ENFORCING_HEADER,
+            [
+                "default-src 'self'",
+                "script-src 'self'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data: blob:",
+                "media-src 'self' blob:",
+                "connect-src 'self'",
+                "font-src 'self' data:",
+                "object-src 'none'",
+                "base-uri 'none'",
+                "form-action 'self'",
+                "frame-src 'none'",
+                "frame-ancestors 'none'",
+            ].join("; "),
+        );
+        return response;
+    }
     const csp = addContentSecurityPolicy(request);
 
     // Allow trailing slashes on /api/ routes (swagger-ui needs them)

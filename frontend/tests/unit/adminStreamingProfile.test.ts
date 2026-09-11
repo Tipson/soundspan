@@ -12,6 +12,7 @@ test("админка показывает защиту медиатеки без
         "ai-services",
         "cache",
         "library-safety",
+        "test-applications",
         "users",
     ]);
     assert.equal(

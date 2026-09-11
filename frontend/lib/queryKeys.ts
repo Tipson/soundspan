@@ -189,6 +189,8 @@ export const queryKeys = {
     activeDownloads: () => ["active-downloads"] as const,
 
     // Enrichment admin surfaces
+    testApplications: (cursor: string | null) =>
+        ["admin", "test-applications", cursor] as const,
     enrichmentFailuresAll: () => ["enrichment-failures"] as const,
     enrichmentFailures: (type: string, page: number) =>
         ["enrichment-failures", type, page] as const,

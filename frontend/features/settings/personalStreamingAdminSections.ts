@@ -19,6 +19,7 @@ const PERSONAL_STREAMING_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         id: "library-safety",
         label: adminActivityRu.admin.sidebar.librarySafety,
     },
+    { id: "test-applications", label: "Заявки на тестирование" },
     { id: "users", label: adminActivityRu.admin.sidebar.users },
 ];
 
