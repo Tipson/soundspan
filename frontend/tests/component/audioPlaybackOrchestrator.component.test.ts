@@ -3486,7 +3486,11 @@ for (const wasLoaded of [false, true]) {
         assert.equal(controlCalls.next, 0);
         engine.emit("end");
         await flushAsync();
-        assert.equal(controlCalls.next, 1, "a recovered source must still advance at its natural end");
+        assert.equal(
+            controlCalls.next,
+            1,
+            "a recovered source must still advance at its natural end",
+        );
     });
 }
 

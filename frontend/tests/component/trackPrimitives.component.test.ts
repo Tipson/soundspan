@@ -179,8 +179,8 @@ test("current title retains its playback indicator with custom album leading cel
             React.createElement(TrackRow, {
                 item: toRowItem(sampleItems[0]),
                 index: 0,
-            isPlaying: current,
-            isInQueue: true,
+                isPlaying: current,
+                isInQueue: true,
                 slots: {
                     leadingColumn: React.createElement("span", null, "1"),
                 },
