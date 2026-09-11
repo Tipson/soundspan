@@ -24,6 +24,17 @@ the optional plugin image and companion restores the ordinary deployment.
 
 ## Request behavior
 
+- Provider refusal opens a shared pause, starting at 90 seconds and doubling
+  after subsequent failed windows up to 15 minutes. Concurrent failures reuse
+  the current deadline. Fresh successful extraction resets older failures;
+  cached audio and an older in-flight success cannot clear a newer refusal.
+- Paced requests recheck the pause after waiting, including format fallback
+  and token recovery. Queued work cannot continue contacting the provider on
+  an admission decision made before another worker's refusal.
+- Set extraction spacing and concurrency conservatively for sustained public
+  traffic. Millisecond spacing validated in a short throughput test is not a
+  long-term provider quota or an availability guarantee.
+
 - Ordinary music metadata and spool extraction disable automatic token fetching;
   their client, quality and fast preparation path are otherwise unchanged.
 - A recognized `Sign in to confirm ... not a bot` DownloadError permits one

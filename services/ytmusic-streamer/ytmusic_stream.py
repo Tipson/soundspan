@@ -196,6 +196,7 @@ def _pacing_cancelled() -> bool:
 
 _provider_challenge_lock = threading.Lock()
 _provider_challenge_cooldown_until = 0.0
+_provider_challenge_failures = 0
 _po_fallback = PoFallback()
 _metadata_worker_context = threading.local()
 
@@ -631,15 +632,26 @@ def _provider_challenge_http_error(video_id: str, retry_after: int) -> HTTPExcep
 
 
 def _arm_provider_challenge_cooldown() -> int:
-    """Arm one process-wide cooldown and return its rounded retry delay."""
-    global _provider_challenge_cooldown_until
+    """Back off repeated refusal up to 15 minutes; peers share the existing pause."""
+    global _provider_challenge_cooldown_until, _provider_challenge_failures
     now = time.monotonic()
     with _provider_challenge_lock:
-        _provider_challenge_cooldown_until = max(
-            _provider_challenge_cooldown_until,
-            now + _PROVIDER_CHALLENGE_COOLDOWN_SECONDS,
-        )
+        if now >= _provider_challenge_cooldown_until:
+            _provider_challenge_failures = min(5, _provider_challenge_failures + 1)
+            delay = min(
+                900, _PROVIDER_CHALLENGE_COOLDOWN_SECONDS * 2 ** (_provider_challenge_failures - 1)
+            )
+            _provider_challenge_cooldown_until = now + delay
         return max(1, int(_provider_challenge_cooldown_until - now + 0.999))
+
+
+def _mark_provider_available(started_at: float) -> None:
+    """Reset backoff after fresh success without clearing a newer peer's refusal."""
+    global _provider_challenge_cooldown_until, _provider_challenge_failures
+    with _provider_challenge_lock:
+        if _provider_challenge_cooldown_until <= started_at:
+            _provider_challenge_cooldown_until = 0.0
+            _provider_challenge_failures = 0
 
 
 def _raise_if_provider_challenge_cooldown(video_id: str) -> None:
@@ -649,6 +661,13 @@ def _raise_if_provider_challenge_cooldown(video_id: str) -> None:
         remaining = _provider_challenge_cooldown_until - now
     if remaining > 0:
         raise _provider_challenge_http_error(video_id, max(1, int(remaining + 0.999)))
+
+
+def _wait_for_provider(video_id: str) -> None:
+    """Recheck the shared cooldown after waiting: another worker may have failed."""
+    _raise_if_provider_challenge_cooldown(video_id)
+    _extract_pacer.wait()
+    _raise_if_provider_challenge_cooldown(video_id)
 
 
 def _stream_extraction_http_error(
@@ -747,7 +766,7 @@ def _extract_with_manifest_fallback(ydl: Any, url: str, options: JsonObject) -> 
             "youtube": {**youtube, "skip": [x for x in youtube["skip"] if x != "hls"]},
         },
     }
-    _extract_pacer.wait()
+    _wait_for_provider(_extract_video_id(url) or "")
     with yt_dlp.YoutubeDL(fallback_options) as fallback:
         return fallback.extract_info(url, download=False)
 
@@ -776,7 +795,7 @@ def _extract_with_po_fallback(
             raise ExtractionAbandoned("Stream extraction deadline exceeded")
 
     def probe() -> T:
-        _extract_pacer.wait()
+        _wait_for_provider(video_id)
         check()
         log.info("Trying one anonymous PO recovery for %s", video_id)
         with yt_dlp.YoutubeDL(token_options(options)) as fallback:
@@ -814,8 +833,8 @@ def _extract_stream_info(
     if cached and cached.get("expires_at", 0) > time.time():
         log.debug(f"Stream URL cache hit for {cache_key}")
         return cached
-    _raise_if_provider_challenge_cooldown(video_id)
-    _extract_pacer.wait()
+    started_at = time.monotonic()
+    _wait_for_provider(video_id)
     try:
         _ensure_player_cache()
         ydl_opts = primary_options(ydl_opts)
@@ -826,7 +845,11 @@ def _extract_stream_info(
                     from ytmusic_anonymous_context import extract_music
 
                     return extract_music(
-                        ydl, url, ydl_opts, _extract_with_manifest_fallback, _extract_pacer.wait
+                        ydl,
+                        url,
+                        ydl_opts,
+                        _extract_with_manifest_fallback,
+                        partial(_wait_for_provider, video_id),
                     )
                 return _extract_with_manifest_fallback(ydl, url, ydl_opts)
 
@@ -836,6 +859,7 @@ def _extract_stream_info(
             selected = _selected_audio_stream(cast(JsonObject, info))
             if selected is None or not selected.get("url"):
                 raise ValueError("No audio stream URL found")
+            _mark_provider_available(started_at)
             result = {
                 "url": selected["url"],
                 "content_type": selected.get("audio_ext")
@@ -1810,7 +1834,7 @@ def _extract_spool_format_retry(
             if attempt or "requested format is not available" not in str(error).lower():
                 raise
             log.warning("Retrying transient YouTube format extraction for %s", video_id)
-            _extract_pacer.wait()
+            _wait_for_provider(video_id)
     raise RuntimeError("Unreachable spool retry state")
 
 
@@ -1865,6 +1889,7 @@ def _download_ytmusic_spool_sync(
                 raise ValueError("YouTube Music spool file exceeds the total spool byte budget")
 
             _cache_spool_info(video_id, quality, info)
+            _mark_provider_available(started_at)
             log.info(
                 "Spooled YouTube Music track %s (%s, %.1f MiB)",
                 video_id,

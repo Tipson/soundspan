@@ -1,5 +1,7 @@
 # Changelog
 
+- Stop queued YouTube extraction and format retries when another request triggers provider cooldown. Repeated provider challenges use bounded exponential backoff; cached audio remains available and fresh successful extraction resets older failures.
+
 - Use the brand purple for the Home Wave button and synchronize its pause/resume action with the shared player without replacing an active queue.
 
 ## Unreleased testing access

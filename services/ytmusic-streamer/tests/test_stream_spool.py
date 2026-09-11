@@ -1992,6 +1992,97 @@ def test_cached_spool_remains_available_during_provider_challenge_cooldown(
     )
 
 
+@pytest.mark.parametrize("spool_retry", [False, True])
+def test_challenge_while_pacing_stops_queued_extraction(
+    stream_module: Any, monkeypatch: pytest.MonkeyPatch, spool_retry: bool
+) -> None:
+    """A job admitted before a peer's failure must recheck after its pacing wait."""
+    import yt_dlp
+
+    calls = []
+
+    def peer_failed() -> None:
+        stream_module._arm_provider_challenge_cooldown()
+
+    class Downloader:
+        def __init__(self, _options: Any) -> None:
+            pass
+
+        def __enter__(self) -> Any:
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            pass
+
+        def extract_info(self, _url: str, download: bool) -> Any:
+            calls.append(download)
+            raise yt_dlp.utils.DownloadError("Requested format is not available")
+
+    monkeypatch.setattr(stream_module, "_ensure_player_cache", lambda: None)
+    monkeypatch.setattr(stream_module._extract_pacer, "wait", peer_failed)
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", Downloader)
+    with pytest.raises(HTTPException) as error:
+        if spool_retry:
+            stream_module._extract_spool_format_retry(VIDEO_ID, {}, None)
+        else:
+            stream_module._extract_stream_info("uncached", "url", {}, VIDEO_ID, "test")
+    assert error.value.status_code == 503
+    assert error.value.headers["Retry-After"]
+    assert calls == ([True] if spool_retry else [])
+
+
+def test_repeated_challenges_back_off_without_peer_failures_extending_pause(
+    stream_module: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Persistent refusal reduces request frequency; concurrent failures share a pause."""
+    clock = [100.0]
+    monkeypatch.setattr(stream_module.time, "monotonic", lambda: clock[0])
+    for delay in [90, 180, 360, 720, 900, 900]:
+        assert stream_module._arm_provider_challenge_cooldown() == delay
+        clock[0] += 10
+        assert stream_module._arm_provider_challenge_cooldown() == delay - 10
+        clock[0] += delay - 10
+
+
+@pytest.mark.parametrize("peer_failed", [False, True])
+def test_fresh_audio_resets_backoff_without_clearing_newer_refusal(
+    stream_module: Any, monkeypatch: pytest.MonkeyPatch, peer_failed: bool
+) -> None:
+    """A successful extraction only clears failures older than that request."""
+    import yt_dlp
+
+    clock = [100.0]
+    monkeypatch.setattr(stream_module.time, "monotonic", lambda: clock[0])
+    assert stream_module._arm_provider_challenge_cooldown() == 90
+    clock[0] += 90
+    monkeypatch.setattr(stream_module._extract_pacer, "wait", lambda: None)
+    monkeypatch.setattr(stream_module, "_ensure_player_cache", lambda: None)
+
+    class Downloader:
+        def __init__(self, _options: Any) -> None:
+            pass
+
+        def __enter__(self) -> Any:
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            pass
+
+        def extract_info(self, _url: str, download: bool) -> Any:
+            if peer_failed:
+                clock[0] += 1
+                assert stream_module._arm_provider_challenge_cooldown() == 180
+            return {"url": "https://cdn.example/audio", "acodec": "opus", "vcodec": "none"}
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", Downloader)
+    stream_module._extract_stream_info("uncached", "url", {}, VIDEO_ID, "test")
+    if peer_failed:
+        with pytest.raises(HTTPException):
+            stream_module._raise_if_provider_challenge_cooldown(VIDEO_ID)
+    else:
+        assert stream_module._arm_provider_challenge_cooldown() == 90
+
+
 def test_spool_progress_hook_rejects_oversized_download(
     stream_module: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
