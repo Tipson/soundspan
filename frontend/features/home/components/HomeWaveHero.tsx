@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useMemo } from "react";
-import { AudioWaveform, ChevronRight, Play } from "lucide-react";
+import { AudioWaveform, ChevronRight, Pause, Play } from "lucide-react";
+import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
@@ -26,8 +27,11 @@ export function HomeWaveHero({
     personalizedFeed,
     isLoading: isHomeLoading,
 }: HomeWaveHeroProps) {
-    const { playTracks } = useAudioControls();
+    const { playTracks, pause, play } = useAudioControls();
+    const { isPlaying } = usePlaybackStatus();
     const {
+        vibeMode,
+        currentTrack,
         waveMode,
         waveMood,
         waveLanguage = "any",
@@ -101,15 +105,26 @@ export function HomeWaveHero({
         setShuffleIndices,
     ]);
 
-    const playLabel = isLoading
-        ? ru.vibe.tuning
-        : canPlay
-          ? ru.home.startWave
-          : waveLanguage !== "any"
-            ? waveFeed?.languageStatus?.pending
-                ? "Уточняем язык треков"
-                : "Нет подходящих треков"
-            : ru.home.moreSignals;
+    const hasActiveWave = vibeMode && currentTrack !== null;
+    const isWavePlaying = hasActiveWave && isPlaying;
+    const toggleWave = useCallback(() => {
+        if (!hasActiveWave) startWave();
+        else if (isPlaying) pause();
+        else play();
+    }, [hasActiveWave, isPlaying, pause, play, startWave]);
+    const playLabel = hasActiveWave
+        ? isPlaying
+            ? ru.common.pause
+            : "Продолжить"
+        : isLoading
+          ? ru.vibe.tuning
+          : canPlay
+            ? ru.home.startWave
+            : waveLanguage !== "any"
+              ? waveFeed?.languageStatus?.pending
+                  ? "Уточняем язык треков"
+                  : "Нет подходящих треков"
+              : ru.home.moreSignals;
 
     return (
         <section
@@ -184,22 +199,36 @@ export function HomeWaveHero({
                     <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
                         <button
                             type="button"
-                            onClick={startWave}
-                            disabled={!canPlay}
-                            aria-label={ru.vibe.play}
-                            data-home-wave-state={
-                                isLoading
-                                    ? "loading"
-                                    : canPlay
-                                      ? "ready"
-                                      : "needs-signals"
+                            onClick={toggleWave}
+                            disabled={!hasActiveWave && !canPlay}
+                            aria-label={
+                                isWavePlaying ? ru.vibe.pause : ru.vibe.play
                             }
-                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-gradient-to-r from-warning to-brand px-6 py-3 text-sm font-black text-white shadow-[0_14px_34px_rgba(163,74,255,0.24)] transition duration-200 active:scale-[0.97] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:border disabled:border-white/10 disabled:bg-none disabled:bg-white/[0.08] disabled:text-content-secondary disabled:shadow-none motion-reduce:transition-none"
+                            aria-pressed={isWavePlaying}
+                            data-home-wave-state={
+                                hasActiveWave
+                                    ? isPlaying
+                                        ? "playing"
+                                        : "paused"
+                                    : isLoading
+                                      ? "loading"
+                                      : canPlay
+                                        ? "ready"
+                                        : "needs-signals"
+                            }
+                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-black text-black shadow-[0_14px_34px_rgba(163,74,255,0.24)] transition duration-200 active:scale-[0.97] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:border disabled:border-white/10 disabled:bg-none disabled:bg-white/[0.08] disabled:text-content-secondary disabled:shadow-none motion-reduce:transition-none"
                         >
-                            <Play
-                                className="h-5 w-5 fill-current"
-                                aria-hidden="true"
-                            />
+                            {isWavePlaying ? (
+                                <Pause
+                                    className="h-5 w-5 fill-current"
+                                    aria-hidden="true"
+                                />
+                            ) : (
+                                <Play
+                                    className="h-5 w-5 fill-current"
+                                    aria-hidden="true"
+                                />
+                            )}
                             <span>{playLabel}</span>
                         </button>
                         <Link

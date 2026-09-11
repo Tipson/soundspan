@@ -1,5 +1,7 @@
 # Changelog
 
+- Use the brand purple for the Home Wave button and synchronize its pause/resume action with the shared player without replacing an active queue.
+
 ## Unreleased testing access
 
 - Publish the interactive listening-room landing at `/welcome`, with direct platform login and the existing registration flow.
