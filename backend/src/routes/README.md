@@ -65,6 +65,12 @@ route file is intentionally incremental (per touched file), not a big-bang.
 
 ## Mounted Route Modules
 
+Server music connections use `backend/src/routes/musicSources.ts` at
+`/api/music-sources`. Only administrators configure encrypted credentials and
+search diagnostic candidates; authenticated listeners receive user-bound stream
+leases. `backend/src/routes/musicSourceFallback.ts` is a shared acquisition helper,
+not a router; it pins one representation for each YouTube playback attempt.
+
 | Route File                                 | Mounted Prefixes                                                                                      |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
 | `backend/src/routes/admin.ts`              | `/api/admin`                                                                                          |

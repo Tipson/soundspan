@@ -242,6 +242,26 @@ test("public preload reuse is isolated by client and credential generation", () 
     assert.equal(getScope(), null);
 });
 
+test("each audio load has a non-secret playback session for byte representation isolation", () => {
+    const client = new AudioClient();
+    const first = new URL(
+        client.getYtMusicStreamUrl("jNQXAC9IVRw"),
+        window.location.origin,
+    );
+    const second = new URL(
+        client.getYtMusicStreamUrl("jNQXAC9IVRw"),
+        window.location.origin,
+    );
+    assert.match(
+        first.searchParams.get("playbackSession") ?? "",
+        /^[0-9a-f-]{36}$/i,
+    );
+    assert.notEqual(
+        first.searchParams.get("playbackSession"),
+        second.searchParams.get("playbackSession"),
+    );
+});
+
 test("credential updates revoke the controlling worker's completed preload bytes", () => {
     const original = Object.getOwnPropertyDescriptor(
         navigator,

@@ -132,6 +132,8 @@ const eslintConfig = defineConfig([
         "out/**",
         "build/**",
         "next-env.d.ts",
+        // Vendored Three.js is upstream code, not React application source.
+        "public/welcome/vendor/**",
     ]),
 ]);
 

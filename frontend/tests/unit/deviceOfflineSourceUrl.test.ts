@@ -52,11 +52,11 @@ test("device source URL honors active YouTube source over a legacy TIDAL id", ()
     });
 
     assert.match(
-        sourceOnlyUrl,
+        new URL(sourceOnlyUrl, "https://soundspan.test").pathname,
         /\/api\/ytmusic\/stream-public\/active-source-video$/,
     );
     assert.match(
-        providerOnlyUrl,
+        new URL(providerOnlyUrl, "https://soundspan.test").pathname,
         /\/api\/ytmusic\/stream-public\/active-provider-video$/,
     );
 });

@@ -48,6 +48,10 @@ test("collects static production env reads and excludes tests, writes, and runti
             "dynamic = os.getenv(name)",
         ].join("\n"),
         "services/example/tests/test_app.py": "os.getenv('TEST_ONLY')",
+        "services/example/tests-container/test_entrypoint.py":
+            "os.getenv('TEST_IMAGE')",
+        "services/example/tests-container-runtime/app.py":
+            "os.getenv('CONTAINER_RUNTIME_TOKEN')",
     });
 
     try {
@@ -57,6 +61,9 @@ test("collects static production env reads and excludes tests, writes, and runti
                 "services/example/app.py:4",
             ],
             PYTHON_FALLBACK: ["services/example/app.py:3"],
+            CONTAINER_RUNTIME_TOKEN: [
+                "services/example/tests-container-runtime/app.py:1",
+            ],
             PYTHON_OPTION: ["services/example/app.py:2"],
             PYTHON_TOKEN: ["services/example/app.py:1"],
         });

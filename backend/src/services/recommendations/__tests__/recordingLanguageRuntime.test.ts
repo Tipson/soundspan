@@ -1,5 +1,6 @@
 const values = new Map<string, string>();
 const mockLookup = jest.fn();
+const mockDebug = jest.fn();
 const mockCache = {
     mGet: jest.fn(async (keys: string[]) =>
         keys.map((key) => values.get(key) ?? null),
@@ -23,7 +24,7 @@ const mockRedis = {
 };
 jest.mock("../../../utils/redis", () => ({ redisClient: mockRedis }));
 jest.mock("../../../utils/logger", () => ({
-    logger: { child: () => ({ debug: jest.fn() }) },
+    logger: { child: () => ({ debug: mockDebug }) },
 }));
 jest.mock("../recordingLanguageProvider", () => ({
     lookupRecordingLanguage: (...args: unknown[]) => mockLookup(...args),
@@ -104,4 +105,16 @@ test("offline Redis does not fan out to the lyrics provider", async () => {
         pending: false,
     });
     expect(mockLookup).not.toHaveBeenCalled();
+});
+test("provider failure diagnostics do not expose upstream URLs or credentials", async () => {
+    mockLookup.mockRejectedValueOnce(
+        new Error("https://provider.example/?token=private-token"),
+    );
+    await store.prepare([track]);
+    await store.drain();
+    expect(mockDebug).toHaveBeenCalled();
+    expect(JSON.stringify(mockDebug.mock.calls)).not.toContain("private-token");
+    expect(JSON.stringify(mockDebug.mock.calls)).not.toContain(
+        "provider.example",
+    );
 });

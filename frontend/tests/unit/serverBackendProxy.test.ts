@@ -351,6 +351,8 @@ test("resolveProxyTimeoutMs applies route-specific first-byte defaults", () => {
         "/api/youtube/stream/kXYiU_JCYtU",
         "/ytmusic/stream-public/kXYiU_JCYtU",
         "/youtube/stream/kXYiU_JCYtU",
+        "/api/music-sources/leases/0123456789abcdef0123456789abcdef0123456789abcdef/stream",
+        "/music-sources/leases/0123456789abcdef0123456789abcdef0123456789abcdef/stream",
     ]) {
         assert.equal(resolveProxyTimeoutMs(mediaPath, {}), 125_000);
     }

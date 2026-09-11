@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased server music connections
+
+- Add disabled-by-default Yandex Music and VK Music server connections managed by administrators, with encrypted credentials, connection revocation and same-origin audio leases scoped to each Soundspan listener.
+- Recover initial YouTube stream failures through an exact recording match on a configured source. Preserve recording identity and reject previews, incompatible versions and changed audio representations during seeking.
+- Add administrator catalog and audio diagnostics. Real service-account acceptance is required before production activation; VK HLS streams and automatic source changes after playback has started are not supported by this implementation.
+
 - Stop queued YouTube extraction and format retries when another request triggers provider cooldown. Repeated provider challenges use bounded exponential backoff; cached audio remains available and fresh successful extraction resets older failures.
 
 - Use the brand purple for the Home Wave button and synchronize its pause/resume action with the shared player without replacing an active queue.

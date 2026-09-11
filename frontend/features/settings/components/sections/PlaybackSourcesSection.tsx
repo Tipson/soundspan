@@ -3,6 +3,7 @@
 import { SettingsSection, SettingsRow, SettingsSelect } from "../ui";
 import { SystemSettings } from "../../types";
 import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
+import { ServerMusicSources } from "./ServerMusicSources";
 
 const DEFAULT_ORDER = "library,peers,ytmusic";
 
@@ -72,6 +73,7 @@ export function PlaybackSourcesSection({
                     options={resolveOrderOptions(stored)}
                 />
             </SettingsRow>
+            <ServerMusicSources />
         </SettingsSection>
     );
 }

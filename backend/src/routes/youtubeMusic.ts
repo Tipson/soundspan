@@ -35,6 +35,7 @@ import { asyncHandler } from "../middleware/asyncHandler";
 import { parsePagination } from "../middleware/parsePagination";
 import { validate } from "../middleware/validate";
 import { acquireAbortableStreamProxy } from "./streamProxyRequestAbort";
+import { acquireWithMusicSourceFallback } from "./musicSourceFallback";
 import { handleYtMusicStreamProxyError } from "./youtubeMusicStreamProxyErrors";
 const router = Router();
 const OAUTH_CACHE_TTL_MS = config.nodeEnv === "test" ? 0 : 60_000;
@@ -1112,18 +1113,20 @@ router.get(
                 req,
                 res,
                 (signal) =>
-                    ytMusicService.getStreamProxy(
-                        "__public__",
-                        videoId,
-                        quality,
-                        rangeHeader,
-                        {
-                            signal,
-                            purpose:
-                                req.query.purpose === "preload"
-                                    ? "preload"
-                                    : "interactive",
-                        },
+                    acquireWithMusicSourceFallback(req, res, signal, (signal) =>
+                        ytMusicService.getStreamProxy(
+                            "__public__",
+                            videoId,
+                            quality,
+                            rangeHeader,
+                            {
+                                signal,
+                                purpose:
+                                    req.query.purpose === "preload"
+                                        ? "preload"
+                                        : "interactive",
+                            },
+                        ),
                     ),
             );
             if (!proxyRes) return;
@@ -1600,18 +1603,20 @@ router.get(
                 req,
                 res,
                 (signal) =>
-                    ytMusicService.getStreamProxy(
-                        "__public__",
-                        videoId,
-                        quality,
-                        rangeHeader,
-                        {
-                            signal,
-                            purpose:
-                                req.query.purpose === "preload"
-                                    ? "preload"
-                                    : "interactive",
-                        },
+                    acquireWithMusicSourceFallback(req, res, signal, (signal) =>
+                        ytMusicService.getStreamProxy(
+                            "__public__",
+                            videoId,
+                            quality,
+                            rangeHeader,
+                            {
+                                signal,
+                                purpose:
+                                    req.query.purpose === "preload"
+                                        ? "preload"
+                                        : "interactive",
+                            },
+                        ),
                     ),
             );
             if (!proxyRes) return;

@@ -25,6 +25,7 @@ const DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS = 90_000;
 const IMPORT_PREVIEW_PROXY_PATH = "api/import/preview";
 const UNAVAILABLE_RECOVERY_PROXY_PATH = "api/ytmusic/recover-unavailable";
 const MEDIA_STREAM_PATH_PATTERNS = [
+    /^(?:api\/)?music-sources\/leases\/[^/]+\/stream$/,
     /^(?:api\/)?ytmusic\/(?:stream|stream-public)\/[^/]+$/,
     /^(?:api\/)?youtube\/stream\/[^/]+$/,
 ];

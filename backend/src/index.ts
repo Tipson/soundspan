@@ -371,6 +371,11 @@ if (config.features.audioAnalysis) {
 }
 app.use("/api/system", apiLimiter, systemRoutes);
 app.use("/api/ytmusic", apiLimiter, ytMusicRoutes);
+app.use(
+    "/api/music-sources",
+    apiLimiter,
+    require("./routes/musicSources").default,
+);
 if (config.features.audius) {
     app.use("/api/audius", apiLimiter, require("./routes/audius").default);
 } else {

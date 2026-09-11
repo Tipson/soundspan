@@ -21,6 +21,7 @@ const UNAVAILABLE_RECOVERY_PATHS = new Set([
 const MEDIA_STREAM_PATH_PATTERNS = [
     /^(?:api\/)?ytmusic\/(?:stream|stream-public)\/[^/]+$/,
     /^(?:api\/)?youtube\/stream\/[^/]+$/,
+    /^(?:api\/)?music-sources\/leases\/[^/]+\/stream$/,
 ];
 
 function parsePositiveTimeoutMs(value) {

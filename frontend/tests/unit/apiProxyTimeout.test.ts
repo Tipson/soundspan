@@ -3,6 +3,12 @@ import { describe, test } from "node:test";
 import { resolveProxyTimeoutMs } from "../../lib/apiProxy";
 
 describe("resolveProxyTimeoutMs", () => {
+    test("allows music source streams the same media header deadline", () => {
+        assert.equal(
+            resolveProxyTimeoutMs("api/music-sources/leases/abc/stream", {}),
+            125_000,
+        );
+    });
     test("uses default timeout for non-import requests", () => {
         const timeoutMs = resolveProxyTimeoutMs("api/library", {});
         assert.equal(timeoutMs, 20_000);

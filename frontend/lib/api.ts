@@ -40,6 +40,7 @@ import { WithSoulseek } from "./api/soulseek";
 import { WithVibe } from "./api/vibe";
 import { WithYouTube } from "./api/youtube";
 import { WithYtMusic } from "./api/ytmusic";
+import { WithMusicSources } from "./api/musicSources";
 import type { ResolvedMediaSource } from "@soundspan/media-metadata-contract";
 
 export { vibeErrorMessage } from "./api/vibe";
@@ -522,34 +523,36 @@ export interface PlaybackClientMetricInput {
     fields?: Record<string, unknown>;
 }
 
-class ApiClient extends WithRequests(
-    WithPeerPlaylists(
-        WithLibraryHealthDashboard(
-            WithListenGroups(
-                WithFederation(
-                    WithYouTube(
-                        WithYtMusic(
-                            WithVibe(
-                                WithAudiobooks(
-                                    WithPodcasts(
-                                        WithSoulseek(
-                                            WithEnrichment(
-                                                WithMetadata(
-                                                    WithNotifications(
-                                                        WithDiscover(
-                                                            WithImports(
-                                                                WithDownloads(
-                                                                    WithAuth(
-                                                                        WithConnectors(
-                                                                            WithSettings(
-                                                                                WithScrobbling(
-                                                                                    WithPlays(
-                                                                                        WithRecommendations(
-                                                                                            WithMedia(
-                                                                                                WithPlaylists(
-                                                                                                    WithLibrary(
-                                                                                                        WithAudius(
-                                                                                                            ApiClientCore,
+class ApiClient extends WithMusicSources(
+    WithRequests(
+        WithPeerPlaylists(
+            WithLibraryHealthDashboard(
+                WithListenGroups(
+                    WithFederation(
+                        WithYouTube(
+                            WithYtMusic(
+                                WithVibe(
+                                    WithAudiobooks(
+                                        WithPodcasts(
+                                            WithSoulseek(
+                                                WithEnrichment(
+                                                    WithMetadata(
+                                                        WithNotifications(
+                                                            WithDiscover(
+                                                                WithImports(
+                                                                    WithDownloads(
+                                                                        WithAuth(
+                                                                            WithConnectors(
+                                                                                WithSettings(
+                                                                                    WithScrobbling(
+                                                                                        WithPlays(
+                                                                                            WithRecommendations(
+                                                                                                WithMedia(
+                                                                                                    WithPlaylists(
+                                                                                                        WithLibrary(
+                                                                                                            WithAudius(
+                                                                                                                ApiClientCore,
+                                                                                                            ),
                                                                                                         ),
                                                                                                     ),
                                                                                                 ),

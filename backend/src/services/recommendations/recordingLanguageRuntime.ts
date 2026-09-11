@@ -60,6 +60,6 @@ export const recordingLanguageStore = new RecordingLanguageStore({
     },
     warn: (error) =>
         log.debug("Optional language preparation unavailable", {
-            error: error instanceof Error ? error.message : "unknown",
+            kind: axios.isAxiosError(error) ? "upstream" : "local",
         }),
 });

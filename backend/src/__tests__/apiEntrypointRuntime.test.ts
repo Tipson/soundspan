@@ -39,6 +39,7 @@ describe("api entrypoint runtime behavior", () => {
         "../routes/vibe",
         "../routes/system",
         "../routes/youtubeMusic",
+        "../routes/musicSources",
         "../routes/trackMappings",
         "../routes/playlistImport",
         "../routes/lyrics",
@@ -834,6 +835,10 @@ describe("api entrypoint runtime behavior", () => {
             "/api/vibe": ["api-limiter", route("../routes/vibe")],
             "/api/system": ["api-limiter", route("../routes/system")],
             "/api/ytmusic": ["api-limiter", route("../routes/youtubeMusic")],
+            "/api/music-sources": [
+                "api-limiter",
+                route("../routes/musicSources"),
+            ],
             "/api/audius": [
                 "api-limiter",
                 mocks.requireAuth,

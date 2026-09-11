@@ -209,6 +209,12 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             const params = new URLSearchParams();
             if (quality) params.set("quality", quality);
             if (purpose === "preload") params.set("purpose", purpose);
+            if (
+                typeof crypto !== "undefined" &&
+                typeof crypto.randomUUID === "function"
+            ) {
+                params.set("playbackSession", crypto.randomUUID());
+            }
             // Isolate ephemeral worker bytes without putting credentials in URLs.
             // Unsupported/insecure browsers retain the uncached playback path.
             if (

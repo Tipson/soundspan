@@ -10,6 +10,7 @@ const MEDIA_COOKIE_PATTERN = new RegExp(
     "gi",
 );
 const MEDIA_COOKIE_AUTH_PATHS = [
+    /^\/api\/music-sources\/leases\/[a-f0-9]{48}\/stream\/?$/,
     /^\/api\/library\/cover-art(?:\/|$)/,
     /^\/api\/browse\/ytmusic\/image\/?$/,
     /^\/api\/social\/profile-picture\/[^/]+\/?$/,

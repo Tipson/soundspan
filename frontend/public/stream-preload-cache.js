@@ -86,6 +86,9 @@ self.createCompletedStreamPreloadCache = function ({
         )
             return null;
         if (purpose === "preload") url.searchParams.delete("purpose");
+        // Only complete original YouTube responses enter this cache. Redirected
+        // fallback leases are excluded by captureLength and carry no-store.
+        url.searchParams.delete("playbackSession");
         // Apply identical encoding on both paths (e.g. raw ':' vs '%3A').
         url.search = url.searchParams.toString();
         return { session, key: url.toString(), preload: purpose === "preload" };

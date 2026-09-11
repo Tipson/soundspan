@@ -148,6 +148,19 @@ async function warm(
     assert.equal(await response.text(), "abcdef");
 }
 
+test("completed YouTube preload remains reusable across playback-attempt identifiers", async () => {
+    const h = harness();
+    await warm(h);
+    const url = new URL(request().url);
+    url.searchParams.set(
+        "playbackSession",
+        "22222222-2222-4222-8222-222222222222",
+    );
+    const response = await h.cache.handle(new Request(url), "client-a");
+    assert.equal(await response.text(), "abcdef");
+    assert.equal(h.calls.length, 1);
+});
+
 test("complete native preload is reused without a second fetch and preserves full and range bodies", async () => {
     const h = harness();
     await warm(h);
