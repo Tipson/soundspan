@@ -2,6 +2,7 @@
 
 ## Unreleased server music connections
 
+- Recheck the live audio position before a buffering watchdog expires. Delayed page callbacks must not stop an already recovered stream; a continuing stall still reaches the normal bounded recovery path.
 - Add disabled-by-default Yandex Music and VK Music server connections managed by administrators, with encrypted credentials, connection revocation and same-origin audio leases scoped to each Soundspan listener.
 - Recover initial YouTube stream failures through an exact recording match on a configured source. Preserve recording identity and reject previews, incompatible versions and changed audio representations during seeking.
 - Add administrator catalog and audio diagnostics. Real service-account acceptance is required before production activation; VK HLS streams are not supported.

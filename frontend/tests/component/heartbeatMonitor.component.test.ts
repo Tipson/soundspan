@@ -138,6 +138,51 @@ test("startBufferTimeout and clearBufferTimeout control timeout callback", () =>
     monitor.destroy();
 });
 
+test("delayed buffer timeout rechecks the media clock before interrupting recovered audio", () => {
+    mock.timers.enable();
+    const { monitor, state, calls } = createHarness({
+        staleThreshold: 1,
+        interval: 60_000,
+        bufferTimeout: 250,
+    });
+    monitor.start();
+    tick(monitor);
+    monitor.startBufferTimeout();
+    assert.equal(monitor.stalled, true);
+
+    // Media resumes while the page cannot deliver timeupdate/poll callbacks.
+    // The older timeout runs first when JavaScript gets another turn.
+    state.currentTime = 12;
+    mock.timers.tick(250);
+
+    assert.equal(calls.bufferTimeout, 0);
+    assert.equal(calls.recovery, 1);
+    assert.equal(monitor.stalled, false);
+    assert.equal(monitor.monitoring, true);
+    monitor.destroy();
+});
+
+test("a continuing stall still times out after a previous recovery", () => {
+    mock.timers.enable();
+    const { monitor, state, calls } = createHarness({
+        staleThreshold: 1,
+        bufferTimeout: 250,
+    });
+    monitor.start();
+    tick(monitor);
+    monitor.startBufferTimeout();
+    state.currentTime = 12;
+    mock.timers.tick(250);
+    tick(monitor);
+    monitor.startBufferTimeout();
+    mock.timers.tick(250);
+
+    assert.equal(calls.recovery, 1);
+    assert.equal(calls.stall, 2);
+    assert.equal(calls.bufferTimeout, 1);
+    monitor.destroy();
+});
+
 test("updateConfig applies new stale threshold", () => {
     const { monitor, calls } = createHarness({ staleThreshold: 3 });
 

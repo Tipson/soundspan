@@ -111,8 +111,22 @@ export class HeartbeatMonitor {
      */
     startBufferTimeout(): void {
         this.clearBufferTimeout();
+        const timeoutStartTime = this.callbacks.getCurrentTime();
 
         this.bufferTimeoutId = setTimeout(() => {
+            this.bufferTimeoutId = null;
+            // A background page can deliver an old timer before timeupdate
+            // or the next poll. The media clock, not callback order, decides
+            // whether the stream is still stalled.
+            const currentTime = this.callbacks.getCurrentTime();
+            if (
+                Number.isFinite(currentTime) &&
+                Math.abs(currentTime - timeoutStartTime) >=
+                    this.config.timeTolerance
+            ) {
+                this.notifyProgress(currentTime);
+                return;
+            }
             if (this.debugEnabled) {
                 sharedFrontendLogger.info("[Heartbeat] Buffer timeout expired");
             }
