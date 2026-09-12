@@ -315,11 +315,11 @@ describe("youtubeMusic routes branch coverage", () => {
         expect(res.headers["accept-ranges"]).toBeUndefined();
     });
 
-    it("returns song details for authenticated browse path", async () => {
+    it("uses the public catalog for an authenticated Soundspan listener's song details", async () => {
         const res = await request(app).get("/api/ytmusic/song/video-1");
         expect(res.status).toBe(200);
         expect(ytMusicService.getSong).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "video-1",
         );
     });

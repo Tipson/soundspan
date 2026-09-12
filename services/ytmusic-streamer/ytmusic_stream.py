@@ -1,6 +1,7 @@
 """Stream extraction, proxying, regular-YouTube metadata, and caches."""
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -1281,13 +1282,56 @@ def _iter_progressive_cdn_chunks(
     session: _SpoolSession,
     byte_limit: int,
     started_at: float,
+    *,
+    refresh_source: Callable[[], str] | None = None,
 ) -> Iterator[tuple[bytes, int | None]]:
-    """Own one connection pool per transfer, closing it on completion or cancellation."""
+    """Own a transfer and verify all published bytes before one source replacement."""
     with requests.Session() as client:
         try:
-            yield from _iter_progressive_cdn_ranges(
-                stream_url, headers, session, byte_limit, started_at, client
-            )
+            delivered = 0
+            original_total: int | None = None
+            digest = hashlib.sha256()
+            try:
+                for chunk, original_total in _iter_progressive_cdn_ranges(
+                    stream_url, headers, session, byte_limit, started_at, client
+                ):
+                    digest.update(chunk)
+                    delivered += len(chunk)
+                    yield chunk, original_total
+                return
+            except requests.HTTPError as error:
+                if (
+                    refresh_source is None
+                    or delivered == 0
+                    or error.response is None
+                    or error.response.status_code not in _PROGRESSIVE_SOURCE_REFRESH_STATUSES
+                ):
+                    raise
+            if session.cancel_event.is_set():
+                raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+            replacement_url = refresh_source()
+            replayed = 0
+            replay_digest = hashlib.sha256()
+            try:
+                for chunk, total in _iter_progressive_cdn_ranges(
+                    replacement_url, headers, session, byte_limit, started_at, client
+                ):
+                    if total != original_total:
+                        raise ValueError("Progressive recovery changed its representation")
+                    prefix_bytes = min(len(chunk), delivered - replayed)
+                    if prefix_bytes:
+                        replay_digest.update(chunk[:prefix_bytes])
+                        replayed += prefix_bytes
+                    if replayed == delivered:
+                        if replay_digest.digest() != digest.digest():
+                            raise ValueError("Progressive recovery changed its representation")
+                        if prefix_bytes < len(chunk):
+                            yield chunk[prefix_bytes:], total
+                if replayed != delivered:
+                    raise ValueError("Progressive recovery truncated its representation")
+            except (requests.HTTPError, _ProgressiveSourceRefreshRequired):
+                # Do not let the pre-publication retry restart an already published file.
+                raise RuntimeError("Progressive source recovery exhausted") from None
         except ExtractionAbandoned as error:
             if session.cancel_event.is_set():
                 raise _SpoolDownloadCancelled(
@@ -1468,10 +1512,37 @@ def _download_progressive_spool_sync(
     }
     downloaded = 0
     total_bytes: int | None = None
+    active_plan = plan
+
+    def refresh_source() -> str:
+        nonlocal active_plan
+        _invalidate_music_stream_url(video_id, quality, active_plan.stream_url)
+        if session.cancel_event.is_set():
+            raise _SpoolDownloadCancelled("YouTube Music spool request was abandoned")
+        replacement = _extraction_budget.run(
+            partial(_resolve_progressive_spool_plan_sync, video_id, quality, session),
+            cancel_event=session.cancel_event,
+            deadline=started_at + YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT,
+            priority=session.current_priority,
+        )
+        if replacement is None or replacement.extension != extension:
+            raise ValueError("Progressive recovery changed its representation")
+        active_plan = replacement
+        log.info("Refreshing refused CDN continuation for %s with prefix verification", video_id)
+        return replacement.stream_url
+
+    def chunks() -> Iterator[tuple[bytes, int | None]]:
+        try:
+            yield from _iter_progressive_cdn_chunks(
+                stream_url, headers, session, byte_limit, started_at, refresh_source=refresh_source
+            )
+        except (requests.HTTPError, RuntimeError, ValueError):
+            if active_plan is not plan:
+                _invalidate_music_stream_url(video_id, quality, active_plan.stream_url)
+            raise
+
     with partial_path.open("wb", buffering=0) as spool:
-        for chunk, total_bytes in _iter_progressive_cdn_chunks(
-            stream_url, headers, session, byte_limit, started_at
-        ):
+        for chunk, total_bytes in chunks():
             session.startup_timing.mark("first_chunk")
             downloaded += len(chunk)
             spool.write(chunk)
@@ -1496,7 +1567,7 @@ def _download_progressive_spool_sync(
     session.pin_path(completed_path)
     _replace_completed_spool(partial_path, completed_path, session.cancel_event)
     session.publish_growth_from_worker()
-    return str(completed_path), content_type, plan.info
+    return str(completed_path), content_type, active_plan.info
 
 
 def _materialize_progressive_spool_sync(

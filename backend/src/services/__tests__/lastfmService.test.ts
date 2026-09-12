@@ -97,6 +97,115 @@ describe("lastFmService", () => {
         mockDeezerGetArtistImageStrict.mockResolvedValue(null);
     });
 
+    it("returns quick search results without a metadata request per match", async () => {
+        const controller = new AbortController();
+        mockHttpGet.mockImplementation(async (_path, config) => ({
+            data:
+                config.params.method === "artist.search"
+                    ? {
+                          results: {
+                              artistmatches: {
+                                  artist: [{ name: "Queen", mbid: "queen-id" }],
+                              },
+                          },
+                      }
+                    : {
+                          results: {
+                              trackmatches: {
+                                  track: [
+                                      {
+                                          name: "Bohemian Rhapsody",
+                                          artist: "Queen",
+                                      },
+                                  ],
+                              },
+                          },
+                      },
+        }));
+        const options = { signal: controller.signal, enrich: false };
+        const artists = await (lastFmService as any).searchArtists(
+            "Queen",
+            20,
+            options,
+        );
+        const tracks = await (lastFmService as any).searchTracks(
+            "Queen",
+            20,
+            options,
+        );
+        expect(artists).toEqual([expect.objectContaining({ name: "Queen" })]);
+        expect(tracks).toEqual([
+            expect.objectContaining({ name: "Bohemian Rhapsody" }),
+        ]);
+        expect(mockHttpGet).toHaveBeenCalledTimes(2);
+        expect(
+            mockHttpGet.mock.calls.every(
+                ([, config]) => config.signal === controller.signal,
+            ),
+        ).toBe(true);
+        expect(
+            mockRateLimiterExecute.mock.calls.every(
+                ([, , options]) => options?.signal === controller.signal,
+            ),
+        ).toBe(true);
+        expect(mockFanartGetArtistImage).not.toHaveBeenCalled();
+        expect(mockDeezerGetArtistImage).not.toHaveBeenCalled();
+    });
+
+    it("does not dispatch or hide cancellation for an expired discovery request", async () => {
+        const controller = new AbortController();
+        const reason = new Error("discovery deadline");
+        controller.abort(reason);
+        for (const invoke of [
+            () =>
+                (lastFmService as any).searchArtists("Queen", 20, {
+                    signal: controller.signal,
+                    enrich: false,
+                }),
+            () =>
+                (lastFmService as any).searchTracks("Queen", 20, {
+                    signal: controller.signal,
+                    enrich: false,
+                }),
+            () =>
+                (lastFmService as any).getArtistCorrection("Queen", {
+                    signal: controller.signal,
+                }),
+        ])
+            await expect(invoke()).rejects.toBe(reason);
+        expect(mockHttpGet).not.toHaveBeenCalled();
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+    });
+
+    it("does not report a failed quick search as a complete empty result", async () => {
+        mockHttpGet.mockRejectedValue({ response: { status: 503 } });
+        await expect(
+            lastFmService.searchArtists("Queen", 20, { enrich: false }),
+        ).rejects.toThrow("Last.fm");
+        await expect(
+            lastFmService.searchTracks("Queen", 20, { enrich: false }),
+        ).rejects.toThrow("Last.fm");
+    });
+
+    it("passes correction cancellation to both the provider queue and HTTP client", async () => {
+        const controller = new AbortController();
+        const reason = new Error("correction deadline");
+        mockHttpGet.mockImplementation(async (_path, config) => {
+            expect(config.signal).toBe(controller.signal);
+            controller.abort(reason);
+            throw new Error("canceled");
+        });
+        await expect(
+            (lastFmService as any).getArtistCorrection("Queen", {
+                signal: controller.signal,
+            }),
+        ).rejects.toBe(reason);
+        expect(mockRateLimiterExecute.mock.calls[0][2]).toEqual(
+            expect.objectContaining({ signal: controller.signal }),
+        );
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+    });
+
     it("picks up another process changing the server key without restarting the worker", async () => {
         const now = jest.spyOn(Date, "now");
         now.mockReturnValue(1_000_000);

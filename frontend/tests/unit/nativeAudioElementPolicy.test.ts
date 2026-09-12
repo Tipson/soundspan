@@ -482,7 +482,7 @@ test("STOP_REQUESTED without a source is a no-op", () => {
 // Element playback signals
 // ---------------------------------------------------------------------------
 
-test("ELEMENT_PLAYING enters playing, starts the ticker, resets retries, and reports start latency", () => {
+test("ELEMENT_PLAYING resets autoplay retries but preserves the stream recovery budget", () => {
     const { state, effects } = transitionNativeEngine(
         loadedState({
             autoplay: true,
@@ -492,7 +492,7 @@ test("ELEMENT_PLAYING enters playing, starts the ticker, resets retries, and rep
         { type: "ELEMENT_PLAYING", nowMs: 1_500 },
     );
     assert.equal(state.status, "playing");
-    assert.equal(state.automaticRetriesUsed, 0);
+    assert.equal(state.automaticRetriesUsed, 2);
     assert.equal(state.playStartRetriesUsed, 0);
     assert.equal(state.gestureRetryUsed, false);
     assert.equal(state.loadRequestedAtMs, null);
@@ -1145,6 +1145,47 @@ test("repeated transient errors across a mid-playback reload still exhaust into 
     // …and the last one exhausts into an explicit error, not silence.
     assert.equal(transition.state.status, "error");
     assert.ok(kinds(finalEffects).includes("emitLoadError"));
+});
+
+test("repeated brief playing events cannot replenish failed stream retries", () => {
+    let state = playingState();
+    let reloads = 0;
+    let finalEffects: NativeEnginePolicyEffect[] = [];
+    for (let round = 0; round < 12; round += 1) {
+        const failed = transitionNativeEngine(state, {
+            type: "ELEMENT_ERROR",
+            mediaErrorCode: 2,
+            mediaErrorMessage: "connection interrupted",
+            isPageHidden: false,
+            currentTimeSec: 30,
+            nowMs: 5_000 + round * 100,
+        });
+        state = failed.state;
+        finalEffects = failed.effects;
+        const reload = findEffect(failed.effects, "reloadFromSource");
+        if (!reload) break;
+        reloads += 1;
+        state = transitionNativeEngine(state, {
+            type: "LOAD_REQUESTED",
+            autoplay: reload.resumePlaying,
+            startTimeSec: reload.resumeAtSec,
+            carryRetryBudget: reload.carryRetryBudget,
+            force: true,
+            nowMs: 5_010 + round * 100,
+        }).state;
+        state = transitionNativeEngine(state, {
+            type: "LOADED_METADATA",
+            durationSec: 240,
+            nowMs: 5_020 + round * 100,
+        }).state;
+        state = transitionNativeEngine(state, {
+            type: "ELEMENT_PLAYING",
+            nowMs: 5_030 + round * 100,
+        }).state;
+    }
+    assert.equal(reloads, NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES);
+    assert.equal(state.status, "error");
+    assert.equal(findEffect(finalEffects, "emitPlayError")?.recoverable, false);
 });
 
 test("media errors in ended, idle, or error status are ignored", () => {

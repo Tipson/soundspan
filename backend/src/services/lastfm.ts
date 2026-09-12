@@ -17,6 +17,15 @@ interface SimilarArtist {
     url: string;
 }
 
+interface LastFmRequestOptions {
+    signal?: AbortSignal;
+}
+
+interface LastFmSearchOptions extends LastFmRequestOptions {
+    /** Quick discovery uses provider search fields without per-match lookups. */
+    enrich?: boolean;
+}
+
 /** A safe provider error retaining only the fields used for fallback decisions. */
 class LastFmRequestError extends Error {
     readonly code: string | undefined;
@@ -162,70 +171,87 @@ class LastFmService {
         return Boolean(this.apiKey);
     }
 
-    private async request<T = any>(params: Record<string, any>) {
+    private async request<T = any>(
+        params: Record<string, any>,
+        options?: LastFmRequestOptions,
+    ) {
+        options?.signal?.throwIfAborted();
         await this.ensureInitialized();
+        options?.signal?.throwIfAborted();
         if (!this.apiKey) {
             throw new Error("Last.fm API key not available");
         }
-        const response = await rateLimiter.execute("lastfm", async () => {
-            // Bind credentials at dispatch: initialization or a settings update
-            // may have changed the key while this request waited for its slot.
-            await this.ensureInitialized();
-            if (!this.apiKey) throw new Error("Last.fm API key not available");
-            try {
-                const result = await this.client.get<T>("/", {
-                    params: { ...params, api_key: this.apiKey },
-                });
-                // Application errors may arrive with HTTP 200. The limiter must
-                // observe them before it records success or decides to retry.
-                const code = providerErrorCode(result.data);
-                if (code !== undefined) throw new LastFmRequestError(code);
-                return result;
-            } catch (error: unknown) {
-                if (error instanceof LastFmRequestError) throw error;
-                // Axios errors include request parameters (and the API key).
-                // Callers log errors, so retain only safe fallback metadata.
-                const upstream =
-                    error && typeof error === "object" && "response" in error
-                        ? error.response
-                        : undefined;
-                const status =
-                    upstream &&
-                    typeof upstream === "object" &&
-                    "status" in upstream &&
-                    typeof upstream.status === "number"
-                        ? upstream.status
-                        : undefined;
-                const data =
-                    upstream &&
-                    typeof upstream === "object" &&
-                    "data" in upstream
-                        ? upstream.data
-                        : undefined;
-                const headers =
-                    upstream &&
-                    typeof upstream === "object" &&
-                    "headers" in upstream
-                        ? upstream.headers
-                        : undefined;
-                const retryAfter =
-                    headers &&
-                    typeof headers === "object" &&
-                    "retry-after" in headers
-                        ? headers["retry-after"]
-                        : undefined;
-                const transportCode =
-                    error && typeof error === "object" && "code" in error
-                        ? error.code
-                        : undefined;
-                throw new LastFmRequestError(
-                    providerErrorCode(data),
-                    status,
-                    transportCode,
-                    retryAfter,
-                );
-            }
-        });
+        const response = await rateLimiter.execute(
+            "lastfm",
+            async () => {
+                options?.signal?.throwIfAborted();
+                // Bind credentials at dispatch: initialization or a settings update
+                // may have changed the key while this request waited for its slot.
+                await this.ensureInitialized();
+                options?.signal?.throwIfAborted();
+                if (!this.apiKey)
+                    throw new Error("Last.fm API key not available");
+                try {
+                    const result = await this.client.get<T>("/", {
+                        params: { ...params, api_key: this.apiKey },
+                        signal: options?.signal,
+                    });
+                    options?.signal?.throwIfAborted();
+                    // Application errors may arrive with HTTP 200. The limiter must
+                    // observe them before it records success or decides to retry.
+                    const code = providerErrorCode(result.data);
+                    if (code !== undefined) throw new LastFmRequestError(code);
+                    return result;
+                } catch (error: unknown) {
+                    options?.signal?.throwIfAborted();
+                    if (error instanceof LastFmRequestError) throw error;
+                    // Axios errors include request parameters (and the API key).
+                    // Callers log errors, so retain only safe fallback metadata.
+                    const upstream =
+                        error &&
+                        typeof error === "object" &&
+                        "response" in error
+                            ? error.response
+                            : undefined;
+                    const status =
+                        upstream &&
+                        typeof upstream === "object" &&
+                        "status" in upstream &&
+                        typeof upstream.status === "number"
+                            ? upstream.status
+                            : undefined;
+                    const data =
+                        upstream &&
+                        typeof upstream === "object" &&
+                        "data" in upstream
+                            ? upstream.data
+                            : undefined;
+                    const headers =
+                        upstream &&
+                        typeof upstream === "object" &&
+                        "headers" in upstream
+                            ? upstream.headers
+                            : undefined;
+                    const retryAfter =
+                        headers &&
+                        typeof headers === "object" &&
+                        "retry-after" in headers
+                            ? headers["retry-after"]
+                            : undefined;
+                    const transportCode =
+                        error && typeof error === "object" && "code" in error
+                            ? error.code
+                            : undefined;
+                    throw new LastFmRequestError(
+                        providerErrorCode(data),
+                        status,
+                        transportCode,
+                        retryAfter,
+                    );
+                }
+            },
+            options,
+        );
         return response.data;
     }
 
@@ -898,17 +924,25 @@ class LastFmService {
     }
 
     /**
-     * Search for artists on Last.fm and fetch their detailed info with images
+     * Search artists; optional quick mode avoids per-result enrichment.
+     * The signal cancels the search's queued and active provider request.
      */
-    async searchArtists(query: string, limit = 20) {
+    async searchArtists(
+        query: string,
+        limit = 20,
+        options?: LastFmSearchOptions,
+    ) {
         try {
-            const data = await this.request({
-                method: "artist.search",
-                artist: query,
-                api_key: this.apiKey,
-                format: "json",
-                limit,
-            });
+            const data = await this.request(
+                {
+                    method: "artist.search",
+                    artist: query,
+                    api_key: this.apiKey,
+                    format: "json",
+                    limit,
+                },
+                options,
+            );
 
             const artists = data.results?.artistmatches?.artist || [];
 
@@ -990,6 +1024,14 @@ class LastFmService {
 
             const limitedArtists = uniqueArtists.slice(0, limit);
 
+            if (options?.enrich === false) {
+                return Promise.all(
+                    limitedArtists.map((artist) =>
+                        this.buildArtistSearchResult(artist, false),
+                    ),
+                );
+            }
+
             logger.debug(
                 `  → Filtered to ${limitedArtists.length} relevant matches (limit: ${limit})`,
             );
@@ -1014,23 +1056,33 @@ class LastFmService {
 
             return [...enriched, ...fast].filter(Boolean);
         } catch (error) {
+            options?.signal?.throwIfAborted();
+            if (options?.enrich === false) throw error;
             logger.error("Last.fm artist search error:", error);
             return [];
         }
     }
 
     /**
-     * Search for tracks on Last.fm
+     * Search tracks; optional quick mode avoids per-result enrichment.
+     * The signal cancels the search's queued and active provider request.
      */
-    async searchTracks(query: string, limit = 20) {
+    async searchTracks(
+        query: string,
+        limit = 20,
+        options?: LastFmSearchOptions,
+    ) {
         try {
-            const data = await this.request({
-                method: "track.search",
-                track: query,
-                api_key: this.apiKey,
-                format: "json",
-                limit,
-            });
+            const data = await this.request(
+                {
+                    method: "track.search",
+                    track: query,
+                    api_key: this.apiKey,
+                    format: "json",
+                    limit,
+                },
+                options,
+            );
 
             const tracks = data.results?.trackmatches?.track || [];
 
@@ -1042,6 +1094,16 @@ class LastFmService {
                 (track: any) => !this.isInvalidArtistName(track.artist),
             );
             const limitedTracks = validTracks.slice(0, limit);
+
+            if (options?.enrich === false) {
+                return (
+                    await Promise.all(
+                        limitedTracks.map((track: any) =>
+                            this.buildTrackSearchResult(track, false),
+                        ),
+                    )
+                ).filter(Boolean);
+            }
 
             const enrichmentCount = Math.min(8, limitedTracks.length);
 
@@ -1064,6 +1126,8 @@ class LastFmService {
 
             return [...enriched, ...fast].filter(Boolean);
         } catch (error) {
+            options?.signal?.throwIfAborted();
+            if (options?.enrich === false) throw error;
             logger.error("Last.fm track search error:", error);
             return [];
         }
@@ -1121,11 +1185,15 @@ class LastFmService {
      * getArtistCorrection("of mice") // Returns { corrected: true, canonicalName: "Of Mice & Men", mbid: "..." }
      * getArtistCorrection("bjork")   // Returns { corrected: true, canonicalName: "Björk", mbid: "..." }
      */
-    async getArtistCorrection(artistName: string): Promise<{
+    async getArtistCorrection(
+        artistName: string,
+        options?: LastFmRequestOptions,
+    ): Promise<{
         corrected: boolean;
         canonicalName: string;
         mbid?: string;
     } | null> {
+        options?.signal?.throwIfAborted();
         const cacheKey = `lastfm:correction:${artistName.toLowerCase().trim()}`;
 
         // Check cache first (30-day TTL)
@@ -1139,12 +1207,15 @@ class LastFmService {
         }
 
         try {
-            const data = await this.request({
-                method: "artist.getCorrection",
-                artist: artistName,
-                api_key: this.apiKey,
-                format: "json",
-            });
+            const data = await this.request(
+                {
+                    method: "artist.getCorrection",
+                    artist: artistName,
+                    api_key: this.apiKey,
+                    format: "json",
+                },
+                options,
+            );
 
             const correction = data.corrections?.correction?.artist;
 
@@ -1166,6 +1237,7 @@ class LastFmService {
 
             return result;
         } catch (error: any) {
+            options?.signal?.throwIfAborted();
             // Error 6 = "Artist not found" - cache negative result
             if (error.response?.data?.error === 6) {
                 await redisClient.setEx(cacheKey, 2592000, "null");

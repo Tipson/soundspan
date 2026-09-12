@@ -946,9 +946,11 @@ router.get(
  *       200:
  *         description: Song details from YouTube Music
  *       401:
- *         description: Not authenticated or YouTube Music auth expired
+ *         description: Not authenticated with Soundspan
  *       403:
  *         description: YouTube Music integration is not enabled
+ *       502:
+ *         description: Public YouTube Music metadata is temporarily unavailable
  */
 router.get(
     "/song/:videoId",
@@ -956,14 +958,22 @@ router.get(
     requireYtMusicEnabled,
     asyncHandler(async (req: Request<{ videoId: string }>, res: Response) => {
         try {
-            const effectiveUserId = await getUserIdOrPublic(req.user!.id);
+            // Playback metadata is public catalog data. A stale personal
+            // library session must not make a playable track require OAuth.
             const song = await ytMusicService.getSong(
-                effectiveUserId,
+                "__public__",
                 req.params.videoId,
             );
             res.json(song);
         } catch (err: unknown) {
-            if (handleYtMusicAuthError(res, err)) return;
+            // Upstream authorization is not the listener's Soundspan session.
+            // A public-provider failure must not trigger a client logout.
+            if (getHttpErrorStatus(err) === 401) {
+                res.status(502).json({
+                    error: "YouTube Music metadata is temporarily unavailable",
+                });
+                return;
+            }
             logger.error("[YTMusic Route] Get song failed:", err);
             sendInternalRouteError(res, "Internal server error");
         }

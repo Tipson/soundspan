@@ -1005,7 +1005,8 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         ) {
             try {
                 const correction = await withDiscoveryDeadline(
-                    () => lastFmService.getArtistCorrection(query),
+                    (signal) =>
+                        lastFmService.getArtistCorrection(query, { signal }),
                     DISCOVERY_CORRECTION_DEADLINE_MS,
                     "Last.fm correction",
                 );
@@ -1034,10 +1035,11 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
         if (type === "music" || type === "all") {
             if (lastFmEnabled && scope === "all") {
                 promiseMap.artists = withDiscoveryDeadline(
-                    () =>
+                    (signal) =>
                         lastFmService.searchArtists(
                             searchQuery,
                             Math.min(searchLimit, 50),
+                            { signal, enrich: false },
                         ),
                     LASTFM_DISCOVERY_SOURCE_DEADLINE_MS,
                     "Last.fm artist search",
@@ -1045,7 +1047,11 @@ router.get("/discover", discoverMusicSearchLimiter, async (req, res) => {
             }
             if (lastFmEnabled && scope === "all") {
                 promiseMap.tracks = withDiscoveryDeadline(
-                    () => lastFmService.searchTracks(searchQuery, searchLimit),
+                    (signal) =>
+                        lastFmService.searchTracks(searchQuery, searchLimit, {
+                            signal,
+                            enrich: false,
+                        }),
                     LASTFM_DISCOVERY_SOURCE_DEADLINE_MS,
                     "Last.fm track search",
                 );

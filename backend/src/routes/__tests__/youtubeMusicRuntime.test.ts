@@ -783,9 +783,9 @@ describe("youtube music route runtime behavior", () => {
             { ...reqBase, params: { videoId: "song-1" } } as any,
             songAuthErrorRes,
         );
-        expect(songAuthErrorRes.statusCode).toBe(401);
+        expect(songAuthErrorRes.statusCode).toBe(502);
         expect(songAuthErrorRes.body).toEqual({
-            error: "YouTube Music authentication expired or invalid. Please reconnect your account.",
+            error: "YouTube Music metadata is temporarily unavailable",
         });
 
         ytMusicService.getSong.mockRejectedValueOnce({
@@ -1171,6 +1171,24 @@ describe("youtube music route runtime behavior", () => {
         data.destroyed = true;
         closeHandler();
         expect(data.destroy).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses public song metadata even when a personal OAuth session is present", async () => {
+        const handler = getLastHandler("/song/:videoId", "get");
+        const response = createRes();
+        await handler(
+            {
+                user: { id: "metadata-user" },
+                params: { videoId: "dQw4w9WgXcQ" },
+            } as any,
+            response,
+        );
+        expect(response.statusCode).toBe(200);
+        expect(ytMusicService.getSong).toHaveBeenCalledWith(
+            "__public__",
+            "dQw4w9WgXcQ",
+        );
+        expect(ytMusicService.getAuthStatus).not.toHaveBeenCalled();
     });
 
     it("handles library songs and albums retrieval with fallback errors", async () => {

@@ -602,8 +602,16 @@ describe("search route runtime behavior", () => {
 
         await discoverHandler(req, res);
 
-        expect(mockSearchArtists).toHaveBeenCalledWith("Radiohead", 50);
-        expect(mockSearchTracks).toHaveBeenCalledWith("Radiohead", 60);
+        expect(mockSearchArtists).toHaveBeenCalledWith(
+            "Radiohead",
+            50,
+            expect.objectContaining({ enrich: false }),
+        );
+        expect(mockSearchTracks).toHaveBeenCalledWith(
+            "Radiohead",
+            60,
+            expect.objectContaining({ enrich: false }),
+        );
         expect(mockYtMusicSearch).toHaveBeenCalledWith(
             "__public__",
             "Radiohead",
@@ -1255,6 +1263,11 @@ describe("search route runtime behavior", () => {
 
         expect(res.statusCode).toBe(200);
         expect(returnedWithinMetadataBudget).toBe(true);
+        for (const search of [mockSearchArtists, mockSearchTracks]) {
+            const options = search.mock.calls[0][2];
+            expect(options?.enrich).toBe(false);
+            expect(options?.signal?.aborted).toBe(true);
+        }
         expect(res.body.results).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ id: "video-fast" }),

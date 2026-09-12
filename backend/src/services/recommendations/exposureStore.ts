@@ -427,20 +427,41 @@ export const recommendationExposureStore = new RecommendationExposureStore({
             select: { id: true },
         }),
     markViewedExposures: async (userId, generationId, viewedAt, tracks) => {
-        const result = await prisma.recommendationExposure.updateMany({
-            where: {
-                userId,
-                generationId,
-                viewedAt: null,
-                generation: { served: true, userId },
-                OR: tracks.map((track) => ({
-                    provider: track.provider,
-                    providerTrackId: track.providerTrackId,
-                })),
+        return prisma.$transaction(
+            async (transaction) => {
+                // Overlapping viewport batches may visit exposure indexes in
+                // different orders. Serialize by their common generation before
+                // locking any exposure, across API processes as well as tabs.
+                const generation = await transaction.$queryRaw<
+                    Array<{ id: string }>
+                >`
+                SELECT "id" FROM "RecommendationGeneration"
+                WHERE "id" = ${generationId} AND "userId" = ${userId}
+                    AND "served" = true
+                FOR NO KEY UPDATE
+            `;
+                if (generation.length === 0) return 0;
+                const result =
+                    await transaction.recommendationExposure.updateMany({
+                        where: {
+                            userId,
+                            generationId,
+                            viewedAt: null,
+                            generation: { served: true, userId },
+                            OR: tracks.map((track) => ({
+                                provider: track.provider,
+                                providerTrackId: track.providerTrackId,
+                            })),
+                        },
+                        data: { viewedAt },
+                    });
+                return result.count;
             },
-            data: { viewedAt },
-        });
-        return result.count;
+            {
+                maxWait: 5_000,
+                timeout: 5_000,
+            },
+        );
     },
     markExposureViewedIfMissing: async (exposureId, viewedAt) => {
         await prisma.recommendationExposure.updateMany({

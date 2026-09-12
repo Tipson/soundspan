@@ -2,6 +2,11 @@
 
 ## Unreleased server music connections
 
+- Recover a refused YouTube CDN continuation with one fresh source resolution. Verify the complete delivered prefix and representation length before appending any replacement bytes; cancellation, changed content and repeat refusal stop recovery.
+- Preserve the native player's automatic retry budget across brief `playing` events, preventing repeated broken streams from replenishing their own retries. Public song metadata does not depend on personal YouTube OAuth, and upstream authorization failures do not invalidate Soundspan login.
+- Keep discovery searches within their deadlines by canceling queued Last.fm work and active HTTP requests, and returning search fields without per-match metadata enrichment. Failed quick searches remain incomplete and are not cached as successful empty results.
+- Coordinate MusicBrainz dispatch across API and worker processes through Redis, including fallback HTTP searches. Apply shared provider cooldown and short failure caching; serialize overlapping recommendation impression batches by generation.
+
 - Recheck the live audio position before a buffering watchdog expires. Delayed page callbacks must not stop an already recovered stream; a continuing stall still reaches the normal bounded recovery path.
 - Add disabled-by-default Yandex Music and VK Music server connections managed by administrators, with encrypted credentials, connection revocation and same-origin audio leases scoped to each Soundspan listener.
 - Recover initial YouTube stream failures through an exact recording match on a configured source. Preserve recording identity and reject previews, incompatible versions and changed audio representations during seeking.

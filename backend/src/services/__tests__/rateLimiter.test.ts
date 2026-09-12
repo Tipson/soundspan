@@ -68,6 +68,42 @@ describe("rateLimiter", () => {
         ).rejects.toThrow("Unknown service: unknown");
     });
 
+    it("never dispatches work whose caller canceled while queued", async () => {
+        const { rateLimiter } = await loadRateLimiterModule();
+        const controller = new AbortController();
+        const reason = new Error("deadline");
+        const queue = (rateLimiter as any).queues.get("lastfm");
+        queue.add.mockImplementation(
+            async (task: () => Promise<unknown>, options: any) => {
+                expect(options.signal).toBe(controller.signal);
+                controller.abort(reason);
+                return task();
+            },
+        );
+        const work = jest.fn().mockResolvedValue("late");
+        await expect(
+            rateLimiter.execute("lastfm", work, {
+                signal: controller.signal,
+            } as any),
+        ).rejects.toBe(reason);
+        expect(work).not.toHaveBeenCalled();
+    });
+
+    it("cancels provider backoff without another attempt or waiting for the timer", async () => {
+        const { rateLimiter } = await loadRateLimiterModule();
+        const controller = new AbortController();
+        const reason = new Error("deadline");
+        const work = jest.fn().mockRejectedValue({ response: { status: 503 } });
+        const result = rateLimiter.execute("lastfm", work, {
+            signal: controller.signal,
+        } as any);
+        const assertion = expect(result).rejects.toBe(reason);
+        await new Promise((resolve) => setImmediate(resolve));
+        controller.abort(reason);
+        await assertion;
+        expect(work).toHaveBeenCalledTimes(1);
+    });
+
     it("executes requests successfully through queue", async () => {
         const { rateLimiter } = await loadRateLimiterModule();
         const requestFn = jest.fn().mockResolvedValue("ok");

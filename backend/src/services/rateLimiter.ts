@@ -109,6 +109,8 @@ class GlobalRateLimiter {
         options?: {
             priority?: number;
             skipRetry?: boolean;
+            /** Cancels queue admission, backoff and the caller-owned operation. */
+            signal?: AbortSignal;
         },
     ): Promise<T> {
         const queue = this.queues.get(service);
@@ -117,12 +119,16 @@ class GlobalRateLimiter {
         if (!queue || !config) {
             throw new Error(`Unknown service: ${service}`);
         }
+        const signal = options?.signal;
+        signal?.throwIfAborted();
+        const pause = (ms: number) =>
+            signal ? this.sleep(ms, signal) : this.sleep(ms);
 
         // Check global pause
         if (this.globalPaused && Date.now() < this.globalPauseUntil) {
             const waitTime = this.globalPauseUntil - Date.now();
             logger.debug(`Global rate limit pause - waiting ${waitTime}ms`);
-            await this.sleep(waitTime);
+            await pause(waitTime);
         }
 
         // Check circuit breaker
@@ -135,7 +141,7 @@ class GlobalRateLimiter {
                 logger.debug(
                     `Circuit breaker open for ${service} - waiting ${waitTime}ms`,
                 );
-                await this.sleep(waitTime);
+                await pause(waitTime);
             }
             // Reset circuit to initial state
             circuit.isOpen = false;
@@ -148,18 +154,21 @@ class GlobalRateLimiter {
         const maxRetries = options?.skipRetry ? 0 : config.maxRetries;
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            signal?.throwIfAborted();
             try {
                 const result = await queue.add(
                     async () => {
+                        signal?.throwIfAborted();
                         return await requestFn();
                     },
-                    { priority: options?.priority ?? 0 },
+                    { priority: options?.priority ?? 0, signal },
                 );
 
                 // Success - reset failure count
                 circuit.consecutiveFailures = 0;
                 return result as T;
             } catch (error: any) {
+                signal?.throwIfAborted();
                 lastError = error;
 
                 // Check if it's a rate limit error
@@ -207,7 +216,7 @@ class GlobalRateLimiter {
                     }
 
                     if (attempt < maxRetries) {
-                        await this.sleep(delay);
+                        await pause(delay);
                         continue;
                     }
                 }
@@ -369,8 +378,19 @@ class GlobalRateLimiter {
         return this.concurrencyMultiplier;
     }
 
-    private sleep(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
+    private sleep(ms: number, signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
+        return new Promise((resolve, reject) => {
+            const onAbort = () => {
+                clearTimeout(timer);
+                reject(signal?.reason);
+            };
+            const timer = setTimeout(() => {
+                signal?.removeEventListener("abort", onAbort);
+                resolve();
+            }, ms);
+            signal?.addEventListener("abort", onAbort, { once: true });
+        });
     }
 }
 

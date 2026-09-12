@@ -40,7 +40,7 @@ export const NATIVE_ENGINE_SEEK_MARK_TOLERANCE_SEC = 2;
 /** Unclassified end-adjacent pauses within this many seconds await `ended`. */
 export const NATIVE_ENGINE_END_PAUSE_EPSILON_SEC = 0.5;
 
-/** Automatic (non-gesture) retry budget per load before exhausting. */
+/** Automatic retries per requested source load, including recovery reloads. */
 export const NATIVE_ENGINE_MAX_AUTOMATIC_RETRIES = 3;
 
 /** Base delay for automatic retry backoff (multiplied by attempt). */
@@ -571,7 +571,9 @@ const handleElementPlaying = (
         state: {
             ...state,
             status: "playing",
-            automaticRetriesUsed: 0,
+            // A resumed element can emit playing from its buffered prefix and
+            // immediately fail again. Only an explicit fresh load resets the
+            // stream budget; otherwise this event permits an endless loop.
             playStartRetriesUsed: 0,
             gestureRetryUsed: false,
             pauseClassification: null,
