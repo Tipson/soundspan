@@ -61,6 +61,7 @@ const state = {
 };
 
 const controlCalls = {
+    pause: 0,
     toggleShuffle: 0,
     toggleRepeat: 0,
 };
@@ -195,7 +196,9 @@ mock.module("@/lib/audio-playback-context", {
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
-            pause: () => undefined,
+            pause: () => {
+                controlCalls.pause++;
+            },
             resume: () => undefined,
             next: () => undefined,
             previous: () => undefined,
@@ -319,6 +322,7 @@ beforeEach(() => {
     state.audioError = null;
     state.qualityBadge = null;
     controlCalls.toggleShuffle = 0;
+    controlCalls.pause = 0;
     controlCalls.toggleRepeat = 0;
 });
 
@@ -437,6 +441,27 @@ test("FullPlayer shows retry affordance when audioError is present", async () =>
 
     assert.match(html, /aria-label="Повторить воспроизведение"/);
     assert.match(html, /title="Повторить воспроизведение"/);
+});
+
+test("FullPlayer lets the listener pause while a playing track is recovering", async () => {
+    state.isPlaying = true;
+    state.isBuffering = true;
+    const { FullPlayer } = await import("../../components/player/FullPlayer");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(React.createElement(FullPlayer)));
+        const button = container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Пауза"]',
+        );
+        assert.ok(button, "buffering must retain a visible pause action");
+        assert.equal(button.disabled, false);
+        await act(async () => button.click());
+        assert.equal(controlCalls.pause, 1);
+    } finally {
+        await act(async () => root.unmount());
+    }
 });
 
 test("FullPlayer exposes both like and dislike controls for music", async () => {

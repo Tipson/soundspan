@@ -195,7 +195,7 @@ export function MiniPlayer() {
                                 if (audioError) {
                                     clearAudioError();
                                     resume();
-                                } else if (!isBuffering) {
+                                } else if (!isBuffering || isPlaying) {
                                     if (isPlaying) {
                                         pause();
                                     } else {
@@ -207,14 +207,14 @@ export function MiniPlayer() {
                                 "h-11 w-11 rounded-full transition shadow-md flex items-center justify-center",
                                 audioError
                                     ? "bg-error text-content hover:brightness-110"
-                                    : isBuffering
+                                    : isBuffering && !isPlaying
                                       ? "bg-content/80 text-surface"
                                       : "bg-content text-surface hover:scale-105",
                             )}
                             aria-label={
                                 audioError
                                     ? ru.player.retry
-                                    : isBuffering
+                                    : isBuffering && !isPlaying
                                       ? ru.player.buffering
                                       : isPlaying
                                         ? ru.common.pause
@@ -223,7 +223,7 @@ export function MiniPlayer() {
                             title={
                                 audioError
                                     ? ru.player.retry
-                                    : isBuffering
+                                    : isBuffering && !isPlaying
                                       ? ru.player.buffering
                                       : isPlaying
                                         ? ru.common.pause
@@ -232,7 +232,7 @@ export function MiniPlayer() {
                         >
                             {audioError ? (
                                 <RefreshCw className="h-5 w-5" />
-                            ) : isBuffering ? (
+                            ) : isBuffering && !isPlaying ? (
                                 <Loader2 className="h-5 w-5 animate-spin" />
                             ) : isPlaying ? (
                                 <Pause className="h-5 w-5" />

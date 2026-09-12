@@ -208,6 +208,23 @@ export function usePlaybackWatchdogs({
                     }
 
                     const failedTrackId = currentTrackRef.current?.id ?? null;
+                    if (
+                        currentTrackRef.current?.streamSource === "youtube" &&
+                        lastPlayingStateRef.current &&
+                        startupStabilityRef.current.trackId === failedTrackId &&
+                        startupStabilityRef.current.firstProgressAtMs !==
+                            null &&
+                        refs.engineEventHandlersRef.current
+                    ) {
+                        // Use the same bounded replacement and queue-preserving
+                        // failure path as a terminal media network error.
+                        void refs.engineEventHandlersRef.current.handleError({
+                            error: timeoutError,
+                            code: "MEDIA_ERR_NETWORK",
+                            recoverable: false,
+                        });
+                        return;
+                    }
                     const didScheduleTransientRecovery =
                         attemptTransientTrackRecovery(
                             failedTrackId,

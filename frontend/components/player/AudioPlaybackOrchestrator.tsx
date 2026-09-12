@@ -66,6 +66,7 @@ import {
 } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import type { DesiredLoadPlayIntent } from "./hooks";
 import * as H from "./hooks";
+import { useServerMusicSourceRecovery } from "./hooks/useServerMusicSourceRecovery";
 /**
  * AudioPlaybackOrchestrator - Unified audio playback using runtime audio engines
  * Handles: web playback, progress saving for audiobooks/podcasts
@@ -168,6 +169,17 @@ export const AudioPlaybackOrchestrator = memo(
             H.useStartupStability({ refs: orchestratorRefs });
         const playbackRecoveryHelpers = H.usePlaybackRecoveryHelpers({
             refs: orchestratorRefs,
+        });
+        const attemptServerMusicSourceRecovery = useServerMusicSourceRecovery({
+            refs: orchestratorRefs,
+            currentTrack,
+            playbackType,
+            isPlaying,
+            playbackRecoveryHelpers,
+            setCurrentTime,
+            setIsBuffering,
+            applyCurrentOutputState,
+            releasePlaybackSource: playbackSourceLeaseController.release,
         });
         const {
             clearPendingTrackErrorSkip,
@@ -277,6 +289,11 @@ export const AudioPlaybackOrchestrator = memo(
                 timeSec: number;
                 time?: number;
             }) => {
+                if (
+                    orchestratorRefs.serverSourceRecoveryLoadIdRef.current ===
+                    loadIdRef.current
+                )
+                    return;
                 const currentTimeValue =
                     typeof data.timeSec === "number"
                         ? data.timeSec
@@ -371,6 +388,11 @@ export const AudioPlaybackOrchestrator = memo(
                 durationSec: number;
                 duration?: number;
             }) => {
+                if (
+                    orchestratorRefs.serverSourceRecoveryLoadIdRef.current ===
+                    loadIdRef.current
+                )
+                    return;
                 trackEndWatchdogRef.current?.clear();
                 const loadedDuration =
                     typeof data.durationSec === "number"
@@ -599,6 +621,7 @@ export const AudioPlaybackOrchestrator = memo(
                 clearTransientTrackRecovery,
                 releasePlaybackSource: playbackSourceLeaseController.release,
                 attemptUnavailableYtMusicRecovery,
+                attemptServerMusicSourceRecovery,
                 attemptTransientTrackRecovery,
                 scheduleTrackErrorSkip,
                 finishFailedPlay: playEngagement.finishFailed,

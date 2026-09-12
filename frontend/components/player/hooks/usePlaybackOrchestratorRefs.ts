@@ -230,7 +230,11 @@ export function usePlaybackOrchestratorRefs({
         lastRequestedAtMs: 0,
     });
 
+    // The replacement owns timeline/load events until its validated seek completes.
+    const serverSourceRecoveryLoadIdRef = useRef<number | null>(null);
+
     return {
+        serverSourceRecoveryLoadIdRef,
         lastTrackIdRef,
         hasSeenTrackLoadRef,
         lastPlayingStateRef,

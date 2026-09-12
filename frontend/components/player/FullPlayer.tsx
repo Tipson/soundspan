@@ -147,7 +147,7 @@ export function FullPlayer() {
             return;
         }
 
-        if (isBuffering) return;
+        if (isBuffering && !isPlaying) return;
         if (isPlaying) {
             pause();
             return;
@@ -460,11 +460,13 @@ export function FullPlayer() {
                                             ? "bg-content/80 text-surface"
                                             : "cursor-not-allowed bg-surface-active text-content-disabled",
                                 )}
-                                disabled={!hasMedia || isBuffering}
+                                disabled={
+                                    !hasMedia || (isBuffering && !isPlaying)
+                                }
                                 aria-label={
                                     audioError
                                         ? ru.player.retry
-                                        : isBuffering
+                                        : isBuffering && !isPlaying
                                           ? ru.player.buffering
                                           : isPlaying
                                             ? ru.common.pause
@@ -473,7 +475,7 @@ export function FullPlayer() {
                                 title={
                                     audioError
                                         ? ru.player.retry
-                                        : isBuffering
+                                        : isBuffering && !isPlaying
                                           ? ru.player.buffering
                                           : isPlaying
                                             ? ru.common.pause
@@ -485,7 +487,7 @@ export function FullPlayer() {
                                 )}
                                 {audioError ? (
                                     <RefreshCw className="w-6 h-6 relative z-10" />
-                                ) : isBuffering ? (
+                                ) : isBuffering && !isPlaying ? (
                                     <Loader2 className="w-6 h-6 animate-spin relative z-10" />
                                 ) : isPlaying ? (
                                     <Pause className="w-6 h-6 relative z-10" />

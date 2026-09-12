@@ -4,7 +4,10 @@
 
 - Add disabled-by-default Yandex Music and VK Music server connections managed by administrators, with encrypted credentials, connection revocation and same-origin audio leases scoped to each Soundspan listener.
 - Recover initial YouTube stream failures through an exact recording match on a configured source. Preserve recording identity and reject previews, incompatible versions and changed audio representations during seeking.
-- Add administrator catalog and audio diagnostics. Real service-account acceptance is required before production activation; VK HLS streams and automatic source changes after playback has started are not supported by this implementation.
+- Add administrator catalog and audio diagnostics. Real service-account acceptance is required before production activation; VK HLS streams are not supported.
+- Recover a terminal network failure or buffering timeout after a YouTube track has started through one exact server-source replacement. Load the replacement paused, restore the confirmed position before playback, honor a pending user seek, and preserve queue identity. Pause, selection changes and session changes cancel obsolete recovery; missing matches and repeat failures preserve the queue.
+- Keep the pause action available in desktop, compact and full-screen players while a playing track buffers or recovers.
+- Keep YouTube preload URLs stable within the authenticated session so failed preloads respect their cooldown and progress updates do not restart requests.
 - Accept hexadecimal Yandex download timestamps and keep full audio streams within their own size budget instead of applying the smaller metadata limit.
 - Cancel the initial source-acquisition timer once audio is ready while preserving listener cancellation throughout playback.
 

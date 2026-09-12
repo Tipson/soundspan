@@ -25,6 +25,7 @@ import {
     providerFailureCooldown,
 } from "@/lib/audio-engine/providerFailureCooldown";
 import { classifyPlaybackError } from "@/lib/audio-engine/playbackErrorCategory";
+import type { ServerSourceRecoveryOutcome } from "@/lib/audio/serverMusicSourceRecovery";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -43,6 +44,9 @@ interface PlaybackErrorHandlerOptions {
     clearStartupPlaybackRecovery(): void;
     clearTransientTrackRecovery(resetAttempts: boolean): void;
     releasePlaybackSource(): void;
+    attemptServerMusicSourceRecovery?(
+        error: AudioEngineErrorPayload,
+    ): Promise<ServerSourceRecoveryOutcome>;
     attemptUnavailableYtMusicRecovery(
         track: Track | null,
     ): Promise<UnavailableYtMusicRecoveryOutcome>;
@@ -78,6 +82,7 @@ export function createPlaybackErrorHandler({
     clearStartupPlaybackRecovery,
     clearTransientTrackRecovery,
     releasePlaybackSource,
+    attemptServerMusicSourceRecovery,
     attemptUnavailableYtMusicRecovery,
     attemptTransientTrackRecovery,
     scheduleTrackErrorSkip,
@@ -189,7 +194,19 @@ export function createPlaybackErrorHandler({
                 stage: "pre_recovery",
             });
             const failedTrackId = currentTrack?.id ?? null;
+            const serverOutcome = attemptServerMusicSourceRecovery
+                ? await attemptServerMusicSourceRecovery(data)
+                : "not_applicable";
+            if (
+                serverOutcome === "recovered" ||
+                serverOutcome === "stale" ||
+                serverOutcome === "in_progress"
+            )
+                return;
+            const serverRecoveryFailed = serverOutcome !== "not_applicable";
+            if (serverRecoveryFailed) preserveProviderQueue = true;
             const transientScheduled =
+                !serverRecoveryFailed &&
                 !providerStartupFailure &&
                 shouldAttemptOuterTransientRecovery({
                     error: data.error,
@@ -206,9 +223,10 @@ export function createPlaybackErrorHandler({
                 setIsBuffering(true);
                 return;
             }
-            const unavailableOutcome = providerStartupFailure
-                ? "failed"
-                : await attemptUnavailableYtMusicRecovery(currentTrack);
+            const unavailableOutcome =
+                providerStartupFailure || serverRecoveryFailed
+                    ? "failed"
+                    : await attemptUnavailableYtMusicRecovery(currentTrack);
             if (
                 unavailableOutcome === "replaced" ||
                 unavailableOutcome === "stale"

@@ -523,6 +523,7 @@ const controlCalls = {
 };
 
 const apiCalls = {
+    resolveMusicSourceForRecovery: [] as unknown[],
     getStreamUrl: [] as string[],
     getPodcastEpisodeCacheStatus: [] as Array<{
         podcastId: string;
@@ -572,6 +573,7 @@ let podcastCacheStatus = {
 };
 let seekToleranceOverride: boolean | null = null;
 let mirrorMachineIntentToPlaybackState = false;
+let musicRecoveryResponse: Promise<string | null> | null = null;
 let startVibeModeImpl: (
     options?: VibeModeStartOptions,
 ) => Promise<VibeModeStartResult> = async () => ({
@@ -754,6 +756,7 @@ const resetHarnessState = (): void => {
     };
     seekToleranceOverride = null;
     mirrorMachineIntentToPlaybackState = false;
+    musicRecoveryResponse = null;
     startVibeModeImpl = async () => ({ success: false, trackCount: 0 });
     advanceQueueRequiresCapturedNext = false;
     recoverUnavailableYtMusicTrackImpl = async () => {
@@ -1006,6 +1009,11 @@ mock.module("@/lib/audio-load-preemption", {
 mock.module("@/lib/api", {
     namedExports: {
         api: {
+            resolveMusicSourceForRecovery: async (recording: unknown) => {
+                apiCalls.resolveMusicSourceForRecovery.push(recording);
+                if (musicRecoveryResponse) return musicRecoveryResponse;
+                return `/api/music-sources/leases/${"a".repeat(48)}/stream`;
+            },
             getStreamUrl: (trackId: string) => {
                 apiCalls.getStreamUrl.push(trackId);
                 return `https://stream.test/direct/${trackId}`;
@@ -5720,3 +5728,120 @@ test("transient recovery anchors resume to zero before startup progress", async 
     assert.equal(engine.seekCalls.includes(12), false);
     assert.ok(engine.playCalls > playCallsBeforeRecoveredLoad);
 });
+
+test("late native metadata and progress cannot pause or rewrite a pending source recovery after manual resume", async () => {
+    mirrorMachineIntentToPlaybackState = true;
+    playbackState.isPlaying = true;
+    const original = makeTrack("yt:late-source", {
+        streamSource: "youtube",
+        youtubeVideoId: "late-source",
+        duration: 240,
+        artist: { name: "Artist" },
+    });
+    audioState.currentTrack = original;
+    audioState.queue = [original];
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 240 });
+    engine.playing = true;
+    engine.emit("play");
+    playbackState.isPlaying = false;
+    renderOrchestrator();
+    await flushAsync();
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    engine.playing = true;
+    engine.emit("play");
+    engine.currentTime = engine.actualCurrentTime = 10.5;
+    engine.emit("timeupdate", { timeSec: 10.5 });
+    await flushAsync();
+    let resolve!: (url: string) => void;
+    musicRecoveryResponse = new Promise((r) => {
+        resolve = r;
+    });
+    engine.emit("playerror", {
+        error: new Error("MEDIA_ERR_NETWORK"),
+        code: "2",
+        recoverable: false,
+    });
+    await flushAsync();
+    assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 1);
+    engine.emit("load", { durationSec: 240 });
+    engine.emit("timeupdate", { timeSec: 100 });
+    await flushAsync();
+    assert.equal(playbackMachine.state, "LOADING");
+    assert.equal(playbackState.isPlaying, true);
+    assert.notEqual(playbackState.currentTime, 100);
+    resolve(`/api/music-sources/leases/${"a".repeat(48)}/stream`);
+    await flushAsync(30);
+    engine.emit("load", { durationSec: 240 });
+    await flushAsync(30);
+    assert.equal(engine.seekCalls.at(-1), 10.5);
+    assert.equal(engine.playing, true);
+    assert.equal(playbackState.isPlaying, true);
+});
+
+for (const trigger of ["terminal network error", "buffer timeout"] as const) {
+    test(`mid-track ${trigger} replaces the server source at the confirmed position and preserves queue identity`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        playbackState.isPlaying = true;
+        const original = makeTrack("yt:sourcefail1", {
+            streamSource: "youtube",
+            youtubeVideoId: "sourcefail1",
+            duration: 240,
+            artist: { name: "Artist" },
+        });
+        audioState.currentTrack = original;
+        const queue = [original, makeTrack("next-song")];
+        audioState.queue = queue;
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 240 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = 10.5;
+        engine.emit("timeupdate", { timeSec: 10.5 });
+        await flushAsync();
+        const error = {
+            error: new Error("MEDIA_ERR_NETWORK"),
+            code: "2",
+            recoverable: false,
+        };
+        if (trigger === "buffer timeout")
+            heartbeatInstances[0].triggerBufferTimeout();
+        else engine.emit("playerror", error);
+        await flushAsync(30);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 1);
+        assert.equal(engine.loadCalls.length, 2);
+        const replacement = engine.loadCalls.at(-1)?.args;
+        assert.equal(
+            (replacement?.[1] as { autoplay: boolean }).autoplay,
+            false,
+        );
+        assert.equal(
+            (replacement?.[0] as { trackId: string }).trackId,
+            original.id,
+        );
+        engine.emit("load", { durationSec: 240 });
+        await flushAsync(30);
+        assert.equal(engine.seekCalls.at(-1), 10.5);
+        assert.equal(engine.playing, true);
+        assert.equal(audioState.currentTrack, original);
+        assert.equal(audioState.queue, queue);
+        assert.equal(controlCalls.next, 0);
+        assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+        // Native pause() is a no-op in its terminal error state, while the
+        // browser may still drain buffered bytes or finish an earlier play().
+        t.mock.method(engine, "pause", () => {});
+        engine.emit("playerror", error);
+        await flushAsync(30);
+        t.mock.timers.tick(5_000);
+        await flushAsync(30);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 1);
+        assert.equal(controlCalls.next, 0);
+        assert.equal(playbackState.isPlaying, false);
+        assert.equal(engine.playing, false);
+        assert.equal(audioState.queue, queue);
+    });
+}

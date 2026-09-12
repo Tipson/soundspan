@@ -210,9 +210,13 @@ export function WithYtMusic<TBase extends ApiClientConstructor>(Base: TBase) {
             if (quality) params.set("quality", quality);
             if (purpose === "preload") params.set("purpose", purpose);
             if (
+                purpose === "interactive" &&
                 typeof crypto !== "undefined" &&
                 typeof crypto.randomUUID === "function"
             ) {
+                // Only foreground loads can switch to a server lease.
+                // Speculative URLs must remain stable for preload reuse and
+                // failed-preload cooldown; preloadSession still fences auth.
                 params.set("playbackSession", crypto.randomUUID());
             }
             // Isolate ephemeral worker bytes without putting credentials in URLs.

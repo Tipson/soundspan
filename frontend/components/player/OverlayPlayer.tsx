@@ -245,7 +245,7 @@ export function OverlayPlayer() {
             resume();
             return;
         }
-        if (isBuffering) return;
+        if (isBuffering && !isPlaying) return;
         if (isPlaying) {
             pause();
         } else {
@@ -932,15 +932,20 @@ export function OverlayPlayer() {
                                                         "overlay-player-primary player-control-primary flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full shadow-xl transition-all",
                                                         audioError
                                                             ? "bg-red-500 text-white hover:bg-red-400"
-                                                            : isBuffering
+                                                            : isBuffering &&
+                                                                !isPlaying
                                                               ? "bg-white/80 text-black"
                                                               : "bg-white text-black hover:scale-[1.04]",
                                                     )}
-                                                    disabled={isBuffering}
+                                                    disabled={
+                                                        isBuffering &&
+                                                        !isPlaying
+                                                    }
                                                     title={
                                                         audioError
                                                             ? ru.player.retry
-                                                            : isBuffering
+                                                            : isBuffering &&
+                                                                !isPlaying
                                                               ? ru.player
                                                                     .buffering
                                                               : isPlaying
@@ -958,7 +963,8 @@ export function OverlayPlayer() {
                                                 >
                                                     {audioError ? (
                                                         <RefreshCw className="h-7 w-7" />
-                                                    ) : isBuffering ? (
+                                                    ) : isBuffering &&
+                                                      !isPlaying ? (
                                                         <Loader2 className="h-7 w-7 animate-spin" />
                                                     ) : isPlaying ? (
                                                         <Pause className="h-7 w-7" />
@@ -1053,11 +1059,14 @@ export function OverlayPlayer() {
                                                     "flex h-16 w-16 items-center justify-center rounded-full shadow-xl transition-all",
                                                     audioError
                                                         ? "bg-red-500 text-white hover:bg-red-400"
-                                                        : isBuffering
+                                                        : isBuffering &&
+                                                            !isPlaying
                                                           ? "bg-white/80 text-black"
                                                           : "bg-white text-black hover:scale-105",
                                                 )}
-                                                disabled={isBuffering}
+                                                disabled={
+                                                    isBuffering && !isPlaying
+                                                }
                                                 title={
                                                     isPlaying
                                                         ? ru.common.pause
@@ -1071,7 +1080,8 @@ export function OverlayPlayer() {
                                             >
                                                 {audioError ? (
                                                     <RefreshCw className="h-7 w-7" />
-                                                ) : isBuffering ? (
+                                                ) : isBuffering &&
+                                                  !isPlaying ? (
                                                     <Loader2 className="h-7 w-7 animate-spin" />
                                                 ) : isPlaying ? (
                                                     <Pause className="h-7 w-7" />
@@ -1267,7 +1277,8 @@ export function OverlayPlayer() {
                                             >
                                                 {audioError ? (
                                                     <RefreshCw className="h-4 w-4" />
-                                                ) : isBuffering ? (
+                                                ) : isBuffering &&
+                                                  !isPlaying ? (
                                                     <Loader2 className="h-4 w-4 animate-spin" />
                                                 ) : isPlaying ? (
                                                     <Pause className="h-4 w-4" />

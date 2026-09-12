@@ -261,6 +261,35 @@ test("each audio load has a non-secret playback session for byte representation 
         second.searchParams.get("playbackSession"),
     );
 });
+test("speculative YouTube URLs stay stable so repeated progress ticks honor preload ownership and cooldown", () => {
+    const client = new AudioClient();
+    client.setToken(ACCESS_TOKEN);
+    const first = client.getYtMusicStreamUrl(
+        "jNQXAC9IVRw",
+        undefined,
+        true,
+        "preload",
+    );
+    const second = client.getYtMusicStreamUrl(
+        "jNQXAC9IVRw",
+        undefined,
+        true,
+        "preload",
+    );
+    assert.equal(first, second);
+    assert.equal(
+        new URL(first, window.location.origin).searchParams.has(
+            "playbackSession",
+        ),
+        false,
+    );
+    client.setToken("other-user.payload.signature");
+    assert.notEqual(
+        client.getYtMusicStreamUrl("jNQXAC9IVRw", undefined, true, "preload"),
+        first,
+    );
+    client.clearToken();
+});
 
 test("credential updates revoke the controlling worker's completed preload bytes", () => {
     const original = Object.getOwnPropertyDescriptor(

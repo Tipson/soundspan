@@ -1,5 +1,9 @@
 # Server music sources — acceptance snapshot, 12 September 2026
 
+Subsequent frontend recovery, concurrency and catalog measurements are recorded in
+[the recovery release](server-music-recovery-20260912.md). The snapshot below describes
+the preceding backend/source release.
+
 ## Release boundary
 
 **Yandex deployed and enabled; VK disabled pending authorization and acceptance.**

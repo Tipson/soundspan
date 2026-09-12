@@ -1,4 +1,5 @@
 import type { ApiClientConstructor } from "./core";
+import { z } from "zod";
 
 /** Server-owned direct playback provider. */
 export type MusicSourceProvider = "yandex" | "vk";
@@ -21,11 +22,45 @@ export interface MusicSourceCandidate {
     isrc?: string;
     preview: boolean;
 }
+/** Original recording identity, independent of the provider carrying its audio. */
+export type MusicSourceRecording = Pick<
+    MusicSourceCandidate,
+    "title" | "artists" | "duration" | "contentVersion" | "isrc"
+>;
+
+const recoveryResponse = z.object({
+    playback: z
+        .object({
+            leaseId: z.string().regex(/^[a-f0-9]{48}$/),
+            provider: z.enum(["yandex", "vk"]),
+            streamPath: z.string(),
+        })
+        .nullable(),
+});
 /** Administrative source management through the shared authenticated API boundary. */
 export function WithMusicSources<TBase extends ApiClientConstructor>(
     Base: TBase,
 ) {
     abstract class MusicSourcesApi extends Base {
+        /** Request one exact replacement without retrying or changing catalog identity. */
+        async resolveMusicSourceForRecovery(
+            recording: MusicSourceRecording,
+            signal?: AbortSignal,
+        ): Promise<string | null> {
+            const response = await this.request("/music-sources/resolve", {
+                method: "POST",
+                body: JSON.stringify(recording),
+                signal,
+                timeoutMs: 20_000,
+                retryOnTimeout: false,
+            });
+            const { playback } = recoveryResponse.parse(response);
+            if (!playback) return null;
+            const path = `/api/music-sources/leases/${playback.leaseId}/stream`;
+            if (playback.streamPath !== path)
+                throw new Error("Invalid recovery stream");
+            return path;
+        }
         async getMusicSourceConnections(): Promise<{
             connections: MusicSourceConnectionStatus[];
             health: {
