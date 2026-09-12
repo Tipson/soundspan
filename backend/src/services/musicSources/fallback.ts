@@ -53,14 +53,26 @@ export function createMusicSourceFallback(deps: Dependencies) {
                 const enabled = deps.enabled
                     ? await deps.enabled().catch(() => false)
                     : true;
+                const startup = new AbortController();
+                const timer = enabled
+                    ? setTimeout(
+                          () =>
+                              startup.abort(
+                                  new MusicSourceError("unavailable"),
+                              ),
+                          deps.primaryTimeoutMs ?? 60_000,
+                      ).unref()
+                    : undefined;
                 const primarySignal = enabled
-                    ? AbortSignal.any([
-                          input.signal,
-                          AbortSignal.timeout(deps.primaryTimeoutMs ?? 60_000),
-                      ])
+                    ? AbortSignal.any([input.signal, startup.signal])
                     : input.signal;
                 try {
-                    const stream = await input.original(primarySignal);
+                    let stream: T;
+                    try {
+                        stream = await input.original(primarySignal);
+                    } finally {
+                        clearTimeout(timer);
+                    }
                     bindings.set(key, { expires: now() + 3_600_000 });
                     return { stream };
                 } catch (error) {

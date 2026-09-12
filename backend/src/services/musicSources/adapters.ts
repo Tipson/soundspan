@@ -249,7 +249,7 @@ export function createMusicSourceAdapter(
                 if (
                     !/^[a-zA-Z0-9.-]+$/.test(host) ||
                     !/^\/[A-Za-z0-9_./%-]+$/.test(path) ||
-                    !/^\d+$/.test(ts) ||
+                    !/^[a-fA-F0-9]{1,32}$/.test(ts) ||
                     !/^[A-Za-z0-9]+$/.test(salt)
                 )
                     throw new MusicSourceError("unsupported_stream");

@@ -1,4 +1,6 @@
 import { Readable } from "node:stream";
+import { createServer, request as localRequest } from "node:http";
+import type { AddressInfo } from "node:net";
 import axios from "axios";
 import { lookup } from "node:dns/promises";
 import { musicSourceHttp } from "../musicSources/transport";
@@ -34,6 +36,69 @@ beforeEach(() => {
 });
 
 describe("music source transport", () => {
+    it.each(["audio", "metadata"])(
+        "uses separate body limits for %s through real Axios",
+        async (kind) => {
+            const audio = Buffer.alloc(3 * 1024 * 1024, 42);
+            const server = createServer((_req, res) => {
+                res.writeHead(200, {
+                    "content-type": "audio/mpeg",
+                    "content-length": String(audio.length),
+                });
+                res.end(audio);
+            });
+            await new Promise<void>((resolve) =>
+                server.listen(0, "127.0.0.1", resolve),
+            );
+            const port = (server.address() as AddressInfo).port;
+            const realAxios = jest.requireActual<{ default: typeof axios }>(
+                "axios",
+            ).default;
+            // Replace only the network destination; retain Axios's actual stream handling.
+            request.mockImplementation((options) =>
+                realAxios.request({
+                    ...options,
+                    transport: {
+                        request: (
+                            _options: unknown,
+                            callback: Parameters<typeof localRequest>[1],
+                        ) =>
+                            localRequest(
+                                `http://127.0.0.1:${port}/audio`,
+                                callback,
+                            ),
+                    },
+                }),
+            );
+            try {
+                if (kind === "metadata") {
+                    await expect(
+                        musicSourceHttp.json(
+                            "https://api.music.yandex.net/search",
+                            {},
+                            signal(),
+                        ),
+                    ).rejects.toMatchObject({ code: "unavailable" });
+                    return;
+                }
+                const result = await musicSourceHttp.stream(
+                    url,
+                    "vk",
+                    {},
+                    signal(),
+                );
+                const chunks: Buffer[] = [];
+                for await (const chunk of result.data)
+                    chunks.push(Buffer.from(chunk));
+                expect(Buffer.concat(chunks)).toEqual(audio);
+            } finally {
+                server.closeAllConnections();
+                await new Promise<void>((resolve) =>
+                    server.close(() => resolve()),
+                );
+            }
+        },
+    );
     it.each([
         "127.0.0.1",
         "10.1.1.1",
@@ -102,6 +167,7 @@ describe("music source transport", () => {
         { "content-range": "bytes 0-2/3", "content-length": "99" },
         { "content-range": "bytes 0-2/999999999999999999999" },
         { "content-length": "-1" },
+        { "content-length": "134217729" },
         { "content-type": "text/html" },
         { "content-encoding": "gzip" },
     ])(

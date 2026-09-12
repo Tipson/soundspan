@@ -259,6 +259,7 @@ export const musicSourceHttp: MusicSourceHttp = {
                 {
                     method: request.head ? "HEAD" : "GET",
                     responseType: "stream",
+                    maxContentLength: maxMediaBytes,
                     headers: {
                         "Accept-Encoding": "identity",
                         ...(request.range ? { Range: request.range } : {}),

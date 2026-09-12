@@ -52,58 +52,63 @@ describe("music source adapters", () => {
             Authorization: "OAuth service-secret",
         });
     });
-    it("builds Yandex media checksum without leading slash and rejects preview-only downloads", async () => {
-        const port = http();
-        port.json.mockResolvedValue({
-            result: [
-                {
-                    codec: "mp3",
-                    bitrateInKbps: 192,
-                    preview: false,
-                    downloadInfoUrl: "https://storage.mds.yandex.net/info",
-                },
-            ],
-        });
-        port.text.mockResolvedValue(
-            "<download-info><host>storage.mds.yandex.net</host><path>/abc</path><ts>123</ts><s>xyz</s></download-info>",
-        );
-        const source = createMusicSourceAdapter(
-            "yandex",
-            "service-secret",
-            1,
-            port,
-        );
-        const response = await source.open(
-            "123",
-            { range: "bytes=0-9" },
-            signal(),
-        );
-        response.data.destroy();
-        const { createHash } = await import("node:crypto");
-        const checksum = createHash("md5")
-            .update("XGRlBW9FXlekgbPrRHuSiAabcxyz")
-            .digest("hex");
-        expect(port.stream.mock.calls[0]).toEqual([
-            `https://storage.mds.yandex.net/get-mp3/${checksum}/123/abc`,
-            "yandex",
-            { range: "bytes=0-9" },
-            expect.any(AbortSignal),
-        ]);
-        expect(port.text.mock.calls[0][0]).not.toContain("service-secret");
-        port.json.mockResolvedValue({
-            result: [
-                {
-                    codec: "mp3",
-                    bitrateInKbps: 192,
-                    preview: true,
-                    downloadInfoUrl: "https://storage.mds.yandex.net/info",
-                },
-            ],
-        });
-        await expect(source.open("123", {}, signal())).rejects.toMatchObject({
-            code: "entitlement_required",
-        });
-    });
+    it.each(["123", "00000000ab12cd34"])(
+        "preserves Yandex download stamp %s and rejects preview-only downloads",
+        async (stamp) => {
+            const port = http();
+            port.json.mockResolvedValue({
+                result: [
+                    {
+                        codec: "mp3",
+                        bitrateInKbps: 192,
+                        preview: false,
+                        downloadInfoUrl: "https://storage.mds.yandex.net/info",
+                    },
+                ],
+            });
+            port.text.mockResolvedValue(
+                `<download-info><host>storage.mds.yandex.net</host><path>/abc</path><ts>${stamp}</ts><s>xyz</s></download-info>`,
+            );
+            const source = createMusicSourceAdapter(
+                "yandex",
+                "service-secret",
+                1,
+                port,
+            );
+            const response = await source.open(
+                "123",
+                { range: "bytes=0-9" },
+                signal(),
+            );
+            response.data.destroy();
+            const { createHash } = await import("node:crypto");
+            const checksum = createHash("md5")
+                .update("XGRlBW9FXlekgbPrRHuSiAabcxyz")
+                .digest("hex");
+            expect(port.stream.mock.calls[0]).toEqual([
+                `https://storage.mds.yandex.net/get-mp3/${checksum}/${stamp}/abc`,
+                "yandex",
+                { range: "bytes=0-9" },
+                expect.any(AbortSignal),
+            ]);
+            expect(port.text.mock.calls[0][0]).not.toContain("service-secret");
+            port.json.mockResolvedValue({
+                result: [
+                    {
+                        codec: "mp3",
+                        bitrateInKbps: 192,
+                        preview: true,
+                        downloadInfoUrl: "https://storage.mds.yandex.net/info",
+                    },
+                ],
+            });
+            await expect(
+                source.open("123", {}, signal()),
+            ).rejects.toMatchObject({
+                code: "entitlement_required",
+            });
+        },
+    );
     it("does not map unmarked songs to explicitly clean versions", async () => {
         const port = http();
         port.json.mockResolvedValue({

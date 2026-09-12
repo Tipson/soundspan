@@ -18,6 +18,29 @@ const input = () => ({
     }),
 });
 describe("transparent provider fallback", () => {
+    it("keeps acquired audio alive beyond the startup deadline and still forwards listener cancellation", async () => {
+        const controller = new AbortController();
+        let upstream: AbortSignal | undefined;
+        const fallback = createMusicSourceFallback({
+            recording: async () => recording,
+            resolve: async () => null,
+            primaryTimeoutMs: 10,
+        });
+        expect(
+            await fallback.acquire({
+                ...input(),
+                signal: controller.signal,
+                original: async (signal) => {
+                    upstream = signal;
+                    return "playing";
+                },
+            }),
+        ).toEqual({ stream: "playing" });
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        expect(upstream?.aborted).toBe(false);
+        controller.abort();
+        expect(upstream?.aborted).toBe(true);
+    });
     it.each(["ECONNABORTED", "ECONNREFUSED", "ETIMEDOUT"])(
         "recovers an initial transport failure %s",
         async (code) => {
