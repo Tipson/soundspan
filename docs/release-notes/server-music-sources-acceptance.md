@@ -3,12 +3,17 @@
 ## Release boundary
 
 **Not deployed or activated.** The implementation is a Yandex/VK prototype in
-the existing Soundspan backend. Real service-account tokens were not available
-for acceptance. The owner has been asked about supported tokens without asking
-them to disclose secrets in chat. No browser session credentials were extracted.
+the existing Soundspan backend. The owner explicitly approved Yandex OAuth consent;
+the resulting account token is stored locally with Windows CurrentUser DPAPI and
+restricted filesystem permissions. No token value is included in this report or Git.
+The token has not been installed in production. VK authorization remains unavailable.
+No browser session cookies were extracted.
 
 ## Executed checks
 
+- verify: the saved Yandex token decrypted under the owner's Windows user; the
+  real `/account/status` API accepted it and reported an active Plus entitlement.
+  This confirms account authorization, not full-track playback or platform capacity.
 - verify: isolated Linux / Node 24 backend coverage: 608 suites, 8624 tests passed;
   2 suites / 9 tests skipped by their existing environment conditions. PostgreSQL
   advisory-lock tests require a real DATABASE_URL and were not enabled for this run.
@@ -64,8 +69,9 @@ refusal to splice different representations during seeking.
 
 ## Remaining acceptance
 
-1. Supply eligible server-owned music credentials through the administrator UI or
-   a protected server-only secret file; confirm the access model for the platform.
+1. Transfer the approved Yandex credential from its local protected store into the
+   server-only configuration. Obtain the VK credential and confirm the access model
+   for the platform. Neither source has passed audio acceptance.
 2. On each source, validate full duration and two distant seeks on several selected
    recordings, including uncensored versions. Search success alone is insufficient.
 3. Repeat playback under two Soundspan users, cancel one session and revoke the
