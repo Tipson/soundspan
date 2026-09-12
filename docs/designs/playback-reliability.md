@@ -1,6 +1,6 @@
 # Надёжность воспроизведения и внешних метаданных
 
-Status: design phase (implementation verified locally; production acceptance pending)
+Status: shipped
 
 ## Продолжение аудио после отказа CDN
 
