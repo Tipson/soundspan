@@ -8,8 +8,9 @@ The owner explicitly approved Yandex OAuth consent;
 the resulting account token is stored locally with Windows CurrentUser DPAPI and
 restricted filesystem permissions. No token value is included in this report or Git.
 The production connection stores the token in the authenticated v2 encryption envelope.
-VK browser access was rejected by the browser tool's site-safety policy; manual
-token delivery is pending. No alternate browser or extraction workaround was used.
+VK browser access was rejected by the browser tool's site-safety policy. The owner
+subsequently saved a token through Soundspan administration. No alternate browser
+or extraction workaround was used.
 No browser session cookies were extracted.
 
 ## Executed checks
@@ -95,7 +96,8 @@ refusal to splice different representations during seeking.
 
 ## Remaining acceptance
 
-1. Obtain the VK token manually in a local file outside Git, then verify its real
+1. Restore VK authorization: the token saved by the owner was rejected with API
+   code 5, `User authorization failed: user is blocked.` Then verify its real
    catalog, complete recordings, seeks, repeated and parallel sessions. VK HLS is
    unsupported; an API credential alone does not establish audio availability.
 2. Measure the shared account's capacity and test physical mobile devices. The
@@ -104,6 +106,26 @@ refusal to splice different representations during seeking.
    absent or incorrect provider markers cannot establish that a recording is uncensored.
 4. Implement other providers from the plan separately. Midstream source switching
    and distributed leases remain unsupported. YouTube CAPTCHA elimination is not proven.
+
+### VK authorization check after owner setup
+
+- verify: the owner-saved connection existed with authenticated v2 encryption and
+  a decryptable token. It was enabled at generation 2. No credential value was printed.
+- verify: three bounded metadata requests returned API code 5. The final redacted
+  diagnostic identified `User authorization failed: user is blocked.` The stored
+  value was a bare token, without whitespace, URL parameters or quotes. This does
+  not establish whether the same account is blocked in the ordinary VK application.
+- verify: only VK was disabled with a generation-checked update (2 to 3); its
+  encrypted token was preserved. A fresh runtime load excluded VK. Yandex remained
+  enabled at generation 2 and returned 65536 bytes of `audio/mpeg`, HTTP 206, for
+  На заре. Public `/health/ready` returned HTTP 200, `startupComplete: true`.
+- Audio acceptance and VK activation remain **BLOCKED on provider authorization**.
+  No code, images, migrations, browser sessions or neighboring services were changed.
+  Full builds and test suites were not repeated for this configuration diagnosis.
+
+Ordinary and adversarial review of this operation checked credential redaction,
+generation-checked disable, preserved Yandex configuration and exclusion of the
+failed provider. The token's presence is not treated as successful audio acceptance.
 
 The aggregate enforcement run passed. Existing formatting drift in the shared
 metadata contract, landing assets and two component test files was corrected.
