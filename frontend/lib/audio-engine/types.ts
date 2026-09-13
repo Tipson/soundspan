@@ -122,6 +122,8 @@ export interface AudioEngine {
     ): AudioPreloadLease | null;
     reload?(): void | Promise<void>;
     getActualCurrentTime?(): number;
+    /** Contiguous buffered seconds at the active position; null if unmeasurable. */
+    getBufferedAheadSec?(): number | null;
     hasTrackEnded?(): boolean;
     notifyTrackEnded?(): void;
     isCurrentlySeeking?(): boolean;

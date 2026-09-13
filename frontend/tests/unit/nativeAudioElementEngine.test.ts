@@ -90,6 +90,15 @@ class FakeAudioElement implements NativeAudioElementLike {
     preload = "";
     crossOrigin: string | null = null;
     error: { code: number; message?: string } | null = null;
+    bufferedRanges: Array<[number, number]> = [];
+
+    get buffered(): TimeRanges {
+        return {
+            length: this.bufferedRanges.length,
+            start: (index) => this.bufferedRanges[index][0],
+            end: (index) => this.bufferedRanges[index][1],
+        };
+    }
 
     playCalls = 0;
     pauseCalls = 0;
@@ -332,6 +341,29 @@ const createHarness = (
 const flushMicrotasks = async (): Promise<void> => {
     await new Promise((resolve) => setImmediate(resolve));
 };
+
+test("buffer recovery measures the active native element, excluding preload and gaps", () => {
+    const h = createHarness();
+    try {
+        assert.equal(h.engine.getBufferedAheadSec(), null);
+        h.engine.load("/current.webm");
+        const main = h.mainElement();
+        main.currentTime = 83;
+        assert.equal(h.engine.getBufferedAheadSec(), 0);
+        main.bufferedRanges = [[0, 80], [90, 120]];
+        assert.equal(h.engine.getBufferedAheadSec(), 0);
+        main.bufferedRanges = [[0, 83.25], [90, 120]];
+        assert.equal(h.engine.getBufferedAheadSec(), 0.25);
+        h.engine.preload("/next.webm");
+        h.elements[1].bufferedRanges = [[0, 240]];
+        assert.equal(h.engine.getBufferedAheadSec(), 0.25);
+        main.currentTime = Number.NaN;
+        assert.equal(h.engine.getBufferedAheadSec(), null);
+    } finally {
+        h.engine.destroy();
+    }
+    assert.equal(h.engine.getBufferedAheadSec(), null);
+});
 
 const eventTypes = (harness: Harness): string[] =>
     harness.events.map((event) => event.type);

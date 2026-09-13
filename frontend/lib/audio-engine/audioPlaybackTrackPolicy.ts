@@ -108,8 +108,17 @@ export function resolveDirectTrackSourceType(
     return toAudioEngineSourceType(normalizeRuntimeProvider(track).source);
 }
 
+/** A confirmed loss of playback while the listener's play intent remains active. */
+export class PlaybackInterruptionError extends Error {
+    constructor(readonly reason: "unexpected_stop" | "unexpected_pause") {
+        super(`Playback interrupted: ${reason}`);
+        this.name = "PlaybackInterruptionError";
+    }
+}
+
 /** Classifies retryable transport and source-availability failures. */
 export function isLikelyTransientStreamError(error: unknown): boolean {
+    if (error instanceof PlaybackInterruptionError) return true;
     const message = (
         error instanceof Error ? error.message : String(error || "")
     )

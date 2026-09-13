@@ -72,6 +72,7 @@ interface RuntimeAudioEngine extends AudioEngine {
     ): AudioPreloadLease | null;
     reload(): void;
     getActualCurrentTime(): number;
+    getBufferedAheadSec(): number | null;
     hasTrackEnded(): boolean;
     isCurrentlySeeking(): boolean;
     getSeekTarget(): number | null;
@@ -265,6 +266,10 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
             return this.howlerEngine.getActualCurrentTime();
         }
         return this.howlerEngine.getCurrentTime();
+    }
+
+    getBufferedAheadSec(): number | null {
+        return this.howlerEngine.getBufferedAheadSec?.() ?? null;
     }
 
     hasTrackEnded(): boolean {

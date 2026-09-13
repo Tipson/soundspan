@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Recover a confirmed unexpected playback stop or empty-buffer native pause through the existing bounded retry path, preserving the current recording and confirmed position. Read buffer ranges from the engine-owned audio element; manual pauses, changed selections and unmeasurable buffers do not trigger this recovery.
+
 - Keep YouTube JavaScript challenge evaluation on yt-dlp's upstream solver. Remove cross-request preprocessing reuse that produced CDN-rejected URLs after the first successful track, including during PO-token recovery.
 
 - Recover a refused YouTube CDN continuation with one fresh source resolution. Verify the complete delivered prefix and representation length before appending any replacement bytes; cancellation, changed content and repeat refusal stop recovery.

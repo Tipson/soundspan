@@ -9,6 +9,7 @@ import {
     logPlaybackClientMetric,
 } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import { resolveBufferingRecoveryAction } from "@/lib/audio-engine/playbackRecoveryPolicy";
+import { PlaybackInterruptionError } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import type { useTrackRecovery } from "./useTrackRecovery";
@@ -159,9 +160,7 @@ export function usePlaybackWatchdogs({
                         return;
                     }
 
-                    const stopError = new Error(
-                        "Playback stopped unexpectedly during heartbeat monitoring",
-                    );
+                    const stopError = new PlaybackInterruptionError("unexpected_stop");
                     const failedTrackId = currentTrackRef.current?.id ?? null;
                     setIsBuffering(true);
                     playbackStateMachine.forceTransition("LOADING");

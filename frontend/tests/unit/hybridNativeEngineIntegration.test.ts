@@ -206,4 +206,8 @@ test("existing engine interface methods pass through to the native engine", () =
     assert.equal(hybrid.hasTrackEnded(), false);
     assert.equal(hybrid.isCurrentlySeeking(), false);
     assert.equal(hybrid.getSeekTarget(), null);
+    Object.defineProperty(native.elements[0], "buffered", {
+        value: { length: 1, start: () => 0, end: () => 12.5 },
+    });
+    assert.equal(hybrid.getBufferedAheadSec(), 0.5);
 });

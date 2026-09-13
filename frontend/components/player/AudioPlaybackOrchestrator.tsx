@@ -40,6 +40,7 @@ import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { resolveDeviceOfflineMediaIdentity } from "@/features/device-offline/playbackResolver";
 import {
     getNextTrackInfo,
+    PlaybackInterruptionError,
     isRetiredProviderTrack,
     resolveAudioLoadTimeoutPolicy,
     resolveDirectTrackSourceType,
@@ -788,9 +789,7 @@ export const AudioPlaybackOrchestrator = memo(
                             return;
                         }
 
-                        const pauseError = new Error(
-                            "Playback paused unexpectedly while track intent is playing",
-                        );
+                        const pauseError = new PlaybackInterruptionError("unexpected_pause");
                         logPlaybackClientMetric("player.unexpected_pause", {
                             reason: "engine_pause_while_play_intent_stall_confirmed",
                             trackId: liveTrackId,

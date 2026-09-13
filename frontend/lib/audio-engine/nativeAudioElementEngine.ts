@@ -60,6 +60,7 @@ export interface NativeAudioElementLike {
     preload: string;
     crossOrigin: string | null;
     readonly error: { code: number; message?: string } | null;
+    readonly buffered?: Pick<TimeRanges, "length" | "start" | "end">;
     play(): Promise<void> | void;
     pause(): void;
     removeAttribute(name: string): void;
@@ -332,6 +333,29 @@ export class NativeAudioElementEngine implements AudioEngine {
 
     getDuration(): number {
         return toFiniteDuration(this.element?.duration ?? 0);
+    }
+
+    /** Read the engine-owned element, which need not be attached to the DOM. */
+    getBufferedAheadSec(): number | null {
+        const element = this.element;
+        if (!element || !Number.isFinite(element.currentTime)) return null;
+        try {
+            const buffered = element.buffered;
+            if (!buffered) return null;
+            for (let index = 0; index < buffered.length; index += 1) {
+                const start = buffered.start(index);
+                const end = buffered.end(index);
+                if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+                if (element.currentTime >= start && element.currentTime <= end) {
+                    return Math.max(0, end - element.currentTime);
+                }
+            }
+            // A later range is separated by a gap; it cannot play at this position.
+            return 0;
+        } catch {
+            // A media pipeline being replaced can invalidate a TimeRanges read.
+            return null;
+        }
     }
 
     isPlaying(): boolean {
