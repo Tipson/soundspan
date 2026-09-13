@@ -1,39 +1,33 @@
-# YouTube player preprocessing cache
+# YouTube player evaluation and transfer caches
 
-The YouTube sidecar shares serialized EJS preprocessing of public player code
-between fresh yt-dlp instances. Audio URLs, cookies, account identifiers,
-challenge inputs and challenge responses are not cache entries. Every request
-is evaluated independently; audio format selection is unchanged.
+The YouTube sidecar delegates JavaScript challenge evaluation to yt-dlp's
+upstream providers. Soundspan does not register a custom EJS solver or share
+serialized preprocessing between separate extractions. Successful solver JSON
+alone is insufficient evidence that YouTube's CDN accepts the resulting URL.
 
-## Bounds and failure behavior
+## Cache ownership and compatibility
 
-- At most two entries and 16 MiB of retained serialized bytes per process.
-- Entries expire after one hour; LRU eviction keeps the byte budget bounded.
-- The key includes the public script content and EJS version. A changed script
-  cannot reuse preprocessing from another script.
-- JSON decoding and Deno execution still require temporary working memory;
-  the 16 MiB limit is not a limit on the complete process RSS.
-- A failed cached execution is retried once using the original public script.
-  The stock yt-dlp Deno provider remains available as a fallback.
-- Cache state is in memory only; service restart discards it. There is no disk
-  cache to clean and no schema or user-data migration.
+`ytmusic_player_cache.register_player_cache()` is a compatibility hook for the
+optional stream bootstrap. It returns `False` without changing the upstream
+provider registry. Repeated and concurrent calls have no registry side effects.
+The bootstrap's version gate and exception handling cannot make this adapter
+mandatory for ordinary extraction.
 
-## Compatibility
+Public player source caching, anonymous visitor context, short-lived stream
+URLs and the validated media spool have separate ownership and bounds. Their
+contracts are independent of serialized EJS preprocessing. There is no custom
+preprocessing disk state to migrate or clear.
 
-Registration is lazy and limited to yt-dlp `2026.08.19`, whose private EJS hooks
-are covered by the adapter tests. The version check happens before importing
-those hooks. Other versions continue with stock extraction and an informational
-log message. Initialization errors are logged by exception type, without
-request data, and do not prevent extraction. A dependency update requires
-explicit adapter revalidation before expanding the supported version.
+JavaScript-dependent paths perform upstream challenge processing on demand.
+Pacing, extraction budgets, cancellation and the single PO-recovery gate bound
+this work. Audio format selection and the anonymous HIGH shortcut are separate
+from the solver hook.
 
-This optimization avoids repeated preprocessing. It does not remove the first
-player download, the first preprocessing run, metadata requests, admission
-queues or audio-CDN latency. Its component benchmark is not an end-to-end
-playback latency guarantee or a concurrent-listener capacity result.
-
-The behavioral tests are `test_player_preprocess_cache.py` and
+The behavioral tests are `test_upstream_player_solver.py` and
 `test_player_cache_bootstrap.py` under `services/ytmusic-streamer/tests`.
+Live acceptance must include sequential recordings in one process, complete
+audio decoding and delayed Range requests. A first successful recording or a
+mocked solver response cannot establish cross-request correctness.
 
 ## Independent connection stalls
 

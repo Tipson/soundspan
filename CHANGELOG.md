@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Keep YouTube JavaScript challenge evaluation on yt-dlp's upstream solver. Remove cross-request preprocessing reuse that produced CDN-rejected URLs after the first successful track, including during PO-token recovery.
+
 - Recover a refused YouTube CDN continuation with one fresh source resolution. Verify the complete delivered prefix and representation length before appending any replacement bytes; cancellation, changed content and repeat refusal stop recovery.
 - Preserve the native player's automatic retry budget across brief `playing` events, preventing repeated broken streams from replenishing their own retries. Public song metadata does not depend on personal YouTube OAuth, and upstream authorization failures do not invalidate Soundspan login.
 - Keep discovery searches within their deadlines by canceling queued Last.fm work and active HTTP requests, and returning search fields without per-match metadata enrichment. Failed quick searches remain incomplete and are not cached as successful empty results.
@@ -242,8 +244,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reveal clipped Library tabs within their horizontal strip without moving the main page or disturbing the listener's scroll position during background updates.
 
 - Bound progressive audio connection/CONNECT setup to three seconds and retry one timed-out opening before response headers. Preserve the exact range, validator, cancellation and transfer deadline; do not replay partially delivered response bodies.
-
-- Reuse bounded public YouTube player preprocessing across stream extractions without reusing listener challenges or signed URLs. Keep the stock extractor on unsupported versions or initialization failure, and retry original player processing when cached execution fails.
 
 - Allow playback or preload joining an in-progress audio-analysis download to use its validated audio prefix, including a prefix discovered before the listener joined. Reuse the same download while keeping analysis responses complete-file-only.
 
