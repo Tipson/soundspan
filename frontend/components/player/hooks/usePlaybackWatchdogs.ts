@@ -9,7 +9,10 @@ import {
     logPlaybackClientMetric,
 } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import { resolveBufferingRecoveryAction } from "@/lib/audio-engine/playbackRecoveryPolicy";
-import { PlaybackInterruptionError } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
+import {
+    PlaybackInterruptionError,
+    resolveDirectTrackSourceType,
+} from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import type { useTrackRecovery } from "./useTrackRecovery";
@@ -61,7 +64,11 @@ export function usePlaybackWatchdogs({
                     logPlaybackClientMetric("player.rebuffer", {
                         reason: "heartbeat_stall",
                         trackId: currentTrackRef.current?.id ?? null,
-                        sourceType: "direct",
+                        sourceType: currentTrackRef.current
+                            ? resolveDirectTrackSourceType(
+                                  currentTrackRef.current,
+                              )
+                            : "unknown",
                     });
                     const transitionedToBuffering =
                         playbackStateMachine.transition("BUFFERING");
@@ -107,7 +114,11 @@ export function usePlaybackWatchdogs({
                             {
                                 reason: suppressionReason,
                                 trackId,
-                                sourceType: "direct",
+                                sourceType: currentTrackRef.current
+                                    ? resolveDirectTrackSourceType(
+                                          currentTrackRef.current,
+                                      )
+                                    : "unknown",
                             },
                         );
                         return;
@@ -125,7 +136,11 @@ export function usePlaybackWatchdogs({
                             {
                                 reason: "startup_guard_active",
                                 trackId,
-                                sourceType: "direct",
+                                sourceType: currentTrackRef.current
+                                    ? resolveDirectTrackSourceType(
+                                          currentTrackRef.current,
+                                      )
+                                    : "unknown",
                                 guardReason: startupGuard.reason,
                                 guardRemainingMs: Math.max(
                                     0,
@@ -142,7 +157,11 @@ export function usePlaybackWatchdogs({
                     logPlaybackClientMetric("player.unexpected_stop", {
                         reason: "heartbeat_unexpected_stop",
                         trackId,
-                        sourceType: "direct",
+                        sourceType: currentTrackRef.current
+                            ? resolveDirectTrackSourceType(
+                                  currentTrackRef.current,
+                              )
+                            : "unknown",
                     });
 
                     if (!lastPlayingStateRef.current) {
@@ -160,7 +179,9 @@ export function usePlaybackWatchdogs({
                         return;
                     }
 
-                    const stopError = new PlaybackInterruptionError("unexpected_stop");
+                    const stopError = new PlaybackInterruptionError(
+                        "unexpected_stop",
+                    );
                     const failedTrackId = currentTrackRef.current?.id ?? null;
                     setIsBuffering(true);
                     playbackStateMachine.forceTransition("LOADING");
@@ -183,7 +204,11 @@ export function usePlaybackWatchdogs({
                     logPlaybackClientMetric("player.rebuffer_timeout", {
                         reason: "heartbeat_buffer_timeout",
                         trackId: currentTrackRef.current?.id ?? null,
-                        sourceType: "direct",
+                        sourceType: currentTrackRef.current
+                            ? resolveDirectTrackSourceType(
+                                  currentTrackRef.current,
+                              )
+                            : "unknown",
                     });
                     const timeoutError = new Error(
                         "Connection lost - audio stream timed out",
@@ -245,7 +270,11 @@ export function usePlaybackWatchdogs({
                     logPlaybackClientMetric("player.rebuffer_recovered", {
                         reason: "heartbeat_recovery",
                         trackId: currentTrackRef.current?.id ?? null,
-                        sourceType: "direct",
+                        sourceType: currentTrackRef.current
+                            ? resolveDirectTrackSourceType(
+                                  currentTrackRef.current,
+                              )
+                            : "unknown",
                     });
                     const enginePlaying = audioEngine.isPlaying();
                     const recoveryAction = resolveBufferingRecoveryAction({

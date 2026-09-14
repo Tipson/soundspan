@@ -34,10 +34,14 @@ export function WithMedia<TBase extends ApiClientConstructor>(Base: TBase) {
 
         async reportPlaybackClientMetric(
             input: PlaybackClientMetricInput,
+            signal?: AbortSignal,
         ): Promise<void> {
             await this.request<void>("/streaming/v1/client-metrics", {
                 method: "POST",
                 body: JSON.stringify(input),
+                signal,
+                timeoutMs: 5000,
+                retryOnTimeout: false,
             });
         }
 

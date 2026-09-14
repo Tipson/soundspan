@@ -22,6 +22,7 @@ const mockPlaybackTraceLogger = {
     child: jest.fn(),
 };
 const mockRecordPlaybackClientMetric = jest.fn();
+const mockDiagnosticWarn = jest.fn();
 
 jest.mock("../../metrics", () => ({
     recordPlaybackClientMetric: mockRecordPlaybackClientMetric,
@@ -59,6 +60,8 @@ jest.mock("../../utils/logger", () => ({
             if (scope === "Playback") return mockPlaybackRouteLogger;
             if (scope === "Playback.Metric") return mockPlaybackMetricLogger;
             if (scope === "Playback.Trace") return mockPlaybackTraceLogger;
+            if (scope === "Playback.Diagnostic")
+                return { warn: mockDiagnosticWarn };
             throw new Error(`Unexpected logger scope: ${scope}`);
         }),
     },
@@ -176,6 +179,62 @@ describe("playback client-signal route", () => {
             reason: undefined,
             durationMs: undefined,
         });
+    });
+
+    it("records an incident through the real route without exposing arbitrary fields", () => {
+        const req = {
+            user: { id: "diagnostic-user" },
+            body: {
+                event: "player.unexpected_stop",
+                fields: {
+                    trackId: "yt:example",
+                    currentTimeSec: 83,
+                    token: "NEVER_LOG_ME",
+                    url: "https://secret",
+                },
+                diagnostic: {
+                    id: "route-event",
+                    ownerId: "diagnostic-user",
+                    observedAtMs: 100_000,
+                },
+            },
+        } as any;
+        const res = createResponse();
+        postClientMetric(req, res);
+        expect(res.statusCode).toBe(202);
+        expect(mockDiagnosticWarn).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(mockDiagnosticWarn.mock.calls[0][0])).toEqual(
+            expect.objectContaining({
+                userId: "diagnostic-user",
+                eventId: "route-event",
+                fields: { trackId: "yt:example", currentTimeSec: 83 },
+            }),
+        );
+        expect(
+            JSON.stringify(mockPlaybackTraceLogger.info.mock.calls),
+        ).not.toContain("NEVER_LOG_ME");
+        expect(
+            JSON.stringify(mockPlaybackTraceLogger.info.mock.calls),
+        ).not.toContain("https://secret");
+    });
+
+    it("rejects a queued diagnostic after its authenticated owner changes", () => {
+        const req = {
+            user: { id: "user-b" },
+            body: {
+                event: "player.unexpected_stop",
+                diagnostic: {
+                    id: "cross-user-event",
+                    ownerId: "user-a",
+                    observedAtMs: 100_000,
+                },
+            },
+        } as any;
+        const res = createResponse();
+        postClientMetric(req, res);
+        expect(res.statusCode).toBe(400);
+        expect(mockDiagnosticWarn).not.toHaveBeenCalled();
+        expect(mockRecordPlaybackClientMetric).not.toHaveBeenCalled();
     });
 
     it("keeps retired startup fields in the generic trace only", async () => {

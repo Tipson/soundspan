@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Record bounded playback incident diagnostics at production log levels, including position, buffer, browser visibility, network status and recovery progress. Retain safe incident events in an account-scoped tab outbox during connection loss, reject cross-account delivery and deduplicate retries without storing source URLs, credentials or raw error messages.
+
 - Recover a confirmed unexpected playback stop or empty-buffer native pause through the existing bounded retry path, preserving the current recording and confirmed position. Read buffer ranges from the engine-owned audio element; manual pauses, changed selections and unmeasurable buffers do not trigger this recovery.
 
 - Keep YouTube JavaScript challenge evaluation on yt-dlp's upstream solver. Remove cross-request preprocessing reuse that produced CDN-rejected URLs after the first successful track, including during PO-token recovery.

@@ -14,6 +14,11 @@ import {
     sendRouteError,
 } from "../utils/routeErrorResponse";
 import { recordPlaybackClientMetric } from "../metrics";
+import {
+    isPlaybackDiagnosticEvent,
+    recordPlaybackDiagnostic,
+    sanitizePlaybackDiagnosticFields,
+} from "../services/playbackDiagnostics";
 
 const router = express.Router();
 const playbackRouteLogger = logger.child("Playback");
@@ -21,6 +26,13 @@ const playbackRouteLogger = logger.child("Playback");
 const clientMetricSchema = z.object({
     event: z.string().min(1).max(128),
     fields: z.record(z.string(), z.unknown()).optional(),
+    diagnostic: z
+        .object({
+            id: z.string().regex(/^[a-zA-Z0-9_:-]{1,128}$/),
+            ownerId: z.string().regex(/^[a-zA-Z0-9_:-]{1,128}$/),
+            observedAtMs: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+        })
+        .optional(),
 });
 
 function optionalStringField(
@@ -59,7 +71,13 @@ function acceptClientMetric(
     data: z.infer<typeof clientMetricSchema>,
 ): express.Response {
     const { event } = data;
-    const fields = data.fields ?? {};
+    if (data.diagnostic && data.diagnostic.ownerId !== userId) {
+        return rejectClientMetric(res, startedAtMs, 400, "invalid_request");
+    }
+    const fields = isPlaybackDiagnosticEvent(event)
+        ? sanitizePlaybackDiagnosticFields(data.fields ?? {})
+        : (data.fields ?? {});
+    recordPlaybackDiagnostic(userId, event, fields, data.diagnostic);
     const sessionId = optionalStringField(fields, "sessionId");
     const sourceType = optionalStringField(fields, "sourceType");
     const trackId = optionalStringField(fields, "trackId");
@@ -158,6 +176,20 @@ function handleClientMetric(
  *                 maxLength: 128
  *               fields:
  *                 type: object
+ *               diagnostic:
+ *                 type: object
+ *                 description: Optional queued-event identity; ownerId must match the authenticated listener.
+ *                 required: [id, ownerId, observedAtMs]
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                     maxLength: 128
+ *                   ownerId:
+ *                     type: string
+ *                     maxLength: 128
+ *                   observedAtMs:
+ *                     type: integer
+ *                     minimum: 0
  *     responses:
  *       202:
  *         description: Playback signal accepted

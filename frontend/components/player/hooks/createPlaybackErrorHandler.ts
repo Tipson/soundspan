@@ -191,6 +191,7 @@ export function createPlaybackErrorHandler({
                 sourceType,
                 error: errorMessage,
                 errorCategory,
+                errorCode: data.code,
                 stage: "pre_recovery",
             });
             const failedTrackId = currentTrack?.id ?? null;
@@ -291,6 +292,7 @@ export function createPlaybackErrorHandler({
             sourceType,
             error: errorMessage,
             errorCategory,
+            errorCode: data.code,
             stage: playbackType === "track" ? "fatal_after_recovery" : "fatal",
         });
         recoverablePlayErrorPendingRef.current = false;

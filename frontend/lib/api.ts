@@ -521,6 +521,7 @@ export interface LikedPlaylistResponse {
 export interface PlaybackClientMetricInput {
     event: string;
     fields?: Record<string, unknown>;
+    diagnostic?: { id: string; ownerId: string; observedAtMs: number };
 }
 
 class ApiClient extends WithMusicSources(

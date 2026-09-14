@@ -16,8 +16,14 @@ import {
     TRANSIENT_TRACK_ERROR_RECOVERY_MAX_ATTEMPTS,
     TRANSIENT_TRACK_ERROR_RECOVERY_WINDOW_MS,
 } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
-import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
-import { isLikelyTransientStreamError } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
+import {
+    audioEngine,
+    logPlaybackClientMetric,
+} from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
+import {
+    isLikelyTransientStreamError,
+    resolveDirectTrackSourceType,
+} from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import { rearmPlaybackProgressConfirmationOnError } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { toast } from "sonner";
@@ -446,6 +452,15 @@ export function useTrackRecovery({
                     startupStabilityAtFailure.firstProgressAtMs,
             });
             const recoveryLoadId = loadIdRef.current;
+            logPlaybackClientMetric("player.recovery_attempt", {
+                trackId: failedTrackId,
+                sourceType: currentTrackRef.current
+                    ? resolveDirectTrackSourceType(currentTrackRef.current)
+                    : "unknown",
+                attemptNumber,
+                resumeAtSec,
+                loadId: recoveryLoadId,
+            });
 
             const onRecoveredLoad = () => {
                 clearTransientTrackRecovery(false);
@@ -480,6 +495,12 @@ export function useTrackRecovery({
                 if (!audioEngine.isPlaying()) {
                     audioEngine.play();
                 }
+                logPlaybackClientMetric("player.recovery_ready", {
+                    trackId: failedTrackId,
+                    attemptNumber,
+                    resumeAtSec: correlatedResumeAtSec,
+                    loadId: recoveryLoadId,
+                });
             };
 
             transientTrackRecoveryLoadListenerRef.current = onRecoveredLoad;

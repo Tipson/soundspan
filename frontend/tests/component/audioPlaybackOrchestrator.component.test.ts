@@ -819,11 +819,14 @@ mock.module("react", {
 mock.module("react/jsx-runtime", {
     namedExports: {
         Fragment: "mock-fragment",
-        jsx: (_component: unknown, props?: {
-            snapshotRef?: { current: number };
-            snapshotTrackIdRef?: { current: string | null };
-            currentTrackRef?: { current: Track | null };
-        }) => {
+        jsx: (
+            _component: unknown,
+            props?: {
+                snapshotRef?: { current: number };
+                snapshotTrackIdRef?: { current: string | null };
+                currentTrackRef?: { current: Track | null };
+            },
+        ) => {
             const timeRef = props?.snapshotRef;
             const trackRef = props?.snapshotTrackIdRef;
             if (timeRef && trackRef) {
@@ -831,7 +834,8 @@ mock.module("react/jsx-runtime", {
                 // Allow tests to deliver its context update to the actual refs.
                 publishProgressSnapshot = (timeSec) => {
                     timeRef.current = timeSec;
-                    trackRef.current = props?.currentTrackRef?.current?.id ?? null;
+                    trackRef.current =
+                        props?.currentTrackRef?.current?.id ?? null;
                 };
             }
             return { __mocked: true };
@@ -5334,6 +5338,7 @@ test("startup watchdog leaves healthy playback with real progress alone", async 
 });
 
 test("mid-track unexpected stop reloads the same recording at its saved position", async (t) => {
+    enableWindowMetrics();
     t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
     playbackState.isPlaying = true;
     audioState.currentTrack = makeTrack("interrupted-mid-track");
@@ -5353,6 +5358,17 @@ test("mid-track unexpected stop reloads the same recording at its saved position
     engine.playing = false;
     heartbeatInstances[0].triggerUnexpectedStop();
     await flushAsync();
+    assert.ok(
+        apiCalls.reportPlaybackClientMetric.some((input) => {
+            const fields = input.fields as Record<string, unknown>;
+            return (
+                input.event === "player.unexpected_stop" &&
+                fields.currentTimeSec === 83 &&
+                fields.enginePlaying === false &&
+                fields.sourceType === "local"
+            );
+        }),
+    );
     t.mock.timers.tick(450);
     await flushAsync();
     assert.equal(engine.reloadCalls, 1);
@@ -5361,6 +5377,17 @@ test("mid-track unexpected stop reloads the same recording at its saved position
     await flushAsync();
     assert.ok(engine.seekCalls.includes(83));
     assert.equal(audioState.currentTrack.id, "interrupted-mid-track");
+    assert.equal(getServerSignalEvents("player.recovery_attempt").length, 1);
+    assert.equal(getServerSignalEvents("player.recovery_ready").length, 1);
+    assert.equal(getServerSignalEvents("player.recovery_resumed").length, 0);
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 84;
+    engine.emit("timeupdate", { timeSec: 84 });
+    await flushAsync();
+    assert.equal(getServerSignalEvents("player.recovery_resumed").length, 1);
+    engine.emit("timeupdate", { timeSec: 85 });
+    await flushAsync();
+    assert.equal(getServerSignalEvents("player.recovery_resumed").length, 1);
 });
 
 test("native empty-buffer pause recovers without a DOM media element", async (t) => {
@@ -5397,7 +5424,12 @@ test("native empty-buffer pause recovers without a DOM media element", async (t)
     assert.ok(engine.seekCalls.includes(83));
 });
 
-for (const cancel of ["user_pause", "track_change", "buffered_audio", "unknown_buffer"] as const) {
+for (const cancel of [
+    "user_pause",
+    "track_change",
+    "buffered_audio",
+    "unknown_buffer",
+] as const) {
     test(`native interruption recovery respects ${cancel}`, async (t) => {
         t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
         runtimeEngineMode = "native";
@@ -5414,7 +5446,12 @@ for (const cancel of ["user_pause", "track_change", "buffered_audio", "unknown_b
         await flushAsync();
         t.mock.timers.tick(30_000);
         await flushAsync();
-        engine.bufferedAheadSec = cancel === "buffered_audio" ? 30 : cancel === "unknown_buffer" ? null : 0;
+        engine.bufferedAheadSec =
+            cancel === "buffered_audio"
+                ? 30
+                : cancel === "unknown_buffer"
+                  ? null
+                  : 0;
         engine.playing = false;
         engine.emit("pause");
         await flushAsync();
