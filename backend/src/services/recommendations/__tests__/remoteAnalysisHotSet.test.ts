@@ -355,6 +355,47 @@ describe("remote recommendation hot set", () => {
         );
     });
 
+    it.each([451, 403, 404, 429, 500, 503, undefined])(
+        "discards only an explicit restricted download response (%s)",
+        async (status) => {
+            mockPrisma.canonicalRecording.findUniqueOrThrow.mockResolvedValue({
+                analysisStatus: "pending",
+                embeddingStatus: "pending",
+                embeddings: [],
+            });
+            const error = Object.assign(new Error("upstream failure"), {
+                response: status === undefined ? undefined : { status },
+            });
+            mockGetStreamProxy.mockRejectedValueOnce(error);
+            const discard = jest.fn();
+            await expect(
+                processRemoteAnalysis({
+                    data: {
+                        userId: "alice",
+                        canonicalRecordingId: "restricted-recording",
+                        provider: "youtube",
+                        providerTrackId: "restricted-video",
+                    },
+                    discard,
+                } as never),
+            ).rejects.toBe(error);
+            expect(discard).toHaveBeenCalledTimes(status === 451 ? 1 : 0);
+            expect(mockPrisma.analysisAssetLease.update).toHaveBeenCalledWith({
+                where: { id: "lease-1" },
+                data: { status: "failed", error: "Remote analysis failed" },
+            });
+            expect(mockPrisma.canonicalRecording.update).toHaveBeenCalledWith({
+                where: { id: "restricted-recording" },
+                data: expect.objectContaining({
+                    analysisStatus: "failed",
+                    embeddingStatus: "failed",
+                }),
+            });
+            expect(mockRm).toHaveBeenCalledTimes(1);
+            expect(mockEmbedAudio).not.toHaveBeenCalled();
+        },
+    );
+
     it("keeps DCLAP failure retryable after successful Essentia hand-off", async () => {
         mockPrisma.canonicalRecording.findMany.mockResolvedValue([]);
         mockPrisma.canonicalRecording.findUniqueOrThrow.mockResolvedValue({

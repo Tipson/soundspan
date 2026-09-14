@@ -1076,11 +1076,18 @@ export async function processRemoteAnalysis(
             status: dclapError ? "queued-essentia-dclap-degraded" : "queued",
         };
     } catch (error) {
+        const classification = classifyRemoteAnalysisError(error);
+        // The sidecar uses 451 for restricted recordings. Retrying this same
+        // download cannot change access; retain failure/cooldown and cleanup,
+        // but do not spend the queue's transient-error retry on it.
+        if (stage === "download" && classification.upstreamStatus === 451) {
+            await bullJob.discard();
+        }
         log.warn("Remote analysis processing failed", {
             canonicalRecordingId: job.canonicalRecordingId,
             provider: job.provider,
             stage,
-            ...classifyRemoteAnalysisError(error),
+            ...classification,
         });
         const message = "Remote analysis failed";
         const terminalUpdates: Promise<unknown>[] = [

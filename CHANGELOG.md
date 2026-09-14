@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Avoid immediately retrying background audio analysis when YouTube explicitly refuses a restricted recording. Preserve failed-analysis state, cleanup and the scheduler cooldown; temporary upstream failures retain their bounded retries.
+
 - Record bounded playback incident diagnostics at production log levels, including position, buffer, browser visibility, network status and recovery progress. Retain safe incident events in an account-scoped tab outbox during connection loss, reject cross-account delivery and deduplicate retries without storing source URLs, credentials or raw error messages.
 
 - Recover a confirmed unexpected playback stop or empty-buffer native pause through the existing bounded retry path, preserving the current recording and confirmed position. Read buffer ranges from the engine-owned audio element; manual pauses, changed selections and unmeasurable buffers do not trigger this recovery.
