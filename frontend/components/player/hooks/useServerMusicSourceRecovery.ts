@@ -25,6 +25,7 @@ import type { AudioEngineErrorPayload } from "@/lib/audio-engine/types";
 import type { Track } from "@/lib/audio-state-context";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import type { usePlaybackRecoveryHelpers } from "./usePlaybackRecoveryHelpers";
+import { isDevicePlaybackSourceUrl } from "./playbackSourceLeaseController";
 
 interface Options {
     refs: PlaybackOrchestratorRefs;
@@ -36,6 +37,7 @@ interface Options {
     setIsBuffering(value: boolean): void;
     applyCurrentOutputState(): void;
     releasePlaybackSource(): void;
+    getPlaybackSourceUrl(): string | null;
 }
 
 /** Own automatic mid-track transport replacement without modifying the queue or recording. */
@@ -79,7 +81,9 @@ export function useServerMusicSourceRecovery(options: Options) {
             const { refs } = initial;
             const track = refs.currentTrackRef.current;
             const stability = refs.startupStabilityRef.current;
+            const sourceUrl = initial.getPlaybackSourceUrl();
             if (
+                isDevicePlaybackSourceUrl(sourceUrl) ||
                 !track ||
                 !track.artist?.name ||
                 !track.title ||

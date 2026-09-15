@@ -33,6 +33,53 @@ mock.module("next/link", {
     }),
 });
 
+test("downloaded collection opens through local history and preserves modified clicks", async () => {
+    const { createRoot } = await import("react-dom/client");
+    const { LibraryPlaylistCard } =
+        await import("../../features/library/components/LibraryPlaylistCard");
+    const { HardDriveDownload } = await import("lucide-react");
+    const parent = document.createElement("main");
+    document.body.appendChild(parent);
+    const root = createRoot(parent);
+    const push = mock.method(window.history, "pushState", () => {});
+    try {
+        await React.act(async () =>
+            root.render(
+                React.createElement(LibraryPlaylistCard, {
+                    href: "/library?tab=downloads",
+                    title: "Загруженное",
+                    trackCount: 5,
+                    icon: HardDriveDownload,
+                    accent: "downloaded",
+                }),
+            ),
+        );
+        const link = parent.querySelector("a")!;
+        const click = new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+        });
+        await React.act(async () => link.dispatchEvent(click));
+        assert.equal(click.defaultPrevented, true);
+        assert.equal(
+            push.mock.calls[0]?.arguments[2],
+            "/library?tab=downloads",
+        );
+        const modified = new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            ctrlKey: true,
+        });
+        await React.act(async () => link.dispatchEvent(modified));
+        assert.equal(modified.defaultPrevented, false);
+        assert.equal(push.mock.callCount(), 1);
+    } finally {
+        await React.act(async () => root.unmount());
+        mock.restoreAll();
+        parent.remove();
+    }
+});
+
 async function mount() {
     const { createRoot } = await import("react-dom/client");
     const { LibraryTabs } =

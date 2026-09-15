@@ -2,6 +2,9 @@
 
 ## Unreleased server music connections
 
+- Transfer a prepared device-audio lease directly into the native player at natural track transitions, retaining the primary audio element and avoiding a second storage read. Recover stalled buffered audio and downloaded-file errors locally with bounded retries; preserve the file, position and queue instead of attempting a provider replacement.
+- Open the last validated local account while connectivity is checked in the background, retain it on transport timeouts, and revoke it on explicit authorization rejection or account replacement. Open the library's downloaded collection through local history without a server route request; end offline queues without waiting for network recommendations and pause the player when the queue is exhausted.
+
 - Avoid immediately retrying background audio analysis when YouTube explicitly refuses a restricted recording. Preserve failed-analysis state, cleanup and the scheduler cooldown; temporary upstream failures retain their bounded retries.
 
 - Record bounded playback incident diagnostics at production log levels, including position, buffer, browser visibility, network status and recovery progress. Retain safe incident events in an account-scoped tab outbox during connection loss, reject cross-account delivery and deduplicate retries without storing source URLs, credentials or raw error messages.

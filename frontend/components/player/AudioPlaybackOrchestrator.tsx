@@ -11,7 +11,6 @@ import {
 } from "@/lib/audio-load-preemption";
 import { api } from "@/lib/api";
 import { resolveNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
-import { detectIosStandalonePwaEnvironment } from "@/lib/audio-engine/iosStandalonePwaBridge";
 import { restartPlaybackProgressConfirmation } from "@/lib/audio-engine/playbackProgressConfirmation";
 import { consumePlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
 import {
@@ -181,6 +180,7 @@ export const AudioPlaybackOrchestrator = memo(
             setIsBuffering,
             applyCurrentOutputState,
             releasePlaybackSource: playbackSourceLeaseController.release,
+            getPlaybackSourceUrl: playbackSourceLeaseController.getSourceUrl,
         });
         const {
             clearPendingTrackErrorSkip,
@@ -244,6 +244,7 @@ export const AudioPlaybackOrchestrator = memo(
         });
         H.usePlaybackWatchdogs({
             refs: orchestratorRefs,
+            getPlaybackSourceUrl: playbackSourceLeaseController.getSourceUrl,
             trackRecovery: {
                 scheduleStartupPlaybackRecovery,
                 attemptTransientTrackRecovery,
@@ -599,6 +600,20 @@ export const AudioPlaybackOrchestrator = memo(
                         }
 
                         if (continueQueueAfterAutoMatch(viaWatchdog)) return;
+                        if (
+                            !isListenTogether &&
+                            resolveQueueAdvance({
+                                action: "next",
+                                queue,
+                                currentIndex,
+                                isShuffle,
+                                shuffleIndices,
+                                repeatMode,
+                            }).kind === "stop"
+                        ) {
+                            pause();
+                            return;
+                        }
                         advanceEndedTrack();
                     }
                 } else {
@@ -621,6 +636,8 @@ export const AudioPlaybackOrchestrator = memo(
                 clearStartupPlaybackRecovery,
                 clearTransientTrackRecovery,
                 releasePlaybackSource: playbackSourceLeaseController.release,
+                getPlaybackSourceUrl:
+                    playbackSourceLeaseController.getSourceUrl,
                 attemptUnavailableYtMusicRecovery,
                 attemptServerMusicSourceRecovery,
                 attemptTransientTrackRecovery,
@@ -789,7 +806,9 @@ export const AudioPlaybackOrchestrator = memo(
                             return;
                         }
 
-                        const pauseError = new PlaybackInterruptionError("unexpected_pause");
+                        const pauseError = new PlaybackInterruptionError(
+                            "unexpected_pause",
+                        );
                         logPlaybackClientMetric("player.unexpected_pause", {
                             reason: "engine_pause_while_play_intent_stall_confirmed",
                             trackId: liveTrackId,
@@ -985,28 +1004,26 @@ export const AudioPlaybackOrchestrator = memo(
                 loadStartedAtMs,
             );
             const advanceOrigin = consumePlaybackAdvanceOrigin();
-            const currentTrackPreloadWasReady = Boolean(
+            const preparedCurrentTrackSource =
                 playbackType === "track" &&
                 currentTrack &&
-                consumeReadyCurrentTrackPreload(currentTrack),
+                consumeReadyCurrentTrackPreload(currentTrack);
+            const currentTrackPreloadWasReady = Boolean(
+                preparedCurrentTrackSource,
             );
             const providerFailureKey = currentTrack
                 ? getTrackProviderFailureKey(currentTrack)
                 : null;
-            // A prepared network handoff must not pause/reset the primary
+            // A prepared natural handoff must not pause/reset the primary
             // element between sources. Native load replaces src on that SAME
             // element, so it already prevents overlap. All manual, cold,
-            // in-flight and non-PWA switches retain the eager stop below.
+            // and in-flight switches retain the eager stop below.
             const preserveNativeHandoff =
                 hasAdvancePlayIntent &&
                 advanceOrigin === null &&
                 currentTrackPreloadWasReady &&
                 !isLoadingRef.current &&
-                audioEngine.isPlaying() &&
                 audioEngine.getActiveEngineDescriptor() === "native" &&
-                detectIosStandalonePwaEnvironment() &&
-                typeof document !== "undefined" &&
-                document.visibilityState === "hidden" &&
                 !isListenTogetherActiveOrPending() &&
                 !(
                     providerFailureKey &&
@@ -1017,6 +1034,9 @@ export const AudioPlaybackOrchestrator = memo(
                 // Stop the previous source while an unprepared source resolves.
                 audioEngine.stop();
                 activeEngineTrackIdRef.current = null;
+            }
+            if (preparedCurrentTrackSource) {
+                playbackSourceLeaseController.adopt(preparedCurrentTrackSource);
             }
 
             if (
@@ -1610,24 +1630,32 @@ export const AudioPlaybackOrchestrator = memo(
                 };
 
                 if (playbackType === "track" && currentTrack) {
-                    H.startTrackPlaybackSourceLease({
-                        controller: playbackSourceLeaseController,
-                        track: currentTrack,
-                        networkUrl: streamUrl,
-                        isCurrent: () =>
-                            loadIdRef.current === thisLoadId &&
-                            isLoadingRef.current,
-                        onReady: startTrackAudioEngineLoad,
-                        onError: (error) => {
-                            isLoadingRef.current = false;
-                            activeEngineTrackIdRef.current = null;
-                            lastTrackIdRef.current = null;
-                            void engineEventHandlersRef.current?.handleError({
-                                error,
-                                recoverable: false,
-                            });
-                        },
-                    });
+                    if (preparedCurrentTrackSource) {
+                        startTrackAudioEngineLoad(
+                            preparedCurrentTrackSource.url,
+                        );
+                    } else {
+                        H.startTrackPlaybackSourceLease({
+                            controller: playbackSourceLeaseController,
+                            track: currentTrack,
+                            networkUrl: streamUrl,
+                            isCurrent: () =>
+                                loadIdRef.current === thisLoadId &&
+                                isLoadingRef.current,
+                            onReady: startTrackAudioEngineLoad,
+                            onError: (error) => {
+                                isLoadingRef.current = false;
+                                activeEngineTrackIdRef.current = null;
+                                lastTrackIdRef.current = null;
+                                void engineEventHandlersRef.current?.handleError(
+                                    {
+                                        error,
+                                        recoverable: false,
+                                    },
+                                );
+                            },
+                        });
+                    }
                 } else {
                     playbackSourceLeaseController.release();
                     startAudioEngineLoad(streamUrl);

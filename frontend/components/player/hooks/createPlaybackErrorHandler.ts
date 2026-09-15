@@ -10,6 +10,7 @@ import {
     resolveDirectTrackSourceType,
     isProviderStartupFailure,
     shouldAttemptOuterTransientRecovery,
+    PlaybackInterruptionError,
 } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import {
     getDeviceOfflinePlaybackErrorMessage,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/audio-engine/providerFailureCooldown";
 import { classifyPlaybackError } from "@/lib/audio-engine/playbackErrorCategory";
 import type { ServerSourceRecoveryOutcome } from "@/lib/audio/serverMusicSourceRecovery";
+import { isDevicePlaybackSourceUrl } from "./playbackSourceLeaseController";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -44,6 +46,7 @@ interface PlaybackErrorHandlerOptions {
     clearStartupPlaybackRecovery(): void;
     clearTransientTrackRecovery(resetAttempts: boolean): void;
     releasePlaybackSource(): void;
+    getPlaybackSourceUrl?(): string | null;
     attemptServerMusicSourceRecovery?(
         error: AudioEngineErrorPayload,
     ): Promise<ServerSourceRecoveryOutcome>;
@@ -82,6 +85,7 @@ export function createPlaybackErrorHandler({
     clearStartupPlaybackRecovery,
     clearTransientTrackRecovery,
     releasePlaybackSource,
+    getPlaybackSourceUrl,
     attemptServerMusicSourceRecovery,
     attemptUnavailableYtMusicRecovery,
     attemptTransientTrackRecovery,
@@ -99,6 +103,11 @@ export function createPlaybackErrorHandler({
     } = refs;
 
     return async (data: AudioEngineErrorPayload): Promise<void> => {
+        if (
+            refs.providerFailedLoadIdRef.current === refs.loadIdRef.current &&
+            !isLoadingRef.current
+        )
+            return;
         if (
             playbackType === "track" &&
             currentTrack &&
@@ -155,12 +164,35 @@ export function createPlaybackErrorHandler({
                 refs.consecutiveErrorBreakerRef.current.getErrorCount(),
         });
 
+        const isDeviceSource = isDevicePlaybackSourceUrl(
+            getPlaybackSourceUrl?.() ?? null,
+        );
+        if (playbackType === "track" && isDeviceSource) {
+            // Native errors can arrive through both loaderror and error. Keep
+            // one bounded retry in flight, retaining the live local file lease.
+            if (refs.transientTrackRecoveryTimeoutRef.current) return;
+            if (
+                attemptTransientTrackRecovery(
+                    currentTrack?.id ?? null,
+                    new PlaybackInterruptionError("device_source_error"),
+                )
+            ) {
+                playbackStateMachine.forceTransition("LOADING");
+                setIsBuffering(true);
+                return;
+            }
+        }
         if (
             playbackType === "track" &&
-            typeof navigator !== "undefined" &&
-            navigator.onLine === false
+            (isDeviceSource ||
+                (typeof navigator !== "undefined" &&
+                    navigator.onLine === false))
         ) {
-            releasePlaybackSource();
+            // Keep a downloaded file alive for the explicit retry button.
+            // A track/account change or unmount still releases its lease.
+            if (!isDeviceSource) releasePlaybackSource();
+            refs.providerFailedLoadIdRef.current = refs.loadIdRef.current;
+            isLoadingRef.current = false;
             finishFailedPlay();
             const hasDeviceCopy = currentTrack
                 ? hasDeviceOfflinePlaybackCopy(currentTrack)

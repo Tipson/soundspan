@@ -80,6 +80,24 @@ test("offline logout still clears the local credential and cached identity", asy
     assert.equal(cleared, 1);
 });
 
+test("an online network hint cannot turn a timeout into an auth rejection", () => {
+    for (const status of [408, 502, 503, 504]) {
+        assert.equal(
+            shouldRestoreCachedOfflineSession({
+                error: Object.assign(new Error("timeout"), { status }),
+                online: true,
+                hasAccessToken: true,
+                cachedUser: {
+                    id: "user-1",
+                    username: "listener",
+                    role: "user",
+                },
+            }),
+            true,
+        );
+    }
+});
+
 test("logout revokes the local runtime before a slow server response settles", async () => {
     let releaseRemote!: () => void;
     const remote = new Promise<void>((resolve) => {

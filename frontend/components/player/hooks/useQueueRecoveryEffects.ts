@@ -161,6 +161,7 @@ export function useQueueRecoveryEffects({
 
     const shouldContinueAtQueueEnd = useCallback(
         () =>
+            (typeof navigator === "undefined" || navigator.onLine !== false) &&
             shouldAutoMatchVibeAtQueueEnd({
                 playbackType,
                 queueLength,

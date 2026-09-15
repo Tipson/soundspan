@@ -21,6 +21,7 @@ type TestUser = {
 };
 
 const state = {
+    pathname: "/",
     token: "token-a" as string | null,
     refreshToken: "refresh-a" as string | null,
     currentUser: {
@@ -42,7 +43,7 @@ const router = {
 
 mock.module("next/navigation", {
     namedExports: {
-        usePathname: () => "/",
+        usePathname: () => state.pathname,
         useRouter: () => router,
     },
 });
@@ -101,6 +102,7 @@ mock.module("@/lib/logger", {
 });
 
 beforeEach(() => {
+    state.pathname = "/";
     Object.defineProperty(navigator, "onLine", {
         configurable: true,
         value: true,
@@ -137,6 +139,7 @@ async function renderAuthState(): Promise<{
     container: HTMLElement;
     login: () => Promise<void>;
     logout: () => Promise<void>;
+    rerender: () => Promise<void>;
     unmount: () => void;
 }> {
     const { createRoot } = await import("react-dom/client");
@@ -145,7 +148,7 @@ async function renderAuthState(): Promise<{
     let invokeLogout: (() => void) | null = null;
 
     function Probe() {
-        const { isAuthenticated, user, login, logout } = useAuth();
+        const { isAuthenticated, isLoading, user, login, logout } = useAuth();
         invokeLogin = () => login("bob", "password-b");
         invokeLogout = () => void logout();
         if (
@@ -157,7 +160,7 @@ async function renderAuthState(): Promise<{
         }
         return React.createElement(
             "output",
-            null,
+            { "data-loading": isLoading },
             isAuthenticated && user ? user.id : "signed-out",
         );
     }
@@ -173,6 +176,17 @@ async function renderAuthState(): Promise<{
     await flush();
     return {
         container,
+        rerender: async () => {
+            await React.act(async () =>
+                root.render(
+                    React.createElement(
+                        AuthProvider,
+                        null,
+                        React.createElement(Probe),
+                    ),
+                ),
+            );
+        },
         login: async () => {
             await React.act(async () => {
                 await invokeLogin?.();
@@ -222,6 +236,67 @@ test("known-offline startup opens the cached owner's runtime without waiting for
             localStorage.getItem("soundspan_playback_owner_id"),
             "user-a",
         );
+    } finally {
+        unmount();
+    }
+});
+
+test("cached startup stays usable while online connectivity is a black hole, then honors a rejection", async () => {
+    writeCachedAuthUser(state.currentUser);
+    let rejectUser!: (error: unknown) => void;
+    state.getCurrentUser = () =>
+        new Promise((_resolve, reject) => {
+            rejectUser = reject;
+        });
+    const { container, unmount } = await renderAuthState();
+    try {
+        assert.equal(container.textContent, "user-a");
+        assert.equal(
+            container.firstElementChild?.getAttribute("data-loading"),
+            "false",
+        );
+        await React.act(async () => {
+            rejectUser(Object.assign(new Error("revoked"), { status: 401 }));
+        });
+        await flush();
+        assert.equal(container.textContent, "signed-out");
+        assert.equal(readCachedAuthUser(), null);
+    } finally {
+        unmount();
+    }
+});
+
+test("background validation retires the cached owner's runtime before activating another account", async () => {
+    writeCachedAuthUser(state.currentUser);
+    state.currentUser = { ...state.currentUser, id: "user-b" };
+    const { container, unmount } = await renderAuthState();
+    try {
+        assert.equal(container.textContent, "user-b");
+        assert.ok((state.queryClearCallsWhenUserBRendered ?? 0) > 0);
+    } finally {
+        unmount();
+    }
+});
+
+test("opening another page cannot invalidate an explicit rejection of the cached startup account", async () => {
+    writeCachedAuthUser(state.currentUser);
+    let rejectUser!: (error: unknown) => void;
+    state.getCurrentUser = () =>
+        new Promise((_resolve, reject) => {
+            rejectUser = reject;
+        });
+    const { container, rerender, unmount } = await renderAuthState();
+    try {
+        assert.equal(container.textContent, "user-a");
+        state.pathname = "/library";
+        window.history.pushState({}, "", "/library");
+        await rerender();
+        await React.act(async () => {
+            rejectUser(Object.assign(new Error("revoked"), { status: 403 }));
+        });
+        await flush();
+        assert.equal(container.textContent, "signed-out");
+        assert.equal(readCachedAuthUser(), null);
     } finally {
         unmount();
     }

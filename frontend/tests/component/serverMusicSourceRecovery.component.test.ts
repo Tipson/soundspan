@@ -78,6 +78,7 @@ let attempt!: (
     payload: AudioEngineErrorPayload,
 ) => Promise<ServerSourceRecoveryOutcome>;
 let savedPosition = 0;
+let playbackSourceUrl = "/api/ytmusic/stream/original001";
 let recoveryHoldsEvents!: () => boolean;
 let hook: typeof import("../../components/player/hooks/useServerMusicSourceRecovery");
 let refsHook: typeof import("../../components/player/hooks/usePlaybackOrchestratorRefs");
@@ -122,6 +123,7 @@ function Probe() {
         setIsBuffering: () => {},
         applyCurrentOutputState: () => {},
         releasePlaybackSource: () => {},
+        getPlaybackSourceUrl: () => playbackSourceUrl,
     });
     React.useLayoutEffect(() => {
         attempt = recovery;
@@ -161,12 +163,28 @@ beforeEach(() => {
     progress = true;
     listenTogether = false;
     savedPosition = 0;
+    playbackSourceUrl = "/api/ytmusic/stream/original001";
     actions.length = 0;
     listeners.clear();
     request.mock.resetCalls();
 });
 after(() => GlobalRegistrator.unregister());
 const path = `/api/music-sources/leases/${"a".repeat(48)}/stream`;
+test("a downloaded YouTube recording cannot be stopped or replaced by server recovery", async () => {
+    playbackSourceUrl = "blob:https://soundspan.test/downloaded";
+    const view = await mount();
+    try {
+        const outcome = attempt(failed);
+        await React.act(async () => {
+            await Promise.resolve();
+        });
+        assert.equal(request.mock.callCount(), 0);
+        assert.deepEqual(actions, []);
+        assert.equal(await outcome, "not_applicable");
+    } finally {
+        await view.unmount();
+    }
+});
 test("a played YouTube track recovers through a server source at the same position without changing its queue identity", async () => {
     const view = await mount();
     const pending = attempt(failed);

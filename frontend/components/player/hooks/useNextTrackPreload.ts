@@ -15,7 +15,11 @@ import {
 import { resolveNetworkNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
 import { resolveRemoteStreamFormat } from "../audioPlaybackOrchestratorPolicy";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
-import { usePlaybackSourceLeaseController } from "./playbackSourceLeaseController";
+import {
+    usePlaybackSourceLeaseController,
+    isDevicePlaybackSourceUrl,
+    type PlaybackSourceLease,
+} from "./playbackSourceLeaseController";
 import { observeIosBackgroundTrackHandoff } from "../iosBackgroundTrackHandoffController";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import {
@@ -56,11 +60,9 @@ interface NextTrackPreloadController {
         options?: PreloadTrackOptions,
     ) => void;
     preloadNetworkWhenDue: (timing: NetworkPreloadTiming) => void;
-    consumeReadyCurrentTrackPreload: (track: Track) => boolean;
-}
-
-function isVerifiedDevicePlaybackUrl(url: string): boolean {
-    return url.startsWith("blob:") || url.includes("/__offline/audio/");
+    consumeReadyCurrentTrackPreload: (
+        track: Track,
+    ) => PlaybackSourceLease | null;
 }
 
 function resolveWarmableYtMusicVideoId(
@@ -130,6 +132,7 @@ export function useNextTrackPreload({
     const readyCurrentTrackPreloadAtCommitRef = useRef<{
         identity: string;
         lease: AudioPreloadLease;
+        source: PlaybackSourceLease | null;
     } | null>(null);
     const pendingYtMusicPreloadRef = useRef<{
         requestId: number;
@@ -172,12 +175,17 @@ export function useNextTrackPreload({
                 ? resolveDeviceOfflineMediaIdentity(currentTrack)
                 : null;
         const preloadLease = enginePreloadLeaseRef.current;
+        readyCurrentTrackPreloadAtCommitRef.current?.source?.release();
         readyCurrentTrackPreloadAtCommitRef.current =
             currentIdentity &&
             preloadLease &&
             lastPreloadedTrackIdRef.current === currentIdentity &&
             readyPreloadedTrackIdRef.current === currentIdentity
-                ? { identity: currentIdentity, lease: preloadLease }
+                ? {
+                      identity: currentIdentity,
+                      lease: preloadLease,
+                      source: leaseController.take(),
+                  }
                 : null;
     }, [
         currentIndex,
@@ -186,10 +194,19 @@ export function useNextTrackPreload({
         lastPreloadedTrackIdRef,
         playbackType,
         readyPreloadedTrackIdRef,
+        leaseController,
     ]);
 
+    useEffect(
+        () => () => {
+            readyCurrentTrackPreloadAtCommitRef.current?.source?.release();
+            readyCurrentTrackPreloadAtCommitRef.current = null;
+        },
+        [],
+    );
+
     const consumeReadyCurrentTrackPreload = useCallback(
-        (track: Track): boolean => {
+        (track: Track): PlaybackSourceLease | null => {
             const readyAtCommit = readyCurrentTrackPreloadAtCommitRef.current;
             readyCurrentTrackPreloadAtCommitRef.current = null;
             const expectedPreloadUrl =
@@ -203,12 +220,16 @@ export function useNextTrackPreload({
                           "preload",
                       )
                     : null;
-            return (
+            const usable =
                 readyAtCommit?.identity ===
                     resolveDeviceOfflineMediaIdentity(track) &&
-                expectedPreloadUrl !== null &&
-                readyAtCommit.lease.sourceUrl === expectedPreloadUrl
-            );
+                (expectedPreloadUrl !== null
+                    ? readyAtCommit.lease.sourceUrl === expectedPreloadUrl
+                    : hasDeviceOfflinePlaybackCopy(track) &&
+                      isDevicePlaybackSourceUrl(readyAtCommit.lease.sourceUrl));
+            if (usable) return readyAtCommit?.source ?? null;
+            readyAtCommit?.source?.release();
+            return null;
         },
         [],
     );
@@ -429,7 +450,7 @@ export function useNextTrackPreload({
                         if (
                             nextTrack.streamSource === "youtube" &&
                             !options.allowNetworkYouTube &&
-                            !isVerifiedDevicePlaybackUrl(resolvedUrl)
+                            !isDevicePlaybackSourceUrl(resolvedUrl)
                         ) {
                             leaseController.release();
                             lastPreloadedTrackIdRef.current = null;

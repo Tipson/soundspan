@@ -110,7 +110,13 @@ export function resolveDirectTrackSourceType(
 
 /** A confirmed loss of playback while the listener's play intent remains active. */
 export class PlaybackInterruptionError extends Error {
-    constructor(readonly reason: "unexpected_stop" | "unexpected_pause") {
+    constructor(
+        readonly reason:
+            | "unexpected_stop"
+            | "unexpected_pause"
+            | "audio_pipeline_stall"
+            | "device_source_error",
+    ) {
         super(`Playback interrupted: ${reason}`);
         this.name = "PlaybackInterruptionError";
     }

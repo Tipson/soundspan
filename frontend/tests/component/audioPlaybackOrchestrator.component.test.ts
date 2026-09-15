@@ -2817,10 +2817,71 @@ for (const handoffScenario of ["hidden", "foreground", "manual"] as const) {
         assert.equal(engine.loadCalls[1]?.args[1], true);
         assert.equal(
             engine.stopCalls,
-            stopsBeforeHandoff + (handoffScenario === "hidden" ? 0 : 1),
+            stopsBeforeHandoff + (handoffScenario === "manual" ? 1 : 0),
         );
     });
 }
+
+test("a native natural-end transition keeps the primary element alive for a prepared source", async () => {
+    runtimeEngineMode = "native";
+    const first = makeTrack("yt:android0001", {
+        streamSource: "youtube",
+        youtubeVideoId: "android0001",
+    });
+    const second = makeTrack("yt:android0002", {
+        streamSource: "youtube",
+        youtubeVideoId: "android0002",
+    });
+    audioState.currentTrack = first;
+    audioState.queue = [first, second];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+    engine.playing = false;
+    engine.trackEnded = true;
+    engine.emit("end");
+    await flushAsync();
+    const stops = engine.stopCalls;
+    audioState.currentTrack = second;
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(engine.loadCalls[1]?.args[1], true);
+    assert.equal(engine.stopCalls, stops);
+});
+
+test("the offline queue ends without waiting for network recommendations", async (t) => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+    });
+    t.after(() => {
+        Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            value: true,
+        });
+    });
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("last-offline-track");
+    audioState.queue = [audioState.currentTrack];
+    startVibeModeImpl = () => new Promise(() => undefined);
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+    assert.equal(controlCalls.pause, 1);
+});
 
 test("hidden iOS handoff waits until the engine reports the next track ready", async (t) => {
     const navigatorDescriptor = Object.getOwnPropertyDescriptor(
@@ -3124,7 +3185,7 @@ test("a terminal offline error releases the active device-file playback lease", 
     assert.equal(releases, 1);
 });
 
-test("next-track preload acquires and releases its own managed device-file lease", async (t) => {
+test("next-track preload transfers its ready device file without a second storage read", async (t) => {
     const currentTrack = makeTrack("current-network");
     const nextTrack = makeTrack("yt:preloaded-file", {
         streamSource: "youtube",
@@ -3136,6 +3197,7 @@ test("next-track preload acquires and releases its own managed device-file lease
     });
     const nextRef = "fsa1:user:preload" as DeviceAudioVaultRef;
     let releases = 0;
+    let accesses = 0;
     const session = {
         ownerId: "user-1",
         authGeneration: 0,
@@ -3143,11 +3205,14 @@ test("next-track preload acquires and releases its own managed device-file lease
         retain: async () => {
             throw new Error("retain is not used by playback");
         },
-        access: async () => ({
-            kind: "play" as const,
-            url: "blob:https://soundspan.test/preload",
-            release: () => releases++,
-        }),
+        access: async () => {
+            accesses++;
+            return {
+                kind: "play" as const,
+                url: "blob:https://soundspan.test/preload",
+                release: () => releases++,
+            };
+        },
     } as unknown as DeviceAudioVaultSession;
     const restoreVault = installDeviceAudioVaultFactory(() =>
         fakeDeviceAudioVault(async ({ authGeneration }) => ({
@@ -3177,6 +3242,13 @@ test("next-track preload acquires and releases its own managed device-file lease
     await flushAsync();
 
     assert.equal(engine.preloadCalls.length, 1);
+    assert.equal(accesses, 1);
+    assert.equal(releases, 0);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "blob:https://soundspan.test/preload",
+    );
+    hookRuntime.unmount();
     assert.equal(releases, 1);
 });
 
@@ -5788,6 +5860,152 @@ test("transient YouTube errors retry the source before alternate lookup", async 
     await flushAsync();
     assert.equal(engine.reloadCalls, 1);
 });
+
+test("a filled audio buffer is recovered locally instead of replacing the recording on the server", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("yt:buffered001", {
+        streamSource: "youtube",
+        youtubeVideoId: "buffered001",
+        duration: 210,
+        artist: { name: "Artist" },
+    });
+    audioState.queue = [audioState.currentTrack];
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 10;
+    engine.emit("timeupdate", { timeSec: 10 });
+    await flushAsync();
+    engine.bufferedAheadSec = 195;
+    heartbeatInstances[0].triggerStall();
+    heartbeatInstances[0].triggerBufferTimeout();
+    await flushAsync();
+    assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 0);
+    assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+    assert.equal(engine.seekCalls.at(-1), 10);
+});
+
+for (const online of [true, false]) {
+    test(`a downloaded native error retries the same file without network or revocation: online=${online}`, async (t) => {
+        enableWindowMetrics();
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const track = makeTrack("yt:download001", {
+            streamSource: "youtube",
+            youtubeVideoId: "download001",
+            duration: 210,
+            artist: { name: "Artist" },
+        });
+        let releases = 0;
+        const restore = installDeviceAudioVaultFactory(() =>
+            fakeDeviceAudioVault(
+                async ({ authGeneration }) =>
+                    ({
+                        ownerId: "user-1",
+                        authGeneration,
+                        storage: { kind: "desktop-directory", label: "Test" },
+                        access: async () => ({
+                            kind: "play",
+                            url: "blob:https://soundspan.test/downloaded",
+                            release: () => releases++,
+                        }),
+                    }) as unknown as DeviceAudioVaultSession,
+            ),
+        );
+        t.after(restore);
+        setDeviceOfflineRuntimeState("user-1", [
+            managedReadyRecord(
+                "user-1",
+                "download-key",
+                track,
+                "fsa1:user:file" as DeviceAudioVaultRef,
+            ),
+        ]);
+        audioState.currentTrack = track;
+        audioState.queue = [track, makeTrack("next")];
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync(30);
+        assert.equal(
+            engine.loadCalls.at(-1)?.args[0],
+            "blob:https://soundspan.test/downloaded",
+        );
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = 0.3;
+        engine.emit("timeupdate", { timeSec: 0.3 });
+        await flushAsync();
+        engine.currentTime = engine.actualCurrentTime = 35;
+        engine.emit("timeupdate", { timeSec: 35 });
+        await flushAsync();
+        assert.ok(publishProgressSnapshot);
+        publishProgressSnapshot(35);
+        Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            value: online,
+        });
+        t.after(() => {
+            Object.defineProperty(navigator, "onLine", {
+                configurable: true,
+                value: true,
+            });
+        });
+        for (let i = 0; i < 3; i++)
+            engine.emit("playerror", {
+                error: new Error("Media source not supported"),
+                code: "4",
+                recoverable: false,
+            });
+        await flushAsync();
+        assert.equal(releases, 0);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 0);
+        assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+        t.mock.timers.tick(450);
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 1);
+        engine.emit("load", { durationSec: 210 });
+        await flushAsync();
+        assert.equal(engine.seekCalls.at(-1), 35);
+        assert.equal(controlCalls.next, 0);
+        assert.equal(audioState.currentTrack?.id, track.id);
+        // A broken reload must consume the remaining retry budget rather
+        // than leaving its load listener waiting forever. Duplicate error
+        // events after exhaustion must not escape to provider fallback.
+        for (let attempt = 0; attempt < 5; attempt++) {
+            engine.emit("playerror", {
+                error: new Error("Media source not supported"),
+                code: "4",
+                recoverable: false,
+            });
+            await flushAsync();
+            t.mock.timers.tick(450);
+            await flushAsync();
+        }
+        assert.equal(engine.reloadCalls, 4);
+        assert.equal(playbackMachine.state, "ERROR");
+        assert.equal(controlCalls.next, 0);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 0);
+        assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+        assert.equal(releases, 0);
+        playbackState.isPlaying = false;
+        rerenderOrchestrator();
+        await flushAsync();
+        playbackState.isPlaying = true;
+        rerenderOrchestrator();
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 5);
+        assert.equal(releases, 0);
+        hookRuntime.unmount();
+        assert.equal(releases, 1);
+    });
+}
 
 test("heartbeat stall buffers and buffer timeout runs transient recovery", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });

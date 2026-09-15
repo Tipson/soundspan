@@ -16,6 +16,7 @@ import {
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import type { useTrackRecovery } from "./useTrackRecovery";
+import { isDevicePlaybackSourceUrl } from "./playbackSourceLeaseController";
 
 interface UsePlaybackWatchdogsOptions {
     refs: PlaybackOrchestratorRefs;
@@ -28,6 +29,7 @@ interface UsePlaybackWatchdogsOptions {
     isBuffering: boolean;
     setIsBuffering: (isBuffering: boolean) => void;
     setIsPlaying: (isPlaying: boolean) => void;
+    getPlaybackSourceUrl(): string | null;
 }
 
 /** Runs the existing heartbeat stall and unexpected-stop watchdogs. */
@@ -38,6 +40,7 @@ export function usePlaybackWatchdogs({
     isBuffering,
     setIsBuffering,
     setIsPlaying,
+    getPlaybackSourceUrl,
 }: UsePlaybackWatchdogsOptions): void {
     const { attemptTransientTrackRecovery, scheduleStartupPlaybackRecovery } =
         trackRecovery;
@@ -197,9 +200,14 @@ export function usePlaybackWatchdogs({
                     playbackStateMachine.forceTransition("READY");
                 },
                 onBufferTimeout: () => {
-                    // Been buffering too long - likely connection lost
+                    const bufferedAhead = audioEngine.getBufferedAheadSec?.();
+                    const pipelineStalled =
+                        isDevicePlaybackSourceUrl(getPlaybackSourceUrl()) ||
+                        (typeof bufferedAhead === "number" &&
+                            Number.isFinite(bufferedAhead) &&
+                            bufferedAhead > 1);
                     sharedFrontendLogger.error(
-                        "[AudioPlaybackOrchestrator] Buffer timeout - connection may be lost",
+                        "[AudioPlaybackOrchestrator] Audio progress timed out",
                     );
                     logPlaybackClientMetric("player.rebuffer_timeout", {
                         reason: "heartbeat_buffer_timeout",
@@ -210,9 +218,9 @@ export function usePlaybackWatchdogs({
                               )
                             : "unknown",
                     });
-                    const timeoutError = new Error(
-                        "Connection lost - audio stream timed out",
-                    );
+                    const timeoutError = pipelineStalled
+                        ? new PlaybackInterruptionError("audio_pipeline_stall")
+                        : new Error("Connection lost - audio stream timed out");
                     const failPlayback = () => {
                         if (audioEngine.isPlaying()) {
                             audioEngine.pause();
@@ -233,6 +241,7 @@ export function usePlaybackWatchdogs({
 
                     const failedTrackId = currentTrackRef.current?.id ?? null;
                     if (
+                        !pipelineStalled &&
                         currentTrackRef.current?.streamSource === "youtube" &&
                         lastPlayingStateRef.current &&
                         startupStabilityRef.current.trackId === failedTrackId &&
@@ -308,6 +317,7 @@ export function usePlaybackWatchdogs({
         scheduleStartupPlaybackRecovery,
         setIsBuffering,
         setIsPlaying,
+        getPlaybackSourceUrl,
     ]);
 
     // Keep heartbeat active while buffering so stall timeouts can still fire.

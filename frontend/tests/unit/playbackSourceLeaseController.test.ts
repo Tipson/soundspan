@@ -23,6 +23,25 @@ function lease(url: string, onRelease: () => void): PlaybackSourceLease {
     return { url, release: onRelease };
 }
 
+test("a prepared lease transfers synchronously without revoking the next track", async () => {
+    const preload = createPlaybackSourceLeaseController();
+    const playback = createPlaybackSourceLeaseController();
+    let releases = 0;
+    await preload.acquire(
+        async () => lease("blob:next", () => releases++),
+        () => true,
+    );
+    const prepared = preload.take();
+    assert.ok(prepared);
+    preload.release();
+    assert.equal(releases, 0);
+    playback.adopt(prepared);
+    assert.equal(playback.getSourceUrl(), "blob:next");
+    playback.release();
+    assert.equal(playback.getSourceUrl(), null);
+    assert.equal(releases, 1);
+});
+
 test("acquire exposes the selected URL while the request generation stays current", async () => {
     const controller = createPlaybackSourceLeaseController();
     const observed = { signal: null as AbortSignal | null };
