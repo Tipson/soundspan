@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
     AudioWaveform,
     Download,
+    HardDriveDownload,
     Heart,
     Home,
     Library,
@@ -25,7 +26,10 @@ import {
 } from "@/hooks/useQueries";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 import { cn } from "@/utils/cn";
-import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
+import {
+    handleOfflineLibraryNavigation,
+    openOfflineDownloads,
+} from "./offlineLibraryNavigation";
 import { MobileSidebar } from "./MobileSidebar";
 import { SIDEBAR_NAVIGATION } from "./socialNavigation";
 
@@ -179,12 +183,16 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                                         ? (event) => {
                                               handleOfflineLibraryNavigation({
                                                   isOnline: navigator.onLine,
+                                                  isModifiedClick:
+                                                      event.button !== 0 ||
+                                                      event.metaKey ||
+                                                      event.ctrlKey ||
+                                                      event.shiftKey ||
+                                                      event.altKey,
                                                   preventDefault: () =>
                                                       event.preventDefault(),
-                                                  hardNavigate: (path) =>
-                                                      window.location.assign(
-                                                          path,
-                                                      ),
+                                                  openDownloads:
+                                                      openOfflineDownloads,
                                               });
                                           }
                                         : undefined
@@ -222,6 +230,20 @@ function DesktopSidebarContents({ pathname }: { pathname: string }) {
                     Библиотека
                 </p>
                 <div className="flex min-h-0 flex-1 flex-col gap-1">
+                    <button
+                        type="button"
+                        onClick={openOfflineDownloads}
+                        aria-haspopup="dialog"
+                        className="group flex min-h-12 shrink-0 items-center gap-3 rounded-xl px-3 text-left text-content-secondary transition-colors duration-200 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                    >
+                        <HardDriveDownload
+                            className="h-[18px] w-[18px] shrink-0 text-ai-hover"
+                            aria-hidden="true"
+                        />
+                        <span className="text-sm font-semibold">
+                            Загруженное
+                        </span>
+                    </button>
                     <Link
                         href="/playlist/my-liked"
                         prefetch={false}

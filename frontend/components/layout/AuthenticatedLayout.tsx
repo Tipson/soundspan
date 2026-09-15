@@ -22,6 +22,7 @@ import { useActivityPanel } from "@/hooks/useActivityPanel";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { TasteProfileOnboardingGate } from "@/features/taste-profile";
 import { MainScrollRestoration } from "./MainScrollRestoration";
+import { OfflineDownloadsPanel } from "./OfflineDownloadsPanel";
 
 const publicPaths = ["/login", "/register", "/onboarding", "/sync"];
 const publicPrefixes = ["/share/"];
@@ -115,6 +116,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     </a>
                     {tasteProfileGate}
                     <MediaControlsHandler />
+                    <OfflineDownloadsPanel key={user?.id} />
                     <TVLayout>{children}</TVLayout>
                 </PlayerModeWrapper>
             );
@@ -188,6 +190,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
 
                         {/* Bottom Navigation - fixed at bottom */}
                         <BottomNavigation />
+                        <OfflineDownloadsPanel key={user?.id} />
                         <PWAInstallPrompt />
                     </div>
                 </PlayerModeWrapper>
@@ -252,6 +255,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <UniversalPlayer />
+                    <OfflineDownloadsPanel key={user?.id} />
                     <PWAInstallPrompt />
                 </div>
             </PlayerModeWrapper>

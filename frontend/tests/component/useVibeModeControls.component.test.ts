@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 import ReactDefault from "react";
+import {
+    recordExplicitPlaybackPause,
+    recordExplicitPlaybackResume,
+    writePlaybackAdvanceOrigin,
+} from "../../lib/audio-engine/playbackAdvanceOrigin";
+import { audioSeekEmitter } from "../../lib/audio-seek-emitter";
 
 interface Deferred<T> {
     promise: Promise<T>;
@@ -85,6 +91,7 @@ mock.module("react", {
 });
 
 const feedRequests: Array<Deferred<Record<string, unknown>>> = [];
+const vibeRequests: Array<Deferred<Record<string, unknown>>> = [];
 const feedRequestPaths: string[] = [];
 const feedRequestOptions: Array<
     { timeoutMs?: number; retryOnTimeout?: boolean } | undefined
@@ -103,10 +110,11 @@ mock.module("@/lib/api", {
                 feedRequestOptions.push(options);
                 return request.promise;
             },
-            getVibeSimilarTracks: async () => ({
-                tracks: [],
-                sourceFeatures: null,
-            }),
+            getVibeSimilarTracks: () => {
+                const request = deferred<Record<string, unknown>>();
+                vibeRequests.push(request);
+                return request.promise;
+            },
         },
     },
 });
@@ -137,9 +145,11 @@ mock.module("sonner", {
 
 beforeEach(() => {
     feedRequests.length = 0;
+    vibeRequests.length = 0;
     feedRequestPaths.length = 0;
     feedRequestOptions.length = 0;
     activeHarness = null;
+    recordExplicitPlaybackResume();
 });
 
 function makeProviderTrack(videoId: string) {
@@ -492,7 +502,7 @@ test("late provider radio response is ignored after the active track changes", a
     assert.deepEqual(second.mutations, []);
 });
 
-test("adaptive provider refresh replaces the stale tail after the latest active track", async () => {
+test("adaptive provider refresh replaces only the tail after the latest selection is paused", async () => {
     const { useVibeModeControls } =
         await import("../../lib/audio/useVibeModeControls");
     const harness = new HookLifecycleHarness();
@@ -575,6 +585,7 @@ test("adaptive provider refresh replaces the stale tail after the latest active 
     });
     await Promise.resolve();
 
+    recordExplicitPlaybackPause();
     HookProbe(advancedState);
     feedRequests[0].resolve({
         shelves: {
@@ -598,3 +609,108 @@ test("adaptive provider refresh replaces the stale tail after the latest active 
     assert.equal(committed.currentIndex, null);
     assert.equal(committed.mutation, "replace-upcoming");
 });
+
+for (const continuation of ["provider append", "Audio-DNA replace"] as const) {
+    for (const action of [
+        "pause",
+        "resume",
+        "seek",
+        "automatic advance",
+    ] as const) {
+        test(`${continuation} response respects a later ${action} on the same queue occurrence`, async () => {
+            const { useVibeModeControls } =
+                await import("../../lib/audio/useVibeModeControls");
+            const harness = new HookLifecycleHarness();
+            const providerSeed = makeProviderTrack("AAAAAAAAAAA");
+            const audio = makeAudioState(providerSeed);
+            const seed =
+                continuation === "provider append"
+                    ? providerSeed
+                    : {
+                          id: "local-audio-dna-seed",
+                          title: "Local seed",
+                          duration: 180,
+                          artist: { id: "artist-local", name: "Artist" },
+                          album: { id: "album-local", title: "Album" },
+                      };
+            const state = { ...audio.state, currentTrack: seed, queue: [seed] };
+            harness.beginRender();
+            activeHarness = harness;
+            const controls = useVibeModeControls({
+                state: state as never,
+                getActiveListenTogetherSession: () => null,
+                showQueueMutationToasts: () => undefined,
+            });
+            harness.commitRender();
+            const commits: Array<{ token: object; mutation: string }> = [];
+            const queueCommitToken = {};
+            const pending = controls.startVibeMode({
+                queueCommitToken,
+                onLocalQueueCommit: (commit) => commits.push(commit),
+            });
+            await Promise.resolve();
+            assert.equal(
+                continuation === "provider append"
+                    ? feedRequests.length
+                    : vibeRequests.length,
+                1,
+            );
+
+            // Pause, replay and seek need not change the queue object, index,
+            // track ID or trigger a React render before the response arrives.
+            if (action === "pause") recordExplicitPlaybackPause();
+            else if (action === "resume") recordExplicitPlaybackResume();
+            else if (action === "seek") audioSeekEmitter.emit(4);
+            else writePlaybackAdvanceOrigin(null, seed.id);
+
+            if (continuation === "provider append") {
+                feedRequests[0].resolve({
+                    shelves: {
+                        discovery: [makeProviderTrack("BBBBBBBBBBB")],
+                        quickPicks: [],
+                        listenAgain: [],
+                    },
+                    degraded: false,
+                    seedCount: 1,
+                });
+            } else {
+                vibeRequests[0].resolve({
+                    tracks: [
+                        {
+                            id: "local-audio-dna-next",
+                            title: "Matched track",
+                            duration: 200,
+                            artist: { id: "artist-next", name: "Next artist" },
+                            album: { id: "album-next", title: "Next album" },
+                        },
+                    ],
+                    sourceFeatures: null,
+                });
+            }
+
+            if (action === "automatic advance") {
+                assert.deepEqual(await pending, {
+                    success: true,
+                    trackCount: 1,
+                });
+                assert.equal(audio.mutations.includes("queue"), true);
+                assert.deepEqual(commits, [
+                    {
+                        token: queueCommitToken,
+                        mutation:
+                            continuation === "provider append"
+                                ? "append"
+                                : "replace",
+                    },
+                ]);
+            } else {
+                assert.deepEqual(await pending, {
+                    success: false,
+                    trackCount: 0,
+                });
+                assert.deepEqual(commits, []);
+                assert.deepEqual(audio.mutations, []);
+            }
+        });
+    }
+}

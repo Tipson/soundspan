@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import { after, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -104,9 +105,11 @@ async function waitFor(
     condition: () => boolean,
     timeoutMs: number = 1_000,
 ): Promise<void> {
-    const startedAt = Date.now();
+    // WSL wall-clock corrections can jump forward during a concurrent suite.
+    // An elapsed timeout must use the monotonic Node clock instead.
+    const startedAt = performance.now();
     while (!condition()) {
-        if (Date.now() - startedAt >= timeoutMs) {
+        if (performance.now() - startedAt >= timeoutMs) {
             assert.fail("condition was not met before timeout");
         }
         await React.act(async () => {
@@ -114,6 +117,21 @@ async function waitFor(
         });
     }
 }
+
+test("DOM readiness waits survive a forward wall-clock adjustment", async (t) => {
+    let wallClockReads = 0;
+    t.mock.method(Date, "now", () => (wallClockReads++ === 0 ? 0 : 60_000));
+    let ready = false;
+    const readyTimer = setTimeout(() => {
+        ready = true;
+    }, 20);
+    try {
+        await waitFor(() => ready);
+        assert.equal(ready, true);
+    } finally {
+        clearTimeout(readyTimer);
+    }
+});
 
 test("onboarding is a Russian accessible dialog and explains that it does not create likes", async () => {
     const mounted = await mountDialog();

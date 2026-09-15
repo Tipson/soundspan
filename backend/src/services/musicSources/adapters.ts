@@ -190,13 +190,14 @@ export function createMusicSourceAdapter(
                     .array(vkTrack)
                     .max(10)
                     .safeParse(data.response);
-                const row = parsed.success
-                    ? parsed.data.find(
-                          (t) => `${t.owner_id}_${t.id}` === trackId,
-                      )
-                    : undefined;
+                if (!parsed.success) throw new MusicSourceError("unavailable");
+                const row = parsed.data.find(
+                    (t) => `${t.owner_id}_${t.id}` === trackId,
+                );
+                // Per-recording availability does not establish that the shared
+                // account lacks permission for every other recording.
                 if (!row?.url || row.is_restricted)
-                    throw new MusicSourceError("entitlement_required");
+                    throw new MusicSourceError("not_found");
                 media = row.url;
                 if (new URL(media).pathname.endsWith(".m3u8"))
                     throw new MusicSourceError("unsupported_stream");
@@ -216,13 +217,13 @@ export function createMusicSourceAdapter(
                     )
                     .max(30)
                     .safeParse(data.result);
-                const variant = parsed.success
-                    ? parsed.data
-                          .filter((t) => t.codec === "mp3" && !t.preview)
-                          .sort((a, b) => b.bitrateInKbps - a.bitrateInKbps)[0]
-                    : undefined;
-                if (!variant)
-                    throw new MusicSourceError("entitlement_required");
+                if (!parsed.success) throw new MusicSourceError("unavailable");
+                const variant = parsed.data
+                    .filter((t) => t.codec === "mp3" && !t.preview)
+                    .sort((a, b) => b.bitrateInKbps - a.bitrateInKbps)[0];
+                // A missing full variant is track-local. Explicit account/API
+                // authorization failures retain their connection-wide circuit.
+                if (!variant) throw new MusicSourceError("not_found");
                 if (!isMusicSourceUrlAllowed(variant.downloadInfoUrl, provider))
                     throw new MusicSourceError("unsupported_stream");
                 const xml = await http.text(

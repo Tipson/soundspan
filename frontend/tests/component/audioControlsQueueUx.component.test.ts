@@ -7,6 +7,7 @@ import type { Episode } from "../../features/podcast/types";
 import { createConsecutiveErrorBreaker } from "../../lib/audio-engine/consecutiveErrorBreaker";
 import {
     consumePlaybackAdvanceOrigin,
+    getExplicitPlaybackPauseGeneration,
     playbackAdvanceOriginRef,
     setPlaybackAutoRestartSuppressed,
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
@@ -1107,13 +1108,16 @@ test("clicking the playing occurrence toggles pause and resume without rebuildin
     playback.isPlaying = true;
     const controls = await renderControls({ state, playback });
 
+    const beforePause = getExplicitPlaybackPauseGeneration();
     controls.playTracks([{ ...currentTrack }, queue[1]], 0);
+    assert.ok(getExplicitPlaybackPauseGeneration() > beforePause);
     state.commit();
     assert.equal(playback.isPlaying, false);
     assert.equal(playback.currentTime, 42);
     assert.equal(state.queue, queue);
 
     controls.playTrack({ ...currentTrack });
+    assert.equal(getExplicitPlaybackPauseGeneration(), 0);
     state.commit();
     assert.equal(playback.isPlaying, true);
     assert.equal(playback.currentTime, 42);
@@ -1131,6 +1135,23 @@ test("clicking the playing occurrence toggles pause and resume without rebuildin
         "playlist-item-b",
     );
     assert.notEqual(state.queue, queue);
+});
+
+test("the shared UI and media-session pause action records explicit intent", async () => {
+    const state = createDeferredAudioState({
+        queue: [makeTrack("pause-intent", "artist-1")],
+        currentIndex: 0,
+        playbackType: "track",
+    });
+    const playback = createPlaybackStub({ currentTime: 42, duration: 200 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+    const beforePause = getExplicitPlaybackPauseGeneration();
+    controls.pause();
+    assert.equal(playback.isPlaying, false);
+    assert.ok(getExplicitPlaybackPauseGeneration() > beforePause);
+    controls.resume();
+    assert.equal(getExplicitPlaybackPauseGeneration(), 0);
 });
 
 test("explicit offline queue replacement works even when the selected track is already current", async () => {
@@ -1154,4 +1175,59 @@ test("explicit offline queue replacement works even when the selected track is a
     assert.equal(state.vibeMode, false);
     assert.equal(playback.isPlaying, true);
     assert.equal(playback.currentTime, 0);
+});
+
+test("a downloaded three-track queue clears play intent after its final natural advance", async () => {
+    const tracks = [3, 2, 1].map((id) => ({
+        ...makeTrack(`yt:train00000${id}`, "train-check"),
+        title: `Traincheck ${id}`,
+        duration: 9,
+    }));
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub({ duration: 9 });
+    let controls = await renderControls({ state, playback });
+
+    // DownloadsList starts a complete local queue using this explicit action.
+    controls.playTracks(tracks, 0, false, { replaceQueue: true });
+    state.commit();
+    for (let index = 0; index < tracks.length; index += 1) {
+        assert.equal(state.currentIndex, index);
+        assert.equal(
+            (state.currentTrack as { id: string }).id,
+            tracks[index].id,
+        );
+        assert.equal(playback.isPlaying, true);
+        playback.currentTime = 9;
+        controls = await renderControls({ state, playback });
+        // This is also the online queue-end path when automatic matching
+        // completes without appending any tracks.
+        controls.advanceQueue(null);
+        state.commit();
+    }
+
+    assert.equal(state.currentIndex, 2);
+    assert.equal(playback.currentTime, 9);
+    assert.equal(playback.isPlaying, false);
+});
+
+test("manual next at the last track keeps the unfinished track playing", async () => {
+    const currentTrack = {
+        ...makeTrack("last-playing", "artist"),
+        duration: 9,
+    };
+    const state = createDeferredAudioState({
+        queue: [currentTrack],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+    });
+    const playback = createPlaybackStub({ currentTime: 4, duration: 9 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+
+    controls.next();
+    state.commit();
+
+    assert.equal(playback.currentTime, 4);
+    assert.equal(playback.isPlaying, true);
 });

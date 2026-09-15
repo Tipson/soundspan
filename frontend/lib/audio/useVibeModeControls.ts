@@ -30,6 +30,7 @@ import type {
     VibeModeStartResult,
     VibeQueueMutationKind,
 } from "../audio-controls-types";
+import { getPlaybackIntentGeneration } from "../audio-engine/playbackAdvanceOrigin";
 
 type AudioState = ReturnType<typeof useAudioState>;
 const MAX_PROVIDER_CONTINUATION_PAGES = 2;
@@ -103,6 +104,7 @@ export function useVibeModeControls({
                 return { success: false, trackCount: 0 };
             }
             const requestGeneration = ++requestGenerationRef.current;
+            const playbackIntentGeneration = getPlaybackIntentGeneration();
             const replaceUpcoming =
                 options?.queueStrategy === "replace-upcoming";
             const requestContext = {
@@ -117,6 +119,15 @@ export function useVibeModeControls({
             const requestIsCurrent = () => {
                 const currentContext = playbackContextRef.current;
                 if (requestGenerationRef.current !== requestGeneration) {
+                    return false;
+                }
+                // Tail-only adaptation preserves the current selection. Other
+                // continuations belong to the playback command that requested
+                // them and must not rewrite a later pause, replay or seek.
+                if (
+                    !replaceUpcoming &&
+                    getPlaybackIntentGeneration() !== playbackIntentGeneration
+                ) {
                     return false;
                 }
                 if (

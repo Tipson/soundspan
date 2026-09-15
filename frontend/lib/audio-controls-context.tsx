@@ -63,6 +63,8 @@ import {
 import { resetPersistedTrackStartPosition } from "@/lib/persisted-playback-position";
 import { resolveListenTogetherNavigationIndex } from "@/lib/listen-together-navigation";
 import {
+    recordExplicitPlaybackPause,
+    recordExplicitPlaybackResume,
     writePlaybackAdvanceOrigin,
     writePlaybackReplacementIntent,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
@@ -871,6 +873,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
     const pause = useCallback(
         (options?: { suppressListenTogetherBroadcast?: boolean }) => {
+            recordExplicitPlaybackPause();
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
             playbackState.setIsPlaying(false);
@@ -999,6 +1002,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
                 if (ltSession.isHost) {
+                    recordExplicitPlaybackResume();
                     playbackState.setIsPlaying(true);
                     if (!options?.suppressListenTogetherBroadcast) {
                         listenTogetherSocket.play().catch(() => {});
@@ -1039,10 +1043,13 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 playbackState.lockSeek(clampedTarget);
                 playbackState.setCurrentTime(clampedTarget);
                 audioSeekEmitter.emit(clampedTarget);
+                if (syncIsPlaying) recordExplicitPlaybackResume();
+                else recordExplicitPlaybackPause();
                 playbackState.setIsPlaying(syncIsPlaying);
                 return;
             }
 
+            recordExplicitPlaybackResume();
             playbackState.setIsPlaying(true);
         },
         [state, getActiveListenTogetherSession, getPlaybackView],
@@ -1124,6 +1131,13 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         : state.repeatMode,
             });
             if (advance.kind === "stop") {
+                // A natural end can arrive here after online auto-match finishes
+                // without extending the queue. Retire its play intent so the
+                // watchdog cannot recover an already completed media element.
+                // Manual Next at the queue boundary remains a no-op.
+                if (origin === null) {
+                    playbackState.setIsPlaying(false);
+                }
                 return;
             }
 

@@ -617,9 +617,14 @@ describe("auth routes runtime", () => {
         await login(req, res);
 
         expect(res.statusCode).toBe(200);
-        expect(prisma.user.update).toHaveBeenCalledWith(
+        expect(prisma.user.updateMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: { id: "u1" },
+                where: {
+                    id: "u1",
+                    twoFactorEnabled: true,
+                    twoFactorSecret: "enc(SECRET123)",
+                    twoFactorRecoveryCodes: `enc(${goodHash},other-hash)`,
+                },
                 data: {
                     twoFactorRecoveryCodes:
                         expect.stringContaining("other-hash"),
@@ -627,6 +632,165 @@ describe("auth routes runtime", () => {
             }),
         );
     });
+
+    it.each(["A1B2C3D4", "E5F6A7B8"])(
+        "consumes overlapping recovery codes safely (%s)",
+        async (secondCode) => {
+            const goodCode = "A1B2C3D4";
+            const goodHash = crypto
+                .createHash("sha256")
+                .update(goodCode)
+                .digest("hex");
+            const otherHash = crypto
+                .createHash("sha256")
+                .update("E5F6A7B8")
+                .digest("hex");
+            let storedCodes = `enc(${goodHash},${otherHash})`;
+            prisma.user.findUnique.mockImplementation(async () => ({
+                id: "u1",
+                username: "alice",
+                role: "user",
+                passwordHash: "hash-1",
+                tokenVersion: 1,
+                twoFactorEnabled: true,
+                twoFactorSecret: "enc(SECRET123)",
+                twoFactorRecoveryCodes: storedCodes,
+            }));
+            prisma.user.update.mockImplementation(
+                async ({
+                    data,
+                }: {
+                    data: { twoFactorRecoveryCodes: string };
+                }) => {
+                    storedCodes = data.twoFactorRecoveryCodes;
+                    return { id: "u1" };
+                },
+            );
+            prisma.user.updateMany.mockImplementation(
+                async ({
+                    where,
+                    data,
+                }: {
+                    where: { twoFactorRecoveryCodes: string };
+                    data: { twoFactorRecoveryCodes: string };
+                }) => {
+                    if (where.twoFactorRecoveryCodes !== storedCodes)
+                        return { count: 0 };
+                    storedCodes = data.twoFactorRecoveryCodes;
+                    return { count: 1 };
+                },
+            );
+            const responses = [createRes(), createRes()];
+            await Promise.all(
+                responses.map((response, index) =>
+                    login(
+                        {
+                            body: {
+                                username: "alice",
+                                password: "pw",
+                                token: index === 0 ? goodCode : secondCode,
+                            },
+                        },
+                        response,
+                    ),
+                ),
+            );
+            expect(
+                responses.map((response) => response.statusCode).sort(),
+            ).toEqual([200, 401]);
+            expect(mockGenerateToken).toHaveBeenCalledTimes(1);
+            const retry = createRes();
+            await login(
+                {
+                    body: {
+                        username: "alice",
+                        password: "pw",
+                        token: secondCode,
+                    },
+                },
+                retry,
+            );
+            expect(retry.statusCode).toBe(secondCode === goodCode ? 401 : 200);
+            const replay = createRes();
+            await login(
+                {
+                    body: {
+                        username: "alice",
+                        password: "pw",
+                        token: goodCode,
+                    },
+                },
+                replay,
+            );
+            expect(replay.statusCode).toBe(401);
+            expect(storedCodes).not.toContain(goodHash);
+        },
+    );
+
+    it.each(["rotated", "disabled"])(
+        "does not restore recovery codes when 2FA is %s during login",
+        async (change) => {
+            const goodCode = "A1B2C3D4";
+            const goodHash = crypto
+                .createHash("sha256")
+                .update(goodCode)
+                .digest("hex");
+            let storedCodes: string | null = `enc(${goodHash})`;
+            let enabled = true;
+            prisma.user.findUnique.mockImplementation(async () => ({
+                id: "u1",
+                username: "alice",
+                role: "user",
+                passwordHash: "hash-1",
+                tokenVersion: 1,
+                twoFactorEnabled: enabled,
+                twoFactorSecret: "enc(SECRET123)",
+                twoFactorRecoveryCodes: storedCodes,
+            }));
+            mockBcryptCompare.mockImplementationOnce(async () => {
+                storedCodes =
+                    change === "rotated" ? "enc(replacement-hash)" : null;
+                enabled = change !== "disabled";
+                return true;
+            });
+            prisma.user.updateMany.mockImplementation(
+                async ({
+                    where,
+                    data,
+                }: {
+                    where: {
+                        twoFactorRecoveryCodes: string;
+                        twoFactorEnabled: boolean;
+                    };
+                    data: { twoFactorRecoveryCodes: string };
+                }) => {
+                    if (
+                        where.twoFactorRecoveryCodes !== storedCodes ||
+                        where.twoFactorEnabled !== enabled
+                    )
+                        return { count: 0 };
+                    storedCodes = data.twoFactorRecoveryCodes;
+                    return { count: 1 };
+                },
+            );
+            const response = createRes();
+            await login(
+                {
+                    body: {
+                        username: "alice",
+                        password: "pw",
+                        token: goodCode,
+                    },
+                },
+                response,
+            );
+            expect(response.statusCode).toBe(401);
+            expect(mockGenerateToken).not.toHaveBeenCalled();
+            expect(storedCodes).toBe(
+                change === "rotated" ? "enc(replacement-hash)" : null,
+            );
+        },
+    );
 
     it("handles logout and refresh-token validation paths", async () => {
         const logoutRes = createRes();
@@ -1736,6 +1900,71 @@ describe("auth routes runtime", () => {
         expect(txErrorRes.statusCode).toBe(500);
         expect(txErrorRes.body).toEqual({ error: "Registration failed" });
     });
+
+    it.each(["username", "email", "unrelated", "unavailable"])(
+        "classifies a registration uniqueness race using current identity state (%s)",
+        async (field) => {
+            Object.assign(prisma, {
+                inviteCode: {
+                    findUnique: jest.fn().mockResolvedValue({
+                        id: "ic-1",
+                        revoked: false,
+                        useCount: 0,
+                        maxUses: 2,
+                        expiresAt: null,
+                    }),
+                },
+            });
+            Object.assign(prisma.user, {
+                findFirst: jest
+                    .fn()
+                    .mockResolvedValue(
+                        field === "email" ? { id: "other" } : null,
+                    )
+                    .mockResolvedValueOnce(null),
+            });
+            prisma.user.findUnique
+                .mockResolvedValue(
+                    field === "username" ? { id: "other" } : null,
+                )
+                .mockResolvedValueOnce(null);
+            if (field === "unavailable") {
+                prisma.user.findUnique.mockRejectedValueOnce(
+                    new Error("identity lookup unavailable"),
+                );
+            }
+            prisma.$transaction.mockRejectedValueOnce({
+                code: "P2002",
+                meta: { target: [field] },
+            });
+            const response = createRes();
+            await getHandler("/register", "post")(
+                {
+                    body: {
+                        inviteCode: "ABCD1234",
+                        username: "racer",
+                        displayName: "Racer",
+                        password: "new-password",
+                        confirmPassword: "new-password",
+                        email: "racer@example.com",
+                    },
+                },
+                response,
+            );
+            expect(response.statusCode).toBe(
+                ["username", "email"].includes(field) ? 400 : 500,
+            );
+            expect(response.body).toEqual({
+                error:
+                    field === "username"
+                        ? "Username already taken"
+                        : field === "email"
+                          ? "Email already in use"
+                          : "Registration failed",
+            });
+            expect(mockGenerateToken).not.toHaveBeenCalled();
+        },
+    );
 
     it("register fails closed when the invite code is concurrently exhausted", async () => {
         (prisma as any).inviteCode = { findUnique: jest.fn() };

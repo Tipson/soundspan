@@ -52,6 +52,8 @@ const registerSchema = z
         path: ["confirmPassword"],
     });
 
+class RegistrationConflictError extends Error {}
+
 // Unambiguous character set for invite codes (no 0/O/1/I/L)
 const INVITE_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -854,30 +856,41 @@ export default function registerAdminUserInviteRoutes(router: Router): void {
         invite: InviteCode,
         passwordHash: string,
     ): Promise<LoginUser> {
-        return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-            await claimInviteCode(tx, invite);
-            const user = await tx.user.create({
-                data: {
-                    username: data.username,
-                    displayName: data.displayName,
-                    email: data.email,
-                    passwordHash,
-                    role: "user",
-                    onboardingComplete: true,
-                },
+        return prisma
+            .$transaction(async (tx: Prisma.TransactionClient) => {
+                await claimInviteCode(tx, invite);
+                const user = await tx.user.create({
+                    data: {
+                        username: data.username,
+                        displayName: data.displayName,
+                        email: data.email,
+                        passwordHash,
+                        role: "user",
+                        onboardingComplete: true,
+                    },
+                });
+                await tx.userSettings.create({
+                    data: {
+                        userId: user.id,
+                        playbackQuality: "original",
+                        wifiOnly: false,
+                        offlineEnabled: false,
+                        maxCacheSizeMb: 10240,
+                    },
+                });
+                await recordInviteCodeUsage(tx, invite, user.id);
+                return user;
+            })
+            .catch(async (error: unknown) => {
+                if (hasErrorCode(error, "P2002")) {
+                    // The transaction has rolled back its invite claim. Recheck
+                    // current identity conflicts without relying on adapter-specific
+                    // error metadata or retrying account creation.
+                    const conflict = await findRegistrationConflict(data);
+                    if (conflict) throw new RegistrationConflictError(conflict);
+                }
+                throw error;
             });
-            await tx.userSettings.create({
-                data: {
-                    userId: user.id,
-                    playbackQuality: "original",
-                    wifiOnly: false,
-                    offlineEnabled: false,
-                    maxCacheSizeMb: 10240,
-                },
-            });
-            await recordInviteCodeUsage(tx, invite, user.id);
-            return user;
-        });
     }
 
     async function registerHandler(
@@ -906,7 +919,8 @@ export default function registerAdminUserInviteRoutes(router: Router): void {
             }
             if (
                 err instanceof InviteCodeValidationError ||
-                err instanceof InviteCodeExhaustedError
+                err instanceof InviteCodeExhaustedError ||
+                err instanceof RegistrationConflictError
             ) {
                 return sendRouteError(res, 400, err.message);
             }

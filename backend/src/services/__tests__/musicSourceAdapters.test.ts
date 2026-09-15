@@ -105,7 +105,7 @@ describe("music source adapters", () => {
             await expect(
                 source.open("123", {}, signal()),
             ).rejects.toMatchObject({
-                code: "entitlement_required",
+                code: "not_found",
             });
         },
     );
@@ -124,6 +124,58 @@ describe("music source adapters", () => {
             "unknown",
         );
     });
+    it("distinguishes malformed Yandex download metadata from a missing full recording", async () => {
+        const port = http();
+        const source = createMusicSourceAdapter(
+            "yandex",
+            "service-secret",
+            1,
+            port,
+        );
+        port.json.mockResolvedValue({ result: { broken: true } });
+        await expect(source.open("123", {}, signal())).rejects.toMatchObject({
+            code: "unavailable",
+        });
+        port.json.mockResolvedValue({ result: [] });
+        await expect(source.open("123", {}, signal())).rejects.toMatchObject({
+            code: "not_found",
+        });
+        expect(port.text).not.toHaveBeenCalled();
+        expect(port.stream).not.toHaveBeenCalled();
+    });
+    it.each([
+        { is_restricted: true, url: "https://cdn.userapi.com/file.mp3" },
+        {},
+    ])(
+        "treats a VK recording without playable audio as track-local: %j",
+        async (audio) => {
+            const port = http();
+            const source = createMusicSourceAdapter(
+                "vk",
+                "service-secret",
+                1,
+                port,
+            );
+            port.json.mockResolvedValue({
+                response: [
+                    {
+                        id: 456,
+                        owner_id: -200,
+                        title: "Song",
+                        artist: "Artist",
+                        duration: 180,
+                        ...audio,
+                    },
+                ],
+            });
+            await expect(
+                source.open("-200_456", {}, signal()),
+            ).rejects.toMatchObject({
+                code: "not_found",
+            });
+            expect(port.stream).not.toHaveBeenCalled();
+        },
+    );
     it("maps VK identity and fails on a provider challenge without replaying it", async () => {
         const port = http();
         port.json.mockResolvedValue({

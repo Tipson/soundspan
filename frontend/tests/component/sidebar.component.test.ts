@@ -473,13 +473,14 @@ test("playlist list exposes a compact retry after a query failure", async () => 
     }
 });
 
-test("desktop Library navigation can enter the precached Downloads shell offline", async () => {
+test("desktop Library navigation supports local downloads and exposes a direct offline action", async () => {
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderSidebarToStaticMarkup(Sidebar);
 
     const libraryLink = html.match(/<a[^>]*href="\/library"[^>]*>/);
     assert.ok(libraryLink, "Expected desktop Library link");
     assert.match(libraryLink[0], /data-has-on-click="true"/);
+    assert.match(html, /aria-haspopup="dialog"[^>]*>[\s\S]*?Загруженное/);
 });
 
 test("keeps federated peer playlist details outside the personal shell list", async () => {

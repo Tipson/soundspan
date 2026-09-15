@@ -1,5 +1,5 @@
 import express from "express";
-import request from "supertest";
+import request, { type Response } from "supertest";
 import type { Client } from "pg";
 import { prisma } from "../src/utils/db";
 import { backgroundPlaylistImport } from "../src/services/backgroundPlaylistImport";
@@ -121,7 +121,7 @@ describeWithPostgres(
             let cursor: string | null = null;
             let pages = 0;
             do {
-                const response = await request(app)
+                const response: Response = await request(app)
                     .get(`/playlists/${playlistId}`)
                     .query({ limit: 137, ...(cursor ? { cursor } : {}) })
                     .expect(200);

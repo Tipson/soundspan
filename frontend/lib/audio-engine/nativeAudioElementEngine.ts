@@ -345,8 +345,12 @@ export class NativeAudioElementEngine implements AudioEngine {
             for (let index = 0; index < buffered.length; index += 1) {
                 const start = buffered.start(index);
                 const end = buffered.end(index);
-                if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-                if (element.currentTime >= start && element.currentTime <= end) {
+                if (!Number.isFinite(start) || !Number.isFinite(end))
+                    return null;
+                if (
+                    element.currentTime >= start &&
+                    element.currentTime <= end
+                ) {
                     return Math.max(0, end - element.currentTime);
                 }
             }

@@ -64,13 +64,20 @@ async function verifyRecoveryCode(
     }
     if (matchIndex === -1) return false;
     hashes.splice(matchIndex, 1);
-    await prisma.user.update({
-        where: { id: user.id },
+    // The encrypted set is the version: a concurrent login, reset or 2FA
+    // rotation must not reuse a consumed code or restore an older set.
+    const consumed = await prisma.user.updateMany({
+        where: {
+            id: user.id,
+            twoFactorEnabled: true,
+            twoFactorSecret: user.twoFactorSecret,
+            twoFactorRecoveryCodes: user.twoFactorRecoveryCodes,
+        },
         data: {
             twoFactorRecoveryCodes: encrypt2FASecret(hashes.join(",")),
         },
     });
-    return true;
+    return consumed.count === 1;
 }
 
 async function verifyLoginSecondFactor(

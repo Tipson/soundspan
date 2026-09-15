@@ -1,4 +1,5 @@
 import { prisma } from "../../utils/db";
+import type { Readable } from "node:stream";
 import type { ResolvedSource } from "../listenTogetherResolution";
 import type {
     UnifiedPlaylistItemRecord,
@@ -30,13 +31,15 @@ export interface RemoteProviderStreamInput {
     range?: string;
     tidalTrackId?: number;
     youtubeVideoId?: string;
+    /** Listener lifetime; disconnects cancel cold acquisition and active audio. */
+    signal?: AbortSignal;
 }
 
 /** Stream response fields consumed by the HTTP proxy. */
 export interface RemoteProviderStreamResponse {
     status: number;
     headers: Record<string, unknown>;
-    data: NodeJS.ReadableStream;
+    data: Readable;
 }
 
 /** Common playlist request accepted by each provider adapter. */
@@ -147,6 +150,15 @@ const youtubeAdapter: RemoteProviderAdapter = {
     streamingProvider: "ytmusic",
     async streamTrack(input) {
         const { ytMusicService } = await import("../youtubeMusic");
+        if (input.signal) {
+            return ytMusicService.getStreamProxy(
+                input.userId,
+                requireYoutubeVideoId(input),
+                input.quality,
+                input.range,
+                { signal: input.signal },
+            );
+        }
         return ytMusicService.getStreamProxy(
             input.userId,
             requireYoutubeVideoId(input),

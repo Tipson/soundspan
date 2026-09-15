@@ -88,7 +88,8 @@ export async function applyLibraryPeerFallback(input: {
             youtubeUserId,
             fallback,
         });
-        if (result.status === "served") return null;
+        if (result.status === "served" || result.status === "cancelled")
+            return null;
         if (result.status !== "failed") continue;
         log.warn("Mapped peer fallback failed", { error: result.failure });
         if (isMappedProviderResponseUnusable(result.responseState)) {

@@ -16,7 +16,7 @@ const pending = {
     createdAt: "2026-09-11T12:00:00Z",
     approvedAt: null,
     status: "pending",
-    username: null,
+    username: null as string | null,
     registrationPath: null,
 };
 const get = mock.fn(async (_path: string) => ({
@@ -44,13 +44,14 @@ async function settle() {
         await new Promise((resolve) => setTimeout(resolve, 20));
     });
 }
-async function mount() {
+async function mount(onClient?: (client: QueryClient) => void) {
     const { TestApplicationsSection } =
         await import("../../features/settings/components/sections/TestApplicationsSection");
     const { createRoot } = await import("react-dom/client");
     const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
     });
+    onClient?.(client);
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -96,6 +97,57 @@ test("non-admin does not request the application list", async (t) => {
     assert.equal(get.mock.callCount(), 0);
     assert.equal(document.body.textContent, "");
 });
+for (const status of ["registered", "revoked"])
+    test(`background refresh replaces the locally approved invite with ${status} status`, async (t) => {
+        let client: QueryClient | undefined;
+        t.after(
+            await mount((value) => {
+                client = value;
+            }),
+        );
+        const approve = Array.from(document.querySelectorAll("button")).find(
+            (button) => button.textContent === "Одобрить",
+        );
+        assert.ok(approve);
+        await React.act(async () => approve.click());
+        await settle();
+        assert.ok(
+            document.querySelector(
+                'input[aria-label="Ссылка-приглашение для @listener"]',
+            ),
+        );
+        get.mock.mockImplementationOnce(async () => ({
+            items: [
+                {
+                    ...pending,
+                    status,
+                    username: status === "registered" ? "new_listener" : null,
+                    registrationPath: null,
+                },
+            ],
+            nextCursor: null,
+        }));
+        assert.ok(client);
+        const activeClient = client;
+        await React.act(async () => {
+            await activeClient.refetchQueries();
+        });
+        await settle();
+        assert.match(
+            document.body.textContent ?? "",
+            status === "registered"
+                ? /Доступ активирован/
+                : /Приглашение отозвано/,
+        );
+        assert.equal(
+            document.querySelector(
+                'input[aria-label="Ссылка-приглашение для @listener"]',
+            ),
+            null,
+        );
+        if (status === "registered")
+            assert.match(document.body.textContent ?? "", /new_listener/);
+    });
 test("list failures are visible and retryable", async (t) => {
     get.mock.mockImplementationOnce(async () => {
         throw new Error("offline");

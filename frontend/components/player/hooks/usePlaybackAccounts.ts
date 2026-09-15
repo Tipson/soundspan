@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type MutableRefObject } from "react";
+import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
 import { api } from "@/lib/api";
 import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
 import { AUTO_MATCH_VIBE_RETRY_COOLDOWN_MS } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
@@ -10,6 +10,7 @@ import type {
 } from "@/lib/audio-controls-types";
 import type { AutoMatchVibeRequestResult } from "../autoMatchVibePlayback";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
+import { getPlaybackIntentGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
 
 /** Keeps the YouTube Music authentication snapshot current. */
 export function useYtMusicAuth(
@@ -61,6 +62,7 @@ export function useAutoMatchVibe({
     refs,
     startVibeMode,
 }: UseAutoMatchVibeOptions) {
+    const requestIntentGenerationRef = useRef<number | null>(null);
     const {
         autoMatchVibePromiseRef,
         autoMatchVibeTrackIdRef,
@@ -79,7 +81,11 @@ export function useAutoMatchVibe({
                 return Promise.resolve(NO_AUTO_MATCH_VIBE_RESULT);
             }
 
-            if (autoMatchVibePromiseRef.current) {
+            const intentGeneration = getPlaybackIntentGeneration();
+            if (
+                autoMatchVibePromiseRef.current &&
+                requestIntentGenerationRef.current === intentGeneration
+            ) {
                 if (autoMatchVibeTrackIdRef.current === seedTrackId) {
                     return autoMatchVibePromiseRef.current;
                 }
@@ -98,6 +104,7 @@ export function useAutoMatchVibe({
 
             autoMatchVibeTrackIdRef.current = seedTrackId;
             autoMatchVibeLastAttemptAtRef.current = now;
+            requestIntentGenerationRef.current = intentGeneration;
 
             const queueCommitToken = {};
             let committedQueueMutation: VibeQueueMutationKind | null = null;
@@ -130,7 +137,9 @@ export function useAutoMatchVibe({
                     return NO_AUTO_MATCH_VIBE_RESULT;
                 })
                 .finally(() => {
-                    autoMatchVibePromiseRef.current = null;
+                    if (autoMatchVibePromiseRef.current === request) {
+                        autoMatchVibePromiseRef.current = null;
+                    }
                 });
 
             autoMatchVibePromiseRef.current = request;

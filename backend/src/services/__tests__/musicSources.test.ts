@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import { createMusicSourceResolver } from "../musicSources/resolver";
 import { matchesRecording } from "../musicSources/matcher";
+import { createMusicSourceAdapter } from "../musicSources/adapters";
 import {
     MusicSourceError,
     type MusicSourceAdapter,
@@ -202,6 +203,105 @@ describe("server music sources", () => {
             "vk",
         );
     });
+    it("keeps another user's full recording playable after a preview-only recording", async () => {
+        const json = jest.fn(async (url: string) => {
+            if (url.includes("/search?")) {
+                const restricted = new URL(url).searchParams
+                    .get("text")!
+                    .includes("Restricted");
+                return {
+                    result: {
+                        tracks: {
+                            results: [
+                                {
+                                    id: restricted ? "1" : "2",
+                                    title: restricted
+                                        ? "Restricted"
+                                        : "Available",
+                                    artists: [{ name: "Artist" }],
+                                    durationMs: 180000,
+                                    available: true,
+                                },
+                            ],
+                        },
+                    },
+                };
+            }
+            return {
+                result: [
+                    {
+                        codec: "mp3",
+                        bitrateInKbps: 192,
+                        preview: url.includes("/tracks/1/"),
+                        downloadInfoUrl: "https://storage.mds.yandex.net/info",
+                    },
+                ],
+            };
+        });
+        const source = createMusicSourceAdapter("yandex", "fixture-secret", 1, {
+            json,
+            text: async () =>
+                "<download-info><host>storage.mds.yandex.net</host><path>/abc</path><ts>123</ts><s>xyz</s></download-info>",
+            stream: async () => ({
+                status: 206,
+                headers: {
+                    "content-type": "audio/mpeg",
+                    "content-range": "bytes 0-0/100",
+                    etag: '"fixture"',
+                },
+                data: Readable.from([Buffer.from("a")]),
+            }),
+        });
+        const resolver = createMusicSourceResolver({
+            connections: async () => [source],
+        });
+        const wanted = {
+            artists: ["Artist"],
+            duration: 180,
+            contentVersion: "unknown" as const,
+        };
+        expect(
+            await resolver.resolve(
+                "a",
+                { ...wanted, title: "Restricted" },
+                signal(),
+            ),
+        ).toBeNull();
+        const result = await resolver.resolve(
+            "b",
+            { ...wanted, title: "Available" },
+            signal(),
+        );
+        expect(result?.provider).toBe("yandex");
+        expect(resolver.health().circuits).toEqual([]);
+        expect(
+            json.mock.calls.filter(([url]) => url.includes("/search?")),
+        ).toHaveLength(2);
+    });
+    it.each([
+        "auth_required",
+        "entitlement_required",
+        "rate_limit",
+        "provider_challenge",
+    ] as const)(
+        "retains the connection circuit for a real %s failure",
+        async (code) => {
+            const source = adapter();
+            source.search = jest.fn(async () => {
+                throw new MusicSourceError(code);
+            });
+            const resolver = createMusicSourceResolver({
+                connections: async () => [source],
+            });
+            expect(await resolver.resolve("a", track, signal())).toBeNull();
+            expect(await resolver.resolve("b", track, signal())).toBeNull();
+            expect(source.search).toHaveBeenCalledTimes(1);
+            expect(resolver.health().circuits[0]).toMatchObject({
+                connection: "yandex:1",
+                code,
+            });
+        },
+    );
     it("rejects a changed representation on seek instead of mixing bytes", async () => {
         const source = adapter();
         const resolver = createMusicSourceResolver({

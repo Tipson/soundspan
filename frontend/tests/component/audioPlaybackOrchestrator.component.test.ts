@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import * as realPlaybackRecoveryPolicy from "../../lib/audio-engine/playbackRecoveryPolicy";
 import {
+    recordExplicitPlaybackPause,
+    recordExplicitPlaybackResume,
     isPlaybackAutoRestartSuppressed,
     markRemoteTrackChange,
     setPlaybackAutoRestartSuppressed,
@@ -36,6 +38,7 @@ import type {
     AudioPreloadLease,
     AudioPreloadResult,
 } from "../../lib/audio-engine/types";
+import { resetForegroundRecoveryThrottle } from "../../lib/audio-engine/foregroundRecoveryPolicy";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -2883,6 +2886,87 @@ test("the offline queue ends without waiting for network recommendations", async
     assert.equal(controlCalls.pause, 1);
 });
 
+test("heartbeat does not reload an ended nine-second track while online continuation is pending", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const tracks = [3, 2, 1].map((id) =>
+        makeTrack(`yt:train00000${id}`, { duration: 9 }),
+    );
+    audioState.queue = tracks;
+    audioState.currentTrack = tracks[0];
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = () =>
+        new Promise((resolve) => {
+            resolveVibe = resolve;
+        });
+
+    renderOrchestrator();
+    await flushAsync();
+    for (let index = 0; index < tracks.length; index += 1) {
+        if (index > 0) {
+            audioState.currentIndex = index;
+            audioState.currentTrack = tracks[index];
+            rerenderOrchestrator();
+            await flushAsync();
+        }
+        engine.duration = 9;
+        engine.trackEnded = false;
+        engine.emit("load", { durationSec: 9 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = 4;
+        engine.actualCurrentTime = 4;
+        engine.emit("timeupdate", { timeSec: 4 });
+        await flushAsync();
+        engine.currentTime = 9;
+        engine.actualCurrentTime = 9;
+        engine.playing = false;
+        engine.trackEnded = true;
+        engine.emit("end");
+        await flushAsync();
+    }
+    assert.equal(controlCalls.next, 2);
+    assert.equal(controlCalls.startVibeMode, 1);
+
+    // Native status events are not user commands and must retain the pending
+    // continuation for this completed occurrence.
+    engine.emit("seek", { timeSec: 9 });
+    engine.emit("timeupdate", { timeSec: 9 });
+    await flushAsync();
+
+    // The native element is ended, but the network request has not completed.
+    // Let the unrelated startup guard expire before checking the heartbeat.
+    t.mock.timers.tick(30_000);
+    await flushAsync();
+    heartbeatInstances[0].triggerUnexpectedStop();
+    await flushAsync();
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 0);
+
+    resolveVibe({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 3);
+
+    // A replay of that same source must still recover a real mid-track stop.
+    engine.trackEnded = false;
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 4;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    engine.playing = false;
+    heartbeatInstances[0].triggerUnexpectedStop();
+    await flushAsync();
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
+});
+
 test("hidden iOS handoff waits until the engine reports the next track ready", async (t) => {
     const navigatorDescriptor = Object.getOwnPropertyDescriptor(
         globalThis,
@@ -4044,6 +4128,76 @@ test("foreground recovery directly advances an unhandled ended music track", asy
     assert.equal(controlCalls.next, 1);
     assert.equal(engine.notifyTrackEndedCalls, 0);
 });
+
+for (const pauseTiming of ["hidden", "recovery-delay"] as const) {
+    test(`foreground recovery preserves explicit pause during ${pauseTiming}`, async () => {
+        mock.timers.enable();
+        resetForegroundRecoveryThrottle();
+        const visibilityDocument = installVisibilityDocument();
+        playbackState.isPlaying = true;
+        audioState.currentTrack = makeTrack("explicit-hidden-pause");
+        audioState.queue = [audioState.currentTrack];
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.emit("timeupdate", { timeSec: 12 });
+        await flushAsync();
+        visibilityDocument.dispatchVisibility("hidden");
+        mock.timers.tick(3000);
+        engine.playing = false;
+        if (pauseTiming === "recovery-delay")
+            visibilityDocument.dispatchVisibility("visible");
+        recordExplicitPlaybackPause();
+        playbackState.isPlaying = false;
+        rerenderOrchestrator();
+        await flushAsync();
+        engine.emit("pause");
+        await flushAsync();
+        const callsBeforeForeground = engine.playCalls;
+        if (pauseTiming === "hidden")
+            visibilityDocument.dispatchVisibility("visible");
+        mock.timers.tick(301);
+        await flushAsync();
+        assert.equal(engine.playCalls, callsBeforeForeground);
+        assert.equal(engine.playing, false);
+    });
+}
+
+for (const resumedAfterPause of [false, true]) {
+    test(`foreground recovers an external full-buffer pause after explicit resume=${resumedAfterPause}`, async () => {
+        mock.timers.enable();
+        resetForegroundRecoveryThrottle();
+        runtimeEngineMode = "native";
+        const visibilityDocument = installVisibilityDocument();
+        playbackState.isPlaying = true;
+        audioState.currentTrack = makeTrack("external-buffered-pause");
+        audioState.queue = [audioState.currentTrack];
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.emit("timeupdate", { timeSec: 12 });
+        await flushAsync();
+        visibilityDocument.dispatchVisibility("hidden");
+        if (resumedAfterPause) {
+            recordExplicitPlaybackPause();
+            recordExplicitPlaybackResume();
+        }
+        engine.playing = false;
+        engine.bufferedAheadSec = 180;
+        engine.emit("pause");
+        mock.timers.tick(3000);
+        await flushAsync();
+        const before = engine.playCalls;
+        visibilityDocument.dispatchVisibility("visible");
+        mock.timers.tick(301);
+        await flushAsync();
+        assert.equal(engine.playCalls, before + 1);
+    });
+}
 
 test("newly loaded source can end immediately after an advance", async () => {
     const tracks = [
@@ -6226,3 +6380,224 @@ for (const trigger of ["terminal network error", "buffer timeout"] as const) {
         assert.equal(audioState.queue, queue);
     });
 }
+
+test("adversarial: late failed AutoMatch must not pause same-occurrence manual replay", async () => {
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const seed = makeTrack("manual-replay-seed", { duration: 9 });
+    audioState.queue = [seed];
+    audioState.currentTrack = seed;
+    audioState.currentIndex = 0;
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = () =>
+        new Promise((resolve) => {
+            resolveVibe = resolve;
+        });
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 9;
+    engine.emit("load", { durationSec: 9 });
+    engine.currentTime = engine.actualCurrentTime = 9;
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+    // User seeks back and resumes the exact same queue occurrence while matching waits.
+    recordExplicitPlaybackResume();
+    engine.trackEnded = false;
+    for (const seek of seekSubscribers) await seek(0);
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 4;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    const advancesBeforeCompletion = controlCalls.next;
+    resolveVibe({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(
+        controlCalls.next,
+        advancesBeforeCompletion,
+        "the retired natural end must not call advanceQueue(null), which now pauses a final track",
+    );
+});
+
+for (const manualAction of ["replay", "pause"] as const) {
+    test(`adversarial: late successful AutoMatch cannot override manual ${manualAction}`, async () => {
+        runtimeEngineMode = "native";
+        playbackState.isPlaying = true;
+        const seed = makeTrack("manual-action-seed", { duration: 9 });
+        audioState.queue = [seed];
+        audioState.currentTrack = seed;
+        audioState.currentIndex = 0;
+        let resolveVibe!: (result: {
+            success: boolean;
+            trackCount: number;
+        }) => void;
+        let commit!: () => void;
+        startVibeModeImpl = (options) =>
+            new Promise((resolve) => {
+                resolveVibe = resolve;
+                commit = () =>
+                    options?.onLocalQueueCommit?.({
+                        token: options.queueCommitToken!,
+                        mutation: "append",
+                    });
+            });
+        renderOrchestrator();
+        await flushAsync();
+        engine.duration = 9;
+        engine.emit("load", { durationSec: 9 });
+        engine.currentTime = engine.actualCurrentTime = 9;
+        engine.trackEnded = true;
+        engine.playing = false;
+        engine.emit("end");
+        await flushAsync();
+        assert.equal(controlCalls.next, 0);
+        if (manualAction === "replay") {
+            recordExplicitPlaybackResume();
+            engine.trackEnded = false;
+            for (const seek of seekSubscribers) await seek(0);
+            engine.playing = true;
+            engine.currentTime = engine.actualCurrentTime = 4;
+            engine.emit("play");
+            engine.emit("timeupdate", { timeSec: 4 });
+        } else {
+            recordExplicitPlaybackPause();
+            playbackState.isPlaying = false;
+            rerenderOrchestrator();
+        }
+        await flushAsync();
+        commit();
+        audioState.queue = [
+            ...audioState.queue,
+            makeTrack("new-recommendation"),
+        ];
+        rerenderOrchestrator();
+        await flushAsync();
+        resolveVibe({ success: true, trackCount: 1 });
+        await flushAsync();
+        assert.equal(
+            controlCalls.next,
+            0,
+            "manual action must retire the old ended continuation",
+        );
+    });
+}
+
+for (const [progressBeforeEnd, useSeek] of [
+    [true, true],
+    [false, true],
+    [false, false],
+]) {
+    test(`adversarial: replay of completed source handles a later lost native end, progressBeforeEnd=${progressBeforeEnd}, useSeek=${useSeek}`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+        runtimeEngineMode = "native";
+        playbackState.isPlaying = true;
+        const seed = makeTrack("replay-lost-end-seed", { duration: 9 });
+        audioState.queue = [seed];
+        audioState.currentTrack = seed;
+        audioState.currentIndex = 0;
+        let resolveVibe!: (result: {
+            success: boolean;
+            trackCount: number;
+        }) => void;
+        startVibeModeImpl = () =>
+            new Promise((resolve) => {
+                resolveVibe = resolve;
+            });
+        renderOrchestrator();
+        await flushAsync();
+        engine.duration = 9;
+        engine.emit("load", { durationSec: 9 });
+        engine.currentTime = engine.actualCurrentTime = 9;
+        engine.trackEnded = true;
+        engine.playing = false;
+        engine.emit("end");
+        await flushAsync();
+        resolveVibe({ success: false, trackCount: 0 });
+        await flushAsync();
+        assert.equal(controlCalls.next, 1);
+        playbackState.isPlaying = false;
+        rerenderOrchestrator();
+        await flushAsync();
+        recordExplicitPlaybackResume();
+        engine.trackEnded = false;
+        if (useSeek) {
+            for (const seek of seekSubscribers) await seek(0);
+        } else {
+            // Native play() on an ended element restarts from zero itself.
+            engine.currentTime = engine.actualCurrentTime = 0;
+        }
+        playbackState.isPlaying = true;
+        rerenderOrchestrator();
+        await flushAsync();
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = 4;
+        if (progressBeforeEnd) engine.emit("timeupdate", { timeSec: 4 });
+        await flushAsync();
+        t.mock.timers.tick(30_000);
+        await flushAsync();
+        engine.currentTime = engine.actualCurrentTime = 8.8;
+        if (progressBeforeEnd) engine.emit("timeupdate", { timeSec: 8.8 });
+        engine.currentTime = engine.actualCurrentTime = 9;
+        engine.trackEnded = true;
+        engine.playing = false;
+        if (!progressBeforeEnd) engine.emit("timeupdate", { timeSec: 9 });
+        t.mock.timers.tick(2_000);
+        await flushAsync();
+        resolveVibe({ success: false, trackCount: 0 });
+        await flushAsync();
+        assert.equal(
+            controlCalls.next,
+            2,
+            "the second completed play needs its own end handling",
+        );
+    });
+}
+
+test("a new end after replay requests its own continuation while the old request remains pending", async () => {
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const seed = makeTrack("replayed-pending-seed", { duration: 9 });
+    audioState.queue = [seed];
+    audioState.currentTrack = seed;
+    const requests: Array<
+        (result: { success: boolean; trackCount: number }) => void
+    > = [];
+    startVibeModeImpl = () => new Promise((resolve) => requests.push(resolve));
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 9;
+    engine.emit("load", { durationSec: 9 });
+    engine.currentTime = engine.actualCurrentTime = 9;
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync();
+    recordExplicitPlaybackResume();
+    engine.trackEnded = false;
+    for (const seek of seekSubscribers) await seek(0);
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 4;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    engine.currentTime = engine.actualCurrentTime = 9;
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync();
+
+    assert.equal(requests.length, 2);
+    requests[0]({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+    requests[1]({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});

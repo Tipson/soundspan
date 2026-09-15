@@ -6,6 +6,7 @@ import type {
     MusicSourceCandidate,
     MusicSourceConnectionStatus,
     MusicSourceProvider,
+    MusicSourceHealth,
 } from "@/lib/api/musicSources";
 
 const providers: Array<{ id: MusicSourceProvider; name: string }> = [
@@ -14,12 +15,19 @@ const providers: Array<{ id: MusicSourceProvider; name: string }> = [
 ];
 const control =
     "min-h-11 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-content disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary";
+const failureLabels: Record<string, string> = {
+    rate_limit: "Лимит запросов источника",
+    provider_challenge: "Источник запросил дополнительную проверку",
+    auth_required: "Нужно обновить авторизацию источника",
+    entitlement_required: "Источник ограничил доступ аккаунта к музыке",
+};
 
 /** Admin-only connection editor and explicit playback diagnostic, with no persisted client secrets. */
 export function ServerMusicSources() {
     const [connections, setConnections] = useState<
         MusicSourceConnectionStatus[]
     >([]);
+    const [health, setHealth] = useState<MusicSourceHealth | null>(null);
     const [tokens, setTokens] = useState<Record<MusicSourceProvider, string>>({
         yandex: "",
         vk: "",
@@ -33,7 +41,10 @@ export function ServerMusicSources() {
         let active = true;
         api.getMusicSourceConnections()
             .then((r) => {
-                if (active) setConnections(r.connections);
+                if (active) {
+                    setConnections(r.connections);
+                    setHealth(r.health);
+                }
             })
             .catch(() => {
                 if (active)
@@ -45,6 +56,20 @@ export function ServerMusicSources() {
             active = false;
         };
     }, []);
+    async function refresh() {
+        if (busy) return;
+        setBusy(true);
+        try {
+            const result = await api.getMusicSourceConnections();
+            setConnections(result.connections);
+            setHealth(result.health);
+            setMessage("Диагностика обновлена.");
+        } catch {
+            setMessage("Не удалось обновить диагностику. Попробуйте ещё раз.");
+        } finally {
+            setBusy(false);
+        }
+    }
     async function save(
         provider: MusicSourceProvider,
         enabled: boolean,
@@ -61,7 +86,9 @@ export function ServerMusicSources() {
                     : {}),
             });
             setTokens((current) => ({ ...current, [provider]: "" }));
-            setConnections((await api.getMusicSourceConnections()).connections);
+            const result = await api.getMusicSourceConnections();
+            setConnections(result.connections);
+            setHealth(result.health);
             setPlayback(null);
             setMessage("Настройки подключения сохранены.");
         } catch {
@@ -126,9 +153,29 @@ export function ServerMusicSources() {
                     своим аккаунтом Soundspan. Ключи доступа сохраняются на
                     сервере в зашифрованном виде.
                 </p>
+                <button
+                    type="button"
+                    className={`${control} mt-3`}
+                    disabled={busy}
+                    onClick={() => void refresh()}
+                >
+                    Обновить диагностику
+                </button>
+                {health?.usage ? (
+                    <p className="mt-2 text-xs leading-5 text-content-secondary">
+                        Статистика с запуска сервера. Запросы аудио включают
+                        перемотки и повторы.
+                    </p>
+                ) : null}
             </div>
             {providers.map(({ id, name }) => {
                 const state = connections.find((c) => c.provider === id);
+                const usage = health?.usage?.providers[id];
+                const circuit = health?.circuits.find(
+                    (c) =>
+                        c.connection === `${id}:${state?.version}` &&
+                        c.until > Date.now(),
+                );
                 return (
                     <fieldset
                         key={id}
@@ -145,6 +192,62 @@ export function ServerMusicSources() {
                                     : "Настроен · выключен"
                                 : "Не подключён"}
                         </p>
+                        {state?.enabled && circuit ? (
+                            <p className="text-sm text-content-secondary">
+                                {failureLabels[circuit.code] ??
+                                    "Источник временно приостановлен"}
+                                . Повторные запросы отложены до{" "}
+                                {new Date(circuit.until).toLocaleTimeString(
+                                    "ru-RU",
+                                    { hour: "2-digit", minute: "2-digit" },
+                                )}
+                                .
+                            </p>
+                        ) : null}
+                        {usage ? (
+                            <dl className="grid grid-cols-2 gap-3 text-xs text-content-secondary">
+                                <div>
+                                    <dt>Выбран для воспроизведения</dt>
+                                    <dd className="mt-1 text-base text-content">
+                                        {usage.selected}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Запросы аудио</dt>
+                                    <dd className="mt-1 text-base text-content">
+                                        {usage.streamRequests}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Ошибки источника</dt>
+                                    <dd className="mt-1 text-base text-content">
+                                        {usage.resolutionFailed +
+                                            usage.streamFailed}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Отменённые запросы</dt>
+                                    <dd className="mt-1 text-base text-content">
+                                        {usage.resolutionCancelled +
+                                            usage.streamCancelled}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Точная запись не найдена</dt>
+                                    <dd className="mt-1 text-base text-content">
+                                        {usage.noMatch}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Активные потоки</dt>
+                                    <dd className="mt-1 text-base text-content">
+                                        {health?.activeStreams[
+                                            `${id}:${state?.version}`
+                                        ] ?? 0}
+                                    </dd>
+                                </div>
+                            </dl>
+                        ) : null}
                         <label
                             className="block text-sm text-content-secondary"
                             htmlFor={`music-source-${id}`}

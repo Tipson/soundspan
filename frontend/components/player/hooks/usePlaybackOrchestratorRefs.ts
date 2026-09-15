@@ -136,6 +136,9 @@ export function usePlaybackOrchestratorRefs({
     const autoMatchVibeLastAttemptAtRef = useRef<number>(0);
     const pendingAutoMatchAdvanceRef = useRef<{
         trackId: string;
+        loadId: number;
+        seekOperationId: number;
+        playbackIntentGeneration: number;
         queueIdentity: readonly unknown[];
         playbackPositionGeneration: number;
         viaWatchdog: boolean;

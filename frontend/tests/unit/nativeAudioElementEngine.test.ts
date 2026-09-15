@@ -350,9 +350,15 @@ test("buffer recovery measures the active native element, excluding preload and 
         const main = h.mainElement();
         main.currentTime = 83;
         assert.equal(h.engine.getBufferedAheadSec(), 0);
-        main.bufferedRanges = [[0, 80], [90, 120]];
+        main.bufferedRanges = [
+            [0, 80],
+            [90, 120],
+        ];
         assert.equal(h.engine.getBufferedAheadSec(), 0);
-        main.bufferedRanges = [[0, 83.25], [90, 120]];
+        main.bufferedRanges = [
+            [0, 83.25],
+            [90, 120],
+        ];
         assert.equal(h.engine.getBufferedAheadSec(), 0.25);
         h.engine.preload("/next.webm");
         h.elements[1].bufferedRanges = [[0, 240]];

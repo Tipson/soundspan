@@ -11,6 +11,28 @@ export interface MusicSourceConnectionStatus {
     version: number;
     updatedAt?: string;
 }
+/** Aggregate transport operations for a provider, without account or track identifiers. */
+export interface MusicSourceUsage {
+    resolutionAttempts: number;
+    selected: number;
+    noMatch: number;
+    resolutionFailed: number;
+    resolutionCancelled: number;
+    streamRequests: number;
+    streamCompleted: number;
+    streamFailed: number;
+    streamCancelled: number;
+    lastFailure: string | null;
+}
+/** Administrator diagnostics for the current playback API process. */
+export interface MusicSourceHealth {
+    activeStreams: Record<string, number>;
+    circuits: Array<{ connection: string; until: number; code: string }>;
+    usage?: {
+        since: number;
+        providers: Partial<Record<MusicSourceProvider, MusicSourceUsage>>;
+    };
+}
 /** Metadata only; transport URLs and credentials remain on the server. */
 export interface MusicSourceCandidate {
     provider: MusicSourceProvider;
@@ -63,14 +85,7 @@ export function WithMusicSources<TBase extends ApiClientConstructor>(
         }
         async getMusicSourceConnections(): Promise<{
             connections: MusicSourceConnectionStatus[];
-            health: {
-                activeStreams: Record<string, number>;
-                circuits: Array<{
-                    connection: string;
-                    until: number;
-                    code: string;
-                }>;
-            };
+            health: MusicSourceHealth;
         }> {
             return this.request("/music-sources/connections");
         }

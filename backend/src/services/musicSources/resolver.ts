@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { matchesRecording } from "./matcher";
+import { createMusicSourceUsage } from "./usage";
 import {
     MusicSourceError,
     type MusicSourceAdapter,
@@ -85,6 +86,7 @@ async function readProbe(response: MusicSourceStream, signal: AbortSignal) {
 /** Resolve exact recordings and own bounded, user-bound transport leases. */
 export function createMusicSourceResolver(options: Options) {
     const now = options.now ?? Date.now;
+    const usage = createMusicSourceUsage(now());
     const leases = new Map<string, Lease>();
     const circuits = new Map<string, { until: number; code: string }>();
     const active = new Map<string, number>();
@@ -162,6 +164,7 @@ export function createMusicSourceResolver(options: Options) {
                     )
                         continue;
                     const operation = lifetime(source.provider, deadline);
+                    usage.resolutionStarted(source.provider);
                     try {
                         const candidates = await source.search(
                             `${wanted.artists.join(" ")} ${wanted.title}`,
@@ -179,7 +182,13 @@ export function createMusicSourceResolver(options: Options) {
                                     .map((c) => [c.id, c]),
                             ).values(),
                         ];
-                        if (matches.length !== 1) continue;
+                        if (matches.length !== 1) {
+                            usage.resolutionFinished(
+                                source.provider,
+                                "noMatch",
+                            );
+                            continue;
+                        }
                         const candidate = matches[0];
                         const probe = await source.open(
                             candidate.id,
@@ -210,6 +219,7 @@ export function createMusicSourceResolver(options: Options) {
                             expiresAt,
                             ...identity,
                         });
+                        usage.resolutionFinished(source.provider, "selected");
                         return {
                             leaseId,
                             provider: source.provider,
@@ -217,6 +227,14 @@ export function createMusicSourceResolver(options: Options) {
                             streamPath: `/api/music-sources/leases/${leaseId}/stream`,
                         };
                     } catch (error) {
+                        usage.resolutionFinished(
+                            source.provider,
+                            signal.aborted ||
+                                (operation.signal.aborted && !deadline.aborted)
+                                ? "resolutionCancelled"
+                                : "resolutionFailed",
+                            error,
+                        );
                         deadline.throwIfAborted();
                         failed(keyOf(source), error);
                     } finally {
@@ -260,6 +278,16 @@ export function createMusicSourceResolver(options: Options) {
             const operation = lifetime(source.provider, signal);
             signal = operation.signal;
             let released = false;
+            let outcomeRecorded = false;
+            usage.streamStarted(source.provider);
+            const recordOutcome = (
+                outcome: "streamCompleted" | "streamFailed" | "streamCancelled",
+                error?: unknown,
+            ) => {
+                if (outcomeRecorded) return;
+                outcomeRecorded = true;
+                usage.streamFinished(source.provider, outcome, error);
+            };
             const release = () => {
                 if (!released) {
                     released = true;
@@ -297,18 +325,48 @@ export function createMusicSourceResolver(options: Options) {
                 }
                 const abort = () => response.data.destroy();
                 signal.addEventListener("abort", abort, { once: true });
-                const done = () => {
+                const done = (
+                    outcome:
+                        | "streamCompleted"
+                        | "streamFailed"
+                        | "streamCancelled",
+                    error?: unknown,
+                ) => {
+                    recordOutcome(outcome, error);
                     signal.removeEventListener("abort", abort);
                     release();
                 };
                 response.data
-                    .once("end", done)
-                    .once("close", done)
-                    .once("error", done);
+                    .once("end", () => done("streamCompleted"))
+                    .once("close", () =>
+                        done(
+                            signal.aborted
+                                ? "streamCancelled"
+                                : response.data.readableEnded
+                                  ? "streamCompleted"
+                                  : "streamFailed",
+                        ),
+                    )
+                    .once("error", (error) =>
+                        done(
+                            signal.aborted ? "streamCancelled" : "streamFailed",
+                            error,
+                        ),
+                    );
                 if (response.data.destroyed || response.data.readableEnded)
-                    done();
+                    done(
+                        signal.aborted
+                            ? "streamCancelled"
+                            : response.data.readableEnded
+                              ? "streamCompleted"
+                              : "streamFailed",
+                    );
                 return response;
             } catch (error) {
+                recordOutcome(
+                    signal.aborted ? "streamCancelled" : "streamFailed",
+                    error,
+                );
                 release();
                 failed(key, error);
                 throw error;
@@ -326,7 +384,9 @@ export function createMusicSourceResolver(options: Options) {
                 controller.abort(new MusicSourceError("lease_expired"));
         },
         health() {
+            prune();
             return {
+                usage: usage.snapshot(),
                 activeStreams: Object.fromEntries(active),
                 circuits: [...circuits].map(([connection, state]) => ({
                     connection,

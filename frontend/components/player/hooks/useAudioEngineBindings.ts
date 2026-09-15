@@ -13,11 +13,43 @@ interface UseAudioEngineBindingsOptions {
     onPlaybackProgressConfirmed?: () => void;
 }
 
+const retireCompletedPlaybackAfterRestart = (
+    refs: PlaybackOrchestratorRefs,
+): void => {
+    const mediaId =
+        refs.playbackTypeRef.current === "track"
+            ? (refs.currentTrackRef.current?.id ?? null)
+            : null;
+    const handledEnd = refs.lastHandledTrackEndRef.current;
+    if (
+        mediaId !== null &&
+        handledEnd.trackId === mediaId &&
+        handledEnd.loadId === refs.loadIdRef.current &&
+        refs.activeEngineTrackIdRef.current === mediaId &&
+        refs.activeEngineLoadIdRef.current === refs.loadIdRef.current &&
+        !refs.isLoadingRef.current &&
+        audioEngine.isPlaying() &&
+        !audioEngine.hasTrackEnded()
+    ) {
+        // A completed source is playing again (including same-occurrence
+        // replay). Retire only that completed occurrence: its old pending
+        // continuation and end dedup marker cannot own the new playback.
+        refs.lastHandledTrackEndRef.current = {
+            trackId: null,
+            loadId: -1,
+            handledAtMs: 0,
+        };
+        refs.pendingAutoMatchAdvanceRef.current = null;
+        refs.trackEndWatchdogRef.current?.clear();
+    }
+};
+
 const createPlaybackConfirmationTimeUpdateHandler = (
     refs: PlaybackOrchestratorRefs,
     onPlaybackProgressConfirmed?: () => void,
 ): AudioEngineEventHandler<"timeupdate"> => {
     return (payload) => {
+        retireCompletedPlaybackAfterRestart(refs);
         const mediaId =
             refs.playbackTypeRef.current === "track"
                 ? (refs.currentTrackRef.current?.id ?? null)
@@ -89,8 +121,10 @@ export function useAudioEngineBindings({
             engineEventHandlersRef.current?.handleEnd(false);
         const stableHandleError = (payload: AudioEngineErrorPayload) =>
             engineEventHandlersRef.current?.handleError(payload);
-        const stableHandlePlay: AudioEngineEventHandler<"play"> = () =>
+        const stableHandlePlay: AudioEngineEventHandler<"play"> = () => {
+            retireCompletedPlaybackAfterRestart(refs);
             engineEventHandlersRef.current?.handlePlay();
+        };
         const stableHandlePause: AudioEngineEventHandler<"pause"> = () =>
             engineEventHandlersRef.current?.handlePause();
         const stableHandleSeek = createPlaybackConfirmationSeekHandler(refs);

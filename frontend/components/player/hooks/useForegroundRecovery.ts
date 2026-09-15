@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import type { Audiobook, Podcast, Track } from "@/lib/audio-state-context";
 import { playbackStateMachine } from "@/lib/audio";
 import {
@@ -14,6 +14,7 @@ import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import type { createConsecutiveErrorBreaker } from "@/lib/audio-engine/consecutiveErrorBreaker";
 import type { TrackEndWatchdog } from "../trackEndWatchdog";
 import {
+    getExplicitPlaybackPauseGeneration,
     isPlaybackAutoRestartSuppressed,
     setPlaybackAutoRestartSuppressed,
     type PlaybackAdvanceOrigin,
@@ -59,6 +60,9 @@ export function useForegroundRecovery({
     advancePlayIntentAtMsRef,
     trackEndWatchdogRef,
 }: UseForegroundRecoveryOptions): void {
+    const hiddenPauseGenerationRef = useRef(
+        getExplicitPlaybackPauseGeneration(),
+    );
     // Foreground recovery: when the page returns from background and
     // audio was playing when it went hidden but the engine is no longer
     // playing (OS reclaimed the audio session, or track ended while
@@ -77,6 +81,19 @@ export function useForegroundRecovery({
             // decide if recovery is needed.
             if (document.visibilityState === "hidden") {
                 wasPlayingWhenHiddenRef.current = audioEngine.isPlaying();
+                hiddenPauseGenerationRef.current =
+                    getExplicitPlaybackPauseGeneration();
+                return;
+            }
+
+            // Lock-screen/UI pause is an explicit command. A native pause event
+            // alone can still be an OS interruption and retains the recovery path.
+            if (
+                getExplicitPlaybackPauseGeneration() !== 0 &&
+                hiddenPauseGenerationRef.current !==
+                    getExplicitPlaybackPauseGeneration()
+            ) {
+                wasPlayingWhenHiddenRef.current = false;
                 return;
             }
 
@@ -167,6 +184,12 @@ export function useForegroundRecovery({
             recoveryTimeoutId = setTimeout(() => {
                 recoveryTimeoutId = null;
                 if (playbackStateMachine.getState() !== "RECOVERING") return;
+                if (
+                    getExplicitPlaybackPauseGeneration() !== 0 &&
+                    hiddenPauseGenerationRef.current !==
+                        getExplicitPlaybackPauseGeneration()
+                )
+                    return;
                 playbackStateMachine.forceTransition("LOADING");
                 audioEngine.play();
             }, 300);

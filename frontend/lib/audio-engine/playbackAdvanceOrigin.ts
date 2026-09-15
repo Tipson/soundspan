@@ -27,11 +27,45 @@ const playbackAutoRestartSuppressedRef: { current: boolean } = {
     current: false,
 };
 
+let explicitPauseSequence = 0;
+let explicitPauseGeneration = 0;
+let playbackIntentGeneration = 0;
+
+/** Fence asynchronous queue work against newer playback commands. */
+export function getPlaybackIntentGeneration(): number {
+    return playbackIntentGeneration;
+}
+
+/** A user seek supersedes queue work even when track and index stay the same. */
+export function recordExplicitPlaybackSeek(): void {
+    playbackIntentGeneration += 1;
+}
+
+/** Records an intentional UI, media-session, or synchronized pause command. */
+export function recordExplicitPlaybackPause(): void {
+    playbackIntentGeneration += 1;
+    explicitPauseGeneration = ++explicitPauseSequence;
+}
+
+/** A later play command retires the earlier explicit pause. */
+export function recordExplicitPlaybackResume(): void {
+    playbackIntentGeneration += 1;
+    explicitPauseGeneration = 0;
+}
+
+/** Current intentional pause generation, or zero after an explicit resume. */
+export function getExplicitPlaybackPauseGeneration(): number {
+    return explicitPauseGeneration;
+}
+
 /** Replaces any pending origin, so manual actions clear stale error markers. */
 export function writePlaybackAdvanceOrigin(
     origin: PlaybackAdvanceOrigin,
     originatingTrackId: string | null,
 ): void {
+    if (origin === "manual" || origin === "feedback") {
+        playbackIntentGeneration += 1;
+    }
     playbackReplacementIntentRef.current = null;
     playbackAdvanceOriginRef.current = origin
         ? { origin, originatingTrackId }
@@ -42,6 +76,7 @@ export function writePlaybackAdvanceOrigin(
 export function writePlaybackReplacementIntent(
     originatingTrackId: string | null,
 ): void {
+    recordExplicitPlaybackResume();
     writePlaybackAdvanceOrigin("manual", originatingTrackId);
     playbackReplacementIntentRef.current = { originatingTrackId };
 }

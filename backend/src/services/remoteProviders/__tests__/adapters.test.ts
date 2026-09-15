@@ -84,4 +84,21 @@ describe("remote provider adapter table", () => {
             where: { id: { in: ["yt-row-1"] } },
         });
     });
+    it("passes cancellation through the YouTube adapter without changing legacy callers", async () => {
+        const controller = new AbortController();
+        mockYoutubeStream.mockResolvedValueOnce(null);
+        await remoteProviderAdapters.youtube.streamTrack({
+            userId: "user",
+            youtubeVideoId: "video",
+            quality: "high",
+            signal: controller.signal,
+        });
+        expect(mockYoutubeStream).toHaveBeenCalledWith(
+            "user",
+            "video",
+            "high",
+            undefined,
+            { signal: controller.signal },
+        );
+    });
 });

@@ -4,7 +4,11 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const Icon = () => React.createElement("svg");
-let libraryClick: ((event: { preventDefault: () => void }) => void) | undefined;
+type LinkClick = {
+    button: number;
+    preventDefault: () => void;
+};
+let libraryClick: ((event: LinkClick) => void) | undefined;
 
 mock.module("lucide-react", {
     namedExports: {
@@ -12,6 +16,7 @@ mock.module("lucide-react", {
         Search: Icon,
         AudioWaveform: Icon,
         Library: Icon,
+        HardDriveDownload: Icon,
         BookOpen: Icon,
         Mic: Icon,
         ListMusic: Icon,
@@ -27,7 +32,7 @@ mock.module("next/link", {
     }: {
         href: string;
         children: React.ReactNode;
-        onClick?: (event: { preventDefault: () => void }) => void;
+        onClick?: (event: LinkClick) => void;
         [key: string]: unknown;
     }) => {
         if (href === "/library") libraryClick = onClick;
@@ -83,9 +88,13 @@ test("mobile navigation keeps search in the persistent header", async () => {
         (html.match(/data-shell-primary-destination=/g) ?? []).length,
         3,
     );
+    assert.equal((html.match(/<(?:a|button)\b/g) ?? []).length, 4);
+    assert.match(html, /<button[^>]*aria-haspopup="dialog"/);
+    assert.match(html, /Загруженное/);
 
     assert.ok(libraryClick);
     const hardNavigations: string[] = [];
+    const localActions: string[] = [];
     const preventDefault = mock.fn();
     const navigatorDescriptor = Object.getOwnPropertyDescriptor(
         globalThis,
@@ -102,13 +111,17 @@ test("mobile navigation keeps search in the persistent header", async () => {
     Object.defineProperty(globalThis, "window", {
         configurable: true,
         value: {
+            dispatchEvent: (event: Event) => {
+                localActions.push(event.type);
+                return true;
+            },
             location: {
                 assign: (path: string) => hardNavigations.push(path),
             },
         },
     });
     try {
-        libraryClick({ preventDefault });
+        libraryClick({ button: 0, preventDefault });
     } finally {
         if (navigatorDescriptor) {
             Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
@@ -122,5 +135,6 @@ test("mobile navigation keeps search in the persistent header", async () => {
         }
     }
     assert.equal(preventDefault.mock.callCount(), 1);
-    assert.deepEqual(hardNavigations, ["/library?tab=downloads"]);
+    assert.deepEqual(hardNavigations, []);
+    assert.deepEqual(localActions, ["open-device-downloads"]);
 });

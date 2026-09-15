@@ -629,6 +629,30 @@ describe("handleStream", () => {
         );
         expect(mockSendError).not.toHaveBeenCalled();
     });
+    it("stops the Subsonic peer fallback ladder quietly after listener cancellation", async () => {
+        mockTrackFindFirst.mockResolvedValueOnce({
+            id: "federated-track",
+            origin: "FEDERATED",
+            remoteId: "remote-track",
+            mime: "audio/flac",
+            filePath: null,
+            fileModified: new Date("2026-08-15T12:00:00Z"),
+            federationPeer: null,
+        });
+        mockLoadPeerPlaybackFallback.mockResolvedValueOnce([
+            { source: "ytmusic", youtubeVideoId: "first" },
+            { source: "ytmusic", youtubeVideoId: "second" },
+        ]);
+        mockServeMappedProviderStream.mockResolvedValueOnce({
+            status: "cancelled",
+        });
+        const res = buildRes();
+        await handleStream(buildReq({ id: "tr-federated-track" }), res);
+        expect(mockServeMappedProviderStream).toHaveBeenCalledTimes(1);
+        expect(mockSubsonicLogger.warn).not.toHaveBeenCalled();
+        expect(mockSendError).not.toHaveBeenCalled();
+        expect(res.end).not.toHaveBeenCalled();
+    });
 
     it("returns PEER_OFFLINE after all mapped provider rungs fail", async () => {
         mockTrackFindFirst.mockResolvedValueOnce({

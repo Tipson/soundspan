@@ -2,6 +2,13 @@
 
 ## Unreleased server music connections
 
+- Keep downloaded music directly reachable from mobile and desktop navigation in an account-scoped local panel. Opening downloads preserves the active player and does not wait for a server route; Back and Escape close the panel without leaving the page.
+- Preserve explicit UI and lock-screen pauses when the app returns from background, including pauses during deferred recovery. A later explicit resume restores recovery eligibility; native interruptions retain their existing recovery path.
+- Finish online queues without retrying their completed recording when automatic recommendations are delayed or return no continuation. Natural queue exhaustion clears playback intent; manual Next at the boundary remains a no-op and genuine mid-track interruptions retain recovery.
+- Keep Yandex/VK recording availability failures scoped to the requested track instead of disabling the shared service connection. Explicit account authorization failures, provider challenges and rate limits retain their bounded cooldown; preview and incompatible recordings remain rejected.
+- Cancel cold YouTube acquisition when a web or Subsonic peer-fallback listener disconnects. Release late audio responses before writing headers, stop the fallback ladder quietly, and preserve the distinction between cancellation and upstream failure.
+- Show bounded, process-local source usage and cooldown diagnostics in administration, including selections, audio requests, failures, cancellations and active streams. Keep listener IDs, track IDs, URLs and credentials out of these aggregates; Range requests and retries do not count as listening history.
+
 - Transfer a prepared device-audio lease directly into the native player at natural track transitions, retaining the primary audio element and avoiding a second storage read. Recover stalled buffered audio and downloaded-file errors locally with bounded retries; preserve the file, position and queue instead of attempting a provider replacement.
 - Open the last validated local account while connectivity is checked in the background, retain it on transport timeouts, and revoke it on explicit authorization rejection or account replacement. Open the library's downloaded collection through local history without a server route request; end offline queues without waiting for network recommendations and pause the player when the queue is exhausted.
 
@@ -34,6 +41,7 @@
 
 ## Unreleased testing access
 
+- Consume two-factor recovery codes atomically so concurrent logins or a replacement code set cannot reuse a one-time code. Report concurrent username/email registration conflicts as correctable input errors and let refreshed application status retire consumed or revoked invitation links in the administrator queue.
 - Publish the interactive listening-room landing at `/welcome`, with direct platform login and the existing registration flow.
 - Persist testing applications in PostgreSQL; expose a paginated administrator queue with idempotent approval, single-use invitations, and activation status. Public submission never returns invitation secrets.
 - Reload the authenticated document after registration and skip a second password prompt when a valid login session already exists.

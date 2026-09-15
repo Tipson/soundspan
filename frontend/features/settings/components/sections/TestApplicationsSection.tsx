@@ -138,7 +138,13 @@ export function TestApplicationsSection() {
             )}
             <div className="space-y-3">
                 {query.data?.items.map((original) => {
-                    const item = approved[original.id] ?? original;
+                    // Keep the immediate approval only while the query still
+                    // contains its pending snapshot. Activation or revocation
+                    // from a later refresh must retire that invitation link.
+                    const item =
+                        original.status === "pending"
+                            ? (approved[original.id] ?? original)
+                            : original;
                     const link = item.registrationPath
                         ? new URL(item.registrationPath, window.location.origin)
                               .href

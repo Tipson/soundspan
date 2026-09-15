@@ -88,6 +88,23 @@ export function usePlaybackWatchdogs({
                 onUnexpectedStop: () => {
                     // Engine stopped without an explicit stop/end event
                     const trackId = currentTrackRef.current?.id ?? null;
+                    const handledEnd = refs.lastHandledTrackEndRef.current;
+                    if (
+                        playbackTypeRef.current === "track" &&
+                        trackId !== null &&
+                        handledEnd.trackId === trackId &&
+                        handledEnd.loadId === refs.loadIdRef.current &&
+                        refs.activeEngineTrackIdRef.current === trackId &&
+                        refs.activeEngineLoadIdRef.current ===
+                            refs.loadIdRef.current &&
+                        audioEngine.hasTrackEnded()
+                    ) {
+                        // Online queue continuation may still be waiting for
+                        // recommendations. Its completed source must not be
+                        // reloaded while that decision is pending. Replaying or
+                        // loading another occurrence retires this condition.
+                        return;
+                    }
                     const startupStability = startupStabilityRef.current;
                     const startupNoProgress =
                         playbackTypeRef.current === "track" &&

@@ -99,7 +99,7 @@ describeWithPostgres("active analysis accounts in PostgreSQL", () => {
         const now = Date.now();
         await prisma.play.createMany({
             data: [
-                ...ids.toReversed().map((userId) => ({
+                ...[...ids].reverse().map((userId) => ({
                     userId,
                     playedAt: new Date(now - day),
                 })),
