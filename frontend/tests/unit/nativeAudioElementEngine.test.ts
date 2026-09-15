@@ -90,6 +90,8 @@ class FakeAudioElement implements NativeAudioElementLike {
     preload = "";
     crossOrigin: string | null = null;
     error: { code: number; message?: string } | null = null;
+    readyState = 0;
+    networkState = 0;
     bufferedRanges: Array<[number, number]> = [];
 
     get buffered(): TimeRanges {
@@ -369,6 +371,38 @@ test("buffer recovery measures the active native element, excluding preload and 
         h.engine.destroy();
     }
     assert.equal(h.engine.getBufferedAheadSec(), null);
+});
+
+test("native diagnostics read only the owned active element without exposing its URL or changing playback", () => {
+    const h = createHarness();
+    try {
+        h.engine.load("blob:private-device-recording", { autoplay: true });
+        const main = h.mainElement();
+        main.fireLoadedMetadata(180);
+        main.readyState = 4;
+        main.networkState = 1;
+        main.currentTime = 3;
+        main.paused = true;
+        main.error = { code: 2, message: "credential-bearing raw error" };
+        h.engine.preload("https://media.example/?token=private");
+        const before = [main.playCalls, main.pauseCalls, main.srcAssignments];
+        const snapshot = h.engine.getDiagnosticState();
+        assert.deepEqual(snapshot, {
+            nativePaused: true,
+            readyState: 4,
+            networkState: 1,
+            mediaErrorCode: 2,
+            audioContextState: "not_used",
+        });
+        assert.deepEqual(
+            [main.playCalls, main.pauseCalls, main.srcAssignments],
+            before,
+        );
+        assert.equal(JSON.stringify(snapshot).includes("private"), false);
+        assert.equal(JSON.stringify(snapshot).includes("credential"), false);
+    } finally {
+        h.engine.destroy();
+    }
 });
 
 const eventTypes = (harness: Harness): string[] =>

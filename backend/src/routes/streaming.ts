@@ -63,21 +63,50 @@ function rejectClientMetric(
     );
 }
 
-function acceptClientMetric(
+async function acceptClientMetric(
     req: express.Request,
     res: express.Response,
     startedAtMs: number,
     userId: string,
     data: z.infer<typeof clientMetricSchema>,
-): express.Response {
+): Promise<express.Response> {
     const { event } = data;
     if (data.diagnostic && data.diagnostic.ownerId !== userId) {
+        return rejectClientMetric(res, startedAtMs, 400, "invalid_request");
+    }
+    if (data.diagnostic && !isPlaybackDiagnosticEvent(event)) {
         return rejectClientMetric(res, startedAtMs, 400, "invalid_request");
     }
     const fields = isPlaybackDiagnosticEvent(event)
         ? sanitizePlaybackDiagnosticFields(data.fields ?? {})
         : (data.fields ?? {});
-    recordPlaybackDiagnostic(userId, event, fields, data.diagnostic);
+    const outcome = await recordPlaybackDiagnostic(
+        userId,
+        event,
+        fields,
+        data.diagnostic,
+    );
+    if (data.diagnostic) {
+        if (outcome.status === "rejected")
+            return rejectClientMetric(res, startedAtMs, 400, "invalid_request");
+        if (outcome.status === "unavailable") {
+            playbackRouteLogger.warn(
+                "Persistent playback diagnostics unavailable",
+            );
+            return sendRouteError(res, 503, "Playback diagnostics unavailable");
+        }
+        if (outcome.status === "throttled") {
+            res.setHeader("Retry-After", String(outcome.retryAfterSeconds));
+            return sendRouteError(
+                res,
+                429,
+                "Playback diagnostics rate limited",
+                { retryAfterSeconds: outcome.retryAfterSeconds },
+            );
+        }
+        if (outcome.status === "duplicate")
+            return res.status(202).json({ accepted: true });
+    }
     const sessionId = optionalStringField(fields, "sessionId");
     const sourceType = optionalStringField(fields, "sourceType");
     const trackId = optionalStringField(fields, "trackId");
@@ -102,29 +131,36 @@ function acceptClientMetric(
         userId,
         latencyMs: playbackTraceDurationMs(startedAtMs),
     });
-    logPlaybackTrace(
-        "playback.client.signal",
-        buildPlaybackRouteTraceFields(req, startedAtMs, {
-            event,
-            sessionId,
-            sourceType,
-            trackId,
-            userId,
-            fields,
-        }),
-    );
+    const traceFields = buildPlaybackRouteTraceFields(req, startedAtMs, {
+        event,
+        sessionId,
+        sourceType,
+        trackId,
+        userId,
+        fields,
+    });
+    if (isPlaybackDiagnosticEvent(event))
+        traceFields.requestPath = "/api/streaming/v1/client-metrics";
+    logPlaybackTrace("playback.client.signal", traceFields);
     return res.status(202).json({ accepted: true });
 }
 
-function handleClientMetric(
+async function handleClientMetric(
     req: express.Request,
     res: express.Response,
-): express.Response {
+): Promise<express.Response> {
     const startedAtMs = Date.now();
     try {
         const userId = req.user?.id;
         if (!userId) {
             return rejectClientMetric(res, startedAtMs, 401, "unauthorized");
+        }
+
+        if (
+            req.body?.diagnostic &&
+            Buffer.byteLength(JSON.stringify(req.body)) > 8192
+        ) {
+            return sendRouteError(res, 413, "Diagnostic request too large");
         }
 
         const parsedBody = clientMetricSchema.safeParse(req.body ?? {});
@@ -137,7 +173,7 @@ function handleClientMetric(
                 parsedBody.error.flatten(),
             );
         }
-        return acceptClientMetric(
+        return await acceptClientMetric(
             req,
             res,
             startedAtMs,
@@ -178,7 +214,7 @@ function handleClientMetric(
  *                 type: object
  *               diagnostic:
  *                 type: object
- *                 description: Optional queued-event identity; ownerId must match the authenticated listener.
+ *                 description: Optional queued-event identity; ownerId must match the authenticated listener. Queued requests contain one allowlisted incident and are limited to 8192 UTF-8 bytes. observedAtMs must be within the last 24 hours or at most 60 seconds ahead.
  *                 required: [id, ownerId, observedAtMs]
  *                 properties:
  *                   id:
@@ -192,11 +228,17 @@ function handleClientMetric(
  *                     minimum: 0
  *     responses:
  *       202:
- *         description: Playback signal accepted
+ *         description: Playback signal accepted. Queued incidents are acknowledged after their persistent journal append and sync succeeds; retries of a recorded event are also accepted.
  *       400:
  *         description: Invalid request body
  *       401:
  *         description: Not authenticated
+ *       413:
+ *         description: Queued diagnostic request exceeds the size limit
+ *       429:
+ *         description: Queued diagnostic rate limit; retain the event and retry after the Retry-After interval
+ *       503:
+ *         description: Persistent diagnostic storage is unavailable; retain the event for retry
  */
 router.post("/v1/client-metrics", requireAuth, handleClientMetric);
 

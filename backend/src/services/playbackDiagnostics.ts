@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger";
+import { playbackDiagnosticJournal } from "./playbackDiagnosticJournal";
 
 const diagnosticLogger = logger.child("Playback.Diagnostic");
 const EVENTS = new Set([
@@ -11,8 +12,12 @@ const EVENTS = new Set([
     "player.recovery_attempt",
     "player.recovery_ready",
     "player.recovery_resumed",
+    "player.engine_pause",
+    "player.track_end",
+    "player.visibility_change",
 ]);
 const IDENTIFIER = /^[a-zA-Z0-9_:-]{1,128}$/;
+const RETENTION_MS = 24 * 60 * 60_000;
 
 /** Sender identity for queued diagnostic delivery, never trusted as authentication. */
 export interface PlaybackDiagnosticEnvelope {
@@ -39,6 +44,7 @@ export function sanitizePlaybackDiagnosticFields(
         "readyState",
         "networkState",
         "mediaErrorCode",
+        "diagnosticsVersion",
     ]) {
         const value = input[key];
         if (value === null) result[key] = null;
@@ -57,11 +63,19 @@ export function sanitizePlaybackDiagnosticFields(
         "nearTrackEnd",
         "uiIsPlaying",
         "recoverable",
+        "nativePaused",
+        "engineEnded",
+        "isLoading",
+        "saveData",
+        "localSource",
     ])
         if (typeof input[key] === "boolean") result[key] = input[key];
+    if (input.nativePaused === null) result.nativePaused = null;
     for (const key of [
-        "trackId",
-        "sessionId",
+        "playbackRunId",
+        "sourceKind",
+        "connectionType",
+        "audioContextState",
         "sourceType",
         "reason",
         "engineMode",
@@ -84,25 +98,57 @@ export function isPlaybackDiagnosticEvent(event: string): boolean {
     return EVENTS.has(event);
 }
 
+/** Ingestion result distinguishes durable acknowledgement from retryable delivery failure. */
+export type PlaybackDiagnosticOutcome =
+    | {
+          status:
+              | "recorded"
+              | "duplicate"
+              | "ignored"
+              | "rejected"
+              | "unavailable";
+      }
+    | { status: "throttled"; retryAfterSeconds: number };
+
 /** Bound diagnostics per process: 60/user/minute, 1024 users, 128 recent IDs/user. */
 export function createPlaybackDiagnosticRecorder(now: () => number = Date.now) {
     const users = new Map<
         string,
-        { started: number; count: number; seen: Map<string, number> }
+        {
+            started: number;
+            count: number;
+            seen: Map<string, number>;
+            inFlight: Map<string, Promise<PlaybackDiagnosticOutcome>>;
+        }
     >();
-    return (
+    return async (
         userId: string,
         event: string,
         input: Record<string, unknown>,
         delivery?: PlaybackDiagnosticEnvelope,
-    ): void => {
-        if (!EVENTS.has(event) || (delivery && delivery.ownerId !== userId))
-            return;
+    ): Promise<PlaybackDiagnosticOutcome> => {
+        if (!EVENTS.has(event))
+            return { status: delivery ? "rejected" : "ignored" };
         const time = now();
+        if (
+            delivery &&
+            (delivery.ownerId !== userId ||
+                !IDENTIFIER.test(delivery.id) ||
+                !Number.isSafeInteger(delivery.observedAtMs) ||
+                delivery.observedAtMs < 0 ||
+                time - delivery.observedAtMs > RETENTION_MS ||
+                delivery.observedAtMs - time > 60_000)
+        )
+            return { status: "rejected" };
         let state = users.get(userId);
         if (!state) {
             if (users.size >= 1024) users.delete(users.keys().next().value!);
-            state = { started: time, count: 0, seen: new Map() };
+            state = {
+                started: time,
+                count: 0,
+                seen: new Map(),
+                inFlight: new Map(),
+            };
             users.set(userId, state);
         }
         if (time - state.started >= 60_000) {
@@ -110,31 +156,75 @@ export function createPlaybackDiagnosticRecorder(now: () => number = Date.now) {
             state.count = 0;
         }
         for (const [id, at] of state.seen)
-            if (time - at >= 3_600_000) state.seen.delete(id);
-        if (delivery && state.seen.has(delivery.id)) return;
-        if (state.count >= 60) return;
+            if (time - at >= RETENTION_MS) state.seen.delete(id);
+        if (delivery && state.seen.has(delivery.id))
+            return { status: "duplicate" };
+        if (delivery && state.inFlight.has(delivery.id))
+            return state.inFlight.get(delivery.id)!;
+        if (state.count >= 60)
+            return {
+                status: "throttled",
+                retryAfterSeconds: Math.max(
+                    1,
+                    Math.min(
+                        60,
+                        Math.ceil((state.started + 60_000 - time) / 1000),
+                    ),
+                ),
+            };
         state.count++;
-        if (delivery) {
-            if (state.seen.size >= 128)
-                state.seen.delete(state.seen.keys().next().value!);
-            state.seen.set(delivery.id, time);
+        const record = {
+            event,
+            userId,
+            receivedAtMs: time,
+            ...(delivery
+                ? {
+                      eventId: delivery.id,
+                      observedAtMs: delivery.observedAtMs,
+                  }
+                : {}),
+            fields: sanitizePlaybackDiagnosticFields(input),
+        };
+        if (!delivery) {
+            diagnosticLogger.warn(JSON.stringify(record));
+            return { status: "recorded" };
         }
-        diagnosticLogger.warn(
-            JSON.stringify({
-                event,
-                userId,
-                receivedAtMs: time,
-                ...(delivery
-                    ? {
-                          eventId: delivery.id,
-                          observedAtMs: delivery.observedAtMs,
-                      }
-                    : {}),
-                fields: sanitizePlaybackDiagnosticFields(input),
-            }),
-        );
+        const reservedState = state;
+        const reservedWindow = state.started;
+        const write: Promise<PlaybackDiagnosticOutcome> = (async () => {
+            try {
+                await playbackDiagnosticJournal.append(record);
+                if (reservedState.seen.size >= 128)
+                    reservedState.seen.delete(
+                        reservedState.seen.keys().next().value!,
+                    );
+                reservedState.seen.set(delivery.id, now());
+                // The persistent record is authoritative. Console failure must
+                // not turn a completed journal append into another delivery.
+                try {
+                    diagnosticLogger.warn(JSON.stringify(record));
+                } catch {
+                    /* Persistent receipt already exists. */
+                }
+                return { status: "recorded" };
+            } catch {
+                if (reservedState.started === reservedWindow)
+                    reservedState.count--;
+                return { status: "unavailable" };
+            }
+        })();
+        state.inFlight.set(delivery.id, write);
+        try {
+            return await write;
+        } finally {
+            // Register before awaiting so even a synchronous sink failure
+            // cannot leave a completed promise in the in-flight map.
+            if (reservedState.inFlight.get(delivery.id) === write) {
+                reservedState.inFlight.delete(delivery.id);
+            }
+        }
     };
 }
 
-/** Shared API-process incident recorder; no database or history writes. */
+/** Shared API-process recorder; queued incidents use persistent logs, never listening history. */
 export const recordPlaybackDiagnostic = createPlaybackDiagnosticRecorder();

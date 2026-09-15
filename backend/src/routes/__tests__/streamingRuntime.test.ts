@@ -23,6 +23,12 @@ const mockPlaybackTraceLogger = {
 };
 const mockRecordPlaybackClientMetric = jest.fn();
 const mockDiagnosticWarn = jest.fn();
+const mockDiagnosticAppend = jest.fn(
+    async (_record: Record<string, unknown>) => {},
+);
+jest.mock("../../services/playbackDiagnosticJournal", () => ({
+    playbackDiagnosticJournal: { append: mockDiagnosticAppend },
+}));
 
 jest.mock("../../metrics", () => ({
     recordPlaybackClientMetric: mockRecordPlaybackClientMetric,
@@ -90,6 +96,7 @@ function createResponse() {
     const res: any = {
         statusCode: 200,
         body: undefined as unknown,
+        setHeader: jest.fn(),
         status: jest.fn(function (code: number) {
             res.statusCode = code;
             return res;
@@ -108,6 +115,7 @@ describe("playback client-signal route", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockAuthFailureState.mode = "ok";
+        mockDiagnosticAppend.mockResolvedValue(undefined);
     });
 
     it("rejects unauthenticated requests through the complete route chain", () => {
@@ -181,13 +189,15 @@ describe("playback client-signal route", () => {
         });
     });
 
-    it("records an incident through the real route without exposing arbitrary fields", () => {
+    it("records an incident through the real route without exposing arbitrary fields", async () => {
+        const observedAtMs = Date.now();
         const req = {
             user: { id: "diagnostic-user" },
             body: {
                 event: "player.unexpected_stop",
                 fields: {
                     trackId: "yt:example",
+                    playbackRunId: "anonymous-run",
                     currentTimeSec: 83,
                     token: "NEVER_LOG_ME",
                     url: "https://secret",
@@ -195,19 +205,20 @@ describe("playback client-signal route", () => {
                 diagnostic: {
                     id: "route-event",
                     ownerId: "diagnostic-user",
-                    observedAtMs: 100_000,
+                    observedAtMs,
                 },
             },
         } as any;
         const res = createResponse();
-        postClientMetric(req, res);
+        await postClientMetric(req, res);
         expect(res.statusCode).toBe(202);
         expect(mockDiagnosticWarn).toHaveBeenCalledTimes(1);
         expect(JSON.parse(mockDiagnosticWarn.mock.calls[0][0])).toEqual(
             expect.objectContaining({
                 userId: "diagnostic-user",
                 eventId: "route-event",
-                fields: { trackId: "yt:example", currentTimeSec: 83 },
+                observedAtMs,
+                fields: { playbackRunId: "anonymous-run", currentTimeSec: 83 },
             }),
         );
         expect(
@@ -218,7 +229,7 @@ describe("playback client-signal route", () => {
         ).not.toContain("https://secret");
     });
 
-    it("rejects a queued diagnostic after its authenticated owner changes", () => {
+    it("rejects a queued diagnostic after its authenticated owner changes", async () => {
         const req = {
             user: { id: "user-b" },
             body: {
@@ -231,10 +242,164 @@ describe("playback client-signal route", () => {
             },
         } as any;
         const res = createResponse();
-        postClientMetric(req, res);
+        await postClientMetric(req, res);
         expect(res.statusCode).toBe(400);
         expect(mockDiagnosticWarn).not.toHaveBeenCalled();
         expect(mockRecordPlaybackClientMetric).not.toHaveBeenCalled();
+    });
+
+    it("does not send 202 until the persistent diagnostic append resolves", async () => {
+        let release!: () => void;
+        mockDiagnosticAppend.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    release = resolve;
+                }),
+        );
+        const res = createResponse();
+        const request = postClientMetric(
+            {
+                user: { id: "durable-user" },
+                body: {
+                    event: "player.engine_pause",
+                    diagnostic: {
+                        id: "durable-event",
+                        ownerId: "durable-user",
+                        observedAtMs: Date.now(),
+                    },
+                },
+            },
+            res,
+        );
+        expect(res.json).not.toHaveBeenCalled();
+        expect(mockDiagnosticAppend).toHaveBeenCalledTimes(1);
+        release();
+        await request;
+        expect(res.statusCode).toBe(202);
+    });
+
+    it("returns a retryable 503 after storage failure without exposing IO details", async () => {
+        mockDiagnosticAppend.mockRejectedValueOnce(
+            new Error("/private/path SECRET"),
+        );
+        const req = {
+            user: { id: "io-user" },
+            body: {
+                event: "player.unexpected_stop",
+                diagnostic: {
+                    id: "io-event",
+                    ownerId: "io-user",
+                    observedAtMs: Date.now(),
+                },
+            },
+        };
+        const res = createResponse();
+        await postClientMetric(req, res);
+        expect(res.statusCode).toBe(503);
+        expect(JSON.stringify(res.body)).not.toMatch(/SECRET|private/);
+        expect(mockDiagnosticWarn).not.toHaveBeenCalled();
+        const retry = createResponse();
+        await postClientMetric(req, retry);
+        expect(retry.statusCode).toBe(202);
+        expect(mockDiagnosticAppend).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns 429 plus Retry-After rather than silently losing an offline burst", async () => {
+        const body = {
+            event: "player.unexpected_stop",
+            diagnostic: {
+                id: "",
+                ownerId: "burst-user",
+                observedAtMs: Date.now(),
+            },
+        };
+        for (let i = 0; i < 60; i++) {
+            const res = createResponse();
+            await postClientMetric(
+                {
+                    user: { id: "burst-user" },
+                    body: {
+                        ...body,
+                        diagnostic: { ...body.diagnostic, id: `burst-${i}` },
+                    },
+                },
+                res,
+            );
+            expect(res.statusCode).toBe(202);
+        }
+        const res = createResponse();
+        await postClientMetric(
+            {
+                user: { id: "burst-user" },
+                body: {
+                    ...body,
+                    diagnostic: { ...body.diagnostic, id: "overflow" },
+                },
+            },
+            res,
+        );
+        expect(res.statusCode).toBe(429);
+        expect(res.setHeader).toHaveBeenCalledWith(
+            "Retry-After",
+            expect.any(String),
+        );
+        expect(mockDiagnosticAppend).toHaveBeenCalledTimes(60);
+    });
+
+    it.each(["expired", "future", "unknown-event", "oversize", "malformed"])(
+        "rejects %s queued diagnostics without persisting or tracing raw fields",
+        async (scenario) => {
+            const now = Date.now();
+            const body: any = {
+                event: "player.unexpected_stop",
+                fields: {},
+                diagnostic: {
+                    id: `invalid-${scenario}`,
+                    ownerId: "schema-user",
+                    observedAtMs: now,
+                },
+            };
+            if (scenario === "expired")
+                body.diagnostic.observedAtMs = now - 86_400_000 - 10_000;
+            if (scenario === "future")
+                body.diagnostic.observedAtMs = now + 120_000;
+            if (scenario === "unknown-event") {
+                body.event = "unknown.event";
+                body.fields = { token: "NEVER_TRACE" };
+            }
+            if (scenario === "oversize")
+                body.fields = { note: "界".repeat(3000) };
+            if (scenario === "malformed") body.diagnostic.observedAtMs = 1.5;
+            const res = createResponse();
+            await postClientMetric({ user: { id: "schema-user" }, body }, res);
+            expect(res.statusCode).toBe(scenario === "oversize" ? 413 : 400);
+            expect(mockDiagnosticAppend).not.toHaveBeenCalled();
+            expect(mockPlaybackTraceLogger.info).not.toHaveBeenCalled();
+        },
+    );
+
+    it("does not copy request query strings into diagnostic traces", async () => {
+        const res = createResponse();
+        await postClientMetric(
+            {
+                user: { id: "query-user" },
+                originalUrl: "/api/streaming/v1/client-metrics?token=SECRET",
+                body: {
+                    event: "player.visibility_change",
+                    fields: { visibility: "hidden" },
+                    diagnostic: {
+                        id: "query-event",
+                        ownerId: "query-user",
+                        observedAtMs: Date.now(),
+                    },
+                },
+            },
+            res,
+        );
+        expect(res.statusCode).toBe(202);
+        expect(
+            JSON.stringify(mockPlaybackTraceLogger.info.mock.calls),
+        ).not.toContain("SECRET");
     });
 
     it("keeps retired startup fields in the generic trace only", async () => {

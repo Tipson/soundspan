@@ -1,15 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type {
     AudioEngineErrorPayload,
     AudioEngineEventHandler,
 } from "@/lib/audio-engine/types";
-import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
+import {
+    audioEngine,
+    beginPlaybackDiagnostics,
+} from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import { transitionPlaybackProgressConfirmation } from "@/lib/audio-engine/playbackProgressConfirmation";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import { setPlaybackAutoRestartSuppressed } from "@/lib/audio-engine/playbackAdvanceOrigin";
 
 interface UseAudioEngineBindingsOptions {
     refs: PlaybackOrchestratorRefs;
+    uiIsPlaying?: boolean;
     onPlaybackProgressConfirmed?: () => void;
 }
 
@@ -97,13 +101,24 @@ const createPlaybackConfirmationSeekHandler = (
 /** Binds the stable runtime-engine facade to the latest delegated handlers. */
 export function useAudioEngineBindings({
     refs,
+    uiIsPlaying,
     onPlaybackProgressConfirmed,
 }: UseAudioEngineBindingsOptions): void {
     const { engineEventHandlersRef, trackEndWatchdogRef } = refs;
+    const uiIsPlayingRef = useRef(uiIsPlaying);
+    useEffect(() => {
+        uiIsPlayingRef.current = uiIsPlaying;
+    }, [uiIsPlaying]);
 
     // The shared hybrid facade keeps its identity while inner engines swap.
     // Bind once per facade identity and dispatch into the latest closures.
     useEffect(() => {
+        const stopDiagnostics = beginPlaybackDiagnostics(() => ({
+            loadId: refs.loadIdRef.current,
+            hasPlayIntent: refs.lastPlayingStateRef.current,
+            uiIsPlaying: uiIsPlayingRef.current ?? null,
+            isLoading: refs.isLoadingRef.current,
+        }));
         const confirmPlaybackProgress =
             createPlaybackConfirmationTimeUpdateHandler(
                 refs,
@@ -139,6 +154,7 @@ export function useAudioEngineBindings({
         audioEngine.on("seek", stableHandleSeek);
 
         return () => {
+            stopDiagnostics();
             // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.
             engineEventHandlersRef.current?.cleanup();
             // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.

@@ -23,6 +23,7 @@
 
 import {
     type AudioEngine,
+    type AudioEngineDiagnosticState,
     type AudioEngineEventHandler,
     type AudioEngineEventType,
     type AudioEngineLoadOptions,
@@ -55,6 +56,8 @@ export interface NativeAudioElementLike {
     readonly duration: number;
     readonly paused: boolean;
     readonly ended: boolean;
+    readonly readyState?: number;
+    readonly networkState?: number;
     muted: boolean;
     volume: number;
     preload: string;
@@ -333,6 +336,16 @@ export class NativeAudioElementEngine implements AudioEngine {
 
     getDuration(): number {
         return toFiniteDuration(this.element?.duration ?? 0);
+    }
+
+    getDiagnosticState(): AudioEngineDiagnosticState {
+        return {
+            nativePaused: this.element?.paused ?? null,
+            readyState: this.element?.readyState ?? null,
+            networkState: this.element?.networkState ?? null,
+            mediaErrorCode: this.element?.error?.code ?? null,
+            audioContextState: this.iosBridge.getState() ?? "not_used",
+        };
     }
 
     /** Read the engine-owned element, which need not be attached to the DOM. */

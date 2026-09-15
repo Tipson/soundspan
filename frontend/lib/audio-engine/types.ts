@@ -42,6 +42,21 @@ export interface AudioEngineTimeUpdatePayload {
     timeSec: number;
 }
 
+/** Read-only state of the active output, never its source URL or preload. */
+export interface AudioEngineDiagnosticState {
+    nativePaused: boolean | null;
+    readyState: number | null;
+    networkState: number | null;
+    mediaErrorCode: number | null;
+    audioContextState:
+        | "not_used"
+        | "running"
+        | "suspended"
+        | "interrupted"
+        | "closed"
+        | "unknown";
+}
+
 export interface AudioEngineVolumePayload {
     volume: number;
     muted?: boolean;
@@ -124,6 +139,7 @@ export interface AudioEngine {
     getActualCurrentTime?(): number;
     /** Contiguous buffered seconds at the active position; null if unmeasurable. */
     getBufferedAheadSec?(): number | null;
+    getDiagnosticState?(): AudioEngineDiagnosticState;
     hasTrackEnded?(): boolean;
     notifyTrackEnded?(): void;
     isCurrentlySeeking?(): boolean;

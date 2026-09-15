@@ -892,6 +892,7 @@ export const AudioPlaybackOrchestrator = memo(
         });
         H.useAudioEngineBindings({
             refs: orchestratorRefs,
+            uiIsPlaying: isPlaying,
             onPlaybackProgressConfirmed: () => {
                 clearPendingTrackErrorSkip();
                 clearTransientTrackRecovery(true);

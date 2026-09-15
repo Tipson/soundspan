@@ -14,6 +14,7 @@ import {
     PLAYBACK_DIAGNOSTIC_EVENTS,
     sanitizePlaybackDiagnosticFields,
 } from "./playbackDiagnosticQueue";
+import { observePlaybackDiagnostics } from "./playbackDiagnosticObserver";
 
 const PLAYBACK_CLIENT_SIGNAL_EVENTS = new Set<string>([
     "player.engine_startup",
@@ -44,6 +45,8 @@ export const orchestratorLogger = sharedFrontendLogger.child(
 let diagnosticQueue: ReturnType<typeof createPlaybackDiagnosticQueue> | null =
     null;
 let diagnosticAuthGeneration: number | null = null;
+let readDiagnosticPlaybackState: (() => Record<string, unknown>) | null = null;
+let diagnosticRun: { loadId: unknown; id: string } | null = null;
 let pendingRecovery: {
     fields: Record<string, unknown>;
     position: number;
@@ -76,50 +79,118 @@ function diagnosticOwnerId(): string | null {
 function queueDiagnostic(
     event: string | null,
     fields: Record<string, unknown>,
+    wake = false,
 ): boolean {
     if (!diagnosticOwnerId()) return false;
     if (!diagnosticQueue) {
         let storage: Storage | null = null;
+        let legacyStorage: Storage | null = null;
         try {
-            storage = window.sessionStorage;
+            storage = window.localStorage;
+            legacyStorage = window.sessionStorage;
         } catch {
             /* Memory-only fallback. */
         }
         diagnosticQueue = createPlaybackDiagnosticQueue({
             storage,
+            legacyStorage,
             ownerId: diagnosticOwnerId,
             online: () =>
                 typeof navigator === "undefined" || navigator.onLine !== false,
             send: (input, signal) =>
                 api.reportPlaybackClientMetric(input, signal),
         });
-        const flush = () => {
-            void diagnosticQueue?.flush();
-        };
-        window.addEventListener("online", flush);
-        window.addEventListener("pageshow", flush);
-        document.addEventListener("visibilitychange", flush);
     }
     const lease = getAuthRuntimeLease();
     if (diagnosticAuthGeneration !== lease.generation) {
         diagnosticAuthGeneration = lease.generation;
+        const ownedQueue = diagnosticQueue;
         lease.signal.addEventListener(
             "abort",
             () => {
-                diagnosticQueue?.clear();
+                ownedQueue.clear();
+                ownedQueue.dispose();
+                if (diagnosticQueue === ownedQueue) diagnosticQueue = null;
                 pendingRecovery = null;
+                diagnosticRun = null;
             },
             { once: true },
         );
     }
     if (event) diagnosticQueue.enqueue(event, fields);
+    else if (wake) void diagnosticQueue.wake();
     else void diagnosticQueue.flush();
     return event !== null;
 }
 
+/** Own discrete diagnostic listeners for this authenticated player shell. */
+export function beginPlaybackDiagnostics(
+    readState: () => Record<string, unknown>,
+): () => void {
+    if (typeof window === "undefined" || typeof document === "undefined")
+        return () => undefined;
+    const lease = getAuthRuntimeLease();
+    const reader = () => (lease.signal.aborted ? {} : readState());
+    readDiagnosticPlaybackState = reader;
+    const cleanupObserver = observePlaybackDiagnostics({
+        engine: audioEngine,
+        page: window,
+        document,
+        record: (event) => {
+            if (!lease.signal.aborted)
+                logPlaybackClientMetric(event, { reason: "unknown" });
+        },
+        wake: () => {
+            if (!lease.signal.aborted) queueDiagnostic(null, {}, true);
+        },
+    });
+    const cleanup = () => {
+        cleanupObserver();
+        if (readDiagnosticPlaybackState === reader)
+            readDiagnosticPlaybackState = null;
+        lease.signal.removeEventListener("abort", cleanup);
+    };
+    lease.signal.addEventListener("abort", cleanup, { once: true });
+    return cleanup;
+}
+
 function diagnosticContext(): Record<string, unknown> {
     const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+    const playback = readDiagnosticPlaybackState?.() ?? {};
+    if (!diagnosticRun || diagnosticRun.loadId !== playback.loadId) {
+        diagnosticRun = {
+            loadId: playback.loadId,
+            id:
+                globalThis.crypto?.randomUUID?.() ??
+                `run-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        };
+    }
+    const native = audioEngine.getDiagnosticState?.();
+    const connection =
+        typeof navigator === "undefined"
+            ? undefined
+            : (
+                  navigator as Navigator & {
+                      connection?: {
+                          effectiveType?: string;
+                          saveData?: boolean;
+                      };
+                  }
+              ).connection;
     return {
+        ...playback,
+        ...native,
+        diagnosticsVersion: 2,
+        playbackRunId: diagnosticRun.id,
+        sourceKind: native?.sourceKind ?? "unknown",
+        localSource: native ? native.sourceKind === "device_file" : null,
+        engineEnded: audioEngine.hasTrackEnded(),
+        connectionType: ["slow-2g", "2g", "3g", "4g"].includes(
+            connection?.effectiveType ?? "",
+        )
+            ? connection!.effectiveType
+            : "unknown",
+        saveData: connection?.saveData ?? null,
         currentTimeSec: audioEngine.getActualCurrentTime(),
         durationSec: audioEngine.getDuration(),
         bufferedAheadSec: audioEngine.getBufferedAheadSec(),
@@ -181,6 +252,7 @@ export function logPlaybackClientMetric(
         // Telemetry must never interfere with playback in restricted storage
         // contexts. The server accepts a missing session id as uncorrelated.
     }
+
     const isDiagnostic = PLAYBACK_DIAGNOSTIC_EVENTS.has(event);
     const correlatedFields = {
         ...(isDiagnostic ? diagnosticContext() : {}),
@@ -215,6 +287,10 @@ export function logPlaybackClientMetric(
     } catch {
         /* A restricted browser still uses the existing best-effort signal. */
     }
+
+    // An incident has no anonymous fallback: delayed delivery always belongs
+    // to a verified local owner and its authenticated runtime generation.
+    if (isDiagnostic) return;
 
     void api
         .reportPlaybackClientMetric({

@@ -39,6 +39,7 @@ import type {
     AudioPreloadResult,
 } from "../../lib/audio-engine/types";
 import { resetForegroundRecoveryThrottle } from "../../lib/audio-engine/foregroundRecoveryPolicy";
+import { advanceAuthRuntimeGeneration } from "../../lib/auth-runtime-generation";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -859,6 +860,10 @@ mock.module("@/lib/audio-engine", {
     },
 });
 
+mock.module("@/lib/auth-offline-session", {
+    namedExports: { readCachedAuthUser: () => ({ id: "player-test-user" }) },
+});
+
 mock.module("@/lib/audio-state-context", {
     namedExports: {
         useAudioState: () => ({
@@ -1413,6 +1418,7 @@ beforeEach(() => {
 
 afterEach(() => {
     hookRuntime.unmount();
+    advanceAuthRuntimeGeneration();
     delete (globalThis as { window?: unknown }).window;
     delete (globalThis as { document?: unknown }).document;
     try {
@@ -3589,9 +3595,9 @@ test("YouTube provider challenge preserves the queue without probing more tracks
         getServerSignalEvents("player.playback_error").every(
             (event) =>
                 typeof (event.fields as Record<string, unknown> | undefined)
-                    ?.sessionId === "string",
+                    ?.playbackRunId === "string",
         ),
-        "playback signals must be correlatable within one browser tab",
+        "incidents must use an anonymous playback run rather than listening-session identity",
     );
 });
 

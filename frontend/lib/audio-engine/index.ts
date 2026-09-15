@@ -7,6 +7,7 @@ import {
 import { resolveStreamingEngineMode } from "@/lib/audio-engine/engineMode";
 import type {
     AudioEngine,
+    AudioEngineDiagnosticState,
     AudioEngineEventHandler,
     AudioEngineEventType,
     AudioEngineLoadOptions,
@@ -73,6 +74,9 @@ interface RuntimeAudioEngine extends AudioEngine {
     reload(): void;
     getActualCurrentTime(): number;
     getBufferedAheadSec(): number | null;
+    getDiagnosticState(): AudioEngineDiagnosticState & {
+        sourceKind: "device_file" | "network" | "unknown";
+    };
     hasTrackEnded(): boolean;
     isCurrentlySeeking(): boolean;
     getSeekTarget(): number | null;
@@ -270,6 +274,26 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
 
     getBufferedAheadSec(): number | null {
         return this.howlerEngine.getBufferedAheadSec?.() ?? null;
+    }
+
+    getDiagnosticState(): AudioEngineDiagnosticState & {
+        sourceKind: "device_file" | "network" | "unknown";
+    } {
+        const url = this.lastSource?.url;
+        return {
+            ...(this.howlerEngine.getDiagnosticState?.() ?? {
+                nativePaused: null,
+                readyState: null,
+                networkState: null,
+                mediaErrorCode: null,
+                audioContextState: "unknown" as const,
+            }),
+            sourceKind: !url
+                ? "unknown"
+                : url.startsWith("blob:") || url.startsWith("/__offline/audio/")
+                  ? "device_file"
+                  : "network",
+        };
     }
 
     hasTrackEnded(): boolean {

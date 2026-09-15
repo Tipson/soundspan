@@ -129,6 +129,29 @@ test("hybrid routes direct loads to the native engine in native mode", () => {
     assert.equal(native.elements[0].src, "https://stream.example/track.flac");
 });
 
+test("runtime diagnostics classify the active source without leaking its identity", () => {
+    const { hybrid, native } = createHybridWithNativeSlot();
+    try {
+        assert.equal(hybrid.getDiagnosticState().sourceKind, "unknown");
+        for (const url of [
+            "blob:private-track",
+            "/__offline/audio/secret-key",
+        ]) {
+            hybrid.load(url, { autoplay: false });
+            const snapshot = hybrid.getDiagnosticState();
+            assert.equal(snapshot.sourceKind, "device_file");
+            assert.equal(snapshot.nativePaused, true);
+            assert.equal(JSON.stringify(snapshot).includes(url), false);
+            assert.equal(native.elements[0].playCalls, 0);
+        }
+        hybrid.load("https://media.example/private.mp3?token=secret");
+        hybrid.preload("blob:next-track");
+        assert.equal(hybrid.getDiagnosticState().sourceKind, "network");
+    } finally {
+        hybrid.destroy();
+    }
+});
+
 test("hybrid forwards native engine events to its listeners", () => {
     const { hybrid, native } = createHybridWithNativeSlot();
     const seen: Array<{ type: string; payload: unknown }> = [];

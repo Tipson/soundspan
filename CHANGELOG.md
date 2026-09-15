@@ -2,6 +2,9 @@
 
 ## Unreleased server music connections
 
+- Retain bounded playback incident records on the device across browser restarts and connection loss. Isolate accounts and concurrent tabs, migrate the former session outbox, and retry delivery in finite bursts when connectivity returns.
+- Include read-only native player, buffer, network and visibility snapshots without source URLs or recording identifiers. Diagnostic observers do not change playback controls or poll progress.
+- Acknowledge queued incidents only after writing and syncing a private, rotating journal on the persistent API log volume. Return retryable responses for storage failures and quota limits instead of silently discarding events.
 - Keep downloaded music directly reachable from mobile and desktop navigation in an account-scoped local panel. Opening downloads preserves the active player and does not wait for a server route; Back and Escape close the panel without leaving the page.
 - Preserve explicit UI and lock-screen pauses when the app returns from background, including pauses during deferred recovery. A later explicit resume restores recovery eligibility; native interruptions retain their existing recovery path.
 - Finish online queues without retrying their completed recording when automatic recommendations are delayed or return no continuation. Natural queue exhaustion clears playback intent; manual Next at the boundary remains a no-op and genuine mid-track interruptions retain recovery.
