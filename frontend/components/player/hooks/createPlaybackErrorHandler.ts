@@ -185,6 +185,7 @@ export function createPlaybackErrorHandler({
         if (
             playbackType === "track" &&
             (isDeviceSource ||
+                currentTrack?.playbackSourcePolicy === "device-only" ||
                 (typeof navigator !== "undefined" &&
                     navigator.onLine === false))
         ) {
@@ -208,10 +209,16 @@ export function createPlaybackErrorHandler({
             clearPendingTrackErrorSkip();
             clearStartupPlaybackRecovery();
             clearTransientTrackRecovery(true);
-            toast.error(getDeviceOfflinePlaybackErrorMessage(hasDeviceCopy), {
-                id: "device-offline-playback-error",
-                duration: 5000,
-            });
+            toast.error(
+                getDeviceOfflinePlaybackErrorMessage(
+                    hasDeviceCopy,
+                    currentTrack?.playbackSourcePolicy === "device-only",
+                ),
+                {
+                    id: "device-offline-playback-error",
+                    duration: 5000,
+                },
+            );
             return;
         }
 

@@ -44,6 +44,7 @@ import { advanceAuthRuntimeGeneration } from "../../lib/auth-runtime-generation"
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
 type Track = {
+    playbackSourcePolicy?: "device-only";
     id: string;
     title: string;
     duration?: number;
@@ -2863,6 +2864,99 @@ test("a native natural-end transition keeps the primary element alive for a prep
     assert.equal(engine.loadCalls.length, 2);
     assert.equal(engine.loadCalls[1]?.args[1], true);
     assert.equal(engine.stopCalls, stops);
+});
+
+test("downloaded shuffle ends without online recommendations even when connectivity reports online", async (t) => {
+    const track = makeTrack("downloaded-last", {
+        playbackSourcePolicy: "device-only",
+        streamSource: "youtube",
+        youtubeVideoId: "downloaded-last",
+    });
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(
+            async ({ authGeneration }) =>
+                ({
+                    ownerId: "user-1",
+                    authGeneration,
+                    access: async () => ({
+                        kind: "play",
+                        url: "blob:https://soundspan.test/downloaded-last",
+                        release() {},
+                    }),
+                }) as unknown as DeviceAudioVaultSession,
+        ),
+    );
+    t.after(restore);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord(
+            "user-1",
+            "downloaded-last-key",
+            track,
+            "fsa1:user:last" as DeviceAudioVaultRef,
+        ),
+    ]);
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+    });
+    playbackState.isPlaying = true;
+    audioState.currentTrack = track;
+    audioState.queue = [
+        makeTrack("first", { playbackSourcePolicy: "device-only" }),
+        track,
+    ];
+    audioState.currentIndex = 1;
+    audioState.isShuffle = true;
+    audioState.shuffleIndices = [0, 1];
+    startVibeModeImpl = () => new Promise(() => undefined);
+    renderOrchestrator();
+    await flushAsync(30);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "blob:https://soundspan.test/downloaded-last",
+    );
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.startVibeMode, 0);
+    assert.equal(controlCalls.next, 0);
+    assert.equal(controlCalls.pause, 1);
+});
+
+test("a missing downloaded occurrence cannot load or recover from the network", async () => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+    });
+    const track = makeTrack("yt:missing001", {
+        streamSource: "youtube",
+        youtubeVideoId: "missing001",
+        playbackSourcePolicy: "device-only",
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [
+        track,
+        makeTrack("yt:missing002", {
+            streamSource: "youtube",
+            youtubeVideoId: "missing002",
+            playbackSourcePolicy: "device-only",
+        }),
+    ];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync(30);
+    assert.equal(engine.loadCalls.length, 0);
+    assert.equal(engine.preloadCalls.length, 0);
+    assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 0);
+    assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+    assert.equal(controlCalls.startVibeMode, 0);
+    assert.equal(controlCalls.next, 0);
+    assert.equal(playbackState.isPlaying, false);
+    assert.equal(playbackState.isBuffering, false);
+    assert.match(toastErrors.join(" "), /не загружен/i);
 });
 
 test("the offline queue ends without waiting for network recommendations", async (t) => {

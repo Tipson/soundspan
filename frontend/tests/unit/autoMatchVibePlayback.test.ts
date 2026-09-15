@@ -2,6 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { shouldAutoMatchVibeAtQueueEnd } from "../../components/player/autoMatchVibePlayback";
 
+test("downloaded shuffle queue cannot request online continuation", () => {
+    assert.equal(
+        shouldAutoMatchVibeAtQueueEnd({
+            playbackType: "track",
+            queueLength: 3,
+            currentIndex: 1,
+            repeatMode: "off",
+            isListenTogether: false,
+            isShuffle: true,
+            shuffleIndices: [2, 0, 1],
+            playbackSourcePolicy: "device-only",
+        }),
+        false,
+    );
+});
+
 test("triggers auto Match Vibe when queue is at the final track", () => {
     assert.equal(
         shouldAutoMatchVibeAtQueueEnd({

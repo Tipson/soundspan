@@ -485,6 +485,7 @@ export function DownloadsList() {
                     const isCurrent =
                         record.status === "ready" &&
                         actionable &&
+                        currentTrack?.playbackSourcePolicy === "device-only" &&
                         playbackTrack.id === currentTrack?.id;
                     const playing = isCurrent && isPlaying;
                     return (
@@ -521,7 +522,13 @@ export function DownloadsList() {
                                                 )
                                                     return [];
                                                 seen.add(track.id);
-                                                return [track];
+                                                return [
+                                                    {
+                                                        ...track,
+                                                        playbackSourcePolicy:
+                                                            "device-only" as const,
+                                                    },
+                                                ];
                                             },
                                         );
                                         const index = tracks.findIndex(

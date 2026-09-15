@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Keep playback started from device downloads restricted to local files across queue restoration and shuffle. Do not substitute a network stream or request online continuation when the downloaded queue ends or a device copy is unavailable.
+
 - Retain bounded playback incident records on the device across browser restarts and connection loss. Isolate accounts and concurrent tabs, migrate the former session outbox, and retry delivery in finite bursts when connectivity returns.
 - Include read-only native player, buffer, network and visibility snapshots without source URLs or recording identifiers. Diagnostic observers do not change playback controls or poll progress.
 - Acknowledge queued incidents only after writing and syncing a private, rotating journal on the persistent API log volume. Return retryable responses for storage failures and quota limits instead of silently discarding events.

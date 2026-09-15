@@ -118,6 +118,8 @@ export interface AudioFeatures {
 
 export interface Track {
     id: string;
+    /** Explicit device-library selection; retained with each queued occurrence. */
+    playbackSourcePolicy?: "device-only";
     title: string;
     artist: { name: string; id?: string; mbid?: string };
     album: {

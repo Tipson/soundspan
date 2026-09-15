@@ -70,6 +70,7 @@ function resolveWarmableYtMusicVideoId(
 ): string | null {
     if (
         !track ||
+        track.playbackSourcePolicy === "device-only" ||
         resolveDirectTrackSourceType(track) !== "ytmusic" ||
         hasDeviceOfflinePlaybackCopy(track)
     ) {
@@ -283,6 +284,8 @@ export function useNextTrackPreload({
         ): void => {
             if (
                 isRetiredProviderTrack(nextTrack) ||
+                (nextTrack.playbackSourcePolicy === "device-only" &&
+                    !hasDeviceOfflinePlaybackCopy(nextTrack)) ||
                 nextTrack.streamSource === "audius" ||
                 nextTrack.provider?.source === "audius"
             ) {

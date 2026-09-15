@@ -43,6 +43,7 @@ export function isRetiredProviderTrack(track: RuntimeProviderTrack): boolean {
 export function getNextTrackInfo(
     queue: {
         id: string;
+        playbackSourcePolicy?: "device-only";
         itemType?: string;
         filePath?: string;
         mediaSource?: CanonicalMediaSource;
@@ -64,6 +65,7 @@ export function getNextTrackInfo(
     repeatMode: "off" | "one" | "all",
 ): {
     id: string;
+    playbackSourcePolicy?: "device-only";
     itemType?: string;
     filePath?: string;
     mediaSource?: CanonicalMediaSource;

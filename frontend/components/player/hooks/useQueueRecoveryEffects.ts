@@ -177,6 +177,7 @@ export function useQueueRecoveryEffects({
         () =>
             (typeof navigator === "undefined" || navigator.onLine !== false) &&
             shouldAutoMatchVibeAtQueueEnd({
+                playbackSourcePolicy: currentTrack?.playbackSourcePolicy,
                 playbackType,
                 queueLength,
                 currentIndex,
@@ -188,6 +189,7 @@ export function useQueueRecoveryEffects({
                 ),
             }),
         [
+            currentTrack?.playbackSourcePolicy,
             playbackType,
             queueLength,
             currentIndex,

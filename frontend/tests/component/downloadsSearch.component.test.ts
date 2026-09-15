@@ -10,10 +10,13 @@ GlobalRegistrator.register();
 ).IS_REACT_ACT_ENVIRONMENT = true;
 let records: DeviceOfflineDownloadRecord[] = [];
 let plays = 0;
-let currentTrack: { id: string } | null = null;
+let currentTrack: { id: string; playbackSourcePolicy?: "device-only" } | null =
+    null;
 let isPlaying = false;
 let pauses = 0;
 let resumes = 0;
+let queuedTracks: Array<{ id: string; playbackSourcePolicy?: string }> = [];
+let queueWasReplaced = false;
 mock.module("@/lib/audio-state-context", {
     namedExports: { useAudioState: () => ({ currentTrack }) },
 });
@@ -36,6 +39,7 @@ const context = {
         explanation: "",
     },
     legacyStorage: null,
+    preparePlayback: async () => undefined,
     refresh,
 };
 mock.module("@/features/device-offline/DeviceOfflineProvider", {
@@ -44,6 +48,15 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
+            playTracks: (
+                tracks: typeof queuedTracks,
+                _index: number,
+                _vibe: boolean,
+                options?: { replaceQueue?: boolean },
+            ) => {
+                queuedTracks = tracks;
+                queueWasReplaced = options?.replaceQueue === true;
+            },
             pause: () => {
                 pauses += 1;
             },
@@ -138,12 +151,45 @@ async function mount() {
 
 after(() => GlobalRegistrator.unregister());
 
-test("download row follows player selection and pause without replacing the queue", async () => {
+test("starting the same track from Downloads replaces an online queue with device-only occurrences", async () => {
     records = [
         record("a", "Numb", "Linkin Park", "Meteora"),
         record("b", "Faint", "Linkin Park", "Meteora"),
     ];
     currentTrack = { id: "a" };
+    isPlaying = true;
+    const view = await mount();
+    try {
+        const button = view.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Воспроизвести: Numb"]',
+        );
+        assert.ok(button);
+        await React.act(async () => button.click());
+        assert.equal(queueWasReplaced, true);
+        assert.deepEqual(
+            queuedTracks.map((t) => t.id),
+            ["a", "b"],
+        );
+        assert.ok(
+            queuedTracks.every((t) => t.playbackSourcePolicy === "device-only"),
+        );
+        assert.equal(currentTrack.playbackSourcePolicy, undefined);
+        assert.ok(records.every((r) => !("playbackSourcePolicy" in r.track)));
+    } finally {
+        currentTrack = null;
+        isPlaying = false;
+        queuedTracks = [];
+        queueWasReplaced = false;
+        view.close();
+    }
+});
+
+test("download row follows player selection and pause without replacing the queue", async () => {
+    records = [
+        record("a", "Numb", "Linkin Park", "Meteora"),
+        record("b", "Faint", "Linkin Park", "Meteora"),
+    ];
+    currentTrack = { id: "a", playbackSourcePolicy: "device-only" };
     isPlaying = true;
     const view = await mount();
     try {
@@ -179,7 +225,7 @@ test("download row follows player selection and pause without replacing the queu
         );
         await React.act(async () => play.click());
         assert.equal(resumes, 1);
-        currentTrack = { id: "b" };
+        currentTrack = { id: "b", playbackSourcePolicy: "device-only" };
         isPlaying = true;
         await view.render();
         assert.ok(

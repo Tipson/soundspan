@@ -36,15 +36,18 @@ type DeviceOfflinePlaybackTrack = Pick<
     | "streamSource"
     | "tidalTrackId"
     | "youtubeVideoId"
->;
+> & { playbackSourcePolicy?: "device-only" };
 
 /** User-facing terminal copy for an offline playback failure. */
 export function getDeviceOfflinePlaybackErrorMessage(
     hasDeviceCopy: boolean,
+    deviceOnly = false,
 ): string {
     return hasDeviceCopy
         ? "Не удалось открыть загруженную копию. Загрузите её снова, когда подключитесь к интернету."
-        : "Вы не в сети, и этот трек не загружен на это устройство.";
+        : deviceOnly
+          ? "Этот трек не загружен на это устройство."
+          : "Вы не в сети, и этот трек не загружен на это устройство.";
 }
 
 function releasePreparedSource(key: string): void {
@@ -241,7 +244,10 @@ export function resolveDeviceOfflineMediaIdentity(
         track,
         preferredQuality,
     );
-    return recordKey ? `${track.id}\u0000${recordKey}` : track.id;
+    const identity = recordKey ? `${track.id}\u0000${recordKey}` : track.id;
+    return track.playbackSourcePolicy === "device-only"
+        ? `${identity}\u0000device-only`
+        : identity;
 }
 
 /** Check whether the active owner has a verified device copy for this track. */
@@ -266,6 +272,13 @@ export async function acquireDeviceOfflinePlaybackSource(
         const preparedUrl = selected
             ? preparedSources.get(selected.key)?.url
             : undefined;
+        if (!preparedUrl && track.playbackSourcePolicy === "device-only") {
+            throw new DeviceAudioVaultError(
+                "not_found",
+                "Загруженная копия недоступна на этом устройстве.",
+                "user-action",
+            );
+        }
         // Legacy metadata can outlive its CacheStorage body (for example after
         // an interrupted Background Fetch or browser eviction). Never replace
         // a healthy online stream with that unverified virtual URL. Downloads
@@ -331,8 +344,8 @@ export async function acquireDeviceOfflinePlaybackSource(
                 );
             }
             if (
-                typeof navigator !== "undefined" &&
-                navigator.onLine === false
+                track.playbackSourcePolicy === "device-only" ||
+                (typeof navigator !== "undefined" && navigator.onLine === false)
             ) {
                 throw error;
             }
@@ -349,6 +362,17 @@ export function resolveDeviceOfflinePlaybackUrl(
     preferredQuality: string = "auto",
 ): string {
     const selected = resolveReadyPlaybackRecord(track, preferredQuality);
+    if (track.playbackSourcePolicy === "device-only") {
+        const url = selected
+            ? preparedSources.get(selected.key)?.url
+            : undefined;
+        if (url) return url;
+        throw new DeviceAudioVaultError(
+            "not_found",
+            "Загруженная копия недоступна на этом устройстве.",
+            "user-action",
+        );
+    }
     if (!selected) return networkUrl;
     return preparedSources.get(selected.key)?.url ?? networkUrl;
 }

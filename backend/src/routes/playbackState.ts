@@ -132,6 +132,9 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
 
     return {
         itemType: "track",
+        ...(item.playbackSourcePolicy === "device-only"
+            ? { playbackSourcePolicy: "device-only" }
+            : {}),
         mediaSource: provider.source,
         provider: sanitizedProvider,
         ...toLegacyStreamFields(provider),

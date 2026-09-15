@@ -81,6 +81,28 @@ function fakeVault(open: DeviceAudioVault["open"]): DeviceAudioVault {
 
 afterEach(() => clearDeviceOfflineRuntimeState());
 
+test("an explicitly downloaded track never substitutes a network URL when its copy is absent", async () => {
+    setDeviceOfflineRuntimeState("user-1", []);
+    await assert.rejects(
+        acquireDeviceOfflinePlaybackSource(
+            { ...TRACK, playbackSourcePolicy: "device-only" },
+            "/network-must-not-play",
+            new AbortController().signal,
+        ),
+    );
+});
+
+test("unverified legacy download cannot escape to the network in a downloaded queue", async () => {
+    setDeviceOfflineRuntimeState("user-1", [readyRecord("user-1", "legacy")]);
+    await assert.rejects(
+        acquireDeviceOfflinePlaybackSource(
+            { ...TRACK, playbackSourcePolicy: "device-only" },
+            "/network-must-not-play",
+            new AbortController().signal,
+        ),
+    );
+});
+
 test("offline playback errors distinguish missing downloads from a damaged local copy", () => {
     assert.match(
         getDeviceOfflinePlaybackErrorMessage(false),
@@ -326,6 +348,45 @@ test("a recoverable vault access failure falls back to the clean network URL", a
     );
 
     assert.equal(source.url, "/network");
+});
+
+test("device-only playback retains a vault failure even when networking is available", async (t) => {
+    const failure = new DeviceAudioVaultError(
+        "permission_required",
+        "Reconnect folder",
+        "user-action",
+    );
+    t.after(
+        installDeviceAudioVaultFactory(() =>
+            fakeVault(async () => {
+                throw failure;
+            }),
+        ),
+    );
+    setDeviceOfflineRuntimeState("user-1", [
+        {
+            ...readyRecord("user-1", "restricted"),
+            mediaRef: "fsa1:owner:restricted" as DeviceAudioVaultRef,
+        },
+    ]);
+    await assert.rejects(
+        acquireDeviceOfflinePlaybackSource(
+            { ...TRACK, playbackSourcePolicy: "device-only" },
+            "/network",
+            new AbortController().signal,
+        ),
+        (error) => error === failure,
+    );
+});
+
+test("switching a queue occurrence to device-only invalidates a previously loaded network identity", () => {
+    assert.notEqual(
+        resolveDeviceOfflineMediaIdentity(TRACK),
+        resolveDeviceOfflineMediaIdentity({
+            ...TRACK,
+            playbackSourcePolicy: "device-only",
+        }),
+    );
 });
 
 test("an offline cold-start never replaces a ready device file with an unreachable network URL", async (t) => {

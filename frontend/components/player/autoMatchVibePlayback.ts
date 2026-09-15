@@ -1,6 +1,7 @@
 import type { VibeQueueMutationKind } from "@/lib/audio-controls-types";
 
 export interface AutoMatchVibeQueueEndInput {
+    playbackSourcePolicy?: "device-only";
     playbackType: "track" | "audiobook" | "podcast" | null;
     queueLength: number;
     currentIndex: number;
@@ -16,6 +17,7 @@ export interface AutoMatchVibeQueueEndInput {
 export function shouldAutoMatchVibeAtQueueEnd(
     input: AutoMatchVibeQueueEndInput,
 ): boolean {
+    if (input.playbackSourcePolicy === "device-only") return false;
     if (input.playbackType !== "track") return false;
     if (input.isListenTogether) return false;
     if (input.repeatMode !== "off") return false;

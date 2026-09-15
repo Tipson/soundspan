@@ -25,9 +25,10 @@ export function startTrackPlaybackSourceLease({
     void controller
         .acquire(async (signal) => {
             if (
-                track.streamSource === "audius" ||
-                track.provider?.source === "audius" ||
-                track.id.startsWith("audius:")
+                track.playbackSourcePolicy !== "device-only" &&
+                (track.streamSource === "audius" ||
+                    track.provider?.source === "audius" ||
+                    track.id.startsWith("audius:"))
             ) {
                 const id = track.provider?.providerTrackId;
                 if (!id || track.id !== `audius:${id}`)

@@ -226,6 +226,12 @@ mock.module("@/lib/audio-controls-context", {
                 _vibe = false,
                 options?: { replaceQueue?: boolean },
             ) {
+                assert.ok(
+                    tracks.every(
+                        (track) => track.playbackSourcePolicy === "device-only",
+                    ),
+                    "Every occurrence started from Downloads must remain device-only",
+                );
                 calls.playbackQueues.push({
                     ids: tracks.map((track) => track.id),
                     startIndex,
