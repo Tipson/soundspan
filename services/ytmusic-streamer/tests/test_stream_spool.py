@@ -238,7 +238,7 @@ def stream_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[A
     [
         (".m4a", "audio/mp4"),
         (".mp4", "audio/mp4"),
-        (".aac", "audio/mp4"),
+        (".aac", "audio/aac"),
         (".webm", "audio/webm"),
         (".opus", "audio/webm"),
         (".bin", "application/octet-stream"),
@@ -2612,18 +2612,21 @@ async def test_waiter_timeout_keeps_single_flight_until_download_finishes(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(("suffix", "content_type"), [("m4a", "audio/mp4"), ("aac", "audio/aac")])
 async def test_proxy_endpoint_serves_full_and_range_responses(
     client: AsyncClient,
     stream_module: Any,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    suffix: str,
+    content_type: str,
 ) -> None:
     body = b"stream body"
 
     def write_spool(video_id: str, quality: str) -> tuple[str, str]:
-        path = tmp_path / f"{video_id}-{quality}.m4a"
+        path = tmp_path / f"{video_id}-{quality}.{suffix}"
         path.write_bytes(body)
-        return str(path), "audio/mp4"
+        return str(path), stream_module._spool_content_type(path)
 
     monkeypatch.setattr(stream_module, "_download_ytmusic_spool_sync", write_spool)
     monkeypatch.setattr(stream_module, "_resolve_progressive_spool_plan_sync", lambda *_args: None)
@@ -2639,9 +2642,11 @@ async def test_proxy_endpoint_serves_full_and_range_responses(
     ranged = await _await_file_response(range_request)
 
     assert response.status_code == 200
+    assert response.headers["content-type"] == content_type
     assert response.content == body
     assert response.headers["accept-ranges"] == "bytes"
     assert ranged.status_code == 206
+    assert ranged.headers["content-type"] == content_type
     assert ranged.content == body[:4]
     assert ranged.headers["accept-ranges"] == "bytes"
 

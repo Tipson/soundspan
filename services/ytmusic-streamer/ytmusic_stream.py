@@ -1654,7 +1654,9 @@ def _find_spooled_file(video_id: str, quality: str, *, pin: bool = False) -> Pat
 
 def _spool_content_type(path: Path) -> str:
     """Map the downloaded container to a browser audio content type."""
-    if path.suffix.lower() in {".mp4", ".m4a", ".aac"}:
+    if path.suffix.lower() == ".aac":
+        return "audio/aac"
+    if path.suffix.lower() in {".mp4", ".m4a"}:
         return "audio/mp4"
     if path.suffix.lower() in {".webm", ".opus"}:
         return "audio/webm"

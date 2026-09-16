@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Serve cached AAC/ADTS audio with its AAC content type for full and partial downloads, keeping MP4 audio identified separately.
+
 - Show the total song count and duration of ready device downloads without double-counting quality copies. Keep unknown durations explicit and leave unrelated library tabs unselected in the downloaded collection.
 
 - Keep playback started from device downloads restricted to local files across queue restoration and shuffle. Do not substitute a network stream or request online continuation when the downloaded queue ends or a device copy is unavailable.
