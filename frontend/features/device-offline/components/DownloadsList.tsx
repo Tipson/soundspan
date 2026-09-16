@@ -18,6 +18,7 @@ import { useDeviceOffline } from "../DeviceOfflineProvider";
 import type { DeviceOfflineQueueItem } from "../offlineQueue";
 import type { DeviceOfflineDownloadRecord, DeviceOfflineTrack } from "../types";
 import { ru } from "@/lib/i18n/ru";
+import { formatTrackCountRu } from "@/lib/i18n/libraryOperationsRu";
 import {
     isTrackActionable,
     normalizeActionableAudioTrack,
@@ -146,6 +147,45 @@ function normalizeSearch(value: string): string {
     return value.normalize("NFKC").toLocaleLowerCase("ru").replaceAll("ё", "е");
 }
 
+function summarizeDownloads(
+    records: DeviceOfflineDownloadRecord[],
+): string | null {
+    const durations = new Map<string, number>();
+    for (const record of records) {
+        if (record.status !== "ready") continue;
+        const track = normalizeActionableAudioTrack(record.track as Track);
+        if (!track) continue;
+        const duration =
+            Number.isFinite(track.duration) && track.duration > 0
+                ? track.duration
+                : 0;
+        // Different quality copies are one song. Prefer known metadata to zero.
+        if (!durations.get(track.id)) durations.set(track.id, duration);
+    }
+    if (durations.size === 0) return null;
+    const values = [...durations.values()];
+    const seconds = values.reduce((total, duration) => total + duration, 0);
+    const incomplete = values.some((duration) => duration === 0);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    let durationCopy = "длительность неизвестна";
+    if (seconds > 0) {
+        durationCopy =
+            hours > 0
+                ? `${hours} ч${minutes % 60 ? ` ${minutes % 60} мин` : ""}`
+                : minutes > 0
+                  ? `${minutes} мин`
+                  : "меньше минуты";
+        if (incomplete) {
+            durationCopy =
+                minutes > 0
+                    ? `не менее ${durationCopy}`
+                    : "длительность уточняется";
+        }
+    }
+    return `Загружено: ${formatTrackCountRu(durations.size)} · ${durationCopy}`;
+}
+
 /** Search and manage this device's copies without changing the playback queue. */
 export function DownloadsList() {
     const [search, setSearch] = useState("");
@@ -173,6 +213,10 @@ export function DownloadsList() {
         retryStorage,
         refresh,
     } = useDeviceOffline();
+    const downloadsSummary = useMemo(
+        () => summarizeDownloads(records),
+        [records],
+    );
     useEffect(() => {
         const verify = () => void refresh();
         const verifyWhenVisible = () => {
@@ -368,6 +412,14 @@ export function DownloadsList() {
             {storageErrorNotice}
             {storageNotice}
             {legacyStorageNotice}
+            {downloadsSummary && (
+                <p
+                    aria-label="Сводка загрузок"
+                    className="text-sm leading-6 text-content-muted"
+                >
+                    {downloadsSummary}
+                </p>
+            )}
             <div className="flex items-center gap-2">
                 <input
                     type="search"

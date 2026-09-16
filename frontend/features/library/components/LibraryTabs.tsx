@@ -8,7 +8,7 @@ import { ru } from "@/lib/i18n/ru";
 export type LibraryTab = "playlists" | "albums" | "artists";
 
 interface LibraryTabsProps {
-    activeTab: LibraryTab;
+    activeTab: LibraryTab | null;
 }
 
 const TABS: ReadonlyArray<{
@@ -25,7 +25,7 @@ const TABS: ReadonlyArray<{
     { id: "artists", label: ru.library.artists, href: "/library?tab=artists" },
 ];
 
-/** Personal Library navigation; playlists also contains liked and device music. */
+/** Personal Library navigation; standalone collections have no selected tab. */
 export function LibraryTabs({ activeTab }: LibraryTabsProps) {
     const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
     const stripRef = useRef<HTMLDivElement | null>(null);

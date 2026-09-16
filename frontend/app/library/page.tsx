@@ -149,9 +149,7 @@ export default function LibraryPage() {
 
             <main className="relative mx-auto max-w-[1800px] space-y-5 px-4 pt-4 sm:space-y-10 sm:px-6 sm:pt-10 lg:px-8">
                 <LibraryTabs
-                    activeTab={
-                        activeView === "downloads" ? "playlists" : activeView
-                    }
+                    activeTab={activeView === "downloads" ? null : activeView}
                 />
 
                 {!online && activeView !== "downloads" && (

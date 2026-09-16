@@ -151,6 +151,53 @@ async function mount() {
 
 after(() => GlobalRegistrator.unregister());
 
+test("downloads summary counts playable tracks once and stays stable while searching", async () => {
+    const first = record("a", "Numb", "Linkin Park", "Meteora");
+    first.track.duration = 3660;
+    const pending = record("c", "Pending", "Artist", "Album");
+    pending.status = "interrupted";
+    records = [
+        first,
+        { ...first, key: "a-other-quality" },
+        record("b", "Faint", "Linkin Park", "Meteora"),
+        pending,
+    ];
+    const view = await mount();
+    try {
+        const summary = () =>
+            view.container.querySelector('[aria-label="Сводка загрузок"]')
+                ?.textContent;
+        assert.equal(summary(), "Загружено: 2 трека · 1 ч 4 мин");
+        await view.search("numb");
+        assert.equal(summary(), "Загружено: 2 трека · 1 ч 4 мин");
+        assert.equal(plays, 0);
+    } finally {
+        view.close();
+    }
+});
+
+test("downloads summary distinguishes incomplete duration metadata from zero music", async () => {
+    const known = record("a", "Known", "Artist", "Album");
+    const unknown = record("b", "Unknown", "Artist", "Album");
+    unknown.track.duration = 0;
+    records = [known, unknown];
+    const view = await mount();
+    try {
+        const summary = () =>
+            view.container.querySelector('[aria-label="Сводка загрузок"]')
+                ?.textContent;
+        assert.equal(summary(), "Загружено: 2 трека · не менее 3 мин");
+        records = [unknown];
+        await view.render();
+        assert.equal(summary(), "Загружено: 1 трек · длительность неизвестна");
+        records = [{ ...known, track: { ...known.track, duration: 25 } }];
+        await view.render();
+        assert.equal(summary(), "Загружено: 1 трек · меньше минуты");
+    } finally {
+        view.close();
+    }
+});
+
 test("starting the same track from Downloads replaces an online queue with device-only occurrences", async () => {
     records = [
         record("a", "Numb", "Linkin Park", "Meteora"),

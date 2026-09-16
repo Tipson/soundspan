@@ -322,6 +322,7 @@ test("Library tabs keep saved albums and artists while Downloads opens its own c
     assert.match(legacyDownloadsHtml, /data-library-view="downloads"/);
     assert.match(legacyDownloadsHtml, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
     assert.doesNotMatch(legacyDownloadsHtml, /Evening mix/);
+    assert.doesNotMatch(legacyDownloadsHtml, /aria-current="page"/);
 
     tab = "liked";
     const legacyLikedHtml = renderToStaticMarkup(
