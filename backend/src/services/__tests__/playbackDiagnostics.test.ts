@@ -23,6 +23,7 @@ describe("playback diagnostic records", () => {
                 sessionId: "account-linked-session",
                 playbackRunId: "run-random",
                 diagnosticsVersion: 2,
+                frontendBuildId: "earlier-client-build",
                 sourceKind: "device_file",
                 nativePaused: null,
                 engineEnded: false,
@@ -47,6 +48,7 @@ describe("playback diagnostic records", () => {
                 fields: {
                     playbackRunId: "run-random",
                     diagnosticsVersion: 2,
+                    frontendBuildId: "earlier-client-build",
                     sourceKind: "device_file",
                     nativePaused: null,
                     engineEnded: false,
@@ -304,6 +306,7 @@ describe("playback diagnostic records", () => {
                     {
                         audioContextState: "interrupted",
                         reason: "https://example.test/SECRET",
+                        frontendBuildId: "https://example.test/SECRET",
                         browser: "Agent\nCookie: SECRET",
                         platform: "x".repeat(129),
                         playbackRunId: "run-1",

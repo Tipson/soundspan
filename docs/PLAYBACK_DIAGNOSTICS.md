@@ -17,6 +17,11 @@ family, reported network availability, error category/code and recovery stage.
 Native snapshots add paused/ended status, ready/network state, media error code,
 AudioContext state, coarse effective connection type and data-saving preference.
 `diagnosticsVersion=2` identifies this diagnostic contract, not a server build.
+`frontendBuildId` identifies the executing client bundle and matches its Next
+`BUILD_ID`. It is embedded during compilation and retained with the observation,
+including when a later client uploads an older offline backlog. Missing values
+mean an unidentified client; the receiving server's build is not a substitute.
+The identifier is diagnostic context, not a trusted attestation of client code.
 `visibility=hidden` means the document is in the background; it does not prove the
 phone is locked. `online=true` does not prove that an upstream provider is reachable.
 Raw error messages, source URLs, headers, credentials, full user-agent strings,

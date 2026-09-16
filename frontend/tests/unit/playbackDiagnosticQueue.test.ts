@@ -5,6 +5,25 @@ import {
     sanitizePlaybackDiagnosticFields,
 } from "../../lib/audio-engine/playbackDiagnosticQueue";
 
+test("build identity is bounded and cannot contain URLs or multiline input", () => {
+    assert.deepEqual(
+        sanitizePlaybackDiagnosticFields({ frontendBuildId: "release-abc_1" }),
+        { frontendBuildId: "release-abc_1" },
+    );
+    for (const frontendBuildId of [
+        "https://secret.test",
+        "a\nCookie:secret",
+        "a".repeat(129),
+        {},
+        null,
+    ]) {
+        assert.deepEqual(
+            sanitizePlaybackDiagnosticFields({ frontendBuildId }),
+            {},
+        );
+    }
+});
+
 function harness() {
     let owner: string | null = "user-a";
     let now = 100_000;

@@ -66,8 +66,10 @@ mock.module("@/lib/recommendationSession", {
     },
 });
 let runtime: typeof import("../../lib/audio-engine/audioPlaybackOrchestratorRuntime");
+const originalBuildId = process.env.NEXT_PUBLIC_SOUNDSPAN_BUILD_ID;
 let stop: (() => void) | undefined;
 before(async () => {
+    process.env.NEXT_PUBLIC_SOUNDSPAN_BUILD_ID = "current-build";
     GlobalRegistrator.register({ url: "https://soundspan.test" });
     runtime =
         await import("../../lib/audio-engine/audioPlaybackOrchestratorRuntime");
@@ -82,6 +84,9 @@ afterEach(() => {
     owner = "user-a";
 });
 after(async () => {
+    if (originalBuildId === undefined)
+        delete process.env.NEXT_PUBLIC_SOUNDSPAN_BUILD_ID;
+    else process.env.NEXT_PUBLIC_SOUNDSPAN_BUILD_ID = originalBuildId;
     await GlobalRegistrator.unregister();
 });
 const settle = async () => {
@@ -117,6 +122,7 @@ test("runtime retains a full native offline incident durably and flushes on onli
     assert.equal(sent[0].diagnostic?.ownerId, "user-a");
     const fields = sent[0].fields;
     assert.equal(fields.diagnosticsVersion, 2);
+    assert.equal(fields.frontendBuildId, "current-build");
     assert.equal(fields.sourceKind, "device_file");
     assert.equal(fields.localSource, true);
     assert.equal(fields.nativePaused, true);
@@ -140,7 +146,10 @@ test("mount restores an earlier PWA backlog without needing another playback eve
             throw Error("offline");
         },
     });
-    queued.enqueue("player.unexpected_pause", { diagnosticsVersion: 2 });
+    queued.enqueue("player.unexpected_pause", {
+        diagnosticsVersion: 2,
+        frontendBuildId: "earlier-build",
+    });
     queued.dispose();
     Object.defineProperty(navigator, "onLine", {
         configurable: true,
@@ -150,6 +159,7 @@ test("mount restores an earlier PWA backlog without needing another playback eve
     await settle();
     assert.equal(sent.length, 1);
     assert.equal(sent[0].event, "player.unexpected_pause");
+    assert.equal(sent[0].fields.frontendBuildId, "earlier-build");
 });
 
 test("auth rotation removes pending account events and retires old native observers", async () => {

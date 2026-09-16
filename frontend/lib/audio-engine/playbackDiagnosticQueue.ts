@@ -50,6 +50,7 @@ const BOOLEAN_FIELDS = [
     "localSource",
 ];
 const CODE_FIELDS = [
+    "frontendBuildId",
     "playbackRunId",
     "sourceKind",
     "connectionType",

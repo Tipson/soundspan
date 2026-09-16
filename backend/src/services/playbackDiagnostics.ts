@@ -73,6 +73,7 @@ export function sanitizePlaybackDiagnosticFields(
     if (input.nativePaused === null) result.nativePaused = null;
     for (const key of [
         "playbackRunId",
+        "frontendBuildId",
         "sourceKind",
         "connectionType",
         "audioContextState",

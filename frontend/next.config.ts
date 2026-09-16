@@ -1,7 +1,16 @@
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { NextConfig } from "next";
 
+// Next reloads config in build workers. Carry the generated identity through
+// their inherited environment so BUILD_ID and compiled diagnostics agree.
+const frontendBuildId =
+    process.env.NEXT_PUBLIC_SOUNDSPAN_BUILD_ID ?? randomUUID();
+process.env.NEXT_PUBLIC_SOUNDSPAN_BUILD_ID = frontendBuildId;
+
 const nextConfig: NextConfig = {
+    generateBuildId: async () => frontendBuildId,
+    env: { NEXT_PUBLIC_SOUNDSPAN_BUILD_ID: frontendBuildId },
     // Allow dev origins for local network testing
     allowedDevOrigins: [
         "http://127.0.0.1:3030",

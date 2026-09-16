@@ -181,6 +181,8 @@ function diagnosticContext(): Record<string, unknown> {
         ...playback,
         ...native,
         diagnosticsVersion: 2,
+        frontendBuildId:
+            process.env.NEXT_PUBLIC_SOUNDSPAN_BUILD_ID ?? "development",
         playbackRunId: diagnosticRun.id,
         sourceKind: native?.sourceKind ?? "unknown",
         localSource: native ? native.sourceKind === "device_file" : null,
