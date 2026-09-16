@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Retain a usable offline document when a network change interrupts its new JavaScript or stylesheet downloads. Prepare bootstrap dependencies before publishing fresh navigation HTML, and bound stalled document and asset bodies instead of leaving PWA startup on an endless loading screen.
+
 - Include the executing frontend build identity in playback incidents, retaining it across offline storage and delayed upload so older PWA failures can be distinguished from the deployed release.
 
 - Recover an unexpected background native-audio pause even when audio is already buffered, retaining the recording, queue and position. Fence deferred recovery against explicit pause, seek, new playback commands, changed loads, follower sessions and stopped retries before React commits those commands.

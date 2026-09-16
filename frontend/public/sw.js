@@ -222,6 +222,37 @@ async function fetchWithTimeout(request, timeoutMs, waitForBody = false) {
     }
 }
 
+async function prepareNavigationBootstrap(response, cache) {
+    const html = await response.clone().text();
+    const assets = new Set();
+    for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
+        const asset = new URL(match[1], self.location.origin);
+        if (
+            asset.origin === self.location.origin &&
+            (asset.pathname === "/runtime-config" ||
+                (asset.pathname.startsWith("/_next/static/") &&
+                    /\.(?:js|css)$/.test(asset.pathname)))
+        ) {
+            assets.add(asset.toString());
+        }
+    }
+    // Never replace a usable cached document with a shell whose scripts were
+    // lost during a network change. Immutable assets may be shared by pages;
+    // only publish the document after every bootstrap dependency is retained.
+    await Promise.all(
+        [...assets].map(async (url) => {
+            if (await cache.match(url)) return;
+            const asset = await fetchWithTimeout(
+                new Request(url),
+                NAVIGATION_NETWORK_TIMEOUT_MS,
+                true,
+            );
+            if (!asset.ok) throw new Error("Ресурс запуска недоступен");
+            await cache.put(url, asset);
+        }),
+    );
+}
+
 function parseSingleByteRange(value, size) {
     if (!value || size < 0 || value.includes(",")) return null;
     const match = /^bytes=(\d*)-(\d*)$/.exec(value.trim());
@@ -871,6 +902,7 @@ self.addEventListener("fetch", (event) => {
                         ? await fetchWithTimeout(
                               request,
                               NAVIGATION_NETWORK_TIMEOUT_MS,
+                              true,
                           )
                         : isBootstrap
                           ? await fetchWithTimeout(
@@ -881,6 +913,9 @@ self.addEventListener("fetch", (event) => {
                           : await fetch(request);
                 if (response.status === 200) {
                     const cache = await caches.open(CACHE_NAME);
+                    if (request.mode === "navigate") {
+                        await prepareNavigationBootstrap(response, cache);
+                    }
                     await cache.put(request, response.clone());
                 }
                 return response;

@@ -1391,6 +1391,104 @@ test(
     },
 );
 
+test("navigation retains the usable previous shell when a new build chunk fails", async () => {
+    const harness = createHarness(async (request) => {
+        if (new URL(request.url).pathname.startsWith("/_next/"))
+            throw new TypeError("network changed");
+        return new Response(
+            '<html><script src="/_next/static/chunks/new.js"></script>New shell</html>',
+            { headers: { "Content-Type": "text/html" } },
+        );
+    });
+    const cache = await harness.caches.open("soundspan-v4");
+    await cache.put(`${ORIGIN}/`, new Response("Usable previous shell"));
+    const response = await harness.dispatch("fetch", {
+        request: {
+            method: "GET",
+            mode: "navigate",
+            url: `${ORIGIN}/`,
+            headers: new Headers(),
+        },
+    });
+    assert.equal(await response?.text(), "Usable previous shell");
+    assert.equal(
+        await (await cache.match(`${ORIGIN}/`))?.text(),
+        "Usable previous shell",
+    );
+});
+
+test("navigation publishes its bootstrap assets before exposing fresh HTML", async () => {
+    let online = true;
+    const fetched: string[] = [];
+    const harness = createHarness(async (request) => {
+        if (!online) throw new TypeError("offline");
+        const path = new URL(request.url).pathname;
+        fetched.push(path);
+        return new Response(
+            path === "/"
+                ? '<html><link href="/_next/static/a.css" rel="stylesheet"><script src="/_next/static/a.js"></script><script src="/runtime-config"></script><img src="https://external.test/image.jpg">Fresh shell</html>'
+                : `asset:${path}`,
+        );
+    });
+    const response = await harness.dispatch("fetch", {
+        request: {
+            method: "GET",
+            mode: "navigate",
+            url: `${ORIGIN}/`,
+            headers: new Headers(),
+        },
+    });
+    assert.match(await response!.text(), /Fresh shell/);
+    online = false;
+    for (const path of [
+        "/_next/static/a.js",
+        "/_next/static/a.css",
+        "/runtime-config",
+    ]) {
+        const cached = await harness.dispatch("fetch", {
+            request: new Request(`${ORIGIN}${path}`),
+        });
+        assert.equal(await cached?.text(), `asset:${path}`);
+    }
+    assert.deepEqual(fetched.sort(), [
+        "/",
+        "/_next/static/a.css",
+        "/_next/static/a.js",
+        "/runtime-config",
+    ]);
+});
+
+test(
+    "a bootstrap asset with a stalled body cannot trap navigation indefinitely",
+    { timeout: 500 },
+    async () => {
+        const harness = createHarness(
+            async (request) =>
+                new URL(request.url).pathname === "/"
+                    ? new Response(
+                          '<script src="/_next/static/hanging.js"></script>',
+                      )
+                    : new Response(new ReadableStream()),
+            {
+                setTimeout: (callback) => setTimeout(callback, 20),
+                clearTimeout: (handle) =>
+                    clearTimeout(handle as ReturnType<typeof setTimeout>),
+            },
+        );
+        const cache = await harness.caches.open("soundspan-v4");
+        await cache.put(`${ORIGIN}/`, new Response("Previous shell"));
+        const response = await harness.dispatch("fetch", {
+            request: {
+                method: "GET",
+                mode: "navigate",
+                url: `${ORIGIN}/`,
+                headers: new Headers(),
+            },
+        });
+        assert.equal(await response?.text(), "Previous shell");
+    },
+);
+
 test("offline bootstrap uses cached configuration and document without starting network", async () => {
     let calls = 0;
     const harness = createHarness(async () => {
