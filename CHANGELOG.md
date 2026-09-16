@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Recover an unexpected background native-audio pause even when audio is already buffered, retaining the recording, queue and position. Fence deferred recovery against explicit pause, seek, new playback commands, changed loads, follower sessions and stopped retries before React commits those commands.
+
 - Index ready device downloads when their snapshot changes, preserving owner, recording provenance and quality selection. Playback progress updates reuse this index instead of repeatedly parsing the entire downloaded collection.
 
 - Show the total song count and duration of ready device downloads without double-counting quality copies. Keep unknown durations explicit and leave unrelated library tabs unselected in the downloaded collection.

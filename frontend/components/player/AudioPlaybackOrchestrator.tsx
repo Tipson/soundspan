@@ -12,7 +12,12 @@ import {
 import { api } from "@/lib/api";
 import { resolveNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
 import { restartPlaybackProgressConfirmation } from "@/lib/audio-engine/playbackProgressConfirmation";
-import { consumePlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    consumePlaybackAdvanceOrigin,
+    getExplicitPlaybackPauseGeneration,
+    getPlaybackIntentGeneration,
+    isPlaybackAutoRestartSuppressed,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 import {
     getTrackProviderFailureKey,
     providerFailureCooldown,
@@ -708,6 +713,9 @@ export const AudioPlaybackOrchestrator = memo(
                 if (shouldAttemptUnexpectedPauseRecovery) {
                     const pauseObservedAtMs = Date.now();
                     const pausedTrackId = currentTrack?.id ?? null;
+                    const pausedLoadId = loadIdRef.current;
+                    const pausedIntentGeneration =
+                        getPlaybackIntentGeneration();
 
                     const finalizeAsRegularPause = () => {
                         if (playbackStateMachine.isPlaying) {
@@ -724,7 +732,12 @@ export const AudioPlaybackOrchestrator = memo(
                         if (
                             playbackTypeRef.current !== "track" ||
                             seekReloadInProgressRef.current ||
-                            isLoadingRef.current
+                            isLoadingRef.current ||
+                            loadIdRef.current !== pausedLoadId ||
+                            getPlaybackIntentGeneration() !==
+                                pausedIntentGeneration ||
+                            getExplicitPlaybackPauseGeneration() !== 0 ||
+                            isPlaybackAutoRestartSuppressed()
                         ) {
                             return;
                         }
@@ -788,7 +801,18 @@ export const AudioPlaybackOrchestrator = memo(
                             return;
                         }
 
-                        if (!hasLowBufferedAhead) {
+                        // A background native element can be paused by the browser
+                        // with a fully buffered source. Buffer availability does
+                        // not turn that interruption into an intentional pause.
+                        const hasBufferedBackgroundInterruption =
+                            audioEngine.getActiveEngineDescriptor() ===
+                                "native" &&
+                            typeof document !== "undefined" &&
+                            document.visibilityState === "hidden";
+                        if (
+                            !hasLowBufferedAhead &&
+                            !hasBufferedBackgroundInterruption
+                        ) {
                             logPlaybackClientMetric("player.unexpected_pause", {
                                 reason: "pause_with_buffered_ahead",
                                 trackId: liveTrackId,

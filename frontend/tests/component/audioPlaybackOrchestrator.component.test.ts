@@ -4,6 +4,7 @@ import * as realPlaybackRecoveryPolicy from "../../lib/audio-engine/playbackReco
 import {
     recordExplicitPlaybackPause,
     recordExplicitPlaybackResume,
+    recordExplicitPlaybackSeek,
     isPlaybackAutoRestartSuppressed,
     markRemoteTrackChange,
     setPlaybackAutoRestartSuppressed,
@@ -762,6 +763,7 @@ const resetHarnessState = (): void => {
     listenTogetherSnapshot = null;
     writePlaybackAdvanceOrigin(null, null);
     setPlaybackAutoRestartSuppressed(false);
+    recordExplicitPlaybackResume();
     podcastCacheStatus = {
         cached: true,
         downloading: false,
@@ -4266,7 +4268,7 @@ for (const pauseTiming of ["hidden", "recovery-delay"] as const) {
 }
 
 for (const resumedAfterPause of [false, true]) {
-    test(`foreground recovers an external full-buffer pause after explicit resume=${resumedAfterPause}`, async () => {
+    test(`foreground does not duplicate buffered background recovery after explicit resume=${resumedAfterPause}`, async () => {
         mock.timers.enable();
         resetForegroundRecoveryThrottle();
         runtimeEngineMode = "native";
@@ -4291,11 +4293,17 @@ for (const resumedAfterPause of [false, true]) {
         engine.emit("pause");
         mock.timers.tick(3000);
         await flushAsync();
+        mock.timers.tick(450);
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 1);
+        engine.emit("load", { durationSec: 210 });
+        await flushAsync();
+        assert.equal(engine.playing, true);
         const before = engine.playCalls;
         visibilityDocument.dispatchVisibility("visible");
         mock.timers.tick(301);
         await flushAsync();
-        assert.equal(engine.playCalls, before + 1);
+        assert.equal(engine.playCalls, before);
     });
 }
 
@@ -5749,6 +5757,98 @@ test("native empty-buffer pause recovers without a DOM media element", async (t)
     await flushAsync();
     assert.ok(engine.seekCalls.includes(83));
 });
+
+for (const [position, buffer] of [
+    [0.35475, 8.24225],
+    [86.728405, 49.478595],
+    [83, 150],
+]) {
+    test(`hidden native buffered interruption recovers at ${position}s without foregrounding`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+        recordExplicitPlaybackResume();
+        runtimeEngineMode = "native";
+        const visibility = installVisibilityDocument();
+        playbackState.isPlaying = true;
+        audioState.currentTrack = makeTrack("buffered-background-interruption");
+        audioState.queue = [audioState.currentTrack];
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 240 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = position;
+        engine.emit("timeupdate", { timeSec: position });
+        await flushAsync();
+        publishProgressSnapshot!(position);
+        visibility.dispatchVisibility("hidden");
+        engine.bufferedAheadSec = buffer;
+        engine.playing = false;
+        engine.emit("pause");
+        t.mock.timers.tick(1_200);
+        await flushAsync();
+        t.mock.timers.tick(450);
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 1);
+        assert.equal(playbackCalls.setIsPlaying.includes(false), false);
+        engine.emit("load", { durationSec: 240 });
+        await flushAsync();
+        assert.equal(engine.playing, true);
+        assert.ok(engine.seekCalls.includes(position));
+        assert.equal(controlCalls.next, 0);
+    });
+}
+
+for (const action of ["pause", "seek", "follower", "breaker"] as const) {
+    for (const stage of ["debounce", "reload-delay", "loaded"] as const) {
+        test(`buffered background recovery cancels ${action} during ${stage} before React renders`, async (t) => {
+            t.mock.timers.enable({
+                apis: ["setTimeout", "Date"],
+                now: 100_000,
+            });
+            runtimeEngineMode = "native";
+            const visibility = installVisibilityDocument();
+            playbackState.isPlaying = true;
+            audioState.currentTrack = makeTrack("buffered-cancel");
+            audioState.queue = [audioState.currentTrack];
+            renderOrchestrator();
+            await flushAsync();
+            engine.emit("load", { durationSec: 240 });
+            engine.playing = true;
+            engine.emit("play");
+            engine.currentTime = engine.actualCurrentTime = 83;
+            engine.emit("timeupdate", { timeSec: 83 });
+            await flushAsync();
+            visibility.dispatchVisibility("hidden");
+            engine.bufferedAheadSec = 150;
+            engine.playing = false;
+            engine.emit("pause");
+            if (stage !== "debounce") {
+                t.mock.timers.tick(1_200);
+                await flushAsync();
+            }
+            if (stage === "loaded") {
+                t.mock.timers.tick(450);
+                await flushAsync();
+            }
+            const reloads = engine.reloadCalls;
+            const plays = engine.playCalls;
+            if (action === "pause") recordExplicitPlaybackPause();
+            if (action === "seek") recordExplicitPlaybackSeek();
+            if (action === "follower")
+                listenTogetherSnapshot = { groupId: "joined", isHost: false };
+            if (action === "breaker") setPlaybackAutoRestartSuppressed(true);
+            t.mock.timers.tick(1_200);
+            await flushAsync();
+            t.mock.timers.tick(450);
+            await flushAsync();
+            engine.emit("load", { durationSec: 240 });
+            await flushAsync();
+            assert.equal(engine.reloadCalls, reloads);
+            assert.equal(engine.playCalls, plays);
+            assert.equal(controlCalls.next, 0);
+        });
+    }
+}
 
 for (const cancel of [
     "user_pause",

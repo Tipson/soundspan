@@ -37,6 +37,8 @@ import type { Track } from "@/lib/audio-state-context";
 import type { QueueItem } from "@/lib/queue-item";
 import { useUnavailableYtMusicRecovery } from "./useUnavailableYtMusicRecovery";
 import {
+    getExplicitPlaybackPauseGeneration,
+    getPlaybackIntentGeneration,
     isPlaybackAutoRestartSuppressed,
     setPlaybackAutoRestartSuppressed,
     type PlaybackAdvanceOrigin,
@@ -407,6 +409,8 @@ export function useTrackRecovery({
             if (playbackTypeRef.current !== "track") return false;
             if (!failedTrackId) return false;
             if (!lastPlayingStateRef.current) return false;
+            if (getExplicitPlaybackPauseGeneration() !== 0) return false;
+            if (isPlaybackAutoRestartSuppressed()) return false;
             if (!isLikelyTransientStreamError(error)) return false;
             if (
                 requestListenTogetherFollowerRecovery("transient_track_error")
@@ -452,6 +456,19 @@ export function useTrackRecovery({
                     startupStabilityAtFailure.firstProgressAtMs,
             });
             const recoveryLoadId = loadIdRef.current;
+            const recoveryIntentGeneration = getPlaybackIntentGeneration();
+            // Commands are recorded synchronously, including lock-screen pause.
+            // A background React render may not have updated isPlaying yet.
+            const isRecoveryIntentCurrent = () => {
+                const session = getListenTogetherSessionSnapshot();
+                return (
+                    getPlaybackIntentGeneration() ===
+                        recoveryIntentGeneration &&
+                    getExplicitPlaybackPauseGeneration() === 0 &&
+                    !isPlaybackAutoRestartSuppressed() &&
+                    !(session?.groupId && !session.isHost)
+                );
+            };
             logPlaybackClientMetric("player.recovery_attempt", {
                 trackId: failedTrackId,
                 sourceType: currentTrackRef.current
@@ -466,6 +483,7 @@ export function useTrackRecovery({
                 clearTransientTrackRecovery(false);
                 if (playbackTypeRef.current !== "track") return;
                 if (!lastPlayingStateRef.current) return;
+                if (!isRecoveryIntentCurrent()) return;
                 const correlatedResumeDecision =
                     resolveCorrelatedRecoveryResumeDecision({
                         requestedResumeAtSec: resumeAtSec,
@@ -513,6 +531,10 @@ export function useTrackRecovery({
                 if (currentTrackRef.current?.id !== failedTrackId) return;
                 if (loadIdRef.current !== recoveryLoadId) return;
                 if (!lastPlayingStateRef.current) return;
+                if (!isRecoveryIntentCurrent()) {
+                    clearTransientTrackRecovery(false);
+                    return;
+                }
 
                 sharedFrontendLogger.warn(
                     `[AudioPlaybackOrchestrator] Transient stream error recovery ${attemptNumber}/${TRANSIENT_TRACK_ERROR_RECOVERY_MAX_ATTEMPTS}: reload and retry current track`,
