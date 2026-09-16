@@ -235,6 +235,7 @@ _SPOOL_QUALITY_ALTERNATION = "|".join(
     re.escape(quality) for quality in sorted(_ALLOWED_STREAM_QUALITIES)
 )
 _SPOOL_OWNED_NAME_RE = re.compile(rf"^[A-Za-z0-9_-]{{11}}-({_SPOOL_QUALITY_ALTERNATION})\.")
+_SPOOL_AUDIO_SUFFIXES = (".webm", ".m4a", ".mp4", ".aac", ".opus")
 
 # Stream URL cache (in-memory, URLs expire after approximately six hours).
 _stream_cache: dict[str, JsonObject] = {}
@@ -1600,6 +1601,21 @@ def _spool_candidates(video_id: str, quality: str) -> list[Path]:
         return []
     prefix = f"{video_id}-{quality}."
     candidates: list[tuple[float, Path]] = []
+    for suffix in _SPOOL_AUDIO_SUFFIXES:
+        path = YTMUSIC_SPOOL_DIR / f"{video_id}-{quality}{suffix}"
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            file_stat = path.stat()
+        except FileNotFoundError:
+            continue
+        if file_stat.st_size > 0:
+            candidates.append((file_stat.st_mtime, path))
+    if candidates:
+        return [path for _, path in sorted(candidates, reverse=True)]
+
+    # Preserve compatibility with an extractor that publishes an unexpected
+    # container. Supported containers take the bounded direct path above.
     with os.scandir(YTMUSIC_SPOOL_DIR) as directory:
         for entry in directory:
             if (

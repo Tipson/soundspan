@@ -104,6 +104,7 @@
 - Isolate anonymous player work in a bounded process pool at higher configured concurrency, initialize it before HTTP readiness and keep shared pacing, cancellation, challenge recovery and quality policy in the parent.
 - Keep event-loop reader leases independent of full spool-directory sweeps. Reuse directory-entry metadata during byte accounting and recheck reader pins atomically immediately before eviction.
 - Perform full cache accounting once at writer reservation, not again before and after every download. Ready-file lookup filters directory entries before allocating paths, without a stale global size cache or relaxed disk limits.
+- Resolve completed spools in supported audio containers by their exact bounded paths before using the compatibility directory scan, so concurrent cached playback does not serialize full scans of a large spool. Exercise up to 200 held listeners with a timeout that covers the configured cold-start ramp and hold interval.
 
 ## Unreleased server memory stability
 

@@ -33,6 +33,7 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 _BASE_HARNESS_PATH = _REPOSITORY_ROOT / "scripts" / "ytmusic-sidecar-load.py"
 _INTERNAL_SECRET = secrets.token_urlsafe(24)
 _QUALITY = "HIGH"
+MAX_LISTENERS = 200
 
 
 def _timing_summary(samples: Sequence[float]) -> dict[str, float | int | None]:
@@ -255,12 +256,26 @@ async def _wait_for_listeners(
             await asyncio.wait_for(generation.changed.wait(), timeout=0.05)
 
 
-async def _new_listener_clients(base_url: str, listeners: int) -> list[httpx.AsyncClient]:
+def _listener_request_timeout_seconds(
+    listeners: int,
+    cold_stagger_ms: float,
+    hold_ms: float,
+) -> float:
+    ramp_seconds = listeners * cold_stagger_ms / 1000
+    hold_seconds = hold_ms / 1000
+    return max(60.0, ramp_seconds + hold_seconds + 15.0)
+
+
+async def _new_listener_clients(
+    base_url: str,
+    listeners: int,
+    request_timeout_seconds: float,
+) -> list[httpx.AsyncClient]:
     return [
         httpx.AsyncClient(
             base_url=base_url,
             headers={"x-internal-secret": _INTERNAL_SECRET},
-            timeout=httpx.Timeout(60.0),
+            timeout=httpx.Timeout(request_timeout_seconds),
             limits=httpx.Limits(max_connections=1, max_keepalive_connections=1),
         )
         for _ in range(listeners)
@@ -469,8 +484,8 @@ async def run_playback_workload(
     spool_directory: Path | None = None,
 ) -> dict[str, Any]:
     """Run cold, warm, and rapid-skip listener waves over real loopback HTTP."""
-    if listeners < 1 or listeners > 120:
-        raise ValueError("listeners must be between 1 and 120")
+    if listeners < 1 or listeners > MAX_LISTENERS:
+        raise ValueError(f"listeners must be between 1 and {MAX_LISTENERS}")
     if cold_stagger_ms < 0 or hold_ms < 0:
         raise ValueError("timings must be non-negative")
 
@@ -521,7 +536,16 @@ async def run_playback_workload(
         async with base._LocalServer(probe, listeners) as local:
             if local.client is None:
                 raise RuntimeError("Local sidecar client was not initialized")
-            clients = await _new_listener_clients(local.base_url, listeners)
+            request_timeout_seconds = _listener_request_timeout_seconds(
+                listeners,
+                cold_stagger_ms,
+                hold_ms,
+            )
+            clients = await _new_listener_clients(
+                local.base_url,
+                listeners,
+                request_timeout_seconds,
+            )
 
             cold_ids = ids.many(listeners)
             cold, _cold_generation = await _run_held_wave(
@@ -564,7 +588,11 @@ async def run_playback_workload(
             warm["playbackUpstreamTransferCalls"] = warm.pop("upstreamTransferCalls")
 
             if preconnect_listeners:
-                rapid_next_clients = await _new_listener_clients(local.base_url, listeners)
+                rapid_next_clients = await _new_listener_clients(
+                    local.base_url,
+                    listeners,
+                    request_timeout_seconds,
+                )
                 rapid_preconnect_ms = await _preconnect_listener_clients(rapid_next_clients)
             else:
                 rapid_next_clients = clients

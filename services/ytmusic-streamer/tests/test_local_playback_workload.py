@@ -16,6 +16,26 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 WORKLOAD_PATH = REPOSITORY_ROOT / "scripts" / "ytmusic-playback-workload.py"
 
 
+@pytest.mark.anyio
+async def test_playback_workload_accepts_two_hundred_listener_stage() -> None:
+    spec = importlib.util.spec_from_file_location("playback_workload_limit_test", WORKLOAD_PATH)
+    assert spec is not None and spec.loader is not None
+    workload = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(workload)
+
+    with pytest.raises(ValueError, match="timings must be non-negative"):
+        await workload.run_playback_workload(listeners=200, cold_stagger_ms=-1)
+
+
+def test_listener_timeout_covers_full_two_hundred_listener_ramp() -> None:
+    spec = importlib.util.spec_from_file_location("playback_workload_timeout_test", WORKLOAD_PATH)
+    assert spec is not None and spec.loader is not None
+    workload = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(workload)
+
+    assert workload._listener_request_timeout_seconds(200, 275.0, 5000.0) >= 75.0
+
+
 @pytest.mark.parametrize("status_code", [200, 206])
 @pytest.mark.anyio
 async def test_playback_egress_probe_can_release_a_browser_decodable_prefix(

@@ -305,6 +305,22 @@ def test_spool_candidates_filter_unrelated_names_before_filesystem_metadata(
     assert metadata_paths == [matching]
 
 
+def test_spool_candidates_avoid_full_scan_for_known_audio_container(
+    stream_module: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    matching = tmp_path / f"{VIDEO_ID}-{QUALITY}.webm"
+    matching.write_bytes(b"audio")
+
+    def reject_directory_scan(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("known spool container must not scan the full directory")
+
+    monkeypatch.setattr(stream_module.os, "scandir", reject_directory_scan)
+
+    assert stream_module._spool_candidates(VIDEO_ID, QUALITY) == [matching]
+
+
 def test_spool_lookup_holds_prune_lock_while_scanning_and_touching(
     stream_module: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
