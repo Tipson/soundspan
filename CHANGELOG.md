@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Reserve resolution time for each available server music source so a stalled VK or Yandex lookup or audio probe cannot consume the entire fallback deadline. Preserve the full budget for a single selected source, listener cancellation, and the acquired recording's stable representation.
+
 - Retain a usable offline document when a network change interrupts its new JavaScript or stylesheet downloads. Prepare bootstrap dependencies before publishing fresh navigation HTML, and bound stalled document and asset bodies instead of leaving PWA startup on an endless loading screen.
 
 - Include the executing frontend build identity in playback incidents, retaining it across offline storage and delayed upload so older PWA failures can be distinguished from the deployed release.

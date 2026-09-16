@@ -148,6 +148,7 @@ export function createMusicSourceResolver(options: Options) {
                 throw new MusicSourceError("busy", 5);
             resolving++;
             try {
+                const startedAt = performance.now();
                 const deadline = AbortSignal.any([
                     signal,
                     AbortSignal.timeout(16_000),
@@ -156,14 +157,33 @@ export function createMusicSourceResolver(options: Options) {
                 const connections = await options.connections();
                 if (generation !== revision)
                     throw new MusicSourceError("lease_expired");
-                for (const source of connections) {
+                const eligible = connections.filter(
+                    (source) =>
+                        available(source) &&
+                        (!provider || source.provider === provider),
+                );
+                for (const [index, source] of eligible.entries()) {
                     deadline.throwIfAborted();
-                    if (
-                        !available(source) ||
-                        (provider && source.provider !== provider)
-                    )
-                        continue;
-                    const operation = lifetime(source.provider, deadline);
+                    if (!available(source)) continue;
+                    // Reserve a share of the remaining deadline for each backup.
+                    // One selected source still receives the entire remaining budget.
+                    const attempt = new AbortController();
+                    const budget = Math.max(
+                        1,
+                        Math.floor(
+                            (16_000 - (performance.now() - startedAt)) /
+                                (eligible.length - index),
+                        ),
+                    );
+                    const timer = setTimeout(
+                        () =>
+                            attempt.abort(new MusicSourceError("unavailable")),
+                        budget,
+                    ).unref();
+                    const operation = lifetime(
+                        source.provider,
+                        AbortSignal.any([deadline, attempt.signal]),
+                    );
                     usage.resolutionStarted(source.provider);
                     try {
                         const candidates = await source.search(
@@ -230,7 +250,9 @@ export function createMusicSourceResolver(options: Options) {
                         usage.resolutionFinished(
                             source.provider,
                             signal.aborted ||
-                                (operation.signal.aborted && !deadline.aborted)
+                                (operation.signal.aborted &&
+                                    !deadline.aborted &&
+                                    !attempt.signal.aborted)
                                 ? "resolutionCancelled"
                                 : "resolutionFailed",
                             error,
@@ -238,6 +260,7 @@ export function createMusicSourceResolver(options: Options) {
                         deadline.throwIfAborted();
                         failed(keyOf(source), error);
                     } finally {
+                        clearTimeout(timer);
                         operation.dispose();
                     }
                 }
