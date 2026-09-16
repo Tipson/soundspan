@@ -2,22 +2,22 @@
  * Native Audio Element Engine (GH #42)
  *
  * Fourth pluggable backend for the hybrid runtime engine: owns exactly
- * one `<audio>` element for the life of the engine and implements the
+ * one active `<audio>` element at a time and implements the
  * shared {@link AudioEngine} contract. All playback decisions live in
  * the pure policy module ({@link transitionNativeEngine}); this
  * controller only applies transitions and executes effects.
  *
  * Structural guarantees:
- * - Single engine-owned element; `load()` assigns `src` directly, which
- *   synchronously stops the previous stream (kills double-play).
+ * - One active element; replacement stops the previous stream before play.
  * - One optional muted, never-playing buffer element for preload
- *   (capped at one; warms the browser cache for gapless switches).
+ *   (capped at one). Android background local handoffs can promote this
+ *   prepared decoder without resetting its source or losing audio focus.
  * - No AudioContext on the production path — hi-res FLAC and iOS PWA
  *   background playback both ride the bare media pipeline. The isolated
  *   bridge implementation remains closed by policy (see
  *   iosStandalonePwaBridge.ts).
- * - End detection is the native `ended` event only (media-pipeline
- *   driven; fires under background timer throttling). Position updates
+ * - End detection is native `ended`, or a native pause with `ended=true`
+ *   when a prepared Android local handoff is available. Position updates
  *   come from `timeupdate` plus a 1s ticker.
  */
 
@@ -98,6 +98,8 @@ export interface NativeAudioElementEngineOptions {
     ) => () => void;
     /** Page-visibility probe for error classification. */
     isPageHidden?: () => boolean;
+    /** Android Chrome can promote a prepared local decoder at natural end. */
+    allowPreparedElementHandoff?: () => boolean;
     /** Injectable compatibility bridge gate; production policy is closed. */
     iosBridgeGate?: () => boolean;
     /** Bridge instance (injectable for tests). */
@@ -160,6 +162,12 @@ const defaultBindGlobalListener = (
 const defaultIsPageHidden = (): boolean =>
     typeof document !== "undefined" && document.visibilityState === "hidden";
 
+const defaultAllowPreparedElementHandoff = (): boolean =>
+    typeof navigator !== "undefined" &&
+    /Android/.test(navigator.userAgent) &&
+    /Chrome\//.test(navigator.userAgent) &&
+    !/; wv\)/.test(navigator.userAgent);
+
 const defaultTelemetry = (
     event: string,
     fields: Record<string, unknown>,
@@ -188,7 +196,7 @@ const isAtEndOfStream = (element: NativeAudioElementLike): boolean =>
             element.duration - NATIVE_ENGINE_END_PAUSE_EPSILON_SEC);
 
 /**
- * AudioEngine implementation backed by a single native `<audio>` element.
+ * AudioEngine implementation with one active native element and one preload slot.
  */
 export class NativeAudioElementEngine implements AudioEngine {
     private element: NativeAudioElementLike | null = null;
@@ -196,6 +204,7 @@ export class NativeAudioElementEngine implements AudioEngine {
     private preloadedUrl: string | null = null;
     private preloadController: AudioPreloadLeaseController | null = null;
     private preloadReadinessCleanup: (() => void) | null = null;
+    private preloadIsReady = false;
     private policyState: NativeEnginePolicyState =
         createInitialNativeEngineState();
     private lastSource: AudioEngineSource | null = null;
@@ -222,6 +231,7 @@ export class NativeAudioElementEngine implements AudioEngine {
         NativeAudioElementEngineOptions["bindGlobalListener"]
     >;
     private readonly isPageHidden: () => boolean;
+    private readonly allowPreparedElementHandoff: () => boolean;
     private readonly iosBridgeGate: () => boolean;
     private readonly iosBridge: IosStandaloneAudioContextBridge;
     private readonly telemetry: (
@@ -236,6 +246,9 @@ export class NativeAudioElementEngine implements AudioEngine {
         this.bindGlobalListener =
             options.bindGlobalListener ?? defaultBindGlobalListener;
         this.isPageHidden = options.isPageHidden ?? defaultIsPageHidden;
+        this.allowPreparedElementHandoff =
+            options.allowPreparedElementHandoff ??
+            defaultAllowPreparedElementHandoff;
         this.iosBridgeGate =
             options.iosBridgeGate ?? detectIosStandaloneAudioBridgeEnvironment;
         this.iosBridge =
@@ -296,7 +309,11 @@ export class NativeAudioElementEngine implements AudioEngine {
             localBackgroundHandoff:
                 this.policyState.status === "ended" &&
                 this.isPageHidden() &&
-                resolvedSource.url.startsWith("blob:"),
+                resolvedSource.url.startsWith("blob:") &&
+                !this.canPromotePreparedElement(
+                    resolvedSource,
+                    normalizedOptions,
+                ),
         });
     }
 
@@ -451,6 +468,7 @@ export class NativeAudioElementEngine implements AudioEngine {
             this.preloadReadinessCleanup = null;
             this.preloadController = null;
             this.preloadedUrl = null;
+            this.preloadIsReady = false;
             this.releaseElement(buffer);
         });
         const handleReady = (): void => {
@@ -462,6 +480,7 @@ export class NativeAudioElementEngine implements AudioEngine {
             }
             this.preloadReadinessCleanup?.();
             this.preloadReadinessCleanup = null;
+            this.preloadIsReady = true;
             controller.settle({ state: "ready" });
         };
         const handleError = (): void => {
@@ -482,6 +501,7 @@ export class NativeAudioElementEngine implements AudioEngine {
             buffer.removeEventListener("error", handleError);
         };
         this.preloadController = controller;
+        this.preloadIsReady = false;
         // Match load() before src starts the request. Credential mode also
         // participates in dedupe so a lease never reuses a different mode.
         buffer.crossOrigin = crossOrigin;
@@ -547,6 +567,7 @@ export class NativeAudioElementEngine implements AudioEngine {
         this.releaseElement(this.preloadElement);
         this.preloadElement = null;
         this.preloadedUrl = null;
+        this.preloadIsReady = false;
         this.iosBridge.close();
         this.listeners.clear();
         this.policyState = createInitialNativeEngineState();
@@ -671,6 +692,69 @@ export class NativeAudioElementEngine implements AudioEngine {
     // Effects
     // ------------------------------------------------------------------
 
+    private canPromotePreparedElement(
+        source: AudioEngineSource,
+        options: AudioEngineLoadOptions | null,
+    ): boolean {
+        const prepared = this.preloadElement;
+        return Boolean(
+            this.allowPreparedElementHandoff() &&
+            this.isPageHidden() &&
+            this.element?.ended &&
+            this.preloadIsReady &&
+            this.preloadController &&
+            source.url.startsWith("blob:") &&
+            this.preloadedUrl === source.url &&
+            prepared?.src === source.url &&
+            !prepared.error &&
+            (prepared.readyState ?? 0) >= 3 &&
+            prepared.crossOrigin ===
+                (options?.withCredentials ? "use-credentials" : "anonymous"),
+        );
+    }
+
+    private promotePreparedElement(previous: NativeAudioElementLike): void {
+        const prepared = this.preloadElement!;
+        const controller = this.preloadController;
+        this.preloadReadinessCleanup?.();
+        this.preloadReadinessCleanup = null;
+        // Detach the lease before cancellation: its eventual owner cleanup
+        // must never release the element that has become the active source.
+        this.preloadController = null;
+        this.preloadedUrl = null;
+        this.preloadIsReady = false;
+        controller?.lease.cancel();
+        this.elementCleanups.forEach((cleanup) => cleanup());
+        this.elementCleanups = [];
+        previous.muted = true;
+        previous.volume = 0;
+        this.releaseElement(previous);
+        this.element = prepared;
+        this.preloadElement = previous;
+        prepared.volume = this.volume;
+        prepared.muted = this.muted;
+        this.bindElementEvents(prepared);
+        // Metadata already arrived on the preload slot. The same policy must
+        // still emit load, apply a requested seek, and honor autoplay/pause.
+        const generation = this.loadGeneration;
+        queueMicrotask(() => {
+            // load() callers register their readiness listeners after return,
+            // just as for a normal native loadedmetadata event. A microtask
+            // keeps this handoff outside throttled background timers.
+            if (
+                this.isDestroyed ||
+                generation !== this.loadGeneration ||
+                this.element !== prepared
+            )
+                return;
+            this.dispatch({
+                type: "LOADED_METADATA",
+                durationSec: toFiniteDuration(prepared.duration),
+                nowMs: this.now(),
+            });
+        });
+    }
+
     private applyLoad(isRetry: boolean): void {
         const element = this.ensureElement();
         const source = this.lastSource;
@@ -681,6 +765,13 @@ export class NativeAudioElementEngine implements AudioEngine {
             return;
         }
         this.loadGeneration += 1;
+        if (
+            !isRetry &&
+            this.canPromotePreparedElement(source, this.lastLoadOptions)
+        ) {
+            this.promotePreparedElement(element);
+            return;
+        }
         if (this.preloadedUrl === source.url) {
             // The main element now owns playback; stop the background buffer.
             this.preloadController?.lease.cancel();
@@ -946,7 +1037,9 @@ export class NativeAudioElementEngine implements AudioEngine {
 
     private bindElementEvents(element: NativeAudioElementLike): void {
         ELEMENT_EVENT_TYPES.forEach((type) => {
-            const handler = (): void => this.handleElementEvent(type);
+            const handler = (): void => {
+                if (this.element === element) this.handleElementEvent(type);
+            };
             element.addEventListener(type, handler);
             this.elementCleanups.push(() =>
                 element.removeEventListener(type, handler),
@@ -972,6 +1065,24 @@ export class NativeAudioElementEngine implements AudioEngine {
             case "playing":
                 return this.dispatch({ type: "ELEMENT_PLAYING", nowMs });
             case "pause":
+                // Chrome queues pause before ended. A genuinely completed
+                // stream may hand off here without waiting another task;
+                // near-end and intentional pauses must never advance.
+                if (
+                    element.ended &&
+                    this.policyState.pauseClassification !== "user" &&
+                    this.preloadedUrl &&
+                    this.canPromotePreparedElement(
+                        { url: this.preloadedUrl },
+                        {
+                            withCredentials:
+                                this.preloadElement?.crossOrigin ===
+                                "use-credentials",
+                        },
+                    )
+                ) {
+                    return this.dispatch({ type: "ELEMENT_ENDED", nowMs });
+                }
                 return this.dispatch({
                     type: "ELEMENT_PAUSED",
                     atEndOfStream: isAtEndOfStream(element),

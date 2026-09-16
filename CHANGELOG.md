@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Preserve a ready local decoder at Android background track boundaries, promote it without reopening the file, and reuse the retired element for the following preload. Keep cancellation scoped to its original lease and respect user pauses, seeking and unsupported platforms.
+
 - Commit prepared local next-track transitions immediately from native end events while the player is hidden, and request blob playback without waiting for metadata when no resume seek is needed. Keep the event's original listener set during synchronous handoffs. Preserve ordinary scheduling for cold loads, group playback and watchdog recovery.
 
 - Serve cached AAC/ADTS audio with its AAC content type for full and partial downloads, keeping MP4 audio identified separately.

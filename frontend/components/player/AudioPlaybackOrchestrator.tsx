@@ -1049,8 +1049,8 @@ export const AudioPlaybackOrchestrator = memo(
                 ? getTrackProviderFailureKey(currentTrack)
                 : null;
             // A prepared natural handoff must not pause/reset the primary
-            // element between sources. Native load replaces src on that SAME
-            // element, so it already prevents overlap. All manual, cold,
+            // element between sources. Native load replaces the source or
+            // promotes a prepared decoder while preventing overlap. Manual, cold,
             // and in-flight switches retain the eager stop below.
             const preserveNativeHandoff =
                 hasAdvancePlayIntent &&

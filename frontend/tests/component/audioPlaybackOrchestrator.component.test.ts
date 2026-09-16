@@ -3378,6 +3378,12 @@ test("a terminal offline error releases the active device-file playback lease", 
 });
 
 test("next-track preload transfers its ready device file without a second storage read", async (t) => {
+    const cancellationsAtLoad: string[][] = [];
+    const originalLoad = engine.load.bind(engine);
+    t.mock.method(engine, "load", (...args: unknown[]) => {
+        cancellationsAtLoad.push([...engine.preloadCancelCalls]);
+        originalLoad(...args);
+    });
     const currentTrack = makeTrack("current-network");
     const nextTrack = makeTrack("yt:preloaded-file", {
         streamSource: "youtube",
@@ -3439,6 +3445,13 @@ test("next-track preload transfers its ready device file without a second storag
     assert.equal(
         engine.loadCalls.at(-1)?.args[0],
         "blob:https://soundspan.test/preload",
+    );
+    assert.equal(
+        cancellationsAtLoad
+            .at(-1)
+            ?.includes("blob:https://soundspan.test/preload"),
+        false,
+        "the ready decoder lease survives until the parent loads it",
     );
     hookRuntime.unmount();
     assert.equal(releases, 1);

@@ -569,48 +569,62 @@ export function useNextTrackPreload({
 
     // Preload next track for gapless playback (music only)
     useEffect(() => {
-        iosBackgroundTrackHandoffRef.current.reset();
-        // Preload while a track or podcast episode plays — but only when the
-        // NEXT queue item is a music track (getNextTrackInfo returns null for
-        // episode items). Audiobooks have no queue and never preload.
-        const hasActiveQueueMedia =
-            playbackType === "track"
-                ? Boolean(currentTrack)
-                : playbackType === "podcast"
-                  ? Boolean(currentPodcast)
-                  : false;
-        if (!hasActiveQueueMedia || !isPlaying) {
-            preloadRequestIdRef.current += 1;
-            pendingYtMusicPreloadRef.current = null;
-            enginePreloadLeaseRef.current?.cancel();
-            enginePreloadLeaseRef.current = null;
-            leaseController.release();
-            lastPreloadedTrackIdRef.current = null;
-            readyPreloadedTrackIdRef.current = null;
-            void warmupCoordinatorRef.current?.clear();
-            return;
-        }
+        let cancelled = false;
+        // The parent's load effect first consumes/promotes the current ready
+        // decoder. Replacing its lease earlier would discard that preparation.
+        const reconcileNext = () => {
+            if (cancelled) return;
+            iosBackgroundTrackHandoffRef.current.reset();
+            // Preload while a track or podcast episode plays — but only when the
+            // NEXT queue item is a music track (getNextTrackInfo returns null for
+            // episode items). Audiobooks have no queue and never preload.
+            const hasActiveQueueMedia =
+                playbackType === "track"
+                    ? Boolean(currentTrack)
+                    : playbackType === "podcast"
+                      ? Boolean(currentPodcast)
+                      : false;
+            if (!hasActiveQueueMedia || !isPlaying) {
+                preloadRequestIdRef.current += 1;
+                pendingYtMusicPreloadRef.current = null;
+                enginePreloadLeaseRef.current?.cancel();
+                enginePreloadLeaseRef.current = null;
+                leaseController.release();
+                lastPreloadedTrackIdRef.current = null;
+                readyPreloadedTrackIdRef.current = null;
+                void warmupCoordinatorRef.current?.clear();
+                return;
+            }
 
-        const nextTrack = getNextTrackInfo(
-            queue,
-            currentIndex,
-            isShuffle,
-            shuffleIndices,
-            repeatMode,
-        );
+            const nextTrack = getNextTrackInfo(
+                queue,
+                currentIndex,
+                isShuffle,
+                shuffleIndices,
+                repeatMode,
+            );
 
-        if (!nextTrack) {
-            preloadRequestIdRef.current += 1;
-            pendingYtMusicPreloadRef.current = null;
-            enginePreloadLeaseRef.current?.cancel();
-            enginePreloadLeaseRef.current = null;
-            leaseController.release();
-            lastPreloadedTrackIdRef.current = null;
-            readyPreloadedTrackIdRef.current = null;
-            void warmupCoordinatorRef.current?.clear();
-            return;
+            if (!nextTrack) {
+                preloadRequestIdRef.current += 1;
+                pendingYtMusicPreloadRef.current = null;
+                enginePreloadLeaseRef.current?.cancel();
+                enginePreloadLeaseRef.current = null;
+                leaseController.release();
+                lastPreloadedTrackIdRef.current = null;
+                readyPreloadedTrackIdRef.current = null;
+                void warmupCoordinatorRef.current?.clear();
+                return;
+            }
+            preloadTrack(nextTrack);
+        };
+        if (isPlaying && readyCurrentTrackPreloadAtCommitRef.current?.source) {
+            queueMicrotask(reconcileNext);
+        } else {
+            reconcileNext();
         }
-        preloadTrack(nextTrack);
+        return () => {
+            cancelled = true;
+        };
     }, [
         playbackType,
         currentTrack,

@@ -181,6 +181,7 @@ class FakeAudioElement implements NativeAudioElementLike {
     }
 
     fire(type: string, event: unknown = {}): void {
+        if (type === "canplay") this.readyState = 3;
         this.listeners.get(type)?.forEach((listener) => listener(event));
     }
 
@@ -1093,6 +1094,291 @@ test("preload lease becomes ready only after the buffer emits canplay", async ()
     harness.elements[0]?.fire("canplay");
     assert.deepEqual(await lease.result, { state: "ready" });
 });
+
+test("a ready device decoder becomes primary without another source assignment", async () => {
+    const h = createHarness({
+        isPageHidden: () => true,
+        allowPreparedElementHandoff: () => true,
+    });
+    h.engine.load("blob:first", { autoplay: true });
+    const first = h.elements[0];
+    first.fireLoadedMetadata(75);
+    const lease = h.engine.preload("blob:second");
+    const second = h.elements[1];
+    second.fireLoadedMetadata(90);
+    second.fire("canplay");
+    h.engine.on("end", () => h.engine.load("blob:second", { autoplay: true }));
+    first.currentTime = 75;
+    first.ended = true;
+    first.paused = true;
+    first.fire("pause");
+    await Promise.resolve();
+    assert.equal(
+        second.playCalls,
+        1,
+        "play is requested from the native end-adjacent pause",
+    );
+    assert.equal(
+        second.srcAssignments,
+        1,
+        "reuse the prepared decoder, not only its URL",
+    );
+    assert.equal(h.engine.getDuration(), 90);
+    assert.equal(first.paused, true);
+    assert.equal(first.muted, true);
+    assert.equal(second.muted, false);
+    lease?.cancel();
+    assert.equal(
+        second.src,
+        "blob:second",
+        "old preload cleanup cannot clear the promoted source",
+    );
+    first.fire("ended");
+    assert.equal(
+        h.events.filter((e) => e.type === "end").length,
+        1,
+        "the old native ended event cannot finish the replacement",
+    );
+    h.engine.seek(12);
+    assert.equal(second.currentTime, 12);
+    h.engine.setVolume(0.25);
+    h.engine.setMuted(true);
+    assert.equal(second.volume, 0.25);
+    assert.equal(second.muted, true);
+    h.engine.pause();
+    assert.equal(second.paused, true);
+    h.engine.preload("blob:third");
+    assert.equal(
+        h.elements.length,
+        2,
+        "the retired primary is reused as the only preload slot",
+    );
+    h.engine.destroy();
+});
+
+for (const scenario of [
+    "platform-disabled",
+    "visible",
+    "not-ready",
+    "cancelled",
+    "different-url",
+    "different-credentials",
+    "network",
+    "lost-readiness",
+    "failed-decoder",
+    "manual-selection",
+] as const) {
+    test(`prepared decoder handoff falls back safely: ${scenario}`, () => {
+        const h = createHarness({
+            isPageHidden: () => scenario !== "visible",
+            allowPreparedElementHandoff: () => scenario !== "platform-disabled",
+        });
+        h.engine.load("blob:first", { autoplay: true });
+        const first = h.elements[0];
+        first.fireLoadedMetadata(75);
+        const url =
+            scenario === "network"
+                ? "https://stream.example/second.webm"
+                : "blob:second";
+        const lease = h.engine.preload(url);
+        const second = h.elements[1];
+        second.fireLoadedMetadata(90);
+        if (scenario !== "not-ready") second.fire("canplay");
+        if (scenario === "lost-readiness") second.readyState = 0;
+        if (scenario === "failed-decoder") second.error = { code: 3 };
+        if (scenario === "cancelled") lease?.cancel();
+        if (scenario !== "manual-selection") {
+            first.ended = true;
+            first.fire("ended");
+        }
+        h.engine.load(scenario === "different-url" ? "blob:other" : url, {
+            autoplay: true,
+            withCredentials: scenario === "different-credentials",
+        });
+        assert.equal(second.playCalls, 0);
+        assert.equal(first.srcAssignments, 2);
+        h.engine.destroy();
+    });
+}
+
+test("prepared decoder preserves paused load and resume seek across repeated slot reuse", async () => {
+    const h = createHarness({
+        isPageHidden: () => true,
+        allowPreparedElementHandoff: () => true,
+    });
+    h.engine.load("blob:first", { autoplay: true });
+    const first = h.elements[0];
+    first.fireLoadedMetadata(75);
+    const oldLease = h.engine.preload("blob:second");
+    const second = h.elements[1];
+    second.fireLoadedMetadata(90);
+    second.fire("canplay");
+    first.ended = true;
+    first.fire("ended");
+    h.engine.load("blob:second", { autoplay: false, startTimeSec: 17 });
+    await Promise.resolve();
+    assert.equal(second.currentTime, 17);
+    assert.equal(second.playCalls, 0);
+    h.engine.play();
+    assert.equal(second.playCalls, 1);
+    const thirdLease = h.engine.preload("blob:third");
+    first.fireLoadedMetadata(100);
+    first.fire("canplay");
+    oldLease?.cancel();
+    assert.equal(first.src, "blob:third");
+    second.ended = true;
+    second.fire("ended");
+    h.engine.load("blob:third", { autoplay: true });
+    await Promise.resolve();
+    assert.equal(h.engine.getDuration(), 100);
+    assert.equal(first.playCalls, 2);
+    assert.equal(second.paused, true);
+    thirdLease?.cancel();
+    assert.equal(first.src, "blob:third");
+    h.engine.stop();
+    assert.equal(first.currentTime, 0);
+    assert.equal(first.paused, true);
+    h.engine.destroy();
+    assert.equal(first.listenerCount() + second.listenerCount(), 0);
+});
+
+for (const followup of ["listener", "pause", "replace", "destroy"] as const) {
+    test(`prepared decoder metadata is asynchronous and generation scoped: ${followup}`, async () => {
+        const h = createHarness({
+            isPageHidden: () => true,
+            allowPreparedElementHandoff: () => true,
+        });
+        h.engine.load("blob:first", { autoplay: true });
+        const first = h.elements[0];
+        first.fireLoadedMetadata(75);
+        h.engine.preload("blob:second");
+        const second = h.elements[1];
+        second.fireLoadedMetadata(90);
+        second.fire("canplay");
+        first.ended = true;
+        first.fire("ended");
+        h.engine.load("blob:second", { autoplay: true });
+        let loaded = 0;
+        h.engine.on("load", () => loaded++);
+        if (followup === "pause") h.engine.pause();
+        if (followup === "replace") h.engine.load("blob:other");
+        if (followup === "destroy") h.engine.destroy();
+        await Promise.resolve();
+        assert.equal(
+            loaded,
+            followup === "listener" || followup === "pause" ? 1 : 0,
+            "callers subscribe after load returns, like native loadedmetadata",
+        );
+        if (followup === "pause")
+            assert.equal(
+                second.playCalls,
+                0,
+                "pause before readiness cancels autoplay",
+            );
+        if (followup === "replace")
+            assert.equal(h.engine.getDiagnosticState().nativePaused, true);
+        h.engine.destroy();
+    });
+}
+
+test("late play rejection from a retired decoder cannot fail the promoted source", async () => {
+    const h = createHarness({
+        isPageHidden: () => true,
+        allowPreparedElementHandoff: () => true,
+    });
+    h.engine.load("blob:first");
+    const first = h.elements[0];
+    first.fireLoadedMetadata(75);
+    let rejectPlay!: (error: Error) => void;
+    first.play = () =>
+        new Promise<void>((_resolve, reject) => {
+            rejectPlay = reject;
+        });
+    h.engine.play();
+    h.engine.preload("blob:second");
+    const second = h.elements[1];
+    second.fireLoadedMetadata(90);
+    second.fire("canplay");
+    first.ended = true;
+    first.fire("ended");
+    h.engine.load("blob:second", { autoplay: true });
+    rejectPlay(
+        Object.assign(new Error("retired"), { name: "NotAllowedError" }),
+    );
+    await Promise.resolve();
+    assert.equal(h.engine.isPlaying(), true);
+    assert.equal(h.events.filter((e) => e.type === "error").length, 0);
+    h.engine.destroy();
+});
+
+for (const [userAgent, enabled] of [
+    [
+        "Mozilla/5.0 (Linux; Android 10; K) Chrome/153.0.0.0 Mobile Safari/537.36",
+        true,
+    ],
+    [
+        "Mozilla/5.0 (Linux; Android 17; Pixel; wv) Chrome/153.0.0.0 Mobile Safari/537.36",
+        false,
+    ],
+    [
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari/604.1",
+        false,
+    ],
+    ["Mozilla/5.0 (Windows NT 10.0) Chrome/153.0.0.0 Safari/537.36", false],
+] as const) {
+    test(`prepared decoder default gate: ${userAgent}`, async () => {
+        const descriptor = Object.getOwnPropertyDescriptor(
+            globalThis,
+            "navigator",
+        );
+        Object.defineProperty(globalThis, "navigator", {
+            configurable: true,
+            value: { userAgent },
+        });
+        const h = createHarness({ isPageHidden: () => true });
+        try {
+            h.engine.load("blob:first", { autoplay: true });
+            const first = h.elements[0];
+            first.fireLoadedMetadata(75);
+            h.engine.preload("blob:second");
+            const second = h.elements[1];
+            second.fireLoadedMetadata(90);
+            second.fire("canplay");
+            first.ended = true;
+            first.fire("ended");
+            h.engine.load("blob:second", { autoplay: true });
+            await Promise.resolve();
+            assert.equal(second.playCalls, enabled ? 1 : 0);
+        } finally {
+            h.engine.destroy();
+            if (descriptor)
+                Object.defineProperty(globalThis, "navigator", descriptor);
+            else Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+}
+
+for (const scenario of ["user-pause", "near-end", "external-pause"] as const) {
+    test(`prepared handoff does not turn a pause into an advance: ${scenario}`, () => {
+        const h = createHarness({
+            isPageHidden: () => true,
+            allowPreparedElementHandoff: () => true,
+        });
+        h.engine.load("blob:first", { autoplay: true });
+        const first = h.elements[0];
+        first.fireLoadedMetadata(75);
+        h.engine.preload("blob:second");
+        h.elements[1].fireLoadedMetadata(90);
+        h.elements[1].fire("canplay");
+        first.currentTime = scenario === "external-pause" ? 20 : 74.9;
+        first.ended = scenario === "user-pause";
+        if (scenario === "user-pause") h.engine.pause();
+        else first.fire("pause");
+        assert.equal(h.events.filter((e) => e.type === "end").length, 0);
+        assert.equal(h.elements[1].playCalls, 0);
+        h.engine.destroy();
+    });
+}
 
 test("preload configures the same request mode as playback before assigning src", () => {
     for (const withCredentials of [false, true]) {
