@@ -1,6 +1,7 @@
 import {
-    deviceOfflineRecordMatchesTrack,
     normalizeDeviceOfflineQuality,
+    resolveCompatibleDeviceOfflineRecordIdentity,
+    resolveDeviceOfflineTrackIdentity,
 } from "./trackIdentity";
 import type { DeviceOfflineDownloadRecord, DeviceOfflineTrack } from "./types";
 import { getAuthRuntimeLease } from "@/lib/auth-runtime-generation";
@@ -13,6 +14,38 @@ import {
 
 let activeOwnerId: string | null = null;
 let readyRecords: DeviceOfflineDownloadRecord[] = [];
+// Derived only from the active owner's published ready records. At most two
+// identities per record; arbitrary playback lookups never grow this index.
+const readyRecordIndex = new Map<
+    string,
+    {
+        newest: DeviceOfflineDownloadRecord;
+        qualities: Map<string, DeviceOfflineDownloadRecord>;
+    }
+>();
+
+function rebuildReadyRecordIndex(): void {
+    readyRecordIndex.clear();
+    // Stable sorting preserves the existing tie and preferred-quality policy.
+    for (const record of [...readyRecords].sort(
+        (left, right) => right.updatedAt - left.updatedAt,
+    )) {
+        const alias = resolveCompatibleDeviceOfflineRecordIdentity(record);
+        for (const identity of new Set([record.trackIdentity, alias])) {
+            if (typeof identity !== "string" || identity.startsWith("tidal:")) {
+                continue;
+            }
+            let entry = readyRecordIndex.get(identity);
+            if (!entry) {
+                entry = { newest: record, qualities: new Map() };
+                readyRecordIndex.set(identity, entry);
+            }
+            if (!entry.qualities.has(record.quality)) {
+                entry.qualities.set(record.quality, record);
+            }
+        }
+    }
+}
 export interface DeviceOfflinePlaybackInvalidation {
     ownerId: string;
     recordKey: string;
@@ -73,6 +106,7 @@ function invalidateDeviceOfflinePlaybackRecord(
     readyRecords = readyRecords.filter(
         (record) => record.ownerId !== ownerId || record.key !== recordKey,
     );
+    rebuildReadyRecordIndex();
     releasePreparedSource(recordKey);
     const invalidation = { ownerId, recordKey, reason } as const;
     for (const listener of playbackInvalidationListeners) {
@@ -114,6 +148,7 @@ export function setDeviceOfflineRuntimeState(
     readyRecords = records.filter(
         (record) => record.ownerId === ownerId && record.status === "ready",
     );
+    rebuildReadyRecordIndex();
 }
 
 /** Remove all user-bound device playback capabilities from memory. */
@@ -123,6 +158,7 @@ export function clearDeviceOfflineRuntimeState(): void {
     }
     activeOwnerId = null;
     readyRecords = [];
+    readyRecordIndex.clear();
 }
 
 /** Check whether the active owner already has a live local playback URL. */
@@ -183,18 +219,10 @@ function resolveReadyPlaybackRecord(
     if (isRetiredRemoteOnlyTrack(track)) return null;
 
     const quality = normalizeDeviceOfflineQuality(preferredQuality);
-    const candidates = readyRecords
-        .filter(
-            (record) =>
-                record.ownerId === activeOwnerId &&
-                deviceOfflineRecordMatchesTrack(record, track),
-        )
-        .sort((left, right) => right.updatedAt - left.updatedAt);
-    return (
-        candidates.find((candidate) => candidate.quality === quality) ??
-        candidates[0] ??
-        null
+    const entry = readyRecordIndex.get(
+        resolveDeviceOfflineTrackIdentity(track),
     );
+    return entry?.qualities.get(quality) ?? entry?.newest ?? null;
 }
 
 function immediatePlaybackSource(url: string): DeviceAudioPlayResult {

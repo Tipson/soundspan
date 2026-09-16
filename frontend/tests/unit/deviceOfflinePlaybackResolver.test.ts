@@ -81,6 +81,107 @@ function fakeVault(open: DeviceAudioVault["open"]): DeviceAudioVault {
 
 afterEach(() => clearDeviceOfflineRuntimeState());
 
+test("an invalid persisted identity does not prevent healthy downloads from being published", () => {
+    const corrupt = { ...readyRecord("user-1", "corrupt"), trackIdentity: 42 };
+    setDeviceOfflineRuntimeState("user-1", [
+        corrupt as unknown as DeviceOfflineDownloadRecord,
+        readyRecord("user-1", "healthy"),
+    ]);
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), "healthy");
+});
+
+test("playback ticks do not reparse the downloaded collection after publication", (t) => {
+    const NativeURL = globalThis.URL;
+    let parses = 0;
+    t.mock.method(
+        globalThis,
+        "URL",
+        class extends NativeURL {
+            constructor(...args: ConstructorParameters<typeof URL>) {
+                super(...args);
+                parses++;
+            }
+        },
+    );
+    const records = Array.from({ length: 40 }, (_, i) => ({
+        ...readyRecord("user-1", `record-${i}`),
+        trackIdentity: `youtube:video-${i}`,
+        sourceUrl: `/api/ytmusic/stream-public/video-${i}`,
+        track: { ...TRACK, id: `yt:video-${i}`, youtubeVideoId: `video-${i}` },
+    }));
+    setDeviceOfflineRuntimeState("user-1", records);
+    parses = 0;
+
+    for (let tick = 0; tick < 200; tick++) {
+        const track = { ...records[tick % records.length].track };
+        assert.equal(hasDeviceOfflinePlaybackCopy(track), true);
+        assert.equal(
+            resolveDeviceOfflinePlaybackIdentity(track),
+            `record-${tick % records.length}`,
+        );
+        assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+    }
+    assert.equal(
+        parses,
+        0,
+        "unchanged download routes must not be parsed on playback ticks",
+    );
+});
+
+test("publication preserves preferred quality, newest fallback, and stable ties", () => {
+    const oldAuto = { ...readyRecord("user-1", "old-auto"), updatedAt: 2 };
+    const newAuto = { ...readyRecord("user-1", "new-auto"), updatedAt: 4 };
+    const high = {
+        ...readyRecord("user-1", "high"),
+        quality: "high",
+        updatedAt: 9,
+    };
+    const tiedHigh = { ...high, key: "tied-high" };
+    const unavailable = {
+        ...high,
+        key: "unavailable",
+        updatedAt: 20,
+        status: "error" as const,
+    };
+    setDeviceOfflineRuntimeState("user-1", [
+        oldAuto,
+        newAuto,
+        high,
+        tiedHigh,
+        unavailable,
+    ]);
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), "new-auto");
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK, " HIGH "), "high");
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity(TRACK, "unknown"),
+        "high",
+    );
+});
+
+test("republishing records updates hits, misses, qualities and owner capabilities", () => {
+    const records = [readyRecord("user-1", "first")];
+    setDeviceOfflineRuntimeState("user-1", records);
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), "first");
+    const otherTrack = { ...TRACK, youtubeVideoId: "other" };
+    assert.equal(hasDeviceOfflinePlaybackCopy(otherTrack), false);
+    records[0].trackIdentity = "youtube:other";
+    records[0].track = otherTrack;
+    records[0].sourceUrl = "/api/ytmusic/stream-public/other";
+    records[0].quality = "high";
+    setDeviceOfflineRuntimeState("user-1", records);
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity(otherTrack, "high"),
+        "first",
+    );
+    setDeviceOfflineRuntimeState("user-2", records);
+    assert.equal(hasDeviceOfflinePlaybackCopy(otherTrack), false);
+    setDeviceOfflineRuntimeState("user-1", records);
+    assert.equal(hasDeviceOfflinePlaybackCopy(otherTrack), true);
+    clearDeviceOfflineRuntimeState();
+    assert.equal(hasDeviceOfflinePlaybackCopy(otherTrack), false);
+});
+
 test("an explicitly downloaded track never substitutes a network URL when its copy is absent", async () => {
     setDeviceOfflineRuntimeState("user-1", []);
     await assert.rejects(
