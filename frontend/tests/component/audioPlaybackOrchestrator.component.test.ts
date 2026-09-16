@@ -821,6 +821,14 @@ mock.module("react", {
     namedExports: reactMock,
 });
 
+// This suite drives commits through HookRuntime; the real concurrent React
+// boundary is exercised separately by naturalTrackAdvance.component.test.ts.
+mock.module("react-dom", {
+    namedExports: {
+        flushSync: (callback: () => void) => callback(),
+    },
+});
+
 mock.module("react/jsx-runtime", {
     namedExports: {
         Fragment: "mock-fragment",

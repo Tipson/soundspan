@@ -367,7 +367,9 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
             return;
         }
 
-        handlers.forEach((handler) => {
+        // A synchronous queue commit can replace React subscriptions here.
+        // The replacement must not receive the previous track's event.
+        [...handlers].forEach((handler) => {
             handler(payload);
         });
     }

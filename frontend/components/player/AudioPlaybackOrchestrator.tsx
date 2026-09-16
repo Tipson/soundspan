@@ -67,6 +67,8 @@ import {
 import type { DesiredLoadPlayIntent } from "./hooks";
 import * as H from "./hooks";
 import { useServerMusicSourceRecovery } from "./hooks/useServerMusicSourceRecovery";
+import { isDevicePlaybackSourceUrl } from "./hooks/playbackSourceLeaseController";
+import { commitNaturalTrackAdvance } from "./commitNaturalTrackAdvance";
 /**
  * AudioPlaybackOrchestrator - Unified audio playback using runtime audio engines
  * Handles: web playback, progress saving for audiobooks/podcasts
@@ -485,7 +487,38 @@ export const AudioPlaybackOrchestrator = memo(
                         trackId: currentTrackId,
                         viaWatchdog,
                     });
-                    next(null);
+                    const upcoming = getNextTrackInfo(
+                        queue,
+                        currentIndex,
+                        isShuffle,
+                        shuffleIndices,
+                        repeatMode,
+                    );
+                    const upcomingIdentity = upcoming
+                        ? resolveDeviceOfflineMediaIdentity(upcoming)
+                        : null;
+                    const preload =
+                        orchestratorRefs.enginePreloadLeaseRef.current;
+                    commitNaturalTrackAdvance({
+                        advance: () => next(null),
+                        isNative:
+                            audioEngine.getActiveEngineDescriptor() ===
+                            "native",
+                        isHidden:
+                            typeof document !== "undefined" &&
+                            document.visibilityState === "hidden",
+                        isPrepared: Boolean(
+                            upcomingIdentity &&
+                            preload &&
+                            isDevicePlaybackSourceUrl(preload.sourceUrl) &&
+                            orchestratorRefs.lastPreloadedTrackIdRef.current ===
+                                upcomingIdentity &&
+                            orchestratorRefs.readyPreloadedTrackIdRef
+                                .current === upcomingIdentity,
+                        ),
+                        isListenTogether,
+                        viaWatchdog,
+                    });
                 };
                 if (playbackType === "track") {
                     if (isLoadingRef.current) {

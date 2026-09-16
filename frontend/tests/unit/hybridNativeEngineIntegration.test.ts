@@ -168,6 +168,34 @@ test("hybrid forwards native engine events to its listeners", () => {
     assert.equal(seen[1]?.type, "play");
 });
 
+test("hybrid handoff does not replay the current event to a replacement subscription", () => {
+    const { hybrid, native } = createHybridWithNativeSlot();
+    let observedEnds = 0;
+    let nextEnds = 0;
+    hybrid.on("end", () => {
+        observedEnds += 1;
+    });
+    const nextEnd = () => {
+        nextEnds += 1;
+    };
+    const firstEnd = () => {
+        hybrid.off("end", firstEnd);
+        hybrid.on("end", nextEnd);
+        hybrid.load("blob:next", { autoplay: true });
+    };
+    hybrid.on("end", firstEnd);
+    hybrid.load("blob:first", { autoplay: true });
+    native.elements[0].fireLoadedMetadata(75);
+    native.elements[0].fire("ended");
+    assert.equal(observedEnds, 1);
+    assert.equal(nextEnds, 0);
+    native.elements[0].fireLoadedMetadata(90);
+    native.elements[0].fire("ended");
+    assert.equal(observedEnds, 2);
+    assert.equal(nextEnds, 1);
+    hybrid.destroy();
+});
+
 test("volume and mute state are applied to the native slot engine", () => {
     const { hybrid, native } = createHybridWithNativeSlot();
     hybrid.setVolume(0.25);

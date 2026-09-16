@@ -1003,6 +1003,82 @@ test("preload uses a single muted buffer element that never plays", () => {
     assert.equal(buffer.src, "https://stream.example/track-3.flac");
 });
 
+test("a synchronous end handoff does not deliver the old end to replacement listeners", () => {
+    const h = createHarness({ isPageHidden: () => true });
+    h.engine.load("blob:first", { autoplay: true });
+    const main = h.mainElement();
+    main.fireLoadedMetadata(75);
+    let nextEnds = 0;
+    const onNextEnd = () => {
+        nextEnds += 1;
+    };
+    const onFirstEnd = () => {
+        h.engine.off("end", onFirstEnd);
+        h.engine.on("end", onNextEnd);
+        h.engine.load("blob:next", { autoplay: true });
+    };
+    h.engine.on("end", onFirstEnd);
+    main.fire("ended");
+    assert.equal(
+        nextEnds,
+        0,
+        "the replacement subscription did not exist at dispatch start",
+    );
+    main.fireLoadedMetadata(90);
+    main.fire("ended");
+    assert.equal(nextEnds, 1);
+    h.engine.destroy();
+});
+
+for (const scenario of [
+    "handoff",
+    "foreground",
+    "network",
+    "paused",
+    "resume",
+    "not-ended",
+] as const) {
+    test(`local natural handoff requests play before metadata only when safe: ${scenario}`, () => {
+        const h = createHarness({
+            isPageHidden: () => scenario !== "foreground",
+        });
+        h.engine.load("blob:first", { autoplay: true });
+        const main = h.mainElement();
+        main.fireLoadedMetadata(75);
+        if (scenario !== "not-ended") {
+            main.ended = true;
+            main.paused = true;
+            main.fire("ended");
+        }
+        const before = main.playCalls;
+        h.engine.load(
+            scenario === "network"
+                ? "https://stream.example/next.mp3"
+                : "blob:next",
+            {
+                autoplay: scenario !== "paused",
+                ...(scenario === "resume" ? { startTimeSec: 20 } : {}),
+            },
+        );
+        assert.equal(main.playCalls - before, scenario === "handoff" ? 1 : 0);
+        assert.equal(
+            main.srcAssignments,
+            2,
+            "one replacement on the same primary element",
+        );
+        h.engine.pause();
+        const pausedCalls = main.playCalls;
+        main.fireLoadedMetadata(90);
+        assert.equal(
+            main.playCalls,
+            pausedCalls,
+            "a user pause before metadata cancels autoplay",
+        );
+        assert.equal(main.paused, true);
+        h.engine.destroy();
+    });
+}
+
 test("preload lease becomes ready only after the buffer emits canplay", async () => {
     const harness = createHarness();
     const lease = harness.engine.preload("https://stream.example/ready.flac");

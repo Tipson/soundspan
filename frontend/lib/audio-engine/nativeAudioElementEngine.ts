@@ -290,6 +290,13 @@ export class NativeAudioElementEngine implements AudioEngine {
                     : null,
             nowMs: this.now(),
             sameLoadedSource,
+            // A local blob already exists in device storage. Request the next
+            // playback in the ended callback, before metadata's async delivery
+            // can leave Chrome without an active background media session.
+            localBackgroundHandoff:
+                this.policyState.status === "ended" &&
+                this.isPageHidden() &&
+                resolvedSource.url.startsWith("blob:"),
         });
     }
 
@@ -646,7 +653,9 @@ export class NativeAudioElementEngine implements AudioEngine {
     }
 
     private emit(event: AudioEngineEventType, payload: unknown): void {
-        this.listeners.get(event)?.forEach((handler) => {
+        // React may replace subscriptions synchronously during a handoff.
+        // New listeners belong to the next source, not the event in flight.
+        [...(this.listeners.get(event) ?? [])].forEach((handler) => {
             try {
                 handler(payload);
             } catch (err) {

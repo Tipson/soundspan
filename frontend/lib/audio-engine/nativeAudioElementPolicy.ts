@@ -105,6 +105,8 @@ export type NativeEnginePolicyEvent =
            * for the current track and must not restart playback).
            */
           sameLoadedSource?: boolean;
+          /** An ended native stream is handing off to a device blob while hidden. */
+          localBackgroundHandoff?: boolean;
           /** Engine-initiated recovery: bypass the same-source dedupe. */
           force?: boolean;
       }
@@ -380,6 +382,13 @@ const applyFreshLoad = (
         { kind: "disarmVisibilityRetry" },
         { kind: "stopTicker" },
         { kind: "applyLoad", autoplay: event.autoplay, isRetry: false },
+        // play() may be pending while metadata loads. It must never precede
+        // a resume seek, and network/cold/foreground loads keep the normal path.
+        ...(event.localBackgroundHandoff &&
+        event.autoplay &&
+        !(typeof event.startTimeSec === "number" && event.startTimeSec > 0)
+            ? [{ kind: "callPlay" as const }]
+            : []),
     ],
 });
 

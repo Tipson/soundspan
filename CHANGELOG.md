@@ -2,6 +2,8 @@
 
 ## Unreleased server music connections
 
+- Commit prepared local next-track transitions immediately from native end events while the player is hidden, and request blob playback without waiting for metadata when no resume seek is needed. Keep the event's original listener set during synchronous handoffs. Preserve ordinary scheduling for cold loads, group playback and watchdog recovery.
+
 - Serve cached AAC/ADTS audio with its AAC content type for full and partial downloads, keeping MP4 audio identified separately.
 
 - Show the total song count and duration of ready device downloads without double-counting quality copies. Keep unknown durations explicit and leave unrelated library tabs unselected in the downloaded collection.
