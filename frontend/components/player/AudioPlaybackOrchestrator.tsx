@@ -497,10 +497,19 @@ export const AudioPlaybackOrchestrator = memo(
                     const upcomingIdentity = upcoming
                         ? resolveDeviceOfflineMediaIdentity(upcoming)
                         : null;
+                    const upcomingFailureKey = upcoming
+                        ? getTrackProviderFailureKey(upcoming)
+                        : null;
                     const preload =
                         orchestratorRefs.enginePreloadLeaseRef.current;
                     commitNaturalTrackAdvance({
                         advance: () => next(null),
+                        startPreparedPlayback: () => {
+                            if (preload)
+                                audioEngine.startPreparedHandoff?.(
+                                    preload.sourceUrl,
+                                );
+                        },
                         isNative:
                             audioEngine.getActiveEngineDescriptor() ===
                             "native",
@@ -510,13 +519,21 @@ export const AudioPlaybackOrchestrator = memo(
                         isPrepared: Boolean(
                             upcomingIdentity &&
                             preload &&
+                            !(
+                                upcomingFailureKey &&
+                                providerFailureCooldown.isCoolingDown(
+                                    upcomingFailureKey,
+                                )
+                            ) &&
                             isDevicePlaybackSourceUrl(preload.sourceUrl) &&
                             orchestratorRefs.lastPreloadedTrackIdRef.current ===
                                 upcomingIdentity &&
                             orchestratorRefs.readyPreloadedTrackIdRef
                                 .current === upcomingIdentity,
                         ),
-                        isListenTogether,
+                        isListenTogether:
+                            isListenTogether ||
+                            isListenTogetherActiveOrPending(),
                         viaWatchdog,
                     });
                 };

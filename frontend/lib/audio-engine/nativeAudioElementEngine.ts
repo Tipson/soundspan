@@ -510,6 +510,23 @@ export class NativeAudioElementEngine implements AudioEngine {
         return controller.lease;
     }
 
+    /** Start the validated next local decoder before React commits its queue item. */
+    startPreparedHandoff(source: AudioEngineSource | string): boolean {
+        const resolved = resolveSource(source);
+        if (
+            this.isDestroyed ||
+            this.policyState.status !== "ended" ||
+            this.policyState.pauseClassification === "user" ||
+            !this.canPromotePreparedElement(resolved, null)
+        )
+            return false;
+        this.load(resolved, { autoplay: true });
+        // The buffer is already ready. Request real native audio before any
+        // React rendering or deferred metadata delivery can retire the FGS.
+        this.callPlay();
+        return true;
+    }
+
     reload(): void {
         this.dispatch({ type: "RELOAD_REQUESTED", nowMs: this.now() });
     }

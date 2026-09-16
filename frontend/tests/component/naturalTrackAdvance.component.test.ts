@@ -59,6 +59,7 @@ for (const scenario of [
         const root = createRoot(container);
         const audio = document.createElement("audio");
         const loadedTracks: number[] = [];
+        const earlyStarts: string[] = [];
         t.after(async () => {
             await React.act(async () => root.unmount());
             container.remove();
@@ -74,6 +75,8 @@ for (const scenario of [
                     const options: NaturalTrackAdvanceOptions = {
                         ...scenario.conditions,
                         advance: () => setTrack((previous) => previous + 1),
+                        startPreparedPlayback: () =>
+                            earlyStarts.push(container.textContent ?? ""),
                     };
                     commitNaturalTrackAdvance(options);
                 };
@@ -91,6 +94,11 @@ for (const scenario of [
                 scenario.immediate ? "Track 1" : "Track 0",
             );
             assert.deepEqual(loadedTracks, scenario.immediate ? [0, 1] : [0]);
+            assert.deepEqual(
+                earlyStarts,
+                scenario.immediate ? ["Track 0"] : [],
+                "audio starts before the next React render and its effects",
+            );
         });
         assert.equal(container.textContent, "Track 1");
         assert.deepEqual(

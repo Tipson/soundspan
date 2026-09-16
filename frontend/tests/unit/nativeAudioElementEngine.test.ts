@@ -1156,6 +1156,72 @@ test("a ready device decoder becomes primary without another source assignment",
     h.engine.destroy();
 });
 
+test("prepared handoff starts before rendering and the following load only adopts it", async () => {
+    const h = createHarness({
+        isPageHidden: () => true,
+        allowPreparedElementHandoff: () => true,
+    });
+    h.engine.load("blob:first", { autoplay: true });
+    const first = h.elements[0];
+    first.fireLoadedMetadata(75);
+    h.engine.preload("blob:second");
+    const second = h.elements[1];
+    second.fireLoadedMetadata(90);
+    second.fire("canplay");
+    assert.equal(
+        h.engine.startPreparedHandoff("blob:second"),
+        false,
+        "an unfinished song must not be replaced early",
+    );
+    first.ended = true;
+    first.fire("ended");
+    assert.equal(h.engine.startPreparedHandoff("blob:second"), true);
+    assert.equal(
+        second.paused,
+        false,
+        "native playback is requested before returning to UI work",
+    );
+    assert.equal(second.playCalls, 1);
+    h.engine.load("blob:second", { autoplay: true });
+    let loaded = 0;
+    h.engine.on("load", () => loaded++);
+    await Promise.resolve();
+    assert.equal(loaded, 1);
+    assert.equal(second.srcAssignments, 1);
+    assert.equal(second.currentTime, 0);
+    assert.equal(h.engine.isPlaying(), true);
+    assert.equal(
+        h.engine.startPreparedHandoff("blob:second"),
+        false,
+        "handoff is single-use",
+    );
+    h.engine.destroy();
+});
+
+test("prepared handoff rejects stale or ineligible preloads without changing playback", () => {
+    const h = createHarness({
+        isPageHidden: () => true,
+        allowPreparedElementHandoff: () => true,
+    });
+    h.engine.load("blob:first", { autoplay: true });
+    const first = h.elements[0];
+    first.fireLoadedMetadata(75);
+    h.engine.preload("blob:second");
+    first.ended = true;
+    first.fire("ended");
+    assert.equal(h.engine.startPreparedHandoff("blob:second"), false);
+    const second = h.elements[1];
+    second.fireLoadedMetadata(90);
+    second.fire("canplay");
+    assert.equal(h.engine.startPreparedHandoff("blob:wrong"), false);
+    assert.equal(first.src, "blob:first");
+    assert.equal(second.playCalls, 0);
+    h.engine.pause();
+    assert.equal(h.engine.startPreparedHandoff("blob:second"), false);
+    h.engine.destroy();
+    assert.equal(h.engine.startPreparedHandoff("blob:second"), false);
+});
+
 for (const scenario of [
     "platform-disabled",
     "visible",

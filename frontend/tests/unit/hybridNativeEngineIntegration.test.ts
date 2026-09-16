@@ -4,6 +4,7 @@ import { HybridRuntimeAudioEngine } from "../../lib/audio-engine/index";
 import {
     NativeAudioElementEngine,
     type NativeAudioElementLike,
+    type NativeAudioElementEngineOptions,
     type NativeEngineScheduler,
 } from "../../lib/audio-engine/nativeAudioElementEngine";
 
@@ -92,7 +93,9 @@ interface NativeHarness {
     elements: FakeAudioElement[];
 }
 
-const createNativeEngine = (): NativeHarness => {
+const createNativeEngine = (
+    overrides: NativeAudioElementEngineOptions = {},
+): NativeHarness => {
     const elements: FakeAudioElement[] = [];
     const engine = new NativeAudioElementEngine({
         createElement: () => {
@@ -106,6 +109,7 @@ const createNativeEngine = (): NativeHarness => {
         isPageHidden: () => false,
         iosBridgeGate: () => false,
         telemetry: () => undefined,
+        ...overrides,
     });
     return { engine, elements };
 };
@@ -127,6 +131,39 @@ test("hybrid routes direct loads to the native engine in native mode", () => {
     hybrid.load("https://stream.example/track.flac", { autoplay: true });
     assert.equal(native.elements.length, 1);
     assert.equal(native.elements[0].src, "https://stream.example/track.flac");
+});
+
+test("runtime starts a prepared native decoder and preserves adoption through its load API", async () => {
+    const native = createNativeEngine({
+        isPageHidden: () => true,
+        allowPreparedElementHandoff: () => true,
+    });
+    const hybrid = new HybridRuntimeAudioEngine({
+        howlerEngine: native.engine,
+        directEngineDescriptor: "native",
+    });
+    hybrid.load("blob:first", true);
+    const first = native.elements[0];
+    first.fireLoadedMetadata(75);
+    hybrid.preload("blob:second");
+    const second = native.elements[1];
+    second.fireLoadedMetadata(90);
+    Object.defineProperty(second, "readyState", { value: 4 });
+    second.fire("canplay");
+    assert.equal(hybrid.startPreparedHandoff("blob:second"), false);
+    first.ended = true;
+    first.fire("ended");
+    assert.equal(hybrid.startPreparedHandoff("blob:second"), true);
+    assert.equal(second.playCalls, 1);
+    hybrid.load("blob:second", true);
+    let loads = 0;
+    hybrid.on("load", () => loads++);
+    await Promise.resolve();
+    assert.equal(loads, 1);
+    assert.equal(hybrid.getDuration(), 90);
+    assert.equal(hybrid.getDiagnosticState().sourceKind, "device_file");
+    hybrid.destroy();
+    assert.equal(hybrid.startPreparedHandoff("blob:second"), false);
 });
 
 test("runtime diagnostics classify the active source without leaking its identity", () => {

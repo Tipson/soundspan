@@ -468,6 +468,12 @@ const handlePlayRequested = (
 };
 
 const handlePauseRequested = (state: State): Transition => {
+    if (state.status === "ended") {
+        return {
+            state: { ...state, autoplay: false, pauseClassification: "user" },
+            effects: [],
+        };
+    }
     if (
         state.status !== "playing" &&
         state.status !== "loading" &&

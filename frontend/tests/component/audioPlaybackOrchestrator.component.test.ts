@@ -39,6 +39,7 @@ import type {
     AudioPreloadResult,
 } from "../../lib/audio-engine/types";
 import { resetForegroundRecoveryThrottle } from "../../lib/audio-engine/foregroundRecoveryPolicy";
+import { providerFailureCooldown } from "../../lib/audio-engine/providerFailureCooldown";
 import { advanceAuthRuntimeGeneration } from "../../lib/auth-runtime-generation";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
@@ -89,6 +90,7 @@ class FakeAudioEngine {
     public readonly setMutedCalls: boolean[] = [];
     public readonly preloadCalls: Array<{ url: string; format: string }> = [];
     public readonly preloadCancelCalls: string[] = [];
+    public readonly preparedHandoffCalls: string[] = [];
 
     public playCalls = 0;
     public pauseCalls = 0;
@@ -120,6 +122,7 @@ class FakeAudioEngine {
         this.setMutedCalls.length = 0;
         this.preloadCalls.length = 0;
         this.preloadCancelCalls.length = 0;
+        this.preparedHandoffCalls.length = 0;
         this.playCalls = 0;
         this.pauseCalls = 0;
         this.stopCalls = 0;
@@ -152,6 +155,11 @@ class FakeAudioEngine {
 
     load(...args: unknown[]): void {
         this.loadCalls.push({ args });
+    }
+
+    startPreparedHandoff(url: string): boolean {
+        this.preparedHandoffCalls.push(url);
+        return true;
     }
 
     play(): void {
@@ -3456,6 +3464,54 @@ test("next-track preload transfers its ready device file without a second storag
     hookRuntime.unmount();
     assert.equal(releases, 1);
 });
+
+for (const blocked of [false, true]) {
+    test(`early native queue handoff respects the next track cooldown: ${blocked}`, async (t) => {
+        runtimeEngineMode = "native";
+        t.mock.method(providerFailureCooldown, "isCoolingDown", () => blocked);
+        const first = makeTrack("early-current");
+        const next = makeTrack("yt:early-next", {
+            streamSource: "youtube",
+            youtubeVideoId: "early-next",
+        });
+        const ref = "fsa1:user:early" as DeviceAudioVaultRef;
+        const restore = installDeviceAudioVaultFactory(() =>
+            fakeDeviceAudioVault(
+                async ({ authGeneration }) =>
+                    ({
+                        ownerId: "user-1",
+                        authGeneration,
+                        storage: { kind: "desktop-directory", label: "test" },
+                        retain: async () => {
+                            throw Error("not used");
+                        },
+                        access: async () => ({
+                            kind: "play" as const,
+                            url: "blob:https://soundspan.test/early",
+                            release: () => undefined,
+                        }),
+                    }) as unknown as DeviceAudioVaultSession,
+            ),
+        );
+        t.after(restore);
+        setDeviceOfflineRuntimeState("user-1", [
+            managedReadyRecord("user-1", "early-key", next, ref),
+        ]);
+        audioState.currentTrack = first;
+        audioState.queue = [first, next];
+        playbackState.isPlaying = true;
+        const visibility = installVisibilityDocument();
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 240 });
+        visibility.dispatchVisibility("hidden");
+        engine.emit("end");
+        assert.deepEqual(
+            engine.preparedHandoffCalls,
+            blocked ? [] : ["blob:https://soundspan.test/early"],
+        );
+    });
+}
 
 test("stale downloaded metadata cannot reopen a network YouTube preload", async () => {
     const currentTrack = makeTrack("current-before-stale-copy");

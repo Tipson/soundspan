@@ -71,6 +71,7 @@ interface RuntimeAudioEngine extends AudioEngine {
         source: AudioEngineSource | string,
         format?: string,
     ): AudioPreloadLease | null;
+    startPreparedHandoff(source: AudioEngineSource | string): boolean;
     reload(): void;
     getActualCurrentTime(): number;
     getBufferedAheadSec(): number | null;
@@ -250,6 +251,17 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
             );
         }
         return null;
+    }
+
+    /** Forward a prepared handoff without introducing a fallback load on failure. */
+    startPreparedHandoff(source: AudioEngineSource | string): boolean {
+        if (this.isDestroyed || this.directEngineDescriptor !== "native")
+            return false;
+        const resolved = resolveSource(source);
+        if (!this.howlerEngine.startPreparedHandoff?.(resolved)) return false;
+        this.lastSource = resolved;
+        this.lastLoadOptions = { autoplay: true };
+        return true;
     }
 
     reload(): void {

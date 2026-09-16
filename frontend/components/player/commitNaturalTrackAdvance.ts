@@ -3,6 +3,8 @@ import { flushSync } from "react-dom";
 /** Conditions for committing a prepared queue transition from a native end event. */
 export interface NaturalTrackAdvanceOptions {
     readonly advance: () => void;
+    /** Runs before rendering only after all natural handoff guards pass. */
+    readonly startPreparedPlayback?: () => void;
     readonly isNative: boolean;
     readonly isHidden: boolean;
     readonly isPrepared: boolean;
@@ -26,6 +28,7 @@ export function commitNaturalTrackAdvance(
         !options.isListenTogether &&
         !options.viaWatchdog
     ) {
+        options.startPreparedPlayback?.();
         flushSync(options.advance);
     } else {
         options.advance();

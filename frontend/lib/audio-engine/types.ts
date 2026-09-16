@@ -135,6 +135,8 @@ export interface AudioEngine {
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
     ): AudioPreloadLease | null;
+    /** Start an eligible completed-source handoff before costly UI work; false changes nothing. */
+    startPreparedHandoff?(source: AudioEngineSource | string): boolean;
     reload?(): void | Promise<void>;
     getActualCurrentTime?(): number;
     /** Contiguous buffered seconds at the active position; null if unmeasurable. */
