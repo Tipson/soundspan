@@ -1231,3 +1231,115 @@ test("manual next at the last track keeps the unfinished track playing", async (
     assert.equal(playback.currentTime, 4);
     assert.equal(playback.isPlaying, true);
 });
+
+test("manual next at the Wave tail waits for one refill and advances once", async (t) => {
+    const currentTrack = {
+        ...makeTrack("yt:AAAAAAAAAAA", "provider-artist"),
+        streamSource: "youtube" as const,
+        youtubeVideoId: "AAAAAAAAAAA",
+        provider: {
+            source: "youtube" as const,
+            youtubeVideoId: "AAAAAAAAAAA",
+        },
+    };
+    const nextVideoId = "BBBBBBBBBBB";
+    personalizedFeed.current = {
+        shelves: {
+            discovery: [
+                {
+                    id: `yt:${nextVideoId}`,
+                    title: "Fresh tail track",
+                    duration: 180,
+                    trackNo: null,
+                    artist: { id: null, name: "Fresh artist" },
+                    album: {
+                        id: null,
+                        title: "Fresh album",
+                        coverArt: null,
+                    },
+                    source: "youtube",
+                    provider: {
+                        tidalTrackId: null,
+                        youtubeVideoId: nextVideoId,
+                    },
+                    streamSource: "youtube",
+                    youtubeVideoId: nextVideoId,
+                },
+            ],
+            quickPicks: [],
+            listenAgain: [],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
+    let releaseFeed!: () => void;
+    personalizedFeedGate.current = new Promise<void>((resolve) => {
+        releaseFeed = resolve;
+    });
+    const state = createDeferredAudioState({
+        queue: [currentTrack],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        vibeMode: true,
+    });
+    const playback = createPlaybackStub({ currentTime: 37, duration: 200 });
+    playback.isPlaying = true;
+    stateHolder.current = state;
+    playbackHolder.current = playback;
+    apiCalls.personalizedRequests.length = 0;
+
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
+    const { createRoot } = await import("react-dom/client");
+    const controlsRef: { current: ReturnType<typeof useAudioControls> | null } =
+        { current: null };
+    function Probe() {
+        controlsRef.current = useAudioControls();
+        return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        releaseFeed();
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    const render = async () =>
+        React.act(async () => {
+            root.render(
+                React.createElement(
+                    AudioControlsProvider,
+                    null,
+                    React.createElement(Probe),
+                ),
+            );
+        });
+
+    await render();
+    await React.act(async () => {
+        controlsRef.current?.next();
+        controlsRef.current?.next();
+        await flushAsync();
+    });
+    assert.equal(apiCalls.personalizedRequests.length, 1);
+    assert.equal(state.currentIndex, 0);
+
+    await React.act(async () => {
+        releaseFeed();
+        await flushAsync();
+        state.commit();
+    });
+    await render();
+    state.commit();
+
+    assert.equal(state.currentIndex, 1);
+    assert.equal(
+        (state.currentTrack as { youtubeVideoId?: string }).youtubeVideoId,
+        nextVideoId,
+    );
+    assert.equal(playback.currentTime, 0);
+    assert.equal(playback.isPlaying, true);
+});

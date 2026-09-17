@@ -6,6 +6,7 @@ import {
     useCallback,
     useRef,
     useEffect,
+    useState,
     ReactNode,
     useMemo,
 } from "react";
@@ -15,7 +16,10 @@ import {
     Audiobook,
     Podcast,
 } from "./audio-state-context";
-import type { AudioControlsContextType } from "./audio-controls-types";
+import type {
+    AudioControlsContextType,
+    VibeQueueMutationKind,
+} from "./audio-controls-types";
 import { usePlaybackStatus } from "./audio-playback-context";
 import { buildPlaybackView, PlaybackClockBridge } from "./audio-playback-view";
 import { useAudioVolumeMode } from "./audio-volume-mode-context";
@@ -63,6 +67,7 @@ import {
 import { resetPersistedTrackStartPosition } from "@/lib/persisted-playback-position";
 import { resolveListenTogetherNavigationIndex } from "@/lib/listen-together-navigation";
 import {
+    getPlaybackIntentGeneration,
     recordExplicitPlaybackPause,
     recordExplicitPlaybackResume,
     writePlaybackAdvanceOrigin,
@@ -338,6 +343,16 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     const lastCursorIsShuffleRef = useRef<boolean | null>(null);
     const adaptiveWaveSkipStreakRef = useRef(0);
     const adaptiveWaveRefreshTokenRef = useRef<object | null>(null);
+    const pendingManualTailAdvanceRef = useRef<{
+        token: object;
+        trackId: string;
+        currentIndex: number;
+        intentGeneration: number;
+        mutation: VibeQueueMutationKind | null;
+        settled: boolean;
+    } | null>(null);
+    const [manualTailAdvanceResolution, setManualTailAdvanceResolution] =
+        useState(0);
 
     const queueRef = useRef(state.queue);
 
@@ -370,6 +385,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             if (repeatTimeoutRef.current) {
                 clearTimeout(repeatTimeoutRef.current);
             }
+            pendingManualTailAdvanceRef.current = null;
             queueDebugLog("AudioControlsProvider unmounted");
         };
     }, []);
@@ -1061,6 +1077,15 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
     const advanceQueue = useCallback(
         (origin: PlaybackAdvanceOrigin) => {
+            const pendingTailAdvance = pendingManualTailAdvanceRef.current;
+            if (
+                origin === "manual" &&
+                pendingTailAdvance !== null &&
+                pendingTailAdvance.trackId === state.currentTrack?.id &&
+                pendingTailAdvance.currentIndex === state.currentIndex
+            ) {
+                return;
+            }
             writePlaybackAdvanceOrigin(origin, state.currentTrack?.id ?? null);
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
@@ -1131,10 +1156,60 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         : state.repeatMode,
             });
             if (advance.kind === "stop") {
+                if (
+                    origin === "manual" &&
+                    state.vibeMode &&
+                    state.currentTrack?.id
+                ) {
+                    const token = {};
+                    const pending = {
+                        token,
+                        trackId: state.currentTrack.id,
+                        currentIndex: state.currentIndex,
+                        intentGeneration: getPlaybackIntentGeneration(),
+                        mutation: null as VibeQueueMutationKind | null,
+                        settled: false,
+                    };
+                    pendingManualTailAdvanceRef.current = pending;
+                    void startVibeMode({
+                        queueCommitToken: token,
+                        onLocalQueueCommit: (commit) => {
+                            if (
+                                commit.token === token &&
+                                pendingManualTailAdvanceRef.current === pending
+                            ) {
+                                pending.mutation = commit.mutation;
+                            }
+                        },
+                    }).then(
+                        () => {
+                            if (
+                                pendingManualTailAdvanceRef.current !== pending
+                            ) {
+                                return;
+                            }
+                            pending.settled = true;
+                            setManualTailAdvanceResolution(
+                                (resolution) => resolution + 1,
+                            );
+                        },
+                        () => {
+                            if (
+                                pendingManualTailAdvanceRef.current !== pending
+                            ) {
+                                return;
+                            }
+                            pending.settled = true;
+                            setManualTailAdvanceResolution(
+                                (resolution) => resolution + 1,
+                            );
+                        },
+                    );
+                    return;
+                }
                 // A natural end can arrive here after online auto-match finishes
                 // without extending the queue. Retire its play intent so the
                 // watchdog cannot recover an already completed media element.
-                // Manual Next at the queue boundary remains a no-op.
                 if (origin === null) {
                     playbackState.setIsPlaying(false);
                 }
@@ -1203,6 +1278,51 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         ],
     );
     const next = useCallback(() => advanceQueue("manual"), [advanceQueue]);
+
+    useEffect(() => {
+        const pending = pendingManualTailAdvanceRef.current;
+        if (!pending) return;
+        if (
+            !state.vibeMode ||
+            state.currentTrack?.id !== pending.trackId ||
+            getPlaybackIntentGeneration() !== pending.intentGeneration ||
+            (state.currentIndex !== pending.currentIndex &&
+                pending.mutation !== "replace")
+        ) {
+            pendingManualTailAdvanceRef.current = null;
+            return;
+        }
+
+        const advance = resolveQueueAdvance({
+            action: "next",
+            queue: state.queue,
+            currentIndex: state.currentIndex,
+            isShuffle: state.isShuffle,
+            shuffleIndices: state.shuffleIndices,
+            repeatMode: state.repeatMode,
+        });
+        if (advance.kind !== "stop") {
+            const nextItem = state.queue[advance.index];
+            pendingManualTailAdvanceRef.current = null;
+            if (nextItem) {
+                startQueueItemAtIndex(advance.index, nextItem);
+            }
+            return;
+        }
+        if (pending.settled) {
+            pendingManualTailAdvanceRef.current = null;
+        }
+    }, [
+        manualTailAdvanceResolution,
+        state.currentIndex,
+        state.currentTrack,
+        state.isShuffle,
+        state.queue,
+        state.repeatMode,
+        state.shuffleIndices,
+        state.vibeMode,
+        startQueueItemAtIndex,
+    ]);
 
     const previous = useCallback(() => {
         writePlaybackAdvanceOrigin("manual", state.currentTrack?.id ?? null);
