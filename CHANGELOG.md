@@ -1,5 +1,10 @@
 # Changelog
 
+## Production playback pacing
+
+- Reduce the retained YouTube extraction pause from 10–15 seconds to 1–2 seconds on the deployed service, preserving bounded concurrency and provider cooldown. See the Wave desktop startup release note for measured scope and rollback.
+
+
 ## Unreleased server music connections
 
 - Search shared VK and Yandex catalogs alongside existing music results, retain selectable recording versions, prefer confirmed explicit matches, and keep partial catalog outages visible. Bound catalog concurrency, cache size and provider retry pressure.
