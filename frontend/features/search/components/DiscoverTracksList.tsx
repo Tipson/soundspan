@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Music, Play } from "lucide-react";
 import { DiscoverResult } from "../types";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
+import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
 import { getArtistRouteParam } from "@/utils/artistRoute";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { toMusicSourcePlaybackTrack } from "@/lib/audio/musicSourcePlayback";
 import {
     formatGoToSearchArtistAria,
     formatPlaySearchTrackAria,
@@ -43,12 +45,19 @@ const getTrackArtistHref = (track: DiscoverResult): string | null => {
 function rowKey(track: DiscoverResult, index: number): string {
     return `discover-track-${track.id || track.name}-${index}`;
 }
+function versionKey(track: DiscoverResult): string {
+    return track.musicSourceRecording
+        ? `${track.musicSourceRecording.provider}:${track.musicSourceRecording.id}`
+        : `youtube:${track.youtubeVideoId ?? track.id ?? ""}`;
+}
 
 function toPlaybackTrack(
     track: DiscoverResult,
     key: string,
     match: SearchProviderMatch,
 ) {
+    if (match.musicSourceRecording)
+        return toMusicSourcePlaybackTrack(match.musicSourceRecording);
     const playbackId = match.youtubeVideoId
         ? `yt:${match.youtubeVideoId}`
         : key;
@@ -66,6 +75,12 @@ function toPlaybackTrack(
 function getDirectProviderMatch(
     track: DiscoverResult,
 ): SearchProviderMatch | null {
+    if (track.musicSourceRecording)
+        return {
+            source: track.musicSourceRecording.provider,
+            musicSourceRecording: track.musicSourceRecording,
+            duration: track.musicSourceRecording.duration,
+        };
     if (track.streamSource === "youtube" && track.youtubeVideoId) {
         return {
             source: "youtube",
@@ -87,10 +102,28 @@ export function DiscoverTracksList({
 }: DiscoverTracksListProps) {
     const router = useRouter();
     const { playTracks } = useAudioControls();
+    const [selections, setSelections] = useState<Record<string, string>>({});
+    const [playbackNotice, setPlaybackNotice] = useState("");
 
     const visibleTracks = useMemo(
-        () => (limit === null ? tracks : tracks.slice(0, limit)),
-        [tracks, limit],
+        () =>
+            (limit === null ? tracks : tracks.slice(0, limit)).map(
+                (track, index) => {
+                    const selected = track.versions?.find(
+                        (version) =>
+                            versionKey(version) ===
+                            selections[rowKey(track, index)],
+                    );
+                    return selected
+                        ? {
+                              ...selected,
+                              id: track.id,
+                              versions: track.versions,
+                          }
+                        : track;
+                },
+            ),
+        [tracks, limit, selections],
     );
 
     const directMatches = useMemo(() => {
@@ -140,12 +173,25 @@ export function DiscoverTracksList({
         (track: DiscoverResult, key: string) => {
             const match = matches.get(key);
             if (match) {
-                const selectedIndex = playableQueue.findIndex(
+                const together = isListenTogetherActiveOrPending();
+                if (together && match.musicSourceRecording) {
+                    setPlaybackNotice(
+                        "Этот источник доступен для личного прослушивания. Сначала выйдите из совместной сессии.",
+                    );
+                    return;
+                }
+                setPlaybackNotice("");
+                const eligibleQueue = together
+                    ? playableQueue.filter(
+                          (item) => !item.track.musicSourceRecording,
+                      )
+                    : playableQueue;
+                const selectedIndex = eligibleQueue.findIndex(
                     (candidate) => candidate.key === key,
                 );
                 if (selectedIndex < 0) return;
                 playTracks(
-                    playableQueue.map((candidate) => candidate.track),
+                    eligibleQueue.map((candidate) => candidate.track),
                     selectedIndex,
                 );
                 return;
@@ -162,6 +208,11 @@ export function DiscoverTracksList({
 
     return (
         <div className="space-y-1.5" data-tv-section="search-discover-tracks">
+            {playbackNotice && (
+                <p role="status" className="p-3 text-sm text-content-secondary">
+                    {playbackNotice}
+                </p>
+            )}
             {visibleTracks.map((track, index) => {
                 const imageUrl = getProxiedImageUrl(track.image);
                 const key = rowKey(track, index);
@@ -228,11 +279,62 @@ export function DiscoverTracksList({
                                 {match?.source === "youtube" && (
                                     <YouTubeBadge />
                                 )}
+                                {match?.source === "vk" ||
+                                match?.source === "yandex" ? (
+                                    <span className="shrink-0 text-[10px] font-normal text-content-muted">
+                                        {match.source === "vk"
+                                            ? "VK"
+                                            : "Яндекс"}
+                                    </span>
+                                ) : null}
                             </p>
                             <p className="truncate text-xs text-content-secondary">
                                 {track.artist}
                                 {track.album ? ` — ${track.album}` : ""}
                             </p>
+                            {track.versions && track.versions.length > 1 ? (
+                                <select
+                                    aria-label={`Источник и версия: ${track.name}`}
+                                    className="mt-1 min-h-11 max-w-full rounded-lg border border-line-strong bg-surface-elevated px-2 text-xs text-content-secondary"
+                                    value={versionKey(track)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        setSelections((previous) => ({
+                                            ...Object.fromEntries(
+                                                Object.entries(previous).slice(
+                                                    -99,
+                                                ),
+                                            ),
+                                            [key]: value,
+                                        }));
+                                    }}
+                                >
+                                    {track.versions.map((version) => (
+                                        <option
+                                            key={versionKey(version)}
+                                            value={versionKey(version)}
+                                        >
+                                            {version.musicSourceRecording
+                                                ?.provider === "vk"
+                                                ? "VK"
+                                                : version.musicSourceRecording
+                                                        ?.provider === "yandex"
+                                                  ? "Яндекс Музыка"
+                                                  : "YouTube Music"}
+                                            {version.musicSourceRecording
+                                                ?.contentVersion === "explicit"
+                                                ? " · Explicit"
+                                                : version.musicSourceRecording
+                                                        ?.contentVersion ===
+                                                    "clean"
+                                                  ? " · С цензурой"
+                                                  : " · Версия не отмечена"}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : null}
                         </div>
                         <div
                             className="flex items-center"
@@ -243,8 +345,12 @@ export function DiscoverTracksList({
                             <TrackOverflowMenu
                                 track={actionTrack}
                                 triggerClassName="h-11 w-11 p-0"
-                                showPlayNext={isPlayable}
-                                showAddToQueue={isPlayable}
+                                showPlayNext={
+                                    isPlayable && !match?.musicSourceRecording
+                                }
+                                showAddToQueue={
+                                    isPlayable && !match?.musicSourceRecording
+                                }
                                 showAddToPlaylist={isPlayable}
                                 showMatchVibe={false}
                                 showVibeMap={false}

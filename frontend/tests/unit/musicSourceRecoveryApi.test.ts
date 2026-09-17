@@ -11,6 +11,97 @@ const recording = {
     contentVersion: "unknown" as const,
 };
 const leaseId = "a".repeat(48);
+test("catalog API encodes query and keeps only sanitized recording metadata", async (t) => {
+    let requested = "";
+    t.mock.method(globalThis, "fetch", async (url: unknown) => {
+        requested = String(url);
+        return Response.json({
+            tracks: [
+                {
+                    ...recording,
+                    provider: "vk",
+                    id: "1_2",
+                    preview: false,
+                    token: "secret",
+                },
+            ],
+            unavailable: ["yandex"],
+        });
+    });
+    const result = await new Client(
+        "https://soundspan.test",
+    ).searchMusicSourceCatalog("A & B");
+    assert.ok(requested.includes("query=A+%26+B"));
+    assert.equal(JSON.stringify(result).includes("secret"), false);
+    assert.deepEqual(result.unavailable, ["yandex"]);
+});
+test("selected playback validates the provider and owned lease path", async (t) => {
+    const candidate = {
+        ...recording,
+        provider: "vk" as const,
+        id: "1_2",
+        preview: false,
+    };
+    let body: unknown;
+    t.mock.method(
+        globalThis,
+        "fetch",
+        async (_url: unknown, options: RequestInit) => {
+            body = JSON.parse(String(options.body));
+            return Response.json({
+                playback: {
+                    leaseId,
+                    provider: "vk",
+                    streamPath: `/api/music-sources/leases/${leaseId}/stream`,
+                },
+            });
+        },
+    );
+    assert.equal(
+        await new Client().resolveMusicSourcePlayback(
+            candidate,
+            new AbortController().signal,
+        ),
+        `/api/music-sources/leases/${leaseId}/stream`,
+    );
+    assert.deepEqual(body, {
+        ...recording,
+        provider: "vk",
+        providerTrackId: "1_2",
+    });
+    t.mock.method(globalThis, "fetch", async () =>
+        Response.json({
+            playback: {
+                leaseId,
+                provider: "yandex",
+                streamPath: `/api/music-sources/leases/${leaseId}/stream`,
+            },
+        }),
+    );
+    await assert.rejects(new Client().resolveMusicSourcePlayback(candidate));
+});
+test("catalog selection includes exact provider id in resolution", async (t) => {
+    let body: unknown;
+    t.mock.method(
+        globalThis,
+        "fetch",
+        async (_url: unknown, options: RequestInit) => {
+            body = JSON.parse(String(options.body));
+            return Response.json({ playback: null });
+        },
+    );
+    await new Client().resolveMusicSource({
+        ...recording,
+        provider: "vk",
+        id: "1_2",
+        preview: false,
+    });
+    assert.deepEqual(body, {
+        ...recording,
+        provider: "vk",
+        providerTrackId: "1_2",
+    });
+});
 test("recovery requests server selection with cancellation and validates a private stream path", async (t) => {
     const calls: RequestInit[] = [];
     t.mock.method(

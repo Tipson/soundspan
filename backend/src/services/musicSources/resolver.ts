@@ -138,11 +138,19 @@ export function createMusicSourceResolver(options: Options) {
     return {
         async resolve(
             userId: string,
-            wanted: RecordingRequest,
+            wanted: RecordingRequest | null,
             signal: AbortSignal,
             provider?: MusicSource,
+            selectedTrackId?: string,
         ) {
             signal.throwIfAborted();
+            if (!wanted && (!provider || !selectedTrackId))
+                throw new MusicSourceError("invalid_request");
+            if (
+                selectedTrackId !== undefined &&
+                (!provider || !selectedTrackId)
+            )
+                throw new MusicSourceError("invalid_request");
             prune();
             if (resolving >= 2 || leases.size >= 1000)
                 throw new MusicSourceError("busy", 5);
@@ -186,10 +194,20 @@ export function createMusicSourceResolver(options: Options) {
                     );
                     usage.resolutionStarted(source.provider);
                     try {
-                        const candidates = await source.search(
-                            `${wanted.artists.join(" ")} ${wanted.title}`,
-                            operation.signal,
-                        );
+                        const selected = selectedTrackId
+                            ? await source.lookup(
+                                  selectedTrackId,
+                                  operation.signal,
+                              )
+                            : null;
+                        const candidates = selectedTrackId
+                            ? selected?.id === selectedTrackId
+                                ? [selected]
+                                : []
+                            : await source.search(
+                                  `${wanted!.artists.join(" ")} ${wanted!.title}`,
+                                  operation.signal,
+                              );
                         operation.signal.throwIfAborted();
                         const matches = [
                             ...new Map(
@@ -197,7 +215,7 @@ export function createMusicSourceResolver(options: Options) {
                                     .filter(
                                         (c) =>
                                             c.provider === source.provider &&
-                                            matchesRecording(wanted, c),
+                                            matchesRecording(wanted ?? c, c),
                                     )
                                     .map((c) => [c.id, c]),
                             ).values(),

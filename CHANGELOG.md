@@ -2,6 +2,10 @@
 
 ## Unreleased server music connections
 
+- Search shared VK and Yandex catalogs alongside existing music results, retain selectable recording versions, prefer confirmed explicit matches, and keep partial catalog outages visible. Bound catalog concurrency, cache size and provider retry pressure.
+- Preserve exact service recording identities through playback, renewable device-download URLs and native next-track preloading. Downloaded playback remains device-only when started from Downloads. Service catalog playlist and preference persistence remains outside this release.
+- Let listeners report a wrong recording, missing sound or interruption from the player. Queue reports offline with bounded, account-isolated diagnostics and acknowledge delivery only after private administrator notifications are persisted. Administrator notifications show allowlisted playback evidence.
+
 - Reserve resolution time for each available server music source so a stalled VK or Yandex lookup or audio probe cannot consume the entire fallback deadline. Preserve the full budget for a single selected source, listener cancellation, and the acquired recording's stable representation.
 
 - Retain a usable offline document when a network change interrupts its new JavaScript or stylesheet downloads. Prepare bootstrap dependencies before publishing fresh navigation HTML, and bound stalled document and asset bodies instead of leaving PWA startup on an endless loading screen.

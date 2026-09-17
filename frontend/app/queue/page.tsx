@@ -116,7 +116,7 @@ export default function QueuePage() {
 
     const resolveQueueSource = (
         index: number,
-        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct" | "audius",
+        fallback?: import("@soundspan/media-metadata-contract").RemoteMediaSource,
     ): "local" | "peer" | "tidal" | "youtube" => {
         const resolved = trackAvailability.get(index)?.source;
         if (
@@ -818,7 +818,7 @@ function NextTrackRow({
     isInGroup: boolean;
     resolveQueueSource: (
         index: number,
-        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct" | "audius",
+        fallback?: import("@soundspan/media-metadata-contract").RemoteMediaSource,
     ) => "local" | "peer" | "tidal" | "youtube";
     onMoveUp: (index: number) => void;
     onMoveDown: (index: number) => void;
@@ -975,7 +975,7 @@ function EarlierQueueTrackRow({
     isInGroup: boolean;
     resolveQueueSource: (
         index: number,
-        fallback?: "peer" | "tidal" | "youtube" | "youtube-direct" | "audius",
+        fallback?: import("@soundspan/media-metadata-contract").RemoteMediaSource,
     ) => "local" | "peer" | "tidal" | "youtube";
     trackAvailability: Map<number, AvailabilityItem>;
 }) {

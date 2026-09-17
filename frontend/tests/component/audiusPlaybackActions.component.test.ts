@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Track } from "../../lib/audio-state-context";
 import { toAudiusPlaybackTrack } from "../../lib/audio/audiusPlayback";
+import { toMusicSourcePlaybackTrack } from "../../lib/audio/musicSourcePlayback";
 import { ru } from "../../lib/i18n/ru";
 
 GlobalRegistrator.register({ url: "https://soundspan.test/queue" });
@@ -46,6 +47,7 @@ let track = audius;
 let preferenceQueries = 0;
 let writes = 0;
 let queued = 0;
+const downloaded: unknown[] = [];
 const noop = () => {};
 const controls = {
     pause: noop,
@@ -202,6 +204,8 @@ mock.module("@/lib/toast-context", {
 mock.module("@/lib/api", {
     namedExports: {
         api: {
+            getMusicSourceStreamUrl: (provider: string, id: string) =>
+                `/api/music-sources/recordings/${provider}/${id}/stream`,
             addTrackToPlaylist: async () => {
                 writes++;
             },
@@ -220,11 +224,69 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
         useOptionalDeviceOffline: () => ({
             recordForTrack: () => null,
             storage: { status: "ready" },
-            download: () => {
+            download: async (input: unknown) => {
                 writes++;
+                downloaded.push(input);
+                return { status: "ready" };
             },
         }),
     },
+});
+
+test("service catalog menu downloads an exact recording and does not offer unsupported playlist writes", async () => {
+    const { createRoot } = await import("react-dom/client");
+    const { TrackOverflowMenu } =
+        await import("../../components/ui/TrackOverflowMenu");
+    const value = toMusicSourcePlaybackTrack({
+        provider: "vk",
+        id: "1_2",
+        title: "Song",
+        artists: ["Artist"],
+        duration: 180,
+        contentVersion: "explicit",
+        preview: false,
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+        await act(async () =>
+            root.render(
+                React.createElement(TrackOverflowMenu, { track: value }),
+            ),
+        );
+        await act(async () =>
+            container
+                .querySelector<HTMLButtonElement>(
+                    'button[aria-haspopup="menu"]',
+                )!
+                .click(),
+        );
+        const buttons = [
+            ...container.querySelectorAll<HTMLButtonElement>(
+                '[role="menuitem"]',
+            ),
+        ];
+        assert.ok(
+            !buttons.some(
+                (button) => button.textContent === ru.trackMenu.addPlaylist,
+            ),
+        );
+        const download = buttons.find(
+            (button) => button.textContent === ru.trackMenu.download,
+        );
+        assert.ok(download);
+        await act(async () => download.click());
+        assert.deepEqual(JSON.parse(JSON.stringify(downloaded.at(-1))), {
+            track: value,
+            sourceUrl: "/api/music-sources/recordings/vk/1_2/stream",
+            quality: "auto",
+        });
+    } finally {
+        writes = 0;
+        await act(async () => root.unmount());
+        container.remove();
+    }
 });
 mock.module("@/components/ui/PlaylistSelector", {
     namedExports: {

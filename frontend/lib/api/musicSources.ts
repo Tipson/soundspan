@@ -1,5 +1,6 @@
 import type { ApiClientConstructor } from "./core";
 import { z } from "zod";
+import { musicSourceCandidateSchema } from "../audio/musicSourcePlayback";
 
 /** Server-owned direct playback provider. */
 export type MusicSourceProvider = "yandex" | "vk";
@@ -64,6 +65,60 @@ export function WithMusicSources<TBase extends ApiClientConstructor>(
     Base: TBase,
 ) {
     abstract class MusicSourcesApi extends Base {
+        /** Renewable authenticated recording URL for native preloading and device downloads. */
+        getMusicSourceStreamUrl(
+            provider: MusicSourceProvider,
+            id: string,
+        ): string {
+            if (
+                !(
+                    provider === "vk"
+                        ? /^-?\d{1,20}_\d{1,20}$/
+                        : provider === "yandex"
+                          ? /^\d{1,20}$/
+                          : /$a/
+                ).test(id)
+            )
+                throw new Error("Invalid music source identity");
+            return `/api/music-sources/recordings/${provider}/${id}/stream`;
+        }
+        /** Search platform connections without exposing credentials or stream addresses. */
+        async searchMusicSourceCatalog(query: string, signal?: AbortSignal) {
+            const response = await this.request(
+                `/music-sources/catalog?${new URLSearchParams({ query })}`,
+                {
+                    signal,
+                    timeoutMs: 6000,
+                    retryOnTimeout: false,
+                },
+            );
+            return z
+                .object({
+                    tracks: z.array(musicSourceCandidateSchema).max(40),
+                    unavailable: z.array(z.enum(["vk", "yandex"])).max(2),
+                })
+                .parse(response);
+        }
+        /** Resolve the selected catalog ID to an authenticated same-origin stream. */
+        async resolveMusicSourcePlayback(
+            candidate: MusicSourceCandidate,
+            signal?: AbortSignal,
+        ): Promise<string> {
+            const selected = musicSourceCandidateSchema.parse(candidate);
+            const result = await this.resolveMusicSource(selected, signal);
+            const { playback } = recoveryResponse.parse(result);
+            if (!playback)
+                throw new Error(
+                    "Эта запись сейчас недоступна. Выберите другую версию.",
+                );
+            const path = `/api/music-sources/leases/${playback.leaseId}/stream`;
+            if (
+                playback.provider !== selected.provider ||
+                playback.streamPath !== path
+            )
+                throw new Error("Invalid selected recording stream");
+            return path;
+        }
         /** Request one exact replacement without retrying or changing catalog identity. */
         async resolveMusicSourceForRecovery(
             recording: MusicSourceRecording,
@@ -108,19 +163,32 @@ export function WithMusicSources<TBase extends ApiClientConstructor>(
                 { retryOnTimeout: false },
             );
         }
-        async resolveMusicSource(candidate: MusicSourceCandidate): Promise<{
+        async resolveMusicSource(
+            candidate: MusicSourceCandidate,
+            signal?: AbortSignal,
+        ): Promise<{
             playback: {
                 leaseId: string;
                 provider: MusicSourceProvider;
                 streamPath: string;
             } | null;
         }> {
-            const { provider, title, artists, duration, contentVersion, isrc } =
-                candidate;
+            const {
+                provider,
+                id,
+                title,
+                artists,
+                duration,
+                contentVersion,
+                isrc,
+            } = candidate;
             return this.request("/music-sources/resolve", {
                 method: "POST",
+                signal,
+                timeoutMs: 20_000,
                 body: JSON.stringify({
                     provider,
+                    providerTrackId: id,
                     title,
                     artists,
                     duration,

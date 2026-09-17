@@ -48,7 +48,9 @@ import {
 
 export interface PlaybackStreamProfile {
     mode: "direct";
-    sourceType: "local" | "peer" | "tidal" | "ytmusic" | "audius" | "unknown";
+    sourceType:
+        | import("@soundspan/media-metadata-contract").AudioEngineSourceType
+        | "unknown";
     codec: string | null;
     bitrateKbps: number | null;
 }

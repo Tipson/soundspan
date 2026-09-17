@@ -4,9 +4,13 @@ import type {
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
 import type { DeviceAudioVaultRef } from "./vault/types";
+import type { MusicSourceCandidate } from "@/lib/api/musicSources";
+import type { CanonicalMediaProviderIdentity } from "@soundspan/media-metadata-contract";
 
 /** Portable metadata required to render and replay one downloaded track. */
 export interface DeviceOfflineTrack {
+    provider?: CanonicalMediaProviderIdentity;
+    musicSourceRecording?: MusicSourceCandidate;
     id: string;
     title: string;
     artist: { id?: string; name: string };

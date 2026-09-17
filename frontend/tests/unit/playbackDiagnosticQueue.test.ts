@@ -73,6 +73,33 @@ function harness() {
         },
     };
 }
+test("manual reports survive automatic diagnostic pressure and are delivered first", async () => {
+    const h = harness();
+    assert.equal(
+        h.queue.enqueue("player.user_report", {
+            reason: "no_sound",
+            reportTrackId: "yt:abc",
+            reportTitle: "Song",
+            reportArtist: "Artist",
+            token: "secret",
+        }),
+        "stored",
+    );
+    for (let i = 0; i < 110; i++) {
+        h.setNow(100_001 + i);
+        h.queue.enqueue("player.rebuffer", { currentTimeSec: i });
+    }
+    h.setOnline(true);
+    await h.queue.flush();
+    const report = h.sent[0] as {
+        event: string;
+        fields: Record<string, unknown>;
+    };
+    assert.equal(report.event, "player.user_report");
+    assert.equal(report.fields.reportTitle, "Song");
+    assert.equal(report.fields.token, undefined);
+    h.queue.dispose();
+});
 
 test("diagnostics exclude credentials, URLs, raw errors and non-finite values", () => {
     const clean = sanitizePlaybackDiagnosticFields({

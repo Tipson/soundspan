@@ -7,6 +7,10 @@ import type { SearchResult, DiscoverResult, AliasInfo } from "../types";
 import { deriveDiscoverySelection } from "../discoverySelection";
 import { useMemo } from "react";
 import { useLibraryTrackSearch } from "./useLibraryTrackSearch";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { queryKeys } from "@/lib/queryKeys";
+import { mergeServiceCatalogResults } from "../serviceCatalogMerge";
 
 interface UseSearchDataProps {
     query: string;
@@ -26,6 +30,7 @@ interface UseSearchDataProps {
 }
 
 interface UseSearchDataReturn {
+    catalogNotice: string | null;
     libraryResults: SearchResult | null;
     discoverResults: DiscoverResult[];
     similarArtists: DiscoverResult[];
@@ -80,9 +85,28 @@ export function useSearchData({
         discoverScope,
     );
 
-    const discoverResults = useMemo(() => {
-        return discoverData?.results || [];
-    }, [discoverData]);
+    const serviceSearchEnabled =
+        source === "all" &&
+        discoverType !== "podcasts" &&
+        (discoverScope === "all" || discoverScope === "tracks") &&
+        query.trim().length >= 2 &&
+        query.trim().length <= 200;
+    const serviceCatalog = useQuery({
+        queryKey: queryKeys.serviceCatalog(query.trim()),
+        queryFn: ({ signal }) =>
+            api.searchMusicSourceCatalog(query.trim(), signal),
+        enabled: serviceSearchEnabled,
+        staleTime: 60_000,
+        retry: false,
+    });
+    const discoverResults = useMemo(
+        () =>
+            mergeServiceCatalogResults(
+                discoverData?.results ?? [],
+                serviceSearchEnabled ? (serviceCatalog.data?.tracks ?? []) : [],
+            ),
+        [discoverData, serviceCatalog.data, serviceSearchEnabled],
+    );
 
     const aliasInfo = useMemo(() => {
         return discoverData?.aliasInfo || null;
@@ -122,6 +146,13 @@ export function useSearchData({
     const hasSearched = query.trim().length >= 2;
 
     return {
+        catalogNotice:
+            serviceSearchEnabled && serviceCatalog.isError
+                ? "VK и Яндекс сейчас недоступны. Показаны результаты остальных каталогов."
+                : serviceSearchEnabled &&
+                    serviceCatalog.data?.unavailable.length
+                  ? `${serviceCatalog.data.unavailable.map((source) => (source === "vk" ? "VK" : "Яндекс")).join(" и ")} сейчас недоступны. Показаны результаты остальных каталогов.`
+                  : null,
         libraryResults: effectiveLibraryResults || null,
         discoverResults,
         similarArtists,
@@ -130,7 +161,10 @@ export function useSearchData({
             libraryType === "tracks"
                 ? libraryTrackSearch.isLoading
                 : isLibrarySearching || isLibraryFetching,
-        isDiscoverSearching: isDiscoverSearching || isDiscoverFetching,
+        isDiscoverSearching:
+            isDiscoverSearching ||
+            isDiscoverFetching ||
+            (serviceSearchEnabled && serviceCatalog.isFetching),
         hasSearched,
         canRequestMoreDiscoverTracks: Boolean(
             discoverData?.pageInfo?.canRequestMoreTracks,

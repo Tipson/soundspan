@@ -3,6 +3,7 @@ import type {
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
 import type { Track as AudioTrack } from "@/lib/audio-state-context";
+import { musicSourceCandidateSchema } from "./audio/musicSourcePlayback";
 
 export type TrackRef =
     | { trackId: string }
@@ -148,7 +149,9 @@ export function resolveTrackProviderSource(
         input.source === "local" ||
         input.source === "tidal" ||
         input.source === "youtube" ||
-        input.source === "audius"
+        input.source === "audius" ||
+        input.source === "vk" ||
+        input.source === "yandex"
             ? input.source
             : null;
     return (
@@ -233,7 +236,9 @@ export function isPlaybackOnlyTrack(input: TrackRefInput): boolean {
     return (
         !hasLocalTrackBacking(input) &&
         (resolveTrackProviderSource(input) === "audius" ||
-            input.id?.startsWith("audius:") === true)
+            resolveTrackProviderSource(input) === "vk" ||
+            resolveTrackProviderSource(input) === "yandex" ||
+            /^(audius|vk|yandex):/.test(input.id ?? ""))
     );
 }
 
@@ -260,6 +265,28 @@ export function normalizeActionableAudioTrack(
     }
 
     const providerSource = resolveTrackProviderSource(track);
+    if (providerSource === "vk" || providerSource === "yandex") {
+        const parsed = musicSourceCandidateSchema.safeParse(
+            track.musicSourceRecording,
+        );
+        if (
+            !parsed.success ||
+            parsed.data.provider !== providerSource ||
+            track.id !== `${providerSource}:${parsed.data.id}` ||
+            track.provider?.providerTrackId !== parsed.data.id
+        )
+            return null;
+        return {
+            ...track,
+            mediaSource: providerSource,
+            source: providerSource,
+            streamSource: providerSource,
+            musicSourceRecording: parsed.data,
+            youtubeVideoId: undefined,
+            tidalTrackId: undefined,
+            youtubeAudioFormat: undefined,
+        };
+    }
     if (providerSource === "audius") {
         const id = track.provider?.providerTrackId;
         if (
@@ -401,7 +428,9 @@ export function isRemoteTrack(input: TrackRefInput | TrackRef): boolean {
         streamSource === "youtube" ||
         streamSource === "youtube-direct" ||
         streamSource === "tidal" ||
-        streamSource === "audius"
+        streamSource === "audius" ||
+        streamSource === "vk" ||
+        streamSource === "yandex"
     );
 }
 
@@ -423,6 +452,15 @@ export function toTrackRef(input: TrackRefInput): TrackRef {
     if (source === "audius" || input.id?.startsWith("audius:")) {
         throw new Error(
             "Audius supports playback only; playlist and library writes are unavailable",
+        );
+    }
+    if (
+        source === "vk" ||
+        source === "yandex" ||
+        /^(vk|yandex):/.test(input.id ?? "")
+    ) {
+        throw new Error(
+            "Service catalog track requires a persistent catalog reference",
         );
     }
 

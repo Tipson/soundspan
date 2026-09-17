@@ -211,16 +211,24 @@ export function useNextTrackPreload({
             const readyAtCommit = readyCurrentTrackPreloadAtCommitRef.current;
             readyCurrentTrackPreloadAtCommitRef.current = null;
             const expectedPreloadUrl =
-                track.streamSource === "youtube" &&
-                track.youtubeVideoId &&
+                (track.streamSource === "vk" ||
+                    track.streamSource === "yandex") &&
                 !hasDeviceOfflinePlaybackCopy(track)
-                    ? api.getYtMusicStreamUrl(
-                          track.youtubeVideoId,
-                          undefined,
-                          true,
-                          "preload",
+                    ? api.getMusicSourceStreamUrl(
+                          track.streamSource,
+                          track.provider?.providerTrackId ??
+                              track.id.slice(track.streamSource.length + 1),
                       )
-                    : null;
+                    : track.streamSource === "youtube" &&
+                        track.youtubeVideoId &&
+                        !hasDeviceOfflinePlaybackCopy(track)
+                      ? api.getYtMusicStreamUrl(
+                            track.youtubeVideoId,
+                            undefined,
+                            true,
+                            "preload",
+                        )
+                      : null;
             const usable =
                 readyAtCommit?.identity ===
                     resolveDeviceOfflineMediaIdentity(track) &&
@@ -384,6 +392,25 @@ export function useNextTrackPreload({
             let format: string | undefined = "mp3";
 
             if (
+                nextTrack.streamSource === "vk" ||
+                nextTrack.streamSource === "yandex"
+            ) {
+                const source = nextTrack.streamSource;
+                const id =
+                    nextTrack.provider?.providerTrackId ??
+                    nextTrack.id.slice(source.length + 1);
+                if (
+                    nextTrack.id !== `${source}:${id}` ||
+                    !(
+                        source === "vk" ? /^-?\d{1,20}_\d{1,20}$/ : /^\d{1,20}$/
+                    ).test(id)
+                ) {
+                    leaseController.release();
+                    lastPreloadedTrackIdRef.current = null;
+                    return;
+                }
+                streamUrl = api.getMusicSourceStreamUrl(source, id);
+            } else if (
                 nextTrack.streamSource === "youtube" &&
                 nextTrack.youtubeVideoId
             ) {

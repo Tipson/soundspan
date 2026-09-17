@@ -45,6 +45,8 @@ import {
 import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
+import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
+import { PlaybackReport } from "./PlaybackReport";
 import { OverlayQueueTab } from "./overlay-tabs/OverlayQueueTab";
 import { OverlayLyricsTab } from "./overlay-tabs/OverlayLyricsTab";
 import { OverlayRelatedTab } from "./overlay-tabs/OverlayRelatedTab";
@@ -585,7 +587,24 @@ export function OverlayPlayer() {
                         </span>
                         <SyncBadge compact />
                     </div>
-                    <div className="w-11" /> {/* Spacer for centering */}
+                    <div
+                        className="w-11"
+                        onTouchStart={(event) => event.stopPropagation()}
+                    >
+                        {playbackType === "track" && currentTrack && (
+                            <TrackOverflowMenu
+                                track={currentTrack}
+                                showPlayNext={false}
+                                showAddToQueue={false}
+                                extraItemsAfter={
+                                    <PlaybackReport
+                                        key={currentTrack.id}
+                                        track={currentTrack}
+                                    />
+                                }
+                            />
+                        )}
+                    </div>
                 </div>
                 {isMobileOrTablet && (
                     <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-white/25" />

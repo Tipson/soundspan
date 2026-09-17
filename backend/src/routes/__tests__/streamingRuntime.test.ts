@@ -1,4 +1,16 @@
 import type { NextFunction, Request, Response } from "express";
+const mockRecordFeedback = jest.fn();
+jest.mock("../../services/playbackFeedback", () => ({
+    recordPlaybackFeedback: mockRecordFeedback,
+    playbackFeedbackSchema: require("zod").z.object({
+        reason: require("zod").z.enum([
+            "wrong_version",
+            "no_sound",
+            "interruption",
+        ]),
+        reportTrackId: require("zod").z.string().min(1),
+    }),
+}));
 
 const mockPlaybackRouteLogger = {
     debug: jest.fn(),
@@ -116,6 +128,59 @@ describe("playback client-signal route", () => {
         jest.clearAllMocks();
         mockAuthFailureState.mode = "ok";
         mockDiagnosticAppend.mockResolvedValue(undefined);
+        mockRecordFeedback.mockResolvedValue(undefined);
+    });
+    it("acknowledges manual feedback only after admin persistence, including a retried journal receipt", async () => {
+        const req = {
+            user: { id: "report-user" },
+            body: {
+                event: "player.user_report",
+                fields: {
+                    reason: "no_sound",
+                    reportTrackId: "yt:abc",
+                    token: "secret",
+                },
+                diagnostic: {
+                    id: "manual-report",
+                    ownerId: "report-user",
+                    observedAtMs: Date.now(),
+                },
+            },
+        } as any;
+        mockRecordFeedback.mockRejectedValueOnce(
+            new Error("storage unavailable"),
+        );
+        const first = createResponse();
+        await postClientMetric(req, first);
+        expect(first.statusCode).toBe(503);
+        const retry = createResponse();
+        await postClientMetric(req, retry);
+        expect(retry.statusCode).toBe(202);
+        expect(mockRecordFeedback).toHaveBeenCalledTimes(2);
+        expect(mockDiagnosticAppend).toHaveBeenCalledTimes(1);
+        expect(mockRecordFeedback.mock.calls[1][3]).not.toHaveProperty("token");
+    });
+    it("rejects manual feedback without an owned durable envelope or valid reason", async () => {
+        for (const body of [
+            {
+                event: "player.user_report",
+                fields: { reason: "no_sound", reportTrackId: "yt:abc" },
+            },
+            {
+                event: "player.user_report",
+                fields: { reason: "anything" },
+                diagnostic: {
+                    id: "bad-report",
+                    ownerId: "report-user",
+                    observedAtMs: Date.now(),
+                },
+            },
+        ]) {
+            const res = createResponse();
+            await postClientMetric({ user: { id: "report-user" }, body }, res);
+            expect(res.statusCode).toBe(400);
+        }
+        expect(mockRecordFeedback).not.toHaveBeenCalled();
     });
 
     it("rejects unauthenticated requests through the complete route chain", () => {

@@ -13,7 +13,10 @@ import {
     saveMusicSourceConnection,
     loadMusicSourceAdapters,
 } from "../services/musicSources/connections";
-import { musicSourceResolver } from "../services/musicSources/runtime";
+import {
+    musicSourceResolver,
+    musicSourceCatalog,
+} from "../services/musicSources/runtime";
 import { MusicSourceError } from "../services/musicSources/types";
 import { createStreamProxyRequestAbort } from "./streamProxyRequestAbort";
 
@@ -150,6 +153,37 @@ router.put(
 
 /**
  * @openapi
+ * /api/music-sources/catalog:
+ *   get:
+ *     summary: Search enabled service catalogs without connecting a personal account
+ *     tags: [Search]
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         required: true
+ *         schema: { type: string, minLength: 1, maxLength: 200 }
+ *     responses:
+ *       200: { description: Sanitized exact recording candidates and unavailable provider names }
+ *       400: { description: Invalid query }
+ *       401: { description: Authentication required }
+ *       429: { description: Account request limit reached }
+ */
+router.get(
+    "/catalog",
+    requireAuth,
+    asyncHandler(async (req, res) => {
+        const parsed = z
+            .object({ query: z.string().trim().min(1).max(200) })
+            .safeParse(req.query);
+        if (!parsed.success) return sendRouteError(res, 400, "invalid_request");
+        await jsonOperation(req, res, (signal) =>
+            musicSourceCatalog.search(parsed.data.query, signal),
+        );
+    }),
+);
+
+/**
+ * @openapi
  * /api/music-sources/search:
  *   get:
  *     summary: Test enabled server catalog connections as an administrator
@@ -197,7 +231,18 @@ router.post(
     "/resolve",
     asyncHandler(async (req, res) => {
         const parsed = recordingSchema
-            .extend({ provider: sourceSchema.optional() })
+            .extend({
+                provider: sourceSchema.optional(),
+                providerTrackId: z.string().min(1).max(42).optional(),
+            })
+            .refine(
+                (value) =>
+                    value.providerTrackId === undefined ||
+                    (value.provider === "yandex"
+                        ? /^\d{1,20}$/.test(value.providerTrackId)
+                        : value.provider === "vk" &&
+                          /^-?\d{1,20}_\d{1,20}$/.test(value.providerTrackId)),
+            )
             .safeParse(req.body);
         if (!parsed.success) return sendRouteError(res, 400, "invalid_request");
         await jsonOperation(req, res, async (signal) => ({
@@ -206,8 +251,64 @@ router.post(
                 parsed.data,
                 signal,
                 parsed.data.provider,
+                parsed.data.providerTrackId,
             ),
         }));
+    }),
+);
+
+/**
+ * @openapi
+ * /api/music-sources/recordings/{provider}/{id}/stream:
+ *   get:
+ *     summary: Renew an exact recording as an authenticated same-origin stream
+ *     tags: [Streaming]
+ *     responses:
+ *       307: { description: Private owned playback lease; range and method are retained }
+ *       400: { description: Invalid provider identity }
+ *       401: { description: Authentication required }
+ *       404: { description: Exact recording unavailable }
+ *       503: { description: Source budget or deadline exceeded }
+ *   head:
+ *     summary: Resolve the headers of an exact recording
+ *     tags: [Streaming]
+ *     responses:
+ *       307: { description: Private owned playback lease }
+ *       401: { description: Authentication required }
+ */
+router.get(
+    "/recordings/:provider/:id/stream",
+    asyncHandler(async (req, res) => {
+        const parsed = z
+            .object({ provider: sourceSchema, id: z.string().max(42) })
+            .refine((value) =>
+                (value.provider === "vk"
+                    ? /^-?\d{1,20}_\d{1,20}$/
+                    : /^\d{1,20}$/
+                ).test(value.id),
+            )
+            .safeParse(req.params);
+        if (!parsed.success) return sendRouteError(res, 400, "invalid_request");
+        const lifetime = createStreamProxyRequestAbort(req, res);
+        try {
+            const lease = await musicSourceResolver.resolve(
+                req.user!.id,
+                null,
+                lifetime.signal,
+                parsed.data.provider,
+                parsed.data.id,
+            );
+            if (lifetime.wasClientAborted()) return;
+            if (!lease) return sendRouteError(res, 404, "not_found");
+            res.set("Cache-Control", "private, no-store").redirect(
+                307,
+                lease.streamPath,
+            );
+        } catch (error) {
+            if (!lifetime.wasClientAborted()) report(res, error);
+        } finally {
+            lifetime.dispose();
+        }
     }),
 );
 

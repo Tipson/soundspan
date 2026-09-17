@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 const state = {
     query: "massive attack",
+    catalogNotice: null as string | null,
     view: null as string | null,
     libraryTracks: [] as unknown[],
     libraryAlbums: [] as unknown[],
@@ -99,6 +100,7 @@ mock.module("@/features/search/hooks/useSearchData", {
         useSearchData: (input: Record<string, unknown>) => {
             calls.searchData.push(input);
             return {
+                catalogNotice: state.catalogNotice,
                 libraryResults: {
                     tracks: state.libraryTracks,
                     albums: state.libraryAlbums,
@@ -275,6 +277,7 @@ beforeEach(() => {
         ...Array.from({ length: 4 }, (_, index) => providerAlbum(index)),
     ];
     state.isDiscoverSearching = false;
+    state.catalogNotice = null;
     state.canRequestMoreDiscoverTracks = false;
     state.hasNextLibraryTracks = false;
     calls.searchData.length = 0;
@@ -404,4 +407,16 @@ test("partial local results disclose that the online catalog is still loading", 
     const html = renderToStaticMarkup(React.createElement(SearchPage));
 
     assert.match(html, /Ищем в онлайн-каталоге/);
+});
+test("an empty search still discloses a partial provider outage", async () => {
+    state.catalogNotice = "VK временно недоступен";
+    state.libraryTracks = [];
+    state.libraryAlbums = [];
+    state.libraryArtists = [];
+    state.discoverResults = [];
+    const SearchPage = (await import("../../app/search/page")).default;
+    assert.match(
+        renderToStaticMarkup(React.createElement(SearchPage)),
+        /VK временно недоступен/,
+    );
 });

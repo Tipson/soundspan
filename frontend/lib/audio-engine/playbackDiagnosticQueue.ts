@@ -1,5 +1,6 @@
 /** Failure events retained for delivery after a transient connection loss. */
 export const PLAYBACK_DIAGNOSTIC_EVENTS = new Set([
+    "player.user_report",
     "player.unexpected_stop",
     "player.unexpected_pause",
     "player.rebuffer",
@@ -73,6 +74,20 @@ export function sanitizePlaybackDiagnosticFields(
     input: Record<string, unknown>,
 ): Record<string, string | number | boolean | null> {
     const result: Record<string, string | number | boolean | null> = {};
+    if (
+        typeof input.reportTrackId === "string" &&
+        IDENTIFIER.test(input.reportTrackId)
+    )
+        result.reportTrackId = input.reportTrackId;
+    for (const key of ["reportTitle", "reportArtist"]) {
+        const value = input[key];
+        if (
+            typeof value === "string" &&
+            value.length <= 200 &&
+            !/[\u0000-\u001f]/.test(value)
+        )
+            result[key] = value;
+    }
     for (const key of NUMBER_FIELDS) {
         const value = input[key];
         if (value === null) result[key] = null;
@@ -253,7 +268,9 @@ export function createPlaybackDiagnosticQueue(options: QueueOptions) {
             items.length > MAX_ITEMS ||
             (bytes > MAX_BYTES && items.length)
         ) {
-            const first = items[0];
+            const first =
+                items.find((item) => item.event !== "player.user_report") ??
+                items[0];
             bytes -= JSON.stringify(first).length;
             removeItem(first.diagnostic.id);
         }
@@ -352,7 +369,10 @@ export function createPlaybackDiagnosticQueue(options: QueueOptions) {
                 const capturedGeneration = generation;
                 for (let count = 0; count < MAX_ITEMS && !disposed; count++) {
                     prune();
-                    const head = items[0];
+                    const head =
+                        items.find(
+                            (item) => item.event === "player.user_report",
+                        ) ?? items[0];
                     if (
                         !head ||
                         !options.online() ||
@@ -433,10 +453,14 @@ export function createPlaybackDiagnosticQueue(options: QueueOptions) {
         return running;
     };
     return {
-        enqueue(event: string, fields: Record<string, unknown>): void {
-            if (disposed || !PLAYBACK_DIAGNOSTIC_EVENTS.has(event)) return;
+        enqueue(
+            event: string,
+            fields: Record<string, unknown>,
+        ): "stored" | "memory" | "rejected" {
+            if (disposed || !PLAYBACK_DIAGNOSTIC_EVENTS.has(event))
+                return "rejected";
             const ownerId = options.ownerId();
-            if (!ownerId || !IDENTIFIER.test(ownerId)) return;
+            if (!ownerId || !IDENTIFIER.test(ownerId)) return "rejected";
             prune();
             const id =
                 globalThis.crypto?.randomUUID?.() ??
@@ -447,6 +471,7 @@ export function createPlaybackDiagnosticQueue(options: QueueOptions) {
                 diagnostic: { id, ownerId, observedAtMs: now() },
             });
             void flush();
+            return memory.has(id) ? "memory" : "stored";
         },
         flush,
         /** A real lifecycle/connectivity wake begins a new finite retry burst. */

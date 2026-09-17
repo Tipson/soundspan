@@ -39,6 +39,8 @@ test("CANONICAL_MEDIA_SOURCE_VALUES lists every canonical media source", () => {
         "youtube",
         "youtube-direct",
         "audius",
+        "vk",
+        "yandex",
     ]);
 });
 
@@ -46,6 +48,8 @@ test("normalizeCanonicalMediaSource normalizes supported source values", () => {
     assert.equal(normalizeCanonicalMediaSource("ytmusic"), "youtube");
     assert.equal(normalizeCanonicalMediaSource("local"), "local");
     assert.equal(normalizeCanonicalMediaSource("audius"), "audius");
+    assert.equal(normalizeCanonicalMediaSource("vk"), "vk");
+    assert.equal(normalizeCanonicalMediaSource("yandex"), "yandex");
     assert.equal(normalizeCanonicalMediaSource("tidal"), "tidal");
     assert.equal(normalizeCanonicalMediaSource("youtube"), "youtube");
     assert.equal(

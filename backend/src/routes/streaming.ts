@@ -19,6 +19,10 @@ import {
     recordPlaybackDiagnostic,
     sanitizePlaybackDiagnosticFields,
 } from "../services/playbackDiagnostics";
+import {
+    playbackFeedbackSchema,
+    recordPlaybackFeedback,
+} from "../services/playbackFeedback";
 
 const router = express.Router();
 const playbackRouteLogger = logger.child("Playback");
@@ -71,6 +75,12 @@ async function acceptClientMetric(
     data: z.infer<typeof clientMetricSchema>,
 ): Promise<express.Response> {
     const { event } = data;
+    if (
+        event === "player.user_report" &&
+        (!data.diagnostic ||
+            !playbackFeedbackSchema.safeParse(data.fields).success)
+    )
+        return rejectClientMetric(res, startedAtMs, 400, "invalid_request");
     if (data.diagnostic && data.diagnostic.ownerId !== userId) {
         return rejectClientMetric(res, startedAtMs, 400, "invalid_request");
     }
@@ -103,6 +113,23 @@ async function acceptClientMetric(
                 "Playback diagnostics rate limited",
                 { retryAfterSeconds: outcome.retryAfterSeconds },
             );
+        }
+        if (event === "player.user_report") {
+            try {
+                await recordPlaybackFeedback(
+                    userId,
+                    data.diagnostic.id,
+                    data.diagnostic.observedAtMs,
+                    fields,
+                );
+            } catch {
+                res.setHeader("Retry-After", "10");
+                return sendRouteError(
+                    res,
+                    503,
+                    "Playback feedback storage unavailable",
+                );
+            }
         }
         if (outcome.status === "duplicate")
             return res.status(202).json({ accepted: true });

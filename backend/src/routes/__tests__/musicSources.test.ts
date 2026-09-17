@@ -2,7 +2,10 @@ import express from "express";
 import request from "supertest";
 import { PassThrough } from "node:stream";
 import { get } from "node:http";
-import { musicSourceResolver } from "../../services/musicSources/runtime";
+import {
+    musicSourceResolver,
+    musicSourceCatalog,
+} from "../../services/musicSources/runtime";
 import { MusicSourceError } from "../../services/musicSources/types";
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (req: any, res: any, next: any) => {
@@ -35,6 +38,113 @@ const app = express();
 app.use(express.json());
 app.use("/api/music-sources", router);
 describe("music sources HTTP boundary", () => {
+    it("renews a stable recording stream through a private owned lease", async () => {
+        const leaseId = "b".repeat(48);
+        const spy = jest
+            .spyOn(musicSourceResolver, "resolve")
+            .mockResolvedValue({
+                provider: "vk",
+                leaseId,
+                expiresAt: Date.now() + 60_000,
+                streamPath: `/api/music-sources/leases/${leaseId}/stream`,
+            });
+        try {
+            await request(app)
+                .get("/api/music-sources/recordings/vk/1_2/stream")
+                .expect(401);
+            const response = await request(app)
+                .get("/api/music-sources/recordings/vk/1_2/stream")
+                .set("x-user", "stable-recording")
+                .expect(307);
+            expect(response.headers.location).toBe(
+                `/api/music-sources/leases/${leaseId}/stream`,
+            );
+            expect(spy).toHaveBeenCalledWith(
+                "stable-recording",
+                null,
+                expect.any(AbortSignal),
+                "vk",
+                "1_2",
+            );
+            await request(app)
+                .get("/api/music-sources/recordings/yandex/1_2/stream")
+                .set("x-user", "stable-recording")
+                .expect(400);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+    it("allows authenticated catalog exploration without granting connection access", async () => {
+        const spy = jest
+            .spyOn(musicSourceCatalog, "search")
+            .mockResolvedValue({ tracks: [], unavailable: ["vk"] });
+        try {
+            await request(app)
+                .get("/api/music-sources/catalog?query=Song")
+                .expect(401);
+            const response = await request(app)
+                .get("/api/music-sources/catalog?query=Song")
+                .set("x-user", "catalog-user")
+                .expect(200);
+            expect(response.body).toEqual({ tracks: [], unavailable: ["vk"] });
+            expect(spy).toHaveBeenCalledWith("Song", expect.any(AbortSignal));
+            await request(app)
+                .get("/api/music-sources/connections")
+                .set("x-user", "catalog-user")
+                .expect(403);
+            await request(app)
+                .get("/api/music-sources/catalog?query=")
+                .set("x-user", "catalog-user")
+                .expect(400);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+    it("passes a selected provider identity to the resolver", async () => {
+        const spy = jest
+            .spyOn(musicSourceResolver, "resolve")
+            .mockResolvedValue(null);
+        try {
+            await request(app)
+                .post("/api/music-sources/resolve")
+                .set("x-user", "selection")
+                .send({
+                    provider: "vk",
+                    providerTrackId: "1_2",
+                    title: "Song",
+                    artists: ["Artist"],
+                    duration: 180,
+                    contentVersion: "explicit",
+                })
+                .expect(200);
+            expect(spy).toHaveBeenCalledWith(
+                "selection",
+                expect.objectContaining({ title: "Song" }),
+                expect.any(AbortSignal),
+                "vk",
+                "1_2",
+            );
+        } finally {
+            spy.mockRestore();
+        }
+    });
+    it.each([
+        { providerTrackId: "1_2" },
+        { provider: "yandex", providerTrackId: "1_2" },
+        { provider: "vk", providerTrackId: "https://internal/" },
+    ])("rejects an invalid selected identity", async (identity) => {
+        await request(app)
+            .post("/api/music-sources/resolve")
+            .set("x-user", "invalid-selection")
+            .send({
+                ...identity,
+                title: "Song",
+                artists: ["Artist"],
+                duration: 180,
+                contentVersion: "unknown",
+            })
+            .expect(400);
+    });
     it("requires authentication and admin privileges to configure a shared account", async () => {
         await request(app).get("/api/music-sources/connections").expect(401);
         await request(app)

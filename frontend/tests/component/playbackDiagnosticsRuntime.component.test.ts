@@ -98,6 +98,33 @@ const state = () => ({
     uiIsPlaying: true,
     isLoading: false,
 });
+test("manual feedback captures offline evidence and survives until online", async () => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+    });
+    stop = runtime.beginPlaybackDiagnostics(state);
+    assert.equal(
+        runtime.queueUserPlaybackReport({
+            reason: "no_sound",
+            reportTrackId: "vk:1_2",
+            reportTitle: "Song",
+            reportArtist: "Artist",
+        }),
+        "stored",
+    );
+    assert.equal(sent.length, 0);
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+    });
+    window.dispatchEvent(new Event("online"));
+    await settle();
+    assert.equal(sent[0].event, "player.user_report");
+    assert.equal(sent[0].fields.reportTrackId, "vk:1_2");
+    assert.equal(sent[0].fields.currentTimeSec, 3);
+    assert.equal(sent[0].fields.online, false);
+});
 
 test("runtime retains a full native offline incident durably and flushes on online", async () => {
     Object.defineProperty(navigator, "onLine", {

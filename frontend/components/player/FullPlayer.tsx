@@ -38,6 +38,7 @@ import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaybackQualityBadgeWithStats } from "./PlaybackQualityBadgeWithStats";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
+import { PlaybackReport } from "./PlaybackReport";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import { ru } from "@/lib/i18n/ru";
 
@@ -605,7 +606,15 @@ export function FullPlayer() {
                                     showPlayNext={false}
                                     triggerClassName="!flex !h-10 !w-10 !items-center !justify-center !p-0 !opacity-100 text-content-muted hover:text-content"
                                     menuClassName="bottom-full top-auto mb-1 mt-0 z-[10001]"
-                                    extraItemsAfter={playerDiagnostics}
+                                    extraItemsAfter={
+                                        <>
+                                            {playerDiagnostics}
+                                            <PlaybackReport
+                                                key={currentTrack.id}
+                                                track={currentTrack}
+                                            />
+                                        </>
+                                    }
                                 />
                             )}
 

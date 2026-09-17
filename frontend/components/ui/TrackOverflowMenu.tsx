@@ -116,6 +116,9 @@ export function TrackOverflowMenu({
     const isActionable = normalizedActionTrack !== null;
     const actionTrack = normalizedActionTrack ?? track;
     const canPersist = isActionable && !isPlaybackOnlyTrack(actionTrack);
+    const canDownload =
+        canPersist ||
+        (isActionable && Boolean(actionTrack.musicSourceRecording));
     // Restored queue metadata is untrusted; only the provider's public page can leave the app.
     const attribution = isPlaybackOnlyTrack(actionTrack)
         ? audiusTrackSchema.shape.attributionUrl.safeParse(track.sourcePageUrl)
@@ -399,7 +402,8 @@ export function TrackOverflowMenu({
         (e: React.MouseEvent) => {
             e.stopPropagation();
             closeMenu();
-            if (!canPersist || !deviceOffline || deviceDownloadDisabled) return;
+            if (!canDownload || !deviceOffline || deviceDownloadDisabled)
+                return;
             try {
                 const sourceUrl = getDeviceDownloadSourceUrl(actionTrack);
                 void deviceOffline
@@ -435,7 +439,7 @@ export function TrackOverflowMenu({
             closeMenu,
             deviceDownloadDisabled,
             deviceOffline,
-            canPersist,
+            canDownload,
             track.title,
         ],
     );
@@ -521,7 +525,7 @@ export function TrackOverflowMenu({
                             />
                         )}
 
-                        {deviceOffline && canPersist && (
+                        {deviceOffline && canDownload && (
                             <MenuButton
                                 onClick={handleDeviceDownload}
                                 disabled={deviceDownloadDisabled}

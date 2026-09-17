@@ -1,6 +1,8 @@
 import { DeviceOfflineDownloadError } from "./downloadError";
 
 const STREAM_SOURCE_PATHS = [
+    /^\/api\/music-sources\/recordings\/vk\/-?\d{1,20}_\d{1,20}\/stream$/,
+    /^\/api\/music-sources\/recordings\/yandex\/\d{1,20}\/stream$/,
     /^\/api\/library\/tracks\/[^/]+\/stream\/?$/,
     /^\/api\/artists\/preview-stream\/[^/]+\/?$/,
     /^\/api\/ytmusic\/(?:stream|stream-public)\/[^/]+\/?$/,

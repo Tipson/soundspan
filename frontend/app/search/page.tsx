@@ -89,6 +89,7 @@ export default function SearchPage() {
         hasNextLibraryTracks,
         isFetchingNextLibraryTracks,
         fetchNextLibraryTracks,
+        catalogNotice,
     } = useSearchData({
         query,
         libraryType: searchCatalogPolicy.libraryType,
@@ -453,6 +454,11 @@ export default function SearchPage() {
                 ) : null}
 
                 <EmptyState hasSearched={hasSearched} isLoading={isLoading} />
+                {catalogNotice && hasSearched && showTracksView ? (
+                    <p role="status" className="text-sm text-content-muted">
+                        {catalogNotice}
+                    </p>
+                ) : null}
 
                 {hasSearched && isDiscoverSearching && activeViewHasResults ? (
                     <p

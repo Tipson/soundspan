@@ -50,7 +50,7 @@ type Track = {
     title: string;
     duration?: number;
     filePath?: string;
-    streamSource?: "local" | "tidal" | "youtube";
+    streamSource?: "local" | "tidal" | "youtube" | "vk" | "yandex";
     tidalTrackId?: number;
     youtubeVideoId?: string;
     playlistItemId?: string;
@@ -1048,6 +1048,8 @@ mock.module("@/lib/audio-load-preemption", {
 mock.module("@/lib/api", {
     namedExports: {
         api: {
+            getMusicSourceStreamUrl: (provider: string, id: string) =>
+                `/api/music-sources/recordings/${provider}/${id}/stream`,
             resolveMusicSourceForRecovery: async (recording: unknown) => {
                 apiCalls.resolveMusicSourceForRecovery.push(recording);
                 if (musicRecoveryResponse) return musicRecoveryResponse;
@@ -2363,6 +2365,26 @@ for (const preloadResult of [
         );
     });
 }
+
+test("service catalog next track preloads through a renewable exact source", async () => {
+    const currentTrack = makeTrack("service-current");
+    const nextTrack = makeTrack("vk:1_2", { streamSource: "vk" });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    assert.deepEqual(engine.preloadCalls, [
+        { url: "/api/music-sources/recordings/vk/1_2/stream", format: "mp3" },
+    ]);
+    assert.ok(!apiCalls.getStreamUrl.includes("vk:1_2"));
+    selectTrack(audioState.queue, 1);
+    await flushAsync();
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "/api/music-sources/recordings/vk/1_2/stream",
+    );
+});
 
 test("stable YouTube playback prepares the next queue item without waiting for track end", async () => {
     const currentTrack = makeTrack("early-preload-current", {

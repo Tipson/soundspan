@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getDeviceDownloadSourceUrl } from "../../features/device-offline/sourceUrl";
+import { toMusicSourcePlaybackTrack } from "../../lib/audio/musicSourcePlayback";
 
 const baseTrack = {
     id: "track-1",
@@ -9,6 +10,32 @@ const baseTrack = {
     album: { title: "Album" },
     duration: 180,
 };
+test("service downloads retain renewable exact identities instead of expiring leases", () => {
+    const track = toMusicSourcePlaybackTrack({
+        provider: "vk",
+        id: "1_2",
+        title: "Song",
+        artists: ["Artist"],
+        duration: 180,
+        contentVersion: "explicit",
+        preview: false,
+    });
+    assert.equal(
+        getDeviceDownloadSourceUrl(track),
+        "/api/music-sources/recordings/vk/1_2/stream",
+    );
+});
+test("catalog-only references cannot fall through to a nonexistent local download", () => {
+    for (const source of ["vk", "yandex"] as const) {
+        assert.throws(() =>
+            getDeviceDownloadSourceUrl({
+                ...baseTrack,
+                id: `${source}:123`,
+                streamSource: source,
+            }),
+        );
+    }
+});
 
 test("device source URL rejects retired TIDAL instead of falling through to a local route", () => {
     assert.throws(

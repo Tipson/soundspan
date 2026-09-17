@@ -3,6 +3,7 @@ import { playbackDiagnosticJournal } from "./playbackDiagnosticJournal";
 
 const diagnosticLogger = logger.child("Playback.Diagnostic");
 const EVENTS = new Set([
+    "player.user_report",
     "player.unexpected_stop",
     "player.unexpected_pause",
     "player.rebuffer",
@@ -31,6 +32,20 @@ export function sanitizePlaybackDiagnosticFields(
     input: Record<string, unknown>,
 ): Record<string, string | number | boolean | null> {
     const result: Record<string, string | number | boolean | null> = {};
+    if (
+        typeof input.reportTrackId === "string" &&
+        IDENTIFIER.test(input.reportTrackId)
+    )
+        result.reportTrackId = input.reportTrackId;
+    for (const key of ["reportTitle", "reportArtist"]) {
+        const value = input[key];
+        if (
+            typeof value === "string" &&
+            value.length <= 200 &&
+            !/[\u0000-\u001f]/.test(value)
+        )
+            result[key] = value;
+    }
     for (const key of [
         "currentTimeSec",
         "durationSec",

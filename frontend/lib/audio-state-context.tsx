@@ -117,6 +117,8 @@ export interface AudioFeatures {
 }
 
 export interface Track {
+    /** Exact service-catalog recording retained independently of temporary playback leases. */
+    musicSourceRecording?: import("./api/musicSources").MusicSourceCandidate;
     id: string;
     /** Explicit device-library selection; retained with each queued occurrence. */
     playbackSourcePolicy?: "device-only";

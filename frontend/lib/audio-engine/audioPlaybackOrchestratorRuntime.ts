@@ -219,6 +219,24 @@ function diagnosticContext(): Record<string, unknown> {
     };
 }
 
+/** Queue an explicitly requested report with the engine snapshot captured at submission. */
+export function queueUserPlaybackReport(input: {
+    reason: "wrong_version" | "no_sound" | "interruption";
+    reportTrackId: string;
+    reportTitle: string;
+    reportArtist: string;
+}): "stored" | "memory" | "rejected" {
+    if (typeof window === "undefined" || !diagnosticOwnerId())
+        return "rejected";
+    queueDiagnostic(null, {});
+    return (
+        diagnosticQueue?.enqueue("player.user_report", {
+            ...diagnosticContext(),
+            ...input,
+        }) ?? "rejected"
+    );
+}
+
 /** Emits client playback telemetry and forwards high-signal events. */
 export function logPlaybackClientMetric(
     event: string,

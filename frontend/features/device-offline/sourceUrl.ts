@@ -1,5 +1,6 @@
 import type { Track } from "@/lib/audio-state-context";
 import { api } from "@/lib/api";
+import { musicSourceCandidateSchema } from "@/lib/audio/musicSourcePlayback";
 import {
     hasLocalTrackBacking,
     isRetiredRemoteOnlyTrack,
@@ -9,6 +10,23 @@ import {
 
 /** Build a clean same-origin source URL for a user-selected playable track. */
 export function getDeviceDownloadSourceUrl(track: Track): string {
+    if (
+        !hasLocalTrackBacking(track) &&
+        (resolveTrackProviderSource(track) === "vk" ||
+            resolveTrackProviderSource(track) === "yandex" ||
+            /^(vk|yandex):/.test(track.id))
+    ) {
+        const recording = musicSourceCandidateSchema.parse(
+            track.musicSourceRecording,
+        );
+        if (
+            track.id !== `${recording.provider}:${recording.id}` ||
+            track.provider?.providerTrackId !== recording.id ||
+            resolveTrackProviderSource(track) !== recording.provider
+        )
+            throw new Error("Некорректная запись каталога");
+        return api.getMusicSourceStreamUrl(recording.provider, recording.id);
+    }
     if (
         !hasLocalTrackBacking(track) &&
         (track.streamSource === "audius" ||

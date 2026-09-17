@@ -21,6 +21,7 @@ import {
     localizeActivityNotification,
 } from "@/lib/i18n/adminActivityRu";
 import { pluralRu } from "@/lib/i18n/ru";
+import { playbackReportDetails } from "./playbackReportDetails";
 
 const logger = createFrontendLogger("Activity.NotificationsTab");
 
@@ -92,6 +93,7 @@ export function NotificationsTab({
             case "download_complete":
                 return <CheckCircle className="w-4 h-4 text-green-400" />;
             case "download_failed":
+            case "playback_report":
                 return <AlertCircle className="w-4 h-4 text-red-400" />;
             case "playlist_ready":
             case "import_complete":
@@ -230,6 +232,28 @@ export function NotificationsTab({
                                         <p className="text-xs text-white/50 mt-0.5 line-clamp-2">
                                             {localized.message}
                                         </p>
+                                    )}
+                                    {notification.type ===
+                                        "playback_report" && (
+                                        <details className="mt-2 text-xs text-content-secondary">
+                                            <summary className="cursor-pointer py-2">
+                                                Диагностика обращения
+                                            </summary>
+                                            <dl className="space-y-1 break-words">
+                                                {playbackReportDetails(
+                                                    notification.metadata,
+                                                ).map(([label, value]) => (
+                                                    <div key={label}>
+                                                        <dt className="inline text-content-muted">
+                                                            {label}:{" "}
+                                                        </dt>
+                                                        <dd className="inline">
+                                                            {value}
+                                                        </dd>
+                                                    </div>
+                                                ))}
+                                            </dl>
+                                        </details>
                                     )}
                                     <div className="flex items-center gap-2 mt-1.5">
                                         <span className="text-[10px] text-white/30">

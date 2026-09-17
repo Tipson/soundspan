@@ -9,6 +9,8 @@ export const CANONICAL_MEDIA_SOURCE_VALUES = [
     "youtube",
     "youtube-direct",
     "audius",
+    "vk",
+    "yandex",
 ] as const;
 
 /** Canonical source identifier shared across media metadata consumers. */
@@ -26,7 +28,13 @@ export type ResolvedMediaSource = Exclude<
 
 /** Source identifiers accepted by the audio engine boundary. */
 export type AudioEngineSourceType =
-    "local" | "peer" | "tidal" | "ytmusic" | "audius";
+    | "local"
+    | "peer"
+    | "tidal"
+    | "ytmusic"
+    | "audius"
+    | "vk"
+    | "yandex";
 
 /** Canonical provider identity and optional provider-specific track metadata. */
 export interface CanonicalMediaProviderIdentity {
@@ -62,7 +70,11 @@ export interface CanonicalMediaSearchResult {
 
 /** Media types currently understood by federation v1 consumers. */
 export type FederationMediaType =
-    "artist" | "album" | "track" | "podcast" | "audiobook";
+    | "artist"
+    | "album"
+    | "track"
+    | "podcast"
+    | "audiobook";
 
 /** Complete bounded vocabulary of federation protocol capabilities. */
 export const FEDERATION_CAPABILITY_VALUES = ["track-attrs-loudness"] as const;
@@ -73,7 +85,13 @@ export type FederationCapability =
 
 /** Source discriminator emitted by unified track response serializers. */
 export type UnifiedTrackSource =
-    "local" | "tidal" | "youtube" | "federated" | "audius";
+    | "local"
+    | "tidal"
+    | "youtube"
+    | "federated"
+    | "audius"
+    | "vk"
+    | "yandex";
 
 /** Safe peer provenance attached to a federated unified track response. */
 export interface FederatedTrackPeer {
@@ -201,7 +219,9 @@ export const normalizeCanonicalMediaSource = (
         value === "tidal" ||
         value === "youtube" ||
         value === "youtube-direct" ||
-        value === "audius"
+        value === "audius" ||
+        value === "vk" ||
+        value === "yandex"
     ) {
         return value;
     }
@@ -281,7 +301,12 @@ export const normalizeCanonicalMediaProviderIdentity = (value: {
         };
     }
 
-    if (source === "peer" || source === "audius") {
+    if (
+        source === "peer" ||
+        source === "audius" ||
+        source === "vk" ||
+        source === "yandex"
+    ) {
         return { source, providerTrackId };
     }
 
@@ -304,8 +329,12 @@ export const toLegacyStreamFields = (
     if (provider.source === "peer") {
         return { streamSource: "peer" };
     }
-    if (provider.source === "audius") {
-        return { streamSource: "audius" };
+    if (
+        provider.source === "audius" ||
+        provider.source === "vk" ||
+        provider.source === "yandex"
+    ) {
+        return { streamSource: provider.source };
     }
     if (provider.source === "youtube") {
         return {

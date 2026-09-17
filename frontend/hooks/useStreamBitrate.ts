@@ -145,11 +145,7 @@ export function resolveEffectiveLocalPlaybackQuality(input: {
     streamProfile: {
         mode: "direct";
         sourceType:
-            | "local"
-            | "peer"
-            | "tidal"
-            | "ytmusic"
-            | "audius"
+            | import("@soundspan/media-metadata-contract").AudioEngineSourceType
             | "unknown";
         codec: string | null;
         bitrateKbps: number | null;

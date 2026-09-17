@@ -48,13 +48,7 @@ export function getNextTrackInfo(
         filePath?: string;
         mediaSource?: CanonicalMediaSource;
         provider?: CanonicalMediaProviderIdentity;
-        streamSource?:
-            | "local"
-            | "peer"
-            | "tidal"
-            | "youtube"
-            | "youtube-direct"
-            | "audius";
+        streamSource?: CanonicalMediaSource;
         tidalTrackId?: number;
         youtubeVideoId?: string;
         youtubeAudioFormat?: "mp4" | "webm";
