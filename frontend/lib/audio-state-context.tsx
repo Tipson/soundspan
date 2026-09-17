@@ -292,6 +292,7 @@ const STORAGE_KEYS = {
     PLAYER_MODE: createMigratingStorageKey("player_mode"),
     VOLUME: createMigratingStorageKey("volume"),
     IS_MUTED: createMigratingStorageKey("muted"),
+    VIBE_MODE: createMigratingStorageKey("vibe_mode"),
     CURRENT_TIME: createMigratingStorageKey("current_time"),
     CURRENT_TIME_TRACK_ID: createMigratingStorageKey("current_time_track_id"),
     LAST_PLAYBACK_STATE_SAVE_AT: createMigratingStorageKey(
@@ -312,6 +313,33 @@ function parseStorageJson<T>(key: MigratingStorageKey, fallback: T): T {
     } catch {
         return fallback;
     }
+}
+
+function resolvePersistedVibeState(
+    queue: QueueItem[],
+    honorPersistedMode = true,
+): {
+    active: boolean;
+    queueIds: string[];
+} {
+    const trackQueue = queue.filter((item) => !isEpisodeQueueItem(item));
+    const persistedMode = honorPersistedMode
+        ? readStorage(STORAGE_KEYS.VIBE_MODE)
+        : null;
+    const hasRecommendationLineage = trackQueue.some(
+        (track) =>
+            Boolean(track.recommendationGenerationId) &&
+            Boolean(track.recommendationSessionId),
+    );
+    const active =
+        trackQueue.length > 0 &&
+        (persistedMode === "true" ||
+            (persistedMode === null && hasRecommendationLineage));
+
+    return {
+        active,
+        queueIds: active ? trackQueue.map((track) => track.id) : [],
+    };
 }
 
 /**
@@ -372,7 +400,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     const [lastServerSync, setLastServerSync] = useState<Date | null>(null);
 
     // Vibe mode state
-    const [vibeMode, setVibeMode] = useState(false);
+    const [vibeMode, setVibeMode] = useState(
+        () => resolvePersistedVibeState(queue).active,
+    );
     const [waveMode, setWaveMode] = useState<WaveMode>("for-you");
     const [waveMood, setWaveMood] = useState<WaveMood>(null);
     const [waveLanguage, setWaveLanguage] =
@@ -381,7 +411,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         );
     const [vibeSourceFeatures, setVibeSourceFeatures] =
         useState<AudioFeatures | null>(null);
-    const [vibeQueueIds, setVibeQueueIds] = useState<string[]>([]);
+    const [vibeQueueIds, setVibeQueueIds] = useState<string[]>(
+        () => resolvePersistedVibeState(queue).queueIds,
+    );
 
     // Refresh audiobook/podcast progress from API on mount, then sync with server
     useEffect(() => {
@@ -663,6 +695,12 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     !queuesMatchByTrackId(hydratedLocalQueue, serverQueue)
                 ) {
                     setQueue(serverQueue);
+                    const restoredServerVibe = resolvePersistedVibeState(
+                        serverQueue,
+                        false,
+                    );
+                    setVibeMode(restoredServerVibe.active);
+                    setVibeQueueIds(restoredServerVibe.queueIds);
                 }
                 if (serverQueue) {
                     setCurrentIndex(
@@ -827,13 +865,17 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                 STORAGE_KEYS.IS_MUTED,
                 isMuted.toString(),
             );
+            writeMigratingStorageItem(
+                STORAGE_KEYS.VIBE_MODE,
+                vibeMode.toString(),
+            );
         } catch (error) {
             sharedFrontendLogger.error(
                 "[AudioState] Failed to save scalar state:",
                 error,
             );
         }
-    }, [repeatMode, playerMode, volume, isMuted, isHydrated]);
+    }, [repeatMode, playerMode, volume, isMuted, vibeMode, isHydrated]);
 
     // Refs for poll effect — read inside setInterval so deps stay stable at [isHydrated]
     const queueRef = useRef(queue);
@@ -1025,6 +1067,15 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                     )
                                 ) {
                                     setQueue(serverQueue);
+                                    const restoredServerVibe =
+                                        resolvePersistedVibeState(
+                                            serverQueue,
+                                            false,
+                                        );
+                                    setVibeMode(restoredServerVibe.active);
+                                    setVibeQueueIds(
+                                        restoredServerVibe.queueIds,
+                                    );
                                 }
                                 setCurrentIndex(
                                     normalizeQueueIndex(
@@ -1063,6 +1114,15 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                         )
                                     ) {
                                         setQueue(serverQueue);
+                                        const restoredServerVibe =
+                                            resolvePersistedVibeState(
+                                                serverQueue,
+                                                false,
+                                            );
+                                        setVibeMode(restoredServerVibe.active);
+                                        setVibeQueueIds(
+                                            restoredServerVibe.queueIds,
+                                        );
                                     }
                                     setCurrentIndex(
                                         normalizeQueueIndex(
@@ -1084,6 +1144,8 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 setPlaybackType(null);
                                 setQueue([]);
                                 setCurrentIndex(0);
+                                setVibeMode(false);
+                                setVibeQueueIds([]);
                                 return;
                             }
                         }
@@ -1149,6 +1211,12 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                             serverUpdatedAt: serverState.updatedAt,
                         });
                         setQueue(serverQueue);
+                        const restoredServerVibe = resolvePersistedVibeState(
+                            serverQueue,
+                            false,
+                        );
+                        setVibeMode(restoredServerVibe.active);
+                        setVibeQueueIds(restoredServerVibe.queueIds);
                         setCurrentIndex(
                             normalizeQueueIndex(
                                 serverState.currentIndex,
