@@ -198,7 +198,10 @@ export function usePlaybackControlSync({
             return;
         }
 
-        isUserInitiatedRef.current = true;
+        // An already-playing native engine ignores play() without emitting
+        // another play event. Do not leave a user-action marker waiting for
+        // that nonexistent event: it would consume the next external pause.
+        isUserInitiatedRef.current = !isPlaying || !audioEngine.isPlaying();
 
         if (isPlaying) {
             const advanceOrigin = consumePlaybackAdvanceOrigin();

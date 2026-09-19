@@ -1,5 +1,7 @@
 # Changelog
 
+- Preserve unexpected-pause recovery after synchronizing an already playing source. A no-op play command does not leave a stale user-action marker that suppresses the next background interruption.
+
 ## Production playback pacing
 
 - Reduce the retained YouTube extraction pause from 10–15 seconds to 1–2 seconds on the deployed service, preserving bounded concurrency and provider cooldown. See the Wave desktop startup release note for measured scope and rollback.

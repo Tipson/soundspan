@@ -4329,6 +4329,43 @@ for (const resumedAfterPause of [false, true]) {
     });
 }
 
+test("play synchronization on an already playing source does not swallow a later background pause", async () => {
+    mock.timers.enable();
+    runtimeEngineMode = "native";
+    const visibilityDocument = installVisibilityDocument();
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("resynced-background-pause");
+    audioState.queue = [audioState.currentTrack];
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 12 });
+    await flushAsync();
+
+    // Repeat changes rerun control synchronization. Native play() is a no-op
+    // while already playing, so it does not emit another play event.
+    const playsBeforeSync = engine.playCalls;
+    audioState.repeatMode = "all";
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.ok(engine.playCalls > playsBeforeSync);
+    mock.timers.tick(20000);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 0);
+    visibilityDocument.dispatchVisibility("hidden");
+    engine.playing = false;
+    engine.bufferedAheadSec = 180;
+    engine.emit("pause");
+    mock.timers.tick(1500);
+    await flushAsync();
+    mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
+    assert.equal(playbackState.isPlaying, true);
+});
+
 test("newly loaded source can end immediately after an advance", async () => {
     const tracks = [
         makeTrack("immediate-end-1"),
