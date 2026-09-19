@@ -66,3 +66,23 @@ audible output. Keep explicit pause, source replacement and follower-session gua
   user-initiated; existing pause-intent, load-generation, seek and follower fences
   are unchanged and covered by the passing suite. No new logging or retry budget.
 - No prolonged physical Android/iOS acceptance was performed for this release.
+
+## Production verification
+
+Released frontend revision `4932b5c7` on September 19, 2026 at approximately
+15:32 Moscow time. Only the frontend container changed; backend and providers kept
+their container IDs. Public `/health` returned HTTP 200 and the frontend was healthy.
+Published service-worker build: `fc392a05-b505-4797-8a61-5af9340f38d0`.
+
+An isolated muted Chromium run against the published frontend recovered an induced
+pause while document visibility was overridden to hidden. Three local fixture
+tracks completed with automatic handoffs of approximately 30 and 31 ms. Every
+playing source was a local blob, the queue remained device-only, and no provider
+resolve/stream request occurred. APIs were stubbed in the test context to avoid
+creating listening history. This tests browser behavior, not real OS suspension.
+
+Release/rollback files are in `/srv/music/soundspan-releases/pause-marker-20260919`.
+Previous frontend image remains available:
+`sha256:3ec6f6498203b2fed755d77af2ca1d7e2cdbe3201074ce7ea4a7bfa0acedd61f`.
+Current frontend image:
+`sha256:46a3fe3ec00add5cfaf9836979667726227745b7ee62497d26227b35ce8f861e`.
