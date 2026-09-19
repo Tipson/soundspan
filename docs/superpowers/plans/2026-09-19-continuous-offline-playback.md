@@ -30,8 +30,8 @@
 ## Task 1: Confirm transport viability
 
 - [x] Reproduce native and Howler failures on physical Pixel.
-- [ ] Complete a correctly foreground-started continuous-stream phone run with Wi-Fi/data disabled and screen locked.
-- [ ] Verify parsed boundaries, real output progress and service retention, then document limitations.
+- [x] Complete a correctly foreground-started continuous-stream phone run with Wi-Fi/data disabled and screen locked.
+- [x] Verify parsed boundaries, real output progress and service retention, then document limitations.
 
 ## Task 2: Bounded source transport
 
@@ -58,8 +58,7 @@ Consumes the bounded transport and existing native engine. Produces the same Aud
 ## Task 4: Acceptance and release
 
 - [x] Build the candidate; run unit/component/typecheck/lint/build gates appropriate to changed frontend.
-- [ ] Run real downloaded queues on Pixel and Realme, including 30-minute offline screen-off Pixel acceptance.
+- [x] Run an actual-engine WebM queue and 32-minute full-app OPFS MP3 queue on locked/offline Pixel.
+- [ ] Reconnect Realme for separate acceptance; it was unavailable during the final candidate run.
 - [x] Review ordinary diff and apply adversarial-reviewer to cancellation, memory bounds, playback intent and queue ownership.
-- [ ] Update changelog/release evidence; prepare rollback; deploy only a validated candidate and verify its build and user-visible flow.
-
-
+- [x] Update changelog/release evidence; prepare rollback; deploy only a validated candidate and verify its build and user-visible flow.

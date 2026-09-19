@@ -1,9 +1,12 @@
 # Android offline physical acceptance — 2026-09-19
 
-Status: FAIL on Pixel; production playback incident remains open.
+Status: downloaded continuous-playback candidate passed the locked/offline Pixel
+application test and is deployed. Other devices and online-source transitions
+remain separate acceptance scopes.
 
-Production frontend build: `fc392a05-b505-4797-8a61-5af9340f38d0`
-(revision `4932b5c7`). No production code or deployment changed in this session.
+Baseline frontend build: `fc392a05-b505-4797-8a61-5af9340f38d0`
+(revision `4932b5c7`). Released frontend build:
+`5b96d3bc-7e5f-47aa-bfa3-4af7c858244e` (revision `c0df8fa6`).
 
 ## Method
 
@@ -157,9 +160,41 @@ continuous future audio and return the current file to the native transport.
 
 Candidate frontend validation: 1,731 unit tests and 1,377 component tests passed;
 typecheck and production build passed. ESLint reported no errors (105 warnings).
-The actual app's long physical locked/offline acceptance remains required before
-deployment. The format probe supports recognized MP3, ADTS AAC and WebM audio;
+The format probe supports recognized MP3, ADTS AAC and WebM audio;
 the core MP4 fixture result does not imply generic downloaded MP4 activation.
+
+## Full application locked/offline acceptance and rollout
+
+The built application, using an isolated local test account and three full MP3
+recordings in OPFS, completed a 32-minute Pixel run with repeat-all, Wi-Fi and
+mobile data disabled. All 166 samples (1,919.684 seconds between first and last)
+were dozing/asleep and retained Chrome FGS, active audio output and progressing
+AudioFlinger frames. Eight natural recording changes completed without seeking.
+CDP was disconnected throughout observation; the phone remained USB-powered.
+
+Final page inspection confirmed exactly one primary native source load, no media
+errors, and a device-only queue. Native time reached 1,955.434 seconds; retained
+decoded audio was bounded to approximately 15 seconds behind and 30 ahead.
+The monitor intentionally paused playback and restored connectivity afterward.
+This is a physical Chrome test of the full app; installed-PWA update acceptance,
+Realme (disconnected), iPhone and online-only playback are not inferred from it.
+
+Production frontend image:
+`sha256:30fd27e7f8844ec910f6eec00fd5312ffbdb20af073f5fd6f8bdb21524bb4631`.
+The image passed a separate loopback-only server canary before deployment.
+The release preserved all existing compose overlays, replaced only the frontend,
+and verified container health plus the externally served worker build identity.
+The externally served application also completed a three-recording device-only
+test in an isolated browser account with one native source load and no errors.
+Backend containers and neighboring services retained their existing IDs.
+Release files and guarded rollback script are under
+`/srv/music/soundspan-releases/continuous-offline-20260919-c0df8fa6` on CT 121.
+Rollback image:
+`sha256:46a3fe3ec00add5cfaf9836979667726227745b7ee62497d26227b35ce8f861e`.
+
+Private evidence: `pixel-app-locked-player.jsonl`, `pixel-app-locked-result.json`,
+`app-candidate-results.json`, `app-candidate-repeat-results.json`,
+`app-candidate-repeat-all-results.json`, and `app-candidate-controls-results.json`.
 
 ## Artifacts and cleanup
 
@@ -167,5 +202,7 @@ Private raw evidence and a sanitized summary remain outside Git under the siblin
 soundspan/diagnostics/playback-20260919 directory. Relevant files include
 physical-summary.json, pixel-low-volume.jsonl, pixel-low-volume-processes-private.txt,
 pixel-elements.json and realme-parallel.jsonl. Do not publish raw process dumps or
-owner-scoped diagnostic records. Wi-Fi and mobile data were restored on both
-phones; playback was paused. Pixel was returned to mute. No app data was cleared.
+owner-scoped diagnostic records. Baseline diagnostics restored connectivity on
+both phones and returned Pixel to mute. Final candidate monitors restored Pixel
+connectivity and paused playback, preserving the user's quiet volume setting.
+No user app data or downloaded collection was cleared.

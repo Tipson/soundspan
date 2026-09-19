@@ -1,6 +1,6 @@
 # Continuous offline playback on Android
 
-Status: implemented candidate; production acceptance pending
+Status: implemented and deployed; locked/offline full-app Pixel acceptance passed
 
 ## Outcome and evidence
 
@@ -45,9 +45,8 @@ format changes. An unsupported format must take an explicit tested fallback;
 it cannot silently be declared fixed by the successful MP3 case.
 
 Limit selection to verified Android/browser environments with MediaSource
-support. Other platforms retain their established engine. Candidate builds enable
-the adapter; production rollout remains blocked until full-app locked-phone
-acceptance succeeds. Active or pending Listen Together membership synchronously
+support. Other platforms retain their established engine. Active or pending
+Listen Together membership synchronously
 disables continuity, removes prepared future audio, and returns the current file
 to native playback at its track-relative position.
 
