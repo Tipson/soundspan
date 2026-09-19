@@ -99,12 +99,6 @@ mock.module("next/link", {
     }) => React.createElement("a", { href, ...props }, children),
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => React.createElement("span", null, "TIDAL"),
-    },
-});
-
 mock.module("@/hooks/useQueuedTrackIds", {
     namedExports: {
         useQueuedTrackIds: () => state.queuedTrackIds,

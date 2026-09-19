@@ -55,6 +55,18 @@ ENV NEXT_PUBLIC_APP_VERSION=$NEXT_PUBLIC_APP_VERSION
 # Build Next.js application
 RUN npm run build
 
+# Discard build-only cache before copying the output into the runtime image.
+RUN rm -rf /app/.next/cache
+
+# Install runtime dependencies into an empty layer. Pruning the builder's
+# node_modules would copy up thousands of files on overlay filesystems.
+FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848 AS runtime-deps
+WORKDIR /app
+COPY --from=deps /packages/media-metadata-contract /packages/media-metadata-contract
+COPY package*.json ./
+RUN --mount=type=cache,id=soundspan-npm-frontend,target=/root/.npm,sharing=locked \
+    npm ci --omit=dev --legacy-peer-deps --prefer-offline --no-audit --no-fund
+
 # Stage 3: Production (Hardened)
 FROM node:24-bookworm-slim@sha256:65932751ed4073ed02f5c04e494e4b2572a891b7dbea0568a863dc80341bf848
 
@@ -68,7 +80,7 @@ ENV NODE_ENV=production
 
 # Copy necessary files from builder
 COPY --from=builder --chown=node:node /app/package*.json ./
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=runtime-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/.next ./.next
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/server.js ./server.js

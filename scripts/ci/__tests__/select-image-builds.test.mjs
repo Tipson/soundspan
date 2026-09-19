@@ -47,12 +47,7 @@ test("shared Python runtime changes build all Python sidecars", () => {
                 changedPaths: ["services/common/sidecar_runtime_utils.py"],
             }),
         ),
-        [
-            "audio-analyzer",
-            "vibe-provider-dclap",
-            "tidal-streamer",
-            "ytmusic-streamer",
-        ],
+        ["audio-analyzer", "vibe-provider-dclap", "ytmusic-streamer"],
     );
 });
 
@@ -68,5 +63,5 @@ test("manual groups are deterministic and AIO is retired from CI", () => {
 });
 
 test("an empty changed-path set fails safe by building every split image", () => {
-    assert.equal(selectImageBuilds({ changedPaths: [] }).include.length, 7);
+    assert.equal(selectImageBuilds({ changedPaths: [] }).include.length, 6);
 });

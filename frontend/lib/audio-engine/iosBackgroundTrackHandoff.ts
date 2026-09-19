@@ -34,7 +34,7 @@ export interface IosBackgroundTrackHandoffInput {
     isListenTogether: boolean;
     repeatMode: "off" | "one" | "all";
     hasNextTrack: boolean;
-    nextTrackPreloadRequested: boolean;
+    nextTrackPreloadReady: boolean;
     currentTimeSec: number;
     durationSec: number;
 }
@@ -61,7 +61,7 @@ function isEligible(input: IosBackgroundTrackHandoffInput): boolean {
         !input.isListenTogether &&
         input.repeatMode !== "one" &&
         input.hasNextTrack &&
-        input.nextTrackPreloadRequested &&
+        input.nextTrackPreloadReady &&
         Number.isFinite(input.currentTimeSec) &&
         Number.isFinite(input.durationSec) &&
         input.durationSec > 0 &&

@@ -6,8 +6,9 @@ import { useAuth } from "@/lib/auth-context";
 import { createFrontendLogger } from "@/lib/logger";
 import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
-import { SettingsLayout, SidebarItem } from "@/features/settings/components/ui";
+import { useInlineStatus } from "@/components/ui/InlineStatus";
+import { SettingsSaveDock } from "@/features/settings/components/SettingsSaveDock";
+import { UserSettingsLayout } from "@/features/settings/components/UserSettingsLayout";
 import { ru } from "@/lib/i18n/ru";
 
 // Section components
@@ -16,72 +17,7 @@ import { SignInSecuritySection } from "@/features/settings/components/sections/S
 import { SocialSection } from "@/features/settings/components/sections/SocialSection";
 import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
 import { DeviceOfflineSettingsSection } from "@/features/settings/components/sections/DeviceOfflineSettingsSection";
-import { IntegrationsSection } from "@/features/settings/components/sections/IntegrationsSection";
 import { TasteProfileSettingsSection } from "@/features/taste-profile";
-
-// Define sidebar items
-const sidebarItems: SidebarItem[] = [
-    {
-        id: "account",
-        label: ru.settings.account,
-        groupId: "profile",
-        groupLabel: "Профиль",
-    },
-    {
-        id: "taste-profile",
-        label: "Музыкальные вкусы",
-        groupId: "profile",
-        groupLabel: "Профиль",
-    },
-    {
-        id: "social",
-        label: ru.settings.social,
-        groupId: "profile",
-        groupLabel: "Профиль",
-    },
-    {
-        id: "sign-in-security",
-        label: ru.settings.security,
-        groupId: "security",
-        groupLabel: "Безопасность",
-    },
-    {
-        id: "api-keys",
-        label: ru.settings.apiKeys,
-        groupId: "security",
-        groupLabel: "Безопасность",
-    },
-    {
-        id: "playback",
-        label: ru.settings.playback,
-        groupId: "listening",
-        groupLabel: "Прослушивание",
-    },
-    {
-        id: "history",
-        label: ru.settings.history,
-        groupId: "listening",
-        groupLabel: "Прослушивание",
-    },
-    {
-        id: "scrobbling",
-        label: ru.settings.scrobbling,
-        groupId: "listening",
-        groupLabel: "Прослушивание",
-    },
-    {
-        id: "device-offline",
-        label: ru.settings.offlineDevice,
-        groupId: "offline",
-        groupLabel: "Офлайн",
-    },
-    {
-        id: "integrations",
-        label: ru.settings.integrations,
-        groupId: "services",
-        groupLabel: "Сервисы",
-    },
-];
 
 function renderSectionFallback() {
     return (
@@ -90,14 +26,6 @@ function renderSectionFallback() {
         </div>
     );
 }
-
-const ScrobblingSection = dynamic(
-    () =>
-        import("@/features/settings/components/sections/ScrobblingSection").then(
-            (mod) => mod.ScrobblingSection,
-        ),
-    { loading: renderSectionFallback },
-);
 
 const PlaybackHistorySection = dynamic(
     () =>
@@ -121,13 +49,26 @@ const logger = createFrontendLogger("Settings.Page");
  * Renders the SettingsPage component.
  */
 export default function SettingsPage() {
-    const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+    const { user, isAuthenticated, isLoading } = useAuth();
+    if (isLoading)
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <GradientSpinner size="md" />
+            </div>
+        );
+    if (!isAuthenticated || !user) return null;
+    return <UserSettingsForm key={user.id} />;
+}
+
+function UserSettingsForm() {
+    const { user } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
     const saveStatus = useInlineStatus();
 
     // User settings hook
     const {
         settings: userSettings,
+        hasChanges,
         isLoading: userSettingsLoading,
         updateSettings: updateUserSettings,
         saveSettings: saveUserSettings,
@@ -151,18 +92,6 @@ export default function SettingsPage() {
         }
     }, [userSettings, saveUserSettings, saveStatus]);
 
-    if (authLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-surface">
-                <GradientSpinner size="md" />
-            </div>
-        );
-    }
-
-    if (!isAuthenticated) {
-        return null;
-    }
-
     if (userSettingsLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-surface">
@@ -172,71 +101,60 @@ export default function SettingsPage() {
     }
 
     return (
-        <SettingsLayout sidebarItems={sidebarItems} isAdmin={false}>
-            {/* Account (includes Subsonic app password) */}
-            <AccountSection
-                settings={userSettings}
-                onUpdate={updateUserSettings}
-            />
-
-            {user?.id && <TasteProfileSettingsSection accountId={user.id} />}
-
-            {/* Social */}
-            <SocialSection
-                settings={userSettings}
-                onUpdate={updateUserSettings}
-                onReloadSettings={() =>
-                    reloadUserSettings({ background: true })
-                }
-            />
-
-            <SignInSecuritySection />
-
-            {/* API Keys */}
-            <APIKeysSection />
-
-            {/* Playback */}
-            <PlaybackSection
-                value={userSettings.playbackQuality}
-                onChange={(quality) =>
-                    updateUserSettings({ playbackQuality: quality })
-                }
-                loudnessMode={userSettings.loudnessMode}
-                onLoudnessModeChange={(mode) =>
-                    updateUserSettings({ loudnessMode: mode })
-                }
-            />
-
-            {/* History & Personalization */}
-            <PlaybackHistorySection />
-
-            {/* Scrobbling */}
-            <ScrobblingSection />
-
-            <DeviceOfflineSettingsSection />
-
-            {/* Integrations (YouTube Music + TIDAL — visible to all users) */}
-            <IntegrationsSection
-                settings={userSettings}
-                onUpdate={updateUserSettings}
-            />
-
-            <div className="sticky bottom-3 z-20 pt-4 md:bottom-4 md:pt-6">
-                <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/[0.1] bg-surface-overlay/90 p-2.5 shadow-2xl shadow-black/30 backdrop-blur-xl md:justify-end">
-                    <div className="min-w-0 flex-1 px-2 md:flex-none">
-                        <InlineStatus {...saveStatus.props} />
-                    </div>
-                    <button
-                        onClick={handleSaveAll}
-                        disabled={isSaving}
-                        className="min-h-11 flex-shrink-0 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-brand/15 transition hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand"
-                    >
-                        {isSaving
-                            ? ru.settings.saving
-                            : ru.settings.saveChanges}
-                    </button>
-                </div>
-            </div>
-        </SettingsLayout>
+        <UserSettingsLayout
+            sections={{
+                profile: (
+                    <>
+                        <AccountSection
+                            settings={userSettings}
+                            onUpdate={updateUserSettings}
+                        />
+                        {user?.id && (
+                            <TasteProfileSettingsSection accountId={user.id} />
+                        )}
+                        <SocialSection
+                            settings={userSettings}
+                            onUpdate={updateUserSettings}
+                            onReloadSettings={() =>
+                                reloadUserSettings({ background: true })
+                            }
+                        />
+                    </>
+                ),
+                playback: (
+                    <>
+                        <PlaybackSection
+                            value={userSettings.playbackQuality}
+                            onChange={(quality) =>
+                                updateUserSettings({ playbackQuality: quality })
+                            }
+                            loudnessMode={userSettings.loudnessMode}
+                            onLoudnessModeChange={(mode) =>
+                                updateUserSettings({ loudnessMode: mode })
+                            }
+                        />
+                        <PlaybackHistorySection />
+                    </>
+                ),
+                offline: <DeviceOfflineSettingsSection />,
+                security: (
+                    <>
+                        <SignInSecuritySection />
+                        <APIKeysSection />
+                    </>
+                ),
+            }}
+            saveDock={
+                <SettingsSaveDock
+                    hasChanges={hasChanges}
+                    placement="inline"
+                    isSaving={isSaving}
+                    status={saveStatus.status}
+                    message={saveStatus.message}
+                    onStatusClear={saveStatus.reset}
+                    onSave={handleSaveAll}
+                />
+            }
+        />
     );
 }

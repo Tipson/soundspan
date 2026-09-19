@@ -1,5 +1,7 @@
 const mockDefaultGetRadio = jest.fn();
+const mockDefaultSearch = jest.fn();
 const mockPrisma = {
+    trackYtMusic: { findMany: jest.fn() },
     play: { findMany: jest.fn() },
     likedRemoteTrack: { findMany: jest.fn() },
     playlistItem: { findMany: jest.fn() },
@@ -9,7 +11,10 @@ const mockPrisma = {
 };
 
 jest.mock("../youtubeMusic", () => ({
-    ytMusicService: { getRadio: mockDefaultGetRadio },
+    ytMusicService: {
+        getRadio: mockDefaultGetRadio,
+        search: mockDefaultSearch,
+    },
 }));
 
 jest.mock("../../utils/db", () => ({ prisma: mockPrisma }));
@@ -100,21 +105,206 @@ function createService(
         Partial<
             Pick<
                 PersonalizedCatalogDependencies,
-                | "loadDislikedEntityIds"
-                | "getListenBrainzCandidates"
-                | "getScenarioCandidates"
+                "loadDislikedEntityIds" | "getListenBrainzCandidates" | "now"
             >
         >,
 ): PersonalizedCatalogService {
     return new PersonalizedCatalogService({
         loadDislikedEntityIds: async () => [],
         getListenBrainzCandidates: async () => [],
-        getScenarioCandidates: async () => [],
         ...dependencies,
     });
 }
 
 describe("PersonalizedCatalogService", () => {
+    it("does not amplify taste when the same song is copied into multiple playlists", async () => {
+        const playlistTrack = storedTrack("playlist-song");
+        const build = (copies: number) =>
+            createService({
+                loadSignals: async () => ({
+                    ...emptySignals(),
+                    likedTracks: [storedTrack("liked-song")],
+                    playlistTracks: Array.from(
+                        { length: copies },
+                        () => playlistTrack,
+                    ),
+                }),
+                getRadio: async (seedVideoId) => ({
+                    seedVideoId,
+                    playlistId: null,
+                    tracks: [],
+                }),
+            }).getHomeFeed("user-1", 12);
+        const [one, many] = await Promise.all([build(1), build(10)]);
+        expect(many.shelves.quickPicks.map((track) => track.id)).toEqual(
+            one.shelves.quickPicks.map((track) => track.id),
+        );
+    });
+
+    it("keeps equal-strength Wave likes independent of bulk import order", async () => {
+        const likes = Array.from({ length: 343 }, (_, i) =>
+            storedTrack(`like-${i}`),
+        );
+        const build = (likedTracks: StoredYoutubeTrack[]) =>
+            createService({
+                loadSignals: async () => ({ ...emptySignals(), likedTracks }),
+                getRadio: async (seedVideoId) => ({
+                    seedVideoId,
+                    playlistId: null,
+                    tracks: [radioTrack("fresh")],
+                }),
+            }).getHomeFeed("user-1", 12, { surface: "wave" });
+        const [forward, reverse] = await Promise.all([
+            build(likes),
+            build([...likes].reverse()),
+        ]);
+        expect(forward.shelves.quickPicks.map((track) => track.id)).toEqual(
+            reverse.shelves.quickPicks.map((track) => track.id),
+        );
+    });
+    it("does not resurrect listened tracks in any Wave lane after a new session", async () => {
+        const recent = storedTrack("heard");
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                recentPlays: [recent],
+                likedTracks: [recent, storedTrack("seed")],
+                playbackSignals: [
+                    playbackSignal("heard", "completed", {
+                        playedAt: new Date(),
+                    }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                playlistId: null,
+                seedVideoId,
+                tracks: [radioTrack("heard"), radioTrack("fresh")],
+            }),
+        });
+        const wave = await service.getHomeFeed("user-1", 12, {
+            surface: "wave",
+        });
+        expect(
+            Object.values(wave.shelves)
+                .flat()
+                .map((track) => track.youtubeVideoId),
+        ).not.toContain("heard");
+        const home = await service.getHomeFeed("user-1", 12);
+        expect(
+            home.shelves.listenAgain.map((track) => track.youtubeVideoId),
+        ).toContain("heard");
+    });
+
+    it("allows yesterday's liked song and a failed start, but excludes today's skip across Wave lanes", async () => {
+        const now = new Date("2026-09-07T22:00:00Z");
+        const service = createService({
+            now: () => now,
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [
+                    storedTrack("yesterday"),
+                    storedTrack("failed"),
+                    storedTrack("skipped"),
+                ],
+                recentPlays: [
+                    storedTrack("yesterday"),
+                    storedTrack("failed"),
+                    storedTrack("skipped"),
+                ],
+                playbackSignals: [
+                    playbackSignal("yesterday", "completed", {
+                        playedAt: new Date("2026-09-06T21:00:00Z"),
+                    }),
+                    playbackSignal("failed", "failed", { playedAt: now }),
+                    playbackSignal("skipped", "skipped", { playedAt: now }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [radioTrack("fresh")],
+            }),
+        });
+        const result = await service.getHomeFeed("user-1", 12, {
+            surface: "wave",
+        });
+        const ids = Object.values(result.shelves)
+            .flat()
+            .map((track) => track.youtubeVideoId);
+        expect(ids).toContain("yesterday");
+        expect(ids).toContain("failed");
+        expect(ids).not.toContain("skipped");
+        expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it("uses at most three different seed artists even when all four signal sources exist", async () => {
+        const getRadio = jest.fn(async (seedVideoId: string) => ({
+            playlistId: null,
+            seedVideoId,
+            tracks: [radioTrack("fresh")],
+        }));
+        const signals = {
+            ...emptySignals(),
+            recentPlays: [storedTrack("a1", { artist: "A" })],
+            likedTracks: [
+                storedTrack("a2", { artist: "A" }),
+                storedTrack("b", { artist: "B" }),
+            ],
+            playlistTracks: [
+                storedTrack("a3", { artist: "A" }),
+                storedTrack("c", { artist: "C" }),
+            ],
+            tasteSeedTracks: [storedTrack("d", { artist: "D" })],
+        };
+        await createService({
+            loadSignals: async () => signals,
+            getRadio,
+        }).getHomeFeed("user-1", 12, { surface: "wave" });
+        const artists = new Map(
+            [
+                ...signals.recentPlays,
+                ...signals.likedTracks,
+                ...signals.playlistTracks,
+                ...signals.tasteSeedTracks,
+            ].map((track) => [track.videoId, track.artist]),
+        );
+        expect(getRadio).toHaveBeenCalledTimes(3);
+        expect(
+            new Set(getRadio.mock.calls.map(([id]) => artists.get(id))).size,
+        ).toBe(3);
+    });
+
+    it("reads older likes beyond a bulk-imported hundred instead of truncating the taste profile", async () => {
+        const rows = Array.from({ length: 343 }, (_, i) => ({
+            trackYtMusicId: `row-like-${i}`,
+        }));
+        mockPrisma.play.findMany.mockResolvedValue([]);
+        mockPrisma.likedRemoteTrack.findMany.mockImplementation(
+            async ({ take }: { take: number }) => rows.slice(0, take),
+        );
+        mockPrisma.playlistItem.findMany.mockResolvedValue([]);
+        mockPrisma.trackYtMusic.findMany.mockResolvedValue(
+            Array.from({ length: 343 }, (_, i) => storedTrack(`like-${i}`)),
+        );
+        mockPrisma.userSettings.findUnique.mockResolvedValue(null);
+        mockPrisma.dislikedEntity.findMany.mockResolvedValue([]);
+        mockPrisma.scrobbleConnection.findUnique.mockResolvedValue(null);
+        mockDefaultGetRadio.mockResolvedValue({
+            tracks: [radioTrack("fresh")],
+            playlistId: null,
+        });
+        await personalizedCatalogService.getHomeFeed("collection-user", 12);
+        expect(mockPrisma.dislikedEntity.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    userId: "collection-user",
+                    entityId: { in: expect.arrayContaining(["yt:like-342"]) },
+                }),
+            }),
+        );
+        mockPrisma.likedRemoteTrack.findMany.mockReset();
+        mockDefaultGetRadio.mockClear();
+    });
     it("builds a playable remote-only home feed from plays, likes, playlists, and provider radio", async () => {
         const loadSignals = jest.fn(async () => ({
             recentPlays: [storedTrack("played")],
@@ -409,9 +599,19 @@ describe("PersonalizedCatalogService", () => {
     it("scopes every persisted signal query to the requested user", async () => {
         mockPrisma.play.findMany.mockResolvedValueOnce([]);
         mockPrisma.likedRemoteTrack.findMany.mockResolvedValueOnce([
-            { trackYtMusic: storedTrack("isolated-signal") },
+            { trackYtMusicId: "row-isolated-signal" },
         ]);
-        mockPrisma.playlistItem.findMany.mockResolvedValueOnce([]);
+        mockPrisma.playlistItem.findMany.mockResolvedValueOnce([
+            { trackYtMusicId: "row-isolated-signal" },
+            { trackYtMusicId: "missing" },
+            { trackYtMusicId: "" },
+        ]);
+        mockPrisma.trackYtMusic.findMany
+            .mockReset()
+            .mockResolvedValue([
+                storedTrack("isolated-signal"),
+                storedTrack("legacy-empty-id", { id: "" }),
+            ]);
         mockPrisma.userSettings.findUnique.mockResolvedValueOnce({
             tasteProfile: {
                 genres: ["Rock"],
@@ -427,7 +627,17 @@ describe("PersonalizedCatalogService", () => {
             tracks: [],
         });
 
-        await personalizedCatalogService.getHomeFeed("isolated-user", 12);
+        await personalizedCatalogService.getHomeFeed("isolated-user", 12, {
+            mood: "focus",
+            surface: "wave",
+        });
+        expect(mockDefaultSearch).not.toHaveBeenCalled();
+        expect(mockPrisma.trackYtMusic.findMany).toHaveBeenCalledTimes(1);
+        expect(mockPrisma.trackYtMusic.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: { in: ["row-isolated-signal", "missing", ""] } },
+            }),
+        );
 
         expect(mockPrisma.play.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -458,6 +668,7 @@ describe("PersonalizedCatalogService", () => {
                     entityId: {
                         in: expect.arrayContaining([
                             "yt:isolated-signal",
+                            "yt:legacy-empty-id",
                             "yt:profile-seed",
                         ]),
                     },
@@ -751,6 +962,64 @@ describe("PersonalizedCatalogService", () => {
         expect(result.shelves.listenAgain).toEqual([]);
     });
 
+    it.each([
+        [null, null],
+        [null, 100],
+        [0.6, null],
+    ])(
+        "does not invent an early skip from ratio=%s seconds=%s",
+        async (completionRatio, listenedSeconds) => {
+            const track = storedTrack("playlist-seed");
+            const getRadio = jest.fn(async (seedVideoId: string) => ({
+                playlistId: null,
+                seedVideoId,
+                tracks: [],
+            }));
+            const service = createService({
+                loadSignals: async () => ({
+                    ...emptySignals(),
+                    playlistTracks: [track],
+                    playbackSignals: [
+                        playbackSignal(track.videoId, "skipped", {
+                            track,
+                            completionRatio,
+                            listenedSeconds,
+                        }),
+                    ],
+                }),
+                getRadio,
+            });
+            await service.getHomeFeed("user-1", 12);
+            expect(getRadio).toHaveBeenCalledWith(
+                track.videoId,
+                expect.any(Number),
+            );
+        },
+    );
+
+    it("treats a measured near-complete skip as positive listening", async () => {
+        const getRadio = jest.fn(async (seedVideoId: string) => ({
+            playlistId: null,
+            seedVideoId,
+            tracks: [],
+        }));
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                recentPlays: [storedTrack("finished")],
+                playbackSignals: [
+                    playbackSignal("finished", "skipped", {
+                        completionRatio: 0.95,
+                        listenedSeconds: 171,
+                    }),
+                ],
+            }),
+            getRadio,
+        });
+        await service.getHomeFeed("user-1", 12);
+        expect(getRadio).toHaveBeenCalledWith("finished", expect.any(Number));
+    });
+
     it("does not treat a provider playback failure as evidence of user taste", async () => {
         const failedTrack = storedTrack("failed-start");
         const loadSignals = jest.fn(async () => ({
@@ -796,7 +1065,7 @@ describe("PersonalizedCatalogService", () => {
         expect(getRadio.mock.calls[0][0]).toBe("repeat");
     });
 
-    it("applies distinct for-you, new, and familiar ranking policies", async () => {
+    it("keeps unheard songs by liked artists eligible without an unknown-artist bonus", async () => {
         const affinityTrack = storedTrack("affinity-seed", {
             artist: "Affinity Artist",
         });
@@ -827,11 +1096,14 @@ describe("PersonalizedCatalogService", () => {
         ]);
 
         expect(forYou.shelves.discovery[0].id).toBe("yt:familiar");
-        expect(fresh.shelves.discovery[0].id).toBe("yt:unseen");
+        expect(fresh.shelves.discovery.map((track) => track.id)).toEqual([
+            "yt:familiar",
+            "yt:unseen",
+        ]);
         expect(familiar.shelves.discovery[0].id).toBe("yt:familiar");
     });
 
-    it("blends a mood-specific provider search with the independent direction ranking", async () => {
+    it("keeps mood candidates personalized instead of inserting generic mood search results", async () => {
         const affinityTrack = storedTrack("affinity-seed", {
             artist: "Affinity Artist",
         });
@@ -847,14 +1119,9 @@ describe("PersonalizedCatalogService", () => {
                 radioTrack("unseen", { artist: "Unseen Artist" }),
             ],
         }));
-        const getScenarioCandidates = jest.fn(async () => [
-            radioTrack("focus-affinity", { artist: "Affinity Artist" }),
-            radioTrack("focus-unseen", { artist: "Unseen Focus Artist" }),
-        ]);
         const service = createService({
             loadSignals,
             getRadio,
-            getScenarioCandidates,
         });
 
         const result = await service.getHomeFeed("user-1", 12, {
@@ -862,15 +1129,10 @@ describe("PersonalizedCatalogService", () => {
             mood: "focus",
         });
 
-        expect(getScenarioCandidates).toHaveBeenCalledWith(
-            "user-1",
-            "focus",
-            36,
-        );
-        expect(result.shelves.discovery[0].id).toBe("yt:focus-unseen");
-        expect(result.shelves.discovery.map((track) => track.id)).toContain(
-            "yt:focus-affinity",
-        );
+        expect(result.shelves.discovery.map((track) => track.id)).toEqual([
+            "yt:familiar",
+            "yt:unseen",
+        ]);
     });
 
     it("uses different personal seed priorities for Favorites and Forgotten", async () => {

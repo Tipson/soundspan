@@ -13,7 +13,12 @@ export interface PlayablePlaylistItem extends PlaylistDetailTrackItem {
 export function isPlayableTrackItem(
     item: PlaylistDetailTrackItem,
 ): item is PlayablePlaylistItem {
-    return Boolean(item.track && item.playback?.isPlayable !== false);
+    if (!item.track || item.playback?.isPlayable === false) return false;
+    return !(
+        item.provider?.source === "tidal" ||
+        item.track.source === "tidal" ||
+        item.track.streamSource === "tidal"
+    );
 }
 
 /** Returns whether a playlist row is a locally sourced playable track. */
@@ -62,12 +67,6 @@ export function toAudioTrack(item: PlayablePlaylistItem): AudioTrack {
         ...(item.trackYtMusicId ? { trackYtMusicId: item.trackYtMusicId } : {}),
         source: track.source,
         peer: track.peer,
-        ...(track.streamSource === "tidal"
-            ? {
-                  streamSource: "tidal" as const,
-                  tidalTrackId: track.tidalTrackId,
-              }
-            : {}),
         ...(track.streamSource === "youtube"
             ? {
                   streamSource: "youtube" as const,

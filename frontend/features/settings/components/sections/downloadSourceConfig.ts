@@ -4,7 +4,6 @@ import { DownloadSource, SystemSettings } from "../../types";
 export interface ConfiguredSources {
     soulseek: boolean;
     lidarr: boolean;
-    tidal: boolean;
     youtube: boolean;
 }
 
@@ -17,14 +16,12 @@ export interface SourceOption {
 const SOURCE_LABELS: Array<{ value: DownloadSource; label: string }> = [
     { value: "soulseek", label: "Soulseek (отдельные треки)" },
     { value: "lidarr", label: "Lidarr (альбомы целиком)" },
-    { value: "tidal", label: "TIDAL (треки и альбомы)" },
     { value: "youtube", label: "YouTube Music (альбомы)" },
 ];
 
 const FALLBACK_LABELS: Record<DownloadSource, string> = {
     soulseek: "Попробовать Soulseek",
     lidarr: "Попробовать Lidarr",
-    tidal: "Попробовать TIDAL",
     youtube: "Попробовать YouTube Music",
 };
 
@@ -35,8 +32,6 @@ type SourceSettings = Pick<
     | "lidarrApiKey"
     | "soulseekUsername"
     | "soulseekPassword"
-    | "tidalEnabled"
-    | "tidalConnected"
     | "ytMusicEnabled"
 >;
 
@@ -54,8 +49,6 @@ export function getConfiguredSources(
             settings.lidarrEnabled === true &&
             settings.lidarrUrl.trim() !== "" &&
             settings.lidarrApiKey.trim() !== "",
-        tidal:
-            settings.tidalEnabled === true && settings.tidalConnected === true,
         youtube: settings.ytMusicEnabled === true,
     };
 }

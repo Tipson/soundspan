@@ -21,15 +21,15 @@ function libraryTrack(artist: string, title: string): LibraryTrack {
 }
 
 function discoverTrack(artist: string, name: string): DiscoverResult {
-    return { type: "track", name, artist };
+    return { type: "track", name, artist, duration: 200 };
 }
 
-test("normalizeSongKey folds case, punctuation, and trailing qualifiers", () => {
-    assert.equal(
+test("normalizeSongKey folds case and punctuation but preserves recording versions", () => {
+    assert.notEqual(
         normalizeSongKey("AC/DC", "T.N.T. (Live)"),
         normalizeSongKey("ac dc", "TNT"),
     );
-    assert.equal(
+    assert.notEqual(
         normalizeSongKey(
             "Trace Adkins",
             "Every Light In The House (2003 Remaster)",
@@ -48,11 +48,40 @@ test("dedupeDiscoverTracks drops external rows that duplicate owned songs", () =
             discoverTrack("Trace Adkins", "Chrome"),
             discoverTrack("Trace Adkins", "Songs About Me"),
         ],
-        [libraryTrack("Trace Adkins", "Chrome (2011 Remaster)")],
+        [libraryTrack("Trace Adkins", "Chrome")],
     );
     assert.deepEqual(
         deduped.map((track) => track.name),
         ["Songs About Me"],
+    );
+});
+test("library original does not hide live, different-length or unknown-length recordings", () => {
+    const rows = [
+        discoverTrack("A", "Song (Live)"),
+        { ...discoverTrack("A", "Song"), duration: 250 },
+        { ...discoverTrack("A", "Song"), duration: undefined },
+    ];
+    assert.deepEqual(
+        dedupeDiscoverTracks(rows, [libraryTrack("A", "Song")]),
+        rows,
+    );
+});
+test("library title cannot erase an explicit source choice", () => {
+    const track = {
+        ...discoverTrack("A", "Song"),
+        musicSourceRecording: {
+            provider: "vk" as const,
+            id: "1_2",
+            title: "Song",
+            artists: ["A"],
+            duration: 200,
+            contentVersion: "explicit" as const,
+            preview: false,
+        },
+    };
+    assert.deepEqual(
+        dedupeDiscoverTracks([track], [libraryTrack("A", "Song")]),
+        [track],
     );
 });
 

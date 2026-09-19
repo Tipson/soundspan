@@ -75,41 +75,6 @@ export function WithConnectors<TBase extends ApiClientConstructor>(
                 },
             );
         }
-
-        async testTidal() {
-            return this.request<ServiceTestResult>(
-                "/system-settings/test-tidal",
-                {
-                    method: "POST",
-                },
-            );
-        }
-
-        async tidalDeviceAuth() {
-            return this.request<{
-                device_code: string;
-                user_code: string;
-                verification_uri: string;
-                verification_uri_complete: string;
-                expires_in: number;
-                interval: number;
-            }>("/system-settings/tidal-auth/device", {
-                method: "POST",
-            });
-        }
-
-        async tidalPollAuth(deviceCode: string) {
-            return this.request<{
-                status?: "pending";
-                success?: boolean;
-                user_id?: string;
-                country_code?: string;
-                username?: string;
-            }>("/system-settings/tidal-auth/token", {
-                method: "POST",
-                body: JSON.stringify({ device_code: deviceCode }),
-            });
-        }
     }
     return ConnectorsApi;
 }

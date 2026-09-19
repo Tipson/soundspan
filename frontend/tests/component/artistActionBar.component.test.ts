@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderExpandedDetailActions } from "./renderExpandedDetailActions";
 
 const icon = (name: string) => {
     const MockIcon = (props: Record<string, unknown> = {}) =>
@@ -12,6 +12,7 @@ const icon = (name: string) => {
 
 mock.module("lucide-react", {
     namedExports: {
+        X: icon("close"),
         Play: icon("play"),
         Pause: icon("pause"),
         Shuffle: icon("shuffle"),
@@ -79,7 +80,7 @@ const baseProps = {
 test("ArtistActionBar renders personal controls without server acquisition", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             onAddAllToQueue: noop,
@@ -95,7 +96,7 @@ test("ArtistActionBar renders personal controls without server acquisition", asy
     );
 
     // Online-first order: playback, personal organization, device copy, radio.
-    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /Воспроизвести всё/);
     assert.match(html, /title="Перемешать"/);
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить в плейлист"/);
@@ -108,7 +109,7 @@ test("ArtistActionBar renders personal controls without server acquisition", asy
 test("ArtistActionBar renders the explicit personal-library control", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             librarySaveControl: React.createElement(
@@ -125,7 +126,7 @@ test("ArtistActionBar renders the explicit personal-library control", async () =
 test("ArtistActionBar never exposes server queueing state", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             isPendingDownload: true,
@@ -139,7 +140,7 @@ test("ArtistActionBar never exposes server queueing state", async () => {
 test("ArtistActionBar icon controls are touch-sized and have accessible names", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             onAddAllToQueue: noop,
@@ -171,7 +172,7 @@ test("ArtistActionBar icon controls are touch-sized and have accessible names", 
 test("ArtistActionBar hides Add to Queue when callback is not provided", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             // onAddAllToQueue not provided
@@ -187,7 +188,7 @@ test("ArtistActionBar hides Add to Queue when callback is not provided", async (
 test("ArtistActionBar hides Add to Playlist and Like All for non-library artist", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             source: "discovery" as const,
@@ -198,14 +199,15 @@ test("ArtistActionBar hides Add to Playlist and Like All for non-library artist"
     assert.doesNotMatch(html, /title="Добавить в плейлист"/);
     assert.doesNotMatch(html, /title="Поставить лайк всем трекам"/);
     // Play and Shuffle should still be there
-    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /Воспроизвести всё/);
+    assert.doesNotMatch(html, /Ещё действия/, "no empty actions sheet");
     assert.match(html, /title="Перемешать"/);
 });
 
 test("ArtistActionBar shows Pause when artist is currently playing", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             isPlaying: true,
@@ -221,7 +223,7 @@ test("ArtistActionBar shows Pause when artist is currently playing", async () =>
 test("ArtistActionBar shows spinner on Like All button when isLikingAll is true", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             onLikeAll: noop,
@@ -237,7 +239,7 @@ test("ArtistActionBar shows spinner on Like All button when isLikingAll is true"
 test("ArtistActionBar shows heart icon when not liking", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             onLikeAll: noop,
@@ -251,7 +253,7 @@ test("ArtistActionBar shows heart icon when not liking", async () => {
 test("ArtistActionBar hides download button when downloadsEnabled is false", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             downloadsEnabled: false,
@@ -266,7 +268,7 @@ test("ArtistActionBar hides download button when downloadsEnabled is false", asy
 test("ArtistActionBar shows Listen Together locked state", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(ArtistActionBar, {
             ...baseProps,
             isInListenTogetherGroup: true,

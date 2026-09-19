@@ -171,6 +171,38 @@ test("registration keeps labelled mobile-sized controls inside the auth stage", 
     assert.equal(email.autocomplete, "email");
 });
 
+test("registration reloads the authenticated document after storing the session", async (t) => {
+    const RegisterPage = (await import("../../app/register/page")).default;
+    const harness = await mount(React.createElement(RegisterPage));
+    t.after(harness.unmount);
+    await React.act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            "value",
+        )!.set!;
+        harness.container.querySelectorAll("input").forEach((input) => {
+            setter.call(
+                input,
+                input.type === "email"
+                    ? "listener@example.test"
+                    : "Listener123",
+            );
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+    });
+    await React.act(async () => {
+        harness.container
+            .querySelector("form")!
+            .dispatchEvent(
+                new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+            );
+        await new Promise<void>((resolve) => setImmediate(resolve));
+    });
+    assert.equal(register.mock.callCount(), 1);
+    assert.equal(window.location.pathname, "/");
+    assert.equal(push.mock.callCount(), 0);
+});
+
 test("server onboarding exposes the current step and accessible integration switches", async (t) => {
     window.history.replaceState({}, "", "/onboarding");
     const OnboardingPage = (await import("../../app/onboarding/page")).default;

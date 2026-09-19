@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AudioWaveform, Home, Library } from "lucide-react";
+import { AudioWaveform, HardDriveDownload, Home, Library } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
-import { handleOfflineLibraryNavigation } from "./offlineLibraryNavigation";
+import {
+    handleOfflineLibraryNavigation,
+    openOfflineDownloads,
+} from "./offlineLibraryNavigation";
 import { ru } from "@/lib/i18n/ru";
 
 const navigationItems = [
@@ -75,10 +78,16 @@ export function BottomNavigation() {
                                     ? (event) => {
                                           handleOfflineLibraryNavigation({
                                               isOnline: navigator.onLine,
+                                              isModifiedClick:
+                                                  event.button !== 0 ||
+                                                  event.metaKey ||
+                                                  event.ctrlKey ||
+                                                  event.shiftKey ||
+                                                  event.altKey,
                                               preventDefault: () =>
                                                   event.preventDefault(),
-                                              hardNavigate: (path) =>
-                                                  window.location.assign(path),
+                                              openDownloads:
+                                                  openOfflineDownloads,
                                           });
                                       }
                                     : undefined
@@ -123,6 +132,22 @@ export function BottomNavigation() {
                         </Link>
                     );
                 })}
+                <button
+                    type="button"
+                    onClick={openOfflineDownloads}
+                    aria-haspopup="dialog"
+                    className="shell-nav-item group relative flex min-h-11 h-full flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 text-content-muted active:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-light"
+                >
+                    <span
+                        className="flex h-7 min-w-10 items-center justify-center rounded-full px-2 group-active:bg-white/[0.05]"
+                        aria-hidden="true"
+                    >
+                        <HardDriveDownload className="h-5 w-5" />
+                    </span>
+                    <span className="text-[10px] leading-none tracking-wide">
+                        Загруженное
+                    </span>
+                </button>
             </div>
         </nav>
     );

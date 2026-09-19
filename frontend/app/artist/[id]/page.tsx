@@ -16,9 +16,14 @@ import { api, type SavedMusicEntityInput } from "@/lib/api";
 import { toast } from "sonner";
 import { useListenTogether } from "@/lib/listen-together-context";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
-import { resolvePreferenceTrackId } from "@/lib/trackRef";
+import {
+    isRetiredRemoteOnlyTrack,
+    normalizeActionableAudioTrack,
+    resolvePreferenceTrackId,
+} from "@/lib/trackRef";
 import { shuffleArray } from "@/utils/shuffle";
 import { Music2 } from "lucide-react";
+import type { Track as AudioTrack } from "@/lib/audio-state-context";
 
 // Hooks
 import { useArtistData } from "@/features/artist/hooks/useArtistData";
@@ -26,7 +31,6 @@ import { useArtistAlbumRequests } from "@/features/artist/hooks/useArtistAlbumRe
 import { useArtistActions } from "@/features/artist/hooks/useArtistActions";
 import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import { useYtMusicTopTracks } from "@/features/artist/hooks/useYtMusicTopTracks";
-import { useTidalTopTracks } from "@/features/artist/hooks/useTidalTopTracks";
 import { useArtistTracks } from "@/features/artist/hooks/useArtistTracks";
 import { useProviderArtistTracks } from "@/features/artist/hooks/useProviderArtistTracks";
 import { useProviderArtistFallback } from "@/features/artist/hooks/useProviderArtistFallback";
@@ -174,8 +178,11 @@ export default function ArtistPage() {
     const providerReleases = isDirectYtMusicArtist
         ? providerAlbums
         : (fallbackProviderData?.providerAlbums ?? []);
+    const shouldLoadProviderTracks =
+        activeView === "tracks" ||
+        (activeView === "overview" && (artist?.topTracks?.length ?? 0) === 0);
     const providerCatalogEnabled =
-        activeView === "tracks" &&
+        shouldLoadProviderTracks &&
         (isDirectYtMusicArtist || Boolean(fallbackProviderData));
     const providerArtistTracksQuery = useProviderArtistTracks(
         providerReleases,
@@ -211,31 +218,16 @@ export default function ArtistPage() {
     } | null>(null);
     const radioConfirmedRef = useRef(false);
 
-    // Enrich unowned top tracks with TIDAL streaming, then YT Music for remaining gaps
+    // Enrich unowned top tracks with YouTube Music streaming.
     const artistWithTopTracks = artist?.topTracks?.length ? artist : null;
-    const {
-        enrichedTopTracks: tidalEnrichedTopTracks,
-        isMatching: isTidalMatching,
-        isStatusResolved: isTidalStatusResolved,
-    } = useTidalTopTracks(artistWithTopTracks);
-    const tidalArtist = artistWithTopTracks
-        ? {
-              ...artistWithTopTracks,
-              topTracks:
-                  tidalEnrichedTopTracks || artistWithTopTracks.topTracks,
-          }
-        : null;
     const {
         enrichedTopTracks,
         isMatching: isYtMatching,
         isStatusResolved: isYtStatusResolved,
-    } = useYtMusicTopTracks(tidalArtist);
+    } = useYtMusicTopTracks(artistWithTopTracks);
     const isProviderMatching = isDirectYtMusicArtist
         ? false
-        : !isTidalStatusResolved ||
-          !isYtStatusResolved ||
-          isTidalMatching ||
-          isYtMatching;
+        : !isYtStatusResolved || isYtMatching;
     const popularTracks = enrichedTopTracks || artist?.topTracks || [];
     const fallbackProviderTracks = fallbackProviderData
         ? mergeArtistTracks(
@@ -244,7 +236,7 @@ export default function ArtistPage() {
           )
         : [];
     const visibleArtistTracks =
-        isDirectYtMusicArtist && activeView === "tracks"
+        isDirectYtMusicArtist && providerCatalogEnabled
             ? mergeArtistTracks(popularTracks, providerArtistTracksQuery.tracks)
             : libraryArtistTracksEnabled
               ? mergeArtistTracks(
@@ -358,48 +350,51 @@ export default function ArtistPage() {
         }
     }
 
-    const formatTrackForPlayback = (t: Track) => ({
-        id: resolvePreferenceTrackId({
-            ...t,
-            hasLocalFile:
-                typeof t.filePath === "string" && t.filePath.trim().length > 0,
-        }),
-        title: t.title,
-        artist: {
-            name: t.artist?.name || artist!.name,
-            id: t.artist?.id || artist!.id,
-        },
-        album: {
-            title: t.album?.title || artistRu.unknownAlbum,
-            coverArt: t.album?.coverArt,
-            id: t.album?.id,
-        },
-        duration: t.duration,
-        filePath: t.filePath,
-        source: t.source,
-        peer: t.peer,
-        ...(t.streamSource === "tidal" && {
-            streamSource: "tidal" as const,
+    const formatTrackForPlayback = (t: Track): AudioTrack | null =>
+        normalizeActionableAudioTrack({
+            id: resolvePreferenceTrackId({
+                ...t,
+                hasLocalFile:
+                    typeof t.filePath === "string" &&
+                    t.filePath.trim().length > 0,
+            }),
+            title: t.title,
+            artist: {
+                name: t.artist?.name || artist!.name,
+                id: t.artist?.id || artist!.id,
+            },
+            album: {
+                title: t.album?.title || artistRu.unknownAlbum,
+                coverArt: t.album?.coverArt,
+                id: t.album?.id,
+                albumLoudnessLufs: t.album?.albumLoudnessLufs,
+                albumTruePeakDb: t.album?.albumTruePeakDb,
+            },
+            duration: t.duration,
+            filePath: t.filePath,
+            source: t.source,
+            peer: t.peer,
+            streamSource:
+                t.streamSource === "local" ? undefined : t.streamSource,
             tidalTrackId: t.tidalTrackId,
-        }),
-        ...(t.streamSource === "youtube" && {
-            streamSource: "youtube" as const,
             youtubeVideoId: t.youtubeVideoId,
-        }),
-        ...(t.streamSource === "peer" && {
-            streamSource: "peer" as const,
-        }),
-    });
+            displayTitle: t.displayTitle,
+            displayTrackNo: t.displayTrackNo,
+            hasUserOverrides: t.hasUserOverrides,
+            loudnessLufs: t.loudnessLufs,
+            truePeakDb: t.truePeakDb,
+        });
     const deviceDownloadTracks = visibleArtistTracks
         .filter(
             (track: Track) =>
                 Boolean(track.filePath) ||
-                (track.streamSource === "tidal" &&
-                    typeof track.tidalTrackId === "number") ||
                 (track.streamSource === "youtube" &&
                     Boolean(track.youtubeVideoId)),
         )
-        .map(formatTrackForPlayback);
+        .map(formatTrackForPlayback)
+        .filter(
+            (track: AudioTrack | null): track is AudioTrack => track !== null,
+        );
     const hasProviderTrackContext =
         isDirectYtMusicArtist || fallbackProviderTracks.length > 0;
 
@@ -416,7 +411,14 @@ export default function ArtistPage() {
         const orderedTracks = shuffle
             ? shuffleArray(playableTracks)
             : playableTracks;
-        playTracks(orderedTracks.map(formatTrackForPlayback), 0);
+        const formattedTracks = orderedTracks
+            .map(formatTrackForPlayback)
+            .filter(
+                (track: AudioTrack | null): track is AudioTrack =>
+                    track !== null,
+            );
+        if (formattedTracks.length === 0) return;
+        playTracks(formattedTracks, 0);
     }
 
     // A row click starts the artist's ordered popular-track context. This
@@ -430,28 +432,44 @@ export default function ArtistPage() {
         if (!artist) return;
         const contextTracks = visibleTracks.filter(
             (candidate: Track) =>
-                (candidate.source === "federated" &&
+                !isRetiredRemoteOnlyTrack(candidate) &&
+                ((candidate.source === "federated" &&
                     candidate.peer?.online === true) ||
-                Boolean(candidate.filePath) ||
-                (candidate.streamSource === "tidal" &&
-                    Boolean(candidate.tidalTrackId)) ||
-                (candidate.streamSource === "youtube" &&
-                    Boolean(candidate.youtubeVideoId)),
+                    Boolean(candidate.filePath) ||
+                    (candidate.streamSource === "youtube" &&
+                        Boolean(candidate.youtubeVideoId))),
         );
-        const selectedIndex = contextTracks.indexOf(track);
+        const formattedTracks = contextTracks
+            .map((candidate) => ({
+                source: candidate,
+                track: formatTrackForPlayback(candidate),
+            }))
+            .filter(
+                (entry): entry is { source: Track; track: AudioTrack } =>
+                    entry.track !== null,
+            );
+        const selectedIndex = formattedTracks.findIndex(
+            (entry) => entry.source === track,
+        );
         if (selectedIndex < 0) return;
-        playTracks(contextTracks.map(formatTrackForPlayback), selectedIndex);
+        playTracks(
+            formattedTracks.map((entry) => entry.track),
+            selectedIndex,
+        );
     }
 
     function handleAddAllPopularToQueue(visibleTracks: Track[]) {
         const playable = visibleTracks.filter(
             (t) =>
-                t.filePath ||
-                (t.streamSource === "tidal" && t.tidalTrackId) ||
-                (t.streamSource === "youtube" && t.youtubeVideoId),
+                !isRetiredRemoteOnlyTrack(t) &&
+                (t.filePath ||
+                    (t.streamSource === "youtube" && t.youtubeVideoId)),
         );
         if (!playable.length) return;
-        const formattedTracks = playable.map(formatTrackForPlayback);
+        const formattedTracks = playable
+            .map(formatTrackForPlayback)
+            .filter((track): track is AudioTrack => track !== null);
+        if (formattedTracks.length === 0) return;
         addTracksToQueue(formattedTracks);
     }
 

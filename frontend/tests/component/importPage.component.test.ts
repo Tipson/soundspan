@@ -111,12 +111,6 @@ mock.module("@/lib/toast-context", {
     },
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => React.createElement("span", null, "TIDAL"),
-    },
-});
-
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: {
         YouTubeBadge: () => React.createElement("span", null, "YOUTUBE"),
@@ -274,7 +268,7 @@ test("imports a public Spotify playlist link without an OAuth connection", async
     }
 });
 
-test("preview list renders provider resolution badges per track", async () => {
+test("preview list treats retired provider rows as unresolved", async () => {
     const { PreviewTrackResolutionList } =
         await import("../../app/import/page");
 
@@ -315,7 +309,7 @@ test("preview list renders provider resolution badges per track", async () => {
 
     assert.match(html, /ЛОКАЛЬНО/);
     assert.match(html, /YOUTUBE/);
-    assert.match(html, /TIDAL/);
+    assert.doesNotMatch(html, /TIDAL/);
     assert.match(html, /НЕ НАЙДЕНО/);
     assert.match(html, /Совпадение у провайдеров не найдено/);
 });

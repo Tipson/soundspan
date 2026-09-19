@@ -1,8 +1,10 @@
 import { pipeline } from "node:stream/promises";
+import type { Readable } from "node:stream";
 import type { Request, Response } from "express";
 import type { PeerPlaybackFallback } from "./peerPlaybackFallback";
 import { remoteProviderAdapters } from "./remoteProviders/adapters";
 import { toMappingProvider } from "./remoteProviders/types";
+import { createStreamProxyRequestAbort } from "../routes/streamProxyRequestAbort";
 
 const FORWARDED_STREAM_HEADERS = [
     "content-type",
@@ -21,6 +23,7 @@ export interface MappedProviderResponseState {
 /** Result of one mapped provider stream attempt. */
 export type MappedProviderStreamResult =
     | { status: "served" }
+    | { status: "cancelled" }
     | { status: "unavailable" }
     | {
           status: "failed";
@@ -72,34 +75,57 @@ export async function serveMappedProviderStream(input: {
         typeof input.req.headers.range === "string"
             ? input.req.headers.range
             : undefined;
+    const lifetime = createStreamProxyRequestAbort(input.req, input.res);
+    const wasCancelled = () =>
+        lifetime.wasClientAborted() ||
+        (input.res.destroyed && !input.res.writableEnded);
+    let body: Readable | undefined;
+    let upstreamFailed = false;
+    const noteUpstreamFailure = () => {
+        if (!wasCancelled()) upstreamFailed = true;
+    };
+    const noteUpstreamClose = () => {
+        if (!body?.readableEnded) noteUpstreamFailure();
+    };
     try {
+        if (wasCancelled()) return { status: "cancelled" };
         if (input.fallback.source === "library") {
             return { status: "unavailable" };
         }
         const adapter =
             remoteProviderAdapters[toMappingProvider(input.fallback.source)];
         const response = await adapter.streamTrack({
-            userId:
-                input.fallback.source === "ytmusic"
-                    ? (input.youtubeUserId ?? "__public__")
-                    : input.userId,
+            userId: input.youtubeUserId ?? "__public__",
             quality: input.quality,
             range,
-            ...(input.fallback.source === "tidal"
-                ? { tidalTrackId: input.fallback.tidalTrackId }
-                : { youtubeVideoId: input.fallback.youtubeVideoId }),
+            youtubeVideoId: input.fallback.youtubeVideoId,
+            signal: lifetime.signal,
         });
+        if (wasCancelled()) {
+            response?.data.destroy();
+            return { status: "cancelled" };
+        }
         if (!response) return { status: "unavailable" };
+        body = response.data;
+        // Pipeline destroys the HTTP response after an upstream failure too.
+        // Preserve that distinction from a listener leaving the player.
+        body.once("error", noteUpstreamFailure);
+        body.once("close", noteUpstreamClose);
         input.res.status(response.status);
         forwardStreamHeaders(input.res, response.headers);
         await pipeline(response.data, input.res);
         return { status: "served" };
     } catch (error) {
+        if (wasCancelled() && !upstreamFailed) return { status: "cancelled" };
         return {
             status: "failed",
             failure: error,
             responseState: mappedProviderResponseState(input.res),
         };
+    } finally {
+        lifetime.dispose();
+        body?.off("error", noteUpstreamFailure);
+        body?.off("close", noteUpstreamClose);
     }
 }
 

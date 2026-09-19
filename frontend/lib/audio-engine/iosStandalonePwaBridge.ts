@@ -144,6 +144,11 @@ export class IosStandaloneAudioContextBridge {
         return this.context !== null;
     }
 
+    /** Observe without creating, resuming or closing a context. */
+    getState(): AudioContextState | null {
+        return this.context?.state ?? null;
+    }
+
     /**
      * Creates the context and element source on first use; subsequent
      * calls for the same element are no-ops.

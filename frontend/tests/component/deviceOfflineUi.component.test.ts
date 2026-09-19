@@ -16,10 +16,18 @@ const calls = {
     prepares: [] as string[],
     exports: [] as string[],
     plays: [] as string[],
+    playbackQueues: [] as Array<{
+        ids: string[];
+        startIndex: number;
+        replaceQueue?: boolean;
+    }>,
+    playedTrackInputs: [] as Array<Record<string, unknown>>,
     settingUpdates: [] as Array<Record<string, unknown>>,
     collectionEnqueues: [] as Array<Record<string, unknown>>,
     storageRetries: 0,
+    automationRetries: 0,
     storageSetups: 0,
+    refreshes: 0,
     confirmations: [] as string[],
 };
 let collectionStatus = {
@@ -106,10 +114,14 @@ const offlineContext = {
     queueItems: [] as Array<Record<string, unknown>>,
     automationSettings: {
         ownerId: "user-1",
-        autoDownloadLiked: false,
+        autoDownloadLiked: true,
         autoDownloadLikedLimit: 100,
         autoDownloadMaxBytes: 2 * 1024 * 1024 * 1024,
         updatedAt: 0,
+    },
+    automationError: null as string | null,
+    retryAutomation: async () => {
+        calls.automationRetries += 1;
     },
     enqueueCollection: async (input: Record<string, unknown>) => {
         calls.collectionEnqueues.push(input);
@@ -120,7 +132,9 @@ const offlineContext = {
         calls.settingUpdates.push(patch);
         Object.assign(offlineContext.automationSettings, patch);
     },
-    refresh: async () => undefined,
+    refresh: async () => {
+        calls.refreshes += 1;
+    },
     retryStorage: async () => {
         calls.storageRetries += 1;
     },
@@ -135,6 +149,7 @@ mock.module("lucide-react", {
     namedExports: {
         Music: Icon,
         Play: Icon,
+        Pause: Icon,
         Radio: Icon,
         HardDriveDownload: Icon,
         RotateCcw: Icon,
@@ -179,12 +194,6 @@ mock.module("@/components/ui/PlaylistSelector", {
 mock.module("@/components/ui/ShareLinkModal", {
     namedExports: { ShareLinkModal: () => null },
 });
-mock.module("@/lib/trackRef", {
-    namedExports: {
-        isRemoteTrack: () => false,
-        toAddToPlaylistRef: () => ({ source: "local", trackId: "track" }),
-    },
-});
 mock.module("@/lib/shareLinks", {
     namedExports: { canShareTrack: () => false },
 });
@@ -202,11 +211,39 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
         useDeviceOffline: () => offlineContext,
     },
 });
+mock.module("@/lib/audio-state-context", {
+    namedExports: { useAudioState: () => ({ currentTrack: null }) },
+});
+mock.module("@/lib/audio-playback-context", {
+    namedExports: { usePlaybackStatus: () => ({ isPlaying: false }) },
+});
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
-            playTracks() {},
-            playNow: (track: { id: string }) => calls.plays.push(track.id),
+            playTracks(
+                tracks: Array<Record<string, unknown> & { id: string }>,
+                startIndex = 0,
+                _vibe = false,
+                options?: { replaceQueue?: boolean },
+            ) {
+                assert.ok(
+                    tracks.every(
+                        (track) => track.playbackSourcePolicy === "device-only",
+                    ),
+                    "Every occurrence started from Downloads must remain device-only",
+                );
+                calls.playbackQueues.push({
+                    ids: tracks.map((track) => track.id),
+                    startIndex,
+                    replaceQueue: options?.replaceQueue,
+                });
+                calls.plays.push(tracks[startIndex].id);
+                calls.playedTrackInputs.push(tracks[startIndex]);
+            },
+            playNow: (track: Record<string, unknown> & { id: string }) => {
+                calls.plays.push(track.id);
+                calls.playedTrackInputs.push(track);
+            },
             playNext() {},
             addToQueue() {},
             playTrack() {},
@@ -250,10 +287,15 @@ beforeEach(() => {
     calls.prepares.length = 0;
     calls.exports.length = 0;
     calls.plays.length = 0;
+    calls.playbackQueues.length = 0;
+    calls.playedTrackInputs.length = 0;
     calls.settingUpdates.length = 0;
     calls.collectionEnqueues.length = 0;
     calls.storageRetries = 0;
+    calls.automationRetries = 0;
+    offlineContext.automationError = null;
     calls.storageSetups = 0;
+    calls.refreshes = 0;
     calls.confirmations.length = 0;
     collectionStatus = {
         total: 2,
@@ -263,7 +305,7 @@ beforeEach(() => {
         processing: 0,
         errors: 0,
     };
-    offlineContext.automationSettings.autoDownloadLiked = false;
+    offlineContext.automationSettings.autoDownloadLiked = true;
     offlineContext.automationSettings.autoDownloadLikedLimit = 100;
     offlineContext.queueItems.length = 0;
     resumeFailure = null;
@@ -284,6 +326,41 @@ beforeEach(() => {
             return confirmDelete;
         },
     });
+});
+
+test("Downloads verifies retained files on entry and when the app returns to the foreground", async () => {
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+
+    assert.equal(calls.refreshes, 1);
+
+    await React.act(async () => {
+        window.dispatchEvent(new Event("focus"));
+        await Promise.resolve();
+    });
+    assert.equal(calls.refreshes, 2);
+
+    Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "hidden",
+    });
+    await React.act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+        await Promise.resolve();
+    });
+    assert.equal(calls.refreshes, 2);
+
+    Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+    });
+    await React.act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+        await Promise.resolve();
+    });
+    assert.equal(calls.refreshes, 3);
+    view.unmount();
 });
 
 test("storage failures stay visible in Downloads and ordinary Settings with retry", async () => {
@@ -525,7 +602,7 @@ test("album device action batches playable tracks and exposes truthful collectio
     protect.unmount();
 });
 
-test("ordinary settings expose an opt-in auto-liked policy for this device only", async () => {
+test("ordinary settings show automatic likes enabled without artificial limits", async () => {
     const { DeviceOfflineSettingsSection } =
         await import("../../features/settings/components/sections/DeviceOfflineSettingsSection");
     const view = await render(
@@ -539,21 +616,57 @@ test("ordinary settings expose an opt-in auto-liked policy for this device only"
         view.container.textContent ?? "",
         /Автоматически скачивать любимые треки на это устройство/i,
     );
-    assert.match(view.container.textContent ?? "", /2 ГБ/i);
+    assert.doesNotMatch(
+        view.container.textContent ?? "",
+        /2 ГБ|Лимит автоматических загрузок/i,
+    );
+    assert.match(view.container.textContent ?? "", /без ограничения/i);
+    assert.equal(
+        view.container.querySelector("a")?.getAttribute("href"),
+        "/library?tab=downloads",
+    );
     assert.match(view.container.textContent ?? "", /Soundspan Music/i);
     assert.doesNotMatch(view.container.textContent ?? "", /browser storage/i);
     const toggle = view.container.querySelector(
         "#device-auto-download-liked",
     ) as HTMLInputElement;
-    assert.equal(toggle.checked, false);
+    assert.equal(toggle.checked, true);
     assert.match(toggle.parentElement?.className ?? "", /min-h-11/);
 
     await React.act(async () => {
         toggle.click();
         await Promise.resolve();
     });
-    assert.deepEqual(calls.settingUpdates, [{ autoDownloadLiked: true }]);
+    assert.deepEqual(calls.settingUpdates, [{ autoDownloadLiked: false }]);
     view.unmount();
+});
+
+test("offline settings explain a storage pause and offer an explicit retry", async () => {
+    offlineContext.queueItems.push({
+        management: "auto-liked",
+        status: "error",
+        requiresStorageAction: true,
+        errorMessage: "Недостаточно места. Освободите место на устройстве.",
+    });
+    const { DeviceOfflineSettingsSection } =
+        await import("../../features/settings/components/sections/DeviceOfflineSettingsSection");
+    const view = await render(
+        React.createElement(DeviceOfflineSettingsSection),
+    );
+    try {
+        assert.match(view.container.textContent ?? "", /Недостаточно места/);
+        const retry = [...view.container.querySelectorAll("button")].find(
+            (button) => button.textContent?.includes("Повторить загрузку"),
+        )!;
+        assert.ok(retry);
+        await React.act(async () => {
+            retry.click();
+            await Promise.resolve();
+        });
+        assert.equal(calls.automationRetries, 1);
+    } finally {
+        view.unmount();
+    }
 });
 
 test("offline settings require an explicit device folder before enabling automatic downloads", async () => {
@@ -573,7 +686,7 @@ test("offline settings require an explicit device folder before enabling automat
     const toggle = view.container.querySelector(
         "#device-auto-download-liked",
     ) as HTMLInputElement;
-    assert.equal(toggle.disabled, true);
+    assert.equal(toggle.disabled, false);
     const setup = view.container.querySelector(
         'button[aria-label="Выбрать папку с музыкой"]',
     ) as HTMLButtonElement;
@@ -644,7 +757,7 @@ test("unsupported browsers explain that a plain PWA cannot save managed files ou
                 "#device-auto-download-liked",
             ) as HTMLInputElement
         ).disabled,
-        true,
+        false,
     );
     view.unmount();
 });
@@ -657,6 +770,9 @@ async function render(element: React.ReactElement) {
     await React.act(async () => root.render(element));
     return {
         container,
+        async rerender(nextElement: React.ReactElement) {
+            await React.act(async () => root.render(nextElement));
+        },
         unmount() {
             void React.act(() => root.unmount());
             container.remove();
@@ -866,6 +982,145 @@ test("single-track actions can protect an automatic ready copy", async () => {
     checking.unmount();
 });
 
+test("Downloads keeps retained rows in stable creation order when an older transfer finishes", async () => {
+    const base = {
+        ownerId: "user-1",
+        quality: "auto",
+        sourceUrl: "/api/ytmusic/stream/video-a",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 3,
+        totalBytes: 6,
+        contentType: "audio/mpeg",
+        persistenceGranted: false,
+        attempt: 1,
+        errorCode: null,
+        errorMessage: null,
+        virtualUrl: "/__offline/audio/test",
+        status: "downloading",
+    };
+    const newest = {
+        ...base,
+        key: "newest-key",
+        trackIdentity: "youtube:newest",
+        track: { ...track, id: "newest", title: "Newest download" },
+        createdAt: 300,
+        updatedAt: 300,
+    };
+    const middle = {
+        ...base,
+        key: "middle-key",
+        trackIdentity: "youtube:middle",
+        track: { ...track, id: "middle", title: "Middle download" },
+        createdAt: 200,
+        updatedAt: 200,
+    };
+    const oldest = {
+        ...base,
+        key: "oldest-key",
+        trackIdentity: "youtube:oldest",
+        track: { ...track, id: "oldest", title: "Oldest download" },
+        createdAt: 100,
+        updatedAt: 100,
+    };
+    records = [newest, middle, oldest];
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+    const rows = () => [
+        ...view.container.querySelectorAll("[data-download-status]"),
+    ];
+    const oldestRow = rows().find((row) =>
+        row.textContent?.includes("Oldest download"),
+    );
+    view.container.scrollTop = 128;
+    records = [{ ...oldest, bytesReceived: 5, updatedAt: 900 }, newest, middle];
+    await view.rerender(React.createElement(DownloadsList));
+    assert.equal(view.container.scrollTop, 128);
+    assert.strictEqual(rows()[2], oldestRow);
+    assert.deepEqual(
+        rows().map((row) => row.querySelector("p")?.textContent),
+        ["Newest download", "Middle download", "Oldest download"],
+    );
+
+    records = [
+        {
+            ...oldest,
+            status: "ready",
+            bytesReceived: 6,
+            updatedAt: 1_000,
+        },
+        newest,
+        middle,
+    ];
+    await view.rerender(React.createElement(DownloadsList));
+
+    assert.deepEqual(
+        rows().map((row) => row.querySelector("p")?.textContent),
+        ["Newest download", "Middle download", "Oldest download"],
+    );
+    assert.strictEqual(
+        rows().find((row) => row.textContent?.includes("Oldest download")),
+        oldestRow,
+    );
+    assert.equal(view.container.scrollTop, 128);
+    view.unmount();
+});
+
+test("Downloads starts a fresh queue containing only ready copies in displayed order", async () => {
+    records = [
+        {
+            key: "a",
+            status: "ready",
+            createdAt: 3,
+            track: {
+                ...track,
+                id: "a",
+                youtubeVideoId: "AAAAAAAAAAA",
+                title: "First",
+            },
+        },
+        {
+            key: "b",
+            status: "ready",
+            createdAt: 2,
+            track: {
+                ...track,
+                id: "b",
+                youtubeVideoId: "BBBBBBBBBBB",
+                title: "Second",
+            },
+        },
+        {
+            key: "error",
+            status: "error",
+            createdAt: 4,
+            track: { ...track, id: "error", title: "Not saved" },
+        },
+        {
+            key: "pending",
+            status: "downloading",
+            createdAt: 5,
+            track: { ...track, id: "pending", title: "Pending" },
+        },
+    ];
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+    await React.act(async () =>
+        (
+            view.container.querySelector(
+                'button[aria-label="Воспроизвести: Second"]',
+            ) as HTMLButtonElement
+        ).click(),
+    );
+    assert.deepEqual(calls.prepares, ["b"]);
+    assert.deepEqual(calls.playbackQueues, [
+        { ids: ["a", "b"], startIndex: 1, replaceQueue: true },
+    ]);
+    view.unmount();
+});
+
 test("Downloads UI plays ready copies and exposes retry/delete state actions", async () => {
     const base = {
         ownerId: "user-1",
@@ -898,7 +1153,8 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
             virtualUrl: "/__offline/audio/retry-key",
             track: { ...track, id: "interrupted", title: "Interrupted song" },
             status: "interrupted",
-            errorMessage: "The transfer stopped before the file was ready.",
+            errorCode: "device_file_missing",
+            errorMessage: "The retained device file is missing.",
         },
         {
             ...base,
@@ -908,10 +1164,29 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
             status: "error",
             errorMessage: "The provider rejected this file.",
         },
+        {
+            ...base,
+            key: "damaged-key",
+            virtualUrl: "/__offline/audio/damaged-key",
+            track: { ...track, id: "damaged", title: "Damaged song" },
+            status: "interrupted",
+            errorCode: "device_file_integrity",
+            errorMessage: "The retained file failed integrity checks.",
+        },
     ];
     const { DownloadsList } =
         await import("../../features/device-offline/components/DownloadsList");
     const view = await render(React.createElement(DownloadsList));
+
+    const interruptedRow = [
+        ...view.container.querySelectorAll(
+            '[data-download-status="interrupted"]',
+        ),
+    ].find((row) =>
+        row.textContent?.includes("Interrupted song"),
+    ) as HTMLElement;
+    assert.equal(interruptedRow.querySelectorAll("p").length, 3);
+    assert.match(interruptedRow.textContent ?? "", /Файл удалён с устройства/i);
 
     await React.act(async () =>
         (
@@ -927,6 +1202,13 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
             ) as HTMLButtonElement
         ).click(),
     );
+    await React.act(async () =>
+        (
+            view.container.querySelector(
+                'button[aria-label="Повторить загрузку: Damaged song"]',
+            ) as HTMLButtonElement
+        ).click(),
+    );
     assert.equal(
         view.container.querySelector(
             'button[aria-label="Воспроизвести: Interrupted song"]',
@@ -939,15 +1221,24 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
         ),
         null,
     );
+    assert.equal(
+        view.container.querySelector(
+            'button[aria-label="Воспроизвести: Damaged song"]',
+        ),
+        null,
+    );
     assert.match(
-        view.container.querySelector('[data-download-status="interrupted"]')
-            ?.textContent ?? "",
-        /Загрузка прервана.*Повтор/i,
+        interruptedRow.textContent ?? "",
+        /Файл удалён с устройства.*скачайте трек снова/i,
     );
     assert.match(
         view.container.querySelector('[data-download-status="error"]')
             ?.textContent ?? "",
         /Не удалось сохранить.*Повторить/i,
+    );
+    assert.match(
+        view.container.textContent ?? "",
+        /Файл повреждён.*скачайте трек снова/i,
     );
     const deleteButtons = view.container.querySelectorAll(
         'button[aria-label="Удалить копию с устройства: Alpha"]',
@@ -965,8 +1256,168 @@ test("Downloads UI plays ready copies and exposes retry/delete state actions", a
 
     assert.deepEqual(calls.prepares, ["ready-key"]);
     assert.deepEqual(calls.plays, ["yt:video-a"]);
-    assert.deepEqual(calls.resumes, ["retry-key"]);
+    assert.equal(calls.playedTrackInputs[0]?.youtubeVideoId, "video-a");
+    assert.equal(calls.playedTrackInputs[0]?.streamSource, "youtube");
+    assert.deepEqual(calls.resumes, ["retry-key", "damaged-key"]);
     assert.deepEqual(calls.deletes, ["ready-key"]);
+    view.unmount();
+});
+
+test("historical TIDAL rows stay manageable without Play or Retry actions", async () => {
+    const retiredTrack = {
+        ...track,
+        id: "tidal:991",
+        title: "Historical TIDAL copy",
+        filePath: undefined,
+        mediaSource: "tidal",
+        streamSource: "tidal",
+        tidalTrackId: 991,
+        youtubeVideoId: undefined,
+    };
+    const base = {
+        ownerId: "user-1",
+        trackIdentity: "tidal:991",
+        quality: "auto",
+        sourceUrl: "/api/tidal/stream/991",
+        track: retiredTrack,
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 6,
+        totalBytes: 6,
+        contentType: "audio/mpeg",
+        persistenceGranted: false,
+        management: "manual",
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        errorCode: null,
+        errorMessage: null,
+    };
+    records = [
+        {
+            ...base,
+            key: "retired-ready",
+            virtualUrl: "/__offline/audio/retired-ready",
+            status: "ready",
+        },
+        {
+            ...base,
+            key: "retired-error",
+            virtualUrl: "/__offline/audio/retired-error",
+            track: { ...retiredTrack, title: "Historical TIDAL failure" },
+            status: "interrupted",
+            errorMessage: "Historical provider failure",
+        },
+        {
+            ...base,
+            key: "local-legacy-ready",
+            trackIdentity: "tidal:994",
+            virtualUrl: "/__offline/audio/local-legacy-ready",
+            sourceUrl: "/api/library/tracks/local-legacy/stream",
+            track: {
+                ...retiredTrack,
+                id: "local-legacy",
+                title: "Local legacy copy",
+                filePath: "/music/local-legacy.flac",
+                source: "local",
+                tidalTrackId: 994,
+            },
+            status: "ready",
+        },
+    ];
+    offlineContext.queueItems.push({
+        key: "retired-queue",
+        ownerId: "user-1",
+        trackIdentity: "tidal:993",
+        quality: "auto",
+        track: {
+            ...retiredTrack,
+            id: "tidal:993",
+            title: "Historical TIDAL queue",
+            tidalTrackId: 993,
+        },
+        sourceUrl: "/api/tidal/stream/993",
+        management: "manual",
+        collectionId: null,
+        collectionLabel: null,
+        status: "error",
+        attempt: 1,
+        leaseId: null,
+        leaseExpiresAt: null,
+        createdAt: 1,
+        updatedAt: 1,
+        errorMessage: "Historical provider failure",
+    });
+
+    const { DownloadsList } =
+        await import("../../features/device-offline/components/DownloadsList");
+    const view = await render(React.createElement(DownloadsList));
+    const rows = [...view.container.querySelectorAll("[data-download-status]")];
+    const readyRow = rows.find((row) =>
+        row.textContent?.includes("Historical TIDAL copy"),
+    );
+    const errorRow = rows.find((row) =>
+        row.textContent?.includes("Historical TIDAL failure"),
+    );
+    const localLegacyRow = rows.find((row) =>
+        row.textContent?.includes("Local legacy copy"),
+    );
+    const queueRow = view.container.querySelector(
+        'button[aria-label="Удалить с этого устройства: Historical TIDAL queue"]',
+    )?.parentElement;
+
+    assert.ok(readyRow);
+    assert.ok(errorRow);
+    assert.ok(localLegacyRow);
+    assert.ok(queueRow);
+    assert.equal(
+        readyRow.querySelector('button[aria-label^="Воспроизвести:"]'),
+        null,
+    );
+    assert.equal(
+        errorRow.querySelector('button[aria-label^="Повторить загрузку:"]'),
+        null,
+    );
+    assert.doesNotMatch(errorRow.textContent ?? "", /Повтор/);
+    assert.match(readyRow.textContent ?? "", /TIDAL больше недоступен/);
+    assert.match(errorRow.textContent ?? "", /TIDAL больше недоступен/);
+    assert.match(queueRow.textContent ?? "", /TIDAL больше недоступен/);
+    assert.equal(
+        queueRow.querySelector('button[aria-label^="Повторить загрузку:"]'),
+        null,
+    );
+    assert.ok(
+        localLegacyRow.querySelector(
+            'button[aria-label="Воспроизвести: Local legacy copy"]',
+        ),
+    );
+    await React.act(async () => {
+        (
+            localLegacyRow.querySelector(
+                'button[aria-label="Воспроизвести: Local legacy copy"]',
+            ) as HTMLButtonElement
+        ).click();
+        await Promise.resolve();
+    });
+    const playedLocalLegacy = calls.playedTrackInputs.at(-1);
+    assert.equal(playedLocalLegacy?.id, "local-legacy");
+    assert.equal(playedLocalLegacy?.mediaSource, "local");
+    assert.equal(playedLocalLegacy?.source, "local");
+    assert.equal(playedLocalLegacy?.streamSource, undefined);
+    assert.equal(playedLocalLegacy?.tidalTrackId, undefined);
+    assert.ok(
+        readyRow.querySelector('button[title="Удалить копию с устройства"]'),
+    );
+    assert.ok(
+        errorRow.querySelector('button[title="Удалить копию с устройства"]'),
+    );
+    assert.ok(
+        queueRow.querySelector('button[title="Удалить с этого устройства"]'),
+    );
+    assert.deepEqual(calls.prepares, ["local-legacy-ready"]);
+    assert.deepEqual(calls.plays, ["local-legacy"]);
+    assert.deepEqual(calls.resumes, []);
+    assert.deepEqual(calls.collectionEnqueues, []);
     view.unmount();
 });
 
@@ -1009,6 +1460,16 @@ test("browser-private Downloads offers an explicit normal-file export without re
     assert.match(
         view.container.textContent ?? "",
         /Личное хранилище Soundspan/i,
+    );
+    const storageDetails = view.container.querySelector("details");
+    assert.ok(
+        storageDetails,
+        "storage explanations must not occupy the track list by default",
+    );
+    assert.equal(storageDetails.open, false);
+    assert.equal(
+        storageDetails.querySelector("summary")?.textContent,
+        "О хранении загрузок",
     );
     assert.match(
         view.container.textContent ?? "",

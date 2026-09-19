@@ -1,9 +1,209 @@
+import type { Prisma } from "@prisma/client";
+import { performance } from "node:perf_hooks";
+
 import { prisma } from "../../utils/db";
 import type { RecommendationCandidate } from "./types";
 
 export interface ResolvedCanonicalRecording {
     id: string;
     canonicalKey: string;
+}
+
+interface CanonicalAliasRow extends ResolvedCanonicalRecording {
+    mergedIntoId: string | null;
+    identitySource: string | null;
+}
+
+const CANONICAL_MERGE_MAX_DEPTH = 16;
+const CANONICAL_TRANSACTION_ATTEMPTS = 8;
+const CANONICAL_TRANSACTION_RETRY_BASE_DELAY_MS = 5;
+const CANONICAL_TRANSACTION_RETRY_MAX_DELAY_MS = 80;
+const CANONICAL_TRANSACTION_TOTAL_BUDGET_MS = 5_000;
+const CANONICAL_TRANSACTION_MAX_WAIT_MS = 2_000;
+const CANONICAL_TRANSACTION_TIMEOUT_MS = 2_000;
+const CANONICAL_TRANSACTION_MIN_BUDGET_MS = 2;
+const canonicalAliasSelect = {
+    id: true,
+    canonicalKey: true,
+    mergedIntoId: true,
+    identitySource: true,
+} as const;
+
+function nestedErrorRecords(error: unknown): Record<string, unknown>[] {
+    const records: Record<string, unknown>[] = [];
+    const pending: Array<{ candidate: unknown; depth: number }> = [
+        { candidate: error, depth: 0 },
+    ];
+    const seen = new Set<unknown>();
+    while (pending.length > 0) {
+        const { candidate, depth } = pending.shift()!;
+        if (
+            depth >= 4 ||
+            typeof candidate !== "object" ||
+            candidate === null ||
+            seen.has(candidate)
+        ) {
+            continue;
+        }
+        seen.add(candidate);
+        const record = candidate as Record<string, unknown>;
+        records.push(record);
+        const meta =
+            typeof record.meta === "object" && record.meta !== null
+                ? (record.meta as Record<string, unknown>)
+                : null;
+        pending.push(
+            { candidate: record.cause, depth: depth + 1 },
+            { candidate: meta, depth: depth + 1 },
+            { candidate: meta?.driverAdapterError, depth: depth + 1 },
+        );
+    }
+    return records;
+}
+
+function isRetryableCanonicalTransactionAbort(error: unknown): boolean {
+    const records = nestedErrorRecords(error);
+    if (
+        records.some(
+            (record) =>
+                [record.code, record.originalCode].some((code) =>
+                    ["P2002", "P2034", "40001", "40P01"].includes(
+                        String(code ?? ""),
+                    ),
+                ) || record.kind === "TransactionWriteConflict",
+        )
+    ) {
+        return true;
+    }
+    return records.some((record) => {
+        const message =
+            typeof record.message === "string"
+                ? record.message.toLowerCase()
+                : "";
+        return (
+            message.includes("could not serialize") ||
+            message.includes("deadlock") ||
+            message.includes("unable to start a transaction in the given time")
+        );
+    });
+}
+
+async function pauseBeforeCanonicalTransactionRetry(
+    attempt: number,
+    remainingBudgetMs: number,
+): Promise<void> {
+    const delay = Math.min(
+        CANONICAL_TRANSACTION_RETRY_MAX_DELAY_MS,
+        CANONICAL_TRANSACTION_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
+    );
+    const jitter = Math.floor(Math.random() * delay);
+    await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(delay + jitter, remainingBudgetMs)),
+    );
+}
+
+function allocateCanonicalTransactionBudget(remainingBudgetMs: number): {
+    maxWait: number;
+    timeout: number;
+} {
+    const transactionBudgetMs = Math.min(
+        CANONICAL_TRANSACTION_MAX_WAIT_MS + CANONICAL_TRANSACTION_TIMEOUT_MS,
+        Math.floor(remainingBudgetMs),
+    );
+    const maxWait = Math.max(
+        1,
+        Math.min(
+            CANONICAL_TRANSACTION_MAX_WAIT_MS,
+            Math.floor(transactionBudgetMs / 2),
+        ),
+    );
+    return {
+        maxWait,
+        timeout: Math.max(
+            1,
+            Math.min(
+                CANONICAL_TRANSACTION_TIMEOUT_MS,
+                transactionBudgetMs - maxWait,
+            ),
+        ),
+    };
+}
+
+/** Run canonical identity mutations at one serializable snapshot with bounded retry. */
+export async function runCanonicalIdentityTransaction<T>(
+    operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+    const deadline = performance.now() + CANONICAL_TRANSACTION_TOTAL_BUDGET_MS;
+    let lastRetryableError: unknown;
+    for (
+        let attempt = 1;
+        attempt <= CANONICAL_TRANSACTION_ATTEMPTS;
+        attempt += 1
+    ) {
+        const remainingBudgetMs = deadline - performance.now();
+        if (remainingBudgetMs < CANONICAL_TRANSACTION_MIN_BUDGET_MS) {
+            if (lastRetryableError !== undefined) throw lastRetryableError;
+            throw new Error(
+                "Canonical identity transaction time budget expired",
+            );
+        }
+        const transactionBudget =
+            allocateCanonicalTransactionBudget(remainingBudgetMs);
+        try {
+            return await prisma.$transaction(operation, {
+                isolationLevel: "Serializable",
+                maxWait: transactionBudget.maxWait,
+                timeout: transactionBudget.timeout,
+            });
+        } catch (error) {
+            const remainingRetryBudgetMs = deadline - performance.now();
+            if (
+                attempt === CANONICAL_TRANSACTION_ATTEMPTS ||
+                !isRetryableCanonicalTransactionAbort(error) ||
+                remainingRetryBudgetMs < CANONICAL_TRANSACTION_MIN_BUDGET_MS
+            ) {
+                throw error;
+            }
+            lastRetryableError = error;
+            await pauseBeforeCanonicalTransactionRetry(
+                attempt,
+                remainingRetryBudgetMs,
+            );
+        }
+    }
+    throw new Error("Canonical identity transaction retry bound was exceeded");
+}
+
+/** Follow a preserved merge alias to its one live canonical survivor. */
+export async function resolveCanonicalSurvivor(
+    database: Pick<Prisma.TransactionClient, "canonicalRecording">,
+    initial: CanonicalAliasRow,
+): Promise<ResolvedCanonicalRecording> {
+    const visited = new Set<string>();
+    let current = initial;
+    for (let depth = 0; depth < CANONICAL_MERGE_MAX_DEPTH; depth += 1) {
+        if (visited.has(current.id)) {
+            throw new Error("Canonical merge alias cycle detected");
+        }
+        visited.add(current.id);
+        if (!current.mergedIntoId) {
+            if (current.identitySource === "identity-merged") {
+                throw new Error(
+                    "Canonical merge alias has no surviving target",
+                );
+            }
+            return { id: current.id, canonicalKey: current.canonicalKey };
+        }
+        const target = await database.canonicalRecording.findUnique({
+            where: { id: current.mergedIntoId },
+            select: canonicalAliasSelect,
+        });
+        if (!target) {
+            throw new Error("Canonical merge alias target is missing");
+        }
+        current = target;
+    }
+    throw new Error("Canonical merge alias chain is too deep");
 }
 
 /** Minimal provider identity used outside the recommendation pipeline. */
@@ -195,10 +395,113 @@ async function findProviderMapping(
             canonicalRecordingId: { not: null },
         },
         select: {
-            canonicalRecording: { select: { id: true, canonicalKey: true } },
+            canonicalRecording: { select: canonicalAliasSelect },
         },
     });
-    return mapping?.canonicalRecording ?? null;
+    if (!mapping?.canonicalRecording) return null;
+    return resolveCanonicalSurvivor(prisma, mapping.canonicalRecording);
+}
+
+/**
+ * Read known provider identities in bounded batches, preserving input positions.
+ * Misses, ambiguous mappings and invalid aliases use the ordinary resolver.
+ * The result is request-local: merges and stale flags are never globally cached.
+ */
+export async function findMappedCanonicalCandidates(
+    candidates: readonly RecommendationCandidate[],
+): Promise<Array<ResolvedCanonicalRecording | null>> {
+    const result: Array<ResolvedCanonicalRecording | null> = [];
+    for (let offset = 0; offset < candidates.length; offset += 250) {
+        const batch = candidates.slice(offset, offset + 250);
+        const ids = (source: RecommendationCandidate["source"]) => [
+            ...new Set(
+                batch
+                    .filter((c) => c.source === source)
+                    .map(providerTrackId)
+                    .filter((id): id is string => Boolean(id)),
+            ),
+        ];
+        const youtube = ids("youtube");
+        const tidal = ids("tidal").map(Number).filter(Number.isSafeInteger);
+        const library = ids("library");
+        const filters: Prisma.TrackMappingWhereInput[] = [
+            ...(youtube.length
+                ? [{ trackYtMusic: { is: { videoId: { in: youtube } } } }]
+                : []),
+            ...(tidal.length
+                ? [{ trackTidal: { is: { tidalId: { in: tidal } } } }]
+                : []),
+            ...(library.length
+                ? [{ track: { is: { id: { in: library } } } }]
+                : []),
+        ];
+        if (!filters.length) {
+            result.push(...batch.map(() => null));
+            continue;
+        }
+        const bound = batch.length * 4;
+        const rows = await prisma.trackMapping.findMany({
+            where: {
+                OR: filters,
+                stale: false,
+                canonicalRecordingId: { not: null },
+            },
+            take: bound,
+            select: {
+                trackYtMusic: { select: { videoId: true } },
+                trackTidal: { select: { tidalId: true } },
+                track: { select: { id: true } },
+                canonicalRecording: { select: canonicalAliasSelect },
+            },
+        });
+        // A truncated duplicate set cannot prove an unambiguous identity.
+        if (rows.length === bound) {
+            result.push(...batch.map(() => null));
+            continue;
+        }
+        const mapped = new Map<string, CanonicalAliasRow | null>();
+        for (const row of rows) {
+            if (!row.canonicalRecording) continue;
+            const keys = [
+                row.trackYtMusic ? `youtube:${row.trackYtMusic.videoId}` : null,
+                row.trackTidal ? `tidal:${row.trackTidal.tidalId}` : null,
+                row.track ? `library:${row.track.id}` : null,
+            ];
+            for (const key of keys) {
+                if (!key) continue;
+                const existing = mapped.get(key);
+                mapped.set(
+                    key,
+                    existing !== undefined &&
+                        existing?.id !== row.canonicalRecording.id
+                        ? null
+                        : row.canonicalRecording,
+                );
+            }
+        }
+        const survivors = new Map<string, ResolvedCanonicalRecording | null>();
+        for (const candidate of batch) {
+            const row = mapped.get(
+                `${candidate.source}:${providerTrackId(candidate)}`,
+            );
+            if (!row) {
+                result.push(null);
+                continue;
+            }
+            if (!survivors.has(row.id)) {
+                try {
+                    survivors.set(
+                        row.id,
+                        await resolveCanonicalSurvivor(prisma, row),
+                    );
+                } catch {
+                    survivors.set(row.id, null);
+                }
+            }
+            result.push(survivors.get(row.id) ?? null);
+        }
+    }
+    return result;
 }
 
 async function findCanonical(
@@ -215,19 +518,29 @@ async function findCanonical(
         candidate.fingerprint
             ? { fingerprint: candidate.fingerprint.trim() }
             : null,
-        { canonicalKey },
     ].filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-    return prisma.canonicalRecording.findFirst({
-        where: { OR: durableMatches },
-        select: { id: true, canonicalKey: true },
-    });
+    const durable =
+        durableMatches.length > 0
+            ? await prisma.canonicalRecording.findFirst({
+                  where: { OR: durableMatches },
+                  select: canonicalAliasSelect,
+              })
+            : null;
+    const match =
+        durable ??
+        (await prisma.canonicalRecording.findFirst({
+            where: { canonicalKey },
+            select: canonicalAliasSelect,
+        }));
+    if (!match) return null;
+    return resolveCanonicalSurvivor(prisma, match);
 }
 
 async function upsertCanonical(
     candidate: RecommendationCandidate,
     canonicalKey: string,
 ): Promise<ResolvedCanonicalRecording> {
-    return prisma.canonicalRecording.upsert({
+    const canonical = await prisma.canonicalRecording.upsert({
         where: { canonicalKey },
         create: {
             canonicalKey,
@@ -247,18 +560,39 @@ async function upsertCanonical(
                 undefined,
             fingerprint: candidate.fingerprint?.trim() || undefined,
         },
-        select: { id: true, canonicalKey: true },
+        select: canonicalAliasSelect,
     });
+    return resolveCanonicalSurvivor(prisma, canonical);
 }
 
 async function attachProviderMapping(
     candidate: RecommendationCandidate,
     canonicalRecordingId: string,
 ): Promise<void> {
+    await runCanonicalIdentityTransaction(async (transaction) => {
+        const canonical = await transaction.canonicalRecording.findUnique({
+            where: { id: canonicalRecordingId },
+            select: canonicalAliasSelect,
+        });
+        if (!canonical) throw new Error("Canonical recording is missing");
+        const survivor = await resolveCanonicalSurvivor(transaction, canonical);
+        await attachProviderMappingInTransaction(
+            transaction,
+            candidate,
+            survivor.id,
+        );
+    });
+}
+
+async function attachProviderMappingInTransaction(
+    transaction: Prisma.TransactionClient,
+    candidate: RecommendationCandidate,
+    canonicalRecordingId: string,
+): Promise<void> {
     if (candidate.source === "youtube") {
         const videoId = providerTrackId(candidate);
         if (!videoId) return;
-        const providerTrack = await prisma.trackYtMusic.upsert({
+        const providerTrack = await transaction.trackYtMusic.upsert({
             where: { videoId },
             create: {
                 videoId,
@@ -277,17 +611,17 @@ async function attachProviderMapping(
             },
             select: { id: true },
         });
-        const mapping = await prisma.trackMapping.findFirst({
+        const mapping = await transaction.trackMapping.findFirst({
             where: { trackYtMusicId: providerTrack.id, stale: false },
             select: { id: true },
         });
         if (mapping) {
-            await prisma.trackMapping.update({
+            await transaction.trackMapping.update({
                 where: { id: mapping.id },
                 data: { canonicalRecordingId },
             });
         } else {
-            await prisma.trackMapping.create({
+            await transaction.trackMapping.create({
                 data: {
                     trackYtMusicId: providerTrack.id,
                     canonicalRecordingId,
@@ -302,7 +636,7 @@ async function attachProviderMapping(
         const rawId = providerTrackId(candidate);
         const tidalId = rawId ? Number(rawId) : Number.NaN;
         if (!Number.isSafeInteger(tidalId)) return;
-        const providerTrack = await prisma.trackTidal.upsert({
+        const providerTrack = await transaction.trackTidal.upsert({
             where: { tidalId },
             create: {
                 tidalId,
@@ -321,17 +655,17 @@ async function attachProviderMapping(
             },
             select: { id: true },
         });
-        const mapping = await prisma.trackMapping.findFirst({
+        const mapping = await transaction.trackMapping.findFirst({
             where: { trackTidalId: providerTrack.id, stale: false },
             select: { id: true },
         });
         if (mapping) {
-            await prisma.trackMapping.update({
+            await transaction.trackMapping.update({
                 where: { id: mapping.id },
                 data: { canonicalRecordingId },
             });
         } else {
-            await prisma.trackMapping.create({
+            await transaction.trackMapping.create({
                 data: {
                     trackTidalId: providerTrack.id,
                     canonicalRecordingId,

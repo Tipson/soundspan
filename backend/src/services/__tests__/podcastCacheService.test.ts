@@ -59,6 +59,7 @@ const mockResolveSafeOutboundUrl = jest.fn(async (url: string) =>
 );
 
 jest.mock("../outboundUrlSafety", () => ({
+    ...jest.requireActual("../outboundUrlSafety"),
     resolveSafeOutboundUrl: (url: string) => mockResolveSafeOutboundUrl(url),
 }));
 

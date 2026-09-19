@@ -250,6 +250,25 @@ test("media cookie and legacy query token cannot authenticate a non-media mutati
     assert.equal(req.url, "/api/settings");
 });
 
+test("retired TIDAL routes cannot use media-cookie authentication", () => {
+    const req: {
+        url: string;
+        method: string;
+        headers: Record<string, string | string[] | undefined>;
+    } = {
+        url: "/api/tidal-streaming/stream/12345",
+        method: "GET",
+        headers: {
+            cookie: "theme=dark; soundspan_media_auth=cookie.jwt.signature",
+        },
+    };
+
+    prepareProxyAuthentication(req);
+
+    assert.equal(req.headers.authorization, undefined);
+    assert.equal(req.headers.cookie, "theme=dark");
+});
+
 test("proxy error handler does not write once headers were already sent", () => {
     const handler = createProxyErrorHandler({
         name: "api-proxy",
@@ -332,6 +351,8 @@ test("resolveProxyTimeoutMs applies route-specific first-byte defaults", () => {
         "/api/youtube/stream/kXYiU_JCYtU",
         "/ytmusic/stream-public/kXYiU_JCYtU",
         "/youtube/stream/kXYiU_JCYtU",
+        "/api/music-sources/leases/0123456789abcdef0123456789abcdef0123456789abcdef/stream",
+        "/music-sources/leases/0123456789abcdef0123456789abcdef0123456789abcdef/stream",
     ]) {
         assert.equal(resolveProxyTimeoutMs(mediaPath, {}), 125_000);
     }

@@ -2,6 +2,139 @@ import { UnifiedRecommendationService } from "../recommendationService";
 import type { RecordEngineGenerationInput } from "../engine";
 
 describe("unified recommendation compatibility facade", () => {
+    it.each(["baseline", "shadow", "active"] as const)(
+        "isolates diagnostic Wave generations in %s mode",
+        async (mode) => {
+            const recordGeneration = jest.fn().mockResolvedValue("ordinary");
+            const scheduleHotSet = jest.fn().mockResolvedValue(undefined);
+            const service = new UnifiedRecommendationService({
+                mode,
+                hybridRolloutPercent: 50,
+                explorationRate: 0,
+                loadPersonalizedFeed: async () => ({
+                    shelves: {
+                        listenAgain: [],
+                        quickPicks: [],
+                        discovery: [track("one")],
+                    },
+                    degraded: false,
+                    reason: null,
+                    seedCount: 1,
+                    nextCursor: 1,
+                }),
+                resolveCanonical: async (c) => ({
+                    id: c.id,
+                    canonicalKey: c.canonicalKey,
+                }),
+                loadRecentExposures: async () => [],
+                loadDislikedCanonicalKeys: async () => new Set(),
+                loadTasteContext: async () => ({
+                    positiveCentroids: [],
+                    negativeCentroids: [],
+                }),
+                recordGeneration,
+                scheduleHotSet,
+                loadSimilarCandidates: jest.fn(),
+                now: () => new Date(),
+            });
+            const input = {
+                userId: "alice",
+                sessionId: "probe",
+                surface: "wave" as const,
+                limit: 12,
+                cursor: 0,
+                direction: "for-you" as const,
+                mood: null,
+                excludeVideoIds: [],
+                diagnostic: true,
+            };
+            const feed = await service.getPersonalizedFeed(input);
+            await new Promise((resolve) => setImmediate(resolve));
+            expect(feed.generationId).toBe("diagnostic-recommendation");
+            expect(feed.shelves.discovery).toHaveLength(1);
+            expect(recordGeneration).not.toHaveBeenCalled();
+            expect(scheduleHotSet).not.toHaveBeenCalled();
+        },
+    );
+    it.each(["baseline", "active"] as const)(
+        "applies strict language before %s ranking and exposure persistence",
+        async (mode) => {
+            const recordGeneration = jest
+                .fn()
+                .mockResolvedValue("language-generation");
+            const service = new UnifiedRecommendationService({
+                mode,
+                hybridRolloutPercent: 100,
+                explorationRate: 0,
+                loadPersonalizedFeed: jest.fn().mockResolvedValue({
+                    shelves: {
+                        listenAgain: [],
+                        quickPicks: [],
+                        discovery: [
+                            track("ru"),
+                            track("foreign"),
+                            track("unknown"),
+                        ],
+                    },
+                    degraded: false,
+                    reason: null,
+                    seedCount: 3,
+                    nextCursor: 1,
+                }),
+                prepareLanguages: jest.fn().mockResolvedValue({
+                    languages: ["ru", "foreign", null],
+                    pending: true,
+                }),
+                resolveCanonical: async (candidate) => ({
+                    id: candidate.id,
+                    canonicalKey: candidate.canonicalKey,
+                }),
+                loadRecentExposures: async () => [],
+                loadDislikedCanonicalKeys: async () => new Set(),
+                loadTasteContext: async () => ({
+                    positiveCentroids: [],
+                    negativeCentroids: [],
+                }),
+                recordGeneration,
+                scheduleHotSet: async () => {},
+                loadSimilarCandidates: jest.fn(),
+                now: () => new Date(),
+            });
+            const request = {
+                userId: "alice",
+                sessionId: "s",
+                surface: "wave" as const,
+                limit: 12,
+                cursor: 0,
+                direction: "for-you" as const,
+                mood: null,
+                excludeVideoIds: [],
+            };
+            const filtered = await service.getPersonalizedFeed({
+                ...request,
+                language: "ru",
+            });
+            expect(
+                filtered.shelves.discovery.map((t) => t.youtubeVideoId),
+            ).toEqual(["ru"]);
+            expect(filtered.languageStatus).toEqual({
+                selection: "ru",
+                pending: true,
+                classified: 2,
+                total: 3,
+            });
+            expect(
+                recordGeneration.mock.calls[0][0].recommendations.map(
+                    (r: any) => r.track.youtubeVideoId,
+                ),
+            ).toEqual(["ru"]);
+            const any = await service.getPersonalizedFeed({
+                ...request,
+                language: "any",
+            });
+            expect(any.shelves.discovery).toHaveLength(3);
+        },
+    );
     it("serves legacy Home shelves through the same exposure-aware engine", async () => {
         const recordGeneration = jest.fn().mockResolvedValue("generation-1");
         const scheduleHotSet = jest.fn().mockResolvedValue(undefined);
@@ -166,7 +299,7 @@ describe("unified recommendation compatibility facade", () => {
         expect(exposures).toHaveLength(72);
     });
 
-    it("backfills Wave shelves when only one reserved candidate remains fresh", async () => {
+    it("returns the remaining fresh Wave candidate without backfilling today's repeats", async () => {
         const now = new Date("2026-09-01T12:00:00Z");
         const exposures: Array<{ canonicalKey: string; exposedAt: Date }> = [];
         const recordGeneration = jest.fn(
@@ -246,12 +379,10 @@ describe("unified recommendation compatibility facade", () => {
             items.map(({ id }) => id),
         );
 
-        for (const shelf of Object.values(wave.shelves)) {
-            expect(shelf).toHaveLength(12);
-        }
+        expect(waveIds).toHaveLength(1);
         expect(waveIds.filter((id) => !homeIds.has(id))).toHaveLength(1);
-        expect(waveIds.filter((id) => homeIds.has(id))).toHaveLength(35);
-        expect(exposures).toHaveLength(72);
+        expect(waveIds.filter((id) => homeIds.has(id))).toHaveLength(0);
+        expect(exposures).toHaveLength(37);
     });
 });
 

@@ -8,7 +8,6 @@ const mockLoggerInfo = jest.fn();
 const mockLoggerDebug = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockLoggerError = jest.fn();
-const mockProcessTidalDownload = jest.fn();
 const mockProcessYoutubeDownload = jest.fn();
 const mockProcessSoulseekDownload = jest.fn();
 const mockStartDownload = jest.fn();
@@ -58,11 +57,6 @@ jest.mock("../../../utils/logger", () => ({
     },
 }));
 
-jest.mock("../../../services/tidalLibraryDownload", () => ({
-    processTidalDownload: (...args: unknown[]) =>
-        mockProcessTidalDownload(...args),
-}));
-
 jest.mock("../../../services/youtubeLibraryDownload", () => ({
     processYoutubeDownload: (...args: unknown[]) =>
         mockProcessYoutubeDownload(...args),
@@ -97,7 +91,6 @@ const payload = {
     artistMbid: "artist-mbid-1",
 } as const;
 const availability = {
-    tidal: true,
     lidarr: true,
     soulseek: true,
     youtube: true,
@@ -108,7 +101,7 @@ const routingJob = {
     metadata: { preserved: true },
 };
 
-function dispatchRouting(source: "tidal" | "youtube" | "lidarr" | "soulseek") {
+function dispatchRouting(source: "youtube" | "lidarr" | "soulseek") {
     return {
         kind: "dispatch" as const,
         source,
@@ -124,13 +117,12 @@ describe("album download queue processor", () => {
         jest.clearAllMocks();
         mockRunWithSchedulerClaim.mockReset();
         mockResolveAlbumDownloadRouting.mockResolvedValue(
-            dispatchRouting("tidal"),
+            dispatchRouting("youtube"),
         );
         mockDownloadJobFindUnique.mockResolvedValue({ status: "processing" });
         mockDownloadJobUpdate.mockResolvedValue({});
         mockDownloadJobUpdateMany.mockResolvedValue({ count: 1 });
         mockExtendSchedulerClaim.mockResolvedValue(true);
-        mockProcessTidalDownload.mockResolvedValue(undefined);
         mockProcessYoutubeDownload.mockResolvedValue(undefined);
         mockProcessSoulseekDownload.mockResolvedValue(undefined);
         mockStartDownload.mockResolvedValue({ success: true });
@@ -146,50 +138,6 @@ describe("album download queue processor", () => {
 
     afterEach(() => {
         jest.useRealTimers();
-    });
-
-    it("acquires the claim before dispatching a TIDAL-routed album", async () => {
-        const ordering: string[] = [];
-        mockProcessTidalDownload.mockImplementationOnce(async () => {
-            ordering.push("dispatch");
-        });
-        mockRunWithSchedulerClaim.mockImplementationOnce(
-            async (
-                _claimKey: string,
-                _ttlMs: number,
-                _operationName: string,
-                operation: (claimToken: string) => Promise<void>,
-            ) => {
-                ordering.push("acquired");
-                return {
-                    acquired: true,
-                    value: await operation("claim-token"),
-                };
-            },
-        );
-        const job = {
-            data: payload,
-            progress: jest.fn().mockResolvedValue(undefined),
-        } as any;
-
-        await processAlbumDownload(job);
-
-        expect(mockResolveAlbumDownloadRouting).toHaveBeenCalledWith(payload);
-        expect(mockRunWithSchedulerClaim).toHaveBeenCalledWith(
-            "scheduler-claim:album-download",
-            15 * 60_000,
-            "album download",
-            expect.any(Function),
-        );
-        expect(mockProcessTidalDownload).toHaveBeenCalledWith(
-            payload.jobId,
-            "Artist",
-            "Album",
-            "user-1",
-        );
-        expect(ordering).toEqual(["acquired", "dispatch"]);
-        expect(job.progress).toHaveBeenNthCalledWith(1, 0);
-        expect(job.progress).toHaveBeenNthCalledWith(2, 100);
     });
 
     it("acquires the claim before dispatching a YouTube-routed album", async () => {
@@ -328,9 +276,9 @@ describe("album download queue processor", () => {
             job: routingJob,
             resolution: {
                 kind: "fail",
-                source: "tidal",
+                source: "youtube",
                 error: "Download source unavailable",
-                statusText: "tidal unavailable — skipped",
+                statusText: "youtube unavailable — skipped",
             },
         });
         mockDownloadJobFindUnique
@@ -355,8 +303,8 @@ describe("album download queue processor", () => {
                 completedAt: expect.any(Date),
                 metadata: {
                     preserved: true,
-                    currentSource: "tidal",
-                    statusText: "tidal unavailable — skipped",
+                    currentSource: "youtube",
+                    statusText: "youtube unavailable — skipped",
                     failedAt: expect.any(String),
                 },
             },
@@ -368,7 +316,7 @@ describe("album download queue processor", () => {
         let finishDispatch!: () => void;
         let finishRenewal!: () => void;
         const ordering: string[] = [];
-        mockProcessTidalDownload.mockImplementationOnce(
+        mockProcessYoutubeDownload.mockImplementationOnce(
             () =>
                 new Promise<void>((resolve) => {
                     finishDispatch = resolve;
@@ -454,7 +402,7 @@ describe("album download queue processor", () => {
 
     it("propagates dispatcher rejection without reporting completion", async () => {
         const error = new Error("sidecar unavailable");
-        mockProcessTidalDownload.mockRejectedValueOnce(error);
+        mockProcessYoutubeDownload.mockRejectedValueOnce(error);
         const job = {
             data: payload,
             progress: jest.fn().mockResolvedValue(undefined),
@@ -500,7 +448,7 @@ describe("album download queue processor", () => {
             AlbumDownloadFailedError,
         );
 
-        expect(mockProcessTidalDownload).toHaveBeenCalledTimes(1);
+        expect(mockProcessYoutubeDownload).toHaveBeenCalledTimes(1);
         expect(job.progress).toHaveBeenCalledTimes(1);
     });
 
@@ -538,7 +486,7 @@ describe("album download queue processor", () => {
                 { delayMs: 25, maxWaitAttempts: 2 },
             );
 
-        expect(mockProcessTidalDownload).not.toHaveBeenCalled();
+        expect(mockProcessYoutubeDownload).not.toHaveBeenCalled();
         expect(queue.add).not.toHaveBeenCalled();
         await requeueAlbumDownloadAfterContention(firstJob, waitOutcome);
 
@@ -570,7 +518,7 @@ describe("album download queue processor", () => {
         );
 
         expect(mockRunWithSchedulerClaim).toHaveBeenCalledTimes(2);
-        expect(mockProcessTidalDownload).toHaveBeenCalledTimes(1);
+        expect(mockProcessYoutubeDownload).toHaveBeenCalledTimes(1);
         expect(delayedJob.progress).toHaveBeenLastCalledWith(100);
     });
 
@@ -594,7 +542,7 @@ describe("album download queue processor", () => {
 
         expect(mockRunWithSchedulerClaim).toHaveBeenCalledTimes(1);
         expect(job.queue.add).not.toHaveBeenCalled();
-        expect(mockProcessTidalDownload).not.toHaveBeenCalled();
+        expect(mockProcessYoutubeDownload).not.toHaveBeenCalled();
     });
 
     it("does not dispatch a residual lineage after another lineage marks the row failed", async () => {
@@ -637,7 +585,7 @@ describe("album download queue processor", () => {
         expect(mockDownloadJobUpdateMany).toHaveBeenCalledTimes(1);
         expect(mockResolveAlbumDownloadRouting).toHaveBeenCalledTimes(1);
         expect(mockRunWithSchedulerClaim).toHaveBeenCalledTimes(1);
-        expect(mockProcessTidalDownload).not.toHaveBeenCalled();
+        expect(mockProcessYoutubeDownload).not.toHaveBeenCalled();
         expect(residualJob.queue.add).not.toHaveBeenCalled();
     });
 

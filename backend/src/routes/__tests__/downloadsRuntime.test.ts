@@ -45,12 +45,6 @@ jest.mock("../../services/soulseek", () => ({
     },
 }));
 
-jest.mock("../../services/tidal", () => ({
-    tidalService: {
-        isAvailable: jest.fn(),
-    },
-}));
-
 jest.mock("../../services/youtubeDownload", () => ({
     youtubeDownloadService: {
         isAvailable: jest.fn(),
@@ -116,7 +110,6 @@ import { prisma } from "../../utils/db";
 import { getSystemSettings } from "../../utils/systemSettings";
 import { lidarrService } from "../../services/lidarr";
 import { soulseekService } from "../../services/soulseek";
-import { tidalService } from "../../services/tidal";
 import { youtubeDownloadService } from "../../services/youtubeDownload";
 import { musicBrainzService } from "../../services/musicbrainz";
 import { lastFmService } from "../../services/lastfm";
@@ -131,7 +124,6 @@ const mockLidarrSearchAlbum = lidarrService.searchAlbum as jest.Mock;
 const mockLidarrGrabRelease = lidarrService.grabRelease as jest.Mock;
 
 const mockSoulseekAvailable = soulseekService.isAvailable as jest.Mock;
-const mockTidalAvailable = tidalService.isAvailable as jest.Mock;
 const mockYoutubeAvailable = youtubeDownloadService.isAvailable as jest.Mock;
 
 const mockGetArtist = musicBrainzService.getArtist as jest.Mock;
@@ -254,7 +246,6 @@ describe("downloads routes runtime", () => {
         mockLidarrGrabRelease.mockResolvedValue(true);
 
         mockSoulseekAvailable.mockResolvedValue(true);
-        mockTidalAvailable.mockResolvedValue(false);
         mockYoutubeAvailable.mockResolvedValue(false);
         mockEnqueueAlbumDownloadInBackground.mockReturnValue(undefined);
         mockEnqueueArtistDownloadExpansionInBackground.mockReturnValue(
@@ -300,7 +291,6 @@ describe("downloads routes runtime", () => {
     it("returns service availability flags", async () => {
         mockLidarrIsEnabled.mockResolvedValue(false);
         mockSoulseekAvailable.mockResolvedValue(true);
-        mockTidalAvailable.mockResolvedValue(false);
         mockYoutubeAvailable.mockResolvedValue(true);
 
         const req = {} as any;
@@ -313,7 +303,6 @@ describe("downloads routes runtime", () => {
             enabled: true,
             lidarr: false,
             soulseek: true,
-            tidal: false,
             youtube: true,
         });
     });
@@ -486,7 +475,6 @@ describe("downloads routes runtime", () => {
     it("returns 400 when no download service is configured", async () => {
         mockLidarrIsEnabled.mockResolvedValue(false);
         mockSoulseekAvailable.mockResolvedValue(false);
-        mockTidalAvailable.mockResolvedValue(false);
         mockYoutubeAvailable.mockResolvedValue(false);
 
         const req = {
@@ -499,7 +487,7 @@ describe("downloads routes runtime", () => {
 
         expect(res.statusCode).toBe(400);
         expect(res.body).toEqual({
-            error: "No download service configured. Please set up Lidarr, Soulseek, TIDAL, or YouTube Music.",
+            error: "No download service configured. Please set up Lidarr, Soulseek, or YouTube Music.",
         });
     });
 

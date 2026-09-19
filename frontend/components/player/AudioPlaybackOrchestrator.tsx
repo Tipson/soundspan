@@ -12,7 +12,12 @@ import {
 import { api } from "@/lib/api";
 import { resolveNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
 import { restartPlaybackProgressConfirmation } from "@/lib/audio-engine/playbackProgressConfirmation";
-import { consumePlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    consumePlaybackAdvanceOrigin,
+    getExplicitPlaybackPauseGeneration,
+    getPlaybackIntentGeneration,
+    isPlaybackAutoRestartSuppressed,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 import {
     getTrackProviderFailureKey,
     providerFailureCooldown,
@@ -22,6 +27,7 @@ import { resolveQueueAdvance } from "@/lib/audio/queue-advance-policy";
 import {
     getListenTogetherSessionSnapshot,
     isListenTogetherActiveOrPending,
+    subscribeListenTogetherMembership,
 } from "@/lib/listen-together-session";
 import {
     isAdvancePlayIntentFresh,
@@ -39,6 +45,8 @@ import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { resolveDeviceOfflineMediaIdentity } from "@/features/device-offline/playbackResolver";
 import {
     getNextTrackInfo,
+    PlaybackInterruptionError,
+    isRetiredProviderTrack,
     resolveAudioLoadTimeoutPolicy,
     resolveDirectTrackSourceType,
 } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
@@ -47,6 +55,8 @@ import {
     CURRENT_TIME_KEY,
     CURRENT_TIME_TRACK_ID_KEY,
     FORMAT_TO_CODEC,
+    MANUAL_YOUTUBE_STABLE_POSITION_SEC,
+    MANUAL_YOUTUBE_STABLE_SWITCH_DEBOUNCE_MS,
     MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS,
     STARTUP_AUDIBLE_THRESHOLD_SEC,
     TRACK_END_WATCHDOG_BOUNDARY_SEC,
@@ -62,6 +72,7 @@ import {
 } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import type { DesiredLoadPlayIntent } from "./hooks";
 import * as H from "./hooks";
+import { useServerMusicSourceRecovery } from "./hooks/useServerMusicSourceRecovery";
 /**
  * AudioPlaybackOrchestrator - Unified audio playback using runtime audio engines
  * Handles: web playback, progress saving for audiobooks/podcasts
@@ -104,6 +115,23 @@ export const AudioPlaybackOrchestrator = memo(
         } = usePlaybackStatus();
         const { pause, advanceQueue: next, startVibeMode } = useAudioControls();
         const queryClient = useQueryClient();
+
+        useLayoutEffect(() => {
+            const syncAuthority = () => {
+                const local = !isListenTogetherActiveOrPending();
+                audioEngine.setContinuousEnabled?.(local);
+                audioEngine.setRepeatCurrent?.(
+                    local && playbackType === "track" && repeatMode === "one",
+                );
+            };
+            syncAuthority();
+            const unsubscribe =
+                subscribeListenTogetherMembership(syncAuthority);
+            return () => {
+                unsubscribe();
+                audioEngine.setRepeatCurrent?.(false);
+            };
+        }, [playbackType, repeatMode]);
         const orchestratorRefs = H.usePlaybackOrchestratorRefs({
             currentTrack,
             playbackType,
@@ -154,6 +182,7 @@ export const AudioPlaybackOrchestrator = memo(
             lastHandledTrackEndRef,
             trackEndWatchdogRef,
             howlerLoadStartMsRef,
+            playbackStartTimingRef,
             heartbeatRef,
         } = orchestratorRefs;
         const applyCurrentOutputState = H.useApplyCurrentOutputState({
@@ -163,6 +192,18 @@ export const AudioPlaybackOrchestrator = memo(
             H.useStartupStability({ refs: orchestratorRefs });
         const playbackRecoveryHelpers = H.usePlaybackRecoveryHelpers({
             refs: orchestratorRefs,
+        });
+        const attemptServerMusicSourceRecovery = useServerMusicSourceRecovery({
+            refs: orchestratorRefs,
+            currentTrack,
+            playbackType,
+            isPlaying,
+            playbackRecoveryHelpers,
+            setCurrentTime,
+            setIsBuffering,
+            applyCurrentOutputState,
+            releasePlaybackSource: playbackSourceLeaseController.release,
+            getPlaybackSourceUrl: playbackSourceLeaseController.getSourceUrl,
         });
         const {
             clearPendingTrackErrorSkip,
@@ -226,6 +267,7 @@ export const AudioPlaybackOrchestrator = memo(
         });
         H.usePlaybackWatchdogs({
             refs: orchestratorRefs,
+            getPlaybackSourceUrl: playbackSourceLeaseController.getSourceUrl,
             trackRecovery: {
                 scheduleStartupPlaybackRecovery,
                 attemptTransientTrackRecovery,
@@ -251,24 +293,32 @@ export const AudioPlaybackOrchestrator = memo(
                 setCurrentAudiobook,
                 lastProgressSaveRef,
             });
-        const { preloadTrack: preloadNextTrack, preloadNetworkWhenDue } =
-            H.useNextTrackPreload({
-                playbackType,
-                currentTrack,
-                currentPodcast,
-                isPlaying,
-                queue,
-                currentIndex,
-                isShuffle,
-                shuffleIndices,
-                repeatMode,
-                refs: orchestratorRefs,
-            });
+        const {
+            preloadTrack: preloadNextTrack,
+            preloadNetworkWhenDue,
+            consumeReadyCurrentTrackPreload,
+        } = H.useNextTrackPreload({
+            playbackType,
+            currentTrack,
+            currentPodcast,
+            isPlaying,
+            queue,
+            currentIndex,
+            isShuffle,
+            shuffleIndices,
+            repeatMode,
+            refs: orchestratorRefs,
+        });
         useLayoutEffect(() => {
             const handleTimeUpdate = (data: {
                 timeSec: number;
                 time?: number;
             }) => {
+                if (
+                    orchestratorRefs.serverSourceRecoveryLoadIdRef.current ===
+                    loadIdRef.current
+                )
+                    return;
                 const currentTimeValue =
                     typeof data.timeSec === "number"
                         ? data.timeSec
@@ -363,6 +413,11 @@ export const AudioPlaybackOrchestrator = memo(
                 durationSec: number;
                 duration?: number;
             }) => {
+                if (
+                    orchestratorRefs.serverSourceRecoveryLoadIdRef.current ===
+                    loadIdRef.current
+                )
+                    return;
                 trackEndWatchdogRef.current?.clear();
                 const loadedDuration =
                     typeof data.durationSec === "number"
@@ -373,9 +428,7 @@ export const AudioPlaybackOrchestrator = memo(
                     currentAudiobook?.duration ||
                     currentPodcast?.duration ||
                     0;
-                const isRemote =
-                    currentTrack?.streamSource === "tidal" ||
-                    currentTrack?.streamSource === "youtube";
+                const isRemote = currentTrack?.streamSource === "youtube";
                 setDuration(
                     resolvePlaybackDuration({
                         loadedDurationSec: loadedDuration,
@@ -570,6 +623,20 @@ export const AudioPlaybackOrchestrator = memo(
                         }
 
                         if (continueQueueAfterAutoMatch(viaWatchdog)) return;
+                        if (
+                            !isListenTogether &&
+                            resolveQueueAdvance({
+                                action: "next",
+                                queue,
+                                currentIndex,
+                                isShuffle,
+                                shuffleIndices,
+                                repeatMode,
+                            }).kind === "stop"
+                        ) {
+                            pause();
+                            return;
+                        }
                         advanceEndedTrack();
                     }
                 } else {
@@ -592,7 +659,10 @@ export const AudioPlaybackOrchestrator = memo(
                 clearStartupPlaybackRecovery,
                 clearTransientTrackRecovery,
                 releasePlaybackSource: playbackSourceLeaseController.release,
+                getPlaybackSourceUrl:
+                    playbackSourceLeaseController.getSourceUrl,
                 attemptUnavailableYtMusicRecovery,
+                attemptServerMusicSourceRecovery,
                 attemptTransientTrackRecovery,
                 scheduleTrackErrorSkip,
                 finishFailedPlay: playEngagement.finishFailed,
@@ -661,6 +731,9 @@ export const AudioPlaybackOrchestrator = memo(
                 if (shouldAttemptUnexpectedPauseRecovery) {
                     const pauseObservedAtMs = Date.now();
                     const pausedTrackId = currentTrack?.id ?? null;
+                    const pausedLoadId = loadIdRef.current;
+                    const pausedIntentGeneration =
+                        getPlaybackIntentGeneration();
 
                     const finalizeAsRegularPause = () => {
                         if (playbackStateMachine.isPlaying) {
@@ -677,7 +750,12 @@ export const AudioPlaybackOrchestrator = memo(
                         if (
                             playbackTypeRef.current !== "track" ||
                             seekReloadInProgressRef.current ||
-                            isLoadingRef.current
+                            isLoadingRef.current ||
+                            loadIdRef.current !== pausedLoadId ||
+                            getPlaybackIntentGeneration() !==
+                                pausedIntentGeneration ||
+                            getExplicitPlaybackPauseGeneration() !== 0 ||
+                            isPlaybackAutoRestartSuppressed()
                         ) {
                             return;
                         }
@@ -741,7 +819,18 @@ export const AudioPlaybackOrchestrator = memo(
                             return;
                         }
 
-                        if (!hasLowBufferedAhead) {
+                        // A background native element can be paused by the browser
+                        // with a fully buffered source. Buffer availability does
+                        // not turn that interruption into an intentional pause.
+                        const hasBufferedBackgroundInterruption =
+                            audioEngine.getActiveEngineDescriptor() ===
+                                "native" &&
+                            typeof document !== "undefined" &&
+                            document.visibilityState === "hidden";
+                        if (
+                            !hasLowBufferedAhead &&
+                            !hasBufferedBackgroundInterruption
+                        ) {
                             logPlaybackClientMetric("player.unexpected_pause", {
                                 reason: "pause_with_buffered_ahead",
                                 trackId: liveTrackId,
@@ -759,8 +848,8 @@ export const AudioPlaybackOrchestrator = memo(
                             return;
                         }
 
-                        const pauseError = new Error(
-                            "Playback paused unexpectedly while track intent is playing",
+                        const pauseError = new PlaybackInterruptionError(
+                            "unexpected_pause",
                         );
                         logPlaybackClientMetric("player.unexpected_pause", {
                             reason: "engine_pause_while_play_intent_stall_confirmed",
@@ -845,6 +934,7 @@ export const AudioPlaybackOrchestrator = memo(
         });
         H.useAudioEngineBindings({
             refs: orchestratorRefs,
+            uiIsPlaying: isPlaying,
             onPlaybackProgressConfirmed: () => {
                 clearPendingTrackErrorSkip();
                 clearTransientTrackRecovery(true);
@@ -940,10 +1030,56 @@ export const AudioPlaybackOrchestrator = memo(
                 return;
             }
 
-            if (previousMediaId !== null) {
-                // Stop the previous source while the next source resolves.
+            // Snapshot before stop() clears the old engine state. Idle/paused
+            // playback has no burst to drain, but an in-flight selection must
+            // retain the long gate even though its engine is not playing yet.
+            const previousPlaybackWasSettled =
+                !isLoadingRef.current &&
+                (previousMediaId === null ||
+                    !audioEngine.isPlaying() ||
+                    audioEngine.getActualCurrentTime() >=
+                        MANUAL_YOUTUBE_STABLE_POSITION_SEC);
+
+            const loadStartedAtMs = Date.now();
+            const pendingAdvanceStartedAtMs = advancePlayIntentAtMsRef.current;
+            const hasAdvancePlayIntent = isAdvancePlayIntentFresh(
+                pendingAdvanceStartedAtMs,
+                loadStartedAtMs,
+            );
+            const advanceOrigin = consumePlaybackAdvanceOrigin();
+            const preparedCurrentTrackSource =
+                playbackType === "track" &&
+                currentTrack &&
+                consumeReadyCurrentTrackPreload(currentTrack);
+            const currentTrackPreloadWasReady = Boolean(
+                preparedCurrentTrackSource,
+            );
+            const providerFailureKey = currentTrack
+                ? getTrackProviderFailureKey(currentTrack)
+                : null;
+            // A prepared natural handoff must not pause/reset the primary
+            // element between sources. Native load replaces src on that SAME
+            // element, so it already prevents overlap. All manual, cold,
+            // and in-flight switches retain the eager stop below.
+            const preserveNativeHandoff =
+                hasAdvancePlayIntent &&
+                advanceOrigin === null &&
+                currentTrackPreloadWasReady &&
+                !isLoadingRef.current &&
+                audioEngine.getActiveEngineDescriptor() === "native" &&
+                !isListenTogetherActiveOrPending() &&
+                !(
+                    providerFailureKey &&
+                    providerFailureCooldown.isCoolingDown(providerFailureKey)
+                );
+
+            if (previousMediaId !== null && !preserveNativeHandoff) {
+                // Stop the previous source while an unprepared source resolves.
                 audioEngine.stop();
                 activeEngineTrackIdRef.current = null;
+            }
+            if (preparedCurrentTrackSource) {
+                playbackSourceLeaseController.adopt(preparedCurrentTrackSource);
             }
 
             if (
@@ -989,18 +1125,24 @@ export const AudioPlaybackOrchestrator = memo(
             const thisLoadId = loadIdRef.current;
             desiredLoadPlayRef.current = null;
             cancelledLoadPlayIdRef.current = null;
-            const hasAdvancePlayIntent = isAdvancePlayIntentFresh(
-                advancePlayIntentAtMsRef.current,
-                Date.now(),
-            );
             advancePlayIntentAtMsRef.current = null;
-            const advanceOrigin = consumePlaybackAdvanceOrigin();
             if (advanceOrigin?.origin === "manual") {
                 consecutiveErrorBreakerRef.current.reset();
             }
-            const providerFailureKey = currentTrack
-                ? getTrackProviderFailureKey(currentTrack)
-                : null;
+            if (
+                playbackType === "track" &&
+                currentTrack &&
+                isRetiredProviderTrack(currentTrack)
+            ) {
+                isLoadingRef.current = false;
+                setIsBuffering(false);
+                logPlaybackClientMetric("player.retired_provider_skip", {
+                    trackId: currentTrack.id,
+                    sourceType: "tidal",
+                });
+                scheduleTrackErrorSkip(currentTrack.id);
+                return;
+            }
             if (
                 playbackType === "track" &&
                 currentTrack &&
@@ -1021,6 +1163,18 @@ export const AudioPlaybackOrchestrator = memo(
                 return;
             }
             loadTimeoutRetryCountRef.current = 0;
+            playbackStartTimingRef.current = {
+                trackId:
+                    playbackType === "track"
+                        ? (currentTrack?.id ?? null)
+                        : null,
+                loadId: thisLoadId,
+                startedAtMs: loadStartedAtMs,
+                transitionStartedAtMs: hasAdvancePlayIntent
+                    ? pendingAdvanceStartedAtMs
+                    : null,
+                reported: false,
+            };
             markStartupStabilityWindow(
                 playbackType === "track" ? (currentTrack?.id ?? null) : null,
                 "track_load_started",
@@ -1048,23 +1202,20 @@ export const AudioPlaybackOrchestrator = memo(
                     hasSeenTrackLoadRef.current = true;
                 }
 
-                // TIDAL streaming takes priority
-                if (
-                    currentTrack.streamSource === "tidal" &&
-                    currentTrack.tidalTrackId
-                ) {
-                    streamUrl = api.getTidalStreamUrl(
-                        currentTrack.tidalTrackId,
-                    );
+                if (currentTrack.streamSource === "audius") {
+                    // Metadata locator only: the source lease revalidates and resolves it
+                    // before any native media load. Never fall through to local/YouTube.
+                    streamUrl = `/api/audius/tracks/${encodeURIComponent(currentTrack.provider?.providerTrackId ?? "")}/playback`;
                 } else if (
                     currentTrack.streamSource === "youtube" &&
                     currentTrack.youtubeVideoId
                 ) {
-                    // Prefer authenticated endpoint when user has YT Music OAuth, else public
+                    // Playback is always public: user OAuth only unlocks private
+                    // YouTube Music library surfaces, not the yt-dlp audio path.
                     streamUrl = api.getYtMusicStreamUrl(
                         currentTrack.youtubeVideoId,
                         undefined,
-                        !ytMusicAuthenticatedRef.current,
+                        true,
                     );
                 } else if (
                     currentTrack.streamSource === "youtube-direct" &&
@@ -1157,7 +1308,10 @@ export const AudioPlaybackOrchestrator = memo(
                         0;
                     setDuration(fallbackDuration);
 
-                    const format = resolveTrackFormatHint(currentTrack ?? null);
+                    const format =
+                        currentTrack?.streamSource === "audius"
+                            ? "mp3"
+                            : resolveTrackFormatHint(currentTrack ?? null);
 
                     if (playbackType === "track" && currentTrack) {
                         setStreamProfile({
@@ -1257,11 +1411,28 @@ export const AudioPlaybackOrchestrator = memo(
                         // Passing autoplay=true here would cause Howler's onload to
                         // play() from position 0 before handleLoaded can seek,
                         // producing overlapping audio streams.
-                        audioEngine.load(
-                            streamUrl,
-                            deferAutoplay ? false : shouldAutoPlayOnLoad,
-                            format,
-                        );
+                        if (currentTrack?.streamSource === "audius") {
+                            audioEngine.load(
+                                {
+                                    url: streamUrl,
+                                    trackId: currentTrack.id,
+                                    sourceType: "audius",
+                                },
+                                {
+                                    autoplay: deferAutoplay
+                                        ? false
+                                        : shouldAutoPlayOnLoad,
+                                    format,
+                                    withCredentials: false,
+                                },
+                            );
+                        } else {
+                            audioEngine.load(
+                                streamUrl,
+                                deferAutoplay ? false : shouldAutoPlayOnLoad,
+                                format,
+                            );
+                        }
                         applyCurrentOutputState();
 
                         if (playbackType === "podcast" && currentPodcast) {
@@ -1469,6 +1640,7 @@ export const AudioPlaybackOrchestrator = memo(
                     const shouldCoalesceManualYouTubeSelection =
                         advanceOrigin?.origin === "manual" &&
                         currentTrack?.streamSource === "youtube" &&
+                        !currentTrackPreloadWasReady &&
                         !resolvedStreamUrl.startsWith("blob:") &&
                         !resolvedStreamUrl.startsWith("/__offline/audio/");
                     if (!shouldCoalesceManualYouTubeSelection) {
@@ -1476,6 +1648,9 @@ export const AudioPlaybackOrchestrator = memo(
                         return;
                     }
 
+                    const selectionDelayMs = previousPlaybackWasSettled
+                        ? MANUAL_YOUTUBE_STABLE_SWITCH_DEBOUNCE_MS
+                        : MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS;
                     const timeout = setTimeout(() => {
                         if (
                             pendingManualProviderLoadRef.current?.loadId !==
@@ -1490,7 +1665,7 @@ export const AudioPlaybackOrchestrator = memo(
                         ) {
                             startAudioEngineLoad(resolvedStreamUrl);
                         }
-                    }, MANUAL_YOUTUBE_SWITCH_DEBOUNCE_MS);
+                    }, selectionDelayMs);
                     pendingManualProviderLoadRef.current = {
                         loadId: thisLoadId,
                         timeout,
@@ -1498,24 +1673,32 @@ export const AudioPlaybackOrchestrator = memo(
                 };
 
                 if (playbackType === "track" && currentTrack) {
-                    H.startTrackPlaybackSourceLease({
-                        controller: playbackSourceLeaseController,
-                        track: currentTrack,
-                        networkUrl: streamUrl,
-                        isCurrent: () =>
-                            loadIdRef.current === thisLoadId &&
-                            isLoadingRef.current,
-                        onReady: startTrackAudioEngineLoad,
-                        onError: (error) => {
-                            isLoadingRef.current = false;
-                            activeEngineTrackIdRef.current = null;
-                            lastTrackIdRef.current = null;
-                            void engineEventHandlersRef.current?.handleError({
-                                error,
-                                recoverable: false,
-                            });
-                        },
-                    });
+                    if (preparedCurrentTrackSource) {
+                        startTrackAudioEngineLoad(
+                            preparedCurrentTrackSource.url,
+                        );
+                    } else {
+                        H.startTrackPlaybackSourceLease({
+                            controller: playbackSourceLeaseController,
+                            track: currentTrack,
+                            networkUrl: streamUrl,
+                            isCurrent: () =>
+                                loadIdRef.current === thisLoadId &&
+                                isLoadingRef.current,
+                            onReady: startTrackAudioEngineLoad,
+                            onError: (error) => {
+                                isLoadingRef.current = false;
+                                activeEngineTrackIdRef.current = null;
+                                lastTrackIdRef.current = null;
+                                void engineEventHandlersRef.current?.handleError(
+                                    {
+                                        error,
+                                        recoverable: false,
+                                    },
+                                );
+                            },
+                        });
+                    }
                 } else {
                     playbackSourceLeaseController.release();
                     startAudioEngineLoad(streamUrl);

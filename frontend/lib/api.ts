@@ -1,6 +1,7 @@
 import { ApiClientCore, type ApiData } from "./api/core";
 import { WithAuth } from "./api/auth";
 import { WithAudiobooks } from "./api/audiobooks";
+import { WithAudius } from "./api/audius";
 import { WithConnectors } from "./api/connectors";
 import { WithEnrichment } from "./api/enrichment";
 import { WithFederation } from "./api/federation";
@@ -36,10 +37,10 @@ import { WithRecommendations } from "./api/recommendations";
 import { WithRequests } from "./api/requests";
 import { WithSettings } from "./api/settings";
 import { WithSoulseek } from "./api/soulseek";
-import { WithTidal } from "./api/tidal";
 import { WithVibe } from "./api/vibe";
 import { WithYouTube } from "./api/youtube";
 import { WithYtMusic } from "./api/ytmusic";
+import { WithMusicSources } from "./api/musicSources";
 import type { ResolvedMediaSource } from "@soundspan/media-metadata-contract";
 
 export { vibeErrorMessage } from "./api/vibe";
@@ -137,6 +138,7 @@ export type PlaylistPlaybackReason =
     | "missing_provider_track"
     | "track_removed"
     | "peer_offline"
+    | "retired_provider"
     | "pending_import";
 
 /** Playback availability metadata returned with a playlist item. */
@@ -519,14 +521,15 @@ export interface LikedPlaylistResponse {
 export interface PlaybackClientMetricInput {
     event: string;
     fields?: Record<string, unknown>;
+    diagnostic?: { id: string; ownerId: string; observedAtMs: number };
 }
 
-class ApiClient extends WithRequests(
-    WithPeerPlaylists(
-        WithLibraryHealthDashboard(
-            WithListenGroups(
-                WithFederation(
-                    WithTidal(
+class ApiClient extends WithMusicSources(
+    WithRequests(
+        WithPeerPlaylists(
+            WithLibraryHealthDashboard(
+                WithListenGroups(
+                    WithFederation(
                         WithYouTube(
                             WithYtMusic(
                                 WithVibe(
@@ -548,7 +551,9 @@ class ApiClient extends WithRequests(
                                                                                                 WithMedia(
                                                                                                     WithPlaylists(
                                                                                                         WithLibrary(
-                                                                                                            ApiClientCore,
+                                                                                                            WithAudius(
+                                                                                                                ApiClientCore,
+                                                                                                            ),
                                                                                                         ),
                                                                                                     ),
                                                                                                 ),

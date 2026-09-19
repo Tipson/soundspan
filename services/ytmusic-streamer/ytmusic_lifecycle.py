@@ -1,5 +1,7 @@
 """Health and process lifecycle routes for the assembled sidecar."""
 
+import asyncio
+
 from ytmusic_browse import YTMUSIC_HOME_FILTERED_SHELVES
 from ytmusic_client import (
     SEARCH_MODE,
@@ -12,14 +14,20 @@ from ytmusic_client import (
 from ytmusic_library import shutdown_library_playlist_provider
 from ytmusic_runtime import DATA_PATH, JsonObject, app, log
 from ytmusic_search import (
-    BATCH_CONCURRENCY,
-    BATCH_DELAY_MAX,
-    BATCH_DELAY_MIN,
     SEARCH_CACHE_TTL,
+    SEARCH_ENDPOINT_TIMEOUT_SECONDS,
+    SEARCH_PROVIDER_CONCURRENCY,
     _clean_search_cache,
     shutdown_search_provider,
 )
-from ytmusic_stream import EXTRACT_DELAY_MAX, EXTRACT_DELAY_MIN, _clean_stream_cache
+from ytmusic_stream import (
+    EXTRACT_DELAY_MAX,
+    EXTRACT_DELAY_MIN,
+    YTDLP_EXTRACT_CONCURRENCY,
+    _clean_stream_cache,
+    shutdown_stream_provider,
+)
+from ytmusic_tail_warmup import shutdown_tail_warmup
 
 
 @app.get("/health")
@@ -37,10 +45,13 @@ async def health() -> JsonObject:
 
 @app.on_event("startup")
 async def startup() -> None:
+    from ytmusic_fast_probe import warm_fast_probes
+
+    await asyncio.to_thread(warm_fast_probes, workers=max(1, YTDLP_EXTRACT_CONCURRENCY // 2))
     log.info("YouTube Music Streamer starting up (multi-user mode)")
     log.info(
-        f"Rate-pacing config: batch_concurrency={BATCH_CONCURRENCY}, "
-        f"batch_delay={BATCH_DELAY_MIN}-{BATCH_DELAY_MAX}s, "
+        f"Search admission config: provider_concurrency={SEARCH_PROVIDER_CONCURRENCY}, "
+        f"endpoint_deadline={SEARCH_ENDPOINT_TIMEOUT_SECONDS}s, "
         f"extract_delay={EXTRACT_DELAY_MIN}-{EXTRACT_DELAY_MAX}s, "
         f"search_cache_ttl={SEARCH_CACHE_TTL}s, "
         f"search_mode={SEARCH_MODE}"
@@ -74,6 +85,8 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    await shutdown_tail_warmup()
+    await shutdown_stream_provider()
     await shutdown_search_provider()
     await shutdown_library_playlist_provider()
     _clean_stream_cache()

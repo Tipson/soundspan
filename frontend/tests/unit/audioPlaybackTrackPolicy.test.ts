@@ -4,6 +4,7 @@ import {
     getNextTrackInfo,
     isLikelyTransientStreamError,
     isProviderStartupFailure,
+    isRetiredProviderTrack,
     resolveAudioLoadTimeoutPolicy,
     resolveDirectTrackSourceType,
     shouldAttemptOuterTransientRecovery,
@@ -140,11 +141,15 @@ test("resolves peer tracks to the peer engine source type", () => {
         "peer",
     );
     assert.equal(resolveDirectTrackSourceType({}), "local");
+});
+
+test("detects every retained TIDAL identity as a retired provider", () => {
+    assert.equal(isRetiredProviderTrack({ streamSource: "tidal" }), true);
     assert.equal(
-        resolveDirectTrackSourceType({
-            streamSource: "tidal",
-            tidalTrackId: 42,
+        isRetiredProviderTrack({
+            provider: { source: "tidal", tidalTrackId: 42 },
         }),
-        "tidal",
+        true,
     );
+    assert.equal(isRetiredProviderTrack({ streamSource: "youtube" }), false);
 });

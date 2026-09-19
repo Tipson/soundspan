@@ -9,7 +9,9 @@ const ffmpegLogger = logger.child("FFmpeg");
 const SYSTEM_FFMPEG_PATH = "/usr/bin/ffmpeg";
 const MINIMUM_FFMPEG_MAJOR = 4;
 const MINIMUM_FFMPEG_MINOR = 4;
-const FFMPEG_VERSION_TIMEOUT_MS = 5_000;
+// Cold shared libraries can exceed five seconds during host disk contention.
+// This bounds the startup capability probe, not track/playback deadlines.
+const FFMPEG_VERSION_TIMEOUT_MS = 30_000;
 const FFMPEG_VERSION_MAX_BUFFER_BYTES = 64 * 1024;
 const FFMPEG_VERSION_PATTERN =
     /^ffmpeg version (?:n)?(\d+)\.(\d+)(?:[.\s-]|$)/i;

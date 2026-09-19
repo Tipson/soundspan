@@ -9,7 +9,10 @@ GlobalRegistrator.register({ url: "https://soundspan.test/" });
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 mock.module("next/navigation", {
-    namedExports: { usePathname: () => "/" },
+    namedExports: {
+        usePathname: () => "/",
+        useSearchParams: () => new URLSearchParams(),
+    },
 });
 mock.module("@/lib/auth-context", {
     namedExports: {

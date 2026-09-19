@@ -17,6 +17,7 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { toast } from "sonner";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { MusicDetailActionDock } from "@/components/music-detail";
+import { MusicDetailSecondaryActions } from "@/components/music-detail/MusicDetailSecondaryActions";
 import { ru } from "@/lib/i18n/ru";
 
 const BRAND_PLAY = "var(--color-brand-hover)";
@@ -101,9 +102,18 @@ export function ArtistActionBar({
                                 <Play className="w-5 h-5 fill-current ml-0.5" />
                             )}
                             <span>
-                                {showPause
-                                    ? ru.common.pause
-                                    : ru.common.playAll}
+                                {showPause ? (
+                                    ru.common.pause
+                                ) : (
+                                    <>
+                                        <span className="sm:hidden">
+                                            Слушать
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                            {ru.common.playAll}
+                                        </span>
+                                    </>
+                                )}
                             </span>
                         </button>
 
@@ -132,9 +142,18 @@ export function ArtistActionBar({
                                 <Play className="w-5 h-5 fill-current text-black ml-0.5" />
                             )}
                             <span>
-                                {showPause
-                                    ? ru.common.pause
-                                    : ru.common.playAll}
+                                {showPause ? (
+                                    ru.common.pause
+                                ) : (
+                                    <>
+                                        <span className="sm:hidden">
+                                            Слушать
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                            {ru.common.playAll}
+                                        </span>
+                                    </>
+                                )}
                             </span>
                         </button>
 
@@ -150,63 +169,89 @@ export function ArtistActionBar({
                     </>
                 )}
 
-                {librarySaveControl}
+                {(librarySaveControl ||
+                    deviceDownloadControl ||
+                    onAddAllToQueue ||
+                    onAddToPlaylist ||
+                    onLikeAll ||
+                    showRadio) && (
+                    <MusicDetailSecondaryActions>
+                        {(close) => (
+                            <>
+                                {librarySaveControl}
 
-                {deviceDownloadControl}
+                                {deviceDownloadControl}
 
-                {onAddAllToQueue && (
-                    <button
-                        onClick={onAddAllToQueue}
-                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                        title={ru.common.addQueue}
-                        aria-label={ru.common.addQueue}
-                    >
-                        <ListMusic className="w-5 h-5" />
-                    </button>
-                )}
+                                {onAddAllToQueue && (
+                                    <button
+                                        onClick={() => {
+                                            close();
+                                            onAddAllToQueue();
+                                        }}
+                                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                        title={ru.common.addQueue}
+                                        aria-label={ru.common.addQueue}
+                                    >
+                                        <ListMusic className="w-5 h-5" />
+                                        <span>{ru.common.addQueue}</span>
+                                    </button>
+                                )}
 
-                {onAddToPlaylist && (
-                    <button
-                        onClick={onAddToPlaylist}
-                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                        title={ru.common.addPlaylist}
-                        aria-label={ru.common.addPlaylist}
-                    >
-                        <Plus className="w-5 h-5" />
-                    </button>
-                )}
+                                {onAddToPlaylist && (
+                                    <button
+                                        onClick={() => {
+                                            close();
+                                            onAddToPlaylist();
+                                        }}
+                                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                        title={ru.common.addPlaylist}
+                                        aria-label={ru.common.addPlaylist}
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                        <span>{ru.common.addPlaylist}</span>
+                                    </button>
+                                )}
 
-                {onLikeAll && (
-                    <button
-                        onClick={onLikeAll}
-                        disabled={isLikingAll}
-                        className={cn(
-                            "flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
-                            isLikingAll
-                                ? "cursor-not-allowed text-white/35"
-                                : "text-white/60 hover:bg-white/10 hover:text-white",
+                                {onLikeAll && (
+                                    <button
+                                        onClick={onLikeAll}
+                                        disabled={isLikingAll}
+                                        className={cn(
+                                            "flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none",
+                                            isLikingAll
+                                                ? "cursor-not-allowed text-white/35"
+                                                : "text-white/60 hover:bg-white/10 hover:text-white",
+                                        )}
+                                        title={ru.catalog.likeAll}
+                                        aria-label={ru.catalog.likeAll}
+                                    >
+                                        {isLikingAll ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Heart className="h-4 w-4" />
+                                        )}
+                                        <span>{ru.catalog.likeAll}</span>
+                                    </button>
+                                )}
+
+                                {/* Radio Button - Only for library artists */}
+                                {showRadio && (
+                                    <button
+                                        onClick={() => {
+                                            close();
+                                            onStartRadio?.();
+                                        }}
+                                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                        title={ru.catalog.artistRadio}
+                                        aria-label={ru.catalog.artistRadio}
+                                    >
+                                        <Radio className="w-5 h-5" />
+                                        <span>{ru.catalog.artistRadio}</span>
+                                    </button>
+                                )}
+                            </>
                         )}
-                        title={ru.catalog.likeAll}
-                        aria-label={ru.catalog.likeAll}
-                    >
-                        {isLikingAll ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Heart className="h-4 w-4" />
-                        )}
-                    </button>
-                )}
-
-                {/* Radio Button - Only for library artists */}
-                {showRadio && (
-                    <button
-                        onClick={onStartRadio}
-                        className="flex h-11 w-11 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
-                        title={ru.catalog.artistRadio}
-                        aria-label={ru.catalog.artistRadio}
-                    >
-                        <Radio className="w-5 h-5" />
-                    </button>
+                    </MusicDetailSecondaryActions>
                 )}
             </MusicDetailActionDock>
 

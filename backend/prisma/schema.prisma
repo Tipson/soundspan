@@ -11,6 +11,16 @@ enum LibraryHealthStatus {
   UNREADABLE_METADATA
 }
 
+/// Server-owned provider credential. Soundspan users never receive this token.
+model MusicSourceConnection {
+  id        String   @id
+  token     String
+  enabled   Boolean  @default(false)
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
 model User {
   id                        String                     @id @default(cuid())
   username                  String                     @unique
@@ -19,6 +29,8 @@ model User {
   passwordHash              String?
   subsonicPassword          String? // Encrypted plaintext for Subsonic token auth (md5 requires plaintext)
   role                      String                     @default("user")
+  // Operator-created playback fixtures; excluded from recommendation evaluation.
+  isTestAccount             Boolean                    @default(false)
   onboardingComplete        Boolean                    @default(false)
   enrichmentSettings        Json?
   twoFactorEnabled          Boolean                    @default(false)
@@ -83,12 +95,12 @@ model UserSettings {
   offlineEnabled          Boolean   @default(false)
   maxCacheSizeMb          Int       @default(10240)
   showYtMusicExplore      Boolean   @default(true)
-  showTidalExplore        Boolean   @default(true)
+  showTidalExplore        Boolean   @default(false)
   // YouTube Music — per-user OAuth credentials and quality preference
   ytMusicOAuthJson        String? // Encrypted OAuth token JSON from ytmusicapi
   ytMusicQuality          String    @default("HIGH")
-  // Per-user TIDAL streaming
-  tidalOAuthJson          String? // Encrypted JSON with access_token, refresh_token, user_id, country_code
+  // Retired TIDAL fields retained only for migration compatibility.
+  tidalOAuthJson          String?
   tidalStreamingQuality   String    @default("HIGH")
   // Account-scoped taste onboarding. Seed tracks are provider identities and
   // metadata only; no audio bytes are persisted here.
@@ -115,19 +127,33 @@ model ScrobbleConnection {
 }
 
 model InviteCode {
-  id        String            @id @default(cuid())
-  code      String            @unique
-  createdBy String
-  expiresAt DateTime?
-  maxUses   Int               @default(1)
-  useCount  Int               @default(0)
-  revoked   Boolean           @default(false)
-  createdAt DateTime          @default(now())
-  creator   User              @relation("InviteCodesCreated", fields: [createdBy], references: [id], onDelete: Cascade)
-  usages    InviteCodeUsage[]
+  id              String            @id @default(cuid())
+  code            String            @unique
+  createdBy       String
+  expiresAt       DateTime?
+  maxUses         Int               @default(1)
+  useCount        Int               @default(0)
+  revoked         Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  creator         User              @relation("InviteCodesCreated", fields: [createdBy], references: [id], onDelete: Cascade)
+  usages          InviteCodeUsage[]
+  testApplication TestApplication?
 
   @@index([code])
   @@index([createdBy])
+}
+
+/// A public testing application linked to one administrator-approved invitation.
+model TestApplication {
+  id           String      @id @default(cuid())
+  telegram     String      @unique
+  device       String      @default("")
+  createdAt    DateTime    @default(now())
+  approvedAt   DateTime?
+  inviteCodeId String?     @unique
+  inviteCode   InviteCode? @relation(fields: [inviteCodeId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt, id])
 }
 
 model InviteCodeUsage {
@@ -266,7 +292,7 @@ model SystemSettings {
   soulseekPassword            String?
   spotifyClientId             String?
   spotifyClientSecret         String?
-  // TIDAL integration (via tiddl Python sidecar)
+  // Retired TIDAL fields retained only for migration compatibility.
   tidalEnabled                Boolean  @default(false)
   tidalAccessToken            String?
   tidalRefreshToken           String?
@@ -283,7 +309,7 @@ model SystemSettings {
   downloadRetryAttempts       Int      @default(3)
   transcodeCacheMaxGb         Int      @default(10)
   downloadSource              String   @default("soulseek")
-  playbackSourceOrder         String   @default("library,peers,tidal,ytmusic")
+  playbackSourceOrder         String   @default("library,peers,ytmusic")
   primaryFailureFallback      String   @default("none")
   updatedAt                   DateTime @updatedAt
   createdAt                   DateTime @default(now())
@@ -1614,16 +1640,17 @@ model TrackMapping {
 /// Provider-neutral identity and shared analysis for one recording. Account
 /// behavior never lives here; all users reuse these immutable audio features.
 model CanonicalRecording {
-  id                       String                        @id @default(cuid())
-  canonicalKey             String                        @unique
-  recordingMbid            String?                       @unique
+  id                       String                             @id @default(cuid())
+  canonicalKey             String                             @unique
+  mergedIntoId             String?
+  recordingMbid            String?                            @unique
   isrc                     String?
   fingerprint              String?
-  identitySource           String                        @default("metadata")
-  identityConfidence       Float                         @default(0.5)
-  identityVersion          Int                           @default(1)
-  identityLookupStatus     String                        @default("pending")
-  identityLookupRetryCount Int                           @default(0)
+  identitySource           String                             @default("metadata")
+  identityConfidence       Float                              @default(0.5)
+  identityVersion          Int                                @default(1)
+  identityLookupStatus     String                             @default("pending")
+  identityLookupRetryCount Int                                @default(0)
   identityLookupError      String?
   identityLookupUpdatedAt  DateTime?
   title                    String
@@ -1641,26 +1668,55 @@ model CanonicalRecording {
   speechiness              Float?
   moodTags                 String[]
   essentiaGenres           String[]
-  analysisStatus           String                        @default("pending")
+  analysisStatus           String                             @default("pending")
   analysisVersion          String?
   analyzedAt               DateTime?
   analysisError            String?
-  embeddingStatus          String                        @default("pending")
+  embeddingStatus          String                             @default("pending")
   embeddingVersion         String?
   embeddingAnalyzedAt      DateTime?
   embeddingError           String?
-  createdAt                DateTime                      @default(now())
-  updatedAt                DateTime                      @updatedAt
+  createdAt                DateTime                           @default(now())
+  updatedAt                DateTime                           @updatedAt
   mappings                 TrackMapping[]
   embeddings               CanonicalRecordingEmbedding[]
   analysisLeases           AnalysisAssetLease[]
   exposures                RecommendationExposure[]
+  identityPromotionIntents CanonicalIdentityPromotionIntent[]
+  mergedInto               CanonicalRecording?                @relation("CanonicalRecordingMerges", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedAliases            CanonicalRecording[]               @relation("CanonicalRecordingMerges")
 
+  @@index([mergedIntoId])
   @@index([isrc])
   @@index([fingerprint], type: Hash)
   @@index([identityLookupStatus, identityLookupUpdatedAt])
   @@index([analysisStatus, updatedAt])
   @@index([embeddingStatus, embeddingAnalyzedAt])
+}
+
+/// Durable handoff from the Python AcoustID lookup boundary to the one
+/// TypeScript-owned canonical identity merge transaction.
+model CanonicalIdentityPromotionIntent {
+  id                  String             @id @default(cuid())
+  sourceCanonicalId   String
+  expectedFingerprint String
+  fingerprintHash     String
+  recordingMbid       String
+  confidence          Float
+  status              String             @default("pending")
+  attemptCount        Int                @default(0)
+  failureCount        Int                @default(0)
+  availableAt         DateTime           @default(now())
+  claimedAt           DateTime?
+  completedAt         DateTime?
+  lastError           String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  sourceCanonical     CanonicalRecording @relation(fields: [sourceCanonicalId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceCanonicalId, fingerprintHash, recordingMbid])
+  @@index([status, availableAt, createdAt])
+  @@index([sourceCanonicalId, createdAt])
 }
 
 model CanonicalRecordingEmbedding {
@@ -1709,6 +1765,8 @@ model RecommendationExposure {
   canonicalRecordingId String?
   canonicalKey         String
   artistKey            String
+  /// Known artist/release snapshot; null for legacy or unknown album metadata.
+  albumKey             String?
   provider             String
   providerTrackId      String
   source               String

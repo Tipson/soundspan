@@ -9,7 +9,6 @@ on:
             - packages/media-metadata-contract/**
             - services/audio-analyzer/**
             - services/common/**
-            - services/tidal-streamer/**
             - services/vibe-provider-dclap/**
             - services/ytmusic-streamer/**
             - docker-bake.json

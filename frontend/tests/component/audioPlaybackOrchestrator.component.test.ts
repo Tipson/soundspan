@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import * as realPlaybackRecoveryPolicy from "../../lib/audio-engine/playbackRecoveryPolicy";
 import {
+    recordExplicitPlaybackPause,
+    recordExplicitPlaybackResume,
+    recordExplicitPlaybackSeek,
     isPlaybackAutoRestartSuppressed,
     markRemoteTrackChange,
     setPlaybackAutoRestartSuppressed,
@@ -31,15 +35,22 @@ import {
     clearPlaybackHeartbeat,
     hasFreshPlaybackHeartbeat,
 } from "../../lib/audio/playback-liveness";
+import type {
+    AudioPreloadLease,
+    AudioPreloadResult,
+} from "../../lib/audio-engine/types";
+import { resetForegroundRecoveryThrottle } from "../../lib/audio-engine/foregroundRecoveryPolicy";
+import { advanceAuthRuntimeGeneration } from "../../lib/auth-runtime-generation";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
 type Track = {
+    playbackSourcePolicy?: "device-only";
     id: string;
     title: string;
     duration?: number;
     filePath?: string;
-    streamSource?: "local" | "tidal" | "youtube";
+    streamSource?: "local" | "tidal" | "youtube" | "vk" | "yandex";
     tidalTrackId?: number;
     youtubeVideoId?: string;
     playlistItemId?: string;
@@ -71,6 +82,8 @@ type Audiobook = {
 };
 
 class FakeAudioEngine {
+    setContinuousEnabled(_enabled: boolean): void {}
+    setRepeatCurrent(_enabled: boolean): void {}
     public readonly loadCalls: Array<{ args: unknown[] }> = [];
     public readonly onCalls: Array<{ event: string }> = [];
     public readonly offCalls: Array<{ event: string }> = [];
@@ -78,6 +91,7 @@ class FakeAudioEngine {
     public readonly setVolumeCalls: number[] = [];
     public readonly setMutedCalls: boolean[] = [];
     public readonly preloadCalls: Array<{ url: string; format: string }> = [];
+    public readonly preloadCancelCalls: string[] = [];
 
     public playCalls = 0;
     public pauseCalls = 0;
@@ -89,7 +103,14 @@ class FakeAudioEngine {
     public actualCurrentTime = 0;
     public duration = 240;
     public playing = false;
+    public bufferedAheadSec: number | null = null;
     public trackEnded = false;
+    public preloadAutoReady = true;
+
+    private pendingPreloads: Array<{
+        resolve: (result: AudioPreloadResult) => void;
+        settled: boolean;
+    }> = [];
 
     private handlers = new Map<string, Set<(payload?: unknown) => void>>();
 
@@ -101,6 +122,7 @@ class FakeAudioEngine {
         this.setVolumeCalls.length = 0;
         this.setMutedCalls.length = 0;
         this.preloadCalls.length = 0;
+        this.preloadCancelCalls.length = 0;
         this.playCalls = 0;
         this.pauseCalls = 0;
         this.stopCalls = 0;
@@ -110,7 +132,16 @@ class FakeAudioEngine {
         this.actualCurrentTime = 0;
         this.duration = 240;
         this.playing = false;
+        this.bufferedAheadSec = null;
         this.trackEnded = false;
+        this.preloadAutoReady = true;
+        for (const pending of this.pendingPreloads) {
+            if (!pending.settled) {
+                pending.settled = true;
+                pending.resolve({ state: "cancelled" });
+            }
+        }
+        this.pendingPreloads.length = 0;
         this.handlers.clear();
     }
 
@@ -151,8 +182,41 @@ class FakeAudioEngine {
         this.reloadCalls += 1;
     }
 
-    preload(url: string, format: string): void {
+    preload(url: string, format: string): AudioPreloadLease {
         this.preloadCalls.push({ url, format });
+        let resolveResult!: (result: AudioPreloadResult) => void;
+        const result = new Promise<AudioPreloadResult>((resolve) => {
+            resolveResult = resolve;
+        });
+        const pending = { resolve: resolveResult, settled: false };
+        this.pendingPreloads.push(pending);
+        const settle = (value: AudioPreloadResult): void => {
+            if (pending.settled) return;
+            pending.settled = true;
+            pending.resolve(value);
+        };
+        if (this.preloadAutoReady) {
+            queueMicrotask(() => settle({ state: "ready" }));
+        }
+        return {
+            sourceUrl: url,
+            result,
+            cancel: () => {
+                this.preloadCancelCalls.push(url);
+                settle({ state: "cancelled" });
+            },
+        };
+    }
+
+    finishLatestPreload(): void {
+        this.settleLatestPreload({ state: "ready" });
+    }
+
+    settleLatestPreload(result: AudioPreloadResult): void {
+        const pending = this.pendingPreloads.at(-1);
+        if (!pending || pending.settled) return;
+        pending.settled = true;
+        pending.resolve(result);
     }
 
     setVolume(value: number): void {
@@ -194,6 +258,10 @@ class FakeAudioEngine {
         return runtimeEngineMode === "native" ? "native" : "howler";
     }
 
+    getBufferedAheadSec(): number | null {
+        return this.bufferedAheadSec;
+    }
+
     on(event: string, handler: (payload?: unknown) => void): void {
         let listeners = this.handlers.get(event);
         if (!listeners) {
@@ -216,6 +284,13 @@ class FakeAudioEngine {
 
 type EffectCallback = () => void | (() => void);
 
+type EffectHookSlot = {
+    kind: "effect" | "layout";
+    deps: readonly unknown[] | undefined;
+    callback: EffectCallback;
+    cleanup: (() => void) | null;
+};
+
 type HookSlot =
     | { kind: "ref"; value: { current: unknown } }
     | {
@@ -223,11 +298,7 @@ type HookSlot =
           deps: readonly unknown[] | undefined;
           fn: (...args: unknown[]) => unknown;
       }
-    | {
-          kind: "effect" | "layout";
-          deps: readonly unknown[] | undefined;
-          cleanup: (() => void) | null;
-      };
+    | EffectHookSlot;
 
 class HookRuntime {
     private slots: HookSlot[] = [];
@@ -268,6 +339,21 @@ class HookRuntime {
         this.cursor = 0;
         this.pendingLayouts = [];
         this.pendingEffects = [];
+    }
+
+    replayMountEffects(): void {
+        const effects = this.slots.filter(
+            (slot): slot is EffectHookSlot =>
+                slot.kind === "effect" || slot.kind === "layout",
+        );
+        for (const slot of effects) {
+            slot.cleanup?.();
+            slot.cleanup = null;
+        }
+        for (const slot of effects) {
+            const cleanup = slot.callback();
+            slot.cleanup = typeof cleanup === "function" ? cleanup : null;
+        }
     }
 
     useRef<T>(initialValue: T): { current: T } {
@@ -329,12 +415,13 @@ class HookRuntime {
 
         const slot = this.slots[index];
         if (!slot) {
-            this.slots[index] = { kind, deps, cleanup: null };
+            this.slots[index] = { kind, deps, callback, cleanup: null };
             this.enqueue(kind, index, callback, deps);
             return;
         }
 
         assert.equal(slot.kind, kind);
+        slot.callback = callback;
         if (!areDepsEqual(slot.deps, deps)) {
             this.enqueue(kind, index, callback, deps);
         }
@@ -450,6 +537,7 @@ const controlCalls = {
 };
 
 const apiCalls = {
+    resolveMusicSourceForRecovery: [] as unknown[],
     getStreamUrl: [] as string[],
     getPodcastEpisodeCacheStatus: [] as Array<{
         podcastId: string;
@@ -464,6 +552,7 @@ const apiCalls = {
     }>,
     reportPlaybackClientMetric: [] as Array<Record<string, unknown>>,
     recoverUnavailableYtMusicTrack: [] as Array<Record<string, unknown>>,
+    reconcileYtMusicTailWarmup: [] as Array<Record<string, unknown>>,
     logPlay: [] as Array<{
         trackRef: Record<string, unknown>;
         context: Record<string, unknown>;
@@ -481,6 +570,7 @@ const preemptChecks: Array<{
 }> = [];
 
 const toastErrors: string[] = [];
+const toastErrorIds = new Map<string | number, number>();
 const listenTogetherHostTrackOperations: string[] = [];
 const listenTogetherResyncCalls: string[] = [];
 const migratingStorageItems = new Map<string, string>();
@@ -497,6 +587,8 @@ let podcastCacheStatus = {
 };
 let seekToleranceOverride: boolean | null = null;
 let mirrorMachineIntentToPlaybackState = false;
+let publishProgressSnapshot: ((timeSec: number) => void) | null = null;
+let musicRecoveryResponse: Promise<string | null> | null = null;
 let startVibeModeImpl: (
     options?: VibeModeStartOptions,
 ) => Promise<VibeModeStartResult> = async () => ({
@@ -550,7 +642,12 @@ const makeTrack = (id: string, overrides: Partial<Track> = {}): Track => ({
     id,
     title: `Track ${id}`,
     duration: 210,
-    filePath: `${id}.mp3`,
+    // Remote fixtures must not accidentally claim a server-local audio file.
+    // A test for enriched local media can still explicitly override filePath.
+    filePath:
+        overrides.streamSource && overrides.streamSource !== "local"
+            ? undefined
+            : `${id}.mp3`,
     streamSource: "local",
     ...overrides,
 });
@@ -616,6 +713,7 @@ const managedReadyRecord = (
     }) as DeviceOfflineDownloadRecord;
 
 const resetHarnessState = (): void => {
+    publishProgressSnapshot = null;
     clearDeviceOfflineRuntimeState();
     engine.reset();
     hookRuntime.unmount();
@@ -658,6 +756,7 @@ const resetHarnessState = (): void => {
     }
     preemptChecks.length = 0;
     toastErrors.length = 0;
+    toastErrorIds.clear();
     listenTogetherHostTrackOperations.length = 0;
     listenTogetherResyncCalls.length = 0;
     migratingStorageItems.clear();
@@ -666,6 +765,7 @@ const resetHarnessState = (): void => {
     listenTogetherSnapshot = null;
     writePlaybackAdvanceOrigin(null, null);
     setPlaybackAutoRestartSuppressed(false);
+    recordExplicitPlaybackResume();
     podcastCacheStatus = {
         cached: true,
         downloading: false,
@@ -673,6 +773,7 @@ const resetHarnessState = (): void => {
     };
     seekToleranceOverride = null;
     mirrorMachineIntentToPlaybackState = false;
+    musicRecoveryResponse = null;
     startVibeModeImpl = async () => ({ success: false, trackCount: 0 });
     advanceQueueRequiresCapturedNext = false;
     recoverUnavailableYtMusicTrackImpl = async () => {
@@ -727,7 +828,27 @@ mock.module("react", {
 mock.module("react/jsx-runtime", {
     namedExports: {
         Fragment: "mock-fragment",
-        jsx: (..._args: unknown[]) => ({ __mocked: true }),
+        jsx: (
+            _component: unknown,
+            props?: {
+                snapshotRef?: { current: number };
+                snapshotTrackIdRef?: { current: string | null };
+                currentTrackRef?: { current: Track | null };
+            },
+        ) => {
+            const timeRef = props?.snapshotRef;
+            const trackRef = props?.snapshotTrackIdRef;
+            if (timeRef && trackRef) {
+                // The separate snapshot child is mocked out of this hook harness.
+                // Allow tests to deliver its context update to the actual refs.
+                publishProgressSnapshot = (timeSec) => {
+                    timeRef.current = timeSec;
+                    trackRef.current =
+                        props?.currentTrackRef?.current?.id ?? null;
+                };
+            }
+            return { __mocked: true };
+        },
         jsxs: (..._args: unknown[]) => ({ __mocked: true }),
     },
 });
@@ -742,6 +863,10 @@ mock.module("@/lib/audio-engine", {
     namedExports: {
         createRuntimeAudioEngine: () => engine,
     },
+});
+
+mock.module("@/lib/auth-offline-session", {
+    namedExports: { readCachedAuthUser: () => ({ id: "player-test-user" }) },
 });
 
 mock.module("@/lib/audio-state-context", {
@@ -925,6 +1050,13 @@ mock.module("@/lib/audio-load-preemption", {
 mock.module("@/lib/api", {
     namedExports: {
         api: {
+            getMusicSourceStreamUrl: (provider: string, id: string) =>
+                `/api/music-sources/recordings/${provider}/${id}/stream`,
+            resolveMusicSourceForRecovery: async (recording: unknown) => {
+                apiCalls.resolveMusicSourceForRecovery.push(recording);
+                if (musicRecoveryResponse) return musicRecoveryResponse;
+                return `/api/music-sources/leases/${"a".repeat(48)}/stream`;
+            },
             getStreamUrl: (trackId: string) => {
                 apiCalls.getStreamUrl.push(trackId);
                 return `https://stream.test/direct/${trackId}`;
@@ -933,6 +1065,17 @@ mock.module("@/lib/api", {
                 `https://stream.test/tidal/${trackId}`,
             getYtMusicStreamUrl: (videoId: string) =>
                 `https://stream.test/yt/${videoId}`,
+            reconcileYtMusicTailWarmup: async (
+                input: Record<string, unknown>,
+            ) => {
+                apiCalls.reconcileYtMusicTailWarmup.push(input);
+                return {
+                    ownerId: input.ownerId,
+                    generation: input.generation,
+                    accepted: true,
+                    items: [],
+                };
+            },
             recoverUnavailableYtMusicTrack: async (
                 input: Record<string, unknown>,
             ) => {
@@ -1065,8 +1208,15 @@ mock.module("@/lib/query-events", {
     },
 });
 
+const membershipSubscribers = new Set<() => void>();
 mock.module("@/lib/listen-together-session", {
     namedExports: {
+        subscribeListenTogetherMembership: (listener: () => void) => {
+            membershipSubscribers.add(listener);
+            return () => {
+                membershipSubscribers.delete(listener);
+            };
+        },
         enqueueLatestListenTogetherHostTrackOperation: async (operation: {
             action: string;
         }) => {
@@ -1220,15 +1370,30 @@ mock.module("@/lib/lyrics-cache-policy", {
     },
 });
 
-mock.module("sonner", {
-    namedExports: {
-        toast: {
-            error: (message: string) => {
+const notificationMock = {
+    toast: {
+        error: (message: string, options?: { id?: string | number }) => {
+            const existing =
+                options?.id === undefined
+                    ? undefined
+                    : toastErrorIds.get(options.id);
+            if (existing !== undefined) toastErrors[existing] = message;
+            else {
+                if (options?.id !== undefined)
+                    toastErrorIds.set(options.id, toastErrors.length);
                 toastErrors.push(message);
-            },
+            }
         },
     },
-});
+};
+// Sonner exports separate ESM/CommonJS entrypoints. tsx-loaded handlers use
+// the latter; both must hit the same observable notification boundary.
+mock.module("sonner", { namedExports: notificationMock });
+mock.method(
+    createRequire(import.meta.url)("sonner").toast,
+    "error",
+    notificationMock.toast.error,
+);
 
 mock.module("@/lib/logger", {
     namedExports: {
@@ -1250,26 +1415,6 @@ mock.module("@/lib/logger", {
     },
 });
 
-mock.module("@soundspan/media-metadata-contract", {
-    namedExports: {
-        normalizeCanonicalMediaProviderIdentity: (input: {
-            streamSource?: "local" | "tidal" | "youtube";
-            tidalTrackId?: number;
-            youtubeVideoId?: string;
-        }) => {
-            if (input.streamSource === "tidal" || input.tidalTrackId) {
-                return { source: "tidal" };
-            }
-            if (input.streamSource === "youtube" || input.youtubeVideoId) {
-                return { source: "youtube" };
-            }
-            return { source: "local" };
-        },
-        toAudioEngineSourceType: (source: "local" | "tidal" | "youtube") =>
-            source === "youtube" ? "ytmusic" : source,
-    },
-});
-
 let orchestratorComponent: (() => null) | null = null;
 
 before(async () => {
@@ -1287,6 +1432,7 @@ beforeEach(() => {
 
 afterEach(() => {
     hookRuntime.unmount();
+    advanceAuthRuntimeGeneration();
     delete (globalThis as { window?: unknown }).window;
     delete (globalThis as { document?: unknown }).document;
     try {
@@ -1300,6 +1446,25 @@ const renderOrchestrator = (): void => {
     assert.ok(orchestratorComponent, "orchestrator should be imported");
     hookRuntime.render(orchestratorComponent as () => null);
 };
+
+test("group membership immediately disables solo continuity and repeat without a React rerender", () => {
+    const continuity = mock.method(engine, "setContinuousEnabled");
+    const repeat = mock.method(engine, "setRepeatCurrent");
+    try {
+        audioState.playbackType = "track";
+        audioState.repeatMode = "one";
+        renderOrchestrator();
+        assert.equal(continuity.mock.calls.at(-1)?.arguments[0], true);
+        assert.equal(repeat.mock.calls.at(-1)?.arguments[0], true);
+        listenTogetherSnapshot = { groupId: "joined", isHost: false };
+        for (const listener of membershipSubscribers) listener();
+        assert.equal(continuity.mock.calls.at(-1)?.arguments[0], false);
+        assert.equal(repeat.mock.calls.at(-1)?.arguments[0], false);
+    } finally {
+        continuity.mock.restore();
+        repeat.mock.restore();
+    }
+});
 
 const rerenderOrchestrator = (): void => {
     assert.ok(orchestratorComponent, "orchestrator should be imported");
@@ -1315,10 +1480,17 @@ const flushAsync = async (ticks = 6): Promise<void> => {
 const enableWindowMetrics = (
     runtimeConfig: Record<string, unknown> = {},
 ): void => {
+    const sessionValues = new Map<string, string>();
     (globalThis as unknown as { window?: Record<string, unknown> }).window = {
         __SOUNDSPAN_RUNTIME_CONFIG__: runtimeConfig,
         addEventListener: () => undefined,
         removeEventListener: () => undefined,
+        sessionStorage: {
+            getItem: (key: string) => sessionValues.get(key) ?? null,
+            setItem: (key: string, value: string) => {
+                sessionValues.set(key, value);
+            },
+        },
     };
 };
 
@@ -1328,6 +1500,17 @@ const getServerSignalEvents = (
     return apiCalls.reportPlaybackClientMetric.filter(
         (payload) => payload.event === eventName,
     );
+};
+
+const requireSignalSessionId = (
+    fields: Record<string, unknown> | undefined,
+): string => {
+    const sessionId = fields?.sessionId;
+    if (typeof sessionId !== "string") {
+        assert.fail("playback signal must include a string sessionId");
+    }
+    assert.ok(sessionId.length > 0);
+    return sessionId;
 };
 
 const emitFatalLoadError = async (): Promise<void> => {
@@ -1422,6 +1605,22 @@ test("live engine load, play, and progress refresh service-worker playback liven
     engine.currentTime = 1;
     engine.emit("timeupdate", { timeSec: 1 });
     assert.equal(hasFreshPlaybackHeartbeat(), true);
+});
+
+test("StrictMode effect replay replaces the disposed tail-warmup owner", async () => {
+    renderOrchestrator();
+    await flushAsync();
+    const initialOwner = apiCalls.reconcileYtMusicTailWarmup.at(-1)?.ownerId;
+    assert.equal(typeof initialOwner, "string");
+
+    hookRuntime.replayMountEffects();
+    await flushAsync();
+
+    const owners = new Set(
+        apiCalls.reconcileYtMusicTailWarmup.map((call) => call.ownerId),
+    );
+    assert.equal(owners.has(initialOwner), true);
+    assert.equal(owners.size, 2);
 });
 
 test("recoverable autoplay rejection preserves the track without scheduling a skip", async () => {
@@ -1715,6 +1914,209 @@ test("preparing a verified legacy copy keeps its media identity without shadowin
     assert.equal(engine.loadCalls.length, 1);
 });
 
+for (const initialState of ["empty", "paused"] as const) {
+    test(`a manual YouTube selection from ${initialState} starts in 300ms`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const tracks = ["idle-current", "idle-selection"].map((id) =>
+            makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+        );
+        audioState.currentTrack = initialState === "paused" ? tracks[0] : null;
+        audioState.queue = tracks;
+        playbackState.isPlaying = false;
+        renderOrchestrator();
+        await flushAsync();
+        if (initialState === "paused")
+            engine.emit("load", { durationSec: 210 });
+        engine.playing = false;
+        engine.actualCurrentTime = 0;
+        const before = engine.loadCalls.length;
+
+        writePlaybackAdvanceOrigin(
+            "manual",
+            audioState.currentTrack?.id ?? null,
+        );
+        selectTrack(tracks, 1);
+        await flushAsync();
+        t.mock.timers.tick(299);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, before);
+        t.mock.timers.tick(1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, before + 1);
+        assert.equal(
+            engine.loadCalls.at(-1)?.args[0],
+            "https://stream.test/yt/idle-selection",
+        );
+    });
+}
+
+test("a burst from idle cancels the fast first selection and keeps the long gate", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const tracks = ["idle-first", "idle-last"].map((id) =>
+        makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+    );
+    audioState.currentTrack = null;
+    audioState.queue = tracks;
+    renderOrchestrator();
+    await flushAsync();
+    writePlaybackAdvanceOrigin("manual", null);
+    selectTrack(tracks, 0);
+    await flushAsync();
+    t.mock.timers.tick(250);
+    writePlaybackAdvanceOrigin("manual", tracks[0].id);
+    selectTrack(tracks, 1);
+    await flushAsync();
+    t.mock.timers.tick(1_249);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 0);
+    t.mock.timers.tick(1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    assert.equal(
+        engine.loadCalls[0].args[0],
+        "https://stream.test/yt/idle-last",
+    );
+});
+
+for (const action of ["pause", "clear", "unmount"] as const) {
+    test(`the first manual YouTube selection respects ${action} before loading`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const track = makeTrack("idle-cancel", {
+            streamSource: "youtube",
+            youtubeVideoId: "idle-cancel",
+        });
+        audioState.currentTrack = null;
+        audioState.queue = [track];
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync();
+        writePlaybackAdvanceOrigin("manual", null);
+        selectTrack([track], 0);
+        await flushAsync();
+        t.mock.timers.tick(100);
+        if (action === "unmount") {
+            hookRuntime.unmount();
+        } else {
+            if (action === "clear") audioState.currentTrack = null;
+            playbackState.isPlaying = false;
+            rerenderOrchestrator();
+        }
+        await flushAsync();
+        t.mock.timers.tick(1_500);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, action === "pause" ? 1 : 0);
+        if (action === "pause")
+            assert.equal(engine.loadCalls[0].args[1], false);
+    });
+}
+
+for (const playedSeconds of [0.49, 0.5, 0.75, 30]) {
+    const expectedDelay = playedSeconds >= 0.5 ? 300 : 1250;
+    test(`an unprepared manual YouTube selection after ${playedSeconds}s of playback starts in ${expectedDelay}ms`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const tracks = ["stable-current", "cold-selection"].map((id) =>
+            makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+        );
+        audioState.currentTrack = tracks[0];
+        audioState.queue = tracks;
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.actualCurrentTime = playedSeconds;
+
+        writePlaybackReplacementIntent(tracks[0].id);
+        selectTrack(tracks, 1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 1);
+        t.mock.timers.tick(expectedDelay - 1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 1);
+        t.mock.timers.tick(1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 2);
+        assert.equal(
+            engine.loadCalls.at(-1)?.args[0],
+            "https://stream.test/yt/cold-selection",
+        );
+        t.mock.timers.tick(1_250);
+        await flushAsync();
+        assert.equal(
+            engine.loadCalls.length,
+            2,
+            "no second load from an old timer",
+        );
+    });
+}
+
+test("a burst after stable playback cancels the fast selection and coalesces the rest", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const tracks = ["burst-current", "burst-first", "burst-last"].map((id) =>
+        makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+    );
+    audioState.currentTrack = tracks[0];
+    audioState.queue = tracks;
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.actualCurrentTime = 30;
+    writePlaybackReplacementIntent(tracks[0].id);
+    selectTrack(tracks, 1);
+    await flushAsync();
+    t.mock.timers.tick(250);
+    writePlaybackReplacementIntent(tracks[1].id);
+    selectTrack(tracks, 2);
+    await flushAsync();
+    t.mock.timers.tick(1_249);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    t.mock.timers.tick(1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "https://stream.test/yt/burst-last",
+    );
+});
+
+for (const action of ["pause", "clear", "unmount"] as const) {
+    test(`a stable manual YouTube selection respects ${action} during its short timer`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const tracks = ["cancel-stable", "cancel-next"].map((id) =>
+            makeTrack(id, { streamSource: "youtube", youtubeVideoId: id }),
+        );
+        audioState.currentTrack = tracks[0];
+        audioState.queue = tracks;
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.actualCurrentTime = 30;
+        writePlaybackReplacementIntent(tracks[0].id);
+        selectTrack(tracks, 1);
+        await flushAsync();
+        t.mock.timers.tick(100);
+        if (action === "unmount") {
+            hookRuntime.unmount();
+        } else {
+            if (action === "clear") audioState.currentTrack = null;
+            playbackState.isPlaying = false;
+            rerenderOrchestrator();
+        }
+        await flushAsync();
+        t.mock.timers.tick(1_500);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, action === "pause" ? 2 : 1);
+        if (action === "pause") {
+            assert.equal(engine.loadCalls.at(-1)?.args[1], false);
+        }
+    });
+}
+
 test("rapid manual YouTube selections start only the latest remote stream", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const tracks = Array.from({ length: 6 }, (_, index) =>
@@ -1766,6 +2168,252 @@ test("rapid manual YouTube selections start only the latest remote stream", asyn
     );
 });
 
+test("manual selection loads an engine-ready preloaded YouTube track without debounce", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const currentTrack = makeTrack("manual-ready-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "manual-ready-current",
+    });
+    const readyNextTrack = makeTrack("manual-ready-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "manual-ready-next",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, readyNextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+
+    writePlaybackReplacementIntent(currentTrack.id);
+    selectTrack(audioState.queue, 1);
+    await flushAsync();
+
+    assert.equal(
+        engine.loadCalls.length,
+        2,
+        "an actually ready next track must start before the manual provider debounce",
+    );
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "https://stream.test/yt/manual-ready-next",
+    );
+    t.mock.timers.tick(1_250);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+});
+
+test("a ready preload for another track cannot bypass manual YouTube debounce", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const currentTrack = makeTrack("manual-stale-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "manual-stale-current",
+    });
+    const readyNextTrack = makeTrack("manual-stale-ready-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "manual-stale-ready-next",
+    });
+    const selectedTrack = makeTrack("manual-stale-selected", {
+        streamSource: "youtube",
+        youtubeVideoId: "manual-stale-selected",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, readyNextTrack, selectedTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+
+    writePlaybackReplacementIntent(currentTrack.id);
+    selectTrack(audioState.queue, 2);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+
+    t.mock.timers.tick(1_249);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    t.mock.timers.tick(1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "https://stream.test/yt/manual-stale-selected",
+    );
+});
+
+test("a same-id preload for a different YouTube source cannot bypass manual debounce", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const currentTrack = makeTrack("manual-remap-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "manual-remap-current",
+    });
+    const preparedNextTrack = makeTrack("manual-remap-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "manual-remap-original",
+        playlistItemId: "manual-remap-original-row",
+    });
+    const remappedSelection = {
+        ...preparedNextTrack,
+        youtubeVideoId: "manual-remap-replacement",
+        playlistItemId: "manual-remap-replacement-row",
+    };
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, preparedNextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "https://stream.test/yt/manual-remap-original",
+            format: "mp4",
+        },
+    ]);
+
+    writePlaybackReplacementIntent(currentTrack.id);
+    audioState.queue = [currentTrack, remappedSelection];
+    selectTrack(audioState.queue, 1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+
+    t.mock.timers.tick(1_249);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 1);
+    t.mock.timers.tick(1);
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "https://stream.test/yt/manual-remap-replacement",
+    );
+});
+
+test("failed network preload is not retried by progress ticks and becomes eligible after cooldown", async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: 1000 });
+    const currentTrack = makeTrack("cooldown-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "cooldown-current",
+    });
+    const nextTrack = makeTrack("cooldown-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "cooldown-next",
+    });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+    engine.preloadAutoReady = false;
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    engine.settleLatestPreload({
+        state: "failed",
+        code: "MEDIA_ERR_SRC_NOT_SUPPORTED",
+    });
+    await flushAsync();
+    for (let timeSec = 2; timeSec < 102; timeSec++) {
+        engine.emit("timeupdate", { timeSec });
+        await flushAsync();
+    }
+    assert.equal(engine.preloadCalls.length, 1);
+    t.mock.timers.tick(60_000);
+    engine.emit("timeupdate", { timeSec: 102 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 2);
+});
+
+for (const preloadResult of [
+    null,
+    { state: "failed", code: "MEDIA_ERR_DECODE" } as const,
+    { state: "cancelled" } as const,
+]) {
+    const stateLabel = preloadResult?.state ?? "pending";
+    test(`manual selection keeps debounce for a ${stateLabel} YouTube preload`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const currentTrack = makeTrack(`manual-${stateLabel}-current`, {
+            streamSource: "youtube",
+            youtubeVideoId: `manual-${stateLabel}-current`,
+        });
+        const nextTrack = makeTrack(`manual-${stateLabel}-next`, {
+            streamSource: "youtube",
+            youtubeVideoId: `manual-${stateLabel}-next`,
+        });
+        audioState.currentTrack = currentTrack;
+        audioState.queue = [currentTrack, nextTrack];
+        playbackState.isPlaying = true;
+        engine.preloadAutoReady = false;
+
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.emit("timeupdate", { timeSec: 1 });
+        await flushAsync();
+        assert.equal(engine.preloadCalls.length, 1);
+        if (preloadResult) {
+            engine.settleLatestPreload(preloadResult);
+            await flushAsync();
+        }
+
+        writePlaybackReplacementIntent(currentTrack.id);
+        selectTrack(audioState.queue, 1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 1);
+
+        t.mock.timers.tick(1_249);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 1);
+        t.mock.timers.tick(1);
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 2);
+        assert.equal(
+            engine.loadCalls.at(-1)?.args[0],
+            `https://stream.test/yt/manual-${stateLabel}-next`,
+        );
+    });
+}
+
+test("service catalog next track preloads through a renewable exact source", async () => {
+    const currentTrack = makeTrack("service-current");
+    const nextTrack = makeTrack("vk:1_2", { streamSource: "vk" });
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    assert.deepEqual(engine.preloadCalls, [
+        { url: "/api/music-sources/recordings/vk/1_2/stream", format: "mp3" },
+    ]);
+    assert.ok(!apiCalls.getStreamUrl.includes("vk:1_2"));
+    selectTrack(audioState.queue, 1);
+    await flushAsync();
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "/api/music-sources/recordings/vk/1_2/stream",
+    );
+});
+
 test("stable YouTube playback prepares the next queue item without waiting for track end", async () => {
     const currentTrack = makeTrack("early-preload-current", {
         streamSource: "youtube",
@@ -1802,7 +2450,676 @@ test("stable YouTube playback prepares the next queue item without waiting for t
     assert.equal(engine.preloadCalls.length, 1);
 });
 
-test("installed iOS PWA advances a preloaded next track before hidden source end", async (t) => {
+test("remapping the same queued track to a new YouTube source replaces its ready preload", async () => {
+    const currentTrack = makeTrack("remap-preload-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "remap-preload-current",
+    });
+    const originalNextTrack = makeTrack("remap-preload-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "remap-preload-original",
+    });
+    const remappedNextTrack = {
+        ...originalNextTrack,
+        youtubeVideoId: "remap-preload-replacement",
+    };
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, originalNextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 240 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "https://stream.test/yt/remap-preload-original",
+            format: "mp4",
+        },
+    ]);
+
+    audioState.queue = [currentTrack, remappedNextTrack];
+    rerenderOrchestrator();
+    await flushAsync();
+    engine.emit("timeupdate", { timeSec: 2 });
+    await flushAsync();
+
+    assert.deepEqual(engine.preloadCancelCalls, [
+        "https://stream.test/yt/remap-preload-original",
+    ]);
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "https://stream.test/yt/remap-preload-original",
+            format: "mp4",
+        },
+        {
+            url: "https://stream.test/yt/remap-preload-replacement",
+            format: "mp4",
+        },
+    ]);
+});
+
+test("stable time updates do not restart the same pending device-source preload", async (t) => {
+    const currentTrack = makeTrack("pending-preload-current");
+    const nextTrack = makeTrack("yt:pending-preload-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "pending-preload-next",
+    });
+    const originalTailTrack = makeTrack("yt:pending-preload-old-tail", {
+        streamSource: "youtube",
+        youtubeVideoId: "pending-preload-old-tail",
+    });
+    const latestTailTrack = makeTrack("yt:pending-preload-latest-tail", {
+        streamSource: "youtube",
+        youtubeVideoId: "pending-preload-latest-tail",
+    });
+    const nextRef = "fsa1:user:pending-preload" as DeviceAudioVaultRef;
+    const openedSession = deferred<DeviceAudioVaultSession>();
+    let openCalls = 0;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async () => {
+            openCalls += 1;
+            return openedSession.promise;
+        }),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord("user-1", "pending-preload-key", nextTrack, nextRef),
+    ]);
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack, originalTailTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(openCalls, 1);
+    audioState.queue = [currentTrack, nextTrack, latestTailTrack];
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(openCalls, 1);
+    engine.emit("load", { durationSec: 240 });
+    engine.playing = true;
+    engine.emit("play");
+    for (const timeSec of [1, 2, 3]) {
+        engine.emit("timeupdate", { timeSec });
+        await flushAsync();
+    }
+
+    assert.equal(openCalls, 1);
+
+    openedSession.resolve({
+        ownerId: "user-1",
+        authGeneration: 0,
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: async () => ({
+            kind: "play" as const,
+            url: "blob:https://soundspan.test/pending-preload",
+            release: () => undefined,
+        }),
+    } as unknown as DeviceAudioVaultSession);
+    await flushAsync(12);
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "blob:https://soundspan.test/pending-preload",
+            format: "mp4",
+        },
+    ]);
+    assert.deepEqual(apiCalls.reconcileYtMusicTailWarmup.at(-1)?.tail, [
+        "pending-preload-latest-tail",
+    ]);
+});
+
+test("StrictMode effect replay restarts a pending preload after source cleanup", async (t) => {
+    const currentTrack = makeTrack("strict-pending-current");
+    const nextTrack = makeTrack("yt:strict-pending-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "strict-pending-next",
+    });
+    const openedSession = deferred<DeviceAudioVaultSession>();
+    let openCalls = 0;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async () => {
+            openCalls += 1;
+            return openedSession.promise;
+        }),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord(
+            "user-1",
+            "strict-pending-key",
+            nextTrack,
+            "fsa1:user:strict-pending" as DeviceAudioVaultRef,
+        ),
+    ]);
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(openCalls, 1);
+
+    hookRuntime.replayMountEffects();
+    await flushAsync();
+
+    assert.equal(openCalls, 2);
+});
+
+test("remapping a pending same-identity YouTube preload starts the new source", async (t) => {
+    const currentTrack = makeTrack("pending-remap-current");
+    const originalNextTrack = makeTrack("pending-remap-next", {
+        filePath: "pending-remap-copy.mp4",
+        streamSource: "youtube",
+        youtubeVideoId: "pending-remap-original",
+    });
+    const remappedNextTrack = {
+        ...originalNextTrack,
+        youtubeVideoId: "pending-remap-replacement",
+    };
+    const pendingOpen = deferred<DeviceAudioVaultSession>();
+    const readySession = {
+        ownerId: "user-1",
+        authGeneration: 0,
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: async () => ({
+            kind: "play" as const,
+            url: "blob:https://soundspan.test/pending-remap-replacement",
+            release: () => undefined,
+        }),
+    } as unknown as DeviceAudioVaultSession;
+    let openCalls = 0;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async () => {
+            openCalls += 1;
+            return openCalls === 1 ? pendingOpen.promise : readySession;
+        }),
+    );
+    t.after(restoreVault);
+    const readyRecord = managedReadyRecord(
+        "user-1",
+        "pending-remap-key",
+        originalNextTrack,
+        "fsa1:user:pending-remap" as DeviceAudioVaultRef,
+    );
+    readyRecord.trackIdentity = `track:${originalNextTrack.id}`;
+    setDeviceOfflineRuntimeState("user-1", [readyRecord]);
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, originalNextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(openCalls, 1);
+
+    audioState.queue = [currentTrack, remappedNextTrack];
+    rerenderOrchestrator();
+    await flushAsync(12);
+
+    assert.equal(openCalls, 2);
+    assert.deepEqual(engine.preloadCalls, [
+        {
+            url: "blob:https://soundspan.test/pending-remap-replacement",
+            format: "mp4",
+        },
+    ]);
+
+    pendingOpen.resolve(readySession);
+    await flushAsync(12);
+    assert.equal(engine.preloadCalls.length, 1);
+});
+
+for (const transition of ["pause", "no-next"] as const) {
+    test(`${transition} releases a device source that resolves after its preload was cancelled`, async (t) => {
+        const currentTrack = makeTrack(`cancel-pending-${transition}-current`);
+        const nextTrack = makeTrack(`yt:cancel-pending-${transition}-next`, {
+            streamSource: "youtube",
+            youtubeVideoId: `cancel-pending-${transition}-next`,
+        });
+        const pendingAccess = deferred<DeviceAudioPlayResult>();
+        let releases = 0;
+        const session = {
+            ownerId: "user-1",
+            authGeneration: 0,
+            storage: { kind: "desktop-directory", label: "Test music" },
+            retain: async () => {
+                throw new Error("retain is not used by playback");
+            },
+            access: () => pendingAccess.promise,
+        } as unknown as DeviceAudioVaultSession;
+        const restoreVault = installDeviceAudioVaultFactory(() =>
+            fakeDeviceAudioVault(async () => session),
+        );
+        t.after(restoreVault);
+        setDeviceOfflineRuntimeState("user-1", [
+            managedReadyRecord(
+                "user-1",
+                `cancel-pending-${transition}-key`,
+                nextTrack,
+                `fsa1:user:cancel-pending-${transition}` as DeviceAudioVaultRef,
+            ),
+        ]);
+        audioState.currentTrack = currentTrack;
+        audioState.queue = [currentTrack, nextTrack];
+        playbackState.isPlaying = true;
+
+        renderOrchestrator();
+        await flushAsync();
+
+        if (transition === "pause") {
+            playbackState.isPlaying = false;
+        } else {
+            audioState.queue = [currentTrack];
+        }
+        rerenderOrchestrator();
+        await flushAsync();
+        pendingAccess.resolve({
+            kind: "play",
+            url: `blob:https://soundspan.test/cancel-pending-${transition}`,
+            release: () => {
+                releases += 1;
+            },
+        });
+        await flushAsync(12);
+
+        assert.equal(releases, 1);
+        assert.equal(engine.preloadCalls.length, 0);
+    });
+}
+
+test("retiring a pending next source prevents its late device lease from preloading", async (t) => {
+    const currentTrack = makeTrack("retired-pending-current");
+    const nextTrack = makeTrack("yt:retired-pending-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "retired-pending-next",
+    });
+    const retiredReplacement = {
+        ...nextTrack,
+        filePath: undefined,
+        streamSource: undefined,
+        youtubeVideoId: undefined,
+        mediaSource: "tidal",
+        tidalTrackId: 991,
+    };
+    const pendingOpen = deferred<DeviceAudioVaultSession>();
+    let accessCalls = 0;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async () => pendingOpen.promise),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord(
+            "user-1",
+            "retired-pending-key",
+            nextTrack,
+            "fsa1:user:retired-pending" as DeviceAudioVaultRef,
+        ),
+    ]);
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+
+    renderOrchestrator();
+    await flushAsync();
+
+    audioState.queue = [currentTrack, retiredReplacement];
+    rerenderOrchestrator();
+    await flushAsync();
+    pendingOpen.resolve({
+        ownerId: "user-1",
+        authGeneration: 0,
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: async () => {
+            accessCalls += 1;
+            return {
+                kind: "play" as const,
+                url: "blob:https://soundspan.test/retired-pending",
+                release: () => undefined,
+            };
+        },
+    } as unknown as DeviceAudioVaultSession);
+    await flushAsync(12);
+
+    assert.equal(accessCalls, 0);
+    assert.equal(engine.preloadCalls.length, 0);
+});
+
+for (const handoffScenario of ["hidden", "foreground", "manual"] as const) {
+    test(`installed iOS PWA advances a preloaded next track before hidden source end: ${handoffScenario}`, async (t) => {
+        const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+            globalThis,
+            "navigator",
+        );
+        Object.defineProperty(globalThis, "navigator", {
+            configurable: true,
+            value: {
+                userAgent:
+                    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+                maxTouchPoints: 5,
+                standalone: true,
+                onLine: true,
+            },
+        });
+        t.after(() => {
+            if (navigatorDescriptor) {
+                Object.defineProperty(
+                    globalThis,
+                    "navigator",
+                    navigatorDescriptor,
+                );
+            } else {
+                Reflect.deleteProperty(globalThis, "navigator");
+            }
+        });
+        enableWindowMetrics();
+        (
+            globalThis as unknown as {
+                window: { matchMedia: () => { matches: boolean } };
+            }
+        ).window.matchMedia = () => ({ matches: true });
+        const visibility = installVisibilityDocument();
+        visibility.dispatchVisibility("hidden");
+        runtimeEngineMode = "native";
+
+        const currentTrack = makeTrack("ios-background-current", {
+            streamSource: "youtube",
+            youtubeVideoId: "ios-background-01",
+        });
+        const nextTrack = makeTrack("ios-background-next", {
+            streamSource: "youtube",
+            youtubeVideoId: "ios-background-02",
+        });
+        audioState.currentTrack = currentTrack;
+        audioState.queue = [currentTrack, nextTrack];
+        playbackState.isPlaying = true;
+
+        renderOrchestrator();
+        await flushAsync();
+        engine.duration = 210;
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.emit("timeupdate", { timeSec: 1 });
+        await flushAsync();
+        assert.equal(engine.preloadCalls.length, 1);
+
+        engine.emit("timeupdate", { timeSec: 209.8 });
+        await flushAsync();
+        assert.equal(controlCalls.next, 1);
+
+        engine.emit("end");
+        await flushAsync();
+        assert.equal(controlCalls.next, 1);
+
+        // Commit the queue advance too: observing `next()` alone misses a stop
+        // inserted by the following track-load effect.
+        const stopsBeforeHandoff = engine.stopCalls;
+        if (handoffScenario === "foreground") {
+            visibility.dispatchVisibility("visible");
+        } else if (handoffScenario === "manual") {
+            writePlaybackAdvanceOrigin("manual", currentTrack.id);
+        }
+        audioState.currentTrack = nextTrack;
+        audioState.currentIndex = 1;
+        rerenderOrchestrator();
+        await flushAsync();
+        assert.equal(engine.loadCalls.length, 2);
+        assert.equal(engine.loadCalls[1]?.args[1], true);
+        assert.equal(
+            engine.stopCalls,
+            stopsBeforeHandoff + (handoffScenario === "manual" ? 1 : 0),
+        );
+    });
+}
+
+test("a native natural-end transition keeps the primary element alive for a prepared source", async () => {
+    runtimeEngineMode = "native";
+    const first = makeTrack("yt:android0001", {
+        streamSource: "youtube",
+        youtubeVideoId: "android0001",
+    });
+    const second = makeTrack("yt:android0002", {
+        streamSource: "youtube",
+        youtubeVideoId: "android0002",
+    });
+    audioState.currentTrack = first;
+    audioState.queue = [first, second];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+    engine.playing = false;
+    engine.trackEnded = true;
+    engine.emit("end");
+    await flushAsync();
+    const stops = engine.stopCalls;
+    audioState.currentTrack = second;
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(engine.loadCalls[1]?.args[1], true);
+    assert.equal(engine.stopCalls, stops);
+});
+
+test("downloaded shuffle ends without online recommendations even when connectivity reports online", async (t) => {
+    const track = makeTrack("downloaded-last", {
+        playbackSourcePolicy: "device-only",
+        streamSource: "youtube",
+        youtubeVideoId: "downloaded-last",
+    });
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(
+            async ({ authGeneration }) =>
+                ({
+                    ownerId: "user-1",
+                    authGeneration,
+                    access: async () => ({
+                        kind: "play",
+                        url: "blob:https://soundspan.test/downloaded-last",
+                        release() {},
+                    }),
+                }) as unknown as DeviceAudioVaultSession,
+        ),
+    );
+    t.after(restore);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord(
+            "user-1",
+            "downloaded-last-key",
+            track,
+            "fsa1:user:last" as DeviceAudioVaultRef,
+        ),
+    ]);
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+    });
+    playbackState.isPlaying = true;
+    audioState.currentTrack = track;
+    audioState.queue = [
+        makeTrack("first", { playbackSourcePolicy: "device-only" }),
+        track,
+    ];
+    audioState.currentIndex = 1;
+    audioState.isShuffle = true;
+    audioState.shuffleIndices = [0, 1];
+    startVibeModeImpl = () => new Promise(() => undefined);
+    renderOrchestrator();
+    await flushAsync(30);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "blob:https://soundspan.test/downloaded-last",
+    );
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.startVibeMode, 0);
+    assert.equal(controlCalls.next, 0);
+    assert.equal(controlCalls.pause, 1);
+});
+
+test("a missing downloaded occurrence cannot load or recover from the network", async () => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: true,
+    });
+    const track = makeTrack("yt:missing001", {
+        streamSource: "youtube",
+        youtubeVideoId: "missing001",
+        playbackSourcePolicy: "device-only",
+    });
+    audioState.currentTrack = track;
+    audioState.queue = [
+        track,
+        makeTrack("yt:missing002", {
+            streamSource: "youtube",
+            youtubeVideoId: "missing002",
+            playbackSourcePolicy: "device-only",
+        }),
+    ];
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync(30);
+    assert.equal(engine.loadCalls.length, 0);
+    assert.equal(engine.preloadCalls.length, 0);
+    assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 0);
+    assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+    assert.equal(controlCalls.startVibeMode, 0);
+    assert.equal(controlCalls.next, 0);
+    assert.equal(playbackState.isPlaying, false);
+    assert.equal(playbackState.isBuffering, false);
+    assert.match(toastErrors.join(" "), /не загружен/i);
+});
+
+test("the offline queue ends without waiting for network recommendations", async (t) => {
+    Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: false,
+    });
+    t.after(() => {
+        Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            value: true,
+        });
+    });
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("last-offline-track");
+    audioState.queue = [audioState.currentTrack];
+    startVibeModeImpl = () => new Promise(() => undefined);
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("timeupdate", { timeSec: 1 });
+    await flushAsync();
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+    assert.equal(controlCalls.pause, 1);
+});
+
+test("heartbeat does not reload an ended nine-second track while online continuation is pending", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const tracks = [3, 2, 1].map((id) =>
+        makeTrack(`yt:train00000${id}`, { duration: 9 }),
+    );
+    audioState.queue = tracks;
+    audioState.currentTrack = tracks[0];
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = () =>
+        new Promise((resolve) => {
+            resolveVibe = resolve;
+        });
+
+    renderOrchestrator();
+    await flushAsync();
+    for (let index = 0; index < tracks.length; index += 1) {
+        if (index > 0) {
+            audioState.currentIndex = index;
+            audioState.currentTrack = tracks[index];
+            rerenderOrchestrator();
+            await flushAsync();
+        }
+        engine.duration = 9;
+        engine.trackEnded = false;
+        engine.emit("load", { durationSec: 9 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = 4;
+        engine.actualCurrentTime = 4;
+        engine.emit("timeupdate", { timeSec: 4 });
+        await flushAsync();
+        engine.currentTime = 9;
+        engine.actualCurrentTime = 9;
+        engine.playing = false;
+        engine.trackEnded = true;
+        engine.emit("end");
+        await flushAsync();
+    }
+    assert.equal(controlCalls.next, 2);
+    assert.equal(controlCalls.startVibeMode, 1);
+
+    // Native status events are not user commands and must retain the pending
+    // continuation for this completed occurrence.
+    engine.emit("seek", { timeSec: 9 });
+    engine.emit("timeupdate", { timeSec: 9 });
+    await flushAsync();
+
+    // The native element is ended, but the network request has not completed.
+    // Let the unrelated startup guard expire before checking the heartbeat.
+    t.mock.timers.tick(30_000);
+    await flushAsync();
+    heartbeatInstances[0].triggerUnexpectedStop();
+    await flushAsync();
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 0);
+
+    resolveVibe({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 3);
+
+    // A replay of that same source must still recover a real mid-track stop.
+    engine.trackEnded = false;
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 4;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    engine.playing = false;
+    heartbeatInstances[0].triggerUnexpectedStop();
+    await flushAsync();
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
+});
+
+test("hidden iOS handoff waits until the engine reports the next track ready", async (t) => {
     const navigatorDescriptor = Object.getOwnPropertyDescriptor(
         globalThis,
         "navigator",
@@ -1832,16 +3149,114 @@ test("installed iOS PWA advances a preloaded next track before hidden source end
     installVisibilityDocument().dispatchVisibility("hidden");
     runtimeEngineMode = "native";
 
-    const currentTrack = makeTrack("ios-background-current", {
+    const currentTrack = makeTrack("ios-pending-current", {
         streamSource: "youtube",
-        youtubeVideoId: "ios-background-01",
+        youtubeVideoId: "ios-pending-01",
     });
-    const nextTrack = makeTrack("ios-background-next", {
+    const nextTrack = makeTrack("yt:ios-pending-next", {
         streamSource: "youtube",
-        youtubeVideoId: "ios-background-02",
+        youtubeVideoId: "ios-pending-02",
     });
+    const nextRef = "fsa1:user:ios-pending" as DeviceAudioVaultRef;
+    const nextAccess = deferred<DeviceAudioPlayResult>();
+    const session = {
+        ownerId: "user-1",
+        authGeneration: 0,
+        storage: { kind: "desktop-directory", label: "Test music" },
+        retain: async () => {
+            throw new Error("retain is not used by playback");
+        },
+        access: () => nextAccess.promise,
+    } as unknown as DeviceAudioVaultSession;
+    const restoreVault = installDeviceAudioVaultFactory(() =>
+        fakeDeviceAudioVault(async ({ authGeneration }) => ({
+            ...session,
+            authGeneration,
+        })),
+    );
+    t.after(restoreVault);
+    setDeviceOfflineRuntimeState("user-1", [
+        managedReadyRecord("user-1", "ios-pending-key", nextTrack, nextRef),
+    ]);
     audioState.currentTrack = currentTrack;
     audioState.queue = [currentTrack, nextTrack];
+    playbackState.isPlaying = true;
+    engine.preloadAutoReady = false;
+
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 210;
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 209.8 });
+    await flushAsync();
+
+    assert.equal(engine.preloadCalls.length, 0);
+    assert.equal(controlCalls.next, 0);
+
+    nextAccess.resolve({
+        kind: "play",
+        url: "blob:https://soundspan.test/ios-pending",
+        release: () => undefined,
+    });
+    await flushAsync();
+    assert.equal(engine.preloadCalls.length, 1);
+
+    engine.emit("timeupdate", { timeSec: 209.81 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+
+    engine.finishLatestPreload();
+    await flushAsync();
+    engine.emit("timeupdate", { timeSec: 209.82 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
+});
+
+test("manual selection cancels an armed hidden iOS handoff", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "navigator",
+    );
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+            maxTouchPoints: 5,
+            standalone: true,
+            onLine: true,
+        },
+    });
+    t.after(() => {
+        if (navigatorDescriptor) {
+            Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+        } else {
+            Reflect.deleteProperty(globalThis, "navigator");
+        }
+    });
+    enableWindowMetrics();
+    (
+        globalThis as unknown as {
+            window: { matchMedia: () => { matches: boolean } };
+        }
+    ).window.matchMedia = () => ({ matches: true });
+    installVisibilityDocument().dispatchVisibility("hidden");
+    runtimeEngineMode = "native";
+
+    const currentTrack = makeTrack("ios-manual-current", {
+        streamSource: "youtube",
+        youtubeVideoId: "ios-manual-01",
+    });
+    const nextTrack = makeTrack("ios-manual-next", {
+        streamSource: "youtube",
+        youtubeVideoId: "ios-manual-02",
+    });
+    const manuallySelectedTrack = makeTrack("ios-manual-selected");
+    audioState.currentTrack = currentTrack;
+    audioState.queue = [currentTrack, nextTrack, manuallySelectedTrack];
+    audioState.currentIndex = 0;
     playbackState.isPlaying = true;
 
     renderOrchestrator();
@@ -1854,9 +3269,17 @@ test("installed iOS PWA advances a preloaded next track before hidden source end
     await flushAsync();
     assert.equal(engine.preloadCalls.length, 1);
 
-    engine.emit("timeupdate", { timeSec: 209.8 });
+    engine.emit("timeupdate", { timeSec: 207 });
     await flushAsync();
-    assert.equal(controlCalls.next, 1);
+
+    audioState.currentTrack = manuallySelectedTrack;
+    audioState.currentIndex = 2;
+    rerenderOrchestrator();
+    await flushAsync();
+    t.mock.timers.tick(5_000);
+    await flushAsync();
+
+    assert.equal(controlCalls.next, 0);
 });
 
 test("a late device-file lease cannot load a retired track and every acquired URL is released", async (t) => {
@@ -1998,7 +3421,7 @@ test("a terminal offline error releases the active device-file playback lease", 
     assert.equal(releases, 1);
 });
 
-test("next-track preload acquires and releases its own managed device-file lease", async (t) => {
+test("next-track preload transfers its ready device file without a second storage read", async (t) => {
     const currentTrack = makeTrack("current-network");
     const nextTrack = makeTrack("yt:preloaded-file", {
         streamSource: "youtube",
@@ -2010,6 +3433,7 @@ test("next-track preload acquires and releases its own managed device-file lease
     });
     const nextRef = "fsa1:user:preload" as DeviceAudioVaultRef;
     let releases = 0;
+    let accesses = 0;
     const session = {
         ownerId: "user-1",
         authGeneration: 0,
@@ -2017,11 +3441,14 @@ test("next-track preload acquires and releases its own managed device-file lease
         retain: async () => {
             throw new Error("retain is not used by playback");
         },
-        access: async () => ({
-            kind: "play" as const,
-            url: "blob:https://soundspan.test/preload",
-            release: () => releases++,
-        }),
+        access: async () => {
+            accesses++;
+            return {
+                kind: "play" as const,
+                url: "blob:https://soundspan.test/preload",
+                release: () => releases++,
+            };
+        },
     } as unknown as DeviceAudioVaultSession;
     const restoreVault = installDeviceAudioVaultFactory(() =>
         fakeDeviceAudioVault(async ({ authGeneration }) => ({
@@ -2051,6 +3478,13 @@ test("next-track preload acquires and releases its own managed device-file lease
     await flushAsync();
 
     assert.equal(engine.preloadCalls.length, 1);
+    assert.equal(accesses, 1);
+    assert.equal(releases, 0);
+    assert.equal(
+        engine.loadCalls.at(-1)?.args[0],
+        "blob:https://soundspan.test/preload",
+    );
+    hookRuntime.unmount();
     assert.equal(releases, 1);
 });
 
@@ -2255,13 +3689,14 @@ test("offline playback failure pauses once without cascading through the queue",
     assert.equal(playbackState.isBuffering, false);
     assert.ok(toastErrors.length <= 1);
     if (toastErrors[0]) {
-        assert.match(toastErrors[0], /offline/i);
-        assert.doesNotMatch(toastErrors[0], /trying the next track/i);
+        assert.match(toastErrors[0], /не в сети/i);
+        assert.doesNotMatch(toastErrors[0], /Пробуем следующий трек/i);
     }
     assert.doesNotMatch(toastErrors.join(" "), /multiple tracks failed/i);
 });
 
-test("temporary YouTube source rejection stops on the current track without cascading", async () => {
+test("YouTube provider challenge preserves the queue without probing more tracks", async () => {
+    mock.timers.enable();
     enableWindowMetrics();
     playbackState.isPlaying = true;
     const failedTrack = makeTrack("provider-challenge-track", {
@@ -2270,7 +3705,7 @@ test("temporary YouTube source rejection stops on the current track without casc
         youtubeVideoId: "challenge01",
     });
     audioState.currentTrack = failedTrack;
-    audioState.queue = [failedTrack, makeTrack("must-not-auto-skip")];
+    audioState.queue = [failedTrack, makeTrack("local-fallback")];
 
     renderOrchestrator();
     await flushAsync();
@@ -2280,29 +3715,128 @@ test("temporary YouTube source rejection stops on the current track without casc
         recoverable: false,
     });
     await flushAsync(10);
+    mock.timers.tick(10_000);
+    await flushAsync();
 
     assert.equal(controlCalls.next, 0);
     assert.equal(engine.reloadCalls, 0);
     assert.equal(engine.stopCalls, 1);
-    assert.equal(playbackMachine.state, "ERROR");
     assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
     assert.equal(playbackState.isPlaying, false);
     assert.equal(playbackState.isBuffering, false);
-    assert.equal(audioState.currentTrack?.id, failedTrack.id);
     assert.ok(toastErrors.length <= 1);
     if (toastErrors[0]) {
-        assert.match(toastErrors[0], /временно недоступен/i);
+        assert.doesNotMatch(toastErrors[0], /Пробуем следующий трек/i);
+        assert.match(toastErrors[0], /очередь сохранена/i);
     }
-    assert.doesNotMatch(toastErrors.join(" "), /Пробуем следующий трек/i);
     assert.ok(
         getServerSignalEvents("player.playback_error").some(
             (event) =>
                 (event.fields as Record<string, unknown> | undefined)?.stage ===
-                "provider_startup_paused",
+                "fatal_after_recovery",
         ),
         JSON.stringify(apiCalls.reportPlaybackClientMetric),
     );
+    assert.ok(
+        getServerSignalEvents("player.playback_error").every(
+            (event) =>
+                typeof (event.fields as Record<string, unknown> | undefined)
+                    ?.playbackRunId === "string",
+        ),
+        "incidents must use an anonymous playback run rather than listening-session identity",
+    );
 });
+
+for (const wasLoaded of [false, true]) {
+    test(`generic media error plus failed provider probe preserves the YouTube queue (loaded=${wasLoaded})`, async () => {
+        mock.timers.enable();
+        enableWindowMetrics();
+        const notificationModule = await import("sonner");
+        notificationModule.toast.error("harness-probe");
+        assert.deepEqual(
+            toastErrors,
+            ["harness-probe"],
+            "notification mock must intercept the loaded module",
+        );
+        toastErrors.length = 0;
+        createRequire(import.meta.url)("sonner").toast.error("commonjs-probe");
+        assert.deepEqual(
+            toastErrors,
+            ["commonjs-probe"],
+            "CommonJS notification mock must intercept the loaded module",
+        );
+        toastErrors.length = 0;
+        const track = makeTrack("probe-failed", {
+            streamSource: "youtube",
+            youtubeVideoId: "challenge01",
+            artist: { name: "Test artist" },
+        });
+        audioState.currentTrack = track;
+        audioState.queue = [
+            track,
+            makeTrack("next-provider", {
+                streamSource: "youtube",
+                youtubeVideoId: "challenge02",
+            }),
+        ];
+        playbackState.isPlaying = true;
+        recoverUnavailableYtMusicTrackImpl = async () => {
+            throw new Error("HTTP 503");
+        };
+        renderOrchestrator();
+        await flushAsync();
+        mock.timers.tick(1_250);
+        await flushAsync();
+        assert.equal(
+            engine.loadCalls.length,
+            1,
+            "source load must start before its failure",
+        );
+        if (wasLoaded) {
+            engine.emit("load", { durationSec: 180 });
+            await flushAsync();
+        }
+        engine.emit("loaderror", {
+            error: new Error("MEDIA_ERR_SRC_NOT_SUPPORTED"),
+            code: "4",
+            recoverable: false,
+        });
+        await flushAsync(40);
+        mock.timers.tick(10_000);
+        await flushAsync();
+        assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 1);
+        assert.equal(controlCalls.next, 0);
+        assert.equal(audioState.currentTrack?.id, track.id);
+        assert.equal(playbackState.isPlaying, false);
+        assert.equal(playbackState.isBuffering, false);
+        assert.match(toastErrors.join(" "), /очередь сохранена/i);
+        rerenderOrchestrator();
+        await flushAsync();
+        const playsBeforeRetry = engine.playCalls;
+        // The real Retry button clears the visible error before resume().
+        transitionPlaybackMachine("IDLE");
+        playbackState.isPlaying = true;
+        rerenderOrchestrator();
+        await flushAsync();
+        assert.equal(
+            engine.reloadCalls + engine.loadCalls.length,
+            2,
+            "manual retry must reacquire or reload the failed source",
+        );
+        engine.emit("load", { durationSec: 180 });
+        await flushAsync();
+        assert.ok(engine.playCalls > playsBeforeRetry);
+        assert.equal(audioState.currentTrack?.id, track.id);
+        assert.equal(controlCalls.next, 0);
+        engine.emit("end");
+        await flushAsync();
+        assert.equal(
+            controlCalls.next,
+            1,
+            "a recovered source must still advance at its natural end",
+        );
+    });
+}
 
 test("offline load timeout stops without retrying or advancing the queue", async (t) => {
     mock.timers.enable({ apis: ["setTimeout"] });
@@ -2747,6 +4281,119 @@ test("foreground recovery directly advances an unhandled ended music track", asy
     assert.equal(engine.notifyTrackEndedCalls, 0);
 });
 
+for (const pauseTiming of ["hidden", "recovery-delay"] as const) {
+    test(`foreground recovery preserves explicit pause during ${pauseTiming}`, async () => {
+        mock.timers.enable();
+        resetForegroundRecoveryThrottle();
+        const visibilityDocument = installVisibilityDocument();
+        playbackState.isPlaying = true;
+        audioState.currentTrack = makeTrack("explicit-hidden-pause");
+        audioState.queue = [audioState.currentTrack];
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.emit("timeupdate", { timeSec: 12 });
+        await flushAsync();
+        visibilityDocument.dispatchVisibility("hidden");
+        mock.timers.tick(3000);
+        engine.playing = false;
+        if (pauseTiming === "recovery-delay")
+            visibilityDocument.dispatchVisibility("visible");
+        recordExplicitPlaybackPause();
+        playbackState.isPlaying = false;
+        rerenderOrchestrator();
+        await flushAsync();
+        engine.emit("pause");
+        await flushAsync();
+        const callsBeforeForeground = engine.playCalls;
+        if (pauseTiming === "hidden")
+            visibilityDocument.dispatchVisibility("visible");
+        mock.timers.tick(301);
+        await flushAsync();
+        assert.equal(engine.playCalls, callsBeforeForeground);
+        assert.equal(engine.playing, false);
+    });
+}
+
+for (const resumedAfterPause of [false, true]) {
+    test(`foreground does not duplicate buffered background recovery after explicit resume=${resumedAfterPause}`, async () => {
+        mock.timers.enable();
+        resetForegroundRecoveryThrottle();
+        runtimeEngineMode = "native";
+        const visibilityDocument = installVisibilityDocument();
+        playbackState.isPlaying = true;
+        audioState.currentTrack = makeTrack("external-buffered-pause");
+        audioState.queue = [audioState.currentTrack];
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.emit("timeupdate", { timeSec: 12 });
+        await flushAsync();
+        visibilityDocument.dispatchVisibility("hidden");
+        if (resumedAfterPause) {
+            recordExplicitPlaybackPause();
+            recordExplicitPlaybackResume();
+        }
+        engine.playing = false;
+        engine.bufferedAheadSec = 180;
+        engine.emit("pause");
+        mock.timers.tick(3000);
+        await flushAsync();
+        mock.timers.tick(450);
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 1);
+        engine.emit("load", { durationSec: 210 });
+        await flushAsync();
+        assert.equal(engine.playing, true);
+        const before = engine.playCalls;
+        visibilityDocument.dispatchVisibility("visible");
+        mock.timers.tick(301);
+        await flushAsync();
+        assert.equal(engine.playCalls, before);
+    });
+}
+
+test("play synchronization on an already playing source does not swallow a later background pause", async () => {
+    mock.timers.enable();
+    runtimeEngineMode = "native";
+    const visibilityDocument = installVisibilityDocument();
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("resynced-background-pause");
+    audioState.queue = [audioState.currentTrack];
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 12 });
+    await flushAsync();
+
+    // Repeat changes rerun control synchronization. Native play() is a no-op
+    // while already playing, so it does not emit another play event.
+    const playsBeforeSync = engine.playCalls;
+    audioState.repeatMode = "all";
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.ok(engine.playCalls > playsBeforeSync);
+    mock.timers.tick(20000);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 0);
+    visibilityDocument.dispatchVisibility("hidden");
+    engine.playing = false;
+    engine.bufferedAheadSec = 180;
+    engine.emit("pause");
+    mock.timers.tick(1500);
+    await flushAsync();
+    mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
+    assert.equal(playbackState.isPlaying, true);
+});
+
 test("newly loaded source can end immediately after an advance", async () => {
     const tracks = [
         makeTrack("immediate-end-1"),
@@ -3079,11 +4726,15 @@ test("track-end watchdog advances after a lost end event and emits server teleme
     assert.equal(controlCalls.next, 1);
     const signals = getServerSignalEvents("player.track_end_advanced");
     assert.equal(signals.length, 1);
+    const sessionId = requireSignalSessionId(
+        signals[0]?.fields as Record<string, unknown> | undefined,
+    );
     assert.deepEqual(signals[0]?.fields, {
         engineMode: "howler",
         activeEngine: "howler",
         trackId: "watchdog-ended",
         viaWatchdog: true,
+        sessionId,
     });
 });
 
@@ -3149,6 +4800,9 @@ test("reports rejected and normally advanced track ends to the server", async ()
 
     const rejected = getServerSignalEvents("player.track_end_rejected");
     assert.equal(rejected.length, 1);
+    const rejectedSessionId = requireSignalSessionId(
+        rejected[0]?.fields as Record<string, unknown> | undefined,
+    );
     assert.deepEqual(rejected[0]?.fields, {
         engineMode: "howler",
         activeEngine: "howler",
@@ -3156,6 +4810,7 @@ test("reports rejected and normally advanced track ends to the server", async ()
         currentTrackId: "telemetry-end",
         activeEngineTrackId: null,
         activeLoadId: -1,
+        sessionId: rejectedSessionId,
     });
 
     engine.emit("load", { durationSec: 210 });
@@ -3164,11 +4819,16 @@ test("reports rejected and normally advanced track ends to the server", async ()
 
     const advanced = getServerSignalEvents("player.track_end_advanced");
     assert.equal(advanced.length, 1);
+    const advancedSessionId = requireSignalSessionId(
+        advanced[0]?.fields as Record<string, unknown> | undefined,
+    );
+    assert.equal(advancedSessionId, rejectedSessionId);
     assert.deepEqual(advanced[0]?.fields, {
         engineMode: "howler",
         activeEngine: "howler",
         trackId: "telemetry-end",
         viaWatchdog: false,
+        sessionId: advancedSessionId,
     });
 
     engine.emit("end");
@@ -3178,6 +4838,10 @@ test("reports rejected and normally advanced track ends to the server", async ()
         "player.track_end_rejected",
     );
     assert.equal(duplicateRejected.length, 2);
+    const duplicateSessionId = requireSignalSessionId(
+        duplicateRejected[1]?.fields as Record<string, unknown> | undefined,
+    );
+    assert.equal(duplicateSessionId, rejectedSessionId);
     assert.deepEqual(duplicateRejected[1]?.fields, {
         engineMode: "howler",
         activeEngine: "howler",
@@ -3185,6 +4849,7 @@ test("reports rejected and normally advanced track ends to the server", async ()
         currentTrackId: "telemetry-end",
         activeEngineTrackId: "telemetry-end",
         activeLoadId: 1,
+        sessionId: duplicateSessionId,
     });
 });
 
@@ -3257,6 +4922,9 @@ test("natural queue advance preserves autoplay intent across load-before-play or
     assert.equal(engine.pauseCalls, pauseCallsBeforeLoad);
     assert.equal(playbackState.isPlaying, true);
     engine.emit("play");
+    engine.currentTime = 0.4;
+    engine.playing = true;
+    engine.emit("timeupdate", { timeSec: 0.4 });
     await flushAsync();
     assert.equal(playbackMachine.state, "PLAYING");
     const advanceDecision = getServerSignalEvents(
@@ -3270,6 +4938,13 @@ test("natural queue advance preserves autoplay intent across load-before-play or
         | undefined;
     assert.equal(advanceDecisionFields?.hasAdvancePlayIntent, true);
     assert.equal(advanceDecisionFields?.shouldAutoPlayOnLoad, true);
+    const transitionGap = getServerSignalEvents("player.transition_gap");
+    assert.equal(transitionGap.length, 1);
+    assert.equal(
+        (transitionGap[0]?.fields as Record<string, unknown> | undefined)
+            ?.outcome,
+        "audible",
+    );
 });
 
 test("manual paused load lands ready without autoplay", async () => {
@@ -3288,6 +4963,117 @@ test("manual paused load lands ready without autoplay", async () => {
     assert.equal(playbackMachine.state, "READY");
     assert.equal(playbackState.isPlaying, false);
     assert.equal(engine.playCalls, 0);
+});
+
+test("play during an active paused load starts playback when that load completes", async () => {
+    mirrorMachineIntentToPlaybackState = true;
+    playbackState.isPlaying = false;
+    audioState.currentTrack = makeTrack("play-during-paused-load");
+    audioState.queue = [audioState.currentTrack];
+
+    renderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls[0]?.args[1], false);
+
+    playbackState.isPlaying = true;
+    rerenderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+
+    assert.equal(engine.playCalls, 1);
+    assert.equal(playbackState.isPlaying, true);
+});
+
+test("play pause play during one load keeps the final play intent", async () => {
+    mirrorMachineIntentToPlaybackState = true;
+    playbackState.isPlaying = false;
+    audioState.currentTrack = makeTrack("play-pause-play-during-load");
+    audioState.queue = [audioState.currentTrack];
+
+    renderOrchestrator();
+    await flushAsync();
+    for (const isPlaying of [true, false, true]) {
+        playbackState.isPlaying = isPlaying;
+        rerenderOrchestrator();
+        await flushAsync();
+    }
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+
+    assert.equal(engine.playCalls, 1);
+    assert.equal(playbackState.isPlaying, true);
+});
+
+test("a final pause during a previously rearmed load prevents autoplay", async () => {
+    mirrorMachineIntentToPlaybackState = true;
+    playbackState.isPlaying = false;
+    audioState.currentTrack = makeTrack("final-pause-during-load");
+    audioState.queue = [audioState.currentTrack];
+
+    renderOrchestrator();
+    await flushAsync();
+    playbackState.isPlaying = true;
+    rerenderOrchestrator();
+    await flushAsync();
+    playbackState.isPlaying = false;
+    rerenderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+
+    assert.equal(engine.playCalls, 0);
+    assert.equal(playbackState.isPlaying, false);
+});
+
+test("a play intent from a replaced load cannot autoplay a newly paused track", async () => {
+    mirrorMachineIntentToPlaybackState = true;
+    const firstTrack = makeTrack("replaced-play-intent-first");
+    const pausedReplacement = makeTrack("replaced-play-intent-second");
+    playbackState.isPlaying = false;
+    audioState.currentTrack = firstTrack;
+    audioState.queue = [firstTrack, pausedReplacement];
+
+    renderOrchestrator();
+    await flushAsync();
+    playbackState.isPlaying = true;
+    rerenderOrchestrator();
+    await flushAsync();
+
+    playbackState.isPlaying = false;
+    audioState.currentTrack = pausedReplacement;
+    audioState.currentIndex = 1;
+    rerenderOrchestrator();
+    await flushAsync();
+    assert.equal(engine.loadCalls.length, 2);
+    assert.equal(engine.loadCalls.at(-1)?.args[1], false);
+
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+    assert.equal(engine.playCalls, 0);
+    assert.equal(playbackState.isPlaying, false);
+});
+
+test("play during a listen-together follower load cannot arm local autoplay", async () => {
+    mirrorMachineIntentToPlaybackState = true;
+    listenTogetherSnapshot = {
+        groupId: "lt-play-during-load-follower",
+        isHost: false,
+    };
+    playbackState.isPlaying = false;
+    audioState.currentTrack = makeTrack("lt-play-during-load");
+    audioState.queue = [audioState.currentTrack];
+
+    renderOrchestrator();
+    await flushAsync();
+    playbackState.isPlaying = true;
+    rerenderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+
+    assert.equal(engine.playCalls, 0);
+    assert.equal(playbackState.isPlaying, false);
 });
 
 test("deferred autoplay seeks then reasserts play intent", async () => {
@@ -3383,6 +5169,9 @@ test("reports one server-visible autoplay decision per load", async () => {
 
     const decisions = getServerSignalEvents("player.load_autoplay_decision");
     assert.equal(decisions.length, 1);
+    const decisionSessionId = requireSignalSessionId(
+        decisions[0]?.fields as Record<string, unknown> | undefined,
+    );
     assert.deepEqual(decisions[0]?.fields, {
         engineMode: "howler",
         activeEngine: "howler",
@@ -3392,6 +5181,7 @@ test("reports one server-visible autoplay decision per load", async () => {
         hasAdvancePlayIntent: false,
         wasPlayingBeforeLoad: true,
         startTime: 0,
+        sessionId: decisionSessionId,
     });
 });
 
@@ -3413,10 +5203,14 @@ test("reports an autoplay intent conflict before sync-pausing a playing engine",
 
     const conflicts = getServerSignalEvents("player.autoplay_intent_conflict");
     assert.equal(conflicts.length, 1);
+    const conflictSessionId = requireSignalSessionId(
+        conflicts[0]?.fields as Record<string, unknown> | undefined,
+    );
     assert.deepEqual(conflicts[0]?.fields, {
         engineMode: "howler",
         activeEngine: "howler",
         loadId: 1,
+        sessionId: conflictSessionId,
     });
     assert.equal(engine.pauseCalls, 1);
 });
@@ -3475,6 +5269,9 @@ test("native engine startup reaches the client-signal pipeline with neutral tele
     renderOrchestrator();
     await flushAsync();
     engine.emit("load", { durationSec: 210 });
+    engine.currentTime = 0.4;
+    engine.playing = true;
+    engine.emit("timeupdate", { timeSec: 0.4 });
     await flushAsync();
 
     const startupSignals = getServerSignalEvents("player.engine_startup");
@@ -3486,6 +5283,7 @@ test("native engine startup reaches the client-signal pipeline with neutral tele
     const durationMs = startupFields.durationMs;
     assert.equal(typeof durationMs, "number");
     assert.ok(typeof durationMs === "number" && Number.isFinite(durationMs));
+    const sessionId = requireSignalSessionId(startupFields);
     assert.deepEqual(startupSignals[0]?.fields, {
         engineMode: "native",
         activeEngine: "native",
@@ -3493,7 +5291,15 @@ test("native engine startup reaches the client-signal pipeline with neutral tele
         trackId: "native-startup",
         sourceType: "local",
         playbackType: "track",
+        sessionId,
     });
+    const audibleSignals = getServerSignalEvents("player.audible_start");
+    assert.equal(audibleSignals.length, 1);
+    assert.equal(
+        (audibleSignals[0]?.fields as Record<string, unknown> | undefined)
+            ?.outcome,
+        "audible",
+    );
     assert.equal(getServerSignalEvents("player.howler_startup").length, 0);
 });
 
@@ -3614,11 +5420,29 @@ test("unmount cleanup stops engine and detaches listeners", async () => {
     assert.ok(engine.offCalls.length > 0);
 });
 
+test("canonical retired provider is rejected before engine load or engagement", async () => {
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("canonical-retired-track", {
+        filePath: undefined,
+        streamSource: undefined,
+        mediaSource: "tidal",
+    });
+    audioState.queue = [audioState.currentTrack];
+
+    renderOrchestrator();
+    await flushAsync(12);
+
+    assert.equal(engine.loadCalls.length, 0);
+    assert.equal(apiCalls.logPlay.length, 0);
+    assert.equal(apiCalls.updatePlayEngagement.length, 0);
+});
+
 test("remote Wave completion sends one contextual engagement update", async () => {
     playbackState.isPlaying = true;
     audioState.vibeMode = true;
     audioState.waveMode = "new";
     audioState.currentTrack = makeTrack("yt:wave-track", {
+        filePath: undefined,
         streamSource: "youtube",
         youtubeVideoId: "wave-track",
         artist: { name: "Artist" },
@@ -3640,6 +5464,7 @@ test("remote Wave completion sends one contextual engagement update", async () =
     await flushAsync(12);
 
     assert.equal(apiCalls.logPlay.length, 1);
+    assert.equal(apiCalls.logPlay[0]?.trackRef.youtubeVideoId, "wave-track");
     const loggedContext = apiCalls.logPlay[0]?.context;
     const recommendationSessionId = loggedContext?.recommendationSessionId;
     assert.ok(typeof recommendationSessionId === "string");
@@ -3672,6 +5497,7 @@ test("remote Wave completion sends one contextual engagement update", async () =
 test("remote track change finalizes an early listen as skipped once", async () => {
     playbackState.isPlaying = true;
     const first = makeTrack("yt:first-track", {
+        filePath: undefined,
         streamSource: "youtube",
         youtubeVideoId: "first-track",
         artist: { name: "Artist" },
@@ -3687,6 +5513,7 @@ test("remote track change finalizes an early listen as skipped once", async () =
     engine.emit("timeupdate", { timeSec: 8 });
 
     const second = makeTrack("yt:second-track", {
+        filePath: undefined,
         streamSource: "youtube",
         youtubeVideoId: "second-track",
         artist: { name: "Artist" },
@@ -3713,6 +5540,7 @@ test("remote track change finalizes an early listen as skipped once", async () =
 test("adjacent duplicate remote occurrences create separate play sessions", async () => {
     playbackState.isPlaying = true;
     const duplicate = makeTrack("yt:duplicate-track", {
+        filePath: undefined,
         streamSource: "youtube",
         youtubeVideoId: "duplicate-track",
         artist: { name: "Artist" },
@@ -3734,6 +5562,10 @@ test("adjacent duplicate remote occurrences create separate play sessions", asyn
     await flushAsync(12);
 
     assert.equal(apiCalls.logPlay.length, 2);
+    assert.deepEqual(
+        apiCalls.logPlay.map(({ trackRef }) => trackRef.youtubeVideoId),
+        ["duplicate-track", "duplicate-track"],
+    );
     assert.deepEqual(apiCalls.updatePlayEngagement, [
         {
             playId: "play-1",
@@ -3748,9 +5580,10 @@ test("adjacent duplicate remote occurrences create separate play sessions", asyn
 
 test("fatal remote playback error finalizes engagement as failed", async () => {
     playbackState.isPlaying = true;
-    audioState.currentTrack = makeTrack("tidal:42", {
-        streamSource: "tidal",
-        tidalTrackId: 42,
+    audioState.currentTrack = makeTrack("yt:failing-track", {
+        filePath: undefined,
+        streamSource: "youtube",
+        youtubeVideoId: "failing-track",
         artist: { name: "Artist" },
         album: { title: "Album" },
         duration: 200,
@@ -3924,6 +5757,233 @@ test("startup watchdog leaves healthy playback with real progress alone", async 
 
     assert.equal(engine.reloadCalls, 0);
 });
+
+test("mid-track unexpected stop reloads the same recording at its saved position", async (t) => {
+    enableWindowMetrics();
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("interrupted-mid-track");
+    audioState.queue = [audioState.currentTrack];
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 240 });
+    await flushAsync();
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 83;
+    engine.emit("timeupdate", { timeSec: 83 });
+    await flushAsync();
+    assert.ok(publishProgressSnapshot);
+    publishProgressSnapshot(83);
+    t.mock.timers.tick(30_000);
+    await flushAsync();
+    engine.playing = false;
+    heartbeatInstances[0].triggerUnexpectedStop();
+    await flushAsync();
+    assert.ok(
+        apiCalls.reportPlaybackClientMetric.some((input) => {
+            const fields = input.fields as Record<string, unknown>;
+            return (
+                input.event === "player.unexpected_stop" &&
+                fields.currentTimeSec === 83 &&
+                fields.enginePlaying === false &&
+                fields.sourceType === "local"
+            );
+        }),
+    );
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
+    assert.equal(playbackCalls.setIsPlaying.includes(false), false);
+    engine.emit("load", { durationSec: 240 });
+    await flushAsync();
+    assert.ok(engine.seekCalls.includes(83));
+    assert.equal(audioState.currentTrack.id, "interrupted-mid-track");
+    assert.equal(getServerSignalEvents("player.recovery_attempt").length, 1);
+    assert.equal(getServerSignalEvents("player.recovery_ready").length, 1);
+    assert.equal(getServerSignalEvents("player.recovery_resumed").length, 0);
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 84;
+    engine.emit("timeupdate", { timeSec: 84 });
+    await flushAsync();
+    assert.equal(getServerSignalEvents("player.recovery_resumed").length, 1);
+    engine.emit("timeupdate", { timeSec: 85 });
+    await flushAsync();
+    assert.equal(getServerSignalEvents("player.recovery_resumed").length, 1);
+});
+
+test("native empty-buffer pause recovers without a DOM media element", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("native-paused-mid-track");
+    audioState.queue = [audioState.currentTrack];
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 240 });
+    await flushAsync();
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 83;
+    engine.emit("timeupdate", { timeSec: 83 });
+    await flushAsync();
+    assert.ok(publishProgressSnapshot);
+    publishProgressSnapshot(83);
+    t.mock.timers.tick(30_000);
+    await flushAsync();
+    assert.equal(typeof document, "undefined");
+    engine.bufferedAheadSec = 0;
+    engine.playing = false;
+    engine.emit("pause");
+    await flushAsync();
+    t.mock.timers.tick(1_200);
+    await flushAsync();
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
+    assert.equal(playbackCalls.setIsPlaying.includes(false), false);
+    engine.emit("load", { durationSec: 240 });
+    await flushAsync();
+    assert.ok(engine.seekCalls.includes(83));
+});
+
+for (const [position, buffer] of [
+    [0.35475, 8.24225],
+    [86.728405, 49.478595],
+    [83, 150],
+]) {
+    test(`hidden native buffered interruption recovers at ${position}s without foregrounding`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+        recordExplicitPlaybackResume();
+        runtimeEngineMode = "native";
+        const visibility = installVisibilityDocument();
+        playbackState.isPlaying = true;
+        audioState.currentTrack = makeTrack("buffered-background-interruption");
+        audioState.queue = [audioState.currentTrack];
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 240 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = position;
+        engine.emit("timeupdate", { timeSec: position });
+        await flushAsync();
+        publishProgressSnapshot!(position);
+        visibility.dispatchVisibility("hidden");
+        engine.bufferedAheadSec = buffer;
+        engine.playing = false;
+        engine.emit("pause");
+        t.mock.timers.tick(1_200);
+        await flushAsync();
+        t.mock.timers.tick(450);
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 1);
+        assert.equal(playbackCalls.setIsPlaying.includes(false), false);
+        engine.emit("load", { durationSec: 240 });
+        await flushAsync();
+        assert.equal(engine.playing, true);
+        assert.ok(engine.seekCalls.includes(position));
+        assert.equal(controlCalls.next, 0);
+    });
+}
+
+for (const action of ["pause", "seek", "follower", "breaker"] as const) {
+    for (const stage of ["debounce", "reload-delay", "loaded"] as const) {
+        test(`buffered background recovery cancels ${action} during ${stage} before React renders`, async (t) => {
+            t.mock.timers.enable({
+                apis: ["setTimeout", "Date"],
+                now: 100_000,
+            });
+            runtimeEngineMode = "native";
+            const visibility = installVisibilityDocument();
+            playbackState.isPlaying = true;
+            audioState.currentTrack = makeTrack("buffered-cancel");
+            audioState.queue = [audioState.currentTrack];
+            renderOrchestrator();
+            await flushAsync();
+            engine.emit("load", { durationSec: 240 });
+            engine.playing = true;
+            engine.emit("play");
+            engine.currentTime = engine.actualCurrentTime = 83;
+            engine.emit("timeupdate", { timeSec: 83 });
+            await flushAsync();
+            visibility.dispatchVisibility("hidden");
+            engine.bufferedAheadSec = 150;
+            engine.playing = false;
+            engine.emit("pause");
+            if (stage !== "debounce") {
+                t.mock.timers.tick(1_200);
+                await flushAsync();
+            }
+            if (stage === "loaded") {
+                t.mock.timers.tick(450);
+                await flushAsync();
+            }
+            const reloads = engine.reloadCalls;
+            const plays = engine.playCalls;
+            if (action === "pause") recordExplicitPlaybackPause();
+            if (action === "seek") recordExplicitPlaybackSeek();
+            if (action === "follower")
+                listenTogetherSnapshot = { groupId: "joined", isHost: false };
+            if (action === "breaker") setPlaybackAutoRestartSuppressed(true);
+            t.mock.timers.tick(1_200);
+            await flushAsync();
+            t.mock.timers.tick(450);
+            await flushAsync();
+            engine.emit("load", { durationSec: 240 });
+            await flushAsync();
+            assert.equal(engine.reloadCalls, reloads);
+            assert.equal(engine.playCalls, plays);
+            assert.equal(controlCalls.next, 0);
+        });
+    }
+}
+
+for (const cancel of [
+    "user_pause",
+    "track_change",
+    "buffered_audio",
+    "unknown_buffer",
+] as const) {
+    test(`native interruption recovery respects ${cancel}`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+        runtimeEngineMode = "native";
+        playbackState.isPlaying = true;
+        audioState.currentTrack = makeTrack("native-recovery-guard");
+        audioState.queue = [audioState.currentTrack];
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 240 });
+        await flushAsync();
+        engine.playing = true;
+        engine.currentTime = engine.actualCurrentTime = 83;
+        engine.emit("timeupdate", { timeSec: 83 });
+        await flushAsync();
+        t.mock.timers.tick(30_000);
+        await flushAsync();
+        engine.bufferedAheadSec =
+            cancel === "buffered_audio"
+                ? 30
+                : cancel === "unknown_buffer"
+                  ? null
+                  : 0;
+        engine.playing = false;
+        engine.emit("pause");
+        await flushAsync();
+        if (cancel === "user_pause") {
+            playbackState.isPlaying = false;
+            renderOrchestrator();
+        } else if (cancel === "track_change") {
+            audioState.currentTrack = makeTrack("next-selected-track");
+            audioState.queue = [audioState.currentTrack];
+            renderOrchestrator();
+        }
+        await flushAsync();
+        t.mock.timers.tick(1_200);
+        await flushAsync();
+        t.mock.timers.tick(450);
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 0);
+    });
+}
 
 test("early unexpected stop is suppressed and routed to startup recovery", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
@@ -4242,6 +6302,152 @@ test("transient YouTube errors retry the source before alternate lookup", async 
     assert.equal(engine.reloadCalls, 1);
 });
 
+test("a filled audio buffer is recovered locally instead of replacing the recording on the server", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    playbackState.isPlaying = true;
+    audioState.currentTrack = makeTrack("yt:buffered001", {
+        streamSource: "youtube",
+        youtubeVideoId: "buffered001",
+        duration: 210,
+        artist: { name: "Artist" },
+    });
+    audioState.queue = [audioState.currentTrack];
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 210 });
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 10;
+    engine.emit("timeupdate", { timeSec: 10 });
+    await flushAsync();
+    engine.bufferedAheadSec = 195;
+    heartbeatInstances[0].triggerStall();
+    heartbeatInstances[0].triggerBufferTimeout();
+    await flushAsync();
+    assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 0);
+    assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+    t.mock.timers.tick(450);
+    await flushAsync();
+    assert.equal(engine.reloadCalls, 1);
+    engine.emit("load", { durationSec: 210 });
+    await flushAsync();
+    assert.equal(engine.seekCalls.at(-1), 10);
+});
+
+for (const online of [true, false]) {
+    test(`a downloaded native error retries the same file without network or revocation: online=${online}`, async (t) => {
+        enableWindowMetrics();
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        const track = makeTrack("yt:download001", {
+            streamSource: "youtube",
+            youtubeVideoId: "download001",
+            duration: 210,
+            artist: { name: "Artist" },
+        });
+        let releases = 0;
+        const restore = installDeviceAudioVaultFactory(() =>
+            fakeDeviceAudioVault(
+                async ({ authGeneration }) =>
+                    ({
+                        ownerId: "user-1",
+                        authGeneration,
+                        storage: { kind: "desktop-directory", label: "Test" },
+                        access: async () => ({
+                            kind: "play",
+                            url: "blob:https://soundspan.test/downloaded",
+                            release: () => releases++,
+                        }),
+                    }) as unknown as DeviceAudioVaultSession,
+            ),
+        );
+        t.after(restore);
+        setDeviceOfflineRuntimeState("user-1", [
+            managedReadyRecord(
+                "user-1",
+                "download-key",
+                track,
+                "fsa1:user:file" as DeviceAudioVaultRef,
+            ),
+        ]);
+        audioState.currentTrack = track;
+        audioState.queue = [track, makeTrack("next")];
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync(30);
+        assert.equal(
+            engine.loadCalls.at(-1)?.args[0],
+            "blob:https://soundspan.test/downloaded",
+        );
+        engine.emit("load", { durationSec: 210 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = 0.3;
+        engine.emit("timeupdate", { timeSec: 0.3 });
+        await flushAsync();
+        engine.currentTime = engine.actualCurrentTime = 35;
+        engine.emit("timeupdate", { timeSec: 35 });
+        await flushAsync();
+        assert.ok(publishProgressSnapshot);
+        publishProgressSnapshot(35);
+        Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            value: online,
+        });
+        t.after(() => {
+            Object.defineProperty(navigator, "onLine", {
+                configurable: true,
+                value: true,
+            });
+        });
+        for (let i = 0; i < 3; i++)
+            engine.emit("playerror", {
+                error: new Error("Media source not supported"),
+                code: "4",
+                recoverable: false,
+            });
+        await flushAsync();
+        assert.equal(releases, 0);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 0);
+        assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+        t.mock.timers.tick(450);
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 1);
+        engine.emit("load", { durationSec: 210 });
+        await flushAsync();
+        assert.equal(engine.seekCalls.at(-1), 35);
+        assert.equal(controlCalls.next, 0);
+        assert.equal(audioState.currentTrack?.id, track.id);
+        // A broken reload must consume the remaining retry budget rather
+        // than leaving its load listener waiting forever. Duplicate error
+        // events after exhaustion must not escape to provider fallback.
+        for (let attempt = 0; attempt < 5; attempt++) {
+            engine.emit("playerror", {
+                error: new Error("Media source not supported"),
+                code: "4",
+                recoverable: false,
+            });
+            await flushAsync();
+            t.mock.timers.tick(450);
+            await flushAsync();
+        }
+        assert.equal(engine.reloadCalls, 4);
+        assert.equal(playbackMachine.state, "ERROR");
+        assert.equal(controlCalls.next, 0);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 0);
+        assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+        assert.equal(releases, 0);
+        playbackState.isPlaying = false;
+        rerenderOrchestrator();
+        await flushAsync();
+        playbackState.isPlaying = true;
+        rerenderOrchestrator();
+        await flushAsync();
+        assert.equal(engine.reloadCalls, 5);
+        assert.equal(releases, 0);
+        hookRuntime.unmount();
+        assert.equal(releases, 1);
+    });
+}
+
 test("heartbeat stall buffers and buffer timeout runs transient recovery", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     playbackState.isPlaying = true;
@@ -4343,4 +6549,342 @@ test("transient recovery anchors resume to zero before startup progress", async 
 
     assert.equal(engine.seekCalls.includes(12), false);
     assert.ok(engine.playCalls > playCallsBeforeRecoveredLoad);
+});
+
+test("late native metadata and progress cannot pause or rewrite a pending source recovery after manual resume", async () => {
+    mirrorMachineIntentToPlaybackState = true;
+    playbackState.isPlaying = true;
+    const original = makeTrack("yt:late-source", {
+        streamSource: "youtube",
+        youtubeVideoId: "late-source",
+        duration: 240,
+        artist: { name: "Artist" },
+    });
+    audioState.currentTrack = original;
+    audioState.queue = [original];
+    renderOrchestrator();
+    await flushAsync();
+    engine.emit("load", { durationSec: 240 });
+    engine.playing = true;
+    engine.emit("play");
+    playbackState.isPlaying = false;
+    renderOrchestrator();
+    await flushAsync();
+    playbackState.isPlaying = true;
+    renderOrchestrator();
+    await flushAsync();
+    engine.playing = true;
+    engine.emit("play");
+    engine.currentTime = engine.actualCurrentTime = 10.5;
+    engine.emit("timeupdate", { timeSec: 10.5 });
+    await flushAsync();
+    let resolve!: (url: string) => void;
+    musicRecoveryResponse = new Promise((r) => {
+        resolve = r;
+    });
+    engine.emit("playerror", {
+        error: new Error("MEDIA_ERR_NETWORK"),
+        code: "2",
+        recoverable: false,
+    });
+    await flushAsync();
+    assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 1);
+    engine.emit("load", { durationSec: 240 });
+    engine.emit("timeupdate", { timeSec: 100 });
+    await flushAsync();
+    assert.equal(playbackMachine.state, "LOADING");
+    assert.equal(playbackState.isPlaying, true);
+    assert.notEqual(playbackState.currentTime, 100);
+    resolve(`/api/music-sources/leases/${"a".repeat(48)}/stream`);
+    await flushAsync(30);
+    engine.emit("load", { durationSec: 240 });
+    await flushAsync(30);
+    assert.equal(engine.seekCalls.at(-1), 10.5);
+    assert.equal(engine.playing, true);
+    assert.equal(playbackState.isPlaying, true);
+});
+
+for (const trigger of ["terminal network error", "buffer timeout"] as const) {
+    test(`mid-track ${trigger} replaces the server source at the confirmed position and preserves queue identity`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        playbackState.isPlaying = true;
+        const original = makeTrack("yt:sourcefail1", {
+            streamSource: "youtube",
+            youtubeVideoId: "sourcefail1",
+            duration: 240,
+            artist: { name: "Artist" },
+        });
+        audioState.currentTrack = original;
+        const queue = [original, makeTrack("next-song")];
+        audioState.queue = queue;
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 240 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = 10.5;
+        engine.emit("timeupdate", { timeSec: 10.5 });
+        await flushAsync();
+        const error = {
+            error: new Error("MEDIA_ERR_NETWORK"),
+            code: "2",
+            recoverable: false,
+        };
+        if (trigger === "buffer timeout")
+            heartbeatInstances[0].triggerBufferTimeout();
+        else engine.emit("playerror", error);
+        await flushAsync(30);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 1);
+        assert.equal(engine.loadCalls.length, 2);
+        const replacement = engine.loadCalls.at(-1)?.args;
+        assert.equal(
+            (replacement?.[1] as { autoplay: boolean }).autoplay,
+            false,
+        );
+        assert.equal(
+            (replacement?.[0] as { trackId: string }).trackId,
+            original.id,
+        );
+        engine.emit("load", { durationSec: 240 });
+        await flushAsync(30);
+        assert.equal(engine.seekCalls.at(-1), 10.5);
+        assert.equal(engine.playing, true);
+        assert.equal(audioState.currentTrack, original);
+        assert.equal(audioState.queue, queue);
+        assert.equal(controlCalls.next, 0);
+        assert.equal(apiCalls.recoverUnavailableYtMusicTrack.length, 0);
+        // Native pause() is a no-op in its terminal error state, while the
+        // browser may still drain buffered bytes or finish an earlier play().
+        t.mock.method(engine, "pause", () => {});
+        engine.emit("playerror", error);
+        await flushAsync(30);
+        t.mock.timers.tick(5_000);
+        await flushAsync(30);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 1);
+        assert.equal(controlCalls.next, 0);
+        assert.equal(playbackState.isPlaying, false);
+        assert.equal(engine.playing, false);
+        assert.equal(audioState.queue, queue);
+    });
+}
+
+test("adversarial: late failed AutoMatch must not pause same-occurrence manual replay", async () => {
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const seed = makeTrack("manual-replay-seed", { duration: 9 });
+    audioState.queue = [seed];
+    audioState.currentTrack = seed;
+    audioState.currentIndex = 0;
+    let resolveVibe!: (result: {
+        success: boolean;
+        trackCount: number;
+    }) => void;
+    startVibeModeImpl = () =>
+        new Promise((resolve) => {
+            resolveVibe = resolve;
+        });
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 9;
+    engine.emit("load", { durationSec: 9 });
+    engine.currentTime = engine.actualCurrentTime = 9;
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+    // User seeks back and resumes the exact same queue occurrence while matching waits.
+    recordExplicitPlaybackResume();
+    engine.trackEnded = false;
+    for (const seek of seekSubscribers) await seek(0);
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 4;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    const advancesBeforeCompletion = controlCalls.next;
+    resolveVibe({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(
+        controlCalls.next,
+        advancesBeforeCompletion,
+        "the retired natural end must not call advanceQueue(null), which now pauses a final track",
+    );
+});
+
+for (const manualAction of ["replay", "pause"] as const) {
+    test(`adversarial: late successful AutoMatch cannot override manual ${manualAction}`, async () => {
+        runtimeEngineMode = "native";
+        playbackState.isPlaying = true;
+        const seed = makeTrack("manual-action-seed", { duration: 9 });
+        audioState.queue = [seed];
+        audioState.currentTrack = seed;
+        audioState.currentIndex = 0;
+        let resolveVibe!: (result: {
+            success: boolean;
+            trackCount: number;
+        }) => void;
+        let commit!: () => void;
+        startVibeModeImpl = (options) =>
+            new Promise((resolve) => {
+                resolveVibe = resolve;
+                commit = () =>
+                    options?.onLocalQueueCommit?.({
+                        token: options.queueCommitToken!,
+                        mutation: "append",
+                    });
+            });
+        renderOrchestrator();
+        await flushAsync();
+        engine.duration = 9;
+        engine.emit("load", { durationSec: 9 });
+        engine.currentTime = engine.actualCurrentTime = 9;
+        engine.trackEnded = true;
+        engine.playing = false;
+        engine.emit("end");
+        await flushAsync();
+        assert.equal(controlCalls.next, 0);
+        if (manualAction === "replay") {
+            recordExplicitPlaybackResume();
+            engine.trackEnded = false;
+            for (const seek of seekSubscribers) await seek(0);
+            engine.playing = true;
+            engine.currentTime = engine.actualCurrentTime = 4;
+            engine.emit("play");
+            engine.emit("timeupdate", { timeSec: 4 });
+        } else {
+            recordExplicitPlaybackPause();
+            playbackState.isPlaying = false;
+            rerenderOrchestrator();
+        }
+        await flushAsync();
+        commit();
+        audioState.queue = [
+            ...audioState.queue,
+            makeTrack("new-recommendation"),
+        ];
+        rerenderOrchestrator();
+        await flushAsync();
+        resolveVibe({ success: true, trackCount: 1 });
+        await flushAsync();
+        assert.equal(
+            controlCalls.next,
+            0,
+            "manual action must retire the old ended continuation",
+        );
+    });
+}
+
+for (const [progressBeforeEnd, useSeek] of [
+    [true, true],
+    [false, true],
+    [false, false],
+]) {
+    test(`adversarial: replay of completed source handles a later lost native end, progressBeforeEnd=${progressBeforeEnd}, useSeek=${useSeek}`, async (t) => {
+        t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
+        runtimeEngineMode = "native";
+        playbackState.isPlaying = true;
+        const seed = makeTrack("replay-lost-end-seed", { duration: 9 });
+        audioState.queue = [seed];
+        audioState.currentTrack = seed;
+        audioState.currentIndex = 0;
+        let resolveVibe!: (result: {
+            success: boolean;
+            trackCount: number;
+        }) => void;
+        startVibeModeImpl = () =>
+            new Promise((resolve) => {
+                resolveVibe = resolve;
+            });
+        renderOrchestrator();
+        await flushAsync();
+        engine.duration = 9;
+        engine.emit("load", { durationSec: 9 });
+        engine.currentTime = engine.actualCurrentTime = 9;
+        engine.trackEnded = true;
+        engine.playing = false;
+        engine.emit("end");
+        await flushAsync();
+        resolveVibe({ success: false, trackCount: 0 });
+        await flushAsync();
+        assert.equal(controlCalls.next, 1);
+        playbackState.isPlaying = false;
+        rerenderOrchestrator();
+        await flushAsync();
+        recordExplicitPlaybackResume();
+        engine.trackEnded = false;
+        if (useSeek) {
+            for (const seek of seekSubscribers) await seek(0);
+        } else {
+            // Native play() on an ended element restarts from zero itself.
+            engine.currentTime = engine.actualCurrentTime = 0;
+        }
+        playbackState.isPlaying = true;
+        rerenderOrchestrator();
+        await flushAsync();
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = 4;
+        if (progressBeforeEnd) engine.emit("timeupdate", { timeSec: 4 });
+        await flushAsync();
+        t.mock.timers.tick(30_000);
+        await flushAsync();
+        engine.currentTime = engine.actualCurrentTime = 8.8;
+        if (progressBeforeEnd) engine.emit("timeupdate", { timeSec: 8.8 });
+        engine.currentTime = engine.actualCurrentTime = 9;
+        engine.trackEnded = true;
+        engine.playing = false;
+        if (!progressBeforeEnd) engine.emit("timeupdate", { timeSec: 9 });
+        t.mock.timers.tick(2_000);
+        await flushAsync();
+        resolveVibe({ success: false, trackCount: 0 });
+        await flushAsync();
+        assert.equal(
+            controlCalls.next,
+            2,
+            "the second completed play needs its own end handling",
+        );
+    });
+}
+
+test("a new end after replay requests its own continuation while the old request remains pending", async () => {
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const seed = makeTrack("replayed-pending-seed", { duration: 9 });
+    audioState.queue = [seed];
+    audioState.currentTrack = seed;
+    const requests: Array<
+        (result: { success: boolean; trackCount: number }) => void
+    > = [];
+    startVibeModeImpl = () => new Promise((resolve) => requests.push(resolve));
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 9;
+    engine.emit("load", { durationSec: 9 });
+    engine.currentTime = engine.actualCurrentTime = 9;
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync();
+    recordExplicitPlaybackResume();
+    engine.trackEnded = false;
+    for (const seek of seekSubscribers) await seek(0);
+    engine.playing = true;
+    engine.currentTime = engine.actualCurrentTime = 4;
+    engine.emit("play");
+    engine.emit("timeupdate", { timeSec: 4 });
+    await flushAsync();
+    engine.currentTime = engine.actualCurrentTime = 9;
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync();
+
+    assert.equal(requests.length, 2);
+    requests[0]({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+    requests[1]({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 1);
 });

@@ -19,7 +19,7 @@ export interface VibeQueueCommit {
 
 /** Optional internal handshake used to bind auto-advance to a Vibe-owned commit. */
 export interface VibeModeStartOptions {
-    /** Replace the prepared provider tail and start its first fresh track. */
+    /** Replace the prepared provider tail without interrupting current playback. */
     queueStrategy?: "append" | "replace-upcoming";
     queueCommitToken?: object;
     onLocalQueueCommit?: (commit: VibeQueueCommit) => void;
@@ -38,6 +38,8 @@ export interface AudioControlsContextType {
         tracks: Track[],
         startIndex?: number,
         isVibeQueue?: boolean,
+        /** Explicit collection start replaces the queue even for the current track. */
+        options?: { replaceQueue?: boolean },
     ) => void;
     playAudiobook: (audiobook: Audiobook) => void;
     playPodcast: (

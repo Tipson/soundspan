@@ -1,16 +1,69 @@
 import type { Track } from "@/lib/audio-state-context";
 import { api } from "@/lib/api";
+import { musicSourceCandidateSchema } from "@/lib/audio/musicSourcePlayback";
+import {
+    hasLocalTrackBacking,
+    isRetiredRemoteOnlyTrack,
+    resolveTrackProviderSource,
+    toTrackRef,
+} from "@/lib/trackRef";
 
 /** Build a clean same-origin source URL for a user-selected playable track. */
 export function getDeviceDownloadSourceUrl(track: Track): string {
-    if (track.streamSource === "tidal" && track.tidalTrackId) {
-        return api.getTidalStreamUrl(track.tidalTrackId);
+    if (
+        !hasLocalTrackBacking(track) &&
+        (resolveTrackProviderSource(track) === "vk" ||
+            resolveTrackProviderSource(track) === "yandex" ||
+            /^(vk|yandex):/.test(track.id))
+    ) {
+        const recording = musicSourceCandidateSchema.parse(
+            track.musicSourceRecording,
+        );
+        if (
+            track.id !== `${recording.provider}:${recording.id}` ||
+            track.provider?.providerTrackId !== recording.id ||
+            resolveTrackProviderSource(track) !== recording.provider
+        )
+            throw new Error("Некорректная запись каталога");
+        return api.getMusicSourceStreamUrl(recording.provider, recording.id);
     }
-    if (track.streamSource === "youtube" && track.youtubeVideoId) {
-        return api.getYtMusicStreamUrl(track.youtubeVideoId, undefined, true);
+    if (
+        !hasLocalTrackBacking(track) &&
+        (track.streamSource === "audius" ||
+            track.provider?.source === "audius" ||
+            track.id.startsWith("audius:"))
+    ) {
+        throw new Error(
+            "Audius доступен только для прослушивания; скачивание не поддерживается",
+        );
     }
-    if (track.streamSource === "youtube-direct" && track.youtubeVideoId) {
-        return api.getYouTubeStreamUrl(track.youtubeVideoId);
+    if (isRetiredRemoteOnlyTrack(track)) {
+        throw new Error("Этот источник больше недоступен для скачивания");
+    }
+    if (hasLocalTrackBacking(track)) {
+        return api.getStreamUrl(track.id);
+    }
+    const providerSource = resolveTrackProviderSource(track);
+    if (providerSource === "youtube" || providerSource === "youtube-direct") {
+        const reference = toTrackRef(track);
+        if (!("youtubeVideoId" in reference)) {
+            throw new Error(
+                "Для скачивания YouTube-трека отсутствует video ID",
+            );
+        }
+        return providerSource === "youtube-direct"
+            ? api.getYouTubeStreamUrl(reference.youtubeVideoId)
+            : api.getYtMusicStreamUrl(
+                  reference.youtubeVideoId,
+                  undefined,
+                  true,
+              );
+    }
+    if (
+        !hasLocalTrackBacking(track) &&
+        (track.streamSource === "peer" || track.source === "federated")
+    ) {
+        throw new Error("Удалённый трек нельзя сохранить как локальный файл");
     }
     return api.getStreamUrl(track.id);
 }

@@ -21,7 +21,11 @@ let feedResult: {
     isError: boolean;
 };
 let feedResolver:
-    | ((mode: string, mood: string | null) => typeof feedResult)
+    | ((
+          mode: string,
+          mood: string | null,
+          language: string,
+      ) => typeof feedResult)
     | null = null;
 const feedCalls: Array<[string, string | null]> = [];
 const calls = {
@@ -34,6 +38,7 @@ const calls = {
     vibeSourceFeatures: [] as unknown[],
     waveMode: [] as unknown[],
     waveMood: [] as unknown[],
+    waveLanguage: [] as unknown[],
 };
 const audioState = {
     currentTrack: null as { id: string } | null,
@@ -81,9 +86,13 @@ mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
             _enabled: boolean,
             mode: string,
             mood: string | null,
+            _surface: string,
+            language: string,
         ) => {
             feedCalls.push([mode, mood]);
-            const result = feedResolver ? feedResolver(mode, mood) : feedResult;
+            const result = feedResolver
+                ? feedResolver(mode, mood, language)
+                : feedResult;
             return {
                 ...result,
                 refetch: async () => {
@@ -123,6 +132,7 @@ mock.module("@/lib/audio-state-context", {
                 calls.vibeSourceFeatures.push(value),
             setWaveMode: (value: unknown) => calls.waveMode.push(value),
             setWaveMood: (value: unknown) => calls.waveMood.push(value),
+            setWaveLanguage: (value: unknown) => calls.waveLanguage.push(value),
         }),
     },
 });
@@ -186,6 +196,47 @@ test("Vibe recommendation failure exposes a touch-sized retry action", async () 
     container.remove();
 });
 
+test("Wave loading remains legible, announced, and single-line while playback is unavailable", async () => {
+    feedResult = {
+        data: undefined,
+        isLoading: true,
+        isError: false,
+    };
+    const { VibeProviderFallback } =
+        await import("../../components/vibe/VibeAvailability");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await React.act(async () => {
+        root.render(React.createElement(VibeProviderFallback));
+    });
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+        '[data-testid="wave-main-toggle"]',
+    );
+    assert.ok(toggle);
+    assert.equal(toggle.disabled, true);
+    assert.equal(toggle.getAttribute("aria-busy"), "true");
+    assert.match(toggle.className, /disabled:bg-white\/85/);
+    const visibleLabel = toggle.querySelector<HTMLElement>(
+        '[data-testid="wave-main-label"]',
+    );
+    const status = container.querySelector<HTMLElement>(
+        '[data-testid="wave-loading-status"][role="status"]',
+    );
+    assert.ok(visibleLabel);
+    assert.ok(status);
+    assert.equal(toggle.contains(status), false);
+    assert.match(visibleLabel.className, /whitespace-nowrap/);
+    assert.equal(visibleLabel.textContent?.trim(), "Загрузка…");
+    assert.equal(status.textContent?.trim(), "Настраиваем мою волну");
+
+    await React.act(async () => root.unmount());
+    container.remove();
+});
+
 test("Vibe starts its ranked queue with shuffle explicitly disabled", async () => {
     feedResult = {
         data: {
@@ -213,6 +264,13 @@ test("Vibe starts its ranked queue with shuffle explicitly disabled", async () =
         'button[aria-label="Включить мою волну"]',
     ) as HTMLButtonElement | null;
     assert.ok(playButton);
+
+    assert.equal(
+        playButton
+            .querySelector('[data-testid="wave-main-label"]')
+            ?.textContent?.trim(),
+        "Слушать",
+    );
 
     await React.act(async () => playButton.click());
 
@@ -351,3 +409,53 @@ for (const recommendationState of ["error", "empty"] as const) {
         container.remove();
     });
 }
+
+test("a retired language URL preserves direction and mood without a hidden language restriction", async () => {
+    window.history.replaceState(
+        {},
+        "",
+        "https://music.test/vibe?mode=new&mood=focus&language=ru",
+    );
+    audioState.currentTrack = { id: "old-foreign" };
+    audioState.vibeMode = true;
+    feedResolver = (mode, mood, language) => ({
+        data: {
+            shelves: {
+                quickPicks: [],
+                listenAgain: [],
+                discovery:
+                    mode === "new" && mood === "calm" && language === "any"
+                        ? [{ id: "personalized-discovery" }]
+                        : [],
+            },
+        },
+        isLoading: false,
+        isError: false,
+    });
+    const { VibeProviderFallback } =
+        await import("../../components/vibe/VibeAvailability");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await React.act(async () => {
+        root.render(React.createElement(VibeProviderFallback));
+        await Promise.resolve();
+    });
+    assert.deepEqual(calls.playTracks, []);
+    await React.act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 340));
+    });
+    assert.deepEqual(calls.playTracks, [
+        [[{ id: "personalized-discovery" }], 0, true],
+    ]);
+    assert.deepEqual(calls.waveLanguage, ["any"]);
+    assert.equal(
+        container
+            .querySelector("[data-wave-language]")
+            ?.getAttribute("data-wave-language"),
+        "any",
+    );
+    await React.act(async () => root.unmount());
+    container.remove();
+});

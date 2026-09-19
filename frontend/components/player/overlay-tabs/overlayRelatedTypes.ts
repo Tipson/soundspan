@@ -9,8 +9,7 @@ export interface RelatedTrack {
     matchConfidence?: number;
     duration?: number;
     filePath?: string;
-    streamSource?: "tidal" | "youtube";
-    tidalTrackId?: number;
+    streamSource?: "youtube";
     youtubeVideoId?: string;
     lastFmUrl?: string;
     album?: {
@@ -34,5 +33,5 @@ export interface RelatedAlbum {
     title: string;
     year?: number;
     coverArt?: string | null;
-    provider?: "youtube" | "tidal" | "library";
+    provider?: "youtube" | "library";
 }

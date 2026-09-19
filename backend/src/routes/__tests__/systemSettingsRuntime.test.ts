@@ -105,16 +105,6 @@ jest.mock("../../services/soulseek", () => ({
     },
 }));
 
-jest.mock("../../services/tidal", () => ({
-    tidalService: {
-        isSidecarHealthy: jest.fn(),
-        verifySession: jest.fn(),
-        initiateDeviceAuth: jest.fn(),
-        pollDeviceAuth: jest.fn(),
-        saveTokens: jest.fn(),
-    },
-}));
-
 jest.mock("../../services/notificationService", () => ({
     notificationService: {
         notifySystem: jest.fn(),
@@ -161,7 +151,6 @@ import { invalidateSystemSettingsCache } from "../../utils/systemSettings";
 import { invalidateUserProviderProfileCache } from "../../services/listenTogetherResolution";
 import { decrypt } from "../../utils/encryption";
 import { lastFmService } from "../../services/lastfm";
-import { tidalService } from "../../services/tidal";
 import { notificationService } from "../../services/notificationService";
 import { redisClient } from "../../utils/redis";
 
@@ -183,7 +172,6 @@ const mockInvalidateUserProviderProfileCache =
     invalidateUserProviderProfileCache as jest.Mock;
 const mockDecrypt = decrypt as jest.Mock;
 const mockLastFmService = lastFmService as jest.Mocked<typeof lastFmService>;
-const mockTidalService = tidalService as jest.Mocked<typeof tidalService>;
 const mockNotificationService = notificationService as jest.Mocked<
     typeof notificationService
 >;
@@ -244,9 +232,6 @@ describe("systemSettings runtime routes", () => {
         "post",
     );
     const testSpotifyHandler = getRouteHandler("/test-spotify", "post");
-    const testTidalHandler = getRouteHandler("/test-tidal", "post");
-    const tidalDeviceHandler = getRouteHandler("/tidal-auth/device", "post");
-    const tidalTokenHandler = getRouteHandler("/tidal-auth/token", "post");
     const queueStatusHandler = getRouteHandler("/queue-cleaner-status", "get");
     const queueStartHandler = getRouteHandler("/queue-cleaner/start", "post");
     const queueStopHandler = getRouteHandler("/queue-cleaner/stop", "post");
@@ -296,24 +281,6 @@ describe("systemSettings runtime routes", () => {
         mockSchedulerQueueGetJob.mockResolvedValue(null);
         mockSchedulerJobGetState.mockResolvedValue("waiting");
         mockSchedulerJobRemove.mockResolvedValue(undefined);
-        mockTidalService.isSidecarHealthy.mockResolvedValue(true);
-        mockTidalService.verifySession.mockResolvedValue({
-            valid: true,
-            userId: "tidal-user",
-        } as any);
-        mockTidalService.initiateDeviceAuth.mockResolvedValue({
-            deviceCode: "device-code",
-            userCode: "ABCD",
-            verificationUri: "https://verify.example",
-        } as any);
-        mockTidalService.pollDeviceAuth.mockResolvedValue({
-            access_token: "acc",
-            refresh_token: "ref",
-            user_id: "u1",
-            country_code: "US",
-            username: "tidal-username",
-        } as any);
-        mockTidalService.saveTokens.mockResolvedValue(undefined as any);
         mockNotificationService.notifySystem.mockResolvedValue(
             undefined as any,
         );
@@ -447,7 +414,7 @@ describe("systemSettings runtime routes", () => {
         expect(mockSystemSettingsUpsert).not.toHaveBeenCalled();
     });
 
-    it("never returns TIDAL token material and reports tidalConnected instead", async () => {
+    it("never returns retired TIDAL settings or token material", async () => {
         const req = { user: { id: "user-1" } } as any;
         const res = createRes();
         await getSettingsHandler(req, res);
@@ -455,7 +422,8 @@ describe("systemSettings runtime routes", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).not.toHaveProperty("tidalAccessToken");
         expect(res.body).not.toHaveProperty("tidalRefreshToken");
-        expect(res.body.tidalConnected).toBe(true);
+        expect(res.body).not.toHaveProperty("tidalConnected");
+        expect(res.body).not.toHaveProperty("tidalEnabled");
     });
 
     it("never returns stored Spotify credential fields", async () => {
@@ -466,23 +434,6 @@ describe("systemSettings runtime routes", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).not.toHaveProperty("spotifyClientId");
         expect(res.body).not.toHaveProperty("spotifyClientSecret");
-    });
-
-    it("reports tidalConnected=false when stored tokens are missing", async () => {
-        mockSystemSettingsFindUnique.mockResolvedValueOnce({
-            id: "default",
-            tidalAccessToken: null,
-            tidalRefreshToken: null,
-        } as any);
-
-        const req = { user: { id: "user-1" } } as any;
-        const res = createRes();
-        await getSettingsHandler(req, res);
-
-        expect(res.statusCode).toBe(200);
-        expect(res.body.tidalConnected).toBe(false);
-        expect(res.body).not.toHaveProperty("tidalAccessToken");
-        expect(res.body).not.toHaveProperty("tidalRefreshToken");
     });
 
     it("treats empty-string secrets as no-change so a settings round-trip cannot wipe stored credentials", async () => {
@@ -552,7 +503,7 @@ describe("systemSettings runtime routes", () => {
     it("accepts a closed playback source order", async () => {
         const req = {
             user: { id: "admin-1" },
-            body: { playbackSourceOrder: "peers,library,tidal,ytmusic" },
+            body: { playbackSourceOrder: "peers,library,ytmusic" },
         } as any;
         const res = createRes();
 
@@ -562,7 +513,7 @@ describe("systemSettings runtime routes", () => {
         expect(mockSystemSettingsUpsert).toHaveBeenCalledWith(
             expect.objectContaining({
                 update: expect.objectContaining({
-                    playbackSourceOrder: "peers,library,tidal,ytmusic",
+                    playbackSourceOrder: "peers,library,ytmusic",
                 }),
             }),
         );
@@ -720,7 +671,7 @@ describe("systemSettings runtime routes", () => {
         expect(upsertArg.update.soulseekPassword).toBe("enc:new-pass");
     });
 
-    it("ignores TIDAL credential fields on save so a settings round-trip cannot wipe the admin connection", async () => {
+    it("strips retired TIDAL settings from updates", async () => {
         const req = {
             user: { id: "admin-1" },
             body: {
@@ -740,8 +691,8 @@ describe("systemSettings runtime routes", () => {
         expect(upsertArg.update).not.toHaveProperty("tidalAccessToken");
         expect(upsertArg.update).not.toHaveProperty("tidalRefreshToken");
         expect(upsertArg.update).not.toHaveProperty("tidalUserId");
-        expect(upsertArg.update.tidalEnabled).toBe(true);
-        expect(upsertArg.update.tidalCountryCode).toBe("US");
+        expect(upsertArg.update).not.toHaveProperty("tidalEnabled");
+        expect(upsertArg.update).not.toHaveProperty("tidalCountryCode");
     });
 
     it("strips obsolete Spotify credential fields from settings updates", async () => {
@@ -798,8 +749,6 @@ describe("systemSettings runtime routes", () => {
                 openaiApiKey: "openai-key",
                 lastfmApiKey: "lastfm-key",
                 audiobookshelfApiKey: "audiobookshelf-key",
-                tidalAccessToken: "tidal-access-token",
-                tidalRefreshToken: "tidal-refresh-token",
                 soulseekUsername: "slsk-user",
                 soulseekPassword: "slsk-pass",
                 fanartApiKey: "fanart-key",
@@ -826,10 +775,6 @@ describe("systemSettings runtime routes", () => {
                 }),
             }),
         );
-        // TIDAL credentials are managed exclusively by the /tidal-auth flow
-        const savedUpdate = mockSystemSettingsUpsert.mock.calls[0][0].update;
-        expect(savedUpdate).not.toHaveProperty("tidalAccessToken");
-        expect(savedUpdate).not.toHaveProperty("tidalRefreshToken");
         expect(mockInvalidateSystemSettingsCache).toHaveBeenCalled();
         expect(mockInvalidateUserProviderProfileCache).toHaveBeenCalled();
         expect(mockWriteEnvFile).toHaveBeenCalled();
@@ -1373,6 +1318,10 @@ describe("systemSettings runtime routes", () => {
         const lastfmRes = createRes();
         await testLastfmHandler(lastfmReq, lastfmRes);
         expect(lastfmRes.statusCode).toBe(200);
+        expect(mockAxiosGet).toHaveBeenLastCalledWith(
+            "https://ws.audioscrobbler.com/2.0/",
+            expect.any(Object),
+        );
 
         mockAxiosGet.mockResolvedValueOnce({ data: { libraries: [1, 2] } });
         const absReq = {
@@ -1423,11 +1372,6 @@ describe("systemSettings runtime routes", () => {
         const spotifyRes = createRes();
         await testSpotifyHandler(spotifyReq, spotifyRes);
         expect(spotifyRes.statusCode).toBe(400);
-
-        const tidalReq = { body: {} } as any;
-        const tidalRes = createRes();
-        await tidalTokenHandler(tidalReq, tidalRes);
-        expect(tidalRes.statusCode).toBe(400);
     });
 
     it("returns OpenAI API connection failures as 500 responses", async () => {
@@ -1485,6 +1429,23 @@ describe("systemSettings runtime routes", () => {
         expect(lastfmInvalidRes.statusCode).not.toBe(401);
         expect(lastfmInvalidRes.body).toEqual({
             error: "Invalid Last.fm API key",
+        });
+
+        mockAxiosGet.mockRejectedValueOnce({
+            response: {
+                status: 403,
+                data: {
+                    error: 11,
+                    message: "Access Denied - You cannot access this service",
+                },
+            },
+            message: "service offline",
+        } as any);
+        const lastfmOfflineRes = createRes();
+        await testLastfmHandler(lastfmReq, lastfmOfflineRes);
+        expect(lastfmOfflineRes.statusCode).toBe(503);
+        expect(lastfmOfflineRes.body).toEqual({
+            error: "Last.fm is temporarily unavailable",
         });
 
         mockAxiosGet.mockRejectedValueOnce({
@@ -1561,98 +1522,6 @@ describe("systemSettings runtime routes", () => {
         expect(res.body).toEqual({
             error: "Invalid Spotify credentials",
         });
-    });
-
-    it("tests TIDAL connection and device auth/token flow", async () => {
-        mockTidalService.isSidecarHealthy.mockResolvedValueOnce(false);
-        const downReq = { body: {} } as any;
-        const downRes = createRes();
-        await testTidalHandler(downReq, downRes);
-        expect(downRes.statusCode).toBe(503);
-        expect(downRes.body).toEqual({
-            error: "TIDAL service is not running",
-            details:
-                "The tidal-streamer container is not reachable. Make sure it is running.",
-        });
-
-        mockTidalService.isSidecarHealthy.mockResolvedValueOnce(true);
-        mockTidalService.verifySession.mockResolvedValueOnce({ valid: false });
-        const unauthReq = { body: {} } as any;
-        const unauthRes = createRes();
-        await testTidalHandler(unauthReq, unauthRes);
-        expect(unauthRes.statusCode).toBe(502);
-        expect(unauthRes.statusCode).not.toBe(401);
-        expect(unauthRes.body).toEqual({
-            error: "Not authenticated to TIDAL",
-            details:
-                "Use the TIDAL settings panel to authenticate via device authorization.",
-        });
-
-        mockTidalService.isSidecarHealthy.mockResolvedValueOnce(true);
-        const okReq = { body: {} } as any;
-        const okRes = createRes();
-        await testTidalHandler(okReq, okRes);
-        expect(okRes.statusCode).toBe(200);
-        expect(okRes.body.success).toBe(true);
-
-        mockTidalService.isSidecarHealthy.mockResolvedValueOnce(false);
-        const deviceDownReq = { body: {} } as any;
-        const deviceDownRes = createRes();
-        await tidalDeviceHandler(deviceDownReq, deviceDownRes);
-        expect(deviceDownRes.statusCode).toBe(503);
-
-        mockTidalService.isSidecarHealthy.mockResolvedValueOnce(true);
-        const deviceReq = { body: {} } as any;
-        const deviceRes = createRes();
-        await tidalDeviceHandler(deviceReq, deviceRes);
-        expect(deviceRes.statusCode).toBe(200);
-        expect(deviceRes.body.deviceCode).toBe("device-code");
-
-        const tokenMissingReq = { body: {} } as any;
-        const tokenMissingRes = createRes();
-        await tidalTokenHandler(tokenMissingReq, tokenMissingRes);
-        expect(tokenMissingRes.statusCode).toBe(400);
-
-        mockTidalService.pollDeviceAuth.mockResolvedValueOnce(null);
-        const tokenPendingReq = { body: { device_code: "pending" } } as any;
-        const tokenPendingRes = createRes();
-        await tidalTokenHandler(tokenPendingReq, tokenPendingRes);
-        expect(tokenPendingRes.statusCode).toBe(202);
-        expect(tokenPendingRes.body.status).toBe("pending");
-
-        const tokenReq = { body: { device_code: "device-code" } } as any;
-        const tokenRes = createRes();
-        await tidalTokenHandler(tokenReq, tokenRes);
-        expect(tokenRes.statusCode).toBe(200);
-        expect(mockTidalService.saveTokens).toHaveBeenCalled();
-    });
-
-    it("handles TIDAL sidecar errors as failures", async () => {
-        mockTidalService.isSidecarHealthy.mockRejectedValueOnce(
-            new Error("sidecar panic"),
-        );
-        const downReq = { body: {} } as any;
-        const downRes = createRes();
-        await testTidalHandler(downReq, downRes);
-        expect(downRes.statusCode).toBe(500);
-        expect(downRes.body.error).toBe("Failed to test TIDAL connection");
-
-        mockTidalService.isSidecarHealthy.mockRejectedValueOnce(
-            new Error("device sidecar panic"),
-        );
-        const deviceRes = createRes();
-        await tidalDeviceHandler({}, deviceRes);
-        expect(deviceRes.statusCode).toBe(500);
-        expect(deviceRes.body.error).toBe("Failed to initiate TIDAL auth");
-
-        mockTidalService.pollDeviceAuth.mockRejectedValueOnce(
-            new Error("token panic"),
-        );
-        const tokenReq = { body: { device_code: "device-code" } } as any;
-        const tokenRes = createRes();
-        await tidalTokenHandler(tokenReq, tokenRes);
-        expect(tokenRes.statusCode).toBe(500);
-        expect(tokenRes.body.error).toBe("Failed to complete TIDAL auth");
     });
 
     it("handles Soulseek dynamic import failures in test endpoint", async () => {

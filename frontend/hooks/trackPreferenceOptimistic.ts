@@ -66,10 +66,85 @@ export interface OrderedTrackPreferenceMutationResult {
     rollbackPreference: TrackPreferenceResponse | null;
 }
 
+export interface ReservedTrackPreferenceIntent {
+    signal: TrackPreferenceSignal;
+    token: object;
+}
+
 const mutationLanesByQueryClient = new WeakMap<
     object,
     Map<string, TrackPreferenceMutationLane>
 >();
+const preferenceIntentsByQueryClient = new WeakMap<
+    object,
+    Map<string, ReservedTrackPreferenceIntent>
+>();
+
+function getPreferenceIntents(
+    queryClient: TrackPreferenceOptimisticQueryClient,
+): Map<string, ReservedTrackPreferenceIntent> {
+    const clientKey = queryClient as object;
+    const existingIntents = preferenceIntentsByQueryClient.get(clientKey);
+    if (existingIntents) return existingIntents;
+
+    const newIntents = new Map<string, ReservedTrackPreferenceIntent>();
+    preferenceIntentsByQueryClient.set(clientKey, newIntents);
+    return newIntents;
+}
+
+/**
+ * Reserves the next synchronous listener intent before React Query reaches
+ * onMutate. This keeps two taps in one render from deriving the same signal.
+ */
+export function reserveTrackPreferenceIntent(
+    queryClient: TrackPreferenceOptimisticQueryClient,
+    trackId: string,
+    resolveSignal: (
+        currentSignal: TrackPreferenceSignal,
+    ) => TrackPreferenceSignal,
+): ReservedTrackPreferenceIntent {
+    const canonicalQueryKey = ["track-preference", trackId] as const;
+    const intents = getPreferenceIntents(queryClient);
+    const currentSignal =
+        intents.get(trackId)?.signal ??
+        queryClient.getQueryData<TrackPreferenceResponse>(canonicalQueryKey)
+            ?.signal ??
+        "clear";
+    const intent = {
+        signal: resolveSignal(currentSignal),
+        token: {},
+    };
+    intents.set(trackId, intent);
+    return intent;
+}
+
+/** Returns the most recent synchronous intent for a canonical track. */
+export function getLatestTrackPreferenceIntent(
+    queryClient: TrackPreferenceOptimisticQueryClient,
+    trackId: string,
+): ReservedTrackPreferenceIntent | null {
+    return (
+        preferenceIntentsByQueryClient
+            .get(queryClient as object)
+            ?.get(trackId) ?? null
+    );
+}
+
+/** Releases an intent only when no newer tap has replaced it. */
+export function releaseTrackPreferenceIntent(
+    queryClient: TrackPreferenceOptimisticQueryClient,
+    trackId: string,
+    intent: ReservedTrackPreferenceIntent,
+): void {
+    const clientKey = queryClient as object;
+    const intents = preferenceIntentsByQueryClient.get(clientKey);
+    if (intents?.get(trackId)?.token !== intent.token) return;
+
+    intents.delete(trackId);
+    if (intents.size === 0) {
+        preferenceIntentsByQueryClient.delete(clientKey);
+    }
+}
 
 function getMutationLanes(
     queryClient: TrackPreferenceOptimisticQueryClient,
@@ -214,4 +289,5 @@ export function resetOrderedTrackPreferenceMutations(
     queryClient: TrackPreferenceOptimisticQueryClient,
 ): void {
     mutationLanesByQueryClient.delete(queryClient as object);
+    preferenceIntentsByQueryClient.delete(queryClient as object);
 }

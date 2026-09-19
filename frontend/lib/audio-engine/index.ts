@@ -1,5 +1,9 @@
 import { HowlerEngineAdapter } from "@/lib/audio-engine/howlerEngineAdapter";
 import { NativeAudioElementEngine } from "@/lib/audio-engine/nativeAudioElementEngine";
+import { ContinuousAudioEngine } from "@/lib/audio-engine/continuousAudioEngine";
+import { prepareContinuousAudioSource } from "@/lib/audio-engine/continuousAudioSource";
+import { createContinuousAudioTimeline } from "@/lib/audio-engine/continuousAudioTimeline";
+import { supportsContinuousAndroidPlayback } from "@/lib/audio-engine/continuousAudioSelection";
 import {
     detectAndroidWebView,
     resolveDirectEngineSelection,
@@ -7,9 +11,11 @@ import {
 import { resolveStreamingEngineMode } from "@/lib/audio-engine/engineMode";
 import type {
     AudioEngine,
+    AudioEngineDiagnosticState,
     AudioEngineEventHandler,
     AudioEngineEventType,
     AudioEngineLoadOptions,
+    AudioPreloadLease,
     AudioEngineSource,
 } from "@/lib/audio-engine/types";
 import { DEFAULT_AUDIO_VOLUME, clampAudioVolume } from "@/lib/audio-volume";
@@ -64,10 +70,17 @@ interface RuntimeAudioEngine extends AudioEngine {
     preload(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void;
-    preload(source: AudioEngineSource | string, format?: string): void;
+    ): AudioPreloadLease | null;
+    preload(
+        source: AudioEngineSource | string,
+        format?: string,
+    ): AudioPreloadLease | null;
     reload(): void;
     getActualCurrentTime(): number;
+    getBufferedAheadSec(): number | null;
+    getDiagnosticState(): AudioEngineDiagnosticState & {
+        sourceKind: "device_file" | "network" | "unknown";
+    };
     hasTrackEnded(): boolean;
     isCurrentlySeeking(): boolean;
     getSeekTarget(): number | null;
@@ -178,6 +191,13 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
         this.howlerEngine.setMuted(this.outputMuted);
     }
 
+    setRepeatCurrent(enabled: boolean): void {
+        this.howlerEngine.setRepeatCurrent?.(enabled);
+    }
+    setContinuousEnabled(enabled: boolean): void {
+        this.howlerEngine.setContinuousEnabled?.(enabled);
+    }
+
     getCurrentTime(): number {
         return this.howlerEngine.getCurrentTime();
     }
@@ -219,12 +239,15 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
     preload(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void;
-    preload(source: AudioEngineSource | string, format?: string): void;
+    ): AudioPreloadLease | null;
+    preload(
+        source: AudioEngineSource | string,
+        format?: string,
+    ): AudioPreloadLease | null;
     preload(
         source: AudioEngineSource | string,
         optionsOrFormat?: AudioEngineLoadOptions | string,
-    ): void {
+    ): AudioPreloadLease | null {
         const normalizedSource = resolveSource(source);
         const normalizedOptions: AudioEngineLoadOptions =
             typeof optionsOrFormat === "string"
@@ -232,8 +255,12 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
                 : (optionsOrFormat ?? {});
 
         if (typeof this.howlerEngine.preload === "function") {
-            this.howlerEngine.preload(normalizedSource, normalizedOptions);
+            return this.howlerEngine.preload(
+                normalizedSource,
+                normalizedOptions,
+            );
         }
+        return null;
     }
 
     reload(): void {
@@ -254,6 +281,30 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
             return this.howlerEngine.getActualCurrentTime();
         }
         return this.howlerEngine.getCurrentTime();
+    }
+
+    getBufferedAheadSec(): number | null {
+        return this.howlerEngine.getBufferedAheadSec?.() ?? null;
+    }
+
+    getDiagnosticState(): AudioEngineDiagnosticState & {
+        sourceKind: "device_file" | "network" | "unknown";
+    } {
+        const url = this.lastSource?.url;
+        return {
+            ...(this.howlerEngine.getDiagnosticState?.() ?? {
+                nativePaused: null,
+                readyState: null,
+                networkState: null,
+                mediaErrorCode: null,
+                audioContextState: "unknown" as const,
+            }),
+            sourceKind: !url
+                ? "unknown"
+                : url.startsWith("blob:") || url.startsWith("/__offline/audio/")
+                  ? "device_file"
+                  : "network",
+        };
     }
 
     hasTrackEnded(): boolean {
@@ -354,10 +405,22 @@ export const createRuntimeAudioEngine = (): RuntimeAudioEngine => {
         // Seed the direct slot synchronously so playback is available
         // immediately: the native element engine in native mode, otherwise
         // HowlerEngineAdapter (the constructor default).
+        const nativeEngine =
+            selection.engine === "native"
+                ? new NativeAudioElementEngine()
+                : null;
+        const directNativeEngine =
+            nativeEngine && supportsContinuousAndroidPlayback()
+                ? new ContinuousAudioEngine({
+                      base: nativeEngine,
+                      prepare: prepareContinuousAudioSource,
+                      createTimeline: createContinuousAudioTimeline,
+                  })
+                : nativeEngine;
         sharedRuntimeAudioEngine = new HybridRuntimeAudioEngine(
             selection.engine === "native"
                 ? {
-                      howlerEngine: new NativeAudioElementEngine(),
+                      howlerEngine: directNativeEngine!,
                       directEngineDescriptor: "native",
                   }
                 : {},

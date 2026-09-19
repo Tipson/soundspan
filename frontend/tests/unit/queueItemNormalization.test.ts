@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { getNextTrackInfo } from "../../lib/audio-engine/audioPlaybackTrackPolicy";
 import {
     buildEpisodeQueueItem,
     episodeQueueItemFromPodcast,
@@ -12,6 +13,23 @@ test("normalizeQueueItems returns empty array for non-array input", () => {
     assert.deepEqual(normalizeQueueItems(undefined), []);
     assert.deepEqual(normalizeQueueItems("queue"), []);
     assert.deepEqual(normalizeQueueItems({ id: "t1" }), []);
+});
+
+test("device-only policy survives queue serialization and shuffled preload selection", () => {
+    const input = ["a", "b"].map((id) => ({
+        id,
+        title: id,
+        duration: 20,
+        artist: { name: "Artist" },
+        album: { title: "Album" },
+        playbackSourcePolicy: "device-only" as const,
+    }));
+    const queue = normalizeQueueItems(JSON.parse(JSON.stringify(input)));
+    assert.equal(
+        getNextTrackInfo(queue, 1, true, [1, 0], "off")?.playbackSourcePolicy,
+        "device-only",
+    );
+    assert.equal(getNextTrackInfo(queue, 0, true, [1, 0], "off"), null);
 });
 
 test("normalizeQueueItems defaults legacy persisted tracks to itemType track", () => {

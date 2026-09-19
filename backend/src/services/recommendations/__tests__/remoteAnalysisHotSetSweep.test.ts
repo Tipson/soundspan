@@ -1,4 +1,6 @@
-jest.mock("../../../utils/db", () => ({ prisma: {} }));
+jest.mock("../../../utils/db", () => ({
+    prisma: { play: { groupBy: jest.fn() } },
+}));
 jest.mock("../../../utils/logger", () => ({
     logger: { child: () => ({ warn: jest.fn(), info: jest.fn() }) },
 }));
@@ -7,6 +9,17 @@ jest.mock("../remoteAnalysisHotSet", () => ({
 }));
 
 import { RemoteAnalysisHotSetSweep } from "../remoteAnalysisHotSetSweep";
+import { prisma } from "../../../utils/db";
+import { remoteAnalysisHotSetScheduler } from "../remoteAnalysisHotSet";
+import {
+    startRemoteAnalysisHotSetSweep,
+    stopRemoteAnalysisHotSetSweep,
+} from "../remoteAnalysisHotSetSweep";
+
+afterEach(() => {
+    stopRemoteAnalysisHotSetSweep();
+    jest.restoreAllMocks();
+});
 
 describe("remote analysis account hot-set sweep", () => {
     it("schedules each recently active account without requiring a foreground feed", async () => {
@@ -33,5 +46,79 @@ describe("remote analysis account hot-set sweep", () => {
 
         await expect(sweep.runOnce()).resolves.toBe(1);
         expect(scheduleUser).toHaveBeenCalledTimes(2);
+    });
+
+    it("starts once, schedules unique recent accounts and stops once", async () => {
+        const interval = { unref: jest.fn() } as unknown as NodeJS.Timeout;
+        const setIntervalSpy = jest
+            .spyOn(global, "setInterval")
+            .mockReturnValue(interval);
+        const clearIntervalSpy = jest
+            .spyOn(global, "clearInterval")
+            .mockImplementation(() => undefined);
+        (prisma.play.groupBy as jest.Mock).mockResolvedValue([
+            { userId: "alice" },
+            { userId: "bob" },
+        ]);
+        (remoteAnalysisHotSetScheduler.schedule as jest.Mock).mockResolvedValue(
+            undefined,
+        );
+
+        startRemoteAnalysisHotSetSweep();
+        startRemoteAnalysisHotSetSweep();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+
+        expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+        expect(interval.unref).toHaveBeenCalledTimes(1);
+        expect(remoteAnalysisHotSetScheduler.schedule).toHaveBeenCalledTimes(2);
+        expect(prisma.play.groupBy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                by: ["userId"],
+                orderBy: [{ _max: { playedAt: "desc" } }, { userId: "asc" }],
+                take: 100,
+            }),
+        );
+
+        stopRemoteAnalysisHotSetSweep();
+        stopRemoteAnalysisHotSetSweep();
+        expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("contains a database failure in the supervised background pass", async () => {
+        const interval = { unref: jest.fn() } as unknown as NodeJS.Timeout;
+        jest.spyOn(global, "setInterval").mockReturnValue(interval);
+        jest.spyOn(global, "clearInterval").mockImplementation(() => undefined);
+        (prisma.play.groupBy as jest.Mock).mockRejectedValue(
+            new Error("database unavailable"),
+        );
+
+        startRemoteAnalysisHotSetSweep();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+
+        expect(remoteAnalysisHotSetScheduler.schedule).not.toHaveBeenCalled();
+    });
+
+    it("does not overlap periodic passes while the previous pass is running", async () => {
+        const interval = { unref: jest.fn() } as unknown as NodeJS.Timeout;
+        const setIntervalSpy = jest
+            .spyOn(global, "setInterval")
+            .mockReturnValue(interval);
+        jest.spyOn(global, "clearInterval").mockImplementation(() => undefined);
+        let resolveRows!: (rows: Array<{ userId: string }>) => void;
+        (prisma.play.groupBy as jest.Mock).mockReturnValue(
+            new Promise((resolve) => {
+                resolveRows = resolve;
+            }),
+        );
+
+        startRemoteAnalysisHotSetSweep();
+        const intervalHandler = setIntervalSpy.mock.calls[0]?.[0];
+        expect(typeof intervalHandler).toBe("function");
+        if (typeof intervalHandler === "function") intervalHandler();
+        await Promise.resolve();
+
+        expect(prisma.play.groupBy).toHaveBeenCalledTimes(1);
+        resolveRows([]);
+        await new Promise<void>((resolve) => setImmediate(resolve));
     });
 });

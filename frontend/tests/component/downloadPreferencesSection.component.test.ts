@@ -27,12 +27,6 @@ const baseSettings: SystemSettings = {
     audiobookshelfApiKey: "",
     soulseekUsername: "",
     soulseekPassword: "",
-    tidalEnabled: false,
-    tidalConnected: false,
-    tidalUserId: "",
-    tidalCountryCode: "US",
-    tidalQuality: "HIGH",
-    tidalFileTemplate: "",
     musicPath: "/music",
     downloadPath: "/downloads",
     transcodeCacheMaxGb: 10,
@@ -44,7 +38,7 @@ const baseSettings: SystemSettings = {
     soulseekConcurrentDownloads: 4,
     downloadSource: "soulseek",
     federationInstanceName: null,
-    playbackSourceOrder: "library,peers,tidal,ytmusic",
+    playbackSourceOrder: "library,peers,ytmusic",
     primaryFailureFallback: "none",
     ytMusicEnabled: false,
     ytMusicClientId: "",
@@ -77,13 +71,11 @@ test("renders disabled state when no download service is configured", async () =
 test("offers YouTube Music as a source when YT Music is enabled", async () => {
     const html = await renderSection({
         ytMusicEnabled: true,
-        tidalEnabled: true,
-        tidalConnected: true,
         downloadSource: "youtube",
     });
 
     assert.match(html, />YouTube Music \(альбомы\)</);
-    assert.match(html, />TIDAL \(треки и альбомы\)</);
+    assert.doesNotMatch(html, /TIDAL/);
     assert.match(html, /по явному запросу постоянной копии на сервере/);
     assert.doesNotMatch(html, /Сначала настройте хотя бы один сервис загрузок/);
 });

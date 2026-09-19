@@ -112,3 +112,65 @@ test("Modal restores focus when it closes", async () => {
     await unmountModal(mounted);
     trigger.remove();
 });
+
+test("nested Escape closes only the upper visible modal and retains the parent", async () => {
+    const { createRoot } = await import("react-dom/client");
+    const { Modal } = await import("../../components/ui/Modal");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const closed: string[] = [];
+    function Layers() {
+        const [parent, setParent] = React.useState(true);
+        const [child, setChild] = React.useState(true);
+        return React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+                Modal,
+                {
+                    isOpen: parent,
+                    title: "Parent",
+                    onClose: () => {
+                        closed.push("parent");
+                        setParent(false);
+                    },
+                } as ModalProps,
+                "Parent content",
+            ),
+            React.createElement(
+                Modal,
+                {
+                    isOpen: child,
+                    title: "Child",
+                    onClose: () => {
+                        closed.push("child");
+                        setChild(false);
+                    },
+                } as ModalProps,
+                "Child content",
+            ),
+        );
+    }
+    try {
+        await React.act(async () => root.render(React.createElement(Layers)));
+        await React.act(async () =>
+            document.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape" }),
+            ),
+        );
+        assert.deepEqual(closed, ["child"]);
+        assert.equal(container.querySelectorAll('[role="dialog"]').length, 1);
+        assert.equal(document.body.style.overflow, "hidden");
+        await React.act(async () =>
+            document.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape" }),
+            ),
+        );
+        assert.deepEqual(closed, ["child", "parent"]);
+        assert.equal(container.querySelectorAll('[role="dialog"]').length, 0);
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});

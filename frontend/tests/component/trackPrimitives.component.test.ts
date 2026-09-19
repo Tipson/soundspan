@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const runtimeState = {
+    playing: true,
     currentTrackId: null as string | null,
     queuedTrackIds: new Set<string>(),
     overflowCalls: [] as Array<Record<string, unknown>>,
@@ -14,6 +15,12 @@ const runtimeState = {
         youtubeVideoId?: string;
     }>,
 };
+
+mock.module("@/lib/audio-playback-context", {
+    namedExports: {
+        usePlaybackStatus: () => ({ isPlaying: runtimeState.playing }),
+    },
+});
 
 const Icon = (props: Record<string, unknown> = {}) =>
     React.createElement("svg", props);
@@ -96,6 +103,7 @@ mock.module("@/features/device-offline/DeviceOfflineProvider", {
 });
 
 beforeEach(() => {
+    runtimeState.playing = true;
     runtimeState.currentTrackId = null;
     runtimeState.queuedTrackIds = new Set();
     runtimeState.overflowCalls = [];
@@ -163,6 +171,30 @@ function toRowItem(item: (typeof sampleItems)[number]) {
         coverArtUrl: item.cover,
     };
 }
+
+test("current title retains its playback indicator with custom album leading cells and stops on pause", async () => {
+    const { TrackRow } = await loadTrackExports();
+    const render = (current: boolean) =>
+        renderToStaticMarkup(
+            React.createElement(TrackRow, {
+                item: toRowItem(sampleItems[0]),
+                index: 0,
+                isPlaying: current,
+                isInQueue: true,
+                slots: {
+                    leadingColumn: React.createElement("span", null, "1"),
+                },
+            }),
+        );
+    assert.match(render(true), /<h3[^>]*>.*data-playback-state="playing"/);
+    assert.match(render(true), /motion-safe:animate-bounce/);
+    assert.doesNotMatch(render(true), /В ОЧЕРЕДИ/);
+    runtimeState.playing = false;
+    assert.match(render(true), /data-playback-state="paused"/);
+    assert.doesNotMatch(render(true), /animate-bounce/);
+    assert.doesNotMatch(render(false), /data-playback-state/);
+    assert.match(render(false), /В ОЧЕРЕДИ/);
+});
 
 test("TrackList renders loadingState and emptyState branches deterministically", async () => {
     const { TrackList } = await loadTrackExports();
@@ -236,6 +268,52 @@ test("TrackList computes row state for current and queued items", async () => {
     );
 });
 
+test("provider-matched artist and album rows follow the canonical player identity, not their Last.fm id", async () => {
+    const { TrackList } = await loadTrackExports();
+    runtimeState.currentTrackId = "yt:video-a";
+    const rows = [
+        {
+            ...toRowItem(sampleItems[0]),
+            id: "lastfm-recording",
+            streamSource: "youtube",
+            youtubeVideoId: "video-a",
+        },
+        {
+            ...toRowItem(sampleItems[0]),
+            id: "lastfm-other",
+            streamSource: "youtube",
+            youtubeVideoId: "video-b",
+        },
+        {
+            ...toRowItem(sampleItems[0]),
+            id: "local-recording",
+            streamSource: "local",
+            youtubeVideoId: "video-a",
+        },
+    ];
+    const selected: string[] = [];
+    const html = renderToStaticMarkup(
+        React.createElement(TrackList, {
+            items: rows,
+            toRowItem: (row: unknown) => row,
+            onPlay: () => undefined,
+            rowSlots: (
+                row: { id: string },
+                _index: number,
+                state: { isPlaying: boolean },
+            ) => {
+                if (state.isPlaying) selected.push(row.id);
+                return {};
+            },
+        }),
+    );
+    assert.deepEqual(selected, ["lastfm-recording"]);
+    assert.equal(
+        (html.match(/data-playback-state="playing"/g) ?? []).length,
+        1,
+    );
+});
+
 test("TrackListHeader renders provided columns with shared header classes", async () => {
     const { TrackListHeader } = await loadTrackExports();
 
@@ -257,7 +335,7 @@ test("TrackListHeader renders provided columns with shared header classes", asyn
     assert.match(html, /Album/);
 });
 
-test("TrackRow renders queue badge, duration, preferences, and overflow actions", async () => {
+test("current TrackRow renders playback marker, duration, preferences, and overflow actions", async () => {
     const { TrackRow } = await loadTrackExports();
 
     const html = renderToStaticMarkup(
@@ -286,7 +364,7 @@ test("TrackRow renders queue badge, duration, preferences, and overflow actions"
         }),
     );
 
-    assert.match(html, /В ОЧЕРЕДИ/);
+    assert.match(html, /data-playback-state="playing"/);
     assert.match(html, /t:181/);
     assert.match(html, /prefs:track-1/);
     assert.match(html, /overflow-menu/);
@@ -469,6 +547,90 @@ test("TrackRow enter key handler triggers play callback and prevents default", a
     });
 
     assert.equal(playCalls, 1);
+    assert.equal(preventDefaultCalls, 1);
+});
+
+test("TrackRow leaves nested controls and links to handle pointer and keyboard activation", async () => {
+    const { TrackRow } = await loadTrackExports();
+
+    let playCalls = 0;
+    let preventDefaultCalls = 0;
+    const element = TrackRow({
+        item: {
+            id: "track-interactive",
+            title: "Interactive Track",
+            artistName: "Artist",
+            duration: 120,
+            coverArtUrl: null,
+        },
+        index: 4,
+        onPlay: () => {
+            playCalls += 1;
+        },
+    });
+    const rowTarget = {
+        closest: () => rowTarget,
+    };
+    const nestedTarget = (selectorFragment: string) => {
+        const target = {
+            closest: (selector: string) =>
+                selector.includes(selectorFragment) ? target : rowTarget,
+        };
+        return target;
+    };
+    const handlers = element.props as {
+        onClick?: (event: {
+            currentTarget: typeof rowTarget;
+            target: ReturnType<typeof nestedTarget> | typeof rowTarget;
+        }) => void;
+        onKeyDown?: (event: {
+            currentTarget: typeof rowTarget;
+            target: ReturnType<typeof nestedTarget> | typeof rowTarget;
+            key: string;
+            preventDefault: () => void;
+        }) => void;
+    };
+
+    for (const selectorFragment of ["button", "a", "input", "label"]) {
+        const target = nestedTarget(selectorFragment);
+        handlers.onClick?.({ currentTarget: rowTarget, target });
+        handlers.onKeyDown?.({
+            currentTarget: rowTarget,
+            target,
+            key: selectorFragment === "input" ? " " : "Enter",
+            preventDefault: () => {
+                preventDefaultCalls += 1;
+            },
+        });
+    }
+    const menuItem = nestedTarget('[role="menuitem"]');
+    handlers.onKeyDown?.({
+        currentTarget: rowTarget,
+        target: menuItem,
+        key: "Enter",
+        preventDefault: () => {
+            preventDefaultCalls += 1;
+        },
+    });
+
+    assert.equal(playCalls, 0);
+    assert.equal(
+        preventDefaultCalls,
+        0,
+        "the row must not consume keyboard activation owned by a nested control",
+    );
+
+    handlers.onClick?.({ currentTarget: rowTarget, target: rowTarget });
+    handlers.onKeyDown?.({
+        currentTarget: rowTarget,
+        target: rowTarget,
+        key: "Enter",
+        preventDefault: () => {
+            preventDefaultCalls += 1;
+        },
+    });
+
+    assert.equal(playCalls, 2, "the row itself remains playable");
     assert.equal(preventDefaultCalls, 1);
 });
 

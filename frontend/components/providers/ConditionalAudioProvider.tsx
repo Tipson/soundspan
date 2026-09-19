@@ -12,6 +12,7 @@ import {
     DeviceOfflineProvider,
     useDeviceOffline,
 } from "@/features/device-offline/DeviceOfflineProvider";
+import { WaveSelectionSynchronizer } from "@/components/providers/WaveSelectionSynchronizer";
 
 function HydratedAudioRuntime() {
     const { isHydrated } = useDeviceOffline();
@@ -45,6 +46,7 @@ export function ConditionalAudioProvider({
         <DeviceOfflineProvider>
             <AudioErrorBoundary>
                 <AudioStateProvider>
+                    <WaveSelectionSynchronizer />
                     <AudioPlaybackProvider>
                         <AudioControlsProvider>
                             {/* Wait for the verified per-user device index before resolving media URLs. */}

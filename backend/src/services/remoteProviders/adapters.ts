@@ -1,4 +1,5 @@
 import { prisma } from "../../utils/db";
+import type { Readable } from "node:stream";
 import type { ResolvedSource } from "../listenTogetherResolution";
 import type {
     UnifiedPlaylistItemRecord,
@@ -30,13 +31,15 @@ export interface RemoteProviderStreamInput {
     range?: string;
     tidalTrackId?: number;
     youtubeVideoId?: string;
+    /** Listener lifetime; disconnects cancel cold acquisition and active audio. */
+    signal?: AbortSignal;
 }
 
 /** Stream response fields consumed by the HTTP proxy. */
 export interface RemoteProviderStreamResponse {
     status: number;
     headers: Record<string, unknown>;
-    data: NodeJS.ReadableStream;
+    data: Readable;
 }
 
 /** Common playlist request accepted by each provider adapter. */
@@ -88,103 +91,10 @@ export interface RemoteProviderAdapter {
     ): UnifiedPlaylistItemRecord;
 }
 
-type TidalStreamingService =
-    typeof import("../tidalStreaming").tidalStreamingService;
-type TidalPlaylist = Awaited<
-    ReturnType<TidalStreamingService["getBrowsePlaylist"]>
->;
-
-function errorStatusCode(error: unknown): number | null {
-    const status = (error as { response?: { status?: unknown } })?.response
-        ?.status;
-    return typeof status === "number" ? status : null;
-}
-
-function requireTidalTrackId(input: RemoteProviderStreamInput): number {
-    if (
-        typeof input.tidalTrackId !== "number" ||
-        !Number.isFinite(input.tidalTrackId) ||
-        input.tidalTrackId <= 0
-    ) {
-        throw new Error("Tidal stream requires tidalTrackId > 0");
-    }
-    return input.tidalTrackId;
-}
-
 function requireYoutubeVideoId(input: RemoteProviderStreamInput): string {
     const videoId = input.youtubeVideoId?.trim();
     if (!videoId) throw new Error("YouTube stream requires youtubeVideoId");
     return videoId;
-}
-
-async function loadAuthenticatedTidalPlaylist(
-    service: TidalStreamingService,
-    input: RemoteProviderPlaylistInput,
-): Promise<TidalPlaylist | null> {
-    if (!input.authenticated || !input.userId) return null;
-    try {
-        return await service.getBrowsePlaylist(
-            input.userId,
-            input.sourceId,
-            input.quality,
-        );
-    } catch (error) {
-        const status = errorStatusCode(error);
-        if (status && status !== 401 && status !== 403) {
-            if (status === 404) throw new Error("Tidal playlist not found");
-            throw error;
-        }
-        return null;
-    }
-}
-
-async function loadPublicTidalPlaylist(
-    service: TidalStreamingService,
-    input: RemoteProviderPlaylistInput,
-): Promise<TidalPlaylist> {
-    try {
-        return await service.getPublicBrowsePlaylist(
-            input.sourceId,
-            input.quality,
-        );
-    } catch (error) {
-        const status = errorStatusCode(error);
-        if (status === 404) throw new Error("Tidal playlist not found");
-        if (status === 401 || status === 403) {
-            throw new Error("Tidal import requires authentication");
-        }
-        throw error;
-    }
-}
-
-function normalizeTidalPlaylist(
-    playlist: TidalPlaylist,
-): RemoteProviderPlaylist {
-    return {
-        name: playlist.title,
-        tracks: playlist.tracks.map((track) => ({
-            artist: track.artist || "Unknown",
-            title: track.title || "Unknown",
-            album: track.album || undefined,
-            duration: track.duration,
-            isrc: track.isrc || undefined,
-            tidalId: track.trackId,
-        })),
-    };
-}
-
-async function fetchTidalPlaylist(
-    input: RemoteProviderPlaylistInput,
-): Promise<RemoteProviderPlaylist> {
-    const { tidalStreamingService } = await import("../tidalStreaming");
-    const authenticated = await loadAuthenticatedTidalPlaylist(
-        tidalStreamingService,
-        input,
-    );
-    const playlist =
-        authenticated ??
-        (await loadPublicTidalPlaylist(tidalStreamingService, input));
-    return normalizeTidalPlaylist(playlist);
 }
 
 function requireTidalTrack(
@@ -209,16 +119,12 @@ const tidalAdapter: RemoteProviderAdapter = {
     provider: "tidal",
     mappingProvider: "tidal",
     streamingProvider: "tidal",
-    async streamTrack(input) {
-        const { tidalStreamingService } = await import("../tidalStreaming");
-        return tidalStreamingService.getStreamProxy(
-            input.userId,
-            requireTidalTrackId(input),
-            input.quality,
-            input.range,
-        );
+    async streamTrack() {
+        return null;
     },
-    fetchPlaylist: fetchTidalPlaylist,
+    async fetchPlaylist() {
+        throw new Error("TIDAL provider has been retired");
+    },
     itemTrackId: (item) => item.trackTidalId,
     itemTrack: (item) => item.trackTidal,
     resolvedTrackId: (resolved) =>
@@ -244,6 +150,15 @@ const youtubeAdapter: RemoteProviderAdapter = {
     streamingProvider: "ytmusic",
     async streamTrack(input) {
         const { ytMusicService } = await import("../youtubeMusic");
+        if (input.signal) {
+            return ytMusicService.getStreamProxy(
+                input.userId,
+                requireYoutubeVideoId(input),
+                input.quality,
+                input.range,
+                { signal: input.signal },
+            );
+        }
         return ytMusicService.getStreamProxy(
             input.userId,
             requireYoutubeVideoId(input),

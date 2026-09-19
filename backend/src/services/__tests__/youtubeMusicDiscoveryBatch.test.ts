@@ -42,6 +42,7 @@ describe("YouTube Music discovery batch", () => {
     });
 
     it("normalizes tracks, albums, and artists from one bounded batch call", async () => {
+        const controller = new AbortController();
         mockClient.post.mockResolvedValueOnce({
             data: {
                 results: [
@@ -107,7 +108,11 @@ describe("YouTube Music discovery batch", () => {
                 "__public__",
                 "massive attack",
                 20,
-                { timeoutMs: 8_000, maxRetries: 0 },
+                {
+                    timeoutMs: 8_000,
+                    maxRetries: 0,
+                    signal: controller.signal,
+                },
             ),
         ).resolves.toEqual({
             tracks: [
@@ -146,6 +151,7 @@ describe("YouTube Music discovery batch", () => {
             {
                 params: { user_id: "__public__" },
                 timeout: 8_000,
+                signal: controller.signal,
             },
         );
     });
@@ -214,6 +220,37 @@ describe("YouTube Music discovery batch", () => {
                     { query: "linkin park", filter: "songs", limit: 100 },
                     { query: "linkin park", filter: "albums", limit: 50 },
                     { query: "linkin park", filter: "artists", limit: 50 },
+                ],
+            },
+            expect.any(Object),
+        );
+    });
+
+    it("requests only songs for a track-scoped search", async () => {
+        mockClient.post.mockResolvedValueOnce({
+            data: {
+                results: [{ results: [], total: 0, error: null }],
+            },
+        });
+
+        await searchYtMusicDiscoveryCatalog(
+            ytMusicService,
+            "__public__",
+            "the cranberries",
+            50,
+            { timeoutMs: 8_000, maxRetries: 0 },
+            ["songs"],
+        );
+
+        expect(mockClient.post).toHaveBeenCalledWith(
+            "/search/batch",
+            {
+                queries: [
+                    {
+                        query: "the cranberries",
+                        filter: "songs",
+                        limit: 50,
+                    },
                 ],
             },
             expect.any(Object),

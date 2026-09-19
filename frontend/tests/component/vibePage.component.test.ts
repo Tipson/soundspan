@@ -239,6 +239,7 @@ mock.module("@/lib/audio-state-context", {
             setWaveMood: (mood: string | null) => {
                 state.waveMood = mood;
             },
+            setWaveLanguage: () => undefined,
             setVibeSourceFeatures: () => undefined,
             setVibeQueueIds: (ids: string[]) => {
                 state.vibeQueueIds = ids;
@@ -425,7 +426,9 @@ function findButton(
 ): HTMLButtonElement | null {
     return (
         Array.from(container.querySelectorAll("button")).find(
-            (button) => button.textContent?.trim() === label,
+            (button) =>
+                button.textContent?.trim() === label ||
+                button.getAttribute("aria-label") === label,
         ) ?? null
     );
 }
@@ -614,7 +617,8 @@ test("My Wave stays bounded to the app viewport while its tune sheet owns overfl
     );
     const mainToggleLabel = mainToggle?.querySelector("span");
     assert.ok(mainToggleLabel);
-    assert.match(mainToggleLabel.className, /\[text-wrap:balance\]/);
+    assert.equal(mainToggleLabel.textContent, "Слушать");
+    assert.match(mainToggleLabel.className, /whitespace-nowrap/);
     assert.match(mainToggleLabel.className, /leading-\[1\.05\]/);
 
     const tune = findButton(mounted.container, "Настроить");
@@ -636,44 +640,29 @@ test("My Wave stays bounded to the app viewport while its tune sheet owns overfl
     await unmountPage(mounted);
 });
 
-test("the Wave stage previews what comes next without presenting a finite queue", async () => {
+test("the Wave stage omits duplicate playback panels but retains its controls", async () => {
     state.currentTrack = { id: "yt:radio-1", title: "Quick Pick" };
     state.vibeModeEnabled = true;
     const mounted = await mountPage();
-
-    const page = mounted.container.querySelector<HTMLElement>(
-        "main[data-wave-mode]",
+    assert.equal(
+        mounted.container.querySelector(
+            '[data-testid="wave-now-playing-panel"]',
+        ),
+        null,
     );
-    const preview = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="wave-next-preview"]',
+    assert.equal(
+        mounted.container.querySelector('[data-testid="wave-next-preview"]'),
+        null,
     );
-    const nowPlayingPanel = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="wave-now-playing-panel"]',
+    assert.equal(
+        mounted.container.querySelector('[data-testid="wave-skip"]'),
+        null,
     );
-    const skipButton = mounted.container.querySelector<HTMLButtonElement>(
-        '[data-testid="wave-skip"]',
+    assert.ok(
+        mounted.container.querySelector('[data-testid="wave-main-toggle"]'),
     );
-    assert.ok(page);
-    assert.match(
-        page.className,
-        /pb-\[calc\(var\(--app-mini-player-height\)\+var\(--app-bottom-nav-height\)\+var\(--safe-area-bottom\)\+4px\)\]/,
-        "Active mobile Wave must end above both the mini player and bottom navigation",
-    );
-    assert.ok(preview);
-    assert.ok(nowPlayingPanel);
-    assert.ok(skipButton);
-    assert.match(
-        nowPlayingPanel.parentElement?.parentElement?.className ?? "",
-        /\bshrink-0\b/,
-        "Active Wave feedback must remain a non-collapsing bottom region",
-    );
-    assert.match(preview.textContent ?? "", /Далее/i);
-    assert.match(preview.textContent ?? "", /Discovery Track|Shared Pick/i);
-    assert.doesNotMatch(
-        preview.textContent ?? "",
-        /\b\d+\s+(?:tracks?|songs?)\b/i,
-    );
-
+    assert.ok(findButton(mounted.container, "Настроить"));
+    assert.equal(state.playTracksCallCount, 0);
     await unmountPage(mounted);
 });
 
@@ -802,7 +791,7 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
         dialog.querySelectorAll(
             '[role="radiogroup"][aria-label="Настроение моей волны"] [role="radio"]',
         ).length,
-        7,
+        3,
     );
     assert.match(
         dialog.textContent ?? "",
@@ -879,7 +868,7 @@ test("Tune My Wave applies mood independently and keeps both choices in the deep
     const dialog =
         mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
-    const energetic = findButtonByLabel(dialog, "Бодрое");
+    const energetic = findButtonByLabel(dialog, "Энергично");
     const newToMe = findButtonByLabel(dialog, "Больше нового");
     assert.ok(energetic);
     assert.ok(newToMe);
@@ -915,7 +904,7 @@ test("applied Wave settings persist per account, URL settings override them, and
         mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
     const familiar = findButtonByLabel(dialog, "Знакомое");
-    const calm = findButtonByLabel(dialog, "Спокойное");
+    const calm = findButtonByLabel(dialog, "Спокойно");
     assert.ok(familiar);
     assert.ok(calm);
     await React.act(async () => {
@@ -939,7 +928,7 @@ test("applied Wave settings persist per account, URL settings override them, and
     dialog = mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
     const newToMe = findButtonByLabel(dialog, "Больше нового");
-    const energetic = findButtonByLabel(dialog, "Бодрое");
+    const energetic = findButtonByLabel(dialog, "Энергично");
     assert.ok(newToMe);
     assert.ok(energetic);
     await React.act(async () => {
@@ -1041,7 +1030,7 @@ test("retuning an active Wave skips the current track, starts the newly ranked q
     const dialog =
         mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
-    const calm = findButtonByLabel(dialog, "Спокойное");
+    const calm = findButtonByLabel(dialog, "Спокойно");
     assert.ok(calm);
     await React.act(async () => calm.click());
 
@@ -1086,7 +1075,7 @@ test("rapid Wave retunes apply only the latest selection and start one replaceme
     });
     const callsBeforeRetune = state.playTracksCallCount;
 
-    for (const moodLabel of ["Спокойное", "Бодрое", "Для концентрации"]) {
+    for (const moodLabel of ["Спокойно", "Энергично", "Спокойно"]) {
         const tune = findButton(mounted.container, "Настроить");
         assert.ok(tune);
         await React.act(async () => tune.click());
@@ -1107,8 +1096,8 @@ test("rapid Wave retunes apply only the latest selection and start one replaceme
     await settleWaveRetune();
 
     assert.equal(state.playTracksCallCount - callsBeforeRetune, 1);
-    assert.deepEqual(state.playedTrackIds, ["yt:focus-pick"]);
-    assert.equal(state.waveMood, "focus");
+    assert.deepEqual(state.playedTrackIds, ["yt:calm-pick"]);
+    assert.equal(state.waveMood, "calm");
 
     await unmountPage(mounted);
 });
@@ -1217,7 +1206,7 @@ test("a failed active-Wave retune keeps the existing upcoming queue", async (t) 
     const dialog =
         mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
-    const calm = findButtonByLabel(dialog, "Спокойное");
+    const calm = findButtonByLabel(dialog, "Спокойно");
     assert.ok(calm);
     await React.act(async () => calm.click());
 
@@ -1328,31 +1317,23 @@ test("Tune My Wave supports arrow-key radio navigation", async () => {
     await unmountPage(mounted);
 });
 
-test("active My Wave keeps feedback on desktop without restoring the redundant mobile block", async () => {
+test("active My Wave relies on the persistent player instead of duplicate desktop feedback", async () => {
     state.currentTrack = { id: "yt:playing-1", title: "Playing Track" };
     state.vibeModeEnabled = true;
     const mounted = await mountPage();
 
-    assert.match(mounted.container.textContent ?? "", /Сейчас играет/i);
-    const inlineNowPlaying = mounted.container.querySelector<HTMLElement>(
-        '[aria-labelledby="wave-now-playing-title"]',
-    );
-    assert.ok(inlineNowPlaying);
-    const desktopFeedbackRegion = inlineNowPlaying.closest<HTMLElement>(
-        ".wave-density-bottom",
-    );
-    assert.ok(desktopFeedbackRegion);
-    assert.match(desktopFeedbackRegion.className, /(?:^|\s)hidden(?:\s|$)/);
-    assert.match(desktopFeedbackRegion.className, /min-\[900px\]:block/);
+    assert.doesNotMatch(mounted.container.textContent ?? "", /Сейчас играет/i);
     assert.equal(
-        mounted.container.querySelector('[data-testid="wave-now-playing"]')
-            ?.textContent,
-        "Playing Track",
+        mounted.container.querySelector(
+            '[aria-labelledby="wave-now-playing-title"]',
+        ),
+        null,
     );
-    const skip = findButton(mounted.container, "Пропустить");
-    assert.ok(skip);
-    await React.act(async () => skip.click());
-    assert.deepEqual(state.advanceOrigins, ["manual"]);
+    assert.equal(mounted.container.querySelector(".wave-density-bottom"), null);
+    assert.equal(findButton(mounted.container, "Пропустить"), null);
+    assert.ok(
+        mounted.container.querySelector('[data-testid="wave-main-toggle"]'),
+    );
 
     await unmountPage(mounted);
 });

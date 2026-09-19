@@ -34,10 +34,6 @@ services:
         image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-vibe-provider-dclap:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
         pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}
 
-    tidal-streamer:
-        image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-tidal-streamer:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
-        pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}
-
     ytmusic-streamer:
         image: "${SOUNDSPAN_IMAGE_REPOSITORY:-ghcr.io/soundspan/soundspan}-ytmusic-streamer:${SOUNDSPAN_IMAGE_TAG:?SOUNDSPAN_IMAGE_TAG must be an immutable release or commit tag}"
         pull_policy: ${SOUNDSPAN_PULL_POLICY:-always}

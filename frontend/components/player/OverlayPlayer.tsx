@@ -1,6 +1,7 @@
 "use client";
 
 import { useOverlayGestures } from "./hooks/useOverlayGestures";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 import { useOverlayPlayerAudio } from "./hooks/useOverlayPlayerAudio";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
 import { resolvePlaybackQualityBadgeFromStreamSource } from "@/hooks/useStreamBitrate";
@@ -33,7 +34,6 @@ import { toast } from "sonner";
 import { SeekSlider } from "./SeekSlider";
 import { useFeatures } from "@/lib/features-context";
 import { api } from "@/lib/api";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { SyncBadge } from "@/components/player/SyncBadge";
 import { useListenTogether } from "@/lib/listen-together-context";
@@ -45,11 +45,13 @@ import {
 import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
+import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
+import { PlaybackReport } from "./PlaybackReport";
 import { OverlayQueueTab } from "./overlay-tabs/OverlayQueueTab";
 import { OverlayLyricsTab } from "./overlay-tabs/OverlayLyricsTab";
 import { OverlayRelatedTab } from "./overlay-tabs/OverlayRelatedTab";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
+import { isPlaybackOnlyTrack, toAddToPlaylistRef } from "@/lib/trackRef";
 import type { Track } from "@/lib/audio-state-context";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 
@@ -125,6 +127,11 @@ export function OverlayPlayer() {
     const [isRadioLoading, setIsRadioLoading] = useState(false);
     const [isPlaylistSelectorOpen, setIsPlaylistSelectorOpen] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    useDismissibleLayer(
+        isDrawerOpen && isMobileOrTablet,
+        () => setIsDrawerOpen(false),
+        20,
+    );
     const [activeTab, setActiveTab] = useState<"queue" | "lyrics" | "related">(
         "queue",
     );
@@ -134,7 +141,9 @@ export function OverlayPlayer() {
     const currentTrackQualityBadge = useMemo(
         () =>
             resolvePlaybackQualityBadgeFromStreamSource(
-                currentTrack?.streamSource,
+                currentTrack?.streamSource === "youtube"
+                    ? "youtube"
+                    : undefined,
             ),
         [currentTrack?.streamSource],
     );
@@ -161,6 +170,9 @@ export function OverlayPlayer() {
     const isLongForm =
         playbackType === "podcast" || playbackType === "audiobook";
     const preferenceTrackId = isTrackMode ? currentTrack?.id : undefined;
+    const canPersistCurrentTrack = Boolean(
+        currentTrack && !isPlaybackOnlyTrack(currentTrack),
+    );
     const isDesktopOverlayLayout = canSkip && !isMobileOrTablet;
     // The lyrics tab mounts only while shown, so it owns its own fetch.
     const lyricsLookupTrack = useMemo(
@@ -235,7 +247,7 @@ export function OverlayPlayer() {
             resume();
             return;
         }
-        if (isBuffering) return;
+        if (isBuffering && !isPlaying) return;
         if (isPlaying) {
             pause();
         } else {
@@ -274,12 +286,6 @@ export function OverlayPlayer() {
                     tag === "select");
 
             if (isEditable) return;
-
-            if (event.key === "Escape") {
-                event.preventDefault();
-                returnToPreviousMode();
-                return;
-            }
 
             if (event.code === "Space") {
                 event.preventDefault();
@@ -412,9 +418,7 @@ export function OverlayPlayer() {
         setIsRadioLoading(true);
         try {
             let response: { tracks: unknown[] } | null = null;
-            const isRemote =
-                currentTrack.streamSource === "tidal" ||
-                currentTrack.streamSource === "youtube";
+            const isRemote = currentTrack.streamSource === "youtube";
             if (isRemote && currentTrack.artist.name) {
                 response = await api.getRadioTracks(
                     "artist-name",
@@ -453,7 +457,7 @@ export function OverlayPlayer() {
 
     const handleAddToPlaylist = useCallback(
         async (playlistId: string) => {
-            if (!currentTrack?.id) return;
+            if (!currentTrack?.id || !canPersistCurrentTrack) return;
             await api.addTrackToPlaylist(
                 playlistId,
                 toAddToPlaylistRef(currentTrack),
@@ -462,7 +466,7 @@ export function OverlayPlayer() {
                 `«${currentTrack.displayTitle || currentTrack.title}» добавлен в плейлист`,
             );
         },
-        [currentTrack],
+        [currentTrack, canPersistCurrentTrack],
     );
 
     const handleDrawerTabToggle = (tab: "queue" | "lyrics" | "related") => {
@@ -538,7 +542,12 @@ export function OverlayPlayer() {
             {/* Header */}
             <div
                 className="overlay-player-chrome relative z-10 flex-shrink-0 px-4 pt-3 pb-2"
-                style={{ paddingTop: "calc(12px + env(safe-area-inset-top))" }}
+                style={{
+                    paddingTop: "calc(12px + env(safe-area-inset-top))",
+                    // Claim this drag before Chrome can start pull-to-refresh.
+                    // The player content and queue keep native scrolling.
+                    touchAction: isMobileOrTablet ? "none" : undefined,
+                }}
                 onTouchStart={
                     isMobileOrTablet
                         ? overlayHeaderHandlers.onTouchStart
@@ -578,7 +587,24 @@ export function OverlayPlayer() {
                         </span>
                         <SyncBadge compact />
                     </div>
-                    <div className="w-11" /> {/* Spacer for centering */}
+                    <div
+                        className="w-11"
+                        onTouchStart={(event) => event.stopPropagation()}
+                    >
+                        {playbackType === "track" && currentTrack && (
+                            <TrackOverflowMenu
+                                track={currentTrack}
+                                showPlayNext={false}
+                                showAddToQueue={false}
+                                extraItemsAfter={
+                                    <PlaybackReport
+                                        key={currentTrack.id}
+                                        track={currentTrack}
+                                    />
+                                }
+                            />
+                        )}
+                    </div>
                 </div>
                 {isMobileOrTablet && (
                     <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-white/25" />
@@ -721,12 +747,6 @@ export function OverlayPlayer() {
                                     </p>
                                 )}
                                 {currentTrackQualityBadge?.variant ===
-                                    "tidal" && (
-                                    <div className="mt-1.5 flex justify-center">
-                                        <TidalBadge />
-                                    </div>
-                                )}
-                                {currentTrackQualityBadge?.variant ===
                                     "youtube" && (
                                     <div className="mt-1.5 flex justify-center">
                                         <YouTubeBadge />
@@ -784,24 +804,26 @@ export function OverlayPlayer() {
                                                         )}
                                                     />
 
-                                                    <button
-                                                        onClick={() =>
-                                                            setIsPlaylistSelectorOpen(
-                                                                true,
-                                                            )
-                                                        }
-                                                        className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                                        title={
-                                                            ru.player
-                                                                .addToPlaylist
-                                                        }
-                                                        aria-label={
-                                                            ru.player
-                                                                .addToPlaylist
-                                                        }
-                                                    >
-                                                        <Plus className="h-6 w-6" />
-                                                    </button>
+                                                    {canPersistCurrentTrack && (
+                                                        <button
+                                                            onClick={() =>
+                                                                setIsPlaylistSelectorOpen(
+                                                                    true,
+                                                                )
+                                                            }
+                                                            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                                                            title={
+                                                                ru.player
+                                                                    .addToPlaylist
+                                                            }
+                                                            aria-label={
+                                                                ru.player
+                                                                    .addToPlaylist
+                                                            }
+                                                        >
+                                                            <Plus className="h-6 w-6" />
+                                                        </button>
+                                                    )}
 
                                                     {currentTrack?.artist?.id &&
                                                         playbackType ===
@@ -929,15 +951,20 @@ export function OverlayPlayer() {
                                                         "overlay-player-primary player-control-primary flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full shadow-xl transition-all",
                                                         audioError
                                                             ? "bg-red-500 text-white hover:bg-red-400"
-                                                            : isBuffering
+                                                            : isBuffering &&
+                                                                !isPlaying
                                                               ? "bg-white/80 text-black"
                                                               : "bg-white text-black hover:scale-[1.04]",
                                                     )}
-                                                    disabled={isBuffering}
+                                                    disabled={
+                                                        isBuffering &&
+                                                        !isPlaying
+                                                    }
                                                     title={
                                                         audioError
                                                             ? ru.player.retry
-                                                            : isBuffering
+                                                            : isBuffering &&
+                                                                !isPlaying
                                                               ? ru.player
                                                                     .buffering
                                                               : isPlaying
@@ -955,7 +982,8 @@ export function OverlayPlayer() {
                                                 >
                                                     {audioError ? (
                                                         <RefreshCw className="h-7 w-7" />
-                                                    ) : isBuffering ? (
+                                                    ) : isBuffering &&
+                                                      !isPlaying ? (
                                                         <Loader2 className="h-7 w-7 animate-spin" />
                                                     ) : isPlaying ? (
                                                         <Pause className="h-7 w-7" />
@@ -1050,11 +1078,14 @@ export function OverlayPlayer() {
                                                     "flex h-16 w-16 items-center justify-center rounded-full shadow-xl transition-all",
                                                     audioError
                                                         ? "bg-red-500 text-white hover:bg-red-400"
-                                                        : isBuffering
+                                                        : isBuffering &&
+                                                            !isPlaying
                                                           ? "bg-white/80 text-black"
                                                           : "bg-white text-black hover:scale-105",
                                                 )}
-                                                disabled={isBuffering}
+                                                disabled={
+                                                    isBuffering && !isPlaying
+                                                }
                                                 title={
                                                     isPlaying
                                                         ? ru.common.pause
@@ -1068,7 +1099,8 @@ export function OverlayPlayer() {
                                             >
                                                 {audioError ? (
                                                     <RefreshCw className="h-7 w-7" />
-                                                ) : isBuffering ? (
+                                                ) : isBuffering &&
+                                                  !isPlaying ? (
                                                     <Loader2 className="h-7 w-7 animate-spin" />
                                                 ) : isPlaying ? (
                                                     <Pause className="h-7 w-7" />
@@ -1230,10 +1262,6 @@ export function OverlayPlayer() {
                                                         {subtitle}
                                                     </p>
                                                     {currentTrackQualityBadge?.variant ===
-                                                        "tidal" && (
-                                                        <TidalBadge />
-                                                    )}
-                                                    {currentTrackQualityBadge?.variant ===
                                                         "youtube" && (
                                                         <YouTubeBadge />
                                                     )}
@@ -1268,7 +1296,8 @@ export function OverlayPlayer() {
                                             >
                                                 {audioError ? (
                                                     <RefreshCw className="h-4 w-4" />
-                                                ) : isBuffering ? (
+                                                ) : isBuffering &&
+                                                  !isPlaying ? (
                                                     <Loader2 className="h-4 w-4 animate-spin" />
                                                 ) : isPlaying ? (
                                                     <Pause className="h-4 w-4" />
@@ -1439,7 +1468,7 @@ export function OverlayPlayer() {
             <div style={{ height: "env(safe-area-inset-bottom)" }} />
 
             <PlaylistSelector
-                isOpen={isPlaylistSelectorOpen}
+                isOpen={canPersistCurrentTrack && isPlaylistSelectorOpen}
                 onClose={() => setIsPlaylistSelectorOpen(false)}
                 onSelectPlaylist={handleAddToPlaylist}
             />

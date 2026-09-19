@@ -2,6 +2,8 @@
 
 import { useAudioState } from "@/lib/audio-state-context";
 import { useAudioVolumeMode } from "@/lib/audio-volume-mode-context";
+import { useAudioControls } from "@/lib/audio-controls-context";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { MiniPlayer } from "./MiniPlayer";
 import { FullPlayer } from "./FullPlayer";
@@ -32,6 +34,12 @@ export function UniversalPlayer() {
     const isMobileOrTablet = isMobile || isTablet;
 
     const hasMedia = !!(currentTrack || currentAudiobook || currentPodcast);
+    const { returnToPreviousMode } = useAudioControls();
+    useDismissibleLayer(
+        playerMode === "overlay" && hasMedia,
+        returnToPreviousMode,
+        10,
+    );
 
     return (
         <>

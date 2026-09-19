@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect } from "react";
 import { api } from "@/lib/api";
+import { playbackStateMachine } from "@/lib/audio";
 import type { Podcast, Track } from "@/lib/audio-state-context";
 import { AUTOPLAY_INTENT_CONFLICT_WINDOW_MS } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
 import {
@@ -13,6 +14,7 @@ import {
     consumePlaybackAdvanceOrigin,
     isPlaybackAutoRestartSuppressed,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
 
 interface UsePlaybackControlSyncOptions {
     refs: PlaybackOrchestratorRefs;
@@ -169,9 +171,37 @@ export function usePlaybackControlSync({
             cancelledLoadPlayIdRef.current = loadIdRef.current;
         }
 
-        if (isLoadingRef.current) return;
+        if (isLoadingRef.current) {
+            if (isPlaying) {
+                const advanceOrigin = consumePlaybackAdvanceOrigin();
+                if (advanceOrigin?.origin === "manual") {
+                    consecutiveErrorBreakerRef.current.reset();
+                }
+                const listenTogetherSnapshot =
+                    getListenTogetherSessionSnapshot();
+                const isListenTogetherFollower = Boolean(
+                    listenTogetherSnapshot?.groupId &&
+                    !listenTogetherSnapshot.isHost,
+                );
+                if (
+                    !isListenTogetherFollower &&
+                    !isPlaybackAutoRestartSuppressed()
+                ) {
+                    desiredLoadPlayRef.current = {
+                        loadId: loadIdRef.current,
+                        shouldPlay: true,
+                        decidedAtMs: Date.now(),
+                    };
+                    cancelledLoadPlayIdRef.current = null;
+                }
+            }
+            return;
+        }
 
-        isUserInitiatedRef.current = true;
+        // An already-playing native engine ignores play() without emitting
+        // another play event. Do not leave a user-action marker waiting for
+        // that nonexistent event: it would consume the next external pause.
+        isUserInitiatedRef.current = !isPlaying || !audioEngine.isPlaying();
 
         if (isPlaying) {
             const advanceOrigin = consumePlaybackAdvanceOrigin();
@@ -180,6 +210,41 @@ export function usePlaybackControlSync({
             }
             if (isPlaybackAutoRestartSuppressed()) return;
             applyCurrentOutputState();
+            if (
+                playbackType === "track" &&
+                currentTrack?.streamSource === "youtube" &&
+                (playbackStateMachine.getState() === "ERROR" ||
+                    refs.providerFailedLoadIdRef.current === loadIdRef.current)
+            ) {
+                // play() cannot revive a media element with a terminal source
+                // error. Reload on explicit retry, without advancing the queue.
+                const expectedLoadId = loadIdRef.current;
+                refs.providerFailedLoadIdRef.current = null;
+                const expectedTrack = currentTrack;
+                const onRetryLoaded = () => {
+                    audioEngine.off("load", onRetryLoaded);
+                    const activeTrack = refs.currentTrackRef.current;
+                    const session = getListenTogetherSessionSnapshot();
+                    if (
+                        !lastPlayingStateRef.current ||
+                        loadIdRef.current !== expectedLoadId ||
+                        activeTrack?.id !== expectedTrack.id ||
+                        activeTrack?.playlistItemId !==
+                            expectedTrack.playlistItemId ||
+                        (session?.groupId && !session.isHost) ||
+                        isPlaybackAutoRestartSuppressed()
+                    )
+                        return;
+                    refs.activeEngineTrackIdRef.current = expectedTrack.id;
+                    refs.activeEngineLoadIdRef.current = expectedLoadId;
+                    if (!audioEngine.isPlaying()) audioEngine.play();
+                };
+                playbackStateMachine.forceTransition("LOADING");
+                audioEngine.on("load", onRetryLoaded);
+                scheduleStartupPlaybackRecovery(currentTrack.id);
+                audioEngine.reload();
+                return () => audioEngine.off("load", onRetryLoaded);
+            }
             audioEngine.play();
             if (playbackType === "track" && currentTrack?.id) {
                 scheduleStartupPlaybackRecovery(currentTrack.id);

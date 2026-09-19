@@ -46,15 +46,15 @@ export function DeviceCollectionDownloadButton({
             return `В очереди ${status.ready}/${status.total}`;
         }
         if (storage.status === "needs-setup") {
-            return ru.downloads.chooseAndDownload;
+            return "Выбрать папку";
         }
         if (storage.status === "error") {
-            return ru.downloads.retryFolderAndDownload;
+            return "Подключить";
         }
         if (storage.status === "unsupported") {
-            return ru.downloads.unavailable;
+            return "Недоступно";
         }
-        return ru.downloads.downloadDevice;
+        return "Скачать";
     }, [
         isActive,
         isProtected,
@@ -148,7 +148,7 @@ export function DeviceCollectionDownloadButton({
                     )}
                     aria-hidden="true"
                 />
-                <span>{label}</span>
+                <span className="whitespace-nowrap">{label}</span>
             </button>
             <span
                 id={`device-download-status-${collectionId}`}

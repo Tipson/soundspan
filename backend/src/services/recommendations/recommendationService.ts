@@ -5,6 +5,12 @@ import type {
 } from "../personalizedCatalog";
 import { buildCanonicalRecordingKey } from "./canonicalIdentity";
 import {
+    matchesWaveLanguage,
+    type LanguageRecording,
+    type WaveLanguage,
+} from "./recordingLanguage";
+import type { PreparedRecordingLanguages } from "./recordingLanguageStore";
+import {
     RecommendationEngine,
     type RecommendationCandidateBatch,
     type RecommendationEngineDependencies,
@@ -27,6 +33,14 @@ type CommonEngineDependencies = Omit<
 >;
 
 export interface UnifiedRecommendationDependencies extends CommonEngineDependencies {
+    /** Bounded personal, already-analyzed reserve for explicit listening moods. */
+    loadSavedMoodCandidates?: (
+        userId: string,
+        mood: RecommendationMood,
+    ) => Promise<RecommendationCandidate[]>;
+    prepareLanguages?: (
+        tracks: LanguageRecording[],
+    ) => Promise<PreparedRecordingLanguages>;
     loadPersonalizedFeed: (
         userId: string,
         limit: number,
@@ -45,11 +59,20 @@ export interface PersonalizedRecommendationInput {
     cursor: number;
     direction: "for-you" | "new" | "familiar";
     mood: RecommendationMood | null;
+    language?: WaveLanguage;
     excludeVideoIds: string[];
     context?: RecommendationRequestContext;
+    /** Authenticated playback probe: compute normally without user-signal writes. */
+    diagnostic?: boolean;
 }
 
 export type PersonalizedRecommendationFeed = PersonalizedHomeFeed & {
+    languageStatus?: {
+        selection: WaveLanguage;
+        pending: boolean;
+        classified: number;
+        total: number;
+    };
     generationId: string;
     degradedSources: string[];
 };
@@ -148,17 +171,28 @@ export class UnifiedRecommendationService {
 
     private engine(
         loadCandidates: RecommendationEngineDependencies["loadCandidates"],
+        diagnostic = false,
     ): RecommendationEngine {
-        return new RecommendationEngine({
+        const dependencies = {
             ...this.dependencies,
             loadCandidates,
-        });
+        };
+        if (!diagnostic) return new RecommendationEngine(dependencies);
+        return new RecommendationEngine(
+            {
+                ...dependencies,
+                recordGeneration: async () => "diagnostic-recommendation",
+                scheduleHotSet: async () => {},
+            },
+            { recordGeneration: () => {} },
+        );
     }
 
     async getPersonalizedFeed(
         input: PersonalizedRecommendationInput,
     ): Promise<PersonalizedRecommendationFeed> {
         const sourceState: { feed?: PersonalizedHomeFeed } = {};
+        let languageStatus: PersonalizedRecommendationFeed["languageStatus"];
         const engine = this.engine(async () => {
             const sourceFeed = await this.dependencies.loadPersonalizedFeed(
                 input.userId,
@@ -166,6 +200,7 @@ export class UnifiedRecommendationService {
                 {
                     cursor: input.cursor,
                     mode: input.direction,
+                    surface: input.surface,
                     ...(input.mood ? { mood: input.mood } : {}),
                     ...(input.excludeVideoIds.length > 0
                         ? { excludeVideoIds: input.excludeVideoIds }
@@ -173,23 +208,76 @@ export class UnifiedRecommendationService {
                 },
             );
             sourceState.feed = sourceFeed;
+            let candidates = flattenPersonalizedFeed(sourceFeed);
+            const reserveDegraded: string[] = [];
+            if (
+                input.surface === "wave" &&
+                input.direction !== "new" &&
+                input.mood &&
+                ["calm", "energetic", "focus", "workout"].includes(
+                    input.mood,
+                ) &&
+                this.dependencies.loadSavedMoodCandidates
+            ) {
+                try {
+                    const saved =
+                        await this.dependencies.loadSavedMoodCandidates(
+                            input.userId,
+                            input.mood,
+                        );
+                    candidates.push(
+                        ...saved.map((candidate) => ({
+                            ...candidate,
+                            lane:
+                                input.direction === "familiar"
+                                    ? ("listenAgain" as const)
+                                    : ("quickPicks" as const),
+                        })),
+                    );
+                } catch {
+                    reserveDegraded.push("saved-mood-candidates");
+                }
+            }
+            if (input.surface === "wave") {
+                const selection = input.language ?? "any";
+                const prepared = this.dependencies.prepareLanguages
+                    ? await this.dependencies.prepareLanguages(candidates)
+                    : { languages: candidates.map(() => null), pending: false };
+                languageStatus = {
+                    selection,
+                    pending: prepared.pending,
+                    classified: prepared.languages.filter(
+                        (value) => value === "ru" || value === "foreign",
+                    ).length,
+                    total: candidates.length,
+                };
+                candidates = candidates.filter((_candidate, index) =>
+                    matchesWaveLanguage(
+                        prepared.languages[index] ?? null,
+                        selection,
+                    ),
+                );
+            }
             return {
-                candidates: flattenPersonalizedFeed(sourceFeed),
+                candidates,
                 nextCursor: sourceFeed.nextCursor,
-                degradedSources:
-                    (sourceFeed.degradedSources?.length ?? 0) > 0
+                degradedSources: [
+                    ...reserveDegraded,
+                    ...((sourceFeed.degradedSources?.length ?? 0) > 0
                         ? (sourceFeed.degradedSources ?? [])
                         : sourceFeed.degraded && sourceFeed.reason
                           ? [sourceFeed.reason]
-                          : [],
+                          : []),
+                ],
             };
-        });
+        }, input.diagnostic);
         const result = await engine.recommend({
             userId: input.userId,
             intent: {
                 surface: input.surface,
                 direction: input.direction,
                 mood: input.mood,
+                language: input.language,
             },
             sessionId: input.sessionId,
             cursor: input.cursor,
@@ -226,6 +314,7 @@ export class UnifiedRecommendationService {
             nextCursor: result.nextCursor,
             generationId: result.generationId,
             degradedSources: result.degradedSources,
+            ...(languageStatus ? { languageStatus } : {}),
         };
     }
 

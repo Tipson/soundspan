@@ -6,6 +6,7 @@ import {
     useCallback,
     useRef,
     useEffect,
+    useState,
     ReactNode,
     useMemo,
 } from "react";
@@ -15,7 +16,10 @@ import {
     Audiobook,
     Podcast,
 } from "./audio-state-context";
-import type { AudioControlsContextType } from "./audio-controls-types";
+import type {
+    AudioControlsContextType,
+    VibeQueueMutationKind,
+} from "./audio-controls-types";
 import { usePlaybackStatus } from "./audio-playback-context";
 import { buildPlaybackView, PlaybackClockBridge } from "./audio-playback-view";
 import { useAudioVolumeMode } from "./audio-volume-mode-context";
@@ -62,7 +66,13 @@ import {
 } from "@/lib/audio-playback-normalization";
 import { resetPersistedTrackStartPosition } from "@/lib/persisted-playback-position";
 import { resolveListenTogetherNavigationIndex } from "@/lib/listen-together-navigation";
-import { writePlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    getPlaybackIntentGeneration,
+    recordExplicitPlaybackPause,
+    recordExplicitPlaybackResume,
+    writePlaybackAdvanceOrigin,
+    writePlaybackReplacementIntent,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 import type { PlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
 import { toAddToPlaylistRef } from "@/lib/trackRef";
 import {
@@ -289,6 +299,22 @@ export function generateSeparatedShuffleIndices(
     return [currentIdx, ...separated];
 }
 
+function isCompleteShuffleOrder(
+    indices: readonly number[],
+    queueLength: number,
+    currentIndex: number,
+): boolean {
+    return (
+        indices.length === queueLength &&
+        indices.includes(currentIndex) &&
+        new Set(indices).size === queueLength &&
+        indices.every(
+            (index) =>
+                Number.isInteger(index) && index >= 0 && index < queueLength,
+        )
+    );
+}
+
 const AudioControlsContext = createContext<
     AudioControlsContextType | undefined
 >(undefined);
@@ -317,6 +343,16 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     const lastCursorIsShuffleRef = useRef<boolean | null>(null);
     const adaptiveWaveSkipStreakRef = useRef(0);
     const adaptiveWaveRefreshTokenRef = useRef<object | null>(null);
+    const pendingManualTailAdvanceRef = useRef<{
+        token: object;
+        trackId: string;
+        currentIndex: number;
+        intentGeneration: number;
+        mutation: VibeQueueMutationKind | null;
+        settled: boolean;
+    } | null>(null);
+    const [manualTailAdvanceResolution, setManualTailAdvanceResolution] =
+        useState(0);
 
     const queueRef = useRef(state.queue);
 
@@ -349,6 +385,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             if (repeatTimeoutRef.current) {
                 clearTimeout(repeatTimeoutRef.current);
             }
+            pendingManualTailAdvanceRef.current = null;
             queueDebugLog("AudioControlsProvider unmounted");
         };
     }, []);
@@ -432,6 +469,34 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         },
         [],
     );
+    const activeShuffle = state.isShuffle;
+    const activeQueueLength = state.queue.length;
+    const activeQueueIndex = state.currentIndex;
+    const activeShuffleIndices = state.shuffleIndices;
+    const setActiveShuffleIndices = state.setShuffleIndices;
+
+    useEffect(() => {
+        if (!activeShuffle || activeQueueLength === 0) return;
+        if (
+            isCompleteShuffleOrder(
+                activeShuffleIndices,
+                activeQueueLength,
+                activeQueueIndex,
+            )
+        ) {
+            return;
+        }
+        setActiveShuffleIndices(
+            generateShuffleIndices(activeQueueLength, activeQueueIndex),
+        );
+    }, [
+        activeShuffle,
+        activeQueueLength,
+        activeQueueIndex,
+        activeShuffleIndices,
+        setActiveShuffleIndices,
+        generateShuffleIndices,
+    ]);
 
     const getActiveListenTogetherSession = useCallback(() => {
         return resolveActiveListenTogetherSession({
@@ -551,7 +616,12 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     );
 
     const playTracks = useCallback(
-        (tracks: Track[], startIndex = 0, isVibeQueue = false) => {
+        (
+            tracks: Track[],
+            startIndex = 0,
+            isVibeQueue = false,
+            options?: { replaceQueue?: boolean },
+        ) => {
             const playbackState = getPlaybackView();
             if (tracks.length === 0) {
                 return;
@@ -625,7 +695,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
             const startTrack = tracks[normalizedStartIndex];
             if (!startTrack?.id) return;
-            if (applyTrackClick(state, playbackState, startTrack)) return;
+            if (options?.replaceQueue) {
+                writePlaybackReplacementIntent(state.currentTrack?.id ?? null);
+            } else if (applyTrackClick(state, playbackState, startTrack))
+                return;
 
             queueDebugLog("playTracks()", {
                 tracksLen: tracks.length,
@@ -816,6 +889,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
     const pause = useCallback(
         (options?: { suppressListenTogetherBroadcast?: boolean }) => {
+            recordExplicitPlaybackPause();
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
             playbackState.setIsPlaying(false);
@@ -944,6 +1018,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
                 if (ltSession.isHost) {
+                    recordExplicitPlaybackResume();
                     playbackState.setIsPlaying(true);
                     if (!options?.suppressListenTogetherBroadcast) {
                         listenTogetherSocket.play().catch(() => {});
@@ -984,10 +1059,13 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 playbackState.lockSeek(clampedTarget);
                 playbackState.setCurrentTime(clampedTarget);
                 audioSeekEmitter.emit(clampedTarget);
+                if (syncIsPlaying) recordExplicitPlaybackResume();
+                else recordExplicitPlaybackPause();
                 playbackState.setIsPlaying(syncIsPlaying);
                 return;
             }
 
+            recordExplicitPlaybackResume();
             playbackState.setIsPlaying(true);
         },
         [state, getActiveListenTogetherSession, getPlaybackView],
@@ -999,6 +1077,15 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
     const advanceQueue = useCallback(
         (origin: PlaybackAdvanceOrigin) => {
+            const pendingTailAdvance = pendingManualTailAdvanceRef.current;
+            if (
+                origin === "manual" &&
+                pendingTailAdvance !== null &&
+                pendingTailAdvance.trackId === state.currentTrack?.id &&
+                pendingTailAdvance.currentIndex === state.currentIndex
+            ) {
+                return;
+            }
             writePlaybackAdvanceOrigin(origin, state.currentTrack?.id ?? null);
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
@@ -1069,6 +1156,63 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         : state.repeatMode,
             });
             if (advance.kind === "stop") {
+                if (
+                    origin === "manual" &&
+                    state.vibeMode &&
+                    state.currentTrack?.id
+                ) {
+                    const token = {};
+                    const pending = {
+                        token,
+                        trackId: state.currentTrack.id,
+                        currentIndex: state.currentIndex,
+                        intentGeneration: getPlaybackIntentGeneration(),
+                        mutation: null as VibeQueueMutationKind | null,
+                        settled: false,
+                    };
+                    pendingManualTailAdvanceRef.current = pending;
+                    void startVibeMode({
+                        queueCommitToken: token,
+                        onLocalQueueCommit: (commit) => {
+                            if (
+                                commit.token === token &&
+                                pendingManualTailAdvanceRef.current === pending
+                            ) {
+                                pending.mutation = commit.mutation;
+                            }
+                        },
+                    }).then(
+                        () => {
+                            if (
+                                pendingManualTailAdvanceRef.current !== pending
+                            ) {
+                                return;
+                            }
+                            pending.settled = true;
+                            setManualTailAdvanceResolution(
+                                (resolution) => resolution + 1,
+                            );
+                        },
+                        () => {
+                            if (
+                                pendingManualTailAdvanceRef.current !== pending
+                            ) {
+                                return;
+                            }
+                            pending.settled = true;
+                            setManualTailAdvanceResolution(
+                                (resolution) => resolution + 1,
+                            );
+                        },
+                    );
+                    return;
+                }
+                // A natural end can arrive here after online auto-match finishes
+                // without extending the queue. Retire its play intent so the
+                // watchdog cannot recover an already completed media element.
+                if (origin === null) {
+                    playbackState.setIsPlaying(false);
+                }
                 return;
             }
 
@@ -1115,9 +1259,6 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                             return;
                         }
                         adaptiveWaveSkipStreakRef.current = 0;
-                        const currentPlayback = getPlaybackView();
-                        currentPlayback.setCurrentTime(0);
-                        currentPlayback.setIsPlaying(true);
                     },
                 }).finally(() => {
                     if (adaptiveWaveRefreshTokenRef.current === refreshToken) {
@@ -1137,6 +1278,51 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         ],
     );
     const next = useCallback(() => advanceQueue("manual"), [advanceQueue]);
+
+    useEffect(() => {
+        const pending = pendingManualTailAdvanceRef.current;
+        if (!pending) return;
+        if (
+            !state.vibeMode ||
+            state.currentTrack?.id !== pending.trackId ||
+            getPlaybackIntentGeneration() !== pending.intentGeneration ||
+            (state.currentIndex !== pending.currentIndex &&
+                pending.mutation !== "replace")
+        ) {
+            pendingManualTailAdvanceRef.current = null;
+            return;
+        }
+
+        const advance = resolveQueueAdvance({
+            action: "next",
+            queue: state.queue,
+            currentIndex: state.currentIndex,
+            isShuffle: state.isShuffle,
+            shuffleIndices: state.shuffleIndices,
+            repeatMode: state.repeatMode,
+        });
+        if (advance.kind !== "stop") {
+            const nextItem = state.queue[advance.index];
+            pendingManualTailAdvanceRef.current = null;
+            if (nextItem) {
+                startQueueItemAtIndex(advance.index, nextItem);
+            }
+            return;
+        }
+        if (pending.settled) {
+            pendingManualTailAdvanceRef.current = null;
+        }
+    }, [
+        manualTailAdvanceResolution,
+        state.currentIndex,
+        state.currentTrack,
+        state.isShuffle,
+        state.queue,
+        state.repeatMode,
+        state.shuffleIndices,
+        state.vibeMode,
+        startQueueItemAtIndex,
+    ]);
 
     const previous = useCallback(() => {
         writePlaybackAdvanceOrigin("manual", state.currentTrack?.id ?? null);
@@ -2032,6 +2218,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         state.currentIndex,
                     ),
                 );
+            } else {
+                state.setShuffleIndices([]);
             }
             return newShuffle;
         });

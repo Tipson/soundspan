@@ -8,8 +8,13 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { AudioWaveform, Check, X } from "lucide-react";
-import type { PersonalizedHomeMood } from "@/features/home/types";
+import type {
+    PersonalizedHomeMood,
+    PersonalizedHomeLanguage,
+} from "@/features/home/types";
+import { normalizeWaveMood } from "@/lib/waveSelection";
 import { ru } from "@/lib/i18n/ru";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 
 /** Provider-backed ranking directions currently supported by My Wave. */
 export type WaveFeedMode = "for-you" | "new" | "familiar";
@@ -60,34 +65,19 @@ export const WAVE_MOODS: readonly {
         label: ru.vibe.moods.energetic[0],
         subtitle: ru.vibe.moods.energetic[1],
     },
-    {
-        id: "focus",
-        label: ru.vibe.moods.focus[0],
-        subtitle: ru.vibe.moods.focus[1],
-    },
-    {
-        id: "workout",
-        label: ru.vibe.moods.workout[0],
-        subtitle: ru.vibe.moods.workout[1],
-    },
-    {
-        id: "favorites",
-        label: ru.vibe.moods.favorites[0],
-        subtitle: ru.vibe.moods.favorites[1],
-    },
-    {
-        id: "forgotten",
-        label: ru.vibe.moods.forgotten[0],
-        subtitle: ru.vibe.moods.forgotten[1],
-    },
 ];
 
 interface WaveDirectionSheetProps {
+    activeLanguage?: PersonalizedHomeLanguage;
     activeMode: WaveFeedMode;
     activeMood: WaveMood | null;
     isWaveActive?: boolean;
     isRetunePending?: boolean;
-    onApply: (mode: WaveFeedMode, mood: WaveMood | null) => void;
+    onApply: (
+        mode: WaveFeedMode,
+        mood: WaveMood | null,
+        language: PersonalizedHomeLanguage,
+    ) => void;
     onClose: () => void;
 }
 
@@ -98,6 +88,13 @@ function focusableElements(container: HTMLElement): HTMLElement[] {
         ),
     );
 }
+
+/** Vocal-language options; unknown and instrumental recordings belong to Any. */
+export const WAVE_LANGUAGES = [
+    { id: "any", label: "Любое" },
+    { id: "ru", label: "Русское" },
+    { id: "foreign", label: "Иностранное" },
+] as const;
 
 function nextRadioIndex(
     key: string,
@@ -124,8 +121,11 @@ export function WaveDirectionSheet({
     onApply,
     onClose,
 }: WaveDirectionSheetProps) {
+    useDismissibleLayer(true, onClose);
     const [draftMode, setDraftMode] = useState(activeMode);
-    const [draftMood, setDraftMood] = useState<WaveMood | null>(activeMood);
+    const [draftMood, setDraftMood] = useState<WaveMood | null>(
+        normalizeWaveMood(activeMood),
+    );
     const dialogRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -141,11 +141,6 @@ export function WaveDirectionSheet({
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                onClose();
-                return;
-            }
             if (event.key !== "Tab" || !dialogRef.current) return;
 
             const focusable = focusableElements(dialogRef.current);
@@ -340,6 +335,12 @@ export function WaveDirectionSheet({
                     >
                         {WAVE_MOODS.map((mood) => {
                             const selected = mood.id === draftMood;
+                            const visibleLabel =
+                                mood.id === "focus"
+                                    ? "Фокус"
+                                    : mood.id === "workout"
+                                      ? "Тренировка"
+                                      : mood.label;
                             return (
                                 <button
                                     key={mood.id ?? "any"}
@@ -375,8 +376,8 @@ export function WaveDirectionSheet({
                                         )}
                                     </span>
                                     <span className="min-w-0">
-                                        <span className="block text-sm font-bold text-content">
-                                            {mood.label}
+                                        <span className="block truncate whitespace-nowrap text-sm font-bold text-content">
+                                            {visibleLabel}
                                         </span>
                                         <span className="mt-0.5 hidden text-xs leading-4 text-content-muted min-[480px]:block">
                                             {mood.subtitle}
@@ -406,15 +407,15 @@ export function WaveDirectionSheet({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold text-content-secondary transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                         >
                             {ru.common.cancel}
                         </button>
                         <button
                             type="button"
-                            onClick={() => onApply(draftMode, draftMood)}
+                            onClick={() => onApply(draftMode, draftMood, "any")}
                             aria-label={`${applyLabel}: ${selectedDefinition.label}, ${selectedMoodDefinition.label}`}
-                            className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
+                            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-full bg-brand px-5 py-2 text-sm font-black text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised motion-reduce:transition-none"
                         >
                             {applyLabel}
                         </button>

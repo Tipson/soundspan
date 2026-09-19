@@ -82,7 +82,7 @@ updates:
           - minor
           - patch
 
-  # --- pip: the 3 Python sidecar services ----------------------------------
+  # --- pip: the 2 Python sidecar services ----------------------------------
   # ytmusic-streamer's yt-dlp / ytmusicapi pins are deliberately loose (see
   # header note above) -- no ignore rules for them here, ever.
   - package-ecosystem: pip
@@ -103,17 +103,6 @@ updates:
           - patch
 
   - package-ecosystem: pip
-    directory: "/services/tidal-streamer"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
-
-  - package-ecosystem: pip
     directory: "/services/ytmusic-streamer"
     schedule:
       interval: weekly
@@ -124,7 +113,7 @@ updates:
           - minor
           - patch
 
-  # --- docker: all 6 Dockerfile directories --------------------------------
+  # --- docker: all 5 Dockerfile directories --------------------------------
   - package-ecosystem: docker
     directory: "/"
     schedule:
@@ -169,17 +158,6 @@ updates:
     # unaccompanied base-image updates.
     ignore:
       - dependency-name: python
-    groups:
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
-
-  - package-ecosystem: docker
-    directory: "/services/tidal-streamer"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
     groups:
       minor-and-patch:
         update-types:

@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
-import Image from "next/image";
 import { Music } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { CachedImage } from "./CachedImage";
 
 interface CoverMosaicProps {
     /** Pre-proxied image URLs. */
@@ -83,7 +83,7 @@ function CoverMosaic({
     if (coverUrls.length === 1 && layout === "2x2") {
         return (
             <div className={cn("relative w-full h-full", className)}>
-                <Image
+                <CachedImage
                     src={coverUrls[0]}
                     alt=""
                     fill
@@ -121,7 +121,7 @@ function CoverMosaic({
                     key={`${url}-${i}`}
                     className="relative bg-surface-elevated"
                 >
-                    <Image
+                    <CachedImage
                         src={url}
                         alt=""
                         fill

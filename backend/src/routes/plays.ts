@@ -403,6 +403,13 @@ router.delete("/history", async (req, res) => {
  * /api/plays:
  *   post:
  *     summary: Log a new play for a track
+ *     description: X-Soundspan-Diagnostic playback validates the payload but returns a diagnostic ID without storing playback or forwarding scrobbles.
+ *     parameters:
+ *       - in: header
+ *         name: X-Soundspan-Diagnostic
+ *         schema:
+ *           type: string
+ *           enum: [playback]
  *     tags: [Plays]
  *     security:
  *       - apiKeyAuth: []
@@ -423,38 +430,6 @@ router.delete("/history", async (req, res) => {
  *                     type: string
  *                     minLength: 1
  *                     description: Local library track ID
- *                   playContext:
- *                     type: string
- *                     enum: [wave, home, search, playlist, album, artist, library]
- *                   waveMode:
- *                     type: string
- *                     enum: [for-you, new, familiar]
- *               - type: object
- *                 required: [tidalTrackId, title, artist, album, duration]
- *                 not:
- *                   anyOf:
- *                     - required: [trackId]
- *                     - required: [youtubeVideoId]
- *                 properties:
- *                   tidalTrackId:
- *                     type: integer
- *                     minimum: 1
- *                   title:
- *                     type: string
- *                     minLength: 1
- *                   artist:
- *                     type: string
- *                     minLength: 1
- *                   album:
- *                     type: string
- *                     minLength: 1
- *                   duration:
- *                     type: integer
- *                     minimum: 0
- *                     description: Track duration in seconds
- *                   thumbnailUrl:
- *                     type: string
- *                     minLength: 1
  *                   playContext:
  *                     type: string
  *                     enum: [wave, home, search, playlist, album, artist, library]
@@ -507,7 +482,28 @@ router.delete("/history", async (req, res) => {
 router.post("/", async (req, res) => {
     try {
         const userId = req.user!.id;
+        const requestedTrackId =
+            req.body && typeof req.body === "object"
+                ? (req.body as { trackId?: unknown }).trackId
+                : undefined;
+        if (
+            (req.body &&
+                typeof req.body === "object" &&
+                Object.prototype.hasOwnProperty.call(
+                    req.body,
+                    "tidalTrackId",
+                )) ||
+            (typeof requestedTrackId === "string" &&
+                requestedTrackId.trim().toLowerCase().startsWith("tidal:"))
+        ) {
+            return res.status(400).json({ error: "retired_provider" });
+        }
         const payload = playSchema.parse(req.body);
+        // Explicit per-request diagnostics, never infer testing from fast skips.
+        // Do not create a Play, attribute exposure, resolve metadata or scrobble.
+        if (req.headers?.["x-soundspan-diagnostic"] === "playback") {
+            return res.json({ id: "diagnostic-playback", diagnostic: true });
+        }
         const recommendationContext = await recommendationContextData(
             userId,
             payload,
@@ -555,67 +551,6 @@ router.post("/", async (req, res) => {
                 generationId: recommendationContext.recommendationGenerationId,
             });
 
-            return res.json(play);
-        }
-
-        if (payload.tidalTrackId) {
-            const resolvedMetadata = await resolveRemoteTrackMetadataForRequest(
-                {
-                    provider: "tidal",
-                    userId,
-                    tidalId: payload.tidalTrackId,
-                    metadata: {
-                        title: payload.title,
-                        artist: payload.artist,
-                        album: payload.album,
-                        duration: payload.duration,
-                    },
-                },
-            );
-            const ensured = await trackMappingService.ensureRemoteTrack({
-                provider: "tidal",
-                tidalId: payload.tidalTrackId,
-                title: resolvedMetadata.title,
-                artist: resolvedMetadata.artist,
-                album: resolvedMetadata.album,
-                duration: resolvedMetadata.duration,
-                isrc: resolvedMetadata.isrc,
-                explicit: resolvedMetadata.explicit,
-            });
-            const playedAt = new Date();
-            const play = await prisma.play.create({
-                data: {
-                    userId,
-                    trackTidalId: ensured.id,
-                    source: "TIDAL",
-                    playedAt,
-                    ...recommendationContext,
-                },
-            });
-            forwardScrobbleIsolated({
-                userId,
-                mediaType: "music",
-                kind: "scrobble",
-                listenedAt: playedAt,
-                track: {
-                    title: resolvedMetadata.title,
-                    artist: resolvedMetadata.artist,
-                    album: resolvedMetadata.album,
-                    durationSeconds: resolvedMetadata.duration,
-                },
-            });
-            await attributeRecommendationPlayback({
-                userId,
-                identity: {
-                    provider: "tidal",
-                    providerTrackId: String(payload.tidalTrackId),
-                },
-                playedAt,
-                listenedSeconds: null,
-                completionRatio: null,
-                outcome: null,
-                generationId: recommendationContext.recommendationGenerationId,
-            });
             return res.json(play);
         }
 
@@ -694,10 +629,16 @@ router.post("/", async (req, res) => {
  * /api/plays/{playId}/engagement:
  *   patch:
  *     summary: Record the final playback outcome used by recommendations
+ *     description: X-Soundspan-Diagnostic playback validates the payload and acknowledges it without changing engagement or recommendation attribution.
  *     tags: [Plays]
  *     security:
  *       - apiKeyAuth: []
  *     parameters:
+ *       - in: header
+ *         name: X-Soundspan-Diagnostic
+ *         schema:
+ *           type: string
+ *           enum: [playback]
  *       - in: path
  *         name: playId
  *         required: true
@@ -748,6 +689,10 @@ router.patch("/:playId/engagement", async (req, res) => {
                 ...(!engagement.success ? engagement.error.issues : []),
             ],
         });
+    }
+
+    if (req.headers?.["x-soundspan-diagnostic"] === "playback") {
+        return res.json({ success: true, diagnostic: true });
     }
 
     try {

@@ -1,14 +1,22 @@
 import assert from "node:assert/strict";
-import { afterEach, mock, test } from "node:test";
+import { after, afterEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Episode } from "../../features/podcast/types";
 import { createConsecutiveErrorBreaker } from "../../lib/audio-engine/consecutiveErrorBreaker";
 import {
     consumePlaybackAdvanceOrigin,
+    getExplicitPlaybackPauseGeneration,
     playbackAdvanceOriginRef,
     setPlaybackAutoRestartSuppressed,
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
+
+GlobalRegistrator.register();
+(
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+window.confirm = () => true;
 
 /**
  * Behavior tests for the mixed-queue UX fixes in
@@ -52,6 +60,9 @@ const personalizedFeed = {
         seedCount: 1,
     } as Record<string, unknown>,
 };
+const personalizedFeedGate: { current: Promise<void> | null } = {
+    current: null,
+};
 const listenTogetherSession = {
     current: null as {
         groupId: string;
@@ -79,12 +90,17 @@ const listenTogetherSocketMock = {
 };
 
 afterEach(() => {
+    personalizedFeedGate.current = null;
     playbackAdvanceOriginRef.current = null;
     setPlaybackAutoRestartSuppressed(false);
     listenTogetherSession.current = null;
     listenTogetherSocketMock.hasActiveGroup = false;
     listenTogetherSocketMock.activeGroupId = null;
     listenTogetherQueueCalls.length = 0;
+});
+
+after(async () => {
+    await GlobalRegistrator.unregister();
 });
 
 mock.module("@/lib/audio-volume-mode-context", {
@@ -123,6 +139,8 @@ mock.module("@/lib/api", {
             clearPlaybackState: async () => ({}),
             request: async (path: string) => {
                 apiCalls.personalizedRequests.push(path);
+                if (personalizedFeedGate.current)
+                    await personalizedFeedGate.current;
                 return personalizedFeed.current;
             },
         },
@@ -603,6 +621,100 @@ test("manual next keeps repeat-one behavior", async () => {
     assert.equal(state.repeatOneCount, 1);
 });
 
+test("shuffle toggle keeps the flag and shuffle order unambiguous on and off", async () => {
+    const currentTrack = makeTrack("shuffle-current", "artist-1");
+    const state = createDeferredAudioState({
+        queue: [
+            currentTrack,
+            makeTrack("shuffle-next", "artist-2"),
+            makeTrack("shuffle-last", "artist-3"),
+        ],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        isShuffle: false,
+        shuffleIndices: [],
+    });
+    const controls = await renderControls({
+        state,
+        playback: createPlaybackStub(),
+    });
+
+    controls.toggleShuffle();
+    state.commit();
+
+    assert.equal(state.isShuffle, true);
+    assert.deepEqual(
+        [...(state.shuffleIndices as number[])].sort((a, b) => a - b),
+        [0, 1, 2],
+    );
+
+    controls.toggleShuffle();
+    state.commit();
+
+    assert.equal(state.isShuffle, false);
+    assert.deepEqual(state.shuffleIndices, []);
+});
+
+test("persisted active shuffle rebuilds its missing factual order on mount", async (testContext) => {
+    const currentTrack = makeTrack("persisted-shuffle", "artist-1");
+    const state = createDeferredAudioState({
+        queue: [
+            currentTrack,
+            makeTrack("persisted-next", "artist-2"),
+            makeTrack("persisted-last", "artist-3"),
+        ],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        isShuffle: true,
+        shuffleIndices: [],
+    });
+    stateHolder.current = state;
+    playbackHolder.current = createPlaybackStub();
+
+    const [{ AudioControlsProvider, useAudioControls }, { createRoot }] =
+        await Promise.all([
+            import("../../lib/audio-controls-context"),
+            import("react-dom/client"),
+        ]);
+    const controlsRef: {
+        current: ReturnType<typeof useAudioControls> | null;
+    } = { current: null };
+    const Probe = () => {
+        controlsRef.current = useAudioControls();
+        return React.createElement("div", null, "ready");
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    testContext.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+
+    await React.act(async () => {
+        root.render(
+            React.createElement(
+                AudioControlsProvider,
+                null,
+                React.createElement(Probe),
+            ),
+        );
+        await Promise.resolve();
+    });
+    state.commit();
+
+    assert.deepEqual(
+        [...(state.shuffleIndices as number[])].sort((a, b) => a - b),
+        [0, 1, 2],
+    );
+    assert.ok(controlsRef.current);
+    controlsRef.current.next();
+    state.commit();
+    assert.notEqual(state.currentIndex, 0);
+});
+
 test("provider radio extends the played shuffle order without replaying old tracks", async () => {
     const currentTrack = {
         ...makeTrack("yt:AAAAAAAAAAA", "provider-artist"),
@@ -682,7 +794,7 @@ test("provider radio extends the played shuffle order without replaying old trac
     );
 });
 
-test("three early Wave skips replace the prepared provider tail", async () => {
+test("three early Wave skips refresh only the tail and respect a subsequent pause", async (t) => {
     const currentTrack = {
         ...makeTrack("yt:AAAAAAAAAAA", "provider-artist"),
         streamSource: "youtube" as const,
@@ -692,12 +804,14 @@ test("three early Wave skips replace the prepared provider tail", async () => {
             youtubeVideoId: "AAAAAAAAAAA",
         },
     };
-    const staleTracks = ["BBBBBBBBBBB", "CCCCCCCCCCC"].map((videoId) => ({
-        ...makeTrack(`yt:${videoId}`, `artist-${videoId}`),
-        streamSource: "youtube" as const,
-        youtubeVideoId: videoId,
-        provider: { source: "youtube" as const, youtubeVideoId: videoId },
-    }));
+    const staleTracks = ["BBBBBBBBBBB", "CCCCCCCCCCC", "EEEEEEEEEEE"].map(
+        (videoId) => ({
+            ...makeTrack(`yt:${videoId}`, `artist-${videoId}`),
+            streamSource: "youtube" as const,
+            youtubeVideoId: videoId,
+            provider: { source: "youtube" as const, youtubeVideoId: videoId },
+        }),
+    );
     const freshVideoId = "DDDDDDDDDDD";
     personalizedFeed.current = {
         shelves: {
@@ -737,27 +851,76 @@ test("three early Wave skips replace the prepared provider tail", async () => {
         ],
     });
     const playback = createPlaybackStub({ currentTime: 5, duration: 200 });
-    const controls = await renderControls({ state, playback });
-
-    controls.next();
-    controls.next();
-    controls.next();
-    await flushAsync();
+    let releaseFeed!: () => void;
+    personalizedFeedGate.current = new Promise<void>((resolve) => {
+        releaseFeed = resolve;
+    });
+    stateHolder.current = state;
+    playbackHolder.current = playback;
+    apiCalls.personalizedRequests.length = 0;
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
+    const { createRoot } = await import("react-dom/client");
+    const controlsRef: { current: ReturnType<typeof useAudioControls> | null } =
+        { current: null };
+    function Probe() {
+        controlsRef.current = useAudioControls();
+        return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        releaseFeed();
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    const render = async () =>
+        React.act(async () => {
+            root.render(
+                React.createElement(
+                    AudioControlsProvider,
+                    null,
+                    React.createElement(Probe),
+                ),
+            );
+        });
+    await render();
+    for (let index = 0; index < 3; index++) {
+        assert.ok(controlsRef.current);
+        controlsRef.current.next();
+        state.commit();
+        await render();
+    }
+    // While recommendations are pending, the listener pauses the selection.
+    playback.currentTime = 7;
+    playback.isPlaying = false;
+    await React.act(async () => {
+        releaseFeed();
+        await flushAsync();
+    });
     state.commit();
 
     assert.equal(apiCalls.personalizedRequests.length, 1);
     assert.equal(
         (state.currentTrack as { youtubeVideoId?: string }).youtubeVideoId,
-        freshVideoId,
+        "EEEEEEEEEEE",
     );
     assert.deepEqual(
         (state.queue as Array<{ youtubeVideoId?: string }>).map(
             (track) => track.youtubeVideoId,
         ),
-        ["AAAAAAAAAAA", freshVideoId],
+        [
+            "AAAAAAAAAAA",
+            "BBBBBBBBBBB",
+            "CCCCCCCCCCC",
+            "EEEEEEEEEEE",
+            freshVideoId,
+        ],
     );
-    assert.equal(playback.currentTime, 0);
-    assert.equal(playback.isPlaying, true);
+    assert.equal(state.currentIndex, 3);
+    assert.equal(playback.currentTime, 7);
+    assert.equal(playback.isPlaying, false);
 });
 
 test("provider radio adds rich tracks to a Listen Together queue without local mutation", async () => {
@@ -945,13 +1108,16 @@ test("clicking the playing occurrence toggles pause and resume without rebuildin
     playback.isPlaying = true;
     const controls = await renderControls({ state, playback });
 
+    const beforePause = getExplicitPlaybackPauseGeneration();
     controls.playTracks([{ ...currentTrack }, queue[1]], 0);
+    assert.ok(getExplicitPlaybackPauseGeneration() > beforePause);
     state.commit();
     assert.equal(playback.isPlaying, false);
     assert.equal(playback.currentTime, 42);
     assert.equal(state.queue, queue);
 
     controls.playTrack({ ...currentTrack });
+    assert.equal(getExplicitPlaybackPauseGeneration(), 0);
     state.commit();
     assert.equal(playback.isPlaying, true);
     assert.equal(playback.currentTime, 42);
@@ -969,4 +1135,211 @@ test("clicking the playing occurrence toggles pause and resume without rebuildin
         "playlist-item-b",
     );
     assert.notEqual(state.queue, queue);
+});
+
+test("the shared UI and media-session pause action records explicit intent", async () => {
+    const state = createDeferredAudioState({
+        queue: [makeTrack("pause-intent", "artist-1")],
+        currentIndex: 0,
+        playbackType: "track",
+    });
+    const playback = createPlaybackStub({ currentTime: 42, duration: 200 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+    const beforePause = getExplicitPlaybackPauseGeneration();
+    controls.pause();
+    assert.equal(playback.isPlaying, false);
+    assert.ok(getExplicitPlaybackPauseGeneration() > beforePause);
+    controls.resume();
+    assert.equal(getExplicitPlaybackPauseGeneration(), 0);
+});
+
+test("explicit offline queue replacement works even when the selected track is already current", async () => {
+    const currentTrack = makeTrack("downloaded", "artist-1");
+    const localNext = makeTrack("also-downloaded", "artist-2");
+    const state = createDeferredAudioState({
+        queue: [currentTrack, makeTrack("online-only", "artist-3")],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        vibeMode: true,
+    });
+    const playback = createPlaybackStub({ currentTime: 42, duration: 200 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+    controls.playTracks([currentTrack, localNext], 0, false, {
+        replaceQueue: true,
+    });
+    state.commit();
+    assert.deepEqual(state.queue, [currentTrack, localNext]);
+    assert.equal(state.vibeMode, false);
+    assert.equal(playback.isPlaying, true);
+    assert.equal(playback.currentTime, 0);
+});
+
+test("a downloaded three-track queue clears play intent after its final natural advance", async () => {
+    const tracks = [3, 2, 1].map((id) => ({
+        ...makeTrack(`yt:train00000${id}`, "train-check"),
+        title: `Traincheck ${id}`,
+        duration: 9,
+    }));
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub({ duration: 9 });
+    let controls = await renderControls({ state, playback });
+
+    // DownloadsList starts a complete local queue using this explicit action.
+    controls.playTracks(tracks, 0, false, { replaceQueue: true });
+    state.commit();
+    for (let index = 0; index < tracks.length; index += 1) {
+        assert.equal(state.currentIndex, index);
+        assert.equal(
+            (state.currentTrack as { id: string }).id,
+            tracks[index].id,
+        );
+        assert.equal(playback.isPlaying, true);
+        playback.currentTime = 9;
+        controls = await renderControls({ state, playback });
+        // This is also the online queue-end path when automatic matching
+        // completes without appending any tracks.
+        controls.advanceQueue(null);
+        state.commit();
+    }
+
+    assert.equal(state.currentIndex, 2);
+    assert.equal(playback.currentTime, 9);
+    assert.equal(playback.isPlaying, false);
+});
+
+test("manual next at the last track keeps the unfinished track playing", async () => {
+    const currentTrack = {
+        ...makeTrack("last-playing", "artist"),
+        duration: 9,
+    };
+    const state = createDeferredAudioState({
+        queue: [currentTrack],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+    });
+    const playback = createPlaybackStub({ currentTime: 4, duration: 9 });
+    playback.isPlaying = true;
+    const controls = await renderControls({ state, playback });
+
+    controls.next();
+    state.commit();
+
+    assert.equal(playback.currentTime, 4);
+    assert.equal(playback.isPlaying, true);
+});
+
+test("manual next at the Wave tail waits for one refill and advances once", async (t) => {
+    const currentTrack = {
+        ...makeTrack("yt:AAAAAAAAAAA", "provider-artist"),
+        streamSource: "youtube" as const,
+        youtubeVideoId: "AAAAAAAAAAA",
+        provider: {
+            source: "youtube" as const,
+            youtubeVideoId: "AAAAAAAAAAA",
+        },
+    };
+    const nextVideoId = "BBBBBBBBBBB";
+    personalizedFeed.current = {
+        shelves: {
+            discovery: [
+                {
+                    id: `yt:${nextVideoId}`,
+                    title: "Fresh tail track",
+                    duration: 180,
+                    trackNo: null,
+                    artist: { id: null, name: "Fresh artist" },
+                    album: {
+                        id: null,
+                        title: "Fresh album",
+                        coverArt: null,
+                    },
+                    source: "youtube",
+                    provider: {
+                        tidalTrackId: null,
+                        youtubeVideoId: nextVideoId,
+                    },
+                    streamSource: "youtube",
+                    youtubeVideoId: nextVideoId,
+                },
+            ],
+            quickPicks: [],
+            listenAgain: [],
+        },
+        degraded: false,
+        reason: null,
+        seedCount: 1,
+    };
+    let releaseFeed!: () => void;
+    personalizedFeedGate.current = new Promise<void>((resolve) => {
+        releaseFeed = resolve;
+    });
+    const state = createDeferredAudioState({
+        queue: [currentTrack],
+        currentIndex: 0,
+        currentTrack,
+        playbackType: "track",
+        vibeMode: true,
+    });
+    const playback = createPlaybackStub({ currentTime: 37, duration: 200 });
+    playback.isPlaying = true;
+    stateHolder.current = state;
+    playbackHolder.current = playback;
+    apiCalls.personalizedRequests.length = 0;
+
+    const { AudioControlsProvider, useAudioControls } =
+        await import("../../lib/audio-controls-context");
+    const { createRoot } = await import("react-dom/client");
+    const controlsRef: { current: ReturnType<typeof useAudioControls> | null } =
+        { current: null };
+    function Probe() {
+        controlsRef.current = useAudioControls();
+        return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        releaseFeed();
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    const render = async () =>
+        React.act(async () => {
+            root.render(
+                React.createElement(
+                    AudioControlsProvider,
+                    null,
+                    React.createElement(Probe),
+                ),
+            );
+        });
+
+    await render();
+    await React.act(async () => {
+        controlsRef.current?.next();
+        controlsRef.current?.next();
+        await flushAsync();
+    });
+    assert.equal(apiCalls.personalizedRequests.length, 1);
+    assert.equal(state.currentIndex, 0);
+
+    await React.act(async () => {
+        releaseFeed();
+        await flushAsync();
+        state.commit();
+    });
+    await render();
+    state.commit();
+
+    assert.equal(state.currentIndex, 1);
+    assert.equal(
+        (state.currentTrack as { youtubeVideoId?: string }).youtubeVideoId,
+        nextVideoId,
+    );
+    assert.equal(playback.currentTime, 0);
+    assert.equal(playback.isPlaying, true);
 });

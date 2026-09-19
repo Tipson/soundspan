@@ -1,5 +1,7 @@
 import type { Track } from "@/lib/audio-state-context";
 import {
+    recordExplicitPlaybackPause,
+    recordExplicitPlaybackResume,
     writePlaybackAdvanceOrigin,
     writePlaybackReplacementIntent,
 } from "./playbackAdvanceOrigin";
@@ -82,7 +84,10 @@ export function applyTrackClick(
     }
 
     if (!playback.isPlaying) {
+        recordExplicitPlaybackResume();
         writePlaybackAdvanceOrigin("manual", selectedTrack.id);
+    } else {
+        recordExplicitPlaybackPause();
     }
     playback.setIsPlaying(!playback.isPlaying);
     return true;

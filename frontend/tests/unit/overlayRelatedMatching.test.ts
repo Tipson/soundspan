@@ -3,7 +3,6 @@ import { test } from "node:test";
 import {
     buildStreamMatchQuery,
     getRelatedTrackKey,
-    partitionTidalBatchMatches,
     selectTracksNeedingStreamMatch,
     sortRelatedTracksByRelevance,
 } from "../../lib/overlay-related-matching";
@@ -65,7 +64,7 @@ test("stream matching skips library rows, unidentified rows, and matched rows", 
         { title: "needs-match", artist: "B" },
     ];
     const missing = selectTracksNeedingStreamMatch(tracks, {
-        "ext:a::already-matched": { streamSource: "tidal" },
+        "ext:a::already-matched": { streamSource: "youtube" },
     });
     assert.deepEqual(
         missing.map((t) => t.title),
@@ -81,12 +80,6 @@ test("provider-playable related rows do not trigger a second catalog match", () 
                 artist: "A",
                 streamSource: "youtube" as const,
                 youtubeVideoId: "video-1",
-            },
-            {
-                title: "TIDAL ready",
-                artist: "B",
-                streamSource: "tidal" as const,
-                tidalTrackId: 42,
             },
             { title: "Needs match", artist: "C" },
         ],
@@ -128,32 +121,4 @@ test("stream-match queries prefer the row artist and carry album context", () =>
         }).artist,
         "Album Artist",
     );
-});
-
-test("tidal batch partition records hits and queues misses for youtube", () => {
-    const missing = [
-        { title: "hit", artist: "A" },
-        { title: "miss", artist: "B", duration: 90 },
-        { title: "null-slot", artist: "C" },
-    ];
-    const { foundMatches, youtubePayload, youtubeTrackKeys } =
-        partitionTidalBatchMatches(missing, [
-            { id: 42, title: "hit", artist: "A", duration: 180 },
-            null,
-        ]);
-
-    assert.deepEqual(foundMatches, {
-        "ext:a::hit": {
-            streamSource: "tidal",
-            tidalTrackId: 42,
-            title: "hit",
-            artist: "A",
-            duration: 180,
-        },
-    });
-    assert.deepEqual(
-        youtubePayload.map((q) => q.title),
-        ["miss", "null-slot"],
-    );
-    assert.deepEqual(youtubeTrackKeys, ["ext:b::miss", "ext:c::null-slot"]);
 });

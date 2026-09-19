@@ -1,11 +1,11 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Music } from "lucide-react";
 import { DiscoverResult } from "../types";
 import { api } from "@/lib/api";
 import { formatListeners } from "@/lib/format";
 import { getDiscoveryArtistHref } from "@/utils/artistRoute";
 import { searchExtrasRu } from "@/lib/i18n/searchExtrasRu";
+import { CachedImage } from "@/components/ui/CachedImage";
 
 interface SimilarArtistsGridProps {
     similarArtists: DiscoverResult[];
@@ -71,14 +71,16 @@ export function SimilarArtistsGrid({
                         >
                             <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-elevated shadow-lg shadow-black/20">
                                 {imageUrl ? (
-                                    <Image
+                                    <CachedImage
                                         src={imageUrl}
                                         alt={result.name}
                                         fill
                                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
                                         className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
                                         loading="lazy"
-                                        unoptimized
+                                        fallback={
+                                            <Music className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />
+                                        }
                                     />
                                 ) : (
                                     <Music className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />

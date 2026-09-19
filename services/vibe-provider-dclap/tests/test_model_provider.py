@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import weakref
 from collections.abc import Iterator
 from types import SimpleNamespace
 
@@ -134,7 +135,7 @@ def test_cancelled_audio_stops_between_segments_and_releases_lock(
     monkeypatch.setattr(
         model_provider,
         "segmented_log_mels",
-        lambda _decoded, **_kwargs: iter([object(), object()]),
+        lambda _decoded, **_kwargs: (item for item in [object(), object()]),
     )
     provider = DclapProvider(
         load_models=lambda: ModelBundle(
@@ -195,7 +196,7 @@ def test_blocking_audio_decode_does_not_hold_inference_lock(
     monkeypatch.setattr(
         model_provider,
         "segmented_log_mels",
-        lambda _decoded, **_kwargs: iter([object()]),
+        lambda _decoded, **_kwargs: (item for item in [object()]),
     )
     provider = DclapProvider(
         load_models=lambda: ModelBundle(AudioSession(), TextSession(), Tokenizer()),
@@ -289,3 +290,132 @@ def test_admission_reservation_rejects_before_executor_submission() -> None:
     assert provider.try_reserve_inference()
     provider.release_inference()
     assert MAX_QUEUED_INFERENCE_REQUESTS == 4
+
+
+def test_queued_audio_does_not_retain_another_decoded_waveform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep one audio buffer resident through decode, lock wait and inference."""
+    first_running = threading.Event()
+    release_first = threading.Event()
+    second_decoded = threading.Event()
+    errors: list[BaseException] = []
+
+    def decode(path: str, **_kwargs: object) -> object:
+        if path == "second.flac":
+            second_decoded.set()
+        return object()
+
+    class BlockingSession(AudioSession):
+        def run(self, outputs: list[str] | None, feed: dict[str, object]) -> list[object]:
+            first_running.set()
+            assert release_first.wait(timeout=3)
+            return super().run(outputs, feed)
+
+    monkeypatch.setattr(model_provider, "load_audio", decode)
+    monkeypatch.setattr(
+        model_provider,
+        "segmented_log_mels",
+        lambda *_args, **_kwargs: (item for item in [object()]),
+    )
+    provider = DclapProvider(
+        load_models=lambda: ModelBundle(BlockingSession(), TextSession(), Tokenizer()),
+        idle_timeout=0,
+    )
+
+    def embed(path: str) -> None:
+        try:
+            provider.get_audio_embedding(path)
+        except BaseException as error:
+            errors.append(error)
+
+    first = threading.Thread(target=embed, args=("first.flac",))
+    second = threading.Thread(target=embed, args=("second.flac",))
+    first.start()
+    try:
+        assert first_running.wait(timeout=2)
+        second.start()
+        decoded_while_first_running = second_decoded.wait(timeout=0.3)
+    finally:
+        release_first.set()
+        first.join(timeout=3)
+        if second.ident is not None:
+            second.join(timeout=3)
+    assert not first.is_alive() and not second.is_alive()
+    assert not errors
+    assert not decoded_while_first_running
+    assert second_decoded.is_set()
+
+
+@pytest.mark.parametrize("failure", ["decode", "cancel", "inference"])
+def test_audio_buffer_slot_is_released_after_failure(
+    monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """A failed or cancelled request must not starve the next audio request."""
+    control = InferenceCancellation(deadline=None)
+
+    def decode(_path: str, **_kwargs: object) -> object:
+        if failure == "decode":
+            raise RuntimeError("decode failed")
+        if failure == "cancel":
+            control.cancel()
+        return object()
+
+    class FailingSession(AudioSession):
+        def run(self, outputs: list[str] | None, feed: dict[str, object]) -> list[object]:
+            raise RuntimeError("inference failed")
+
+    provider = DclapProvider(
+        load_models=lambda: ModelBundle(FailingSession(), TextSession(), Tokenizer()),
+        idle_timeout=0,
+    )
+    monkeypatch.setattr(model_provider, "load_audio", decode)
+    monkeypatch.setattr(
+        model_provider,
+        "segmented_log_mels",
+        lambda *_args, **_kwargs: (item for item in [object()]),
+    )
+    with pytest.raises(RuntimeError):
+        provider.get_audio_embedding("broken.flac", control)
+    monkeypatch.setattr(model_provider, "load_audio", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(model_provider, "run_audio_chunks", lambda *_args: [1.0] * 512)
+    # Bound a regression rather than hanging the test for the production wait budget.
+    monkeypatch.setattr(model_provider, "MAX_INFERENCE_LOCK_POLLS", 2)
+    assert len(provider.get_audio_embedding("valid.flac")) == 512
+
+
+def test_cancelled_traceback_does_not_retain_decoded_audio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even a retained failed future must not keep the large waveform alive."""
+    control = InferenceCancellation(deadline=None)
+    references: list[weakref.ReferenceType[object]] = []
+
+    class Waveform:
+        pass
+
+    def decode(_path: str, **_kwargs: object) -> object:
+        waveform = Waveform()
+        references.append(weakref.ref(waveform))
+        return waveform
+
+    def mels(source: object, **_kwargs: object) -> Iterator[object]:
+        yield object()
+        assert source is not None
+
+    class CancellingSession(AudioSession):
+        def run(self, outputs: list[str] | None, feed: dict[str, object]) -> list[object]:
+            control.cancel()
+            return super().run(outputs, feed)
+
+    provider = DclapProvider(
+        load_models=lambda: ModelBundle(CancellingSession(), TextSession(), Tokenizer()),
+        idle_timeout=0,
+    )
+    monkeypatch.setattr(model_provider, "load_audio", decode)
+    monkeypatch.setattr(model_provider, "segmented_log_mels", mels)
+    with pytest.raises(InferenceCancelledError) as failure:
+        provider.get_audio_embedding("cancelled.flac", control)
+    assert failure.value.__traceback__ is not None
+    assert len(references) == 1
+    assert references[0]() is None

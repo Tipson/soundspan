@@ -3,7 +3,6 @@
 import { SettingsSection } from "../ui";
 import { UserSettings } from "../../types";
 import { YouTubeMusicCard } from "./YouTubeMusicSection";
-import { TidalStreamingCard } from "./TidalStreamingSection";
 
 interface IntegrationsSectionProps {
     settings: UserSettings;
@@ -25,7 +24,6 @@ export function IntegrationsSection({
         >
             <div className="space-y-3">
                 <YouTubeMusicCard settings={settings} onUpdate={onUpdate} />
-                <TidalStreamingCard settings={settings} onUpdate={onUpdate} />
             </div>
         </SettingsSection>
     );

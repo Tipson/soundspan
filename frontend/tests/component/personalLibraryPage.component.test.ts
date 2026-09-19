@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { LucideProps } from "lucide-react";
 
 let tab: string | null = null;
+let create: string | null = null;
 
-const Icon = () => React.createElement("i");
+const Icon = React.forwardRef<SVGSVGElement, LucideProps>((props, ref) =>
+    React.createElement("svg", { ...props, ref }),
+);
+Icon.displayName = "TestIcon";
 
 mock.module("lucide-react", {
     namedExports: {
@@ -17,16 +22,35 @@ mock.module("lucide-react", {
         ListMusic: Icon,
         Loader2: Icon,
         Music2: Icon,
+        Plus: Icon,
         RotateCcw: Icon,
         Search: Icon,
         Sparkles: Icon,
+        Upload: Icon,
         UserRound: Icon,
     },
 });
 
 mock.module("next/navigation", {
     namedExports: {
-        useSearchParams: () => ({ get: () => tab }),
+        useRouter: () => ({
+            push: () => undefined,
+            replace: () => undefined,
+        }),
+        useSearchParams: () => ({
+            get: (name: string) => (name === "create" ? create : tab),
+        }),
+    },
+});
+
+mock.module("@/features/playlist/components/CreatePlaylistDialog", {
+    namedExports: {
+        CreatePlaylistDialog: ({ isOpen }: { isOpen: boolean }) =>
+            isOpen
+                ? React.createElement("div", {
+                      "data-testid": "create-playlist-dialog",
+                  })
+                : null,
     },
 });
 
@@ -123,6 +147,59 @@ test("personal Library failures provide touch-sized retry actions", async () => 
     assert.match(albums, /min-h-11/);
 });
 
+test("personal Library keeps system collections ahead of loading and error content", async () => {
+    const { PersonalPlaylistGrid } =
+        await import("../../features/library/components/PersonalPlaylistGrid");
+    const { LibraryPlaylistCard } =
+        await import("../../features/library/components/LibraryPlaylistCard");
+
+    const leadingCards = React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(LibraryPlaylistCard, {
+            href: "/playlist/my-liked",
+            title: "Любимые треки",
+            trackCount: 24,
+            icon: Icon,
+            accent: "liked",
+        }),
+        React.createElement(LibraryPlaylistCard, {
+            href: "/library?tab=downloads",
+            title: "Загруженное",
+            trackCount: 1,
+            icon: Icon,
+            accent: "downloaded",
+        }),
+    );
+
+    for (const state of [
+        { isLoading: true, isError: false, marker: "animate-pulse" },
+        {
+            isLoading: false,
+            isError: true,
+            marker: 'role="alert"',
+        },
+    ]) {
+        const html = renderToStaticMarkup(
+            React.createElement(PersonalPlaylistGrid, {
+                playlists: [],
+                isLoading: state.isLoading,
+                isError: state.isError,
+                onRetry: () => undefined,
+                leadingCards,
+            }),
+        );
+
+        assert.match(html, /href="\/playlist\/my-liked"/);
+        assert.match(html, /href="\/library\?tab=downloads"/);
+        assert.match(html, new RegExp(state.marker));
+        assert.ok(
+            html.indexOf("Любимые треки") < html.indexOf("Загруженное"),
+            "Любимые треки должны оставаться первой системной карточкой",
+        );
+    }
+});
+
 mock.module("@/features/device-offline/DeviceOfflineProvider", {
     namedExports: {
         useOptionalDeviceOffline: () => ({
@@ -168,6 +245,7 @@ mock.module("@/features/device-offline/components/DownloadsList", {
 test("Library opens one Playlists flow for liked tracks, personal playlists, and device downloads", async () => {
     const { default: LibraryPage } = await import("../../app/library/page");
     tab = null;
+    create = null;
     const html = renderToStaticMarkup(React.createElement(LibraryPage));
 
     assert.match(html, /Моя коллекция/);
@@ -182,6 +260,9 @@ test("Library opens one Playlists flow for liked tracks, personal playlists, and
     assert.match(html, /href="\/playlist\/my-liked"/);
     assert.match(html, /href="\/library\?tab=downloads"/);
     assert.match(html, /Evening mix/);
+    assert.match(html, /href="\/import"/);
+    assert.match(html, />Импортировать плейлист</);
+    assert.match(html, />Создать плейлист</);
     assert.doesNotMatch(html, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
     assert.match(html, /24 трека/);
     assert.match(html, /1 трек/);
@@ -199,6 +280,26 @@ test("Library opens one Playlists flow for liked tracks, personal playlists, and
     assert.doesNotMatch(html, /Shuffle Library/);
     assert.doesNotMatch(html, />Owned</);
     assert.doesNotMatch(html, />Discovery</);
+});
+
+test("Library uses compact mobile actions while preserving their accessible purpose", async () => {
+    const { default: LibraryPage } = await import("../../app/library/page");
+    tab = null;
+    create = null;
+    const html = renderToStaticMarkup(React.createElement(LibraryPage));
+    assert.match(html, /aria-label="Создать плейлист"/);
+    assert.match(html, /aria-label="Импортировать плейлист"/);
+    assert.match(html, />Создать</);
+    assert.match(html, />Импорт</);
+});
+
+test("Library owns the playlist creation deep link", async () => {
+    const { default: LibraryPage } = await import("../../app/library/page");
+    tab = null;
+    create = "1";
+    const html = renderToStaticMarkup(React.createElement(LibraryPage));
+    assert.match(html, /data-testid="create-playlist-dialog"/);
+    create = null;
 });
 
 test("Library tabs keep saved albums and artists while Downloads opens its own collection", async () => {
@@ -221,6 +322,7 @@ test("Library tabs keep saved albums and artists while Downloads opens its own c
     assert.match(legacyDownloadsHtml, /data-library-view="downloads"/);
     assert.match(legacyDownloadsHtml, /ЗАГРУЗКИ НА УСТРОЙСТВЕ/);
     assert.doesNotMatch(legacyDownloadsHtml, /Evening mix/);
+    assert.doesNotMatch(legacyDownloadsHtml, /aria-current="page"/);
 
     tab = "liked";
     const legacyLikedHtml = renderToStaticMarkup(

@@ -6,11 +6,24 @@ export interface PlaybackSourceLease {
     release(): void;
 }
 
+/** Identifies device transport independently of the track's original catalog. */
+export function isDevicePlaybackSourceUrl(url: string | null): boolean {
+    return Boolean(
+        url?.startsWith("blob:") || url?.includes("/__offline/audio/"),
+    );
+}
+
 /**
  * Keeps at most one playback-source lease alive and rejects results from an
  * obsolete load generation before they can reach the audio engine.
  */
 export interface PlaybackSourceLeaseController {
+    /** Transfer the prepared source without revoking its URL. */
+    take(): PlaybackSourceLease | null;
+    /** Accept a transferred source synchronously, retiring the previous one. */
+    adopt(source: PlaybackSourceLease): void;
+    /** Read the active transport without exposing it to telemetry. */
+    getSourceUrl(): string | null;
     acquire(
         acquireSource: (signal: AbortSignal) => Promise<PlaybackSourceLease>,
         isCurrent: () => boolean,
@@ -45,6 +58,17 @@ export function createPlaybackSourceLeaseController(): PlaybackSourceLeaseContro
     };
 
     return {
+        take() {
+            const source = active;
+            active = null;
+            release();
+            return source;
+        },
+        adopt(source) {
+            release();
+            active = makeIdempotent(source);
+        },
+        getSourceUrl: () => active?.url ?? null,
         async acquire(acquireSource, isCurrent) {
             release();
             const requestGeneration = generation;

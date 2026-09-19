@@ -197,6 +197,35 @@ test("preloaded promotion emits load and autoplays after only a microtask flush"
     assert.equal(preloadedHowl.playCalls, 1);
 });
 
+test("Howler preload lease resolves ready only from onload", async (t) => {
+    const engine = new HowlerEngine();
+    t.after(() => engine.destroy());
+    const lease = engine.preload("https://stream.example/lease.flac", "flac");
+    assert.ok(lease);
+    let settled = false;
+    void lease.result.then(() => {
+        settled = true;
+    });
+    await Promise.resolve();
+    assert.equal(settled, false);
+
+    StubHowl.instances.at(-1)?.finishLoad();
+    assert.deepEqual(await lease.result, { state: "ready" });
+});
+
+test("Howler replacement preload cancels the previous readiness lease", async (t) => {
+    const engine = new HowlerEngine();
+    t.after(() => engine.destroy());
+    const first = engine.preload("https://stream.example/first.flac", "flac");
+    const second = engine.preload("https://stream.example/second.flac", "flac");
+    assert.ok(first);
+    assert.ok(second);
+
+    assert.deepEqual(await first.result, { state: "cancelled" });
+    StubHowl.instances.at(-1)?.finishLoad();
+    assert.deepEqual(await second.result, { state: "ready" });
+});
+
 test("late callbacks from a superseded track cannot fail or autoplay the replacement", (t) => {
     const engine = new HowlerEngine();
     t.after(() => engine.destroy());

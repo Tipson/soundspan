@@ -46,6 +46,8 @@ export interface RecommendationCandidate {
     audioFeatures?: {
         bpm?: number | null;
         energy?: number | null;
+        /** Perceived intensity; unlike RMS energy, not just mastering volume. */
+        arousal?: number | null;
         valence?: number | null;
         danceability?: number | null;
         instrumentalness?: number | null;
@@ -55,6 +57,9 @@ export interface RecommendationCandidate {
 
 export interface RecommendationExposureSignal {
     canonicalKey: string;
+    artistKey?: string;
+    /** Known album snapshot from an actually viewed, served recommendation. */
+    albumKey?: string | null;
     exposedAt: Date;
 }
 
@@ -71,6 +76,7 @@ export interface RecommendRequest {
         surface: RecommendationSurface;
         direction: RecommendationDirection;
         mood?: RecommendationMood | null;
+        language?: import("./recordingLanguage").WaveLanguage;
     };
     sessionId: string;
     context?: RecommendationRequestContext;

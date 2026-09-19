@@ -43,7 +43,7 @@ const eligibleInput = {
     isListenTogether: false,
     repeatMode: "off" as const,
     hasNextTrack: true,
-    nextTrackPreloadRequested: true,
+    nextTrackPreloadReady: true,
     currentTimeSec: 176,
     durationSec: 180,
 };
@@ -86,7 +86,7 @@ test("does not arm outside the exact iOS standalone background case", () => {
         { isListenTogether: true },
         { repeatMode: "one" as const },
         { hasNextTrack: false },
-        { nextTrackPreloadRequested: false },
+        { nextTrackPreloadReady: false },
     ]) {
         const fake = createFakeScheduler();
         const handoff = createIosBackgroundTrackHandoff(fake.scheduler);

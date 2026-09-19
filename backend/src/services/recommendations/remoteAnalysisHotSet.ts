@@ -14,13 +14,21 @@ import { logger } from "../../utils/logger";
 import { redisClient } from "../../utils/redis";
 import type { ScheduleRecommendationHotSetInput } from "./engine";
 import type { RecommendationCandidate } from "./types";
-import { canonicalIdentityResolver } from "./canonicalIdentity";
+import {
+    canonicalIdentityResolver,
+    runCanonicalIdentityTransaction,
+} from "./canonicalIdentity";
 import { onlineIdentityEnricher } from "./onlineIdentityEnrichment";
 
 const log = logger.child("RemoteAnalysisHotSet");
 const SPOOL_DIRECTORY = ".soundspan-analysis-spool";
 const MAX_HOT_SET_CANDIDATES = 48;
 const MAX_HOT_SET_PER_SIGNAL = 20;
+// Admission capacity, not ranking weights: identity-only work cannot fill the
+// audio-analysis lane. Both queries together retain the old20-row signal cap.
+const MAX_IDENTITY_ONLY_PER_SIGNAL = 4;
+const MAX_ANALYSIS_PER_SIGNAL =
+    MAX_HOT_SET_PER_SIGNAL - MAX_IDENTITY_ONLY_PER_SIGNAL;
 const MAX_REPEAT_SIGNAL_PLAYS = 500;
 const MAX_REMOTE_ASSET_BYTES = 64 * 1024 * 1024;
 const REMOTE_ASSET_DOWNLOAD_DEADLINE_MS = 15 * 60 * 1_000;
@@ -70,33 +78,31 @@ local reservation = redis.call("GET", KEYS[1])
 if reservation == "allowed" then
     return 1
 end
-if reservation == "denied" then
+-- Count admissions, not rejected attempts. A previous denial may be
+-- reconsidered after an operator raises the daily limit.
+local count = tonumber(redis.call("GET", KEYS[2]) or "0")
+if count >= tonumber(ARGV[1]) then
     return 0
 end
 
-local count = redis.call("INCR", KEYS[2])
+count = redis.call("INCR", KEYS[2])
 if count == 1 then
     redis.call("EXPIRE", KEYS[2], ARGV[2])
 end
-
-if count <= tonumber(ARGV[1]) then
-    redis.call("SET", KEYS[1], "allowed", "EX", ARGV[2])
-    return 1
-end
-
-redis.call("SET", KEYS[1], "denied", "EX", ARGV[2])
-return 0
+redis.call("SET", KEYS[1], "allowed", "EX", ARGV[2])
+return 1
 `;
 
 export interface RemoteAnalysisJob {
     userId: string;
     canonicalRecordingId: string;
-    provider: "youtube" | "tidal";
+    provider: "youtube";
     providerTrackId: string;
 }
 
 interface RemoteAnalysisHotSetDependencies {
     enabled: boolean;
+    isAccountEligible?: (userId: string) => Promise<boolean>;
     loadCoveredCanonicalIds: (
         canonicalRecordingIds: string[],
     ) => Promise<ReadonlySet<string>>;
@@ -114,7 +120,7 @@ interface RemoteAnalysisHotSetDependencies {
 }
 
 function remoteIdentity(candidate: RecommendationCandidate): {
-    provider: "youtube" | "tidal";
+    provider: "youtube";
     providerTrackId: string;
 } | null {
     if (candidate.provider.youtubeVideoId) {
@@ -123,13 +129,53 @@ function remoteIdentity(candidate: RecommendationCandidate): {
             providerTrackId: candidate.provider.youtubeVideoId,
         };
     }
-    if (candidate.provider.tidalTrackId !== null) {
-        return {
-            provider: "tidal",
-            providerTrackId: String(candidate.provider.tidalTrackId),
-        };
-    }
     return null;
+}
+
+function selectFairHotSetCandidates(
+    batches: readonly (readonly RecommendationCandidate[])[],
+): RecommendationCandidate[] {
+    const unique = new Map<string, RecommendationCandidate>();
+    const queues = batches.map((batch) => {
+        const keys = new Set<string>();
+        for (const candidate of batch) {
+            const key = candidate.canonicalRecordingId
+                ? `canonical:${candidate.canonicalRecordingId}`
+                : `${candidate.source}:${candidate.provider.youtubeVideoId ?? candidate.provider.tidalTrackId ?? candidate.id}`;
+            if (keys.size < MAX_HOT_SET_CANDIDATES) keys.add(key);
+            const existing = unique.get(key);
+            if (!existing && keys.has(key))
+                unique.set(key, {
+                    ...candidate,
+                    candidateSources: [...candidate.candidateSources],
+                });
+            else if (existing)
+                existing.candidateSources = Array.from(
+                    new Set([
+                        ...existing.candidateSources,
+                        ...candidate.candidateSources,
+                    ]),
+                );
+        }
+        return [...keys];
+    });
+    const selected = new Set<string>();
+    const offsets = queues.map(() => 0);
+    while (
+        selected.size < MAX_HOT_SET_CANDIDATES &&
+        queues.some((queue, index) => offsets[index] < queue.length)
+    ) {
+        for (let index = 0; index < queues.length; index += 1) {
+            while (offsets[index] < queues[index].length) {
+                const id = queues[index][offsets[index]++];
+                if (selected.has(id)) continue;
+                selected.add(id);
+                break;
+            }
+            if (selected.size >= MAX_HOT_SET_CANDIDATES) break;
+        }
+    }
+    return [...selected].map((id) => unique.get(id)!);
 }
 
 /** Bounded, global canonical admission; no live recommendation waits on it. */
@@ -140,6 +186,11 @@ export class RemoteAnalysisHotSetScheduler {
 
     async schedule(input: ScheduleRecommendationHotSetInput): Promise<void> {
         if (!this.dependencies.enabled) return;
+        if (
+            this.dependencies.isAccountEligible &&
+            !(await this.dependencies.isAccountEligible(input.userId))
+        )
+            return;
         let accountCandidates: RecommendationCandidate[] = [];
         if (this.dependencies.loadAccountCandidates) {
             try {
@@ -152,10 +203,24 @@ export class RemoteAnalysisHotSetScheduler {
                 });
             }
         }
-        let prioritizedCandidates = [
-            ...accountCandidates,
-            ...input.candidates,
-        ].slice(0, MAX_HOT_SET_CANDIDATES);
+        const collectionCandidates: RecommendationCandidate[] = [];
+        const listeningCandidates: RecommendationCandidate[] = [];
+        for (const candidate of accountCandidates) {
+            const isCollection = candidate.candidateSources.some(
+                (source) => source === "hot-liked" || source === "hot-playlist",
+            );
+            (isCollection ? collectionCandidates : listeningCandidates).push(
+                candidate,
+            );
+        }
+        // Give saved music its own fair lane, instead of making it compete
+        // with four listening signals inside half of the admission capacity.
+        // Empty lanes yield their slots; the global 48-record cap is unchanged.
+        let prioritizedCandidates = selectFairHotSetCandidates([
+            input.candidates,
+            collectionCandidates,
+            listeningCandidates,
+        ]);
         try {
             await this.dependencies.enrichIdentities?.(
                 input.userId,
@@ -220,6 +285,10 @@ export class RemoteAnalysisHotSetScheduler {
 
 type HotSetMapping = {
     canonicalRecordingId: string | null;
+    canonicalRecording?: {
+        recordingMbid: string | null;
+        isrc: string | null;
+    } | null;
     trackYtMusic: {
         id: string;
         videoId: string;
@@ -228,15 +297,6 @@ type HotSetMapping = {
         album: string;
         duration: number;
         thumbnailUrl: string | null;
-    } | null;
-    trackTidal: {
-        id: string;
-        tidalId: number;
-        title: string;
-        artist: string;
-        album: string;
-        duration: number;
-        isrc: string | null;
     } | null;
 };
 
@@ -252,6 +312,8 @@ function hotSetCandidate(
             id: `yt:${track.videoId}`,
             canonicalKey: `canonical:${canonicalRecordingId}`,
             canonicalRecordingId,
+            recordingMbid: mapping.canonicalRecording?.recordingMbid,
+            isrc: mapping.canonicalRecording?.isrc,
             title: track.title,
             duration: track.duration,
             artist: { id: null, name: track.artist },
@@ -268,29 +330,14 @@ function hotSetCandidate(
             providerPrior: 1,
         };
     }
-    if (mapping.trackTidal) {
-        const track = mapping.trackTidal;
-        return {
-            id: `tidal:${track.tidalId}`,
-            canonicalKey: `canonical:${canonicalRecordingId}`,
-            canonicalRecordingId,
-            isrc: track.isrc,
-            title: track.title,
-            duration: track.duration,
-            artist: { id: null, name: track.artist },
-            album: { id: null, title: track.album, coverArt: null },
-            source: "tidal",
-            provider: { tidalTrackId: track.tidalId, youtubeVideoId: null },
-            streamSource: "tidal",
-            tidalTrackId: track.tidalId,
-            candidateSources: [signal],
-            providerPrior: 1,
-        };
-    }
     return null;
 }
 
-/** Load a bounded online-first analysis set from durable account signals. */
+/**
+ * Load a bounded online-first analysis set from durable account signals.
+ * Each signal contributes one unseen canonical per round, in likes/seed-first
+ * order. Exhausted or duplicate-only signals yield their slots to the others.
+ */
 export async function loadAccountHotSetCandidates(
     userId: string,
 ): Promise<RecommendationCandidate[]> {
@@ -301,154 +348,218 @@ export async function loadAccountHotSetCandidates(
         {
             source: "hot-liked",
             where: {
-                OR: [
-                    { trackYtMusic: { is: { likedBy: { some: { userId } } } } },
-                    { trackTidal: { is: { likedBy: { some: { userId } } } } },
-                ],
+                trackYtMusic: { is: { likedBy: { some: { userId } } } },
             },
         },
         {
             source: "hot-wave-seed",
             where: {
-                OR: [
-                    {
-                        trackYtMusic: {
-                            is: {
-                                plays: {
-                                    some: { userId, playContext: "wave" },
-                                },
+                trackYtMusic: {
+                    is: {
+                        plays: {
+                            some: {
+                                userId,
+                                playContext: "wave",
+                                OR: [
+                                    { outcome: null },
+                                    { outcome: { not: "failed" } },
+                                ],
                             },
                         },
                     },
-                    {
-                        trackTidal: {
-                            is: {
-                                plays: {
-                                    some: { userId, playContext: "wave" },
-                                },
-                            },
-                        },
-                    },
-                ],
+                },
             },
         },
         {
             source: "hot-completed",
             where: {
-                OR: [
-                    {
-                        trackYtMusic: {
-                            is: {
-                                plays: {
-                                    some: {
-                                        userId,
+                trackYtMusic: {
+                    is: {
+                        plays: {
+                            some: {
+                                userId,
+                                AND: [
+                                    {
                                         OR: [
-                                            { outcome: "completed" },
-                                            { completionRatio: { gte: 0.85 } },
+                                            { outcome: null },
+                                            { outcome: { not: "failed" } },
                                         ],
                                     },
-                                },
+                                ],
+                                OR: [
+                                    { outcome: "completed" },
+                                    { completionRatio: { gte: 0.85 } },
+                                ],
                             },
                         },
                     },
-                    {
-                        trackTidal: {
-                            is: {
-                                plays: {
-                                    some: {
-                                        userId,
-                                        OR: [
-                                            { outcome: "completed" },
-                                            { completionRatio: { gte: 0.85 } },
-                                        ],
-                                    },
-                                },
-                            },
-                        },
-                    },
-                ],
+                },
             },
         },
         {
             source: "hot-playlist",
             where: {
-                OR: [
-                    {
-                        trackYtMusic: {
-                            is: {
-                                playlistItems: {
-                                    some: { playlist: { userId } },
-                                },
-                            },
+                trackYtMusic: {
+                    is: {
+                        playlistItems: {
+                            some: { playlist: { userId } },
                         },
                     },
-                    {
-                        trackTidal: {
-                            is: {
-                                playlistItems: {
-                                    some: { playlist: { userId } },
-                                },
-                            },
-                        },
-                    },
-                ],
+                },
             },
         },
     ];
     const batches = await Promise.all(
         signalQueries.map(async ({ source, where }) => ({
             source,
-            rows: await prisma.trackMapping.findMany({
-                where: {
-                    stale: false,
-                    canonicalRecordingId: { not: null },
-                    ...where,
-                },
-                orderBy: { createdAt: "desc" },
-                take: MAX_HOT_SET_PER_SIGNAL,
-                select: {
-                    canonicalRecordingId: true,
-                    trackYtMusic: {
-                        select: {
-                            id: true,
-                            videoId: true,
-                            title: true,
-                            artist: true,
-                            album: true,
-                            duration: true,
-                            thumbnailUrl: true,
-                        },
-                    },
-                    trackTidal: {
-                        select: {
-                            id: true,
-                            tidalId: true,
-                            title: true,
-                            artist: true,
-                            album: true,
-                            duration: true,
-                            isrc: true,
-                        },
-                    },
-                },
-            }),
+            rows: await loadHotSetWorkMappings(where),
         })),
     );
     const repeatedRows = await loadRepeatedHotSetMappings(userId);
     batches.push({ source: "hot-repeated", rows: repeatedRows });
-    const unique = new Map<string, RecommendationCandidate>();
-    for (const batch of batches) {
-        for (const row of batch.rows) {
-            const candidate = hotSetCandidate(row, batch.source);
-            if (!candidate?.canonicalRecordingId) continue;
-            if (!unique.has(candidate.canonicalRecordingId)) {
-                unique.set(candidate.canonicalRecordingId, candidate);
-            }
-            if (unique.size >= MAX_HOT_SET_CANDIDATES)
-                return [...unique.values()];
-        }
+    return selectFairHotSetCandidates(
+        batches.map((batch) =>
+            batch.rows.flatMap((row) => {
+                const candidate = hotSetCandidate(row, batch.source);
+                return candidate ? [candidate] : [];
+            }),
+        ),
+    );
+}
+
+const completedAnalysisWhere: Prisma.CanonicalRecordingWhereInput = {
+    analysisStatus: "completed",
+    embeddingStatus: "completed",
+    embeddings: {
+        some: {
+            space: {
+                status: { in: ["active", "migrating"] },
+                cleaningAt: null,
+            },
+        },
+    },
+};
+
+function temporarilyUnavailableAnalysisWhere(
+    now: Date,
+    includeFailedCooldown = true,
+): Prisma.CanonicalRecordingWhereInput[] {
+    const cooldownStart = new Date(now.getTime() - FAILED_ANALYSIS_COOLDOWN_MS);
+    return [
+        ...(includeFailedCooldown
+            ? [
+                  {
+                      analysisStatus: "failed",
+                      updatedAt: { gte: cooldownStart },
+                  },
+                  {
+                      embeddingStatus: "failed",
+                      embeddingAnalyzedAt: { gte: cooldownStart },
+                  },
+              ]
+            : []),
+        {
+            analysisLeases: {
+                some: {
+                    status: { in: [...ACTIVE_LEASE_STATUSES] },
+                    expiresAt: { gt: now },
+                },
+            },
+        },
+    ];
+}
+
+async function loadHotSetWorkMappings(
+    where: Prisma.TrackMappingWhereInput,
+): Promise<HotSetMapping[]> {
+    const mappingWhere: Prisma.TrackMappingWhereInput = {
+        AND: [{ stale: false, trackYtMusic: { isNot: null } }, where],
+    };
+    const query = async (
+        work: Prisma.CanonicalRecordingWhereInput,
+        take: number,
+    ): Promise<HotSetMapping[]> => {
+        // Take unique canonical rows, not provider aliases. Root and nested
+        // filters are identical so a different account's newer mapping cannot
+        // become this signal's representative. Work order is stable canonical
+        // creation time/id; the representative is the newest eligible mapping.
+        const rows = await prisma.canonicalRecording.findMany({
+            where: {
+                AND: [
+                    {
+                        mergedIntoId: null,
+                        identitySource: { not: "identity-merged" },
+                    },
+                    work,
+                    { mappings: { some: mappingWhere } },
+                ],
+            },
+            orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+            take,
+            select: {
+                id: true,
+                recordingMbid: true,
+                isrc: true,
+                mappings: {
+                    where: mappingWhere,
+                    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+                    take: 1,
+                    select: {
+                        trackYtMusic: {
+                            select: {
+                                id: true,
+                                videoId: true,
+                                title: true,
+                                artist: true,
+                                album: true,
+                                duration: true,
+                                thumbnailUrl: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        return rows.map((row) => ({
+            canonicalRecordingId: row.id,
+            canonicalRecording: {
+                recordingMbid: row.recordingMbid,
+                isrc: row.isrc,
+            },
+            trackYtMusic: row.mappings[0]?.trackYtMusic ?? null,
+        }));
+    };
+    const [analysis, identity] = await Promise.all([
+        query(
+            {
+                NOT: {
+                    OR: [
+                        completedAnalysisWhere,
+                        ...temporarilyUnavailableAnalysisWhere(new Date()),
+                    ],
+                },
+            },
+            MAX_ANALYSIS_PER_SIGNAL,
+        ),
+        query(
+            {
+                AND: [
+                    completedAnalysisWhere,
+                    { OR: [{ recordingMbid: null }, { recordingMbid: "" }] },
+                    { OR: [{ isrc: null }, { isrc: "" }] },
+                ],
+            },
+            MAX_IDENTITY_ONLY_PER_SIGNAL,
+        ),
+    ]);
+    // Interleave the16/4 lanes so a full48-canonical account set also retains
+    // some identity work, instead of trimming every signal's identity tail.
+    const rows: HotSetMapping[] = [];
+    for (let index = 0; index < MAX_IDENTITY_ONLY_PER_SIGNAL; index += 1) {
+        rows.push(...analysis.slice(index * 4, (index + 1) * 4));
+        if (identity[index]) rows.push(identity[index]);
     }
-    return [...unique.values()];
+    return rows;
 }
 
 async function loadRepeatedHotSetMappings(
@@ -457,89 +568,30 @@ async function loadRepeatedHotSetMappings(
     const plays = await prisma.play.findMany({
         where: {
             userId,
-            OR: [
-                { trackYtMusicId: { not: null } },
-                { trackTidalId: { not: null } },
-            ],
+            trackYtMusicId: { not: null },
+            OR: [{ outcome: null }, { outcome: { not: "failed" } }],
         },
         orderBy: { playedAt: "desc" },
         take: MAX_REPEAT_SIGNAL_PLAYS,
-        select: { trackYtMusicId: true, trackTidalId: true },
+        select: { trackYtMusicId: true, outcome: true },
     });
     const counts = new Map<string, number>();
     for (const play of plays) {
+        if (play.outcome === "failed") continue;
         const identity = play.trackYtMusicId
             ? `youtube:${play.trackYtMusicId}`
-            : play.trackTidalId
-              ? `tidal:${play.trackTidalId}`
-              : null;
+            : null;
         if (identity) counts.set(identity, (counts.get(identity) ?? 0) + 1);
     }
     const repeated = [...counts.entries()]
         .filter(([, count]) => count >= 2)
         .sort((left, right) => right[1] - left[1])
-        .slice(0, MAX_HOT_SET_PER_SIGNAL)
         .map(([identity]) => identity);
     const youtubeIds = repeated
         .filter((identity) => identity.startsWith("youtube:"))
         .map((identity) => identity.slice("youtube:".length));
-    const tidalIds = repeated
-        .filter((identity) => identity.startsWith("tidal:"))
-        .map((identity) => identity.slice("tidal:".length));
-    if (youtubeIds.length === 0 && tidalIds.length === 0) return [];
-    const rows = await prisma.trackMapping.findMany({
-        where: {
-            stale: false,
-            canonicalRecordingId: { not: null },
-            OR: [
-                ...(youtubeIds.length > 0
-                    ? [{ trackYtMusicId: { in: youtubeIds } }]
-                    : []),
-                ...(tidalIds.length > 0
-                    ? [{ trackTidalId: { in: tidalIds } }]
-                    : []),
-            ],
-        },
-        take: MAX_HOT_SET_PER_SIGNAL,
-        select: {
-            canonicalRecordingId: true,
-            trackYtMusic: {
-                select: {
-                    id: true,
-                    videoId: true,
-                    title: true,
-                    artist: true,
-                    album: true,
-                    duration: true,
-                    thumbnailUrl: true,
-                },
-            },
-            trackTidal: {
-                select: {
-                    id: true,
-                    tidalId: true,
-                    title: true,
-                    artist: true,
-                    album: true,
-                    duration: true,
-                    isrc: true,
-                },
-            },
-        },
-    });
-    const rank = new Map(repeated.map((identity, index) => [identity, index]));
-    return rows.sort((left, right) => {
-        const leftKey = left.trackYtMusic
-            ? `youtube:${left.trackYtMusic.id}`
-            : `tidal:${left.trackTidal?.id ?? ""}`;
-        const rightKey = right.trackYtMusic
-            ? `youtube:${right.trackYtMusic.id}`
-            : `tidal:${right.trackTidal?.id ?? ""}`;
-        return (
-            (rank.get(leftKey) ?? repeated.length) -
-            (rank.get(rightKey) ?? repeated.length)
-        );
-    });
+    if (youtubeIds.length === 0) return [];
+    return loadHotSetWorkMappings({ trackYtMusicId: { in: youtubeIds } });
 }
 
 /** Resolve only hidden-spool references; never accepts arbitrary music paths. */
@@ -599,27 +651,17 @@ async function streamRemoteAsset(
         const requestOptions = {
             signal: controller.signal,
             timeoutMs: REMOTE_ASSET_DOWNLOAD_DEADLINE_MS,
+            purpose: "analysis" as const,
         };
-        const response =
-            job.provider === "youtube"
-                ? await (
-                      await import("../youtubeMusic")
-                  ).ytMusicService.getStreamProxy(
-                      "__public__",
-                      job.providerTrackId,
-                      "medium",
-                      undefined,
-                      requestOptions,
-                  )
-                : await (
-                      await import("../tidalStreaming")
-                  ).tidalStreamingService.getStreamProxy(
-                      job.userId,
-                      Number(job.providerTrackId),
-                      "HIGH",
-                      undefined,
-                      requestOptions,
-                  );
+        const response = await (
+            await import("../youtubeMusic")
+        ).ytMusicService.getStreamProxy(
+            "__public__",
+            job.providerTrackId,
+            "medium",
+            undefined,
+            requestOptions,
+        );
         responseStream = response.data as Readable;
         if (controller.signal.aborted) {
             responseStream.destroy(deadlineError);
@@ -743,11 +785,12 @@ export async function loadRemoteAnalysisCoveredCanonicalIds(
     includeFailedCooldown = true,
 ): Promise<Set<string>> {
     const now = new Date();
-    const cooldownStart = new Date(now.getTime() - FAILED_ANALYSIS_COOLDOWN_MS);
     const rows = await prisma.canonicalRecording.findMany({
         where: {
             id: { in: canonicalRecordingIds },
             OR: [
+                { mergedIntoId: { not: null } },
+                { identitySource: "identity-merged" },
                 {
                     AND: [
                         { analysisStatus: "completed" },
@@ -766,26 +809,10 @@ export async function loadRemoteAnalysisCoveredCanonicalIds(
                         },
                     ],
                 },
-                ...(includeFailedCooldown
-                    ? [
-                          {
-                              analysisStatus: "failed",
-                              updatedAt: { gte: cooldownStart },
-                          },
-                          {
-                              embeddingStatus: "failed",
-                              embeddingAnalyzedAt: { gte: cooldownStart },
-                          },
-                      ]
-                    : []),
-                {
-                    analysisLeases: {
-                        some: {
-                            status: { in: [...ACTIVE_LEASE_STATUSES] },
-                            expiresAt: { gt: now },
-                        },
-                    },
-                },
+                ...temporarilyUnavailableAnalysisWhere(
+                    now,
+                    includeFailedCooldown,
+                ),
             ],
         },
         select: { id: true },
@@ -800,7 +827,7 @@ async function enqueueRemoteAnalysis(
     const { remoteAnalysisQueue } = await import("../../workers/queues");
     const existing = await remoteAnalysisQueue.getJob(jobId);
     if (existing) return;
-    await remoteAnalysisQueue.add("analyze", job, { jobId });
+    await remoteAnalysisQueue.add("analyze", job, { jobId, priority: 1 });
 }
 
 export const remoteAnalysisHotSetScheduler = new RemoteAnalysisHotSetScheduler({
@@ -808,6 +835,13 @@ export const remoteAnalysisHotSetScheduler = new RemoteAnalysisHotSetScheduler({
         (config.recommendations?.remoteAnalysisEnabled ?? false) &&
         config.features.audioAnalysis,
     loadCoveredCanonicalIds: loadRemoteAnalysisCoveredCanonicalIds,
+    isAccountEligible: async (userId) => {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { isTestAccount: true },
+        });
+        return user?.isTestAccount === false;
+    },
     enqueue: enqueueRemoteAnalysis,
     loadAccountCandidates: loadAccountHotSetCandidates,
     enrichIdentities: (userId, candidates) =>
@@ -856,7 +890,7 @@ export async function processRemoteAnalysis(
     if (
         !job?.userId ||
         !job.canonicalRecordingId ||
-        !["youtube", "tidal"].includes(job.provider) ||
+        job.provider !== "youtube" ||
         !job.providerTrackId
     ) {
         throw new TypeError("Invalid remote analysis job");
@@ -904,17 +938,38 @@ export async function processRemoteAnalysis(
     await mkdir(path.dirname(spoolPath), { recursive: true });
     let lease: { id: string };
     try {
-        lease = await prisma.analysisAssetLease.create({
-            data: {
-                canonicalRecordingId: job.canonicalRecordingId,
-                provider: job.provider,
-                providerTrackId: job.providerTrackId,
-                spoolRef,
-                status: "downloading",
-                expiresAt: new Date(now.getTime() + LEASE_TTL_MS),
+        const admitted = await runCanonicalIdentityTransaction(
+            async (transaction) => {
+                const canonical =
+                    await transaction.canonicalRecording.findUnique({
+                        where: { id: job.canonicalRecordingId },
+                        select: {
+                            mergedIntoId: true,
+                            identitySource: true,
+                        },
+                    });
+                if (
+                    !canonical ||
+                    canonical.mergedIntoId ||
+                    canonical.identitySource === "identity-merged"
+                ) {
+                    return null;
+                }
+                return transaction.analysisAssetLease.create({
+                    data: {
+                        canonicalRecordingId: job.canonicalRecordingId,
+                        provider: job.provider,
+                        providerTrackId: job.providerTrackId,
+                        spoolRef,
+                        status: "downloading",
+                        expiresAt: new Date(now.getTime() + LEASE_TTL_MS),
+                    },
+                    select: { id: true },
+                });
             },
-            select: { id: true },
-        });
+        );
+        if (!admitted) return { status: "canonical-merged" };
+        lease = admitted;
     } catch (error) {
         if (isRemoteAnalysisLeaseConflict(error)) {
             return { status: "already-in-flight" };
@@ -1021,11 +1076,18 @@ export async function processRemoteAnalysis(
             status: dclapError ? "queued-essentia-dclap-degraded" : "queued",
         };
     } catch (error) {
+        const classification = classifyRemoteAnalysisError(error);
+        // The sidecar uses 451 for restricted recordings. Retrying this same
+        // download cannot change access; retain failure/cooldown and cleanup,
+        // but do not spend the queue's transient-error retry on it.
+        if (stage === "download" && classification.upstreamStatus === 451) {
+            await bullJob.discard();
+        }
         log.warn("Remote analysis processing failed", {
             canonicalRecordingId: job.canonicalRecordingId,
             provider: job.provider,
             stage,
-            ...classifyRemoteAnalysisError(error),
+            ...classification,
         });
         const message = "Remote analysis failed";
         const terminalUpdates: Promise<unknown>[] = [

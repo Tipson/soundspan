@@ -38,3 +38,23 @@ test("provider artist fallback ignores provider results without a channel", () =
         null,
     );
 });
+
+test("provider artist fallback accepts a provider qualifier after an exact local name", () => {
+    const results = [
+        {
+            type: "music",
+            name: "2CELLOS (SULIC & HAUSER)",
+            youtubeChannelId: "UCxwLkfMCfx2uSKO9w4iRfDQ",
+        },
+        {
+            type: "music",
+            name: "2CELLOS Tribute",
+            youtubeChannelId: "UCtribute",
+        },
+    ] satisfies Array<Partial<DiscoverResult>>;
+
+    assert.equal(
+        resolveProviderArtistChannel(results, "2CELLOS"),
+        "UCxwLkfMCfx2uSKO9w4iRfDQ",
+    );
+});

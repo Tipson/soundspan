@@ -1,4 +1,9 @@
-import axios, { AxiosInstance } from "axios";
+import axios, {
+    type AxiosAdapter,
+    type AxiosInstance,
+    type AxiosRequestConfig,
+    type InternalAxiosRequestConfig,
+} from "axios";
 import http from "node:http";
 import https from "node:https";
 import pLimit from "p-limit";
@@ -7,6 +12,7 @@ import { logger } from "../utils/logger";
 import type { CanonicalMediaSearchResult } from "@soundspan/media-metadata-contract";
 import {
     cachedSingleflight,
+    coalesceInFlightByKey,
     type CachedSingleflight,
 } from "../utils/singleflight";
 import {
@@ -16,6 +22,10 @@ import {
 } from "./ytMusicPlayableAlternate";
 import { retryYtMusicRequest as retryWithBackoff } from "./youtubeMusicRetry";
 import { encodeProviderPathSegment } from "./youtubeMusicInput";
+import {
+    classifyYouTubeRadioFailure,
+    YouTubeRadioResponseError,
+} from "./youtubeRadioDiagnostics";
 export type {
     YtMusicPlayableAlternate,
     YtMusicPlayableAlternateInput,
@@ -31,13 +41,388 @@ export {
 // keep module evaluation side-effect free for consumers that never call it.
 const YTMUSIC_STREAMER_URL =
     config.ytmusicStreamer?.url ?? "http://ytmusic-streamer:8585";
-const SIDECAR_AGENT_OPTIONS = {
+const STREAM_PROXY_DEFAULT_TIMEOUT_MS = 120_000;
+const CONTROL_REQUEST_DEFAULT_TIMEOUT_MS = 30_000;
+const MAX_NODE_TIMER_DELAY_MS = 2_147_483_647;
+const CONTROL_REQUEST_ACTIVE_LIMIT = 16;
+const CONTROL_REQUEST_QUEUE_LIMIT = 128;
+const INTERACTIVE_STREAM_ACTIVE_LIMIT = 120;
+const INTERACTIVE_STREAM_QUEUE_LIMIT = 120;
+const BACKGROUND_STREAM_ACTIVE_LIMIT = 8;
+const BACKGROUND_STREAM_QUEUE_LIMIT = 8;
+const STREAM_INFO_MAX_IN_FLIGHT = 1_000;
+const CONTROL_SIDECAR_AGENT_OPTIONS = {
     keepAlive: true,
-    maxSockets: 64,
+    maxSockets: CONTROL_REQUEST_ACTIVE_LIMIT,
+    maxTotalSockets: CONTROL_REQUEST_ACTIVE_LIMIT,
+    maxFreeSockets: 8,
+};
+const INTERACTIVE_SIDECAR_AGENT_OPTIONS = {
+    keepAlive: true,
+    maxSockets: INTERACTIVE_STREAM_ACTIVE_LIMIT,
+    maxTotalSockets: INTERACTIVE_STREAM_ACTIVE_LIMIT,
     maxFreeSockets: 16,
 };
-const SIDE_CAR_HTTP_AGENT = new http.Agent(SIDECAR_AGENT_OPTIONS);
-const SIDE_CAR_HTTPS_AGENT = new https.Agent(SIDECAR_AGENT_OPTIONS);
+const BACKGROUND_SIDECAR_AGENT_OPTIONS = {
+    keepAlive: true,
+    maxSockets: BACKGROUND_STREAM_ACTIVE_LIMIT,
+    maxTotalSockets: BACKGROUND_STREAM_ACTIVE_LIMIT,
+    maxFreeSockets: 4,
+};
+const SIDE_CAR_CONTROL_HTTP_AGENT = new http.Agent(
+    CONTROL_SIDECAR_AGENT_OPTIONS,
+);
+const SIDE_CAR_CONTROL_HTTPS_AGENT = new https.Agent(
+    CONTROL_SIDECAR_AGENT_OPTIONS,
+);
+const SIDE_CAR_INTERACTIVE_HTTP_AGENT = new http.Agent(
+    INTERACTIVE_SIDECAR_AGENT_OPTIONS,
+);
+const SIDE_CAR_INTERACTIVE_HTTPS_AGENT = new https.Agent(
+    INTERACTIVE_SIDECAR_AGENT_OPTIONS,
+);
+const SIDE_CAR_BACKGROUND_HTTP_AGENT = new http.Agent(
+    BACKGROUND_SIDECAR_AGENT_OPTIONS,
+);
+const SIDE_CAR_BACKGROUND_HTTPS_AGENT = new https.Agent(
+    BACKGROUND_SIDECAR_AGENT_OPTIONS,
+);
+
+type StreamAdmissionRelease = () => void;
+type SidecarAdmissionLane = "control" | "interactive" | "background";
+
+interface StreamAdmissionWaiter {
+    signal?: AbortSignal;
+    deadlineAtMs: number;
+    deadlineTimer?: ReturnType<typeof setTimeout>;
+    resolve: (release: StreamAdmissionRelease) => void;
+    reject: (error: Error) => void;
+    abort: () => void;
+}
+
+class StreamProxyCapacityError extends Error {
+    readonly response = { status: 503 };
+
+    constructor(lane: SidecarAdmissionLane) {
+        super(`YouTube Music ${lane} request capacity reached`);
+        this.name = "StreamProxyCapacityError";
+    }
+}
+
+class StreamProxyDeadlineError extends Error {
+    readonly response = { status: 504 };
+
+    constructor(lane: SidecarAdmissionLane) {
+        super(`YouTube Music ${lane} request deadline exceeded`);
+        this.name = "StreamProxyDeadlineError";
+    }
+}
+
+function abortReason(signal: AbortSignal): Error {
+    if (signal.reason instanceof Error) return signal.reason;
+    const error = new Error("The operation was aborted");
+    error.name = "AbortError";
+    return error;
+}
+
+function resolveStreamProxyBudgetMs(timeoutMs: number | undefined): number {
+    if (
+        timeoutMs === undefined ||
+        !Number.isFinite(timeoutMs) ||
+        timeoutMs <= 0 ||
+        timeoutMs > MAX_NODE_TIMER_DELAY_MS
+    ) {
+        return STREAM_PROXY_DEFAULT_TIMEOUT_MS;
+    }
+    return Math.max(1, timeoutMs);
+}
+
+/** Bounds speculative stream work before it reaches Node's unbounded Agent queue. */
+class BoundedStreamAdmission {
+    private active = 0;
+    private readonly waiters: StreamAdmissionWaiter[] = [];
+
+    constructor(
+        private readonly maxActive: number,
+        private readonly maxQueued: number,
+        private readonly lane: SidecarAdmissionLane,
+    ) {}
+
+    acquire(
+        deadlineAtMs: number,
+        signal?: AbortSignal,
+    ): Promise<StreamAdmissionRelease> {
+        if (signal?.aborted) return Promise.reject(abortReason(signal));
+        if (performance.now() >= deadlineAtMs) {
+            return Promise.reject(new StreamProxyDeadlineError(this.lane));
+        }
+        if (this.active < this.maxActive) {
+            this.active += 1;
+            return Promise.resolve(this.createRelease());
+        }
+        if (this.waiters.length >= this.maxQueued) {
+            return Promise.reject(new StreamProxyCapacityError(this.lane));
+        }
+
+        return new Promise((resolve, reject) => {
+            const waiter: StreamAdmissionWaiter = {
+                signal,
+                deadlineAtMs,
+                resolve,
+                reject,
+                abort: () => undefined,
+            };
+            waiter.deadlineTimer = setTimeout(
+                () =>
+                    this.rejectWaiter(
+                        waiter,
+                        new StreamProxyDeadlineError(this.lane),
+                    ),
+                Math.max(1, Math.ceil(deadlineAtMs - performance.now())),
+            );
+            waiter.deadlineTimer.unref?.();
+            waiter.abort = () => {
+                this.rejectWaiter(waiter, abortReason(signal!));
+            };
+            this.waiters.push(waiter);
+            signal?.addEventListener("abort", waiter.abort, { once: true });
+            if (signal?.aborted) waiter.abort();
+        });
+    }
+
+    private createRelease(): StreamAdmissionRelease {
+        let released = false;
+        return () => {
+            if (released) return;
+            released = true;
+            this.active -= 1;
+            this.drain();
+        };
+    }
+
+    private rejectWaiter(waiter: StreamAdmissionWaiter, error: Error): void {
+        const index = this.waiters.indexOf(waiter);
+        if (index < 0) return;
+        this.waiters.splice(index, 1);
+        this.detachWaiter(waiter);
+        waiter.reject(error);
+    }
+
+    private detachWaiter(waiter: StreamAdmissionWaiter): void {
+        if (waiter.deadlineTimer) clearTimeout(waiter.deadlineTimer);
+        waiter.signal?.removeEventListener("abort", waiter.abort);
+    }
+
+    private drain(): void {
+        while (this.active < this.maxActive && this.waiters.length > 0) {
+            const waiter = this.waiters.shift()!;
+            this.detachWaiter(waiter);
+            if (waiter.signal?.aborted) {
+                waiter.reject(abortReason(waiter.signal));
+                continue;
+            }
+            if (performance.now() >= waiter.deadlineAtMs) {
+                waiter.reject(new StreamProxyDeadlineError(this.lane));
+                continue;
+            }
+            this.active += 1;
+            waiter.resolve(this.createRelease());
+        }
+    }
+}
+
+// Agents and admissions intentionally share module lifetime. Creating another
+// service instance cannot bypass the process-wide sidecar transport bounds.
+const SIDE_CAR_CONTROL_ADMISSION = new BoundedStreamAdmission(
+    CONTROL_REQUEST_ACTIVE_LIMIT,
+    CONTROL_REQUEST_QUEUE_LIMIT,
+    "control",
+);
+const SIDE_CAR_INTERACTIVE_ADMISSION = new BoundedStreamAdmission(
+    INTERACTIVE_STREAM_ACTIVE_LIMIT,
+    INTERACTIVE_STREAM_QUEUE_LIMIT,
+    "interactive",
+);
+const SIDE_CAR_BACKGROUND_ADMISSION = new BoundedStreamAdmission(
+    BACKGROUND_STREAM_ACTIVE_LIMIT,
+    BACKGROUND_STREAM_QUEUE_LIMIT,
+    "background",
+);
+
+interface CompletionObservableStream {
+    closed?: boolean;
+    once(event: "end" | "close" | "error", listener: () => void): unknown;
+    off?(event: "end" | "close" | "error", listener: () => void): unknown;
+    destroy?(): unknown;
+}
+
+function holdAdmissionUntilStreamCompletion(
+    value: unknown,
+    completeLease: StreamAdmissionRelease,
+): void {
+    if (
+        typeof value !== "object" ||
+        value === null ||
+        !("once" in value) ||
+        typeof value.once !== "function"
+    ) {
+        completeLease();
+        return;
+    }
+    const stream = value as CompletionObservableStream;
+    let completed = false;
+    const complete = () => {
+        if (completed) return;
+        completed = true;
+        stream.off?.("close", complete);
+        stream.off?.("error", onError);
+        completeLease();
+    };
+    const onError = () => stream.destroy?.();
+    stream.once("close", complete);
+    stream.once("error", onError);
+    if (stream.closed) complete();
+}
+
+const SIDE_CAR_STREAM_REQUEST = Symbol("sidecar-stream-request");
+type SidecarStreamRequestConfig = AxiosRequestConfig & {
+    [SIDE_CAR_STREAM_REQUEST]: true;
+};
+type SidecarInternalRequestConfig = InternalAxiosRequestConfig & {
+    [SIDE_CAR_STREAM_REQUEST]?: true;
+};
+
+let baseAxiosAdapter: AxiosAdapter | undefined;
+
+function getBaseAxiosAdapter(): AxiosAdapter {
+    baseAxiosAdapter ??= axios.getAdapter(axios.defaults.adapter);
+    return baseAxiosAdapter;
+}
+
+function resolveControlRequestBudgetMs(timeoutMs: number | undefined): number {
+    if (
+        timeoutMs === undefined ||
+        !Number.isFinite(timeoutMs) ||
+        timeoutMs <= 0 ||
+        timeoutMs > MAX_NODE_TIMER_DELAY_MS
+    ) {
+        return CONTROL_REQUEST_DEFAULT_TIMEOUT_MS;
+    }
+    return Math.max(1, timeoutMs);
+}
+
+interface CloseObservableRequest {
+    closed?: boolean;
+    once(event: "close", listener: () => void): unknown;
+    off(event: "close", listener: () => void): unknown;
+}
+
+function asCloseObservableRequest(
+    candidate: unknown,
+): CloseObservableRequest | undefined {
+    if (
+        typeof candidate !== "object" ||
+        candidate === null ||
+        !("once" in candidate) ||
+        typeof candidate.once !== "function" ||
+        !("off" in candidate) ||
+        typeof candidate.off !== "function"
+    ) {
+        return undefined;
+    }
+    return candidate as CloseObservableRequest;
+}
+
+function failedRequest(error: unknown): CloseObservableRequest | undefined {
+    if (!axios.isAxiosError(error)) return undefined;
+    return asCloseObservableRequest(error.request);
+}
+
+async function waitForRequestTransportRelease(
+    request: CloseObservableRequest,
+): Promise<void> {
+    if (request.closed) return;
+    await new Promise<void>((resolve) => {
+        const complete = () => {
+            request.off("close", complete);
+            resolve();
+        };
+        request.once("close", complete);
+        if (request.closed) complete();
+    });
+}
+
+function deferAdmissionReleaseUntilTransportReleased(
+    request: unknown,
+    release: StreamAdmissionRelease,
+): boolean {
+    const observableRequest = asCloseObservableRequest(request);
+    if (!observableRequest) return false;
+    void waitForRequestTransportRelease(observableRequest).then(release);
+    return true;
+}
+
+function closeRejectedStreamingResponse(error: unknown): void {
+    if (!axios.isAxiosError(error)) return;
+    const responseBody = error.response?.data as unknown;
+    if (
+        typeof responseBody !== "object" ||
+        responseBody === null ||
+        !("destroy" in responseBody) ||
+        typeof responseBody.destroy !== "function"
+    ) {
+        return;
+    }
+    responseBody.destroy();
+}
+
+const SIDE_CAR_BOUNDED_ADAPTER: AxiosAdapter = async (rawConfig) => {
+    const requestConfig = rawConfig as SidecarInternalRequestConfig;
+    // Stream responses own a longer lease through end/close/error in
+    // getStreamProxy; do not consume a second control permit here.
+    if (requestConfig[SIDE_CAR_STREAM_REQUEST]) {
+        return getBaseAxiosAdapter()(rawConfig);
+    }
+
+    const signal = requestConfig.signal as AbortSignal | undefined;
+    const deadlineAtMs =
+        performance.now() +
+        resolveControlRequestBudgetMs(requestConfig.timeout);
+    const release = await SIDE_CAR_CONTROL_ADMISSION.acquire(
+        deadlineAtMs,
+        signal,
+    );
+    let releaseDeferred = false;
+    try {
+        if (signal?.aborted) throw abortReason(signal);
+        const remainingTimeoutMs = Math.ceil(deadlineAtMs - performance.now());
+        if (remainingTimeoutMs <= 0) {
+            throw new StreamProxyDeadlineError("control");
+        }
+        requestConfig.timeout = remainingTimeoutMs;
+        try {
+            const response = await getBaseAxiosAdapter()(rawConfig);
+            releaseDeferred = deferAdmissionReleaseUntilTransportReleased(
+                response.request,
+                release,
+            );
+            return response;
+        } catch (error) {
+            // Axios may settle before Node completes the native request close
+            // callback that returns or removes its socket. Keep the permit
+            // through that request-owned lifecycle without delaying the
+            // caller's rejection.
+            const request = failedRequest(error);
+            if (request) {
+                releaseDeferred = true;
+                void waitForRequestTransportRelease(request).then(release);
+            }
+            throw error;
+        }
+    } finally {
+        if (!releaseDeferred) release();
+    }
+};
 const AVAILABILITY_CACHE_TTL_MS = 10_000;
 const RADIO_CACHE_TTL_MS = 30_000;
 const RADIO_CACHE_MAX_KEYS = 256;
@@ -98,6 +483,8 @@ export interface YtMusicStreamInfoOptions {
     /** Read metadata from completed audio work without invoking yt-dlp. */
     cachedOnly?: boolean;
 }
+
+export type YtMusicStreamPurpose = "interactive" | "preload" | "analysis";
 
 /** A browsable YouTube Music album returned by catalog search. */
 export interface YtMusicCatalogAlbumResult {
@@ -404,7 +791,31 @@ export function toCatalogArtistResultItem(
 
 // ── Service ────────────────────────────────────────────────────────
 
+export interface YtMusicTailWarmupRequest {
+    ownerId: string;
+    generation: number;
+    quality: string;
+    current: string | null;
+    immediate: string | null;
+    tail: string[];
+}
+
+export interface YtMusicTailWarmupSnapshot {
+    ownerId: string;
+    generation: number;
+    accepted: boolean;
+    items: Array<{
+        videoId: string;
+        quality: string;
+        status: "complete" | "readable" | "queued" | "miss" | "failed";
+    }>;
+}
+
 class YouTubeMusicService {
+    private readonly streamInfoFlights = new Map<
+        string,
+        Promise<YtMusicStreamInfo>
+    >();
     private readonly radioLoaders = new Map<
         string,
         CachedSingleflight<YtMusicRadioQueue>
@@ -443,8 +854,12 @@ class YouTubeMusicService {
         this.client = axios.create({
             baseURL: YTMUSIC_STREAMER_URL,
             timeout: 30_000,
-            httpAgent: SIDE_CAR_HTTP_AGENT,
-            httpsAgent: SIDE_CAR_HTTPS_AGENT,
+            // The sidecar is a fixed internal origin; never spend both protocol
+            // pools or forward internal credentials through a redirect.
+            maxRedirects: 0,
+            adapter: SIDE_CAR_BOUNDED_ADAPTER,
+            httpAgent: SIDE_CAR_CONTROL_HTTP_AGENT,
+            httpsAgent: SIDE_CAR_CONTROL_HTTPS_AGENT,
             // Authenticate to the sidecar (F31). Omitted when unset so the
             // sidecar rejects fail-closed rather than us sending a blank header.
             ...(config.internalApiSecret
@@ -703,22 +1118,42 @@ class YouTubeMusicService {
         options: YtMusicStreamInfoOptions = {},
     ): Promise<YtMusicStreamInfo> {
         const encodedId = encodeProviderPathSegment(videoId, "video id");
-        return retryWithBackoff(
-            async () => {
-                const params: Record<string, string> = { user_id: userId };
-                if (quality) params.quality = quality;
-                if (options.cachedOnly) params.cached_only = "true";
-                const res = await this.client.get(`/stream/${encodedId}`, {
-                    params,
-                    ...(options.timeoutMs
-                        ? { timeout: options.timeoutMs }
-                        : {}),
-                });
-                return res.data;
-            },
-            `getStreamInfo(${videoId})`,
-            options.maxRetries ?? 3,
-        );
+        const timeoutMs = options.timeoutMs || undefined;
+        const maxRetries = options.maxRetries ?? 3;
+        const params: Record<string, string> = { user_id: userId };
+        if (quality) params.quality = quality;
+        if (options.cachedOnly) params.cached_only = "true";
+        // Coalesce only transport-compatible work; no settled metadata or
+        // failures are cached here. Snapshot options before the deferred start.
+        const key = JSON.stringify([
+            userId,
+            encodedId,
+            quality || "",
+            Boolean(options.cachedOnly),
+            String(timeoutMs),
+            String(maxRetries),
+        ]);
+        const load = () =>
+            retryWithBackoff<YtMusicStreamInfo>(
+                async () => {
+                    const res = await this.client.get(`/stream/${encodedId}`, {
+                        params,
+                        ...(timeoutMs ? { timeout: timeoutMs } : {}),
+                    });
+                    return res.data;
+                },
+                `getStreamInfo(${videoId})`,
+                maxRetries,
+            );
+        // Bound bookkeeping without changing existing overload behavior.
+        // A full map still joins known keys; new keys use the normal client.
+        const flight =
+            this.streamInfoFlights.size >= STREAM_INFO_MAX_IN_FLIGHT &&
+            !this.streamInfoFlights.has(key)
+                ? load()
+                : coalesceInFlightByKey(this.streamInfoFlights, key, load);
+        // Stream metadata is a flat DTO: callers must not share mutable fields.
+        return { ...(await flight) };
     }
 
     /**
@@ -730,22 +1165,127 @@ class YouTubeMusicService {
         videoId: string,
         quality?: string,
         rangeHeader?: string,
-        options: { signal?: AbortSignal; timeoutMs?: number } = {},
+        options: {
+            signal?: AbortSignal;
+            timeoutMs?: number;
+            purpose?: YtMusicStreamPurpose;
+        } = {},
     ) {
         const encodedId = encodeProviderPathSegment(videoId, "video id");
-        const params: Record<string, string> = { user_id: userId };
+        const purpose = options.purpose ?? "interactive";
+        const isBackground = purpose !== "interactive";
+        const streamAdmission = isBackground
+            ? SIDE_CAR_BACKGROUND_ADMISSION
+            : SIDE_CAR_INTERACTIVE_ADMISSION;
+        const streamHttpAgent = isBackground
+            ? SIDE_CAR_BACKGROUND_HTTP_AGENT
+            : SIDE_CAR_INTERACTIVE_HTTP_AGENT;
+        const streamHttpsAgent = isBackground
+            ? SIDE_CAR_BACKGROUND_HTTPS_AGENT
+            : SIDE_CAR_INTERACTIVE_HTTPS_AGENT;
+        const requestBudgetMs = resolveStreamProxyBudgetMs(options.timeoutMs);
+        const deadlineAtMs = performance.now() + requestBudgetMs;
+        const params: Record<string, string> = {
+            user_id: userId,
+            purpose,
+        };
         if (quality) params.quality = quality;
 
         const headers: Record<string, string> = {};
         if (rangeHeader) headers["Range"] = rangeHeader;
 
-        return this.client.get(`/proxy/${encodedId}`, {
-            params,
-            headers,
-            responseType: "stream",
-            timeout: options.timeoutMs ?? 120_000,
-            ...(options.signal ? { signal: options.signal } : {}),
-        });
+        const acquire = (timeoutMs: number, freshConnection = false) =>
+            this.client.get(`/proxy/${encodedId}`, {
+                params,
+                headers,
+                responseType: "stream",
+                timeout: timeoutMs,
+                httpAgent: freshConnection ? false : streamHttpAgent,
+                httpsAgent: freshConnection ? false : streamHttpsAgent,
+                ...(options.signal ? { signal: options.signal } : {}),
+                [SIDE_CAR_STREAM_REQUEST]: true,
+            } as SidecarStreamRequestConfig);
+
+        const release = await streamAdmission.acquire(
+            deadlineAtMs,
+            options.signal,
+        );
+        try {
+            const remainingTimeoutMs = Math.ceil(
+                deadlineAtMs - performance.now(),
+            );
+            if (remainingTimeoutMs <= 0) {
+                throw new StreamProxyDeadlineError(
+                    isBackground ? "background" : "interactive",
+                );
+            }
+            const response = await acquire(remainingTimeoutMs).catch(
+                (error: unknown) => {
+                    const reset = error as {
+                        code?: string;
+                        response?: unknown;
+                        request?: { reusedSocket?: boolean };
+                    } | null;
+                    // A sidecar can close an idle keep-alive socket just as Node
+                    // reuses it. Retry this GET only before any response, once on
+                    // a fresh connection, within the same admission and deadline.
+                    if (
+                        reset?.code !== "ECONNRESET" ||
+                        reset.response ||
+                        reset.request?.reusedSocket !== true ||
+                        options.signal?.aborted
+                    ) {
+                        throw error;
+                    }
+                    const remaining = Math.ceil(
+                        deadlineAtMs - performance.now(),
+                    );
+                    if (remaining <= 0) throw error;
+                    logger.warn(
+                        "Retrying reset reused sidecar audio connection",
+                        { videoId, purpose },
+                    );
+                    return acquire(remaining, true);
+                },
+            );
+            holdAdmissionUntilStreamCompletion(response.data, () => {
+                if (
+                    !deferAdmissionReleaseUntilTransportReleased(
+                        response.request,
+                        release,
+                    )
+                ) {
+                    release();
+                }
+            });
+            return response;
+        } catch (error) {
+            closeRejectedStreamingResponse(error);
+            const request = failedRequest(error);
+            if (
+                !request ||
+                !deferAdmissionReleaseUntilTransportReleased(request, release)
+            ) {
+                release();
+            }
+            throw error;
+        }
+    }
+
+    /** Reconcile server-side warm interests without returning audio bytes. */
+    async reconcileTailWarmup(
+        request: YtMusicTailWarmupRequest,
+        options: { signal?: AbortSignal } = {},
+    ): Promise<YtMusicTailWarmupSnapshot> {
+        const response = await this.client.post(
+            "/tail-warmup/reconcile",
+            request,
+            {
+                ...(options.signal ? { signal: options.signal } : {}),
+                timeout: 5_000,
+            },
+        );
+        return response.data;
     }
 
     // ── Library ────────────────────────────────────────────────────
@@ -804,12 +1344,15 @@ class YouTubeMusicService {
                     {
                         params: { user_id: userId },
                         timeout: options.timeoutMs ?? 60_000,
+                        ...(options.signal ? { signal: options.signal } : {}),
                     },
                 );
                 return res.data.results;
             },
             `searchBatch(${queries.length} queries)`,
             options.maxRetries ?? 3,
+            1000,
+            options.signal,
         );
     }
 
@@ -1397,14 +1940,36 @@ class YouTubeMusicService {
         let loader = this.radioLoaders.get(cacheKey);
         if (!loader) {
             loader = cachedSingleflight(async () => {
-                const { data } = await this.client.get("/radio", {
-                    params: {
-                        video_id: normalizedVideoId,
-                        limit: boundedLimit,
-                    },
-                    timeout: 13_000,
-                });
-                return data;
+                try {
+                    const { data } = await this.client.get("/radio", {
+                        params: {
+                            video_id: normalizedVideoId,
+                            limit: boundedLimit,
+                        },
+                        timeout: 13_000,
+                    });
+                    if (!data || !Array.isArray(data.tracks))
+                        throw new YouTubeRadioResponseError("invalid");
+                    const tracks = data.tracks
+                        .slice(0, boundedLimit)
+                        .filter(
+                            (track: unknown) =>
+                                track !== null &&
+                                typeof track === "object" &&
+                                "videoId" in track &&
+                                typeof track.videoId === "string" &&
+                                track.videoId.trim().length > 0,
+                        );
+                    if (tracks.length === 0)
+                        throw new YouTubeRadioResponseError("empty");
+                    return { ...data, tracks };
+                } catch (error) {
+                    logger.warn("YouTube Music radio unavailable", {
+                        seedVideoId: normalizedVideoId.slice(0, 128),
+                        ...classifyYouTubeRadioFailure(error),
+                    });
+                    throw error;
+                }
             }, RADIO_CACHE_TTL_MS);
             if (this.radioLoaders.size >= RADIO_CACHE_MAX_KEYS) {
                 const oldestKey = this.radioLoaders.keys().next().value;

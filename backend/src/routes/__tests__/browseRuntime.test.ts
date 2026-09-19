@@ -39,13 +39,6 @@ jest.mock("../../services/youtubeMusic", () => ({
     ytMusicService,
 }));
 
-jest.mock("../../services/tidalStreaming", () => ({
-    tidalStreamingService: {
-        isEnabled: jest.fn(),
-        isAvailable: jest.fn(),
-    },
-}));
-
 jest.mock("../../services/browseImageCache", () => ({
     getBrowseImageCacheRoot: () => "/tmp",
     browseImageCacheKey: jest.fn(() => "browse-image-cache-key"),
@@ -176,7 +169,7 @@ describe("browse route runtime", () => {
 
         expect(unsupportedRes.statusCode).toBe(400);
         expect(unsupportedRes.body).toEqual({
-            error: "Invalid or unsupported URL. Supported: Spotify, Deezer, YouTube Music, and TIDAL playlist URLs.",
+            error: "Invalid or unsupported URL. Supported: Spotify, Deezer, and YouTube Music playlist URLs.",
         });
 
         deezerService.parseUrl.mockImplementationOnce(() => {

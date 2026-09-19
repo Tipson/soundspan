@@ -1,7 +1,7 @@
 /**
  * Pure decision math for the overlay Related tab's stream matching
- * (GH #787): row identity, relevance ordering, and the TIDAL-first /
- * YouTube-fallback batch partition. Kept free of React and network code so
+ * (GH #787): row identity, relevance ordering, and YouTube stream matching.
+ * Kept free of React and network code so
  * the matching rules are unit-testable.
  */
 
@@ -13,8 +13,7 @@ export interface RelatedTrackLike {
     inLibrary?: boolean;
     matchConfidence?: number;
     duration?: number;
-    streamSource?: "tidal" | "youtube";
-    tidalTrackId?: number;
+    streamSource?: "youtube";
     youtubeVideoId?: string;
     album?: {
         title?: string;
@@ -23,8 +22,7 @@ export interface RelatedTrackLike {
 }
 
 export interface RelatedStreamMatch {
-    streamSource: "tidal" | "youtube";
-    tidalTrackId?: number;
+    streamSource: "youtube";
     youtubeVideoId?: string;
     title?: string;
     artist?: string;
@@ -36,14 +34,6 @@ export interface StreamMatchQuery {
     title: string;
     albumTitle?: string;
     duration?: number;
-}
-
-export interface TidalBatchMatch {
-    id: number;
-    title: string;
-    artist: string;
-    duration: number;
-    isrc?: string;
 }
 
 /** Read both the released string contract and the legacy object response. */
@@ -93,10 +83,7 @@ export function selectTracksNeedingStreamMatch<T extends RelatedTrackLike>(
 ): T[] {
     return tracks.filter((track) => {
         if (track.inLibrary) return false;
-        if (
-            (track.streamSource === "youtube" && track.youtubeVideoId) ||
-            (track.streamSource === "tidal" && track.tidalTrackId)
-        ) {
+        if (track.streamSource === "youtube" && track.youtubeVideoId) {
             return false;
         }
         const hasArtist = Boolean(getRelatedTrackArtistName(track).trim());
@@ -115,41 +102,4 @@ export function buildStreamMatchQuery(
         albumTitle: track.album?.title,
         duration: track.duration,
     };
-}
-
-export interface TidalBatchPartition {
-    /** Matches found on TIDAL, keyed by related-row identity. */
-    foundMatches: Record<string, RelatedStreamMatch>;
-    /** Rows TIDAL missed, to retry against YouTube Music. */
-    youtubePayload: StreamMatchQuery[];
-    youtubeTrackKeys: string[];
-}
-
-/** Split a TIDAL batch response into matches and the YouTube retry set. */
-export function partitionTidalBatchMatches(
-    missingTracks: readonly RelatedTrackLike[],
-    tidalMatches: ReadonlyArray<TidalBatchMatch | null | undefined>,
-): TidalBatchPartition {
-    const foundMatches: Record<string, RelatedStreamMatch> = {};
-    const youtubePayload: StreamMatchQuery[] = [];
-    const youtubeTrackKeys: string[] = [];
-
-    missingTracks.forEach((track, index) => {
-        const trackKey = getRelatedTrackKey(track);
-        const tidalMatch = tidalMatches[index];
-        if (tidalMatch?.id) {
-            foundMatches[trackKey] = {
-                streamSource: "tidal",
-                tidalTrackId: tidalMatch.id,
-                title: tidalMatch.title,
-                artist: tidalMatch.artist,
-                duration: tidalMatch.duration,
-            };
-            return;
-        }
-        youtubePayload.push(buildStreamMatchQuery(track));
-        youtubeTrackKeys.push(trackKey);
-    });
-
-    return { foundMatches, youtubePayload, youtubeTrackKeys };
 }

@@ -81,6 +81,7 @@ describe("lastFmService", () => {
         service.envApiKey = "test-lastfm-key";
         service.apiKey = "test-lastfm-key";
         service.initialized = false;
+        service.keyExpiresAt = 0;
 
         mockGetSystemSettings.mockResolvedValue({
             lastfmApiKey: null,
@@ -94,6 +95,420 @@ describe("lastFmService", () => {
         mockFanartGetArtistImage.mockResolvedValue(null);
         mockDeezerGetArtistImage.mockResolvedValue(null);
         mockDeezerGetArtistImageStrict.mockResolvedValue(null);
+    });
+
+    it("returns quick search results without a metadata request per match", async () => {
+        const controller = new AbortController();
+        mockHttpGet.mockImplementation(async (_path, config) => ({
+            data:
+                config.params.method === "artist.search"
+                    ? {
+                          results: {
+                              artistmatches: {
+                                  artist: [{ name: "Queen", mbid: "queen-id" }],
+                              },
+                          },
+                      }
+                    : {
+                          results: {
+                              trackmatches: {
+                                  track: [
+                                      {
+                                          name: "Bohemian Rhapsody",
+                                          artist: "Queen",
+                                      },
+                                  ],
+                              },
+                          },
+                      },
+        }));
+        const options = { signal: controller.signal, enrich: false };
+        const artists = await (lastFmService as any).searchArtists(
+            "Queen",
+            20,
+            options,
+        );
+        const tracks = await (lastFmService as any).searchTracks(
+            "Queen",
+            20,
+            options,
+        );
+        expect(artists).toEqual([expect.objectContaining({ name: "Queen" })]);
+        expect(tracks).toEqual([
+            expect.objectContaining({ name: "Bohemian Rhapsody" }),
+        ]);
+        expect(mockHttpGet).toHaveBeenCalledTimes(2);
+        expect(
+            mockHttpGet.mock.calls.every(
+                ([, config]) => config.signal === controller.signal,
+            ),
+        ).toBe(true);
+        expect(
+            mockRateLimiterExecute.mock.calls.every(
+                ([, , options]) => options?.signal === controller.signal,
+            ),
+        ).toBe(true);
+        expect(mockFanartGetArtistImage).not.toHaveBeenCalled();
+        expect(mockDeezerGetArtistImage).not.toHaveBeenCalled();
+    });
+
+    it("does not dispatch or hide cancellation for an expired discovery request", async () => {
+        const controller = new AbortController();
+        const reason = new Error("discovery deadline");
+        controller.abort(reason);
+        for (const invoke of [
+            () =>
+                (lastFmService as any).searchArtists("Queen", 20, {
+                    signal: controller.signal,
+                    enrich: false,
+                }),
+            () =>
+                (lastFmService as any).searchTracks("Queen", 20, {
+                    signal: controller.signal,
+                    enrich: false,
+                }),
+            () =>
+                (lastFmService as any).getArtistCorrection("Queen", {
+                    signal: controller.signal,
+                }),
+        ])
+            await expect(invoke()).rejects.toBe(reason);
+        expect(mockHttpGet).not.toHaveBeenCalled();
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+    });
+
+    it("does not report a failed quick search as a complete empty result", async () => {
+        mockHttpGet.mockRejectedValue({ response: { status: 503 } });
+        await expect(
+            lastFmService.searchArtists("Queen", 20, { enrich: false }),
+        ).rejects.toThrow("Last.fm");
+        await expect(
+            lastFmService.searchTracks("Queen", 20, { enrich: false }),
+        ).rejects.toThrow("Last.fm");
+    });
+
+    it("passes correction cancellation to both the provider queue and HTTP client", async () => {
+        const controller = new AbortController();
+        const reason = new Error("correction deadline");
+        mockHttpGet.mockImplementation(async (_path, config) => {
+            expect(config.signal).toBe(controller.signal);
+            controller.abort(reason);
+            throw new Error("canceled");
+        });
+        await expect(
+            (lastFmService as any).getArtistCorrection("Queen", {
+                signal: controller.signal,
+            }),
+        ).rejects.toBe(reason);
+        expect(mockRateLimiterExecute.mock.calls[0][2]).toEqual(
+            expect.objectContaining({ signal: controller.signal }),
+        );
+        expect(mockRedisSetEx).not.toHaveBeenCalled();
+    });
+
+    it("picks up another process changing the server key without restarting the worker", async () => {
+        const now = jest.spyOn(Date, "now");
+        now.mockReturnValue(1_000_000);
+        try {
+            mockGetSystemSettings.mockResolvedValue({
+                lastfmApiKey: "key-before",
+            });
+            mockHttpGet.mockResolvedValue({
+                data: { artist: { name: "Artist" } },
+            });
+            await lastFmService.getArtistInfo("Artist");
+            mockGetSystemSettings.mockResolvedValue({
+                lastfmApiKey: "key-after",
+            });
+            now.mockReturnValue(1_061_000);
+            await lastFmService.getArtistInfo("Artist");
+            expect(mockHttpGet).toHaveBeenLastCalledWith("/", {
+                params: expect.objectContaining({ api_key: "key-after" }),
+            });
+        } finally {
+            now.mockRestore();
+        }
+    });
+
+    it("shares credential initialization across concurrent metadata requests", async () => {
+        mockGetSystemSettings.mockResolvedValue({ lastfmApiKey: "shared-key" });
+        mockHttpGet.mockResolvedValue({ data: { artist: { name: "Artist" } } });
+        await Promise.all(
+            Array.from({ length: 100 }, () =>
+                lastFmService.getArtistInfo("Artist"),
+            ),
+        );
+        expect(mockGetSystemSettings).toHaveBeenCalledTimes(1);
+        expect(mockHttpGet).toHaveBeenCalledTimes(100);
+        expect(
+            mockHttpGet.mock.calls.every(
+                ([, options]) => options.params.api_key === "shared-key",
+            ),
+        ).toBe(true);
+    });
+
+    it("does not restore an old key when initialization completes after a settings refresh", async () => {
+        let finishOld:
+            | ((settings: { lastfmApiKey: string }) => void)
+            | undefined;
+        mockGetSystemSettings.mockReturnValueOnce(
+            new Promise((resolve) => {
+                finishOld = resolve;
+            }),
+        );
+        mockHttpGet.mockResolvedValue({ data: { artist: { name: "Artist" } } });
+        const pending = lastFmService.getArtistInfo("Artist");
+        expect(finishOld).toBeDefined();
+        mockGetSystemSettings.mockResolvedValue({ lastfmApiKey: "new-key" });
+        await lastFmService.refreshApiKey();
+        finishOld!({ lastfmApiKey: "old-key" });
+        await pending;
+        await lastFmService.getArtistInfo("Artist");
+        expect(
+            mockHttpGet.mock.calls.every(
+                ([, options]) => options.params.api_key === "new-key",
+            ),
+        ).toBe(true);
+    });
+
+    it("retries settings after a temporary database failure instead of disabling the worker forever", async () => {
+        const service = lastFmService as any;
+        service.envApiKey = "";
+        const now = jest.spyOn(Date, "now").mockReturnValue(1_000_000);
+        try {
+            mockGetSystemSettings.mockRejectedValueOnce(
+                new Error("database not ready"),
+            );
+            expect(await lastFmService.isConfigured()).toBe(false);
+            mockGetSystemSettings.mockResolvedValue({
+                lastfmApiKey: "recovered-key",
+            });
+            now.mockReturnValue(1_006_000);
+            expect(await lastFmService.isConfigured()).toBe(true);
+        } finally {
+            now.mockRestore();
+        }
+    });
+
+    it("does not log credentials carried by an upstream request error", async () => {
+        mockHttpGet.mockRejectedValue({
+            message: "secret-key-in-url",
+            config: { params: { api_key: "secret-key-in-url" } },
+            response: {
+                status: 503,
+                data: { error: 11, message: "secret-key-in-url" },
+            },
+        });
+        await lastFmService.getArtistInfo("Artist");
+        expect(mockLoggerError).toHaveBeenCalled();
+        expect(JSON.stringify(mockLoggerError.mock.calls)).not.toContain(
+            "secret-key-in-url",
+        );
+    });
+
+    it("sends the configured database key on the first metadata request", async () => {
+        mockGetSystemSettings.mockResolvedValue({
+            lastfmApiKey: "db-current-key",
+        });
+        mockHttpGet.mockResolvedValue({ data: { artist: { name: "Artist" } } });
+
+        await lastFmService.getArtistInfo("Artist");
+
+        expect(mockHttpGet).toHaveBeenCalledWith("/", {
+            params: expect.objectContaining({ api_key: "db-current-key" }),
+        });
+    });
+
+    it("uses the refreshed key when a queued request is finally dispatched", async () => {
+        await lastFmService.refreshApiKey();
+        let dispatch: (() => Promise<unknown>) | undefined;
+        let releaseQueue: (() => void) | undefined;
+        const queued = new Promise<void>((resolve) => {
+            releaseQueue = resolve;
+        });
+        mockRateLimiterExecute.mockImplementationOnce(
+            async (_bucket, requestFn) => {
+                dispatch = requestFn;
+                await queued;
+                return requestFn();
+            },
+        );
+        mockHttpGet.mockResolvedValue({ data: { artist: { name: "Artist" } } });
+        const request = lastFmService.getArtistInfo("Artist");
+        for (let i = 0; i < 10 && !dispatch; i += 1) await Promise.resolve();
+        expect(dispatch).toBeDefined();
+        mockGetSystemSettings.mockResolvedValue({
+            lastfmApiKey: "rotated-key",
+        });
+        await lastFmService.refreshApiKey();
+        releaseQueue!();
+        await request;
+        expect(mockHttpGet).toHaveBeenCalledWith("/", {
+            params: expect.objectContaining({ api_key: "rotated-key" }),
+        });
+    });
+
+    it.each([
+        { body: { error: 29 }, transport: undefined },
+        { body: { error: 11 }, transport: undefined },
+        { body: { error: 16 }, transport: undefined },
+        {
+            body: undefined,
+            transport: { response: { status: 403, data: { error: 11 } } },
+        },
+        {
+            body: undefined,
+            transport: { code: "ECONNRESET", message: "secret-url" },
+        },
+    ])(
+        "preserves bounded retries through the real limiter for %j",
+        async ({ body, transport }) => {
+            const { rateLimiter: realLimiter } =
+                jest.requireActual<typeof import("../rateLimiter")>(
+                    "../rateLimiter",
+                );
+            const sleep = jest
+                .spyOn(realLimiter as any, "sleep")
+                .mockResolvedValue(undefined);
+            mockRateLimiterExecute.mockImplementation((service, requestFn) =>
+                realLimiter.execute(service, requestFn),
+            );
+            if (transport) mockHttpGet.mockRejectedValueOnce(transport);
+            else mockHttpGet.mockResolvedValueOnce({ data: body });
+            mockHttpGet.mockResolvedValueOnce({
+                data: { artist: { name: "Recovered" } },
+            });
+            try {
+                expect(await lastFmService.getArtistInfo("Artist")).toEqual(
+                    expect.objectContaining({ name: "Recovered" }),
+                );
+                expect(mockHttpGet).toHaveBeenCalledTimes(2);
+                expect(sleep).toHaveBeenCalledTimes(1);
+                expect(mockRedisSetEx).not.toHaveBeenCalled();
+            } finally {
+                sleep.mockRestore();
+                await realLimiter.drain();
+            }
+        },
+    );
+
+    it("retains only a bounded Retry-After header for the retry policy", async () => {
+        let receivedError: unknown;
+        mockRateLimiterExecute.mockImplementation(
+            async (_service, requestFn) => {
+                try {
+                    return await requestFn();
+                } catch (error) {
+                    receivedError = error;
+                    throw error;
+                }
+            },
+        );
+        mockHttpGet.mockRejectedValueOnce({
+            response: {
+                status: 429,
+                headers: { "retry-after": "7", "set-cookie": "secret-cookie" },
+            },
+            config: { params: { api_key: "secret-key" } },
+        });
+        await lastFmService.getArtistInfo("Artist");
+        expect(receivedError).toMatchObject({
+            response: { status: 429, headers: { "retry-after": "7" } },
+        });
+        expect(JSON.stringify(receivedError)).not.toContain("secret");
+    });
+
+    it.each([
+        { error: 10, attempts: 1 },
+        { error: 26, attempts: 1 },
+        { error: 29, attempts: 4 },
+    ])(
+        "bounds attempts for persistent provider error $error",
+        async ({ error, attempts }) => {
+            const { rateLimiter: realLimiter } =
+                jest.requireActual<typeof import("../rateLimiter")>(
+                    "../rateLimiter",
+                );
+            const sleep = jest
+                .spyOn(realLimiter as any, "sleep")
+                .mockResolvedValue(undefined);
+            mockRateLimiterExecute.mockImplementation((service, requestFn) =>
+                realLimiter.execute(service, requestFn),
+            );
+            mockHttpGet.mockResolvedValue({ data: { error } });
+            try {
+                expect(
+                    await lastFmService.getSimilarTracks("Artist", "Track"),
+                ).toEqual([]);
+                expect(mockHttpGet).toHaveBeenCalledTimes(attempts);
+                expect(sleep).toHaveBeenCalledTimes(attempts - 1);
+                expect(mockRedisSetEx).not.toHaveBeenCalled();
+            } finally {
+                sleep.mockRestore();
+                await realLimiter.drain();
+            }
+        },
+    );
+
+    it.each(["ERR_CANCELED", "secret-code"])(
+        "does not retry cancellation or an unknown transport code %s",
+        async (code) => {
+            const { rateLimiter: realLimiter } =
+                jest.requireActual<typeof import("../rateLimiter")>(
+                    "../rateLimiter",
+                );
+            mockRateLimiterExecute.mockImplementation((service, requestFn) =>
+                realLimiter.execute(service, requestFn),
+            );
+            mockHttpGet.mockRejectedValue({ code, message: "secret-message" });
+            expect(await lastFmService.getArtistInfo("Artist")).toBeNull();
+            expect(mockHttpGet).toHaveBeenCalledTimes(1);
+            expect(JSON.stringify(mockLoggerError.mock.calls)).not.toContain(
+                "secret",
+            );
+            await realLimiter.drain();
+        },
+    );
+
+    it.each([10, 11, 16, 26, 29])(
+        "does not cache Last.fm application error %s as an empty recommendation list",
+        async (error) => {
+            mockHttpGet.mockResolvedValue({
+                data: { error, message: "Upstream failure" },
+            });
+            expect(
+                await lastFmService.getSimilarTracks("Artist", "Track"),
+            ).toEqual([]);
+            expect(mockRedisSetEx).not.toHaveBeenCalled();
+        },
+    );
+
+    it("falls back to artist name for a Last.fm error body on MBID lookup", async () => {
+        mockHttpGet
+            .mockResolvedValueOnce({
+                data: { error: 6, message: "Artist not found" },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    similarartists: {
+                        artist: [
+                            {
+                                name: "Similar",
+                                match: "0.8",
+                                url: "https://last.fm/music/Similar",
+                            },
+                        ],
+                    },
+                },
+            });
+        const result = await lastFmService.getSimilarArtists(
+            "missing-mbid",
+            "Artist",
+        );
+        expect(result).toEqual([
+            expect.objectContaining({ name: "Similar", match: 0.8 }),
+        ]);
+        expect(mockHttpGet).toHaveBeenCalledTimes(2);
     });
 
     it("returns cached similar artists without calling Last.fm", async () => {
@@ -699,7 +1114,7 @@ describe("lastFmService", () => {
 
     it("returns empty chart artists when no API key is configured", async () => {
         const service = lastFmService as any;
-        service.initialized = true;
+        service.envApiKey = "";
         service.apiKey = "";
 
         const artists = await lastFmService.getTopChartArtists(10);
@@ -860,7 +1275,7 @@ describe("lastFmService", () => {
 
     it("skips outbound similar-artist requests when initialized without an API key", async () => {
         const service = lastFmService as any;
-        service.initialized = true;
+        service.envApiKey = "";
         service.apiKey = "";
         mockRedisGet.mockResolvedValueOnce(null);
 

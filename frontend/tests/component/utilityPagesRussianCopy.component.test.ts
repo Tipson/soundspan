@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 GlobalRegistrator.register();
 (
@@ -71,10 +72,15 @@ beforeEach(() => {
     shareState.fail = true;
 });
 
+const queryClient = new QueryClient();
+
 mock.module("next/navigation", {
     namedExports: {
         useParams: () => ({ token: "expired-token" }),
-        useRouter: () => ({ push: () => undefined }),
+        useRouter: () => ({
+            push: () => undefined,
+            replace: () => undefined,
+        }),
     },
 });
 
@@ -93,7 +99,13 @@ async function mountPage(Page: React.ComponentType) {
     document.body.appendChild(container);
     const root = createRoot(container);
     await React.act(async () => {
-        root.render(React.createElement(Page));
+        root.render(
+            React.createElement(
+                QueryClientProvider,
+                { client: queryClient },
+                React.createElement(Page),
+            ),
+        );
         await Promise.resolve();
         await Promise.resolve();
     });

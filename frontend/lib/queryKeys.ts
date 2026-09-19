@@ -73,12 +73,17 @@ export const queryKeys = {
         ["recommendations", "albums", seedAlbumId, limit] as const,
 
     // Search
+    serviceCatalog: (query: string) => ["service-catalog", query] as const,
     search: (query: string, type?: string, limit?: number, source?: string) =>
         ["search", query, type, limit, source] as const,
     searchTracks: (query: string, source?: string) =>
         ["search", "tracks", query, source] as const,
-    discoverSearch: (query: string, type?: string, limit?: number) =>
-        ["search", "discover", query, type, limit] as const,
+    discoverSearch: (
+        query: string,
+        type?: string,
+        limit?: number,
+        scope?: string,
+    ) => ["search", "discover", query, type, limit, scope] as const,
     discoverSimilar: (artist: string, mbid: string, limit: number) =>
         ["search", "discover", "similar", artist, mbid, limit] as const,
     musicBrainzArtistSearch: (query: string) =>
@@ -126,10 +131,21 @@ export const queryKeys = {
             | "forgotten"
             | null = null,
         surface: "home" | "wave" | "made-for-you" = "home",
+        language: "any" | "ru" | "foreign" = "any",
     ) =>
-        mood
-            ? (["home", "personalized", surface, limit, mode, mood] as const)
-            : (["home", "personalized", surface, limit, mode] as const),
+        language !== "any"
+            ? ([
+                  "home",
+                  "personalized",
+                  surface,
+                  limit,
+                  mode,
+                  mood,
+                  language,
+              ] as const)
+            : mood
+              ? (["home", "personalized", surface, limit, mode, mood] as const)
+              : (["home", "personalized", surface, limit, mode] as const),
     tasteProfile: (accountId: string) =>
         ["taste-profile", accountId.trim()] as const,
 
@@ -139,12 +155,7 @@ export const queryKeys = {
     browseCategories: () => ["browse", "ytmusic", "categories"] as const,
     browseYtMusicMixes: () => ["browse", "ytmusic", "mixes"] as const,
 
-    // Browse (TIDAL) — used by Explore page
-    browseTidalHome: () => ["browse", "tidal", "home"] as const,
-    browseTidalExplore: () => ["browse", "tidal", "explore"] as const,
-    browseTidalGenres: () => ["browse", "tidal", "genres"] as const,
-    browseTidalMoods: () => ["browse", "tidal", "moods"] as const,
-    browseTidalMixes: () => ["browse", "tidal", "mixes"] as const,
+    // Provider browse content used by Explore pages
 
     // Prefix keys for whole-domain invalidation of the parameterized entries
     libraryArtistsAll: () => ["library", "artists"] as const,
@@ -179,6 +190,8 @@ export const queryKeys = {
     activeDownloads: () => ["active-downloads"] as const,
 
     // Enrichment admin surfaces
+    testApplications: (cursor: string | null) =>
+        ["admin", "test-applications", cursor] as const,
     enrichmentFailuresAll: () => ["enrichment-failures"] as const,
     enrichmentFailures: (type: string, page: number) =>
         ["enrichment-failures", type, page] as const,
@@ -206,7 +219,6 @@ export const queryKeys = {
     // Settings
     userSettings: () => ["user-settings"] as const,
     scrobblingStatus: () => ["scrobbling-status"] as const,
-    tidalStreamingStatus: () => ["tidal-streaming-status"] as const,
 
     // Podcast discovery
     podcastDiscoveryGenres: () => ["podcasts", "discovery", "genres"] as const,

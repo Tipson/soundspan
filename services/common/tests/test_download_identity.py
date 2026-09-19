@@ -44,15 +44,15 @@ def test_identity_candidates_use_one_bounded_sequence(tmp_path: Path) -> None:
     """Build the planned path followed by the five numbered alternatives."""
     planned = tmp_path / "Track.flac"
 
-    candidates = build_identity_candidates(planned, "tidal-8")
+    candidates = build_identity_candidates(planned, "source-8")
 
     assert candidates == (
         planned,
-        tmp_path / "Track [tidal-8].flac",
-        tmp_path / "Track [tidal-8-2].flac",
-        tmp_path / "Track [tidal-8-3].flac",
-        tmp_path / "Track [tidal-8-4].flac",
-        tmp_path / "Track [tidal-8-5].flac",
+        tmp_path / "Track [source-8].flac",
+        tmp_path / "Track [source-8-2].flac",
+        tmp_path / "Track [source-8-3].flac",
+        tmp_path / "Track [source-8-4].flac",
+        tmp_path / "Track [source-8-5].flac",
     )
     assert len(candidates) == MAX_COLLISION_COUNTER + 1
 
@@ -87,12 +87,12 @@ def test_resolver_ignores_directories_and_returns_first_free_file_path(
     resolved = resolve_identity_path(
         planned,
         tmp_path,
-        "tidal-8",
+        "source-8",
         8,
         lambda path: reader_calls.append(path),
     )
 
-    assert resolved == tmp_path / "Track [tidal-8].flac"
+    assert resolved == tmp_path / "Track [source-8].flac"
     assert reader_calls == []
 
 
@@ -104,7 +104,7 @@ def test_resolver_returns_planned_unidentified_legacy_file(tmp_path: Path) -> No
     resolved = resolve_identity_path(
         planned,
         tmp_path,
-        "tidal-8",
+        "source-8",
         8,
         lambda _path: None,
     )
@@ -115,7 +115,7 @@ def test_resolver_returns_planned_unidentified_legacy_file(tmp_path: Path) -> No
 def test_resolver_raises_when_every_candidate_is_taken(tmp_path: Path) -> None:
     """Fail closed after the complete bounded candidate sequence is occupied."""
     planned = tmp_path / "Track.flac"
-    candidates = build_identity_candidates(planned, "tidal-8")
+    candidates = build_identity_candidates(planned, "source-8")
     for candidate in candidates:
         candidate.write_bytes(b"foreign")
 
@@ -123,7 +123,7 @@ def test_resolver_raises_when_every_candidate_is_taken(tmp_path: Path) -> None:
         resolve_identity_path(
             planned,
             tmp_path,
-            "tidal-8",
+            "source-8",
             8,
             lambda _path: 999,
         )

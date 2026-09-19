@@ -223,13 +223,11 @@ jobs:
     continue-on-error: ${{ vars.CI_NON_BLOCKING_TEST_VISIBILITY != 'false' }}
     strategy:
       fail-fast: false
-      # Runtime/lock targets are tidal+ytmusic 3.14, DCLAP 3.12, and audio-analyzer 3.11.
+      # Runtime/lock targets are ytmusic 3.14, DCLAP 3.12, and audio-analyzer 3.11.
       # The analyzer stays on 3.11 because TensorFlow 2.15.x has no CPython 3.12+
       # wheels; its dependency-light test job remains on 3.12.
       matrix:
         include:
-          - service: tidal-streamer
-            python-version: "3.14"
           - service: ytmusic-streamer
             python-version: "3.14"
           - service: audio-analyzer
@@ -264,14 +262,15 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          # tiddl requires Python >=3.13; mypy retains Python 3.11 semantics via pyproject.toml.
-          python-version: "3.14"
+          # The combined quality environment uses Python 3.12 because the analyzer
+          # keeps the NumPy <2 ABI. YT Music remains tested separately on Python 3.14.
+          # Mypy retains Python 3.11 semantics via pyproject.toml.
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: |
             services/requirements-quality.txt
             services/audio-analyzer/requirements-test.txt
             services/vibe-provider-dclap/requirements-test.txt
-            services/tidal-streamer/requirements-test.txt
             services/ytmusic-streamer/requirements-test.txt
 
       - name: Install quality and sidecar test dependencies
@@ -280,11 +279,13 @@ jobs:
             -r services/requirements-quality.txt \
             -r services/audio-analyzer/requirements-test.txt \
             -r services/vibe-provider-dclap/requirements-test.txt \
-            -r services/tidal-streamer/requirements-test.txt \
             -r services/ytmusic-streamer/requirements-test.txt
 
       - name: Run AIO image hardening tests
         run: pytest tests/ -q
+
+      - name: Run shared sidecar runtime tests
+        run: pytest services/common/tests -q
 
       - name: Ruff lint
         run: ruff check services/

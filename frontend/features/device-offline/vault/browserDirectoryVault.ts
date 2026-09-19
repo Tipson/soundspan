@@ -330,10 +330,11 @@ async function readFile(
     }
 }
 
-function verifyBytes(
+async function verifyBytes(
     file: Blob,
     expectedBytes: number | null | undefined,
-): void {
+    contentType: string | null = file.type,
+): Promise<void> {
     if (file.size < 1) {
         throw new DeviceAudioVaultError(
             "integrity",
@@ -349,6 +350,24 @@ function verifyBytes(
         throw new DeviceAudioVaultError(
             "integrity",
             `Сохранённый файл на устройстве неполный (${file.size} из ${expectedBytes} байт).`,
+            "retry",
+        );
+    }
+    // A successful HTTP status and matching byte count can still describe a
+    // login/error document. Inspect only a bounded prefix, not decoded PCM or
+    // the entire file; this check is not a codec/decode validation guarantee.
+    const mime = (contentType ?? "").split(";", 1)[0].trim().toLowerCase();
+    const prefix = (await file.slice(0, 512).text()).trimStart();
+    if (
+        mime.startsWith("text/") ||
+        /^application\/(?:[^/]+\+)?(?:json|xml)$/.test(mime) ||
+        /^(?:<!doctype\s+html\b|<html(?:\s|>)|<\?xml\b|\{\s*"(?:error|message|detail)"\s*:)/i.test(
+            prefix,
+        )
+    ) {
+        throw new DeviceAudioVaultError(
+            "integrity",
+            "Вместо аудиофайла сохранён ответ сервера. Попробуйте загрузить трек снова.",
             "retry",
         );
     }
@@ -430,7 +449,7 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
                 throw new DOMException("Загрузка прервана", "AbortError");
             }
             assertSessionCurrent(this.runtime, this.authGeneration);
-            verifyBytes(file, input.expectedBytes);
+            await verifyBytes(file, input.expectedBytes, input.contentType);
             if (input.signal?.aborted) {
                 throw new DOMException("Загрузка прервана", "AbortError");
             }
@@ -500,7 +519,8 @@ class BrowserDirectorySession implements DeviceAudioVaultSession {
                 "retry",
             );
         }
-        verifyBytes(file, input.expectedBytes);
+        await verifyBytes(file, input.expectedBytes);
+        assertSessionCurrent(this.runtime, this.authGeneration);
         if (input.kind === "inspect") {
             return {
                 kind: "inspect",

@@ -40,7 +40,7 @@ export interface YtMusicDiscoveryCatalogTransport {
 }
 
 /**
- * Fetch and normalize tracks, albums, and artists through one queued sidecar
+ * Fetch and normalize tracks, albums, and artists through one bounded sidecar
  * batch. Row-level failures remain explicit so callers can retain successful
  * categories without caching an incomplete discovery response.
  */
@@ -50,12 +50,8 @@ export async function searchYtMusicDiscoveryCatalog(
     query: string,
     limit: number,
     options: YtMusicSearchOptions = {},
+    filters: YtMusicDiscoveryCatalogFilter[] = ["songs", "albums", "artists"],
 ): Promise<YtMusicDiscoveryCatalogResponse> {
-    const filters: YtMusicDiscoveryCatalogFilter[] = [
-        "songs",
-        "albums",
-        "artists",
-    ];
     const batchResult = await transport.searchBatch(
         userId,
         filters.map((filter) => ({
@@ -78,14 +74,14 @@ export async function searchYtMusicDiscoveryCatalog(
         return row.results;
     };
 
-    const tracks = resultsFor("songs")
+    const tracks = (filters.includes("songs") ? resultsFor("songs") : [])
         .filter((item) => !isExplicitVideoSearchResult(item))
         .map((item) => toCanonicalSearchResultItem(item))
         .filter((item): item is CanonicalMediaSearchResult => item !== null);
-    const albums = resultsFor("albums")
+    const albums = (filters.includes("albums") ? resultsFor("albums") : [])
         .map((item) => toCatalogAlbumResultItem(item))
         .filter((item): item is YtMusicCatalogAlbumResult => item !== null);
-    const artists = resultsFor("artists")
+    const artists = (filters.includes("artists") ? resultsFor("artists") : [])
         .map((item) => toCatalogArtistResultItem(item))
         .filter((item): item is YtMusicCatalogArtistResult => item !== null);
 

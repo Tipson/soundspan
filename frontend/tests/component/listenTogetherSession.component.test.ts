@@ -14,6 +14,7 @@ import {
     requestListenTogetherGroupResync,
     setListenTogetherMembershipPending,
     setListenTogetherSessionSnapshot,
+    subscribeListenTogetherMembership,
     type ListenTogetherSessionSnapshot,
 } from "../../lib/listen-together-session";
 import {
@@ -30,6 +31,19 @@ import {
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
 
 GlobalRegistrator.register();
+
+test("membership subscribers see pending state synchronously and unsubscribe", () => {
+    const seen: boolean[] = [];
+    const unsubscribe = subscribeListenTogetherMembership(() =>
+        seen.push(isListenTogetherActiveOrPending()),
+    );
+    setListenTogetherMembershipPending(true);
+    setListenTogetherMembershipPending(false);
+    unsubscribe();
+    setListenTogetherMembershipPending(true);
+    assert.deepEqual(seen, [true, false]);
+    setListenTogetherMembershipPending(false);
+});
 (
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

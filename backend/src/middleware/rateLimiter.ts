@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { logger } from "../utils/logger";
 import { isLibraryMediaPath } from "./libraryRateLimitPaths";
 import { createRedisRateLimitOptions } from "./rateLimitStore";
@@ -52,6 +52,22 @@ export const apiLimiter = rateLimit({
             /^\/api\/soulseek\/search\/[a-f0-9-]+$/.test(path)
         );
     },
+    ...trustProxyValidation,
+});
+
+// The analyzer owns one global AcoustID lookup lease and normally emits no
+// more than three promotions per second. A separate shared bucket prevents
+// unauthenticated traffic on the machine route from consuming unbounded JSON
+// parsing/database work without coupling trusted handoffs to user API bursts.
+export const internalCanonicalIdentityLimiter = rateLimit({
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    max: 300,
+    message: "Too many canonical identity promotion requests.",
+    standardHeaders: true,
+    legacyHeaders: false,
+    ...createRedisRateLimitOptions("canonical-identity-promotion", {
+        fallback: "memory",
+    }),
     ...trustProxyValidation,
 });
 
@@ -278,17 +294,29 @@ export const ytMusicSearchLimiter = rateLimit({
     ...trustProxyValidation,
 });
 
-// YT Music stream extraction limiter (20 extractions/minute per IP).
-// Each stream request triggers a yt-dlp extraction (unless cached).
-// This is the most detectable operation — yt-dlp makes multiple HTTP
-// requests to YouTube for each extraction.
+// YT Music stream extraction limiter. Byte-range reads and cached metadata
+// checks do not start provider work, so they must not consume this budget.
+// Account keys also prevent listeners sharing one home IP from exhausting
+// each other's bucket. The sidecar separately bounds extraction concurrency.
 export const ytMusicStreamLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 20,
+    max: 120,
     message:
         "Too many YouTube Music stream requests. Please wait before playing more tracks.",
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => {
+        const rangeStart =
+            typeof req.headers.range === "string"
+                ? /^bytes=(\d+)-/i.exec(req.headers.range)?.[1]
+                : undefined;
+        return (
+            (rangeStart !== undefined && Number(rangeStart) > 0) ||
+            req.query.cachedOnly === "true"
+        );
+    },
+    keyGenerator: (req) =>
+        req.user?.id ?? ipKeyGenerator(req.ip || "unresolved-account"),
     ...trustProxyValidation,
 });
 

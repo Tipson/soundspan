@@ -58,7 +58,6 @@ export interface TrackResolutionInput {
     peerOnline?: boolean;
 }
 
-type TidalTrack = { id: string; tidalId: number; duration: number };
 type YouTubeTrack = { id: string; videoId: string; duration: number };
 
 const PROFILE_CACHE_TTL_MS = 60_000;
@@ -96,10 +95,6 @@ async function awaitResolutionOperation<T>(
     }
 }
 
-function hasToken(value: string | null | undefined): boolean {
-    return typeof value === "string" && value.trim().length > 0;
-}
-
 /**
  * Returns cached per-user provider connectivity flags used for queue resolution.
  */
@@ -113,29 +108,21 @@ export async function getUserProviderProfile(
         return cached.profile;
     }
 
-    const [settings, systemSettings] = await awaitResolutionOperation(
-        Promise.all([
-            prisma.userSettings.findUnique({
-                where: { userId },
-                select: {
-                    tidalOAuthJson: true,
-                },
-            }),
-            prisma.systemSettings.findUnique({
-                where: { id: "default" },
-                select: {
-                    ytMusicEnabled: true,
-                    playbackSourceOrder: true,
-                },
-            }),
-        ]),
+    const systemSettings = await awaitResolutionOperation(
+        prisma.systemSettings.findUnique({
+            where: { id: "default" },
+            select: {
+                ytMusicEnabled: true,
+                playbackSourceOrder: true,
+            },
+        }),
         options.signal,
     );
 
     const profile: UserProviderProfile = {
         userId,
         hasLocal: true,
-        hasTidal: hasToken(settings?.tidalOAuthJson),
+        hasTidal: false,
         // YouTube playback/search has a public fallback path and should not require
         // per-user OAuth connectivity to mark tracks playable. Still respect
         // global system-level YouTube enablement.
@@ -161,13 +148,11 @@ type MappingWithTargets = {
         origin: "LOCAL" | "FEDERATED";
         federationPeer: { outboundStatus: string | null } | null;
     } | null;
-    trackTidal: { id: string; tidalId: number; duration: number } | null;
     trackYtMusic: { id: string; videoId: string; duration: number } | null;
 };
 
 interface ResolveTrackContext {
     mappingsById?: Map<string, MappingWithTargets>;
-    trackTidalById?: Map<string, TidalTrack>;
     signal?: AbortSignal;
     trackYtById?: Map<string, YouTubeTrack>;
 }
@@ -192,33 +177,6 @@ function localMappingCandidate(
             available: true,
             source: "local",
             trackId: mapping.trackId,
-        },
-    };
-}
-
-function tidalMappingCandidate(
-    mapping: MappingWithTargets,
-    item: TrackResolutionInput,
-    profile: UserProviderProfile,
-): MappingCandidate | null {
-    if (
-        !mapping.trackTidal ||
-        !isProviderMappingEligible({
-            confidence: mapping.confidence,
-            expectedDurationSeconds: item.duration,
-            actualDurationSeconds: mapping.trackTidal.duration,
-        })
-    ) {
-        return null;
-    }
-    return {
-        source: "tidal",
-        available: profile.hasTidal,
-        resolved: {
-            available: true,
-            source: "tidal",
-            tidalTrackId: mapping.trackTidal.tidalId,
-            trackTidalId: mapping.trackTidal.id,
         },
     };
 }
@@ -256,10 +214,7 @@ function mappedCandidates(
     profile: UserProviderProfile,
 ): MappingCandidate[] {
     const candidates = [localMappingCandidate(mapping)];
-    candidates.push(
-        tidalMappingCandidate(mapping, item, profile),
-        youtubeMappingCandidate(mapping, item, profile),
-    );
+    candidates.push(youtubeMappingCandidate(mapping, item, profile));
     return candidates.filter(
         (candidate): candidate is MappingCandidate => candidate !== null,
     );
@@ -285,13 +240,6 @@ async function loadMapping(
                     select: {
                         origin: true,
                         federationPeer: { select: { outboundStatus: true } },
-                    },
-                },
-                trackTidal: {
-                    select: {
-                        id: true,
-                        tidalId: true,
-                        duration: true,
                     },
                 },
                 trackYtMusic: {
@@ -332,110 +280,11 @@ async function resolveMappedTrack(
     ) {
         return { available: false, reason: "low-confidence" };
     }
-    const hasProviderTarget = mapping.trackTidal || mapping.trackYtMusic;
+    const hasProviderTarget = mapping.trackYtMusic;
     if (hasProviderTarget && candidates.length === 0) {
         return { available: false, reason: "duration-mismatch" };
     }
     return { available: false, reason: "no-provider" };
-}
-
-async function loadTidalTrack(
-    item: TrackResolutionInput,
-    context?: ResolveTrackContext,
-): Promise<TidalTrack | undefined> {
-    let track = item.trackTidalId
-        ? context?.trackTidalById?.get(item.trackTidalId)
-        : undefined;
-    if (!track && item.trackTidalId) {
-        track =
-            (await awaitResolutionOperation(
-                prisma.trackTidal.findUnique({
-                    where: { id: item.trackTidalId },
-                    select: { id: true, tidalId: true, duration: true },
-                }),
-                context?.signal,
-            )) ?? undefined;
-    }
-    if (!track && typeof item.tidalTrackId === "number") {
-        track =
-            (await awaitResolutionOperation(
-                prisma.trackTidal.findUnique({
-                    where: { tidalId: item.tidalTrackId },
-                    select: { id: true, tidalId: true, duration: true },
-                }),
-                context?.signal,
-            )) ?? undefined;
-    }
-    return track;
-}
-
-async function findYouTubeFallback(
-    item: TrackResolutionInput,
-    tidalTrackId: string,
-    context?: ResolveTrackContext,
-): Promise<ResolvedSource | null> {
-    const crossMapping = await awaitResolutionOperation(
-        prisma.trackMapping.findFirst({
-            where: {
-                stale: false,
-                trackTidalId: tidalTrackId,
-                trackYtMusicId: { not: null },
-            },
-            select: {
-                confidence: true,
-                trackYtMusic: {
-                    select: { id: true, videoId: true, duration: true },
-                },
-            },
-            orderBy: { confidence: "desc" },
-        }),
-        context?.signal,
-    );
-    if (
-        !crossMapping?.trackYtMusic ||
-        !isProviderMappingEligible({
-            confidence: crossMapping.confidence,
-            expectedDurationSeconds: item.duration,
-            actualDurationSeconds: crossMapping.trackYtMusic.duration,
-        })
-    ) {
-        return null;
-    }
-    return {
-        available: true,
-        source: "youtube",
-        youtubeVideoId: crossMapping.trackYtMusic.videoId,
-        trackYtMusicId: crossMapping.trackYtMusic.id,
-    };
-}
-
-async function resolveTidalTrack(
-    item: TrackResolutionInput,
-    profile: UserProviderProfile,
-    context?: ResolveTrackContext,
-): Promise<ResolvedSource> {
-    const tidalTrack = await loadTidalTrack(item, context);
-    if (profile.hasTidal && tidalTrack) {
-        return {
-            available: true,
-            source: "tidal",
-            tidalTrackId: tidalTrack.tidalId,
-            trackTidalId: tidalTrack.id,
-        };
-    }
-    const resolvedTidalId = tidalTrack?.id ?? item.trackTidalId;
-    if (profile.hasYtMusic && resolvedTidalId) {
-        const fallback = await findYouTubeFallback(
-            item,
-            resolvedTidalId,
-            context,
-        );
-        if (fallback) return fallback;
-    }
-    return {
-        available: false,
-        reason: resolvedTidalId ? "no-provider" : "no-mapping",
-    };
 }
 
 async function loadYouTubeTrack(
@@ -468,46 +317,6 @@ async function loadYouTubeTrack(
     return track;
 }
 
-async function findTidalFallback(
-    item: TrackResolutionInput,
-    youtubeTrackId: string,
-    context?: ResolveTrackContext,
-): Promise<ResolvedSource | null> {
-    const crossMapping = await awaitResolutionOperation(
-        prisma.trackMapping.findFirst({
-            where: {
-                stale: false,
-                trackYtMusicId: youtubeTrackId,
-                trackTidalId: { not: null },
-            },
-            select: {
-                confidence: true,
-                trackTidal: {
-                    select: { id: true, tidalId: true, duration: true },
-                },
-            },
-            orderBy: { confidence: "desc" },
-        }),
-        context?.signal,
-    );
-    if (
-        !crossMapping?.trackTidal ||
-        !isProviderMappingEligible({
-            confidence: crossMapping.confidence,
-            expectedDurationSeconds: item.duration,
-            actualDurationSeconds: crossMapping.trackTidal.duration,
-        })
-    ) {
-        return null;
-    }
-    return {
-        available: true,
-        source: "tidal",
-        tidalTrackId: crossMapping.trackTidal.tidalId,
-        trackTidalId: crossMapping.trackTidal.id,
-    };
-}
-
 async function resolveYouTubeTrack(
     item: TrackResolutionInput,
     profile: UserProviderProfile,
@@ -523,10 +332,6 @@ async function resolveYouTubeTrack(
         };
     }
     const resolvedYtId = ytTrack?.id ?? item.trackYtMusicId;
-    if (profile.hasTidal && resolvedYtId) {
-        const fallback = await findTidalFallback(item, resolvedYtId, context);
-        if (fallback) return fallback;
-    }
     return {
         available: false,
         reason: resolvedYtId ? "no-provider" : "no-mapping",
@@ -554,7 +359,7 @@ export async function resolveTrackForUser(
     }
 
     if (item.trackTidalId || typeof item.tidalTrackId === "number") {
-        return resolveTidalTrack(item, profile, context);
+        return { available: false, reason: "no-provider" };
     }
 
     if (item.trackYtMusicId || typeof item.youtubeVideoId === "string") {
@@ -596,21 +401,10 @@ async function preloadMappings(ids: string[]): Promise<MappingWithTargets[]> {
                     federationPeer: { select: { outboundStatus: true } },
                 },
             },
-            trackTidal: {
-                select: { id: true, tidalId: true, duration: true },
-            },
             trackYtMusic: {
                 select: { id: true, videoId: true, duration: true },
             },
         },
-    });
-}
-
-async function preloadTidalTracks(ids: string[]): Promise<TidalTrack[]> {
-    if (ids.length === 0) return [];
-    return prisma.trackTidal.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, tidalId: true, duration: true },
     });
 }
 
@@ -627,19 +421,16 @@ async function preloadResolutionContext(
     signal?: AbortSignal,
 ): Promise<ResolveTrackContext> {
     const mappingIds = collectQueueIds(queue, (item) => item.trackMappingId);
-    const tidalIds = collectQueueIds(queue, (item) => item.trackTidalId);
     const youtubeIds = collectQueueIds(queue, (item) => item.trackYtMusicId);
-    const [mappings, tidalTracks, ytTracks] = await awaitResolutionOperation(
+    const [mappings, ytTracks] = await awaitResolutionOperation(
         Promise.all([
             preloadMappings(mappingIds),
-            preloadTidalTracks(tidalIds),
             preloadYouTubeTracks(youtubeIds),
         ]),
         signal,
     );
     return {
         mappingsById: new Map(mappings.map((mapping) => [mapping.id, mapping])),
-        trackTidalById: new Map(tidalTracks.map((track) => [track.id, track])),
         trackYtById: new Map(ytTracks.map((track) => [track.id, track])),
         signal,
     };

@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { logger } from "../../utils/logger";
 import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
-import { rankRecommendationCandidates } from "./rankerV2";
+import { moodRankingScore, rankRecommendationCandidates } from "./rankerV2";
+import { normalizeRecommendationArtistKey } from "./identityKeys";
+import { isWaveMusicCandidate, matchesWaveMood } from "./wavePolicy";
 import type {
     RecommendRequest,
     RecommendResult,
@@ -70,6 +72,10 @@ export interface RecommendationEngineDependencies {
     resolveCanonical: (
         candidate: RecommendationCandidate,
     ) => Promise<CanonicalRecommendationIdentity>;
+    /** Request-local prefetch; null slots retain ordinary canonical resolution. */
+    loadCanonicalMappings?: (
+        candidates: readonly RecommendationCandidate[],
+    ) => Promise<readonly (CanonicalRecommendationIdentity | null)[]>;
     enrichCandidates?: (
         candidates: RecommendationCandidate[],
     ) => Promise<RecommendationCandidate[]>;
@@ -78,6 +84,11 @@ export interface RecommendationEngineDependencies {
         now: Date,
     ) => Promise<RecommendationExposureSignal[]>;
     loadDislikedCanonicalKeys: (userId: string) => Promise<ReadonlySet<string>>;
+    /** Saved originals for Discoveries, including another upload of the same recording. */
+    loadSavedCanonicalKeys?: (
+        userId: string,
+        candidates: readonly RecommendationCandidate[],
+    ) => Promise<ReadonlySet<string>>;
     loadTasteContext: (
         userId: string,
         request: RecommendRequest,
@@ -87,9 +98,9 @@ export interface RecommendationEngineDependencies {
     now: () => Date;
 }
 
-function rolloutBucket(userId: string): number {
+function rolloutBucket(userId: string, sessionId: string): number {
     const digest = createHash("sha256")
-        .update(`soundspan:hybrid-v2:${userId}`)
+        .update(`soundspan:hybrid-v2:${userId}:${sessionId}`)
         .digest();
     return digest.readUInt32BE(0) / 0x1_0000_0000;
 }
@@ -108,6 +119,9 @@ function requestContext(request: RecommendRequest): Record<string, unknown> {
                   : "evening";
     return {
         ...request.context,
+        ...(request.intent.language
+            ? { language: request.intent.language }
+            : {}),
         ...(timeBucket ? { timeBucket } : {}),
     };
 }
@@ -167,6 +181,8 @@ function baselineRank(
     excludes: ReadonlySet<string>,
     limit: number,
     perLaneLimit?: number,
+    waveMood?: RecommendRequest["intent"]["mood"],
+    diversify = false,
 ): ScoredRecommendation[] {
     const seenCanonical = new Set<string>();
     const recommendations: ScoredRecommendation[] = [];
@@ -178,7 +194,16 @@ function baselineRank(
         perLaneLimit !== undefined && Number.isFinite(perLaneLimit)
             ? Math.max(0, Math.floor(perLaneLimit))
             : null;
-    for (const candidate of candidates) {
+    const artistCounts = new Map<string, number>();
+    const ordered = waveMood
+        ? [...candidates].sort(
+              (left, right) =>
+                  right.providerPrior +
+                  moodRankingScore(right, waveMood) -
+                  (left.providerPrior + moodRankingScore(left, waveMood)),
+          )
+        : candidates;
+    for (const candidate of ordered) {
         if (
             !hasPlayableIdentity(candidate) ||
             isExcluded(candidate, excludes)
@@ -186,6 +211,9 @@ function baselineRank(
             continue;
         }
         if (seenCanonical.has(candidate.canonicalKey)) continue;
+        const artist = normalizeRecommendationArtistKey(candidate.artist.name);
+        if (diversify && artist && (artistCounts.get(artist) ?? 0) >= 2)
+            continue;
         if (
             candidate.lane &&
             normalizedPerLaneLimit !== null &&
@@ -194,6 +222,7 @@ function baselineRank(
             continue;
         }
         seenCanonical.add(candidate.canonicalKey);
+        artistCounts.set(artist, (artistCounts.get(artist) ?? 0) + 1);
         recommendations.push({
             track: candidate,
             score: candidate.providerPrior,
@@ -245,9 +274,12 @@ export class RecommendationEngine {
         const cursor = request.cursor ?? 0;
         const limit = Math.max(0, Math.floor(request.limit));
         const loaded = await this.dependencies.loadCandidates(request);
+        const isWave = request.intent.surface === "wave";
         const degradedSources = [...new Set(loaded.degradedSources)];
         let candidates = await this.resolveCanonicalCandidates(
-            loaded.candidates,
+            isWave
+                ? loaded.candidates.filter(isWaveMusicCandidate)
+                : loaded.candidates,
             degradedSources,
         );
         if (this.dependencies.enrichCandidates && candidates.length > 0) {
@@ -263,16 +295,62 @@ export class RecommendationEngine {
                 );
             }
         }
+        // Apply eligibility before lane quotas and either ranker, so discovery
+        // and familiar insertions cannot reintroduce an incompatible recording.
+        if (isWave)
+            candidates = candidates.filter((candidate) =>
+                matchesWaveMood(candidate, request.intent.mood),
+            );
         const excludes = new Set(
             (request.exclude ?? [])
                 .map((value) => value.trim())
                 .filter((value) => value.length > 0),
         );
+        // Safety/variety policy belongs to Wave itself, not only the hybrid
+        // experiment arm. Never refill a short Wave with today's exposures.
+        const sharedContext = isWave
+            ? await this.loadHybridContext(request, startedAt)
+            : null;
+        if (sharedContext) {
+            for (const source of sharedContext.degradedSources)
+                appendDegradedSource(degradedSources, source);
+            for (const key of sharedContext.dislikedCanonicalKeys)
+                excludes.add(key);
+            for (const exposure of sharedContext.exposures) {
+                if (
+                    startedAt.getTime() - exposure.exposedAt.getTime() <
+                    24 * 60 * 60 * 1_000
+                ) {
+                    excludes.add(exposure.canonicalKey);
+                }
+            }
+        }
+        if (
+            request.intent.direction === "new" &&
+            this.dependencies.loadSavedCanonicalKeys
+        ) {
+            try {
+                const savedKeys =
+                    await this.dependencies.loadSavedCanonicalKeys(
+                        request.userId,
+                        candidates,
+                    );
+                for (const key of savedKeys) excludes.add(key);
+            } catch (error) {
+                appendDegradedSource(degradedSources, "saved-recordings");
+                recommendationLogger.warn("Saved recording lookup failed", {
+                    error,
+                });
+                candidates = [];
+            }
+        }
         const baseline = baselineRank(
             candidates,
             excludes,
             limit,
             request.perLaneLimit,
+            isWave ? request.intent.mood : undefined,
+            isWave,
         );
 
         if (this.dependencies.mode === "baseline") {
@@ -294,7 +372,8 @@ export class RecommendationEngine {
             };
         }
 
-        const hybridContext = await this.loadHybridContext(request, startedAt);
+        const hybridContext =
+            sharedContext ?? (await this.loadHybridContext(request, startedAt));
         for (const source of hybridContext.degradedSources) {
             appendDegradedSource(degradedSources, source);
         }
@@ -359,7 +438,8 @@ export class RecommendationEngine {
             Math.min(100, this.dependencies.hybridRolloutPercent),
         );
         const servesHybrid =
-            rolloutBucket(request.userId) * 100 < normalizedRolloutPercent;
+            rolloutBucket(request.userId, request.sessionId) * 100 <
+            normalizedRolloutPercent;
         const servedAlgorithm = servesHybrid ? "hybrid-v2" : "baseline-v1";
         const servedRecommendations = servesHybrid ? hybrid : baseline;
         const generationId = await this.recordGeneration({
@@ -367,6 +447,7 @@ export class RecommendationEngine {
             cursor,
             algorithm: servedAlgorithm,
             served: true,
+            experimentAssignment: "session-switchback-v1",
             degradedSources,
             recommendations: servedRecommendations,
             startedAt,
@@ -381,6 +462,7 @@ export class RecommendationEngine {
                         cursor,
                         algorithm: servesHybrid ? "baseline-v1" : "hybrid-v2",
                         served: false,
+                        experimentAssignment: "session-switchback-v1",
                         degradedSources,
                         recommendations: servesHybrid ? baseline : hybrid,
                         startedAt,
@@ -401,6 +483,18 @@ export class RecommendationEngine {
         degradedSources: string[],
     ): Promise<RecommendationCandidate[]> {
         const resolved: RecommendationCandidate[] = [];
+        let mapped: readonly (CanonicalRecommendationIdentity | null)[] = [];
+        if (this.dependencies.loadCanonicalMappings && candidates.length > 0) {
+            try {
+                mapped =
+                    await this.dependencies.loadCanonicalMappings(candidates);
+            } catch (error) {
+                recommendationLogger.warn(
+                    "Canonical batch lookup failed; resolving individually",
+                    { error },
+                );
+            }
+        }
         for (
             let offset = 0;
             offset < candidates.length;
@@ -411,8 +505,10 @@ export class RecommendationEngine {
                 offset + CANONICAL_RESOLUTION_BATCH_SIZE,
             );
             const identities = await Promise.allSettled(
-                batch.map((candidate) =>
-                    this.dependencies.resolveCanonical(candidate),
+                batch.map((candidate, index) =>
+                    mapped[offset + index]
+                        ? Promise.resolve(mapped[offset + index]!)
+                        : this.dependencies.resolveCanonical(candidate),
                 ),
             );
             identities.forEach((identity, index) => {
@@ -443,7 +539,12 @@ export class RecommendationEngine {
         const [exposures, dislikes, taste] = await Promise.allSettled([
             this.dependencies.loadRecentExposures(request.userId, now),
             this.dependencies.loadDislikedCanonicalKeys(request.userId),
-            this.dependencies.loadTasteContext(request.userId, request),
+            this.dependencies.mode === "baseline"
+                ? Promise.resolve<RecommendationTasteContext>({
+                      positiveCentroids: [],
+                      negativeCentroids: [],
+                  })
+                : this.dependencies.loadTasteContext(request.userId, request),
         ]);
         const degradedSources: string[] = [];
         if (exposures.status === "rejected") {
@@ -476,6 +577,7 @@ export class RecommendationEngine {
         cursor: number;
         algorithm: RecordEngineGenerationInput["algorithm"];
         served: boolean;
+        experimentAssignment?: "session-switchback-v1";
         degradedSources: string[];
         recommendations: ScoredRecommendation[];
         startedAt: Date;
@@ -495,7 +597,12 @@ export class RecommendationEngine {
             served: input.served,
             degradedSources: [...input.degradedSources],
             latencyMs,
-            context: requestContext(input.request),
+            context: {
+                ...requestContext(input.request),
+                ...(input.experimentAssignment
+                    ? { experimentAssignment: input.experimentAssignment }
+                    : {}),
+            },
             recommendations: input.recommendations,
         });
         try {

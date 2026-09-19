@@ -26,19 +26,11 @@ import {
     useYtMusicChartsQuery,
     useYtMusicCategoriesQuery,
     useYtMusicMixesQuery,
-    useTidalHomeShelvesQuery,
-    useTidalExploreShelvesQuery,
-    useTidalGenresQuery,
-    useTidalMoodsQuery,
-    useTidalMixesQuery,
     queryKeys,
     type YtMusicHomeShelf,
     type YtMusicCategory,
     type YtMusicChartEntry,
     type YtMusicMixPreview,
-    type TidalBrowseShelf,
-    type TidalGenre,
-    type TidalMixPreview,
 } from "@/hooks/useQueries";
 
 /** Summary data for the user's liked-tracks playlist. */
@@ -62,13 +54,6 @@ export interface ExploreProviderFailures {
         categories: boolean;
         home: boolean;
         charts: boolean;
-    };
-    tidal: {
-        mixes: boolean;
-        moods: boolean;
-        genres: boolean;
-        home: boolean;
-        explore: boolean;
     };
 }
 
@@ -100,16 +85,6 @@ export interface UseExploreDataReturn {
     genreCategories: YtMusicCategory[];
     /** YT Music personalized mixes (requires OAuth). */
     ytMusicMixes: YtMusicMixPreview[];
-    /** TIDAL home shelves (personalized). */
-    tidalHomeShelves: TidalBrowseShelf[];
-    /** TIDAL explore shelves (editorial). */
-    tidalExploreShelves: TidalBrowseShelf[];
-    /** TIDAL genre categories. */
-    tidalGenres: TidalGenre[];
-    /** TIDAL mood categories. */
-    tidalMoods: TidalGenre[];
-    /** TIDAL personal mixes (Daily Discovery, etc.). */
-    tidalMixes: TidalMixPreview[];
     /** True while initial critical data is loading. */
     isLoading: boolean;
     /** True while mixes are being refreshed. */
@@ -120,8 +95,6 @@ export interface UseExploreDataReturn {
     isRadioLoading: boolean;
     /** Whether YT Music Explore content is enabled. */
     showYtMusicExplore: boolean;
-    /** Whether TIDAL Explore content is enabled. */
-    showTidalExplore: boolean;
     /** True when at least one enabled Explore query failed. */
     hasDegradedResults: boolean;
     /** Stable signature identifying the enabled Explore queries in error. */
@@ -146,10 +119,8 @@ export interface UseExploreDataReturn {
  */
 export function useExploreData(options?: {
     showYtMusicExplore?: boolean;
-    showTidalExplore?: boolean;
 }): UseExploreDataReturn {
     const showYtMusicExplore = options?.showYtMusicExplore ?? true;
-    const showTidalExplore = options?.showTidalExplore ?? false;
     const { isAuthenticated } = useAuth();
     const { discovery, autoPlaylists } = useFeatures();
     const queryClient = useQueryClient();
@@ -201,28 +172,6 @@ export function useExploreData(options?: {
         categoriesQuery;
     const { data: ytMusicMixesData } = ytMusicMixesQuery;
 
-    // ── TIDAL Browse queries ─────────────────────────────────────────────
-    const tidalHomeQuery = useTidalHomeShelvesQuery({
-        enabled: showTidalExplore,
-    });
-    const tidalExploreQuery = useTidalExploreShelvesQuery({
-        enabled: showTidalExplore,
-    });
-    const tidalGenresQuery = useTidalGenresQuery({
-        enabled: showTidalExplore,
-    });
-    const tidalMoodsQuery = useTidalMoodsQuery({
-        enabled: showTidalExplore,
-    });
-    const tidalMixesQuery = useTidalMixesQuery({
-        enabled: showTidalExplore,
-    });
-    const { data: tidalHomeData } = tidalHomeQuery;
-    const { data: tidalExploreData } = tidalExploreQuery;
-    const { data: tidalGenresData } = tidalGenresQuery;
-    const { data: tidalMoodsData } = tidalMoodsQuery;
-    const { data: tidalMixesData } = tidalMixesQuery;
-
     const libraryFailures = [
         { key: "liked", enabled: true, query: likedQuery },
         {
@@ -273,31 +222,6 @@ export function useExploreData(options?: {
             enabled: showYtMusicExplore,
             query: ytMusicMixesQuery,
         },
-        {
-            key: "tidalHome",
-            enabled: showTidalExplore,
-            query: tidalHomeQuery,
-        },
-        {
-            key: "tidalExplore",
-            enabled: showTidalExplore,
-            query: tidalExploreQuery,
-        },
-        {
-            key: "tidalGenres",
-            enabled: showTidalExplore,
-            query: tidalGenresQuery,
-        },
-        {
-            key: "tidalMoods",
-            enabled: showTidalExplore,
-            query: tidalMoodsQuery,
-        },
-        {
-            key: "tidalMixes",
-            enabled: showTidalExplore,
-            query: tidalMixesQuery,
-        },
     ];
     const providerQueryFailures = providerQueries.filter(
         ({ enabled, query }) => enabled && query.isLoadingError,
@@ -312,13 +236,6 @@ export function useExploreData(options?: {
             categories: failedKeys.has("ytCategories"),
             home: failedKeys.has("ytHome"),
             charts: failedKeys.has("ytCharts"),
-        },
-        tidal: {
-            mixes: failedKeys.has("tidalMixes"),
-            moods: failedKeys.has("tidalMoods"),
-            genres: failedKeys.has("tidalGenres"),
-            home: failedKeys.has("tidalHome"),
-            explore: failedKeys.has("tidalExplore"),
         },
     };
     const hasDegradedResults = libraryFailures.length > 0;
@@ -392,17 +309,11 @@ export function useExploreData(options?: {
         moodCategories: categoriesData?.moodCategories ?? [],
         genreCategories: categoriesData?.genreCategories ?? [],
         ytMusicMixes: ytMusicMixesData ?? [],
-        tidalHomeShelves: tidalHomeData ?? [],
-        tidalExploreShelves: tidalExploreData ?? [],
-        tidalGenres: tidalGenresData ?? [],
-        tidalMoods: tidalMoodsData ?? [],
-        tidalMixes: tidalMixesData ?? [],
         isLoading,
         isRefreshingMixes,
         isMoodsLoading,
         isRadioLoading: libraryRadioData.isLoading,
         showYtMusicExplore,
-        showTidalExplore,
         hasDegradedResults,
         degradedFailureSignature,
         providerFailures,

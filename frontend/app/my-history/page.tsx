@@ -6,7 +6,6 @@ import { AlertCircle, History, ListMusic } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -150,6 +149,13 @@ export default function MyHistoryPage() {
     const [history, setHistory] = useState<PlayHistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [loadAttempt, setLoadAttempt] = useState(0);
+    const retryHistory = useCallback(() => {
+        setLoading(true);
+        setError(null);
+        setLoadAttempt((attempt) => attempt + 1);
+    }, []);
+
     useEffect(() => {
         if (!isAuthenticated) {
             router.push("/login");
@@ -158,8 +164,6 @@ export default function MyHistoryPage() {
 
         const loadHistory = async () => {
             try {
-                setLoading(true);
-                setError(null);
                 const data =
                     await api.get<PlayHistoryEntry[]>("/plays?limit=250");
                 setHistory(
@@ -176,7 +180,7 @@ export default function MyHistoryPage() {
         };
 
         void loadHistory();
-    }, [isAuthenticated, router]);
+    }, [isAuthenticated, loadAttempt, router]);
 
     const audioTracks = useMemo(
         () => history.map((entry) => toAudioTrack(entry.track)),
@@ -200,19 +204,14 @@ export default function MyHistoryPage() {
                 (track.source === "tidal" || track.source === "youtube"
                     ? track.source
                     : undefined);
-            const isRemote =
-                streamSource === "tidal" || streamSource === "youtube";
+            const isRemote = streamSource === "youtube";
             return {
                 leadingColumn: null,
                 subtitleExtra: (
                     <>
                         {isRemote && (
                             <div className="mt-1 flex items-center gap-1.5">
-                                {streamSource === "tidal" ? (
-                                    <TidalBadge />
-                                ) : (
-                                    <YouTubeBadge />
-                                )}
+                                <YouTubeBadge />
                             </div>
                         )}
                         <p className="truncate text-[11px] text-content-muted">
@@ -280,7 +279,7 @@ export default function MyHistoryPage() {
                             description="Проверьте соединение и попробуйте загрузить историю ещё раз."
                             action={{
                                 label: "Повторить",
-                                onClick: () => window.location.reload(),
+                                onClick: retryHistory,
                                 variant: "secondary",
                             }}
                         />

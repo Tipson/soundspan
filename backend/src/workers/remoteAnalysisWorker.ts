@@ -12,9 +12,17 @@ import {
     startRemoteAnalysisHotSetSweep,
     stopRemoteAnalysisHotSetSweep,
 } from "../services/recommendations/remoteAnalysisHotSetSweep";
+import {
+    startCanonicalIdentityPromotionSweep,
+    stopCanonicalIdentityPromotionSweep,
+} from "../services/recommendations/canonicalIdentityPromotionSweep";
 import { registerQueueProcessorEvents } from "./queueEvents";
 import type { QueueProcessorEventHandlers } from "./queueEvents";
 import { remoteAnalysisQueue } from "./queues";
+import {
+    startDiscoveryAnalysisPrefetch,
+    stopDiscoveryAnalysisPrefetch,
+} from "../services/recommendations/discoveryAnalysisPrefetchRuntime";
 
 const log = logger.child("RemoteAnalysisWorker");
 type EventRecorder = NonNullable<
@@ -33,6 +41,7 @@ export function startRemoteAnalysisWorker(record: EventRecorder): void {
             processRemoteAnalysis,
         );
         startRemoteAnalysisHotSetSweep();
+        startDiscoveryAnalysisPrefetch();
     } else {
         log.info("Remote hot-set analysis disabled; processor not registered");
     }
@@ -43,12 +52,15 @@ export function startRemoteAnalysisWorker(record: EventRecorder): void {
             record,
         },
     );
+    startCanonicalIdentityPromotionSweep();
     startRemoteAnalysisAssetRecovery();
 }
 
 /** Stop recovery first, then close the queue before removing its listeners. */
 export async function stopRemoteAnalysisWorker(): Promise<void> {
     stopRemoteAnalysisHotSetSweep();
+    await stopDiscoveryAnalysisPrefetch();
+    await stopCanonicalIdentityPromotionSweep();
     await stopRemoteAnalysisAssetRecovery();
     await remoteAnalysisQueue.close();
     remoteAnalysisQueue.removeAllListeners();

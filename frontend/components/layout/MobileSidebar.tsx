@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
     Bell,
     Download,
@@ -31,7 +33,7 @@ interface MobileSidebarProps {
 
 const personalLinks = [
     { name: ru.library.likedSongs, href: "/playlist/my-liked", icon: Heart },
-    { name: ru.library.playlists, href: "/playlists", icon: ListMusic },
+    { name: ru.library.playlists, href: "/library", icon: ListMusic },
     {
         name: ru.nav.downloads,
         href: "/library?tab=downloads",
@@ -45,14 +47,17 @@ const personalLinks = [
  * bottom bar; this drawer adds library shortcuts and account administration.
  */
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
+    useDismissibleLayer(isOpen, onClose, 5);
     const pathname = usePathname();
+    const libraryTab = useSearchParams().get("tab");
+    const standalone = useMediaQuery("(display-mode: standalone)");
     const { user, logout } = useAuth();
     const { toast } = useToast();
 
     useEffect(() => {
         onClose();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname]);
+    }, [pathname, libraryTab]);
 
     const handleLogout = async () => {
         try {
@@ -137,7 +142,13 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     </p>
                     <div className="space-y-1">
                         {personalLinks.map((link) => {
-                            const active = pathname === link.href.split("?")[0];
+                            const active =
+                                pathname === "/library"
+                                    ? link.href ===
+                                      (libraryTab === "downloads"
+                                          ? "/library?tab=downloads"
+                                          : "/library")
+                                    : pathname === link.href;
                             const Icon = link.icon;
                             return (
                                 <Link
@@ -208,6 +219,26 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                 </nav>
 
                 <div className="border-t border-white/[0.07] p-3">
+                    {!standalone && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                onClose();
+                                window.dispatchEvent(
+                                    new CustomEvent("request-pwa-install"),
+                                );
+                            }}
+                            className={linkClassName(false)}
+                        >
+                            <Download
+                                className="h-5 w-5 shrink-0"
+                                aria-hidden="true"
+                            />
+                            <span className="whitespace-nowrap">
+                                Установить приложение
+                            </span>
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={handleLogout}

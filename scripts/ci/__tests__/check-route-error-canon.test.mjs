@@ -226,8 +226,7 @@ test("countLeakPattern flags bare e and ex response leaks", () => {
 });
 
 test("countLeakPattern exempts bare err details logged server-side", () => {
-    const source =
-        'logger.error("[TIDAL-STREAM] Poll auth failed:", err.message);';
+    const source = 'logger.error("[PROVIDER] Poll auth failed:", err.message);';
     assert.equal(countLeakPattern(source), 0);
 });
 
@@ -367,6 +366,36 @@ test("countLeakPattern exempts terminal axios response data inside logger calls"
     assert.equal(
         countLeakPattern("logger.error('axios', err.response.data)"),
         0,
+    );
+});
+
+test("cleanup-only response data remains counted and an additional leak exceeds its allowance", () => {
+    const cleanup = `
+        const responseBody = error.response?.data as unknown;
+        if (responseBody && typeof responseBody === "object" &&
+            "destroy" in responseBody && typeof responseBody.destroy === "function") {
+            responseBody.destroy();
+        }
+    `;
+    const file = "backend/src/services/youtubeMusic.ts";
+    const baseline = { [file]: 1 };
+    assert.equal(countLeakPattern(cleanup), 1);
+    assert.equal(
+        analyzeRouteErrorCanon({ [file]: countLeakPattern(cleanup) }, baseline)
+            .ok,
+        true,
+    );
+    const withLeak = cleanup + "res.json({ error: error.response?.data });";
+    assert.deepEqual(
+        analyzeRouteErrorCanon(
+            { [file]: countLeakPattern(withLeak) },
+            baseline,
+        ),
+        {
+            ok: false,
+            violations: [{ file, count: 2, baseline: 1 }],
+            tightenable: [],
+        },
     );
 });
 

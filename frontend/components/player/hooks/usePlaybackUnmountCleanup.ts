@@ -27,6 +27,8 @@ export function usePlaybackUnmountCleanup({
         loadErrorListenerRef,
         cachePollingLoadListenerRef,
         lastPreloadedTrackIdRef,
+        enginePreloadLeaseRef,
+        readyPreloadedTrackIdRef,
     } = refs;
 
     // Cleanup on unmount
@@ -66,7 +68,10 @@ export function usePlaybackUnmountCleanup({
                 cachePollingLoadListenerRef.current = null;
             }
             // Clean up preload refs
+            enginePreloadLeaseRef.current?.cancel();
+            enginePreloadLeaseRef.current = null;
             lastPreloadedTrackIdRef.current = null;
+            readyPreloadedTrackIdRef.current = null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.
     }, [

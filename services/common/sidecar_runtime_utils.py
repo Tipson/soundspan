@@ -119,12 +119,15 @@ class ThreadSafeRatePacer:
         with self._lock:
             now = time.monotonic()
             gap = random.uniform(self._min, self._max)  # noqa: S311 -- pacing jitter is not security-sensitive
-            start_at = max(self._next_allowed, now)
-            self._next_allowed = start_at + gap
-            sleep_for = start_at - now
-        if sleep_for > 0:
-            time.sleep(sleep_for)
-        return sleep_for
+            sleep_for = max(0.0, self._next_allowed - now)
+            if sleep_for > 0:
+                # Keep the lock until this caller actually starts. Releasing it
+                # before sleep lets a delayed scheduler wake several reserved
+                # threads together and burst requests through the provider gap.
+                time.sleep(sleep_for)
+            started_at = time.monotonic()
+            self._next_allowed = started_at + gap
+            return max(0.0, started_at - now)
 
 
 def register_error_handlers(app: FastAPI, logger: logging.Logger) -> None:

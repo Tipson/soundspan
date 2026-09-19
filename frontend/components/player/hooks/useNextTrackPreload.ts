@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { Podcast, Track } from "@/lib/audio-state-context";
 import type { QueueItem } from "@/lib/queue-item";
 import { api } from "@/lib/api";
@@ -7,13 +7,28 @@ import {
     hasDeviceOfflinePlaybackCopy,
     resolveDeviceOfflineMediaIdentity,
 } from "@/features/device-offline/playbackResolver";
-import { getNextTrackInfo } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
+import {
+    getNextTrackInfo,
+    isRetiredProviderTrack,
+    resolveDirectTrackSourceType,
+} from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import { resolveNetworkNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
 import { resolveRemoteStreamFormat } from "../audioPlaybackOrchestratorPolicy";
 import { audioEngine } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
-import { usePlaybackSourceLeaseController } from "./playbackSourceLeaseController";
+import {
+    usePlaybackSourceLeaseController,
+    isDevicePlaybackSourceUrl,
+    type PlaybackSourceLease,
+} from "./playbackSourceLeaseController";
 import { observeIosBackgroundTrackHandoff } from "../iosBackgroundTrackHandoffController";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
+import {
+    AdaptiveQueueWarmupCoordinator,
+    resolveUpcomingQueueTracks,
+    type NetworkConnectionHints,
+} from "@/lib/audio-engine/adaptiveQueueWarmup";
+import type { AudioPreloadLease } from "@/lib/audio-engine/types";
+import { frontendLogger } from "@/lib/logger";
 
 interface UseNextTrackPreloadOptions {
     playbackType: "track" | "audiobook" | "podcast" | null;
@@ -45,10 +60,48 @@ interface NextTrackPreloadController {
         options?: PreloadTrackOptions,
     ) => void;
     preloadNetworkWhenDue: (timing: NetworkPreloadTiming) => void;
+    consumeReadyCurrentTrackPreload: (
+        track: Track,
+    ) => PlaybackSourceLease | null;
 }
 
-function isVerifiedDevicePlaybackUrl(url: string): boolean {
-    return url.startsWith("blob:") || url.includes("/__offline/audio/");
+function resolveWarmableYtMusicVideoId(
+    track: PreloadableTrack | Track | null | undefined,
+): string | null {
+    if (
+        !track ||
+        track.playbackSourcePolicy === "device-only" ||
+        resolveDirectTrackSourceType(track) !== "ytmusic" ||
+        hasDeviceOfflinePlaybackCopy(track)
+    ) {
+        return null;
+    }
+    return track.provider?.youtubeVideoId ?? track.youtubeVideoId ?? null;
+}
+
+function readConnectionHints(): NetworkConnectionHints {
+    const connection =
+        typeof navigator === "undefined"
+            ? undefined
+            : (
+                  navigator as Navigator & {
+                      connection?: {
+                          saveData?: boolean;
+                          effectiveType?: string;
+                      };
+                  }
+              ).connection;
+    return {
+        saveData: connection?.saveData,
+        effectiveType: connection?.effectiveType,
+    };
+}
+
+function createWarmupOwnerId(): string {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+        return `player-${crypto.randomUUID()}`;
+    }
+    return `player-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** Preloads the next music queue item without changing playback state. */
@@ -67,19 +120,252 @@ export function useNextTrackPreload({
     const {
         iosBackgroundTrackHandoffRef,
         lastPreloadedTrackIdRef,
-        ytMusicAuthenticatedRef,
+        enginePreloadLeaseRef,
+        readyPreloadedTrackIdRef,
     } = refs;
     const leaseController = usePlaybackSourceLeaseController();
     const preloadRequestIdRef = useRef(0);
+    const failedNetworkPreloadRef = useRef<{
+        identity: string;
+        sourceUrl: string;
+        retryAt: number;
+    } | null>(null);
+    const readyCurrentTrackPreloadAtCommitRef = useRef<{
+        identity: string;
+        lease: AudioPreloadLease;
+        source: PlaybackSourceLease | null;
+    } | null>(null);
+    const pendingYtMusicPreloadRef = useRef<{
+        requestId: number;
+        identity: string;
+        videoId: string;
+        track: PreloadableTrack;
+        reconcile: (
+            immediateTrack: PreloadableTrack,
+            immediateLease: AudioPreloadLease,
+        ) => void;
+    } | null>(null);
+    const warmupCoordinatorRef = useRef<AdaptiveQueueWarmupCoordinator | null>(
+        null,
+    );
+    useLayoutEffect(() => {
+        const coordinator = new AdaptiveQueueWarmupCoordinator(
+            createWarmupOwnerId(),
+            (request, signal) =>
+                api.reconcileYtMusicTailWarmup(request, signal),
+            (error) =>
+                frontendLogger.warn(
+                    "[Player] Tail warmup reconcile failed:",
+                    error,
+                ),
+        );
+        warmupCoordinatorRef.current = coordinator;
+        return () => {
+            if (warmupCoordinatorRef.current === coordinator) {
+                warmupCoordinatorRef.current = null;
+            }
+            coordinator.dispose();
+        };
+    }, []);
+
+    useLayoutEffect(() => {
+        // Snapshot readiness before this hook's passive queue effect replaces
+        // the old next-track preload ahead of the parent's load effect.
+        const currentIdentity =
+            playbackType === "track" && currentTrack
+                ? resolveDeviceOfflineMediaIdentity(currentTrack)
+                : null;
+        const preloadLease = enginePreloadLeaseRef.current;
+        readyCurrentTrackPreloadAtCommitRef.current?.source?.release();
+        readyCurrentTrackPreloadAtCommitRef.current =
+            currentIdentity &&
+            preloadLease &&
+            lastPreloadedTrackIdRef.current === currentIdentity &&
+            readyPreloadedTrackIdRef.current === currentIdentity
+                ? {
+                      identity: currentIdentity,
+                      lease: preloadLease,
+                      source: leaseController.take(),
+                  }
+                : null;
+    }, [
+        currentIndex,
+        currentTrack,
+        enginePreloadLeaseRef,
+        lastPreloadedTrackIdRef,
+        playbackType,
+        readyPreloadedTrackIdRef,
+        leaseController,
+    ]);
+
+    useEffect(
+        () => () => {
+            readyCurrentTrackPreloadAtCommitRef.current?.source?.release();
+            readyCurrentTrackPreloadAtCommitRef.current = null;
+        },
+        [],
+    );
+
+    const consumeReadyCurrentTrackPreload = useCallback(
+        (track: Track): PlaybackSourceLease | null => {
+            const readyAtCommit = readyCurrentTrackPreloadAtCommitRef.current;
+            readyCurrentTrackPreloadAtCommitRef.current = null;
+            const expectedPreloadUrl =
+                (track.streamSource === "vk" ||
+                    track.streamSource === "yandex") &&
+                !hasDeviceOfflinePlaybackCopy(track)
+                    ? api.getMusicSourceStreamUrl(
+                          track.streamSource,
+                          track.provider?.providerTrackId ??
+                              track.id.slice(track.streamSource.length + 1),
+                      )
+                    : track.streamSource === "youtube" &&
+                        track.youtubeVideoId &&
+                        !hasDeviceOfflinePlaybackCopy(track)
+                      ? api.getYtMusicStreamUrl(
+                            track.youtubeVideoId,
+                            undefined,
+                            true,
+                            "preload",
+                        )
+                      : null;
+            const usable =
+                readyAtCommit?.identity ===
+                    resolveDeviceOfflineMediaIdentity(track) &&
+                (expectedPreloadUrl !== null
+                    ? readyAtCommit.lease.sourceUrl === expectedPreloadUrl
+                    : hasDeviceOfflinePlaybackCopy(track) &&
+                      isDevicePlaybackSourceUrl(readyAtCommit.lease.sourceUrl));
+            if (usable) return readyAtCommit?.source ?? null;
+            readyAtCommit?.source?.release();
+            return null;
+        },
+        [],
+    );
+
+    const reconcileAdaptiveWarmup = useCallback(
+        (
+            immediateTrack: PreloadableTrack,
+            immediateLease: AudioPreloadLease | null,
+        ) => {
+            const upcoming = resolveUpcomingQueueTracks(
+                queue,
+                currentIndex,
+                isShuffle,
+                shuffleIndices,
+                repeatMode,
+                5,
+            );
+            const tailVideoIds = upcoming
+                .slice(
+                    upcoming[0] && upcoming[0].id === immediateTrack.id ? 1 : 0,
+                )
+                .map((track) =>
+                    track.itemType === "episode"
+                        ? null
+                        : resolveWarmableYtMusicVideoId(track),
+                )
+                .filter((videoId): videoId is string => Boolean(videoId));
+            void warmupCoordinatorRef.current?.reconcile({
+                currentVideoId: resolveWarmableYtMusicVideoId(currentTrack),
+                immediateVideoId: resolveWarmableYtMusicVideoId(immediateTrack),
+                tailVideoIds,
+                connection: readConnectionHints(),
+                immediateLease,
+                retainOnly: immediateLease === null,
+            });
+        },
+        [
+            currentIndex,
+            currentTrack,
+            isShuffle,
+            queue,
+            repeatMode,
+            shuffleIndices,
+        ],
+    );
+
     const preloadTrack = useCallback(
         (
             nextTrack: PreloadableTrack,
             options: PreloadTrackOptions = {},
         ): void => {
+            if (
+                isRetiredProviderTrack(nextTrack) ||
+                (nextTrack.playbackSourcePolicy === "device-only" &&
+                    !hasDeviceOfflinePlaybackCopy(nextTrack)) ||
+                nextTrack.streamSource === "audius" ||
+                nextTrack.provider?.source === "audius"
+            ) {
+                preloadRequestIdRef.current += 1;
+                pendingYtMusicPreloadRef.current = null;
+                enginePreloadLeaseRef.current?.cancel();
+                enginePreloadLeaseRef.current = null;
+                leaseController.release();
+                lastPreloadedTrackIdRef.current = null;
+                readyPreloadedTrackIdRef.current = null;
+                void warmupCoordinatorRef.current?.clear();
+                return;
+            }
             const preloadIdentity =
                 resolveDeviceOfflineMediaIdentity(nextTrack);
-            if (preloadIdentity === lastPreloadedTrackIdRef.current) return;
+            const hasDeviceCopy = hasDeviceOfflinePlaybackCopy(nextTrack);
+            const requestedYtMusicVideoId =
+                nextTrack.streamSource === "youtube"
+                    ? (nextTrack.youtubeVideoId ?? null)
+                    : null;
+            const expectedNetworkYtMusicPreloadUrl =
+                requestedYtMusicVideoId && !hasDeviceCopy
+                    ? api.getYtMusicStreamUrl(
+                          requestedYtMusicVideoId,
+                          undefined,
+                          true,
+                          "preload",
+                      )
+                    : null;
+            const failedPreload = failedNetworkPreloadRef.current;
+            if (
+                failedPreload?.identity === preloadIdentity &&
+                failedPreload.sourceUrl === expectedNetworkYtMusicPreloadUrl &&
+                Date.now() < failedPreload.retryAt
+            ) {
+                // A failed speculative read must not be restarted by every
+                // progress tick. Foreground playback has its own recovery.
+                return;
+            }
+            if (preloadIdentity === lastPreloadedTrackIdRef.current) {
+                const existingLease = enginePreloadLeaseRef.current;
+                const existingLeaseMatchesSource =
+                    expectedNetworkYtMusicPreloadUrl === null ||
+                    existingLease?.sourceUrl ===
+                        expectedNetworkYtMusicPreloadUrl;
+                if (existingLease && existingLeaseMatchesSource) {
+                    // The immediate item stayed stable, but a reorder may have
+                    // replaced its tail. Reconcile a fresh generation without
+                    // restarting the real browser preload.
+                    reconcileAdaptiveWarmup(nextTrack, existingLease);
+                    return;
+                }
+                const pendingPreload = pendingYtMusicPreloadRef.current;
+                if (
+                    !existingLease &&
+                    requestedYtMusicVideoId !== null &&
+                    pendingPreload?.identity === preloadIdentity &&
+                    pendingPreload.videoId === requestedYtMusicVideoId
+                ) {
+                    // Time updates retain the same expensive device-source
+                    // acquisition. A queue-only change refreshes the tail
+                    // context consumed when that acquisition completes.
+                    pendingPreload.track = nextTrack;
+                    pendingPreload.reconcile = reconcileAdaptiveWarmup;
+                    return;
+                }
+            }
+            enginePreloadLeaseRef.current?.cancel();
+            enginePreloadLeaseRef.current = null;
+            readyPreloadedTrackIdRef.current = null;
             const requestId = ++preloadRequestIdRef.current;
+            pendingYtMusicPreloadRef.current = null;
             const isCurrentRequest = () =>
                 preloadRequestIdRef.current === requestId &&
                 lastPreloadedTrackIdRef.current === preloadIdentity;
@@ -90,29 +376,52 @@ export function useNextTrackPreload({
             // handler may do the same as an iOS audio-session fallback.
             if (
                 nextTrack.streamSource === "youtube" &&
-                !hasDeviceOfflinePlaybackCopy(nextTrack) &&
+                !hasDeviceCopy &&
                 !options.allowNetworkYouTube
             ) {
                 leaseController.release();
                 lastPreloadedTrackIdRef.current = null;
+                readyPreloadedTrackIdRef.current = null;
+                // Keep only existing work needed after this queue change.
+                // Do not admit a new network preload before timing permits it.
+                reconcileAdaptiveWarmup(nextTrack, null);
                 return;
             }
 
             let streamUrl: string;
             let format: string | undefined = "mp3";
 
-            if (nextTrack.streamSource === "tidal" && nextTrack.tidalTrackId) {
-                streamUrl = api.getTidalStreamUrl(nextTrack.tidalTrackId);
-                format = resolveRemoteStreamFormat("tidal");
+            if (
+                nextTrack.streamSource === "vk" ||
+                nextTrack.streamSource === "yandex"
+            ) {
+                const source = nextTrack.streamSource;
+                const id =
+                    nextTrack.provider?.providerTrackId ??
+                    nextTrack.id.slice(source.length + 1);
+                if (
+                    nextTrack.id !== `${source}:${id}` ||
+                    !(
+                        source === "vk" ? /^-?\d{1,20}_\d{1,20}$/ : /^\d{1,20}$/
+                    ).test(id)
+                ) {
+                    leaseController.release();
+                    lastPreloadedTrackIdRef.current = null;
+                    return;
+                }
+                streamUrl = api.getMusicSourceStreamUrl(source, id);
             } else if (
                 nextTrack.streamSource === "youtube" &&
                 nextTrack.youtubeVideoId
             ) {
-                streamUrl = api.getYtMusicStreamUrl(
-                    nextTrack.youtubeVideoId,
-                    undefined,
-                    !ytMusicAuthenticatedRef.current,
-                );
+                streamUrl =
+                    expectedNetworkYtMusicPreloadUrl ??
+                    api.getYtMusicStreamUrl(
+                        nextTrack.youtubeVideoId,
+                        undefined,
+                        true,
+                        "preload",
+                    );
                 format = resolveRemoteStreamFormat("youtube");
             } else if (
                 nextTrack.streamSource === "youtube-direct" &&
@@ -134,6 +443,15 @@ export function useNextTrackPreload({
             }
 
             lastPreloadedTrackIdRef.current = preloadIdentity;
+            if (requestedYtMusicVideoId !== null) {
+                pendingYtMusicPreloadRef.current = {
+                    requestId,
+                    identity: preloadIdentity,
+                    videoId: requestedYtMusicVideoId,
+                    track: nextTrack,
+                    reconcile: reconcileAdaptiveWarmup,
+                };
+            }
             void leaseController
                 .acquire(
                     (signal) =>
@@ -147,29 +465,90 @@ export function useNextTrackPreload({
                 .then(
                     (resolvedUrl) => {
                         if (!isCurrentRequest()) return;
+                        const pendingPreload =
+                            pendingYtMusicPreloadRef.current?.requestId ===
+                            requestId
+                                ? pendingYtMusicPreloadRef.current
+                                : null;
+                        pendingYtMusicPreloadRef.current = null;
                         if (!resolvedUrl) {
                             lastPreloadedTrackIdRef.current = null;
+                            readyPreloadedTrackIdRef.current = null;
+                            void warmupCoordinatorRef.current?.clear();
                             return;
                         }
                         if (
                             nextTrack.streamSource === "youtube" &&
                             !options.allowNetworkYouTube &&
-                            !isVerifiedDevicePlaybackUrl(resolvedUrl)
+                            !isDevicePlaybackSourceUrl(resolvedUrl)
                         ) {
                             leaseController.release();
                             lastPreloadedTrackIdRef.current = null;
+                            readyPreloadedTrackIdRef.current = null;
+                            void warmupCoordinatorRef.current?.clear();
                             return;
                         }
-                        audioEngine.preload(resolvedUrl, format);
+                        const preloadLease = audioEngine.preload(
+                            resolvedUrl,
+                            format,
+                        );
+                        if (!preloadLease) {
+                            leaseController.release();
+                            lastPreloadedTrackIdRef.current = null;
+                            readyPreloadedTrackIdRef.current = null;
+                            return;
+                        }
+                        enginePreloadLeaseRef.current = preloadLease;
+                        (pendingPreload?.reconcile ?? reconcileAdaptiveWarmup)(
+                            pendingPreload?.track ?? nextTrack,
+                            preloadLease,
+                        );
+                        void preloadLease.result.then((result) => {
+                            if (
+                                !isCurrentRequest() ||
+                                enginePreloadLeaseRef.current !== preloadLease
+                            ) {
+                                return;
+                            }
+                            if (result.state === "ready") {
+                                readyPreloadedTrackIdRef.current =
+                                    preloadIdentity;
+                                return;
+                            }
+                            if (
+                                result.state === "failed" &&
+                                expectedNetworkYtMusicPreloadUrl !== null
+                            ) {
+                                failedNetworkPreloadRef.current = {
+                                    identity: preloadIdentity,
+                                    sourceUrl: expectedNetworkYtMusicPreloadUrl,
+                                    retryAt: Date.now() + 60_000,
+                                };
+                            }
+                            enginePreloadLeaseRef.current = null;
+                            lastPreloadedTrackIdRef.current = null;
+                            readyPreloadedTrackIdRef.current = null;
+                            leaseController.release();
+                            void warmupCoordinatorRef.current?.clear();
+                        });
                     },
                     () => {
                         if (isCurrentRequest()) {
+                            pendingYtMusicPreloadRef.current = null;
                             lastPreloadedTrackIdRef.current = null;
+                            readyPreloadedTrackIdRef.current = null;
+                            void warmupCoordinatorRef.current?.clear();
                         }
                     },
                 );
         },
-        [lastPreloadedTrackIdRef, leaseController, ytMusicAuthenticatedRef],
+        [
+            enginePreloadLeaseRef,
+            lastPreloadedTrackIdRef,
+            leaseController,
+            reconcileAdaptiveWarmup,
+            readyPreloadedTrackIdRef,
+        ],
     );
 
     const preloadNetworkWhenDue = useCallback(
@@ -229,8 +608,13 @@ export function useNextTrackPreload({
                   : false;
         if (!hasActiveQueueMedia || !isPlaying) {
             preloadRequestIdRef.current += 1;
+            pendingYtMusicPreloadRef.current = null;
+            enginePreloadLeaseRef.current?.cancel();
+            enginePreloadLeaseRef.current = null;
             leaseController.release();
             lastPreloadedTrackIdRef.current = null;
+            readyPreloadedTrackIdRef.current = null;
+            void warmupCoordinatorRef.current?.clear();
             return;
         }
 
@@ -244,11 +628,33 @@ export function useNextTrackPreload({
 
         if (!nextTrack) {
             preloadRequestIdRef.current += 1;
+            pendingYtMusicPreloadRef.current = null;
+            enginePreloadLeaseRef.current?.cancel();
+            enginePreloadLeaseRef.current = null;
             leaseController.release();
             lastPreloadedTrackIdRef.current = null;
+            readyPreloadedTrackIdRef.current = null;
+            void warmupCoordinatorRef.current?.clear();
             return;
         }
         preloadTrack(nextTrack);
+        // Source acquisition may finish before the parent's current-track load.
+        // Rebind a device preload after that load so it belongs to the active
+        // transport, rather than a native lease from the previous transport.
+        const onLoaded = () => {
+            if (!hasDeviceOfflinePlaybackCopy(nextTrack)) return;
+            if (!enginePreloadLeaseRef.current) {
+                preloadTrack(nextTrack);
+                return;
+            }
+            enginePreloadLeaseRef.current?.cancel();
+            enginePreloadLeaseRef.current = null;
+            lastPreloadedTrackIdRef.current = null;
+            readyPreloadedTrackIdRef.current = null;
+            preloadTrack(nextTrack);
+        };
+        audioEngine.on("load", onLoaded);
+        return () => audioEngine.off("load", onLoaded);
     }, [
         playbackType,
         currentTrack,
@@ -260,10 +666,16 @@ export function useNextTrackPreload({
         shuffleIndices,
         repeatMode,
         iosBackgroundTrackHandoffRef,
+        enginePreloadLeaseRef,
         leaseController,
         lastPreloadedTrackIdRef,
         preloadTrack,
+        readyPreloadedTrackIdRef,
     ]);
 
-    return { preloadTrack, preloadNetworkWhenDue };
+    return {
+        preloadTrack,
+        preloadNetworkWhenDue,
+        consumeReadyCurrentTrackPreload,
+    };
 }

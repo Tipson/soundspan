@@ -864,13 +864,7 @@ describe("playlists route runtime", () => {
                 }),
             }),
         );
-        expect(prisma.trackMapping.findMany).toHaveBeenCalledTimes(1);
-        const mappingQuery = prisma.trackMapping.findMany.mock.calls[0][0];
-        const tidalIds = mappingQuery.where.OR.find(
-            (clause: any) => clause.trackTidalId,
-        ).trackTidalId.in;
-        expect(tidalIds).toHaveLength(itemCount);
-        expect(tidalIds[itemCount - 1]).toBe(`tt-${itemCount}`);
+        expect(prisma.trackMapping.findMany).not.toHaveBeenCalled();
         expect(prisma.trackMapping.findFirst).not.toHaveBeenCalled();
         expect(prisma.trackMapping.findUnique).not.toHaveBeenCalled();
         expect(prisma.trackTidal.findUnique).not.toHaveBeenCalled();
@@ -1165,7 +1159,7 @@ describe("playlists route runtime", () => {
         expect(res.body.mergedItems[4999].id).toBe("pending-5000");
     });
 
-    it("bulk-resolves cross-provider mappings and misses without per-item queries", async () => {
+    it("does not rematch retired TIDAL playlist items", async () => {
         const itemCount = 50;
         prisma.userSettings.findUnique.mockResolvedValueOnce({
             tidalOAuthJson: null,
@@ -1198,63 +1192,6 @@ describe("playlists route runtime", () => {
             })),
             pendingTracks: [],
         });
-        prisma.trackMapping.findMany.mockImplementation(async (args: any) => {
-            if (args?.where?.id?.in) {
-                return [
-                    {
-                        id: "map-tt-0-yt",
-                        stale: false,
-                        confidence: 0.95,
-                        trackId: null,
-                        trackTidal: {
-                            id: "tt-0",
-                            tidalId: 1000,
-                            duration: 180,
-                        },
-                        trackYtMusic: {
-                            id: "yt-fallback",
-                            videoId: "yt-fallback-video",
-                            duration: 180,
-                        },
-                    },
-                ];
-            }
-            if (args?.select?.id) {
-                return [
-                    {
-                        id: "map-tt-0-yt",
-                        trackId: null,
-                        trackTidalId: "tt-0",
-                        trackYtMusicId: "yt-fallback",
-                        source: "import-match",
-                        confidence: 0.95,
-                        createdAt: new Date("2026-08-01T00:00:00.000Z"),
-                    },
-                ];
-            }
-            return [
-                {
-                    trackId: null,
-                    trackTidalId: "tt-0",
-                    trackYtMusicId: "yt-fallback",
-                },
-            ];
-        });
-        prisma.trackTidal.findMany.mockResolvedValueOnce([
-            { id: "tt-0", tidalId: 1000, duration: 180 },
-        ]);
-        prisma.trackYtMusic.findMany.mockResolvedValueOnce([
-            {
-                id: "yt-fallback",
-                videoId: "yt-fallback-video",
-                title: "Fallback Song",
-                artist: "Fallback Artist",
-                album: "Fallback Album",
-                duration: 180,
-                thumbnailUrl: "https://yt/fallback.jpg",
-            },
-        ]);
-
         const req = {
             user: { id: "u-bounded-resolution" },
             params: { id: "pl-bounded-resolution" },
@@ -1264,21 +1201,14 @@ describe("playlists route runtime", () => {
 
         expect(res.statusCode).toBe(200);
         expect(res.body.items).toHaveLength(itemCount);
-        expect(res.body.items[0].provider.source).toBe("youtube");
-        expect(res.body.items[0].playback.isPlayable).toBe(true);
-        expect(res.body.items[0].track.youtubeVideoId).toBe(
-            "yt-fallback-video",
-        );
         expect(
-            res.body.items
-                .slice(1)
-                .every(
-                    (item: any) =>
-                        item.provider.source === "tidal" &&
-                        item.playback.reason === "provider_unavailable",
-                ),
+            res.body.items.every(
+                (item: any) =>
+                    item.provider.source === "tidal" &&
+                    item.playback.reason === "provider_unavailable",
+            ),
         ).toBe(true);
-        expect(prisma.trackMapping.findMany).toHaveBeenCalledTimes(3);
+        expect(prisma.trackMapping.findMany).not.toHaveBeenCalled();
         expect(prisma.trackMapping.findFirst).not.toHaveBeenCalled();
         expect(prisma.trackMapping.findUnique).not.toHaveBeenCalled();
         expect(prisma.trackTidal.findUnique).not.toHaveBeenCalled();
@@ -1413,7 +1343,12 @@ describe("playlists route runtime", () => {
             (entry: any) => entry.provider?.source === "tidal",
         );
         expect(tidalItem).toBeDefined();
-        expect(tidalItem.playback.isPlayable).toBe(true);
+        expect(tidalItem.playback).toEqual({
+            isPlayable: false,
+            reason: "provider_unavailable",
+            message:
+                "Playback is unavailable because this account is not connected to a compatible provider for this track.",
+        });
         expect(tidalItem.track.streamSource).toBe("tidal");
         expect(tidalItem.track.tidalTrackId).toBe(991);
 
@@ -2170,6 +2105,26 @@ describe("playlists route runtime", () => {
             params: { id: "pl-1" },
             body: {
                 trackId: "t-1",
+                youtubeVideoId: "video-1",
+                title: "YouTube Song",
+                artist: "YouTube Artist",
+                album: "YouTube Album",
+                duration: 245,
+            },
+        } as any;
+        const res = createRes();
+
+        await addItem(req, res);
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body.error).toBe("Invalid request");
+    });
+
+    it("rejects new TIDAL playlist items after provider retirement", async () => {
+        const req = {
+            user: { id: "u1" },
+            params: { id: "pl-1" },
+            body: {
                 tidalTrackId: 991,
                 title: "Tidal Song",
                 artist: "Tidal Artist",
@@ -2182,129 +2137,27 @@ describe("playlists route runtime", () => {
         await addItem(req, res);
 
         expect(res.statusCode).toBe(400);
-        expect(res.body.error).toBe("Invalid request");
+        expect(res.body.error).toBe("retired_provider");
+        expect(trackMappingService.ensureRemoteTrack).not.toHaveBeenCalled();
+        expect(prisma.playlistItem.create).not.toHaveBeenCalled();
     });
 
-    it("materializes remote tidal items, handles duplicate detection, and normalizes responses", async () => {
-        prisma.playlist.findUnique.mockResolvedValueOnce({
-            id: "pl-1",
-            userId: "u1",
-            items: [{ sort: 5 }],
-        });
-        trackMappingService.ensureRemoteTrack.mockResolvedValueOnce({
-            provider: "tidal",
-            id: "tt-remote-dup",
-            created: false,
-        });
-        prisma.playlistItem.findFirst.mockResolvedValueOnce({
-            id: "pli-remote-dup",
-            playlistId: "pl-1",
-            trackId: null,
-            trackTidalId: "tt-remote-dup",
-            trackYtMusicId: null,
-            sort: 3,
-            track: null,
-            trackTidal: {
-                id: "tt-remote-dup",
-                tidalId: 991,
-                title: "Tidal Song",
-                artist: "Tidal Artist",
-                album: "Tidal Album",
-                duration: 245,
-            },
-            trackYtMusic: null,
-        });
-
-        const duplicateReq = {
+    it("rejects a TIDAL-prefixed pseudo-local playlist id before lookup", async () => {
+        const req = {
             user: { id: "u1" },
             params: { id: "pl-1" },
-            body: {
-                tidalTrackId: 991,
-                title: "Tidal Song",
-                artist: "Tidal Artist",
-                album: "Tidal Album",
-                duration: 245,
-            },
+            body: { trackId: "tidal:991" },
         } as any;
-        const duplicateRes = createRes();
-        await addItem(duplicateReq, duplicateRes);
+        const res = createRes();
 
-        expect(trackMappingService.ensureRemoteTrack).toHaveBeenCalledWith({
-            provider: "tidal",
-            tidalId: 991,
-            videoId: undefined,
-            title: "Tidal Song",
-            artist: "Tidal Artist",
-            album: "Tidal Album",
-            duration: 245,
-            isrc: undefined,
-            quality: undefined,
-            explicit: undefined,
-            thumbnailUrl: undefined,
-        });
-        expect(duplicateRes.statusCode).toBe(200);
-        expect(duplicateRes.body.duplicated).toBe(true);
-        expect(duplicateRes.body.item.provider.source).toBe("tidal");
+        await addItem(req, res);
+
+        expect(res.statusCode).toBe(400);
+        expect(res.body).toEqual({ error: "retired_provider" });
+        expect(prisma.playlist.findUnique).not.toHaveBeenCalled();
+        expect(prisma.track.findUnique).not.toHaveBeenCalled();
+        expect(trackMappingService.ensureRemoteTrack).not.toHaveBeenCalled();
         expect(prisma.playlistItem.create).not.toHaveBeenCalled();
-
-        prisma.playlist.findUnique.mockResolvedValueOnce({
-            id: "pl-1",
-            userId: "u1",
-            items: [{ sort: 5 }],
-        });
-        trackMappingService.ensureRemoteTrack.mockResolvedValueOnce({
-            provider: "tidal",
-            id: "tt-remote-new",
-            created: true,
-        });
-        prisma.playlistItem.findFirst.mockResolvedValueOnce(null);
-        prisma.playlistItem.create.mockResolvedValueOnce({
-            id: "pli-remote-new",
-            playlistId: "pl-1",
-            trackId: null,
-            trackTidalId: "tt-remote-new",
-            trackYtMusicId: null,
-            sort: 6,
-            track: null,
-            trackTidal: {
-                id: "tt-remote-new",
-                tidalId: 992,
-                title: "Tidal Song 2",
-                artist: "Tidal Artist",
-                album: "Tidal Album",
-                duration: 244,
-            },
-            trackYtMusic: null,
-        });
-
-        const createReq = {
-            user: { id: "u1" },
-            params: { id: "pl-1" },
-            body: {
-                tidalTrackId: 992,
-                title: "Tidal Song 2",
-                artist: "Tidal Artist",
-                album: "Tidal Album",
-                duration: 244,
-            },
-        } as any;
-        const createResValue = createRes();
-        await addItem(createReq, createResValue);
-
-        expect(createResValue.statusCode).toBe(200);
-        expect(createResValue.body.provider.source).toBe("tidal");
-        expect(createResValue.body.track.streamSource).toBe("tidal");
-        expect(prisma.playlistItem.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                data: expect.objectContaining({
-                    playlistId: "pl-1",
-                    trackId: null,
-                    trackTidalId: "tt-remote-new",
-                    trackYtMusicId: null,
-                    sort: 6,
-                }),
-            }),
-        );
     });
 
     it("materializes remote youtube items and normalizes add responses", async () => {

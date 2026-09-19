@@ -23,6 +23,67 @@ function requestUrl(input: Request | string | { url: string }): string {
     return new URL(raw, ORIGIN).toString();
 }
 
+test("native completed preload is reused only by its session and cleared by the sender", async () => {
+    let requests = 0;
+    const harness = createHarness(async () => {
+        requests += 1;
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+            headers: {
+                "Content-Type": "audio/mpeg",
+                "Content-Length": "4",
+                "Cache-Control": "private, max-age=120",
+            },
+        });
+    });
+    const url = `${ORIGIN}/api/ytmusic/stream-public/dQw4w9WgXcQ?preloadSession=11111111-1111-4111-8111-111111111111:1`;
+    const preload = await harness.dispatch("fetch", {
+        clientId: "owner",
+        request: new Request(`${url}&purpose=preload`),
+    });
+    assert.ok(
+        preload,
+        "eligible real cookie-auth media requests are intercepted",
+    );
+    await preload.arrayBuffer();
+    const interactive = await harness.dispatch("fetch", {
+        clientId: "owner",
+        request: new Request(url, { headers: { Range: "bytes=1-2" } }),
+    });
+    assert.equal(interactive?.status, 206);
+    assert.deepEqual(
+        [...new Uint8Array(await interactive!.arrayBuffer())],
+        [2, 3],
+    );
+    assert.equal(requests, 1, "completed bytes avoid the second transfer");
+    await harness.dispatch("message", {
+        data: { type: "CLEAR_STREAM_PRELOAD_CACHE", clientId: "owner" },
+        source: { id: "other" },
+    });
+    await harness.dispatch("fetch", {
+        clientId: "owner",
+        request: new Request(url),
+    });
+    assert.equal(
+        requests,
+        1,
+        "another client's message cannot clear the owner's bytes",
+    );
+    await harness.dispatch("message", {
+        data: { type: "CLEAR_STREAM_PRELOAD_CACHE" },
+        source: { id: "owner" },
+    });
+    await harness.dispatch("fetch", {
+        clientId: "owner",
+        request: new Request(url),
+    });
+    assert.equal(requests, 2, "logout forces an authenticated network request");
+    assert.deepEqual(
+        await harness.caches.keys(),
+        [],
+        "online reuse does not create persistent offline downloads",
+    );
+});
+
 class FakeCache {
     readonly values = new Map<string, Response>();
     readonly putKeys: string[] = [];
@@ -378,6 +439,7 @@ function createHarness(
 
     const self = {
         location: { origin: ORIGIN },
+        navigator: { onLine: true },
         registration: {
             backgroundFetch: {
                 async getIds() {
@@ -421,31 +483,44 @@ function createHarness(
         },
     };
 
-    vm.runInContext(
-        serviceWorkerSource,
-        vm.createContext({
-            self,
-            caches,
-            indexedDB,
-            fetch: fetchImpl,
-            Request,
-            Response,
-            Headers,
-            URL,
-            ReadableStream,
-            AbortController,
-            setTimeout:
-                timerOverrides?.setTimeout ??
-                ((callback: () => void, delayMs?: number) =>
-                    setTimeout(callback, delayMs)),
-            clearTimeout:
-                timerOverrides?.clearTimeout ??
-                ((handle: unknown) =>
-                    clearTimeout(handle as ReturnType<typeof setTimeout>)),
-            console,
-        }),
-        { filename: "sw.js" },
-    );
+    const context = vm.createContext({
+        self,
+        caches,
+        indexedDB,
+        fetch: fetchImpl,
+        Request,
+        Response,
+        Headers,
+        URL,
+        Blob,
+        Uint8Array,
+        ReadableStream,
+        AbortController,
+        setTimeout:
+            timerOverrides?.setTimeout ??
+            ((callback: () => void, delayMs?: number) =>
+                setTimeout(callback, delayMs)),
+        clearTimeout:
+            timerOverrides?.clearTimeout ??
+            ((handle: unknown) =>
+                clearTimeout(handle as ReturnType<typeof setTimeout>)),
+        console,
+        importScripts(path: string) {
+            assert.equal(path, "/stream-preload-cache.js");
+            vm.runInContext(
+                readFileSync(
+                    new URL(
+                        "../../public/stream-preload-cache.js",
+                        import.meta.url,
+                    ),
+                    "utf8",
+                ),
+                context,
+                { filename: "stream-preload-cache.js" },
+            );
+        },
+    });
+    vm.runInContext(serviceWorkerSource, context, { filename: "sw.js" });
 
     async function dispatch(
         type: string,
@@ -471,6 +546,7 @@ function createHarness(
     }
 
     return {
+        navigator: self.navigator,
         caches,
         indexedDB,
         clientMessages,
@@ -1191,9 +1267,20 @@ test("activate retires legacy Background Fetch, reloads an old client once, and 
     assert.equal(harness.claimCalls, 1);
 });
 
-test("activate reloads an open client even when only the v4 cache remains", async () => {
+test("activate keeps open clients intact when no legacy shell migration is required", async () => {
     const harness = createHarness();
     await harness.caches.open("soundspan-v4");
+
+    await harness.dispatch("activate");
+
+    assert.deepEqual(harness.clientNavigations, []);
+    assert.equal(harness.claimCalls, 1);
+});
+
+test("activate reloads a legacy Background Fetch client even after its shell cache was evicted", async () => {
+    const harness = createHarness();
+    await harness.caches.open("soundspan-v4");
+    harness.addLegacyBackgroundFetch("soundspan-device-audio-stuck::2");
 
     await harness.dispatch("activate");
 
@@ -1204,6 +1291,7 @@ test("activate reloads an open client even when only the v4 cache remains", asyn
 
 test("one rejected client navigation does not block the remaining clients", async () => {
     const harness = createHarness(undefined, undefined, ["reject", "resolve"]);
+    await harness.caches.open("soundspan-v3");
     await harness.caches.open("soundspan-v4");
 
     await harness.dispatch("activate");
@@ -1213,6 +1301,33 @@ test("one rejected client navigation does not block the remaining clients", asyn
         `${ORIGIN}/search?client=1`,
     ]);
     assert.equal(harness.claimCalls, 1);
+});
+
+test("an uncached route redirects to the cached homepage instead of serving it under the wrong URL", async () => {
+    const harness = createHarness();
+    const cache = await harness.caches.open("soundspan-v4");
+    await cache.put(`${ORIGIN}/`, new Response("<html>Home only</html>"));
+    const response = await harness.dispatch("fetch", {
+        request: {
+            method: "GET",
+            mode: "navigate",
+            url: `${ORIGIN}/library`,
+            headers: new Headers(),
+        },
+    });
+    assert.equal(response?.status, 302);
+    assert.equal(response?.headers.get("Location"), `${ORIGIN}/`);
+    assert.doesNotMatch(await response!.text(), /Home only/);
+    const landing = await harness.dispatch("fetch", {
+        request: {
+            method: "GET",
+            mode: "navigate",
+            url: response!.headers.get("Location")!,
+            headers: new Headers(),
+        },
+    });
+    assert.equal(landing?.status, 200);
+    assert.match(await landing!.text(), /Home only/);
 });
 
 test("cold offline navigation to Library Downloads returns its cached app shell", async () => {
@@ -1273,6 +1388,194 @@ test(
         assert.equal(timeoutDelayMs, 5_000);
         assert.ok(response);
         assert.match(await response.text(), /Timed fallback/);
+    },
+);
+
+test("navigation retains the usable previous shell when a new build chunk fails", async () => {
+    const harness = createHarness(async (request) => {
+        if (new URL(request.url).pathname.startsWith("/_next/"))
+            throw new TypeError("network changed");
+        return new Response(
+            '<html><script src="/_next/static/chunks/new.js"></script>New shell</html>',
+            { headers: { "Content-Type": "text/html" } },
+        );
+    });
+    const cache = await harness.caches.open("soundspan-v4");
+    await cache.put(`${ORIGIN}/`, new Response("Usable previous shell"));
+    const response = await harness.dispatch("fetch", {
+        request: {
+            method: "GET",
+            mode: "navigate",
+            url: `${ORIGIN}/`,
+            headers: new Headers(),
+        },
+    });
+    assert.equal(await response?.text(), "Usable previous shell");
+    assert.equal(
+        await (await cache.match(`${ORIGIN}/`))?.text(),
+        "Usable previous shell",
+    );
+});
+
+test("navigation publishes its bootstrap assets before exposing fresh HTML", async () => {
+    let online = true;
+    const fetched: string[] = [];
+    const harness = createHarness(async (request) => {
+        if (!online) throw new TypeError("offline");
+        const path = new URL(request.url).pathname;
+        fetched.push(path);
+        return new Response(
+            path === "/"
+                ? '<html><link href="/_next/static/a.css" rel="stylesheet"><script src="/_next/static/a.js"></script><script src="/runtime-config"></script><img src="https://external.test/image.jpg">Fresh shell</html>'
+                : `asset:${path}`,
+        );
+    });
+    const response = await harness.dispatch("fetch", {
+        request: {
+            method: "GET",
+            mode: "navigate",
+            url: `${ORIGIN}/`,
+            headers: new Headers(),
+        },
+    });
+    assert.match(await response!.text(), /Fresh shell/);
+    online = false;
+    for (const path of [
+        "/_next/static/a.js",
+        "/_next/static/a.css",
+        "/runtime-config",
+    ]) {
+        const cached = await harness.dispatch("fetch", {
+            request: new Request(`${ORIGIN}${path}`),
+        });
+        assert.equal(await cached?.text(), `asset:${path}`);
+    }
+    assert.deepEqual(fetched.sort(), [
+        "/",
+        "/_next/static/a.css",
+        "/_next/static/a.js",
+        "/runtime-config",
+    ]);
+});
+
+test(
+    "a bootstrap asset with a stalled body cannot trap navigation indefinitely",
+    { timeout: 500 },
+    async () => {
+        const harness = createHarness(
+            async (request) =>
+                new URL(request.url).pathname === "/"
+                    ? new Response(
+                          '<script src="/_next/static/hanging.js"></script>',
+                      )
+                    : new Response(new ReadableStream()),
+            {
+                setTimeout: (callback) => setTimeout(callback, 20),
+                clearTimeout: (handle) =>
+                    clearTimeout(handle as ReturnType<typeof setTimeout>),
+            },
+        );
+        const cache = await harness.caches.open("soundspan-v4");
+        await cache.put(`${ORIGIN}/`, new Response("Previous shell"));
+        const response = await harness.dispatch("fetch", {
+            request: {
+                method: "GET",
+                mode: "navigate",
+                url: `${ORIGIN}/`,
+                headers: new Headers(),
+            },
+        });
+        assert.equal(await response?.text(), "Previous shell");
+    },
+);
+
+test("offline bootstrap uses cached configuration and document without starting network", async () => {
+    let calls = 0;
+    const harness = createHarness(async () => {
+        calls += 1;
+        throw new TypeError("offline");
+    });
+    harness.navigator.onLine = false;
+    const cache = await harness.caches.open("soundspan-v4");
+    for (const path of ["/runtime-config", "/library?tab=downloads"]) {
+        await cache.put(`${ORIGIN}${path}`, new Response(`cached:${path}`));
+        const response = await harness.dispatch("fetch", {
+            request: {
+                method: "GET",
+                mode: path === "/runtime-config" ? "no-cors" : "navigate",
+                url: `${ORIGIN}${path}`,
+                headers: new Headers(),
+            },
+        });
+        assert.equal(await response?.text(), `cached:${path}`);
+    }
+    assert.equal(calls, 0);
+});
+
+test(
+    "stalled bootstrap configuration falls back within its deadline",
+    { timeout: 500 },
+    async () => {
+        let deadline: number | undefined;
+        const harness = createHarness(
+            () => new Promise<Response>(() => undefined),
+            {
+                setTimeout: (callback, delay) => {
+                    deadline = delay;
+                    queueMicrotask(callback);
+                    return 1;
+                },
+                clearTimeout: () => undefined,
+            },
+        );
+        const cache = await harness.caches.open("soundspan-v4");
+        await cache.put(
+            `${ORIGIN}/runtime-config`,
+            new Response("cached-config"),
+        );
+        const response = await harness.dispatch("fetch", {
+            request: new Request(`${ORIGIN}/runtime-config`),
+        });
+        assert.equal(await response?.text(), "cached-config");
+        assert.ok(deadline !== undefined && deadline <= 1500);
+    },
+);
+
+test("online bootstrap configuration refreshes the cached value", async () => {
+    const harness = createHarness(async () => new Response("fresh-config"));
+    const cache = await harness.caches.open("soundspan-v4");
+    await cache.put(`${ORIGIN}/runtime-config`, new Response("old-config"));
+    const response = await harness.dispatch("fetch", {
+        request: new Request(`${ORIGIN}/runtime-config`),
+    });
+    assert.equal(await response?.text(), "fresh-config");
+    assert.equal(
+        await (await cache.match(`${ORIGIN}/runtime-config`))?.text(),
+        "fresh-config",
+    );
+});
+
+test(
+    "bootstrap deadline also bounds a response whose headers arrive but body stalls",
+    { timeout: 500 },
+    async () => {
+        const harness = createHarness(
+            async () => new Response(new ReadableStream()),
+            {
+                setTimeout: (callback) => setTimeout(callback, 10),
+                clearTimeout: (handle) =>
+                    clearTimeout(handle as ReturnType<typeof setTimeout>),
+            },
+        );
+        const cache = await harness.caches.open("soundspan-v4");
+        await cache.put(
+            `${ORIGIN}/runtime-config`,
+            new Response("complete-config"),
+        );
+        const response = await harness.dispatch("fetch", {
+            request: new Request(`${ORIGIN}/runtime-config`),
+        });
+        assert.equal(await response?.text(), "complete-config");
     },
 );
 

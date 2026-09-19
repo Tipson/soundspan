@@ -1,9 +1,12 @@
 import crypto from "crypto";
+import axios from "axios";
+import { Readable } from "node:stream";
 import { BRAND_USER_AGENT } from "../config/brand";
 import {
     normalizeSafeOutboundUrl,
     resolveSafeOutboundUrl,
     resolveSafeOutboundRedirectTarget,
+    retainOutboundLookupGuard,
 } from "./outboundUrlSafety";
 
 /**
@@ -52,6 +55,85 @@ export type ExternalImageResult =
 
 type ExternalImageFailure = Extract<ExternalImageResult, { ok: false }>;
 
+// Only these provider-owned image origins may use the operator's egress proxy.
+// Arbitrary image URLs retain native fetch and its connect-time DNS guard.
+const PROXY_AWARE_IMAGE_HOSTS = new Set([
+    "i.ytimg.com",
+    "yt3.ggpht.com",
+    "yt3.googleusercontent.com",
+    "lh3.googleusercontent.com",
+]);
+
+async function fetchImageResponse(
+    url: string,
+    timeoutMs: number,
+): Promise<Response> {
+    const release = retainOutboundLookupGuard(url);
+    try {
+        return await fetchImageResponseTransport(url, timeoutMs);
+    } finally {
+        release();
+    }
+}
+
+async function fetchImageResponseTransport(
+    url: string,
+    timeoutMs: number,
+): Promise<Response> {
+    const target = new URL(url);
+    const headers = { "User-Agent": BRAND_USER_AGENT };
+    const signal = AbortSignal.timeout(timeoutMs);
+    if (
+        target.protocol !== "https:" ||
+        target.port ||
+        target.username ||
+        target.password ||
+        !PROXY_AWARE_IMAGE_HOSTS.has(target.hostname)
+    ) {
+        return fetch(url, { headers, signal, redirect: "manual" });
+    }
+
+    // The HTTP adapter honors HTTPS_PROXY / NO_PROXY without changing global
+    // fetch or routing audio/internal requests through a different transport.
+    // Redirects remain manual and pass the shared safety check on every hop.
+    const upstream = await axios.get<Readable>(url, {
+        adapter: "http",
+        headers,
+        signal,
+        timeout: timeoutMs,
+        responseType: "stream",
+        maxRedirects: 0,
+        validateStatus: () => true,
+    });
+    try {
+        const responseHeaders = new Headers();
+        for (const name of ["content-type", "content-length", "location"]) {
+            const value = upstream.headers[name];
+            if (typeof value === "string") responseHeaders.set(name, value);
+        }
+        const noBody = [204, 205, 304].includes(upstream.status);
+        if (noBody) upstream.data.destroy();
+        return new Response(
+            noBody
+                ? null
+                : (Readable.toWeb(upstream.data, {
+                      strategy: {
+                          highWaterMark: 64 * 1024,
+                          size: (chunk: Buffer) => chunk.byteLength,
+                      },
+                  }) as ReadableStream<Uint8Array>),
+            {
+                status: upstream.status,
+                statusText: upstream.statusText,
+                headers: responseHeaders,
+            },
+        );
+    } catch (error) {
+        upstream.data.destroy();
+        throw error;
+    }
+}
+
 async function fetchWithSafeRedirects(options: {
     url: string;
     timeoutMs: number;
@@ -65,13 +147,7 @@ async function fetchWithSafeRedirects(options: {
         redirectCount <= maxRedirects;
         redirectCount += 1
     ) {
-        const response = await fetch(currentUrl, {
-            headers: {
-                "User-Agent": BRAND_USER_AGENT,
-            },
-            signal: AbortSignal.timeout(timeoutMs),
-            redirect: "manual",
-        });
+        const response = await fetchImageResponse(currentUrl, timeoutMs);
 
         const isRedirect = response.status >= 300 && response.status < 400;
         const location = response.headers.get("location");

@@ -58,12 +58,6 @@ mock.module("@/components/ui/Card", {
     },
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => React.createElement("span", null, "TIDAL"),
-    },
-});
-
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: {
         YouTubeBadge: () => React.createElement("span", null, "YT"),
@@ -183,7 +177,7 @@ test("album TrackList renders disc separators and provider loading badges for un
     );
 });
 
-test("album TrackList shows preview controls, queue badges, and provider badges", async () => {
+test("album TrackList keeps retired provider rows unplayable", async () => {
     state.queuedTrackIds = new Set(["a-tidal"]);
     const { TrackList } =
         await import("../../features/album/components/TrackList");
@@ -242,10 +236,10 @@ test("album TrackList shows preview controls, queue badges, and provider badges"
     assert.ok(previewButton);
     assert.match(previewButton, /h-11 w-11/);
     assert.match(html, /В ОЧЕРЕДИ/);
-    assert.match(html, /TIDAL/);
+    assert.doesNotMatch(html, /TIDAL/);
     assert.match(html, /YT/);
-    assert.match(html, /#7/);
-    assert.equal((html.match(/Track actions/g) || []).length, 2);
+    assert.doesNotMatch(html, /#7/);
+    assert.equal((html.match(/Track actions/g) || []).length, 1);
 });
 
 test("artist PopularTracks limits visible items and renders provider states", async () => {
@@ -330,7 +324,8 @@ test("artist PopularTracks limits visible items and renders provider states", as
 
     // Remote provider tracks must use canonical IDs for preference actions.
     assert.match(html, /data-track-id="yt:yt-id"/);
-    assert.match(html, /data-track-id="tidal:101"/);
+    assert.match(html, /data-track-id="p-in-queue"/);
+    assert.doesNotMatch(html, /data-track-id="tidal:101"/);
 
     // Provider-enriched persisted tracks keep their original local ID.
     assert.match(html, /data-track-id="p-local-enriched"/);
@@ -431,7 +426,8 @@ test("discover TrackList renders source badges, tier aliases, queue badges, and 
         } as any),
     );
 
-    assert.match(html, /TIDAL/);
+    assert.doesNotMatch(html, /TIDAL/);
+    assert.match(html, /Недоступно/);
     assert.match(html, /YT</);
     assert.match(html, /Ищем/);
     assert.match(html, /Локально/);

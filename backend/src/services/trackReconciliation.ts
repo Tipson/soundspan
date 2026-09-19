@@ -22,28 +22,11 @@ import {
 } from "../utils/trackMatching";
 import { yieldToEventLoop } from "../utils/async";
 import { trackMappingService } from "./trackMappingService";
-import { tidalStreamingService } from "./tidalStreaming";
 
 const log = logger.child("TrackReconciliation");
 
 const DEFAULT_BATCH_SIZE = 50;
 const MIN_CONFIDENCE_THRESHOLD = 70;
-const TIDAL_UPGRADE_CONFIDENCE = 0.85;
-const TIDAL_UPGRADE_MATCH_BATCH_SIZE = 25;
-const TIDAL_USER_SCAN_BATCH_SIZE = 100;
-
-function tryDecryptOAuthJson(value: string): string {
-    try {
-        // Defer loading encryption module so tests without encryption env can still run.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { decrypt } = require("../utils/encryption") as {
-            decrypt: (text: string) => string;
-        };
-        return decrypt(value);
-    } catch {
-        return value;
-    }
-}
 
 /** Counts produced by one bounded remote-to-local reconciliation run. */
 export interface ReconciliationResult {
@@ -78,13 +61,6 @@ export interface ReconciliationWindowOptions extends ReconciliationRunOptions {
 export interface ReconciliationWindowResult {
     result: ReconciliationResult;
     nextCursor: ReconciliationCursor | null;
-}
-
-/** Counts produced by one YT Music-to-TIDAL upgrade run. */
-export interface ProviderUpgradeResult {
-    processed: number;
-    upgraded: number;
-    skipped: number;
 }
 
 interface ReconciliationMapping {
@@ -255,59 +231,6 @@ class TrackReconciliationService {
             },
         });
         return "linked";
-    }
-
-    private async getRestoredTidalUserId(): Promise<string | null> {
-        let cursorUserId: string | null = null;
-        while (true) {
-            const usersWithTidal: Array<{
-                userId: string;
-                tidalOAuthJson: string | null;
-            }> = await prisma.userSettings.findMany({
-                where: { tidalOAuthJson: { not: null } },
-                select: {
-                    userId: true,
-                    tidalOAuthJson: true,
-                },
-                orderBy: { userId: "asc" },
-                take: TIDAL_USER_SCAN_BATCH_SIZE,
-                ...(cursorUserId
-                    ? {
-                          cursor: { userId: cursorUserId },
-                          skip: 1,
-                      }
-                    : {}),
-            });
-            if (usersWithTidal.length === 0) {
-                break;
-            }
-
-            for (const userWithTidal of usersWithTidal) {
-                if (!userWithTidal.tidalOAuthJson) {
-                    continue;
-                }
-
-                const oauthJson = tryDecryptOAuthJson(
-                    userWithTidal.tidalOAuthJson,
-                );
-                const restored = await tidalStreamingService.restoreOAuth(
-                    userWithTidal.userId,
-                    oauthJson,
-                );
-                if (restored) {
-                    return userWithTidal.userId;
-                }
-
-                log.warn(
-                    `[YT->TIDAL] TIDAL credentials exist for ${userWithTidal.userId}, but session restore failed`,
-                );
-            }
-
-            cursorUserId =
-                usersWithTidal[usersWithTidal.length - 1]?.userId ?? null;
-        }
-
-        return null;
     }
 
     /**
@@ -499,152 +422,6 @@ class TrackReconciliationService {
                 processed,
                 limits.maxRows,
             ),
-        };
-    }
-
-    /**
-     * Attempt to upgrade YT-only mappings to include a TIDAL linkage.
-     * This allows future playlist/listen resolution to prefer TIDAL where possible.
-     */
-    async reconcileYoutubeToTidal(
-        batchSize: number = DEFAULT_BATCH_SIZE,
-    ): Promise<ProviderUpgradeResult> {
-        const ytOnlyMappings = await prisma.trackMapping.findMany({
-            where: {
-                stale: false,
-                trackId: { not: null },
-                trackYtMusicId: { not: null },
-                trackTidalId: null,
-            },
-            select: {
-                id: true,
-                trackId: true,
-                trackYtMusicId: true,
-                confidence: true,
-                trackYtMusic: {
-                    select: {
-                        title: true,
-                        artist: true,
-                        album: true,
-                        duration: true,
-                    },
-                },
-            },
-            take: batchSize,
-            orderBy: { createdAt: "asc" },
-        });
-
-        if (ytOnlyMappings.length === 0) {
-            return { processed: 0, upgraded: 0, skipped: 0 };
-        }
-
-        const tidalUserId = await this.getRestoredTidalUserId();
-        if (!tidalUserId) {
-            log.debug(
-                `[YT->TIDAL] No restorable TIDAL user available, skipping ${ytOnlyMappings.length} mappings`,
-            );
-            return {
-                processed: ytOnlyMappings.length,
-                upgraded: 0,
-                skipped: ytOnlyMappings.length,
-            };
-        }
-
-        let upgraded = 0;
-        let skipped = 0;
-
-        for (
-            let startIndex = 0;
-            startIndex < ytOnlyMappings.length;
-            startIndex += TIDAL_UPGRADE_MATCH_BATCH_SIZE
-        ) {
-            const batch = ytOnlyMappings.slice(
-                startIndex,
-                startIndex + TIDAL_UPGRADE_MATCH_BATCH_SIZE,
-            );
-            const matchInputs = batch.map((mapping) => {
-                const yt = mapping.trackYtMusic;
-                return {
-                    artist: yt?.artist ?? "",
-                    title: yt?.title ?? "",
-                    albumTitle: yt?.album ?? undefined,
-                    duration: yt?.duration ?? undefined,
-                    isrc: undefined,
-                };
-            });
-
-            const matches = await tidalStreamingService.findMatchesForAlbum(
-                tidalUserId,
-                matchInputs,
-            );
-
-            for (let index = 0; index < batch.length; index += 1) {
-                const mapping = batch[index];
-                const yt = mapping.trackYtMusic;
-                const match = matches[index];
-
-                if (!mapping.trackYtMusicId || !yt || !yt.title || !yt.artist) {
-                    skipped += 1;
-                    continue;
-                }
-                if (!match) {
-                    skipped += 1;
-                    continue;
-                }
-
-                try {
-                    const tidalRow = await trackMappingService.upsertTrackTidal(
-                        {
-                            tidalId: match.id,
-                            title: match.title,
-                            artist: match.artist,
-                            album: yt.album || "",
-                            duration: match.duration,
-                            isrc: match.isrc,
-                        },
-                    );
-
-                    const conflicting = await prisma.trackMapping.findFirst({
-                        where: {
-                            id: { not: mapping.id },
-                            stale: false,
-                            trackId: mapping.trackId ?? null,
-                            trackYtMusicId: mapping.trackYtMusicId,
-                            trackTidalId: tidalRow.id,
-                        },
-                        select: { id: true },
-                    });
-                    if (conflicting) {
-                        skipped += 1;
-                        continue;
-                    }
-
-                    await prisma.trackMapping.update({
-                        where: { id: mapping.id },
-                        data: {
-                            trackTidalId: tidalRow.id,
-                            confidence: Math.max(
-                                mapping.confidence,
-                                TIDAL_UPGRADE_CONFIDENCE,
-                            ),
-                        },
-                    });
-
-                    upgraded += 1;
-                } catch (error) {
-                    log.warn(
-                        `[YT->TIDAL] Failed to upgrade mapping ${mapping.id}`,
-                        error,
-                    );
-                    skipped += 1;
-                }
-            }
-        }
-
-        return {
-            processed: ytOnlyMappings.length,
-            upgraded,
-            skipped,
         };
     }
 

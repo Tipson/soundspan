@@ -66,12 +66,6 @@ jest.mock("../../services/staleJobCleanup", () => ({
     },
 }));
 
-jest.mock("../../services/tidalStreaming", () => ({
-    tidalStreamingService: {
-        clearUserQualityCache: jest.fn(),
-    },
-}));
-
 class MockMulterError extends Error {
     code: string;
 
@@ -168,8 +162,6 @@ jest.mock("sharp", () => ({
 const { prisma } = require("../../utils/db") as typeof import("../../utils/db");
 const { staleJobCleanupService } =
     require("../../services/staleJobCleanup") as typeof import("../../services/staleJobCleanup");
-const { tidalStreamingService } =
-    require("../../services/tidalStreaming") as typeof import("../../services/tidalStreaming");
 const router = require("../settings")
     .default as typeof import("../settings").default;
 const { createRouteTestApp } =
@@ -184,8 +176,6 @@ const mockUserCount = prisma.user.count as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockUserUpdate = prisma.user.update as jest.Mock;
 const mockCleanupAll = staleJobCleanupService.cleanupAll as jest.Mock;
-const mockClearUserQualityCache =
-    tidalStreamingService.clearUserQualityCache as jest.Mock;
 
 const existingSettings = {
     userId: "user-1",
@@ -237,6 +227,11 @@ describe("settings routes integration", () => {
 
     it("returns existing settings with displayName and hasProfilePicture", async () => {
         mockUserCount.mockResolvedValueOnce(1);
+        const {
+            showTidalExplore: _showTidalExplore,
+            tidalStreamingQuality: _tidalStreamingQuality,
+            ...publicSettings
+        } = existingSettings;
 
         const res = await request(app)
             .get("/api/settings")
@@ -244,7 +239,7 @@ describe("settings routes integration", () => {
 
         expect(res.status).toBe(200);
         expect(res.body).toEqual({
-            ...existingSettings,
+            ...publicSettings,
             displayName: "Jane Doe",
             hasProfilePicture: true,
         });
@@ -275,7 +270,6 @@ describe("settings routes integration", () => {
                 offlineEnabled: false,
                 maxCacheSizeMb: 5120,
                 showYtMusicExplore: true,
-                showTidalExplore: true,
             },
         });
         expect(res.body).toEqual(
@@ -298,7 +292,6 @@ describe("settings routes integration", () => {
             .send({
                 playbackQuality: "original",
                 wifiOnly: false,
-                showTidalExplore: true,
                 displayName: "  Mary Jane  ",
             });
 
@@ -309,12 +302,10 @@ describe("settings routes integration", () => {
                 userId: "user-1",
                 playbackQuality: "original",
                 wifiOnly: false,
-                showTidalExplore: true,
             },
             update: {
                 playbackQuality: "original",
                 wifiOnly: false,
-                showTidalExplore: true,
             },
         });
         expect(mockUserUpdate).toHaveBeenCalledWith({
@@ -326,7 +317,6 @@ describe("settings routes integration", () => {
                 userId: "user-1",
                 playbackQuality: "original",
                 wifiOnly: false,
-                showTidalExplore: true,
                 displayName: "Mary Jane",
             }),
         );
@@ -352,14 +342,19 @@ describe("settings routes integration", () => {
         expect(res.body).not.toHaveProperty("sharePlaylistsToPeers");
     });
 
-    it("clears the TIDAL quality cache when tidalStreamingQuality is updated", async () => {
+    it("strips retired TIDAL fields from old-client updates", async () => {
         const res = await request(app)
             .post("/api/settings")
             .set(AUTH_HEADER, AUTH_VALUE)
             .send({ tidalStreamingQuality: "HI_RES_LOSSLESS" });
 
         expect(res.status).toBe(200);
-        expect(mockClearUserQualityCache).toHaveBeenCalledWith("user-1");
+        expect(mockUserSettingsUpsert).toHaveBeenCalledWith({
+            where: { userId: "user-1" },
+            create: { userId: "user-1" },
+            update: {},
+        });
+        expect(res.body).not.toHaveProperty("tidalStreamingQuality");
     });
 
     it("requires admin and returns cleanup results for stale-job cleanup", async () => {

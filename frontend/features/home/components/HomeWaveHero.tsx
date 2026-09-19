@@ -2,18 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useMemo } from "react";
-import { AudioWaveform, ChevronRight, Play } from "lucide-react";
+import { AudioWaveform, ChevronRight, Pause, Play } from "lucide-react";
+import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
-import type {
-    PersonalizedHomeFeed,
-    PersonalizedHomeMode,
-    PersonalizedHomeMood,
-    PersonalizedTrack,
-} from "../types";
+import type { PersonalizedHomeFeed } from "../types";
+import { usePersonalizedHomeFeed } from "../hooks/usePersonalizedHomeFeed";
+import { selectWaveTracks } from "../selectWaveTracks";
 import { ru } from "@/lib/i18n/ru";
 import { getRecommendationSessionId } from "@/lib/recommendationSession";
 import { useRecommendationImpressions } from "../hooks/useRecommendationImpressions";
@@ -24,65 +22,40 @@ interface HomeWaveHeroProps {
     isLoading: boolean;
 }
 
-function balancedUniqueTracks(
-    shelves: PersonalizedHomeFeed["shelves"] | undefined,
-    mode: PersonalizedHomeMode,
-    mood: PersonalizedHomeMood | null,
-): PersonalizedTrack[] {
-    if (!shelves) return [];
-    const sources =
-        mood === "favorites"
-            ? [shelves.quickPicks, shelves.listenAgain, shelves.discovery]
-            : mood === "forgotten" || mode === "familiar"
-              ? [shelves.listenAgain, shelves.quickPicks, shelves.discovery]
-              : mood !== null || mode === "new"
-                ? [shelves.discovery, shelves.quickPicks, shelves.listenAgain]
-                : [shelves.quickPicks, shelves.discovery, shelves.listenAgain];
-    const positions = sources.map(() => 0);
-    const seen = new Set<string>();
-    const result: PersonalizedTrack[] = [];
-    let foundTrack = true;
-
-    while (foundTrack) {
-        foundTrack = false;
-        sources.forEach((source, sourceIndex) => {
-            while (positions[sourceIndex] < source.length) {
-                const track = source[positions[sourceIndex]];
-                positions[sourceIndex] += 1;
-                const key = recommendationTrackKey(track);
-                if (seen.has(key)) continue;
-                seen.add(key);
-                result.push(track);
-                foundTrack = true;
-                break;
-            }
-        });
-    }
-
-    return result;
-}
-
 /** Compact personal-radio quick start for the first Home viewport. */
 export function HomeWaveHero({
     personalizedFeed,
-    isLoading,
+    isLoading: isHomeLoading,
 }: HomeWaveHeroProps) {
-    const { playTracks } = useAudioControls();
+    const { playTracks, pause, play } = useAudioControls();
+    const { isPlaying } = usePlaybackStatus();
     const {
+        vibeMode,
+        currentTrack,
         waveMode,
         waveMood,
+        waveLanguage = "any",
         setIsShuffle,
         setShuffleIndices,
         setVibeMode,
         setVibeQueueIds,
         setVibeSourceFeatures,
     } = useAudioState();
+    const { data: waveFeed, isLoading: isWaveLoading } =
+        usePersonalizedHomeFeed(
+            12,
+            true,
+            waveMode,
+            waveMood,
+            "wave",
+            waveLanguage,
+        );
+    const isLoading = isHomeLoading || isWaveLoading;
     const tracks = useMemo(
-        () =>
-            balancedUniqueTracks(personalizedFeed?.shelves, waveMode, waveMood),
-        [personalizedFeed?.shelves, waveMode, waveMood],
+        () => selectWaveTracks(waveFeed?.shelves, waveMode),
+        [waveFeed?.shelves, waveMode],
     );
-    const generationId = personalizedFeed?.generationId;
+    const generationId = waveFeed?.generationId;
     const queue = useMemo(
         () =>
             tracks.map((track) =>
@@ -94,12 +67,16 @@ export function HomeWaveHero({
         [generationId, tracks],
     );
     const focusTrack = useMemo(
-        () => tracks.find((track) => track.album.coverArt) ?? tracks[0] ?? null,
-        [tracks],
+        () =>
+            tracks.find((track) => track.album.coverArt) ??
+            tracks[0] ??
+            personalizedFeed?.shelves.discovery[0] ??
+            null,
+        [tracks, personalizedFeed?.shelves.discovery],
     );
     const visibleTracks = useMemo(
-        () => (focusTrack ? [focusTrack] : []),
-        [focusTrack],
+        () => (waveFeed && focusTrack ? [focusTrack] : []),
+        [waveFeed, focusTrack],
     );
     const impressionRef = useRecommendationImpressions(
         generationId,
@@ -128,11 +105,26 @@ export function HomeWaveHero({
         setShuffleIndices,
     ]);
 
-    const playLabel = isLoading
-        ? ru.vibe.tuning
-        : canPlay
-          ? ru.home.startWave
-          : ru.home.moreSignals;
+    const hasActiveWave = vibeMode && currentTrack !== null;
+    const isWavePlaying = hasActiveWave && isPlaying;
+    const toggleWave = useCallback(() => {
+        if (!hasActiveWave) startWave();
+        else if (isPlaying) pause();
+        else play();
+    }, [hasActiveWave, isPlaying, pause, play, startWave]);
+    const playLabel = hasActiveWave
+        ? isPlaying
+            ? ru.common.pause
+            : "Продолжить"
+        : isLoading
+          ? ru.vibe.tuning
+          : canPlay
+            ? ru.home.startWave
+            : waveLanguage !== "any"
+              ? waveFeed?.languageStatus?.pending
+                  ? "Уточняем язык треков"
+                  : "Нет подходящих треков"
+              : ru.home.moreSignals;
 
     return (
         <section
@@ -207,15 +199,36 @@ export function HomeWaveHero({
                     <div className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
                         <button
                             type="button"
-                            onClick={startWave}
-                            disabled={!canPlay}
-                            aria-label={ru.vibe.play}
-                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-gradient-to-r from-warning to-brand px-6 py-3 text-sm font-black text-white shadow-[0_14px_34px_rgba(163,74,255,0.24)] transition duration-200 active:scale-[0.97] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:bg-surface-highlight disabled:text-content-muted disabled:shadow-none motion-reduce:transition-none"
+                            onClick={toggleWave}
+                            disabled={!hasActiveWave && !canPlay}
+                            aria-label={
+                                isWavePlaying ? ru.vibe.pause : ru.vibe.play
+                            }
+                            aria-pressed={isWavePlaying}
+                            data-home-wave-state={
+                                hasActiveWave
+                                    ? isPlaying
+                                        ? "playing"
+                                        : "paused"
+                                    : isLoading
+                                      ? "loading"
+                                      : canPlay
+                                        ? "ready"
+                                        : "needs-signals"
+                            }
+                            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-black text-black shadow-[0_14px_34px_rgba(163,74,255,0.24)] transition duration-200 active:scale-[0.97] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-4 focus-visible:ring-offset-surface-raised disabled:scale-100 disabled:border disabled:border-white/10 disabled:bg-none disabled:bg-white/[0.08] disabled:text-content-secondary disabled:shadow-none motion-reduce:transition-none"
                         >
-                            <Play
-                                className="h-5 w-5 fill-current"
-                                aria-hidden="true"
-                            />
+                            {isWavePlaying ? (
+                                <Pause
+                                    className="h-5 w-5 fill-current"
+                                    aria-hidden="true"
+                                />
+                            ) : (
+                                <Play
+                                    className="h-5 w-5 fill-current"
+                                    aria-hidden="true"
+                                />
+                            )}
                             <span>{playLabel}</span>
                         </button>
                         <Link

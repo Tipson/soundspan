@@ -20,6 +20,7 @@ describe("api entrypoint runtime behavior", () => {
         "../routes/requests",
         "../routes/webhooks",
         "../routes/audiobooks",
+        "../routes/audius",
         "../routes/podcasts",
         "../routes/artists",
         "../routes/soulseek",
@@ -38,7 +39,7 @@ describe("api entrypoint runtime behavior", () => {
         "../routes/vibe",
         "../routes/system",
         "../routes/youtubeMusic",
-        "../routes/tidalStreaming",
+        "../routes/musicSources",
         "../routes/trackMappings",
         "../routes/playlistImport",
         "../routes/lyrics",
@@ -97,6 +98,7 @@ describe("api entrypoint runtime behavior", () => {
                 autoPlaylists?: boolean;
                 federation?: boolean;
                 requests?: boolean;
+                audius?: boolean;
             };
         };
         bcryptHashImpl?: (value: string, salt: number) => Promise<string>;
@@ -223,6 +225,8 @@ describe("api entrypoint runtime behavior", () => {
         const adminSurfaceLimiter = "admin-surface-limiter";
         const shareLinkLimiter = "share-link-limiter";
         const lyricsLimiter = "lyrics-limiter";
+        const internalCanonicalIdentityLimiter =
+            "internal-canonical-identity-limiter";
         const swaggerSetup = jest.fn(() => "swagger-setup-middleware");
         const swaggerServe = "swagger-serve-middleware";
         const config = {
@@ -245,6 +249,7 @@ describe("api entrypoint runtime behavior", () => {
                 autoPlaylists: true,
                 federation: true,
                 requests: true,
+                audius: false,
                 ...(configOverrides?.features || {}),
             },
         };
@@ -333,6 +338,7 @@ describe("api entrypoint runtime behavior", () => {
             adminSurfaceLimiter,
             shareLinkLimiter,
             lyricsLimiter,
+            internalCanonicalIdentityLimiter,
         }));
         jest.doMock("swagger-ui-express", () => ({
             serve: swaggerServe,
@@ -753,6 +759,10 @@ describe("api entrypoint runtime behavior", () => {
         // its expected limiter fails this test. Router-level auth for the
         // routers themselves is asserted by their per-router authz tests.
         const expectedMounts: Record<string, unknown[]> = {
+            "/api/internal/canonical-identity": [
+                "internal-canonical-identity-limiter",
+                route("../routes/internalCanonicalIdentity"),
+            ],
             "/api/auth/login": ["auth-limiter"],
             "/api/auth/register": ["auth-limiter"],
             "/api/auth/refresh": ["refresh-limiter"],
@@ -825,11 +835,16 @@ describe("api entrypoint runtime behavior", () => {
             "/api/vibe": ["api-limiter", route("../routes/vibe")],
             "/api/system": ["api-limiter", route("../routes/system")],
             "/api/ytmusic": ["api-limiter", route("../routes/youtubeMusic")],
-            "/api/youtube": ["api-limiter", route("../routes/youtube")],
-            "/api/tidal-streaming": [
+            "/api/music-sources": [
                 "api-limiter",
-                route("../routes/tidalStreaming"),
+                route("../routes/musicSources"),
             ],
+            "/api/audius": [
+                "api-limiter",
+                mocks.requireAuth,
+                expect.any(Function),
+            ],
+            "/api/youtube": ["api-limiter", route("../routes/youtube")],
             "/api/track-mappings": [
                 "api-limiter",
                 route("../routes/trackMappings"),
@@ -869,6 +884,11 @@ describe("api entrypoint runtime behavior", () => {
                 );
             }
         }
+        expect(mocks.app.use).not.toHaveBeenCalledWith(
+            "/api/tidal-streaming",
+            expect.anything(),
+            expect.anything(),
+        );
 
         expect(
             mocks.app.use.mock.calls.map((args: unknown[]) => args[0]),
@@ -906,6 +926,44 @@ describe("api entrypoint runtime behavior", () => {
             "bull-router",
         ]);
     });
+
+    it.each([false, true])(
+        "gates the Audius prefix with explicit opt-in %s",
+        async (enabled) => {
+            process.env = { ...originalEnv, BACKEND_PROCESS_ROLE: "api" };
+            jest.spyOn(process, "on").mockImplementation(() => process as any);
+            process.exit = jest.fn() as any;
+            const mocks = setupApiEntrypointMocks({
+                configOverrides: { features: { audius: enabled } },
+            });
+            require("../index");
+            await flushPromises();
+            const mount = mocks.app.use.mock.calls.find(
+                (args: unknown[]) => args[0] === "/api/audius",
+            );
+            if (enabled) {
+                expect(mount).toEqual([
+                    "/api/audius",
+                    "api-limiter",
+                    require("../routes/audius").default,
+                ]);
+            } else {
+                expect(mount).toEqual([
+                    "/api/audius",
+                    "api-limiter",
+                    mocks.requireAuth,
+                    expect.any(Function),
+                ]);
+                const res = createJsonRes();
+                mount![3]({}, res);
+                expect(res.statusCode).toBe(404);
+                expect(res.body).toEqual({
+                    error: "feature disabled",
+                    code: "FEATURE_DISABLED",
+                });
+            }
+        },
+    );
 
     it("mounts /api/device-link behind the stricter authLimiter", async () => {
         process.env = {

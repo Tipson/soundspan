@@ -6,6 +6,7 @@ import { cn } from "@/utils/cn";
 import { Button } from "./Button";
 import { nextFocusIndex } from "./focusTrapMath";
 import { ru } from "@/lib/i18n/ru";
+import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 
 const FOCUSABLE_SELECTOR =
     "a:not([tabindex='-1']), button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex='-1'])";
@@ -23,21 +24,17 @@ export interface ModalProps {
 }
 
 function useEscapeAndScrollLock(isOpen: boolean, onClose: () => void) {
+    useDismissibleLayer(isOpen, onClose);
     useEffect(() => {
-        const handleEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") onClose();
-        };
-
+        const previousOverflow = document.body.style.overflow;
         if (isOpen) {
-            document.addEventListener("keydown", handleEscape);
             document.body.style.overflow = "hidden";
         }
 
         return () => {
-            document.removeEventListener("keydown", handleEscape);
-            document.body.style.overflow = "unset";
+            if (isOpen) document.body.style.overflow = previousOverflow;
         };
-    }, [isOpen, onClose]);
+    }, [isOpen]);
 }
 
 function useDialogFocus(

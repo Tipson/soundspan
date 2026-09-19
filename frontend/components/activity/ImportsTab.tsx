@@ -67,7 +67,7 @@ function JobStatusBadge({ status }: { status: string }) {
 
     return (
         <span
-            className={`flex items-center gap-1.5 text-xs font-medium ${config.color}`}
+            className={`flex shrink-0 items-center gap-1.5 text-xs font-medium ${config.color}`}
         >
             <Icon
                 className={`w-3.5 h-3.5 ${isAnimated ? "animate-spin" : ""}`}
@@ -84,7 +84,12 @@ export function ImportsTab() {
     const router = useRouter();
     const [jobs, setJobs] = useState<ImportJob[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+    const [loadFailed, setLoadFailed] = useState(false);
+    const [actionErrors, setActionErrors] = useState<Record<string, string>>(
+        {},
+    );
+    const [busyJobIds, setBusyJobIds] = useState<Set<string>>(() => new Set());
+    const actionInFlightRef = useRef(new Set<string>());
     const loadGenerationRef = useRef(0);
     const loadInFlightRef = useRef(false);
     const refreshPendingRef = useRef(false);
@@ -102,6 +107,9 @@ export function ImportsTab() {
             let latestGeneration = loadGenerationRef.current;
             try {
                 let runAgain = true;
+                let latestSuccessfulData: Awaited<
+                    ReturnType<typeof api.listImportJobs>
+                > | null = null;
                 while (runAgain && mountedRef.current) {
                     refreshPendingRef.current = false;
                     const generation = ++loadGenerationRef.current;
@@ -112,17 +120,21 @@ export function ImportsTab() {
                     try {
                         data = await api.listImportJobs();
                     } catch {
-                        // Silently fail — tab is informational
+                        // Preserve the last successful snapshot and report failure
+                        // only after any queued newer refresh has settled.
                     }
+                    if (data) latestSuccessfulData = data;
 
                     runAgain = mountedRef.current && refreshPendingRef.current;
                     if (
                         !runAgain &&
-                        data &&
                         mountedRef.current &&
                         loadGenerationRef.current === generation
                     ) {
-                        setJobs(data.jobs);
+                        setLoadFailed(data === null);
+                        if (latestSuccessfulData) {
+                            setJobs(latestSuccessfulData.jobs);
+                        }
                     }
                 }
             } finally {
@@ -175,24 +187,54 @@ export function ImportsTab() {
         return () => clearInterval(interval);
     }, [jobs, loadJobs]);
 
+    const beginAction = (jobId: string): boolean => {
+        if (actionInFlightRef.current.has(jobId)) return false;
+        actionInFlightRef.current.add(jobId);
+        setBusyJobIds(new Set(actionInFlightRef.current));
+        setActionErrors((current) => ({ ...current, [jobId]: "" }));
+        return true;
+    };
+
+    const finishAction = (jobId: string) => {
+        actionInFlightRef.current.delete(jobId);
+        if (mountedRef.current) {
+            setBusyJobIds(new Set(actionInFlightRef.current));
+        }
+    };
+
     const handleCancel = async (jobId: string) => {
+        if (!beginAction(jobId)) return;
         try {
             await api.cancelImportJob(jobId);
             await loadJobs();
         } catch {
-            // Silently fail
+            if (mountedRef.current) {
+                setActionErrors((current) => ({
+                    ...current,
+                    [jobId]:
+                        "Не удалось отменить импорт. Обновите состояние или попробуйте ещё раз.",
+                }));
+            }
+        } finally {
+            finishAction(jobId);
         }
     };
 
     const handleRetry = async (jobId: string) => {
-        setRetryingJobId(jobId);
+        if (!beginAction(jobId)) return;
         try {
             await api.retryImportJob(jobId);
             await loadJobs();
         } catch {
-            // The next poll keeps the durable server state authoritative.
+            if (mountedRef.current) {
+                setActionErrors((current) => ({
+                    ...current,
+                    [jobId]:
+                        "Не удалось повторить поиск. Обновите состояние или попробуйте ещё раз.",
+                }));
+            }
         } finally {
-            setRetryingJobId((current) => (current === jobId ? null : current));
+            finishAction(jobId);
         }
     };
 
@@ -208,7 +250,7 @@ export function ImportsTab() {
         );
     }
 
-    if (jobs.length === 0) {
+    if (jobs.length === 0 && !loadFailed) {
         return (
             <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                 <p className="text-gray-400 text-sm">
@@ -223,6 +265,24 @@ export function ImportsTab() {
 
     return (
         <div className="overflow-y-auto h-full">
+            {loadFailed && (
+                <div
+                    role="alert"
+                    className="m-3 rounded-xl border border-warning/20 bg-warning/10 p-3 text-sm text-content-body"
+                >
+                    <p>Не удалось обновить импорты.</p>
+                    {jobs.length > 0 && (
+                        <p>Показаны последние полученные данные.</p>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => void loadJobs()}
+                        className="mt-2 inline-flex min-h-11 items-center rounded-full border border-warning/35 px-4 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning"
+                    >
+                        Обновить
+                    </button>
+                </div>
+            )}
             {jobs.map((job) => {
                 const isActive =
                     job.status === "pending" ||
@@ -240,8 +300,8 @@ export function ImportsTab() {
                         key={job.id}
                         className="px-4 py-3 border-b border-white/5 hover:bg-white/[0.03] transition-colors"
                     >
-                        <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                            <div className="min-w-[8rem] flex-1">
                                 <p className="text-sm text-white truncate">
                                     {job.requestedPlaylistName ||
                                         job.playlistName}
@@ -296,23 +356,26 @@ export function ImportsTab() {
                                 </p>
                             )}
 
-                        <div className="flex items-center gap-2 mt-2">
+                        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                             {isActive && (
                                 <button
+                                    type="button"
                                     onClick={() => void handleCancel(job.id)}
-                                    className="text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                                    disabled={busyJobIds.has(job.id)}
+                                    className="inline-flex min-h-11 max-w-full items-center rounded-md px-1 text-left text-xs text-red-400/70 transition-colors hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current disabled:opacity-50"
                                 >
                                     {adminActivityRu.activity.imports.cancel}
                                 </button>
                             )}
                             {createdPlaylistId && (
                                 <button
+                                    type="button"
                                     onClick={() =>
                                         router.push(
                                             `/playlist/${createdPlaylistId}`,
                                         )
                                     }
-                                    className="flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
+                                    className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md px-1 text-left text-xs text-blue-400/70 transition-colors hover:text-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
                                 >
                                     {
                                         adminActivityRu.activity.imports
@@ -326,9 +389,10 @@ export function ImportsTab() {
                                 job.status === "failed") &&
                                 job.summary?.unresolved > 0 && (
                                     <button
+                                        type="button"
                                         onClick={() => void handleRetry(job.id)}
-                                        disabled={retryingJobId === job.id}
-                                        className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors disabled:opacity-50"
+                                        disabled={busyJobIds.has(job.id)}
+                                        className="inline-flex min-h-11 max-w-full items-center rounded-md px-1 text-left text-xs text-blue-400/70 transition-colors hover:text-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current disabled:opacity-50"
                                     >
                                         {
                                             adminActivityRu.activity.imports
@@ -337,7 +401,7 @@ export function ImportsTab() {
                                     </button>
                                 )}
                             {job.status === "failed" && job.error && (
-                                <p className="text-xs text-red-400/60 truncate">
+                                <p className="min-w-0 max-w-full truncate text-xs text-red-400/60">
                                     {localizeImportJobMessage(
                                         job.error,
                                         "error",
@@ -355,6 +419,14 @@ export function ImportsTab() {
                                     cancellationWarning,
                                     "warning",
                                 )}
+                            </p>
+                        )}
+                        {actionErrors[job.id] && (
+                            <p
+                                role="alert"
+                                className="mt-2 text-xs text-warning"
+                            >
+                                {actionErrors[job.id]}
                             </p>
                         )}
                     </div>

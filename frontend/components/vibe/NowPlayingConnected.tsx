@@ -31,15 +31,11 @@ export function NowPlayingConnected({
     onMapPresent,
     moodColor,
     onFlyTo,
-    appearance = "floating",
-    showPlaybackToggle = true,
 }: {
     track: Track | null;
     onMapPresent: boolean;
     moodColor: string | null;
     onFlyTo: () => void;
-    appearance?: "floating" | "wave";
-    showPlaybackToggle?: boolean;
 }) {
     const { isPlaying, duration } = usePlaybackStatus();
     // Now-playing card shows the position; it is a legitimate clock consumer.
@@ -61,8 +57,6 @@ export function NowPlayingConnected({
             onTogglePlay={onTogglePlay}
             currentTime={currentTime}
             duration={duration}
-            appearance={appearance}
-            showPlaybackToggle={showPlaybackToggle}
             likeSlot={
                 <CurrentTrackPreferenceButtons
                     trackId={preferenceTrackId}

@@ -209,11 +209,6 @@ mock.module("@/lib/audio-playback-context", {
 });
 
 // Mock TidalBadge
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => null,
-    },
-});
 
 // Mock SyncBadge
 mock.module("@/components/player/SyncBadge", {
@@ -292,6 +287,15 @@ test("MiniPlayer exposes only the like preference in compact chrome", async () =
     );
     assert.match(html, /data-track-id="t1"/, "Should pass correct track ID");
     assert.match(html, /data-mode="up-only"/, "Should expose one preference");
+});
+
+test("MiniPlayer retains the pause action while restoring a playing track", async () => {
+    state.isPlaying = true;
+    state.isBuffering = true;
+    const { MiniPlayer } = await import("../../components/player/MiniPlayer");
+    const html = renderToStaticMarkup(React.createElement(MiniPlayer));
+    assert.match(html, /aria-label="Пауза"/);
+    assert.doesNotMatch(html, /aria-label="Пауза"[^>]*disabled/);
 });
 
 test("MiniPlayer does not render Next/thumbs when no media playing", async () => {

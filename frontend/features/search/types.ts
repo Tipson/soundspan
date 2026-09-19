@@ -94,6 +94,9 @@ export interface SearchResult {
 }
 
 export interface DiscoverResult {
+    /** Alternate exact catalog entries, retained for an explicit listener choice. */
+    versions?: DiscoverResult[];
+    musicSourceRecording?: import("@/lib/api/musicSources").MusicSourceCandidate;
     type: "music" | "album" | "podcast" | "track";
     id?: string;
     name: string;

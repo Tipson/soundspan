@@ -8,7 +8,7 @@ export const TV_NAVIGATION: TvNavigationItem[] = [
     { name: "Поиск", href: "/search" },
     { name: "Медиатека", href: "/library" },
     { name: "Открытия", href: "/discover" },
-    { name: "Плейлисты", href: "/playlists" },
+    { name: "Плейлисты", href: "/library?tab=playlists" },
 ];
 
 /**

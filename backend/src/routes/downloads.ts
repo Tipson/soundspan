@@ -41,7 +41,7 @@ router.use(requireAuthOrToken);
  *       - apiKeyAuth: []
  *     responses:
  *       200:
- *         description: Availability status for each download service (Lidarr, Soulseek, TIDAL, YouTube Music)
+ *         description: Availability status for each download service (Lidarr, Soulseek, YouTube Music)
  *       401:
  *         description: Not authenticated
  */
@@ -58,11 +58,9 @@ router.get("/availability", async (req, res) => {
             enabled:
                 availability.lidarr ||
                 availability.soulseek ||
-                availability.tidal ||
                 availability.youtube,
             lidarr: availability.lidarr,
             soulseek: availability.soulseek,
-            tidal: availability.tidal,
             youtube: availability.youtube,
         });
     } catch (error: any) {
@@ -154,11 +152,10 @@ router.post("/", requireAdmin, async (req, res) => {
         if (
             !availability.lidarr &&
             !availability.soulseek &&
-            !availability.tidal &&
             !availability.youtube
         ) {
             return res.status(400).json({
-                error: "No download service configured. Please set up Lidarr, Soulseek, TIDAL, or YouTube Music.",
+                error: "No download service configured. Please set up Lidarr, Soulseek, or YouTube Music.",
             });
         }
 

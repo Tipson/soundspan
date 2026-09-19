@@ -16,7 +16,6 @@ Start-here guide for `frontend/features/home`.
 | Path | Kind |
 | --- | --- |
 | `components/ArtistsGrid.tsx` | components |
-| `components/AudiobooksGrid.tsx` | components |
 | `components/ContinueListening.tsx` | components |
 | `components/FeaturedPlaylistsGrid.tsx` | components |
 | `components/HomeHero.tsx` | components |
@@ -25,8 +24,6 @@ Start-here guide for `frontend/features/home`.
 | `components/HomeMadeForYou.tsx` | bounded set of distinct account-backed and generated mixes |
 | `components/LibraryRadioStations.tsx` | components |
 | `components/libraryRadioStationsGenreSelection.ts` | components |
-| `components/MixesGrid.tsx` | components |
-| `components/PodcastsGrid.tsx` | components |
 | `components/PopularArtistsGrid.tsx` | components |
 | `components/PersonalizedTrackShelf.tsx` | personalized provider tracks |
 | `components/PersonalizedMixCard.tsx` | playable card backed by one real personalized feed shelf |
@@ -34,6 +31,7 @@ Start-here guide for `frontend/features/home`.
 | `components/StaticPlaylistCard.tsx` | components |
 | `hooks/useHomeData.ts` | hooks |
 | `hooks/usePersonalizedHomeFeed.ts` | personalized provider feed |
+| `selectWaveTracks.ts` | shared Home/Wave queue selection from server-ranked Wave shelves |
 | `hooks/useRecommendationImpressions.ts` | viewport-confirmed recommendation impression reporting |
 | `personalizedHomeRequestPolicy.ts` | shared bounded request and retry policy |
 | `recommendationIdentity.ts` | stable provider identity for playback lineage and impressions |

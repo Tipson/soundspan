@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { AUDIUS_MEDIA_ORIGINS } from "@soundspan/media-metadata-contract";
 
 const CSP_REPORT_ONLY_HEADER = "Content-Security-Policy-Report-Only";
 const CSP_ENFORCING_HEADER = "Content-Security-Policy";
@@ -44,7 +45,7 @@ function buildContentSecurityPolicy(nonce: string): {
         // if the framework gains nonce-able style emission.
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: blob:",
-        "media-src 'self' blob:",
+        `media-src 'self' blob: ${AUDIUS_MEDIA_ORIGINS.join(" ")}`,
         "connect-src 'self' ws: wss:",
         "worker-src 'self' blob:",
         "font-src 'self' data:",
@@ -107,6 +108,32 @@ function setContentSecurityPolicyHeaders(
  */
 export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
+    if (pathname === "/welcome" || pathname.startsWith("/welcome/")) {
+        const target = new URL(request.url);
+        const isDocument = pathname === "/welcome" || pathname === "/welcome/";
+        if (isDocument) target.pathname = "/welcome/index.html";
+        const response = isDocument
+            ? NextResponse.rewrite(target)
+            : NextResponse.next();
+        response.headers.set(
+            CSP_ENFORCING_HEADER,
+            [
+                "default-src 'self'",
+                "script-src 'self'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data: blob:",
+                "media-src 'self' blob:",
+                "connect-src 'self'",
+                "font-src 'self' data:",
+                "object-src 'none'",
+                "base-uri 'none'",
+                "form-action 'self'",
+                "frame-src 'none'",
+                "frame-ancestors 'none'",
+            ].join("; "),
+        );
+        return response;
+    }
     const csp = addContentSecurityPolicy(request);
 
     // Allow trailing slashes on /api/ routes (swagger-ui needs them)

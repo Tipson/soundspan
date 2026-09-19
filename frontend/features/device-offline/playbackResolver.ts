@@ -1,9 +1,11 @@
 import {
     normalizeDeviceOfflineQuality,
+    resolveCompatibleDeviceOfflineRecordIdentity,
     resolveDeviceOfflineTrackIdentity,
 } from "./trackIdentity";
 import type { DeviceOfflineDownloadRecord, DeviceOfflineTrack } from "./types";
 import { getAuthRuntimeLease } from "@/lib/auth-runtime-generation";
+import { isRetiredRemoteOnlyTrack } from "@/lib/trackRef";
 import {
     DeviceAudioVaultError,
     getDeviceAudioVault,
@@ -12,6 +14,48 @@ import {
 
 let activeOwnerId: string | null = null;
 let readyRecords: DeviceOfflineDownloadRecord[] = [];
+// Derived only from the active owner's published ready records. At most two
+// identities per record; arbitrary playback lookups never grow this index.
+const readyRecordIndex = new Map<
+    string,
+    {
+        newest: DeviceOfflineDownloadRecord;
+        qualities: Map<string, DeviceOfflineDownloadRecord>;
+    }
+>();
+
+function rebuildReadyRecordIndex(): void {
+    readyRecordIndex.clear();
+    // Stable sorting preserves the existing tie and preferred-quality policy.
+    for (const record of [...readyRecords].sort(
+        (left, right) => right.updatedAt - left.updatedAt,
+    )) {
+        const alias = resolveCompatibleDeviceOfflineRecordIdentity(record);
+        for (const identity of new Set([record.trackIdentity, alias])) {
+            if (typeof identity !== "string" || identity.startsWith("tidal:")) {
+                continue;
+            }
+            let entry = readyRecordIndex.get(identity);
+            if (!entry) {
+                entry = { newest: record, qualities: new Map() };
+                readyRecordIndex.set(identity, entry);
+            }
+            if (!entry.qualities.has(record.quality)) {
+                entry.qualities.set(record.quality, record);
+            }
+        }
+    }
+}
+export interface DeviceOfflinePlaybackInvalidation {
+    ownerId: string;
+    recordKey: string;
+    reason: "missing" | "integrity";
+}
+type DeviceOfflinePlaybackInvalidationListener = (
+    invalidation: DeviceOfflinePlaybackInvalidation,
+) => void;
+const playbackInvalidationListeners =
+    new Set<DeviceOfflinePlaybackInvalidationListener>();
 const MAX_PREPARED_DEVICE_OFFLINE_SOURCES = 2;
 const preparedSources = new Map<
     string,
@@ -19,16 +63,24 @@ const preparedSources = new Map<
 >();
 type DeviceOfflinePlaybackTrack = Pick<
     DeviceOfflineTrack,
-    "id" | "streamSource" | "tidalTrackId" | "youtubeVideoId"
->;
+    | "id"
+    | "filePath"
+    | "source"
+    | "streamSource"
+    | "tidalTrackId"
+    | "youtubeVideoId"
+> & { playbackSourcePolicy?: "device-only" };
 
 /** User-facing terminal copy for an offline playback failure. */
 export function getDeviceOfflinePlaybackErrorMessage(
     hasDeviceCopy: boolean,
+    deviceOnly = false,
 ): string {
     return hasDeviceCopy
         ? "Не удалось открыть загруженную копию. Загрузите её снова, когда подключитесь к интернету."
-        : "Вы не в сети, и этот трек не загружен на это устройство.";
+        : deviceOnly
+          ? "Этот трек не загружен на это устройство."
+          : "Вы не в сети, и этот трек не загружен на это устройство.";
 }
 
 function releasePreparedSource(key: string): void {
@@ -36,6 +88,35 @@ function releasePreparedSource(key: string): void {
     if (!prepared) return;
     preparedSources.delete(key);
     prepared.revoke();
+}
+
+/** Reconcile persistent metadata after playback discovers an unusable file. */
+export function subscribeToDeviceOfflinePlaybackInvalidations(
+    listener: DeviceOfflinePlaybackInvalidationListener,
+): () => void {
+    playbackInvalidationListeners.add(listener);
+    return () => playbackInvalidationListeners.delete(listener);
+}
+
+function invalidateDeviceOfflinePlaybackRecord(
+    ownerId: string,
+    recordKey: string,
+    reason: DeviceOfflinePlaybackInvalidation["reason"],
+): void {
+    readyRecords = readyRecords.filter(
+        (record) => record.ownerId !== ownerId || record.key !== recordKey,
+    );
+    rebuildReadyRecordIndex();
+    releasePreparedSource(recordKey);
+    const invalidation = { ownerId, recordKey, reason } as const;
+    for (const listener of playbackInvalidationListeners) {
+        try {
+            listener(invalidation);
+        } catch {
+            // A UI subscriber must never turn a recoverable local-file miss
+            // into a playback failure.
+        }
+    }
 }
 
 function releaseStalePreparedSources(
@@ -67,6 +148,7 @@ export function setDeviceOfflineRuntimeState(
     readyRecords = records.filter(
         (record) => record.ownerId === ownerId && record.status === "ready",
     );
+    rebuildReadyRecordIndex();
 }
 
 /** Remove all user-bound device playback capabilities from memory. */
@@ -76,6 +158,7 @@ export function clearDeviceOfflineRuntimeState(): void {
     }
     activeOwnerId = null;
     readyRecords = [];
+    readyRecordIndex.clear();
 }
 
 /** Check whether the active owner already has a live local playback URL. */
@@ -133,21 +216,13 @@ function resolveReadyPlaybackRecord(
     preferredQuality: string = "auto",
 ): DeviceOfflineDownloadRecord | null {
     if (!activeOwnerId) return null;
+    if (isRetiredRemoteOnlyTrack(track)) return null;
 
-    const identity = resolveDeviceOfflineTrackIdentity(track);
     const quality = normalizeDeviceOfflineQuality(preferredQuality);
-    const candidates = readyRecords
-        .filter(
-            (record) =>
-                record.ownerId === activeOwnerId &&
-                record.trackIdentity === identity,
-        )
-        .sort((left, right) => right.updatedAt - left.updatedAt);
-    return (
-        candidates.find((candidate) => candidate.quality === quality) ??
-        candidates[0] ??
-        null
+    const entry = readyRecordIndex.get(
+        resolveDeviceOfflineTrackIdentity(track),
     );
+    return entry?.qualities.get(quality) ?? entry?.newest ?? null;
 }
 
 function immediatePlaybackSource(url: string): DeviceAudioPlayResult {
@@ -197,7 +272,10 @@ export function resolveDeviceOfflineMediaIdentity(
         track,
         preferredQuality,
     );
-    return recordKey ? `${track.id}\u0000${recordKey}` : track.id;
+    const identity = recordKey ? `${track.id}\u0000${recordKey}` : track.id;
+    return track.playbackSourcePolicy === "device-only"
+        ? `${identity}\u0000device-only`
+        : identity;
 }
 
 /** Check whether the active owner has a verified device copy for this track. */
@@ -222,6 +300,13 @@ export async function acquireDeviceOfflinePlaybackSource(
         const preparedUrl = selected
             ? preparedSources.get(selected.key)?.url
             : undefined;
+        if (!preparedUrl && track.playbackSourcePolicy === "device-only") {
+            throw new DeviceAudioVaultError(
+                "not_found",
+                "Загруженная копия недоступна на этом устройстве.",
+                "user-action",
+            );
+        }
         // Legacy metadata can outlive its CacheStorage body (for example after
         // an interrupted Background Fetch or browser eviction). Never replace
         // a healthy online stream with that unverified virtual URL. Downloads
@@ -279,9 +364,16 @@ export async function acquireDeviceOfflinePlaybackSource(
             throw playbackAcquisitionAbort();
         }
         if (error instanceof DeviceAudioVaultError) {
+            if (error.code === "not_found" || error.code === "integrity") {
+                invalidateDeviceOfflinePlaybackRecord(
+                    ownerId,
+                    recordKey,
+                    error.code === "not_found" ? "missing" : "integrity",
+                );
+            }
             if (
-                typeof navigator !== "undefined" &&
-                navigator.onLine === false
+                track.playbackSourcePolicy === "device-only" ||
+                (typeof navigator !== "undefined" && navigator.onLine === false)
             ) {
                 throw error;
             }
@@ -298,6 +390,17 @@ export function resolveDeviceOfflinePlaybackUrl(
     preferredQuality: string = "auto",
 ): string {
     const selected = resolveReadyPlaybackRecord(track, preferredQuality);
+    if (track.playbackSourcePolicy === "device-only") {
+        const url = selected
+            ? preparedSources.get(selected.key)?.url
+            : undefined;
+        if (url) return url;
+        throw new DeviceAudioVaultError(
+            "not_found",
+            "Загруженная копия недоступна на этом устройстве.",
+            "user-action",
+        );
+    }
     if (!selected) return networkUrl;
     return preparedSources.get(selected.key)?.url ?? networkUrl;
 }

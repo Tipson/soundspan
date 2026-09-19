@@ -27,8 +27,6 @@ export interface NowPlayingCardProps {
     currentTime?: number;
     duration?: number;
     likeSlot?: ReactNode;
-    appearance?: "floating" | "wave";
-    showPlaybackToggle?: boolean;
 }
 
 const DEFAULT_COLOR = VIBE_ACCENTS.edge;
@@ -54,13 +52,11 @@ function CoverButton({
     onMap,
     color,
     onFlyTo,
-    decorativeOnly = false,
 }: {
     track: NowPlayingCardTrack;
     onMap: boolean;
     color: string;
     onFlyTo: () => void;
-    decorativeOnly?: boolean;
 }) {
     const rawCover = track.album?.coverArt ?? null;
     const cover =
@@ -88,7 +84,7 @@ function CoverButton({
                     <Music className="h-5 w-5" style={{ color }} />
                 </span>
             )}
-            {onMap && !decorativeOnly && (
+            {onMap && (
                 <span
                     className="vibe-np-dot"
                     style={{
@@ -100,10 +96,6 @@ function CoverButton({
             )}
         </span>
     );
-
-    if (decorativeOnly) {
-        return <span className="flex-shrink-0">{artwork}</span>;
-    }
 
     return (
         <button
@@ -128,13 +120,7 @@ function CoverButton({
     );
 }
 
-function TrackLabels({
-    track,
-    wide = false,
-}: {
-    track: NowPlayingCardTrack;
-    wide?: boolean;
-}) {
+function TrackLabels({ track }: { track: NowPlayingCardTrack }) {
     const artist = track.artist?.name ?? "";
     const artistId = track.artist?.id ?? "";
     const albumId = track.album?.id ?? "";
@@ -161,9 +147,7 @@ function TrackLabels({
         </span>
     );
     return (
-        <span
-            className={`flex min-w-0 flex-col ${wide ? "max-w-[min(28vw,20rem)] sm:max-w-[min(44vw,20rem)]" : "max-w-[min(38vw,9rem)]"}`}
-        >
+        <span className="flex min-w-0 max-w-[min(38vw,9rem)] flex-col">
             {title}
             {artist && artistLabel}
         </span>
@@ -257,24 +241,15 @@ function ProgressStrip({
 export function NowPlayingCard(props: NowPlayingCardProps) {
     if (!props.track) return null;
     const color = props.moodColor ?? DEFAULT_COLOR;
-    const appearance = props.appearance ?? "floating";
-    const showPlaybackToggle = props.showPlaybackToggle ?? true;
     return (
-        <div
-            className={`pointer-events-auto relative flex items-center gap-1.5 sm:gap-2 ${
-                appearance === "wave"
-                    ? "bg-transparent"
-                    : "rounded-xl border border-white/10 bg-black/60 p-2 shadow-lg backdrop-blur-md"
-            }`}
-        >
+        <div className="pointer-events-auto relative flex items-center gap-1.5 rounded-xl border border-white/10 bg-black/60 p-2 shadow-lg backdrop-blur-md sm:gap-2">
             <CoverButton
                 track={props.track}
                 onMap={props.onMapPresent}
                 color={color}
                 onFlyTo={props.onFlyTo}
-                decorativeOnly={appearance === "wave"}
             />
-            <TrackLabels track={props.track} wide={appearance === "wave"} />
+            <TrackLabels track={props.track} />
             {props.likeSlot && (
                 <span className="flex-shrink-0">{props.likeSlot}</span>
             )}
@@ -285,12 +260,7 @@ export function NowPlayingCard(props: NowPlayingCardProps) {
                     onFlyTo={props.onFlyTo}
                 />
             )}
-            {showPlaybackToggle && (
-                <PlayButton
-                    playing={props.isPlaying}
-                    toggle={props.onTogglePlay}
-                />
-            )}
+            <PlayButton playing={props.isPlaying} toggle={props.onTogglePlay} />
             <ProgressStrip
                 currentTime={props.currentTime}
                 duration={props.duration}

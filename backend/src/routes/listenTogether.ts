@@ -116,6 +116,19 @@ router.post("/", async (req, res) => {
     try {
         const user = req.user!;
         const payload = createGroupSchema.parse(req.body ?? {});
+        if (
+            payload.queueTracks?.some(
+                (track) =>
+                    track.tidalTrackId !== undefined ||
+                    track.trackId?.trim().toLowerCase().startsWith("tidal:") ===
+                        true,
+            ) ||
+            payload.queueTrackIds?.some((trackId) =>
+                trackId.trim().toLowerCase().startsWith("tidal:"),
+            )
+        ) {
+            return res.status(400).json({ error: "retired_provider" });
+        }
         const snapshot = await createGroup(user.id, user.username, payload);
         return res.status(201).json(snapshot);
     } catch (error) {

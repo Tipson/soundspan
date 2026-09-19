@@ -6,7 +6,7 @@
 export type Tab = "user" | "account" | "system";
 
 /** Library download sources selectable as the primary preference. */
-export type DownloadSource = "soulseek" | "lidarr" | "tidal" | "youtube";
+export type DownloadSource = "soulseek" | "lidarr" | "youtube";
 
 /** Fallback behavior when the primary download source is unavailable. */
 export type DownloadFallback = "none" | DownloadSource;
@@ -23,12 +23,8 @@ export interface UserSettings {
     maxCacheSizeMb: number;
     // YouTube Music (per-user)
     showYtMusicExplore: boolean;
-    showTidalExplore: boolean;
     ytMusicOAuthJson?: string;
     ytMusicQuality: "LOW" | "MEDIUM" | "HIGH" | "LOSSLESS";
-    // Per-user TIDAL streaming
-    tidalOAuthJson?: string;
-    tidalStreamingQuality: "LOW" | "HIGH" | "LOSSLESS" | "HI_RES_LOSSLESS";
 }
 
 export interface SystemSettings {
@@ -50,14 +46,6 @@ export interface SystemSettings {
     // Soulseek (direct connection via slsk-client)
     soulseekUsername: string;
     soulseekPassword: string;
-    // TIDAL — token material never leaves the backend; tidalConnected
-    // reports whether the admin download connection is established.
-    tidalEnabled: boolean;
-    tidalConnected: boolean;
-    tidalUserId: string;
-    tidalCountryCode: string;
-    tidalQuality: "LOW" | "HIGH" | "LOSSLESS" | "HI_RES_LOSSLESS";
-    tidalFileTemplate: string;
     // Storage
     musicPath: string;
     downloadPath: string;

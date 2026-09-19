@@ -53,7 +53,7 @@ function isExcludedSource(relativePath, language) {
             relativePath.endsWith(".spec.ts")
         );
     }
-    return parts.includes("tests");
+    return parts.includes("tests") || parts.includes("tests-container");
 }
 
 function sourceFiles(repoRoot, relativeRoot, extension, language) {

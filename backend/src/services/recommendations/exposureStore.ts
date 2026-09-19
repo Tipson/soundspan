@@ -13,6 +13,10 @@ import type {
     RecommendationSurface,
     ScoredRecommendation,
 } from "./types";
+import {
+    buildRecommendationAlbumKey,
+    normalizeRecommendationArtistKey,
+} from "./identityKeys";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1_000;
 const exposureLogger = logger.child("RecommendationExposureStore");
@@ -22,6 +26,7 @@ interface ExposureCreateInput {
     canonicalRecordingId: string | null;
     canonicalKey: string;
     artistKey: string;
+    albumKey: string | null;
     provider: string;
     providerTrackId: string;
     source: string;
@@ -145,12 +150,32 @@ function providerIdentity(recommendation: ScoredRecommendation): {
     return null;
 }
 
-function normalizedArtistKey(value: string): string {
-    return value
-        .normalize("NFKC")
-        .trim()
-        .replace(/\s+/g, " ")
-        .toLocaleLowerCase("en-US");
+function isRetriableExposureWriteConflict(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) return false;
+    const record = error as Record<string, unknown>;
+    if (record.code === "P2034" || record.code === "40P01") return true;
+    const message =
+        typeof record.message === "string" ? record.message.toLowerCase() : "";
+    if (
+        message.includes("deadlock") ||
+        message.includes("could not serialize")
+    ) {
+        return true;
+    }
+    const meta =
+        typeof record.meta === "object" && record.meta !== null
+            ? (record.meta as Record<string, unknown>)
+            : null;
+    const adapter =
+        typeof meta?.driverAdapterError === "object" &&
+        meta.driverAdapterError !== null
+            ? (meta.driverAdapterError as Record<string, unknown>)
+            : null;
+    const cause =
+        typeof adapter?.cause === "object" && adapter.cause !== null
+            ? (adapter.cause as Record<string, unknown>)
+            : null;
+    return cause?.code === "40P01";
 }
 
 export class RecommendationExposureStore {
@@ -180,8 +205,12 @@ export class RecommendationExposureStore {
                         canonicalRecordingId:
                             recommendation.track.canonicalRecordingId ?? null,
                         canonicalKey: recommendation.track.canonicalKey,
-                        artistKey: normalizedArtistKey(
+                        artistKey: normalizeRecommendationArtistKey(
                             recommendation.track.artist.name,
+                        ),
+                        albumKey: buildRecommendationAlbumKey(
+                            recommendation.track.artist.name,
+                            recommendation.track.album.title,
                         ),
                         ...identity,
                         source:
@@ -277,12 +306,29 @@ export class RecommendationExposureStore {
         ) {
             return 0;
         }
-        return this.dependencies.markViewedExposures(
-            input.userId,
-            input.generationId,
-            input.viewedAt,
-            input.tracks,
-        );
+        try {
+            return await this.dependencies.markViewedExposures(
+                input.userId,
+                input.generationId,
+                input.viewedAt,
+                input.tracks,
+            );
+        } catch (error) {
+            if (!isRetriableExposureWriteConflict(error)) throw error;
+            exposureLogger.warn(
+                "retrying impression update after write conflict",
+                {
+                    userId: input.userId,
+                    generationId: input.generationId,
+                },
+            );
+            return this.dependencies.markViewedExposures(
+                input.userId,
+                input.generationId,
+                input.viewedAt,
+                input.tracks,
+            );
+        }
     }
 
     /** Explicit taste semantics shared by ranker training and metrics. */
@@ -336,11 +382,18 @@ export const recommendationExposureStore = new RecommendationExposureStore({
                     generation: { served: true },
                 },
                 orderBy: { viewedAt: "desc" },
-                select: { canonicalKey: true, viewedAt: true },
+                select: {
+                    canonicalKey: true,
+                    artistKey: true,
+                    albumKey: true,
+                    viewedAt: true,
+                },
             })
             .then((rows) =>
                 rows.map((row) => ({
                     canonicalKey: row.canonicalKey,
+                    artistKey: row.artistKey,
+                    albumKey: row.albumKey,
                     exposedAt: row.viewedAt!,
                 })),
             ),
@@ -374,20 +427,41 @@ export const recommendationExposureStore = new RecommendationExposureStore({
             select: { id: true },
         }),
     markViewedExposures: async (userId, generationId, viewedAt, tracks) => {
-        const result = await prisma.recommendationExposure.updateMany({
-            where: {
-                userId,
-                generationId,
-                viewedAt: null,
-                generation: { served: true, userId },
-                OR: tracks.map((track) => ({
-                    provider: track.provider,
-                    providerTrackId: track.providerTrackId,
-                })),
+        return prisma.$transaction(
+            async (transaction) => {
+                // Overlapping viewport batches may visit exposure indexes in
+                // different orders. Serialize by their common generation before
+                // locking any exposure, across API processes as well as tabs.
+                const generation = await transaction.$queryRaw<
+                    Array<{ id: string }>
+                >`
+                SELECT "id" FROM "RecommendationGeneration"
+                WHERE "id" = ${generationId} AND "userId" = ${userId}
+                    AND "served" = true
+                FOR NO KEY UPDATE
+            `;
+                if (generation.length === 0) return 0;
+                const result =
+                    await transaction.recommendationExposure.updateMany({
+                        where: {
+                            userId,
+                            generationId,
+                            viewedAt: null,
+                            generation: { served: true, userId },
+                            OR: tracks.map((track) => ({
+                                provider: track.provider,
+                                providerTrackId: track.providerTrackId,
+                            })),
+                        },
+                        data: { viewedAt },
+                    });
+                return result.count;
             },
-            data: { viewedAt },
-        });
-        return result.count;
+            {
+                maxWait: 5_000,
+                timeout: 5_000,
+            },
+        );
     },
     markExposureViewedIfMissing: async (exposureId, viewedAt) => {
         await prisma.recommendationExposure.updateMany({

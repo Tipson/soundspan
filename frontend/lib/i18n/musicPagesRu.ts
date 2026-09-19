@@ -118,7 +118,7 @@ export const queueRu = {
     nowPlaying: "Сейчас играет",
     unavailable: "Недоступно",
     nextUp: "Далее",
-    previouslyPlayed: "Прослушано ранее",
+    earlierInQueue: "Ранее в очереди",
     saveDialogTitle: "Сохранить очередь как плейлист",
     cancel: "Отмена",
     saving: "Сохраняем…",

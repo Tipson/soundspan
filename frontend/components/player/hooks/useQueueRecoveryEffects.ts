@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { Track } from "@/lib/audio-state-context";
 import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
-import type { PlaybackAdvanceOrigin } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    getPlaybackIntentGeneration,
+    type PlaybackAdvanceOrigin,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 import { logPlaybackClientMetric } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
 import {
     shouldAutoMatchVibeAtQueueEnd,
@@ -91,6 +94,15 @@ export function useQueueRecoveryEffects({
     const advancePendingQueue = useCallback(
         (pending: NonNullable<typeof pendingAutoMatchAdvanceRef.current>) => {
             if (pendingAutoMatchAdvanceRef.current !== pending) return;
+            if (
+                getPlaybackIntentGeneration() !==
+                    pending.playbackIntentGeneration ||
+                refs.loadIdRef.current !== pending.loadId ||
+                refs.seekOperationIdRef.current !== pending.seekOperationId
+            ) {
+                pendingAutoMatchAdvanceRef.current = null;
+                return;
+            }
             if (refs.currentTrackRef.current?.id !== pending.trackId) {
                 pendingAutoMatchAdvanceRef.current = null;
                 return;
@@ -115,6 +127,8 @@ export function useQueueRecoveryEffects({
             advancePlayIntentAtMsRef,
             pendingAutoMatchAdvanceRef,
             refs.currentTrackRef,
+            refs.loadIdRef,
+            refs.seekOperationIdRef,
         ],
     );
 
@@ -161,7 +175,9 @@ export function useQueueRecoveryEffects({
 
     const shouldContinueAtQueueEnd = useCallback(
         () =>
+            (typeof navigator === "undefined" || navigator.onLine !== false) &&
             shouldAutoMatchVibeAtQueueEnd({
+                playbackSourcePolicy: currentTrack?.playbackSourcePolicy,
                 playbackType,
                 queueLength,
                 currentIndex,
@@ -173,6 +189,7 @@ export function useQueueRecoveryEffects({
                 ),
             }),
         [
+            currentTrack?.playbackSourcePolicy,
             playbackType,
             queueLength,
             currentIndex,
@@ -197,6 +214,9 @@ export function useQueueRecoveryEffects({
 
             const pendingAdvance = {
                 trackId,
+                loadId: refs.loadIdRef.current,
+                seekOperationId: refs.seekOperationIdRef.current,
+                playbackIntentGeneration: getPlaybackIntentGeneration(),
                 queueIdentity: queue,
                 playbackPositionGeneration:
                     playbackPositionRef.current.generation,
@@ -255,6 +275,8 @@ export function useQueueRecoveryEffects({
             pendingAutoMatchAdvanceRef,
             queue,
             refs.currentTrackRef,
+            refs.loadIdRef,
+            refs.seekOperationIdRef,
             requestAutoMatchVibe,
             shouldContinueAtQueueEnd,
         ],

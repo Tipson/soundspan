@@ -143,43 +143,6 @@ export function hasPlaceholderRemoteTrackMetadata(
     );
 }
 
-async function resolveTidalMetadata(
-    lookup: RemoteTrackLookup,
-    resolved: ResolvedRemoteTrackMetadata,
-): Promise<ResolvedRemoteTrackMetadata> {
-    const tidalId =
-        typeof lookup.tidalId === "number" &&
-        Number.isFinite(lookup.tidalId) &&
-        lookup.tidalId > 0
-            ? Math.trunc(lookup.tidalId)
-            : null;
-    if (!tidalId) return resolved;
-
-    const { tidalStreamingService } = await import("./tidalStreaming");
-    const detail = await tidalStreamingService.getTrack(lookup.userId, tidalId);
-    if (!detail) return resolved;
-
-    if (!isPlaceholderValue("title", detail.title)) {
-        resolved.title = detail.title;
-    }
-    if (!isPlaceholderValue("artist", detail.artist)) {
-        resolved.artist = detail.artist;
-    }
-    if (!isPlaceholderValue("album", detail.album?.title)) {
-        resolved.album = detail.album.title;
-    }
-    if (normalizeDuration(detail.duration)) {
-        resolved.duration = Math.trunc(detail.duration);
-    }
-    resolved.thumbnailUrl =
-        normalizeOptionalString(detail.thumbnailUrl) ?? resolved.thumbnailUrl;
-    resolved.isrc = normalizeOptionalString(detail.isrc) ?? resolved.isrc;
-    if (typeof detail.explicit === "boolean") {
-        resolved.explicit = detail.explicit;
-    }
-    return resolved;
-}
-
 type YtMetadataSong = {
     title?: string;
     artist?: string;
@@ -259,10 +222,9 @@ export async function resolveRemoteTrackMetadataForRequest(
     }
 
     try {
-        if (lookup.provider === "tidal") {
-            return await resolveTidalMetadata(lookup, resolved);
-        }
-        return await resolveYtMetadata(lookup, resolved);
+        return lookup.provider === "youtube"
+            ? await resolveYtMetadata(lookup, resolved)
+            : resolved;
     } catch (error) {
         log.warn(
             `Failed to resolve inline metadata for ${lookup.provider} track`,

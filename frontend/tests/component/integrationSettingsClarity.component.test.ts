@@ -16,10 +16,6 @@ const soulseekModule = new URL(
     "../../features/settings/components/sections/SoulseekSection.tsx",
     import.meta.url,
 ).href;
-const tidalModule = new URL(
-    "../../features/settings/components/sections/TidalSection.tsx",
-    import.meta.url,
-).href;
 
 mock.module(uiModule, {
     namedExports: {
@@ -70,7 +66,6 @@ mock.module(uiModule, {
 for (const [moduleUrl, exportName, label] of [
     [lidarrModule, "LidarrCard", "Lidarr"],
     [soulseekModule, "SoulseekCard", "Soulseek"],
-    [tidalModule, "TidalCard", "TIDAL"],
 ] as const) {
     mock.module(moduleUrl, {
         namedExports: {
@@ -109,7 +104,7 @@ test("explains that playback source order is not connection status", async () =>
     const html = renderToStaticMarkup(
         React.createElement(PlaybackSourcesSection, {
             settings: {
-                playbackSourceOrder: "library,peers,tidal,ytmusic",
+                playbackSourceOrder: "library,peers,ytmusic",
             } as SystemSettings,
             onUpdate: () => undefined,
         }),
@@ -117,6 +112,7 @@ test("explains that playback source order is not connection status", async () =>
 
     assert.match(html, /Это приоритет, а не список подключений/i);
     assert.match(html, /недоступные и отключённые источники пропускаются/i);
+    assert.doesNotMatch(html, /TIDAL/i);
 });
 
 test("separates active public YouTube Music access from optional account linking", async () => {

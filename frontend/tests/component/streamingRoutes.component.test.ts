@@ -146,7 +146,9 @@ const capture = {
     discoverActionBar: null as Record<string, unknown> | null,
     providerAlbums: null as Record<string, unknown> | null,
     providerFallbackEnabled: false,
+    providerCatalogEnabled: false,
     playedTracks: null as Array<Record<string, unknown>> | null,
+    queuedTracks: null as Array<Record<string, unknown>> | null,
     playedStartIndex: null as number | null,
     playNowTrack: null as Record<string, unknown> | null,
     albumPlayAlbum: null as Record<string, unknown> | null,
@@ -192,6 +194,9 @@ mock.module("@/lib/audio-context", {
             },
             playNow: (track: Record<string, unknown>) => {
                 capture.playNowTrack = track;
+            },
+            addTracksToQueue: (tracks: Array<Record<string, unknown>>) => {
+                capture.queuedTracks = tracks;
             },
         }),
     },
@@ -295,16 +300,6 @@ mock.module("@/features/album/hooks/useAlbumData", {
             loading: albumState.loading,
             detailsLoading: albumState.detailsLoading,
             reloadAlbum: () => undefined,
-        }),
-    },
-});
-
-mock.module("@/features/album/hooks/useTidalGapFill", {
-    namedExports: {
-        useTidalGapFill: () => ({
-            enrichedTracks: albumState.tidalGapFill.enrichedTracks,
-            isMatching: albumState.tidalGapFill.isMatching,
-            isStatusResolved: albumState.tidalGapFill.isStatusResolved,
         }),
     },
 });
@@ -431,16 +426,22 @@ mock.module("@/features/artist/hooks/useArtistTracks", {
 
 mock.module("@/features/artist/hooks/useProviderArtistTracks", {
     namedExports: {
-        useProviderArtistTracks: () => ({
-            tracks: artistState.providerCatalogTracks,
-            isLoading: artistState.providerCatalogLoading,
-            failedReleaseCount: 0,
-            loadedReleaseCount: artistState.providerAlbums.length,
-            totalReleaseCount: artistState.providerAlbums.length,
-            hasNextPage: artistState.providerCatalogHasNextPage,
-            isFetchingNextPage: false,
-            fetchNextPage: () => undefined,
-        }),
+        useProviderArtistTracks: (
+            _releases: Array<Record<string, unknown>>,
+            enabled: boolean,
+        ) => {
+            capture.providerCatalogEnabled = enabled;
+            return {
+                tracks: artistState.providerCatalogTracks,
+                isLoading: artistState.providerCatalogLoading,
+                failedReleaseCount: 0,
+                loadedReleaseCount: artistState.providerAlbums.length,
+                totalReleaseCount: artistState.providerAlbums.length,
+                hasNextPage: artistState.providerCatalogHasNextPage,
+                isFetchingNextPage: false,
+                fetchNextPage: () => undefined,
+            };
+        },
     },
 });
 
@@ -475,16 +476,6 @@ mock.module("@/features/artist/hooks/useDownloadActions", {
         useDownloadActions: () => ({
             downloadArtist: () => undefined,
             downloadAlbum: () => undefined,
-        }),
-    },
-});
-
-mock.module("@/features/artist/hooks/useTidalTopTracks", {
-    namedExports: {
-        useTidalTopTracks: () => ({
-            enrichedTopTracks: artistState.tidalTopTracks.enrichedTopTracks,
-            isMatching: artistState.tidalTopTracks.isMatching,
-            isStatusResolved: artistState.tidalTopTracks.isStatusResolved,
         }),
     },
 });
@@ -755,7 +746,9 @@ beforeEach(() => {
     capture.discoverActionBar = null;
     capture.providerAlbums = null;
     capture.providerFallbackEnabled = false;
+    capture.providerCatalogEnabled = false;
     capture.playedTracks = null;
+    capture.queuedTracks = null;
     capture.playedStartIndex = null;
     capture.playNowTrack = null;
     capture.albumPlayAlbum = null;
@@ -824,7 +817,7 @@ test("album route forwards provider matching and discovery fallback source to ch
         tracks: [{ id: "track-1", title: "Track One", duration: 180 }],
         similarAlbums: [{ id: "sim-1", title: "Similar One" }],
     };
-    albumState.tidalGapFill.isStatusResolved = false;
+    albumState.ytGapFill.isStatusResolved = false;
 
     const AlbumPage = (await import("../../app/album/[id]/page")).default;
     const html = renderToStaticMarkup(
@@ -1033,6 +1026,115 @@ test("artist popular-track selection starts the visible artist queue at that row
     assert.equal(capture.playNowTrack, null);
 });
 
+test("artist callbacks exclude retired TIDAL but retain a local file with stale provider metadata", async () => {
+    const topTracks = [
+        {
+            id: "local-stale-tidal",
+            title: "Local survivor",
+            duration: 199,
+            filePath: "/music/local.flac",
+            streamSource: "tidal",
+            tidalTrackId: 991,
+            artist: { id: "artist-mixed", name: "Mixed Artist" },
+            album: { title: "Local Album" },
+        },
+        {
+            id: "local-stale-youtube",
+            title: "Local YouTube survivor",
+            duration: 200,
+            filePath: "/music/local-youtube.flac",
+            streamSource: "youtube",
+            youtubeVideoId: "stale-video",
+            artist: { id: "artist-mixed", name: "Mixed Artist" },
+            album: { title: "Local YouTube Album" },
+        },
+        {
+            id: "tidal:992",
+            title: "Historical remote",
+            duration: 201,
+            streamSource: "tidal",
+            tidalTrackId: 992,
+            artist: { id: "artist-mixed", name: "Mixed Artist" },
+            album: { title: "Historical Album" },
+        },
+        {
+            id: "yt:active-video",
+            title: "Active remote",
+            duration: 202,
+            streamSource: "youtube",
+            youtubeVideoId: "active-video",
+            artist: { id: "artist-mixed", name: "Mixed Artist" },
+            album: { title: "Active Album" },
+        },
+    ];
+    artistState.source = "library";
+    artistState.artist = {
+        id: "artist-mixed",
+        name: "Mixed Artist",
+        topTracks,
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerFallbackData = {
+        artist: { topTracks: [] },
+        providerAlbums: [],
+    };
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    renderToStaticMarkup(React.createElement(ArtistPage));
+
+    const onPlayTrack = capture.artistPopularTracks?.onPlayTrack as
+        | ((
+              track: Record<string, unknown>,
+              index: number,
+              visibleTracks: Array<Record<string, unknown>>,
+          ) => void)
+        | undefined;
+    const onAddAllToQueue = capture.artistPopularTracks?.onAddAllToQueue as
+        | ((visibleTracks: Array<Record<string, unknown>>) => void)
+        | undefined;
+    assert.ok(onPlayTrack);
+    assert.ok(onAddAllToQueue);
+
+    onPlayTrack(topTracks[3], 3, topTracks);
+    assert.deepEqual(
+        capture.playedTracks?.map((track) => track.id),
+        ["local-stale-tidal", "local-stale-youtube", "yt:active-video"],
+    );
+    assert.equal(capture.playedStartIndex, 2);
+    const localPlaybackTrack = capture.playedTracks?.find(
+        (track) => track.id === "local-stale-youtube",
+    );
+    assert.equal(localPlaybackTrack?.mediaSource, "local");
+    assert.equal(localPlaybackTrack?.source, "local");
+    assert.equal(localPlaybackTrack?.streamSource, undefined);
+    assert.equal(localPlaybackTrack?.youtubeVideoId, undefined);
+
+    onAddAllToQueue(topTracks);
+    assert.deepEqual(
+        capture.queuedTracks?.map((track) => track.id),
+        ["local-stale-tidal", "local-stale-youtube", "yt:active-video"],
+    );
+    const localQueuedTrack = capture.queuedTracks?.find(
+        (track) => track.id === "local-stale-youtube",
+    );
+    assert.equal(localQueuedTrack?.mediaSource, "local");
+    assert.equal(localQueuedTrack?.streamSource, undefined);
+    assert.equal(localQueuedTrack?.youtubeVideoId, undefined);
+
+    const deviceDownloadControl = capture.artistActionBar
+        ?.deviceDownloadControl as React.ReactElement<{
+        tracks: Array<Record<string, unknown>>;
+    }>;
+    assert.ok(React.isValidElement(deviceDownloadControl));
+    const localDeviceTrack = deviceDownloadControl.props.tracks.find(
+        (track) => track.id === "local-stale-youtube",
+    );
+    assert.equal(localDeviceTrack?.mediaSource, "local");
+    assert.equal(localDeviceTrack?.streamSource, undefined);
+    assert.equal(localDeviceTrack?.youtubeVideoId, undefined);
+});
+
 test("YouTube Music artist route exposes playable tracks and provider albums", async () => {
     artistState.source = "discovery";
     artistState.artistProvider = "ytmusic";
@@ -1239,6 +1341,53 @@ test("local artist Overview actions use exact provider top tracks", async () => 
     assert.equal(capture.playedTracks?.[0]?.youtubeVideoId, "numb");
 });
 
+test("local artist Overview loads provider releases when metadata has no top tracks", async () => {
+    artistState.source = "library";
+    artistState.artist = {
+        id: "local-2cellos",
+        name: "2CELLOS",
+        topTracks: [],
+        similarArtists: [],
+    };
+    artistState.albums = [];
+    artistState.providerFallbackData = {
+        artist: { topTracks: [] },
+        providerAlbums: [
+            {
+                type: "album",
+                id: "MPREb_score",
+                browseId: "MPREb_score",
+                name: "Score",
+                artist: "2CELLOS",
+                provider: "ytmusic",
+            },
+        ],
+    };
+    artistState.providerCatalogTracks = [
+        {
+            id: "yt:thunderstruck",
+            title: "Thunderstruck",
+            duration: 282,
+            streamSource: "youtube",
+            youtubeVideoId: "thunderstruck",
+            artist: { name: "2CELLOS" },
+            album: { title: "Celloverse" },
+        },
+    ];
+
+    const ArtistPage = (await import("../../app/artist/[id]/page")).default;
+    const html = renderToStaticMarkup(React.createElement(ArtistPage));
+
+    assert.equal(capture.providerCatalogEnabled, true);
+    assert.match(html, /popular-tracks/);
+    assert.deepEqual(
+        (capture.artistPopularTracks?.tracks as Array<{ title: string }>).map(
+            (track) => track.title,
+        ),
+        ["Thunderstruck"],
+    );
+});
+
 test("local artist release views expose the exact provider catalog", async () => {
     navigationState.artistView = "albums";
     artistState.source = "library";
@@ -1296,7 +1445,7 @@ test("discover route renders source mix and track list when playlist has tracks"
     const html = renderToStaticMarkup(React.createElement(DiscoverPage));
 
     assert.match(html, /Источники: 1 на устройстве/);
-    assert.match(html, /2 TIDAL — дополнение/);
+    assert.doesNotMatch(html, /TIDAL/);
     assert.match(html, /3 YouTube Music — дополнение/);
     assert.match(html, /discover-track-list/);
     assert.match(html, /how-it-works/);

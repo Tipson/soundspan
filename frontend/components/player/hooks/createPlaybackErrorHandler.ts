@@ -10,6 +10,7 @@ import {
     resolveDirectTrackSourceType,
     isProviderStartupFailure,
     shouldAttemptOuterTransientRecovery,
+    PlaybackInterruptionError,
 } from "@/lib/audio-engine/audioPlaybackTrackPolicy";
 import {
     getDeviceOfflinePlaybackErrorMessage,
@@ -25,6 +26,8 @@ import {
     providerFailureCooldown,
 } from "@/lib/audio-engine/providerFailureCooldown";
 import { classifyPlaybackError } from "@/lib/audio-engine/playbackErrorCategory";
+import type { ServerSourceRecoveryOutcome } from "@/lib/audio/serverMusicSourceRecovery";
+import { isDevicePlaybackSourceUrl } from "./playbackSourceLeaseController";
 
 type PlaybackType = "track" | "audiobook" | "podcast" | null;
 
@@ -43,6 +46,10 @@ interface PlaybackErrorHandlerOptions {
     clearStartupPlaybackRecovery(): void;
     clearTransientTrackRecovery(resetAttempts: boolean): void;
     releasePlaybackSource(): void;
+    getPlaybackSourceUrl?(): string | null;
+    attemptServerMusicSourceRecovery?(
+        error: AudioEngineErrorPayload,
+    ): Promise<ServerSourceRecoveryOutcome>;
     attemptUnavailableYtMusicRecovery(
         track: Track | null,
     ): Promise<UnavailableYtMusicRecoveryOutcome>;
@@ -78,6 +85,8 @@ export function createPlaybackErrorHandler({
     clearStartupPlaybackRecovery,
     clearTransientTrackRecovery,
     releasePlaybackSource,
+    getPlaybackSourceUrl,
+    attemptServerMusicSourceRecovery,
     attemptUnavailableYtMusicRecovery,
     attemptTransientTrackRecovery,
     scheduleTrackErrorSkip,
@@ -94,6 +103,11 @@ export function createPlaybackErrorHandler({
     } = refs;
 
     return async (data: AudioEngineErrorPayload): Promise<void> => {
+        if (
+            refs.providerFailedLoadIdRef.current === refs.loadIdRef.current &&
+            !isLoadingRef.current
+        )
+            return;
         if (
             playbackType === "track" &&
             currentTrack &&
@@ -150,12 +164,36 @@ export function createPlaybackErrorHandler({
                 refs.consecutiveErrorBreakerRef.current.getErrorCount(),
         });
 
+        const isDeviceSource = isDevicePlaybackSourceUrl(
+            getPlaybackSourceUrl?.() ?? null,
+        );
+        if (playbackType === "track" && isDeviceSource) {
+            // Native errors can arrive through both loaderror and error. Keep
+            // one bounded retry in flight, retaining the live local file lease.
+            if (refs.transientTrackRecoveryTimeoutRef.current) return;
+            if (
+                attemptTransientTrackRecovery(
+                    currentTrack?.id ?? null,
+                    new PlaybackInterruptionError("device_source_error"),
+                )
+            ) {
+                playbackStateMachine.forceTransition("LOADING");
+                setIsBuffering(true);
+                return;
+            }
+        }
         if (
             playbackType === "track" &&
-            typeof navigator !== "undefined" &&
-            navigator.onLine === false
+            (isDeviceSource ||
+                currentTrack?.playbackSourcePolicy === "device-only" ||
+                (typeof navigator !== "undefined" &&
+                    navigator.onLine === false))
         ) {
-            releasePlaybackSource();
+            // Keep a downloaded file alive for the explicit retry button.
+            // A track/account change or unmount still releases its lease.
+            if (!isDeviceSource) releasePlaybackSource();
+            refs.providerFailedLoadIdRef.current = refs.loadIdRef.current;
+            isLoadingRef.current = false;
             finishFailedPlay();
             const hasDeviceCopy = currentTrack
                 ? hasDeviceOfflinePlaybackCopy(currentTrack)
@@ -171,58 +209,50 @@ export function createPlaybackErrorHandler({
             clearPendingTrackErrorSkip();
             clearStartupPlaybackRecovery();
             clearTransientTrackRecovery(true);
-            toast.error(getDeviceOfflinePlaybackErrorMessage(hasDeviceCopy), {
-                id: "device-offline-playback-error",
-                duration: 5000,
-            });
+            toast.error(
+                getDeviceOfflinePlaybackErrorMessage(
+                    hasDeviceCopy,
+                    currentTrack?.playbackSourcePolicy === "device-only",
+                ),
+                {
+                    id: "device-offline-playback-error",
+                    duration: 5000,
+                },
+            );
             return;
         }
 
         let confirmedProviderUnavailableFailureKey: string | null = null;
+        let preserveProviderQueue = providerStartupFailure;
         if (playbackType === "track") {
             logPlaybackClientMetric("player.playback_error", {
                 trackId: currentTrack?.id ?? null,
                 sourceType,
                 error: errorMessage,
                 errorCategory,
+                errorCode: data.code,
                 stage: "pre_recovery",
             });
-            if (providerStartupFailure) {
-                releasePlaybackSource();
-                finishFailedPlay();
-                playbackStateMachine.forceTransition("ERROR", {
-                    error: errorMessage,
-                });
-                setIsPlaying(false);
-                setIsBuffering(false);
-                recoverablePlayErrorPendingRef.current = false;
-                isUserInitiatedRef.current = false;
-                heartbeatRef.current?.stop();
-                clearPendingTrackErrorSkip();
-                clearStartupPlaybackRecovery();
-                clearTransientTrackRecovery(true);
-                toast.error(
-                    "Несколько треков YouTube Music подряд не загрузились. Текущий трек сохранён — повторите запуск немного позже.",
-                    {
-                        id: "youtube-provider-temporarily-unavailable",
-                        duration: 6000,
-                    },
-                );
-                logPlaybackClientMetric("player.playback_error", {
-                    trackId: currentTrack?.id ?? null,
-                    sourceType,
-                    error: errorMessage,
-                    errorCategory,
-                    stage: "provider_startup_paused",
-                });
-                return;
-            }
             const failedTrackId = currentTrack?.id ?? null;
+            const serverOutcome = attemptServerMusicSourceRecovery
+                ? await attemptServerMusicSourceRecovery(data)
+                : "not_applicable";
+            if (
+                serverOutcome === "recovered" ||
+                serverOutcome === "stale" ||
+                serverOutcome === "in_progress"
+            )
+                return;
+            const serverRecoveryFailed = serverOutcome !== "not_applicable";
+            if (serverRecoveryFailed) preserveProviderQueue = true;
             const transientScheduled =
+                !serverRecoveryFailed &&
+                !providerStartupFailure &&
                 shouldAttemptOuterTransientRecovery({
                     error: data.error,
                     recoverable: data.recoverable,
-                }) && attemptTransientTrackRecovery(failedTrackId, data.error);
+                }) &&
+                attemptTransientTrackRecovery(failedTrackId, data.error);
             if (transientScheduled) {
                 logPlaybackClientMetric("player.rebuffer", {
                     reason: "transient_track_recovery",
@@ -234,12 +264,23 @@ export function createPlaybackErrorHandler({
                 return;
             }
             const unavailableOutcome =
-                await attemptUnavailableYtMusicRecovery(currentTrack);
+                providerStartupFailure || serverRecoveryFailed
+                    ? "failed"
+                    : await attemptUnavailableYtMusicRecovery(currentTrack);
             if (
                 unavailableOutcome === "replaced" ||
                 unavailableOutcome === "stale"
             ) {
                 return;
+            }
+            // A failed provider probe (including HTTP 503 during verification)
+            // is not evidence that this song, or the next song, is unavailable.
+            if (
+                sourceType === "ytmusic" &&
+                (unavailableOutcome === "failed" ||
+                    unavailableOutcome === "original_available")
+            ) {
+                preserveProviderQueue = true;
             }
             // `no_candidate` is the only terminal provider outcome backed by
             // the server contract: the original returned 404/451 and no exact
@@ -271,8 +312,15 @@ export function createPlaybackErrorHandler({
                     ? "YouTube"
                     : "YouTube Music";
             toast.error(
-                `Не удалось воспроизвести «${currentTrack.title}» через ${source}. ${queueLength > 1 ? "Пробуем следующий трек." : "Повторите попытку или выберите другую версию."}`,
-                { duration: 5000 },
+                preserveProviderQueue
+                    ? `${source} временно недоступен. Очередь сохранена — повторите воспроизведение чуть позже.`
+                    : `Не удалось воспроизвести «${currentTrack.title}» через ${source}. ${queueLength > 1 ? "Пробуем следующий трек." : "Повторите попытку или выберите другую версию."}`,
+                {
+                    duration: 5000,
+                    ...(preserveProviderQueue
+                        ? { id: "provider-playback-unavailable" }
+                        : {}),
+                },
             );
         }
 
@@ -283,12 +331,21 @@ export function createPlaybackErrorHandler({
             sourceType,
             error: errorMessage,
             errorCategory,
+            errorCode: data.code,
             stage: playbackType === "track" ? "fatal_after_recovery" : "fatal",
         });
         recoverablePlayErrorPendingRef.current = false;
         isUserInitiatedRef.current = false;
         heartbeatRef.current?.stop();
         clearTransientTrackRecovery(true);
+
+        if (playbackType === "track" && preserveProviderQueue) {
+            refs.providerFailedLoadIdRef.current = refs.loadIdRef.current;
+            isLoadingRef.current = false;
+            clearPendingTrackErrorSkip();
+            clearStartupPlaybackRecovery();
+            return;
+        }
 
         if (playbackType === "track") {
             const failedTrackId = currentTrack?.id ?? null;

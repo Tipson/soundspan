@@ -108,7 +108,6 @@ spec:
             "INTERNAL_API_SECRET" true
             "METRICS_TOKEN" true
             "METRICS_PUBLIC" true
-            "TIDAL_SIDECAR_URL" true
             "YTMUSIC_STREAMER_URL" true
             "VIBE_PROVIDER_URL" true
             "VIBE_EMBED_CONCURRENCY" true
@@ -125,6 +124,7 @@ spec:
             "DISCOVERY_ENABLED" true
             "AUTO_PLAYLISTS_ENABLED" true
             "FEATURE_REQUESTS" true
+            "FEATURE_AUDIUS" true
             "FEDERATION_ENABLED" true
             "SCAN_FILE_CONCURRENCY" true
             "CATALOG_PERSISTENCE" true
@@ -326,13 +326,6 @@ spec:
             - name: METRICS_PUBLIC
               value: "true"
             {{- end }}
-            {{- if hasKey $backendWorkerEnv "TIDAL_SIDECAR_URL" }}
-            - name: TIDAL_SIDECAR_URL
-              value: {{ index $backendWorkerEnv "TIDAL_SIDECAR_URL" | quote }}
-            {{- else }}
-            - name: TIDAL_SIDECAR_URL
-              value: {{ include "soundspan.tidalSidecarUrl" . | quote }}
-            {{- end }}
             {{- if hasKey $backendWorkerEnv "YTMUSIC_STREAMER_URL" }}
             - name: YTMUSIC_STREAMER_URL
               value: {{ index $backendWorkerEnv "YTMUSIC_STREAMER_URL" | quote }}
@@ -493,6 +486,13 @@ spec:
             {{- else }}
             - name: FEATURE_REQUESTS
               value: {{ .Values.config.features.requests | quote }}
+            {{- end }}
+            {{- if hasKey $backendWorkerEnv "FEATURE_AUDIUS" }}
+            - name: FEATURE_AUDIUS
+              value: {{ index $backendWorkerEnv "FEATURE_AUDIUS" | quote }}
+            {{- else if not (kindIs "invalid" .Values.config.features.audius) }}
+            - name: FEATURE_AUDIUS
+              value: {{ .Values.config.features.audius | quote }}
             {{- end }}
             {{- if hasKey $backendWorkerEnv "LIDARR_ENABLED" }}
             - name: LIDARR_ENABLED

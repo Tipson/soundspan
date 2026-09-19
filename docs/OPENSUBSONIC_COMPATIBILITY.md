@@ -105,6 +105,12 @@ absent. An unavailable peer produces Subsonic error code `0` (`GENERIC`) with
 the message `Federation peer is offline`. Embedded-file lyrics remain
 local-only, while federated tracks may use metadata-based LRCLIB lookup.
 
+If an unavailable peer resolves through an existing YouTube mapping, client
+disconnects cancel pending provider acquisition and end that fallback attempt
+without another protocol error response. A late provider stream is released
+before response headers are written. Upstream failures remain distinct from
+listener cancellation.
+
 Alias support:
 
 - Both bare and `.view` forms are mounted (for example `/rest/ping` and `/rest/ping.view`)

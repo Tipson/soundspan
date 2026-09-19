@@ -1,7 +1,8 @@
-import axios, { AxiosInstance } from "axios";
+import axios, { AxiosInstance, type AxiosRequestConfig } from "axios";
 import { logger } from "../utils/logger";
 import { redisClient } from "../utils/redis";
 import { rateLimiter } from "./rateLimiter";
+import { runMusicBrainzRequest } from "./musicbrainzRequestGate";
 import {
     normalizeFullwidth,
     normalizeQuotes,
@@ -218,11 +219,16 @@ class MusicBrainzService {
         });
     }
 
+    private get(path: string, options?: AxiosRequestConfig) {
+        return runMusicBrainzRequest(() => this.client.get(path, options));
+    }
+
     private async cachedRequest<T>(
         cacheKey: string,
         requestFn: () => Promise<T>,
         ttlSeconds = 2592000, // 30 days
         fallbackValue?: T,
+        backgroundIdentity = false,
     ): Promise<T> {
         try {
             const cached = await redisClient.get(cacheKey);
@@ -236,7 +242,15 @@ class MusicBrainzService {
         let data: T;
         try {
             // Use global rate limiter instead of local rate limiting
-            data = await rateLimiter.execute("musicbrainz", requestFn);
+            // Optional enrichment yields to interactive metadata and defers a
+            // failed lookup to its short fallback TTL instead of filling the
+            // shared provider queue with retries during an upstream outage.
+            data = backgroundIdentity
+                ? await rateLimiter.execute("musicbrainz", requestFn, {
+                      priority: -1,
+                      skipRetry: true,
+                  })
+                : await rateLimiter.execute("musicbrainz", requestFn);
         } catch (error: any) {
             logger.warn(
                 `[MusicBrainz] Request failed for key "${cacheKey}": ${error.message}`,
@@ -285,7 +299,7 @@ class MusicBrainzService {
         return this.cachedRequest(
             `mb:isrc:${normalized}`,
             async () => {
-                const response = await this.client.get(
+                const response = await this.get(
                     `/isrc/${encodeURIComponent(normalized)}`,
                     { params: { fmt: "json" } },
                 );
@@ -317,7 +331,7 @@ class MusicBrainzService {
             async () => {
                 const normalizedTitle = this.normalizeForSearch(title);
                 const normalizedArtist = this.normalizeForSearch(artist);
-                const response = await this.client.get("/recording", {
+                const response = await this.get("/recording", {
                     params: {
                         query: `recording:"${this.escapeLucene(
                             normalizedTitle,
@@ -336,6 +350,7 @@ class MusicBrainzService {
             },
             2592000,
             null,
+            true,
         );
         if (!identity || identity.isrc) return identity;
         const isrc = await this.lookupRecordingIsrc(identity.recordingMbid);
@@ -349,7 +364,7 @@ class MusicBrainzService {
         return this.cachedRequest(
             `mb:recording-isrc:${recordingMbid}`,
             async () => {
-                const response = await this.client.get(
+                const response = await this.get(
                     `/recording/${encodeURIComponent(recordingMbid)}`,
                     { params: { inc: "isrcs", fmt: "json" } },
                 );
@@ -357,6 +372,7 @@ class MusicBrainzService {
             },
             2592000,
             null,
+            true,
         );
     }
 
@@ -366,7 +382,7 @@ class MusicBrainzService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const response = await this.client.get("/artist", {
+                const response = await this.get("/artist", {
                     params: {
                         query,
                         limit,
@@ -393,7 +409,7 @@ class MusicBrainzService {
                     searchQuery += ` AND artist:"${this.escapeLucene(normalizedArtist)}"`;
                 }
 
-                const response = await this.client.get("/release-group", {
+                const response = await this.get("/release-group", {
                     params: {
                         query: searchQuery,
                         limit,
@@ -415,15 +431,12 @@ class MusicBrainzService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const response = await this.client.get(
-                    `/artist/${artistMbid}`,
-                    {
-                        params: {
-                            inc: includes.join("+"),
-                            fmt: "json",
-                        },
+                const response = await this.get(`/artist/${artistMbid}`, {
+                    params: {
+                        inc: includes.join("+"),
+                        fmt: "json",
                     },
-                );
+                });
                 return response.data;
             },
             2592000,
@@ -442,7 +455,7 @@ class MusicBrainzService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const response = await this.client.get("/release-group", {
+                const response = await this.get("/release-group", {
                     params: {
                         artist: validatedArtistMbid,
                         type: types.join("|"),
@@ -473,7 +486,7 @@ class MusicBrainzService {
         const releaseGroups = await this.cachedRequest<unknown>(
             cacheKey,
             async () => {
-                const response = await this.client.get("/release-group", {
+                const response = await this.get("/release-group", {
                     params: {
                         artist: validatedArtistMbid,
                         type: types.join("|"),
@@ -500,7 +513,7 @@ class MusicBrainzService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const response = await this.client.get(
+                const response = await this.get(
                     `/release-group/${releaseGroupMbid}`,
                     {
                         params: {
@@ -523,7 +536,7 @@ class MusicBrainzService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const response = await this.client.get(
+                const response = await this.get(
                     `/release-group/${releaseGroupMbid}`,
                     {
                         params: {
@@ -549,7 +562,7 @@ class MusicBrainzService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const response = await this.client.get(
+                const response = await this.get(
                     `/release/${validatedReleaseMbid}`,
                     {
                         params: {
@@ -628,111 +641,128 @@ class MusicBrainzService {
     ): Promise<{ id: string; title: string } | null> {
         const cacheKey = `mb:search:album:${artistName}:${albumTitle}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            // Strategy 1: Exact match with escaped special characters
-            const escapedTitle = this.escapeLucene(albumTitle);
-            const escapedArtist = this.escapeLucene(artistName);
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                let failed = false;
+                let lastError: unknown;
+                // Strategy 1: Exact match with escaped special characters
+                const escapedTitle = this.escapeLucene(albumTitle);
+                const escapedArtist = this.escapeLucene(artistName);
 
-            try {
-                const query1 = `releasegroup:"${escapedTitle}" AND artist:"${escapedArtist}"`;
-                const response1 = await this.client.get("/release-group", {
-                    params: {
-                        query: query1,
-                        limit: 5,
-                        fmt: "json",
-                    },
-                });
-
-                const releaseGroups1 = response1.data["release-groups"] || [];
-                if (releaseGroups1.length > 0) {
-                    return {
-                        id: releaseGroups1[0].id,
-                        title: releaseGroups1[0].title,
-                    };
-                }
-            } catch (e) {
-                // Continue to strategy 2
-            }
-
-            // Strategy 2: Normalized/cleaned title search
-            const normalizedTitle = this.normalizeForSearch(albumTitle);
-            const normalizedArtist = this.normalizeForSearch(artistName);
-
-            if (
-                normalizedTitle !== albumTitle ||
-                normalizedArtist !== artistName
-            ) {
                 try {
-                    const escapedNormTitle = this.escapeLucene(normalizedTitle);
-                    const escapedNormArtist =
-                        this.escapeLucene(normalizedArtist);
-                    const query2 = `releasegroup:"${escapedNormTitle}" AND artist:"${escapedNormArtist}"`;
-                    const response2 = await this.client.get("/release-group", {
+                    const query1 = `releasegroup:"${escapedTitle}" AND artist:"${escapedArtist}"`;
+                    const response1 = await this.get("/release-group", {
                         params: {
-                            query: query2,
+                            query: query1,
                             limit: 5,
                             fmt: "json",
                         },
                     });
 
-                    const releaseGroups2 =
-                        response2.data["release-groups"] || [];
-                    if (releaseGroups2.length > 0) {
+                    const releaseGroups1 =
+                        response1.data["release-groups"] || [];
+                    if (releaseGroups1.length > 0) {
                         return {
-                            id: releaseGroups2[0].id,
-                            title: releaseGroups2[0].title,
+                            id: releaseGroups1[0].id,
+                            title: releaseGroups1[0].title,
                         };
                     }
                 } catch (e) {
-                    // Continue to strategy 3
+                    failed = true;
+                    lastError = e;
+                    // Continue to strategy 2
                 }
-            }
 
-            // Strategy 3: Fuzzy search without quotes (last resort)
-            try {
-                // Use simple terms without quotes for fuzzy matching
-                const simpleTitle = normalizedTitle
-                    .split(" ")
-                    .slice(0, 3)
-                    .join(" "); // First 3 words
-                const simpleArtist = normalizedArtist.split(" ")[0]; // First word of artist
-                const query3 = `${this.escapeLucene(
-                    simpleTitle,
-                )} AND artist:${this.escapeLucene(simpleArtist)}`;
+                // Strategy 2: Normalized/cleaned title search
+                const normalizedTitle = this.normalizeForSearch(albumTitle);
+                const normalizedArtist = this.normalizeForSearch(artistName);
 
-                const response3 = await this.client.get("/release-group", {
-                    params: {
-                        query: query3,
-                        limit: 10,
-                        fmt: "json",
-                    },
-                });
+                if (
+                    normalizedTitle !== albumTitle ||
+                    normalizedArtist !== artistName
+                ) {
+                    try {
+                        const escapedNormTitle =
+                            this.escapeLucene(normalizedTitle);
+                        const escapedNormArtist =
+                            this.escapeLucene(normalizedArtist);
+                        const query2 = `releasegroup:"${escapedNormTitle}" AND artist:"${escapedNormArtist}"`;
+                        const response2 = await this.get("/release-group", {
+                            params: {
+                                query: query2,
+                                limit: 5,
+                                fmt: "json",
+                            },
+                        });
 
-                const releaseGroups3 = response3.data["release-groups"] || [];
-
-                // Find a match where the artist name contains our search term
-                for (const rg of releaseGroups3) {
-                    const rgArtist =
-                        rg["artist-credit"]?.[0]?.name ||
-                        rg["artist-credit"]?.[0]?.artist?.name ||
-                        "";
-                    if (
-                        rgArtist
-                            .toLowerCase()
-                            .includes(simpleArtist.toLowerCase())
-                    ) {
-                        return {
-                            id: rg.id,
-                            title: rg.title,
-                        };
+                        const releaseGroups2 =
+                            response2.data["release-groups"] || [];
+                        if (releaseGroups2.length > 0) {
+                            return {
+                                id: releaseGroups2[0].id,
+                                title: releaseGroups2[0].title,
+                            };
+                        }
+                    } catch (e) {
+                        failed = true;
+                        lastError = e;
+                        // Continue to strategy 3
                     }
                 }
-            } catch (e) {
-                // All strategies failed
-            }
 
-            return null;
-        });
+                // Strategy 3: Fuzzy search without quotes (last resort)
+                try {
+                    // Use simple terms without quotes for fuzzy matching
+                    const simpleTitle = normalizedTitle
+                        .split(" ")
+                        .slice(0, 3)
+                        .join(" "); // First 3 words
+                    const simpleArtist = normalizedArtist.split(" ")[0]; // First word of artist
+                    const query3 = `${this.escapeLucene(
+                        simpleTitle,
+                    )} AND artist:${this.escapeLucene(simpleArtist)}`;
+
+                    const response3 = await this.get("/release-group", {
+                        params: {
+                            query: query3,
+                            limit: 10,
+                            fmt: "json",
+                        },
+                    });
+
+                    const releaseGroups3 =
+                        response3.data["release-groups"] || [];
+
+                    // Find a match where the artist name contains our search term
+                    for (const rg of releaseGroups3) {
+                        const rgArtist =
+                            rg["artist-credit"]?.[0]?.name ||
+                            rg["artist-credit"]?.[0]?.artist?.name ||
+                            "";
+                        if (
+                            rgArtist
+                                .toLowerCase()
+                                .includes(simpleArtist.toLowerCase())
+                        ) {
+                            return {
+                                id: rg.id,
+                                title: rg.title,
+                            };
+                        }
+                    }
+                } catch (e) {
+                    failed = true;
+                    lastError = e;
+                    // All strategies failed
+                }
+
+                if (failed) throw lastError;
+                return null;
+            },
+            2592000,
+            null,
+        );
     }
 
     /**
@@ -751,137 +781,98 @@ class MusicBrainzService {
     } | null> {
         const cacheKey = `mb:search:recording:${artistName}:${trackTitle}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            try {
-                // Normalize track title first - removes "- 2011 Remaster", "(Radio Edit)", etc.
-                const normalizedTitle = this.normalizeForSearch(trackTitle);
-                const normalizedArtist = this.normalizeForSearch(artistName);
-
-                // Search for recording by normalized track title and artist
-                const escapedTitle = this.escapeLucene(normalizedTitle);
-                const escapedArtist = this.escapeLucene(normalizedArtist);
-
-                const query = `recording:"${escapedTitle}" AND artist:"${escapedArtist}"`;
-
-                const response = await this.client.get("/recording", {
-                    params: {
-                        query,
-                        limit: 50, // Need high limit because bootleg recordings often rank first
-                        fmt: "json",
-                        inc: "releases+release-groups+artists",
-                    },
-                });
-
-                const allRecordings = response.data.recordings || [];
-
-                logger.debug(
-                    `[MusicBrainz] Query: "${trackTitle}" by "${artistName}"`,
-                );
-                logger.debug(
-                    `[MusicBrainz] Found ${allRecordings.length} total recordings`,
-                );
-
-                // Log first 5 recordings for debugging
-                allRecordings.slice(0, 5).forEach((rec: any, i: number) => {
-                    const disambig = rec.disambiguation || "(studio)";
-                    const releases = rec.releases || [];
-                    const albumNames = releases
-                        .slice(0, 2)
-                        .map((r: any) => r["release-group"]?.title || "?")
-                        .join(", ");
-                    logger.debug(
-                        `   ${i + 1}. [${disambig}] → ${
-                            albumNames || "(no albums)"
-                        }`,
-                    );
-                });
-
-                // Filter out live recordings - they have disambiguation like "live, 1995-07-28"
-                // We want the studio recording, not live versions
-                const recordings = allRecordings.filter((rec: any) => {
-                    const disambig = (rec.disambiguation || "").toLowerCase();
-                    // Skip if disambiguation contains "live" or date patterns
-                    if (disambig.includes("live")) return false;
-                    if (disambig.match(/\d{4}[-‐]\d{2}[-‐]\d{2}/)) return false;
-                    if (disambig.includes("demo")) return false;
-                    if (disambig.includes("acoustic")) return false;
-                    if (disambig.includes("remix")) return false;
-                    return true;
-                });
-
-                logger.debug(
-                    `[MusicBrainz] After filtering live/demo: ${recordings.length} studio recordings`,
-                );
-
-                if (recordings.length === 0) {
-                    // Try fuzzy search without quotes
+        return this.cachedRequest(
+            cacheKey,
+            async () => {
+                try {
+                    // Normalize track title first - removes "- 2011 Remaster", "(Radio Edit)", etc.
                     const normalizedTitle = this.normalizeForSearch(trackTitle);
                     const normalizedArtist =
                         this.normalizeForSearch(artistName);
-                    const fuzzyQuery = `${this.escapeLucene(
-                        normalizedTitle,
-                    )} AND artist:${this.escapeLucene(normalizedArtist)}`;
 
-                    const fuzzyResponse = await this.client.get("/recording", {
+                    // Search for recording by normalized track title and artist
+                    const escapedTitle = this.escapeLucene(normalizedTitle);
+                    const escapedArtist = this.escapeLucene(normalizedArtist);
+
+                    const query = `recording:"${escapedTitle}" AND artist:"${escapedArtist}"`;
+
+                    const response = await this.get("/recording", {
                         params: {
-                            query: fuzzyQuery,
-                            limit: 10,
+                            query,
+                            limit: 50, // Need high limit because bootleg recordings often rank first
                             fmt: "json",
                             inc: "releases+release-groups+artists",
                         },
                     });
 
-                    const fuzzyRecordings = fuzzyResponse.data.recordings || [];
+                    const allRecordings = response.data.recordings || [];
 
-                    // Find best match by checking artist name similarity
-                    for (const rec of fuzzyRecordings) {
-                        const recArtist =
-                            rec["artist-credit"]?.[0]?.name ||
-                            rec["artist-credit"]?.[0]?.artist?.name ||
-                            "";
-                        if (
-                            recArtist
-                                .toLowerCase()
-                                .includes(
-                                    normalizedArtist
-                                        .toLowerCase()
-                                        .split(" ")[0],
-                                )
-                        ) {
-                            const result = this.extractAlbumFromRecording(rec);
-                            if (result) return result; // Only return if we found a good album
-                        }
-                    }
+                    logger.debug(
+                        `[MusicBrainz] Query: "${trackTitle}" by "${artistName}"`,
+                    );
+                    logger.debug(
+                        `[MusicBrainz] Found ${allRecordings.length} total recordings`,
+                    );
 
-                    // Strategy 3: Strip all punctuation (handles "Do You Realize??" etc.)
-                    const strippedTitle = this.stripPunctuation(trackTitle);
-                    const strippedArtist = this.stripPunctuation(artistName);
-
-                    if (strippedTitle !== normalizedTitle) {
+                    // Log first 5 recordings for debugging
+                    allRecordings.slice(0, 5).forEach((rec: any, i: number) => {
+                        const disambig = rec.disambiguation || "(studio)";
+                        const releases = rec.releases || [];
+                        const albumNames = releases
+                            .slice(0, 2)
+                            .map((r: any) => r["release-group"]?.title || "?")
+                            .join(", ");
                         logger.debug(
-                            `[MusicBrainz] Trying punctuation-stripped search: "${strippedTitle}" by ${strippedArtist}`,
+                            `   ${i + 1}. [${disambig}] → ${
+                                albumNames || "(no albums)"
+                            }`,
                         );
+                    });
 
-                        const strippedQuery = `${strippedTitle} AND artist:${strippedArtist}`;
-                        const strippedResponse = await this.client.get(
-                            "/recording",
-                            {
-                                params: {
-                                    query: strippedQuery,
-                                    limit: 10,
-                                    fmt: "json",
-                                    inc: "releases+release-groups+artists",
-                                },
+                    // Filter out live recordings - they have disambiguation like "live, 1995-07-28"
+                    // We want the studio recording, not live versions
+                    const recordings = allRecordings.filter((rec: any) => {
+                        const disambig = (
+                            rec.disambiguation || ""
+                        ).toLowerCase();
+                        // Skip if disambiguation contains "live" or date patterns
+                        if (disambig.includes("live")) return false;
+                        if (disambig.match(/\d{4}[-‐]\d{2}[-‐]\d{2}/))
+                            return false;
+                        if (disambig.includes("demo")) return false;
+                        if (disambig.includes("acoustic")) return false;
+                        if (disambig.includes("remix")) return false;
+                        return true;
+                    });
+
+                    logger.debug(
+                        `[MusicBrainz] After filtering live/demo: ${recordings.length} studio recordings`,
+                    );
+
+                    if (recordings.length === 0) {
+                        // Try fuzzy search without quotes
+                        const normalizedTitle =
+                            this.normalizeForSearch(trackTitle);
+                        const normalizedArtist =
+                            this.normalizeForSearch(artistName);
+                        const fuzzyQuery = `${this.escapeLucene(
+                            normalizedTitle,
+                        )} AND artist:${this.escapeLucene(normalizedArtist)}`;
+
+                        const fuzzyResponse = await this.get("/recording", {
+                            params: {
+                                query: fuzzyQuery,
+                                limit: 10,
+                                fmt: "json",
+                                inc: "releases+release-groups+artists",
                             },
-                        );
+                        });
 
-                        const strippedRecordings =
-                            strippedResponse.data.recordings || [];
-                        logger.debug(
-                            `[MusicBrainz] Punctuation-stripped search found ${strippedRecordings.length} recordings`,
-                        );
+                        const fuzzyRecordings =
+                            fuzzyResponse.data.recordings || [];
 
-                        for (const rec of strippedRecordings) {
+                        // Find best match by checking artist name similarity
+                        for (const rec of fuzzyRecordings) {
                             const recArtist =
                                 rec["artist-credit"]?.[0]?.name ||
                                 rec["artist-credit"]?.[0]?.artist?.name ||
@@ -890,73 +881,131 @@ class MusicBrainzService {
                                 recArtist
                                     .toLowerCase()
                                     .includes(
-                                        strippedArtist
+                                        normalizedArtist
                                             .toLowerCase()
                                             .split(" ")[0],
                                     )
                             ) {
                                 const result =
                                     this.extractAlbumFromRecording(rec);
-                                if (result) {
-                                    logger.debug(
-                                        `[MusicBrainz] Found via punctuation-stripped search: ${result.albumName}`,
-                                    );
-                                    return result;
+                                if (result) return result; // Only return if we found a good album
+                            }
+                        }
+
+                        // Strategy 3: Strip all punctuation (handles "Do You Realize??" etc.)
+                        const strippedTitle = this.stripPunctuation(trackTitle);
+                        const strippedArtist =
+                            this.stripPunctuation(artistName);
+
+                        if (strippedTitle !== normalizedTitle) {
+                            logger.debug(
+                                `[MusicBrainz] Trying punctuation-stripped search: "${strippedTitle}" by ${strippedArtist}`,
+                            );
+
+                            const strippedQuery = `${strippedTitle} AND artist:${strippedArtist}`;
+                            const strippedResponse = await this.get(
+                                "/recording",
+                                {
+                                    params: {
+                                        query: strippedQuery,
+                                        limit: 10,
+                                        fmt: "json",
+                                        inc: "releases+release-groups+artists",
+                                    },
+                                },
+                            );
+
+                            const strippedRecordings =
+                                strippedResponse.data.recordings || [];
+                            logger.debug(
+                                `[MusicBrainz] Punctuation-stripped search found ${strippedRecordings.length} recordings`,
+                            );
+
+                            for (const rec of strippedRecordings) {
+                                const recArtist =
+                                    rec["artist-credit"]?.[0]?.name ||
+                                    rec["artist-credit"]?.[0]?.artist?.name ||
+                                    "";
+                                if (
+                                    recArtist
+                                        .toLowerCase()
+                                        .includes(
+                                            strippedArtist
+                                                .toLowerCase()
+                                                .split(" ")[0],
+                                        )
+                                ) {
+                                    const result =
+                                        this.extractAlbumFromRecording(rec);
+                                    if (result) {
+                                        logger.debug(
+                                            `[MusicBrainz] Found via punctuation-stripped search: ${result.albumName}`,
+                                        );
+                                        return result;
+                                    }
                                 }
                             }
                         }
+
+                        return null;
                     }
 
-                    return null;
-                }
+                    // Try each recording until we find one with a good (non-bootleg) album
+                    for (const rec of recordings) {
+                        const disambig =
+                            rec.disambiguation || "(no disambiguation)";
+                        logger.debug(
+                            `[MusicBrainz] Trying recording: "${rec.title}" [${disambig}]`,
+                        );
+                        const result = this.extractAlbumFromRecording(
+                            rec,
+                            false,
+                        );
+                        if (result) {
+                            logger.debug(
+                                `[MusicBrainz] Found album: "${result.albumName}" (MBID: ${result.albumMbid})`,
+                            );
+                            return result; // Found a good album
+                        } else {
+                            logger.debug(
+                                `[MusicBrainz] No valid album found for this recording`,
+                            );
+                        }
+                    }
 
-                // Try each recording until we find one with a good (non-bootleg) album
-                for (const rec of recordings) {
-                    const disambig =
-                        rec.disambiguation || "(no disambiguation)";
+                    // Fallback: Try again accepting Singles/EPs as last resort
                     logger.debug(
-                        `[MusicBrainz] Trying recording: "${rec.title}" [${disambig}]`,
+                        `[MusicBrainz] No official albums found, trying to find Singles/EPs...`,
                     );
-                    const result = this.extractAlbumFromRecording(rec, false);
-                    if (result) {
-                        logger.debug(
-                            `[MusicBrainz] Found album: "${result.albumName}" (MBID: ${result.albumMbid})`,
+                    for (const rec of recordings) {
+                        const result = this.extractAlbumFromRecording(
+                            rec,
+                            true,
                         );
-                        return result; // Found a good album
-                    } else {
-                        logger.debug(
-                            `[MusicBrainz] No valid album found for this recording`,
-                        );
+                        if (result) {
+                            logger.debug(
+                                `[MusicBrainz] Found Single/EP: "${result.albumName}" (MBID: ${result.albumMbid})`,
+                            );
+                            return result;
+                        }
                     }
-                }
 
-                // Fallback: Try again accepting Singles/EPs as last resort
-                logger.debug(
-                    `[MusicBrainz] No official albums found, trying to find Singles/EPs...`,
-                );
-                for (const rec of recordings) {
-                    const result = this.extractAlbumFromRecording(rec, true);
-                    if (result) {
-                        logger.debug(
-                            `[MusicBrainz] Found Single/EP: "${result.albumName}" (MBID: ${result.albumMbid})`,
-                        );
-                        return result;
-                    }
+                    // No good albums found in any recording
+                    logger.debug(
+                        `[MusicBrainz] No official albums or singles found for "${trackTitle}" by ${artistName} (checked ${recordings.length} recordings)`,
+                    );
+                    return null;
+                } catch (error: any) {
+                    logger.error(
+                        "MusicBrainz recording search error:",
+                        error.message,
+                    );
+                    throw error;
                 }
-
-                // No good albums found in any recording
-                logger.debug(
-                    `[MusicBrainz] No official albums or singles found for "${trackTitle}" by ${artistName} (checked ${recordings.length} recordings)`,
-                );
-                return null;
-            } catch (error: any) {
-                logger.error(
-                    "MusicBrainz recording search error:",
-                    error.message,
-                );
-                return null;
-            }
-        });
+            },
+            2592000,
+            null,
+        );
     }
 
     /**
@@ -1131,7 +1180,7 @@ class MusicBrainzService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const response = await this.client.get("/release", {
+                const response = await this.get("/release", {
                     params: {
                         "release-group": releaseGroupMbid,
                         inc: "media",
@@ -1198,10 +1247,9 @@ class MusicBrainzService {
         return this.cachedRequest(
             cacheKey,
             async () => {
-                const response = await this.client.get(
-                    `/release/${releaseMbid}`,
-                    { params: { inc: "recordings", fmt: "json" } },
-                );
+                const response = await this.get(`/release/${releaseMbid}`, {
+                    params: { inc: "recordings", fmt: "json" },
+                });
                 const tracks = flattenAlbumTracks(response.data?.media);
                 logger.debug(
                     `[MusicBrainz] Found ${tracks.length} tracks for release group ${releaseGroupMbid}`,

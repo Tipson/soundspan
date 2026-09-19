@@ -270,6 +270,59 @@ test("lock-screen metadata localizes missing track identity", async (t) => {
     );
 });
 
+test("OS handlers survive pause, resume and track changes without re-registration", async (t) => {
+    const { useMediaSession } = await import("../../hooks/useMediaSession");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        container.remove();
+    });
+    function Probe() {
+        useMediaSession();
+        return null;
+    }
+    playback.isPlaying = true;
+    await React.act(async () => root.render(React.createElement(Probe)));
+    const playHandler = registered.get("play");
+    for (const playing of [false, true, false, true]) {
+        playback.isPlaying = playing;
+        media.currentTrack = { ...track, id: `track-${playing}` };
+        await React.act(async () => root.render(React.createElement(Probe)));
+        assert.equal(registered.get("play"), playHandler);
+        assert.equal(registrationCounts.get("play"), 1);
+    }
+});
+
+test("stable OS handlers invoke the latest committed queue callbacks", async (t) => {
+    const { useMediaSession } = await import("../../hooks/useMediaSession");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const originalNext = controls.next;
+    t.after(async () => {
+        await React.act(async () => root.unmount());
+        controls.next = originalNext;
+        container.remove();
+    });
+    function Probe() {
+        useMediaSession();
+        return null;
+    }
+    playback.isPlaying = true;
+    await React.act(async () => root.render(React.createElement(Probe)));
+    const handler = registered.get("nexttrack");
+    const newNext = mock.fn(() => undefined);
+    controls.next = newNext;
+    await React.act(async () => root.render(React.createElement(Probe)));
+    assert.equal(registered.get("nexttrack"), handler);
+    handler?.();
+    assert.equal(newNext.mock.callCount(), 1);
+});
+
 test("media controls and lock-screen state clear after playback is paused and media is removed", async (t) => {
     const { useMediaSession } = await import("../../hooks/useMediaSession");
     const { createRoot } = await import("react-dom/client");
@@ -326,4 +379,13 @@ test("media controls and lock-screen state clear after playback is paused and me
         undefined,
         "the OS scrubber position must be cleared with the media item",
     );
+
+    media.currentTrack = track;
+    media.playbackType = "track";
+    await React.act(async () => root.render(React.createElement(Probe)));
+    assert.equal(registered.get("play"), null);
+    playback.isPlaying = true;
+    await React.act(async () => root.render(React.createElement(Probe)));
+    assert.equal(typeof registered.get("play"), "function");
+    assert.equal(registrationCounts.get("play"), 2);
 });

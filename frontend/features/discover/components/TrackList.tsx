@@ -3,7 +3,6 @@ import Link from "next/link";
 import { cn } from "@/utils/cn";
 import { DiscoverTrack } from "../types";
 import { api } from "@/lib/api";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import {
     TrackList as SharedTrackList,
@@ -50,10 +49,6 @@ function getSourceBadge(
     isMatching: boolean,
     extraClassName?: string,
 ): ReactNode {
-    if (track.sourceType === "tidal") {
-        return <TidalBadge className={extraClassName} />;
-    }
-
     if (track.sourceType === "youtube") {
         return <YouTubeBadge className={extraClassName} />;
     }
@@ -61,7 +56,10 @@ function getSourceBadge(
     let label: string;
     let badgeClassName: string;
 
-    if (!track.available) {
+    if (track.sourceType === "tidal") {
+        label = "Недоступно";
+        badgeClassName = "border border-warning/30 bg-warning/10 text-warning";
+    } else if (!track.available) {
         if (isMatching) {
             label = discoverRu.source.loading;
             badgeClassName =
@@ -89,17 +87,17 @@ function getSourceBadge(
 }
 
 function toRowItem(track: DiscoverTrack): TrackRowItem {
+    const isPlayable =
+        (track.sourceType === "youtube" && Boolean(track.youtubeVideoId)) ||
+        (track.sourceType === "local" && track.available);
     return {
         id: track.id,
         title: track.title,
         artistName: track.artist,
         duration: track.duration,
-        streamSource:
-            track.streamSource === "tidal" || track.streamSource === "youtube"
-                ? track.streamSource
-                : undefined,
-        tidalTrackId: track.tidalTrackId,
+        streamSource: track.streamSource === "youtube" ? "youtube" : undefined,
         youtubeVideoId: track.youtubeVideoId,
+        isPlayable,
         coverArtUrl:
             track.coverUrl || track.albumId
                 ? api.getCoverArtUrl(track.coverUrl || track.albumId, 80)
@@ -121,6 +119,11 @@ export function TrackList({
     const handlePlay = useCallback(
         (_track: DiscoverTrack, index: number) => {
             const track = tracks[index];
+            const isPlayable =
+                (track.sourceType === "youtube" &&
+                    Boolean(track.youtubeVideoId)) ||
+                (track.sourceType === "local" && track.available);
+            if (!isPlayable) return;
             const isTrackPlaying = currentTrack?.id === track.id;
             if (isTrackPlaying && isPlaying) {
                 onTogglePlay();
@@ -191,7 +194,6 @@ export function TrackList({
                 },
                 duration: track.duration,
                 streamSource: track.streamSource,
-                tidalTrackId: track.tidalTrackId,
                 youtubeVideoId: track.youtubeVideoId,
             },
             showGoToAlbum: !!track.albumId,

@@ -61,10 +61,10 @@ mock.module("@/hooks/useMediaQuery", {
 // lets the SAME test render on the pre-fix tree too: there UniversalPlayer calls
 // useAudio(), which internally calls useAudioControls(). Controls are stable
 // actions that never change on a clock tick, so stubbing them cannot affect the
-// re-render count on either tree; post-fix UniversalPlayer never calls it at all.
+// re-render count on either tree; UniversalPlayer uses its stable close action.
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
-        useAudioControls: () => ({}),
+        useAudioControls: () => ({ returnToPreviousMode: () => undefined }),
     },
 });
 

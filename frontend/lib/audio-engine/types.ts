@@ -42,6 +42,21 @@ export interface AudioEngineTimeUpdatePayload {
     timeSec: number;
 }
 
+/** Read-only state of the active output, never its source URL or preload. */
+export interface AudioEngineDiagnosticState {
+    nativePaused: boolean | null;
+    readyState: number | null;
+    networkState: number | null;
+    mediaErrorCode: number | null;
+    audioContextState:
+        | "not_used"
+        | "running"
+        | "suspended"
+        | "interrupted"
+        | "closed"
+        | "unknown";
+}
+
 export interface AudioEngineVolumePayload {
     volume: number;
     muted?: boolean;
@@ -50,6 +65,21 @@ export interface AudioEngineVolumePayload {
 export interface AudioEngineBufferingPayload {
     isBuffering: boolean;
     reason?: string;
+}
+
+export type AudioPreloadResult =
+    | { state: "ready" }
+    | { state: "cancelled" }
+    | { state: "failed"; code?: string };
+
+/**
+ * Ownership handle for one real media preload. The result never rejects and
+ * only reports ready after the underlying media implementation does.
+ */
+export interface AudioPreloadLease {
+    readonly sourceUrl: string;
+    readonly result: Promise<AudioPreloadResult>;
+    cancel(): void;
 }
 
 export interface AudioEngineEventPayloadMap {
@@ -89,6 +119,9 @@ export interface AudioEngine {
     seek(timeSec: number): void | Promise<void>;
     setVolume(value: number): void;
     setMuted(value: boolean): void;
+    /** Optional transport hint; queue ownership and logical repeat remain external. */
+    setRepeatCurrent?(enabled: boolean): void;
+    setContinuousEnabled?(enabled: boolean): void;
     getCurrentTime(): number;
     getDuration(): number;
     isPlaying(): boolean;
@@ -104,9 +137,12 @@ export interface AudioEngine {
     preload?(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void | Promise<void>;
+    ): AudioPreloadLease | null;
     reload?(): void | Promise<void>;
     getActualCurrentTime?(): number;
+    /** Contiguous buffered seconds at the active position; null if unmeasurable. */
+    getBufferedAheadSec?(): number | null;
+    getDiagnosticState?(): AudioEngineDiagnosticState;
     hasTrackEnded?(): boolean;
     notifyTrackEnded?(): void;
     isCurrentlySeeking?(): boolean;

@@ -6,7 +6,6 @@ import { WithAudiobooks } from "../../lib/api/audiobooks";
 import { WithMedia } from "../../lib/api/media";
 import { WithPodcasts } from "../../lib/api/podcasts";
 import { WithSettings } from "../../lib/api/settings";
-import { WithTidal } from "../../lib/api/tidal";
 import { WithYouTube } from "../../lib/api/youtube";
 import { WithYtMusic } from "../../lib/api/ytmusic";
 import { readMediaAuthCookie } from "../../lib/media-auth";
@@ -20,9 +19,7 @@ const ACCESS_TOKEN = "header.payload.signature";
 class MediaClient extends WithMedia(ApiClientCore) {}
 class SettingsClient extends WithSettings(ApiClientCore) {}
 class AudioClient extends WithPodcasts(
-    WithAudiobooks(
-        WithYouTube(WithYtMusic(WithTidal(WithMedia(ApiClientCore)))),
-    ),
+    WithAudiobooks(WithYouTube(WithYtMusic(WithMedia(ApiClientCore)))),
 ) {}
 
 function clearMediaAuthCookie(): void {
@@ -172,8 +169,8 @@ test("all browser audio stream URLs stay same-origin and never embed access cred
         client.getPreviewStreamUrl("preview/with spaces"),
         client.getYtMusicStreamUrl("yt/with spaces", "HIGH"),
         client.getYtMusicStreamUrl("public-video", "LOW", true),
+        client.getYtMusicStreamUrl("preload-video", undefined, true, "preload"),
         client.getYouTubeStreamUrl("youtube/with spaces", "HIGH"),
-        client.getTidalStreamUrl(12345, "LOSSLESS"),
         client.getAudiobookStreamUrl("book/with spaces"),
         client.getPodcastEpisodeStreamUrl(
             "podcast/with spaces",
@@ -197,25 +194,133 @@ test("all browser audio stream URLs stay same-origin and never embed access cred
         "HIGH",
     );
     assert.equal(
-        new URL(urls[5], window.location.origin).searchParams.get("quality"),
-        "LOSSLESS",
+        new URL(urls[4], window.location.origin).searchParams.get("purpose"),
+        "preload",
     );
     client.clearToken();
 });
 
-test("TIDAL browse artwork uses the same clean media-cookie transport", () => {
-    const client = new AudioClient("https://api.soundspan.test");
-    client.setToken(ACCESS_TOKEN, "refresh-secret");
-
-    const url = client.getTidalBrowseImageUrl(
-        "https://resources.tidal.com/images/cover.jpg",
-    );
-
-    assert.equal(url.startsWith("/api/browse/tidal/image?"), true);
+test("public preload reuse is isolated by client and credential generation", () => {
+    const client = new AudioClient();
+    const getScope = (purpose: "interactive" | "preload" = "interactive") =>
+        new URL(
+            client.getYtMusicStreamUrl("dQw4w9WgXcQ", "HIGH", true, purpose),
+            window.location.origin,
+        ).searchParams.get("preloadSession");
     assert.equal(
-        new URL(url, window.location.origin).searchParams.has("token"),
+        getScope(),
+        null,
+        "anonymous streams cannot reuse session bytes",
+    );
+    client.setToken(ACCESS_TOKEN);
+    const initial = getScope();
+    assert.match(initial ?? "", /^[0-9a-f-]{36}:\d+$/i);
+    assert.equal(getScope("preload"), initial);
+    assert.equal(getScope(), initial);
+    const otherClient = new AudioClient();
+    assert.notEqual(
+        new URL(
+            otherClient.getYtMusicStreamUrl("dQw4w9WgXcQ", "HIGH", true),
+            window.location.origin,
+        ).searchParams.get("preloadSession"),
+        initial,
+    );
+    client.setToken("other-user.payload.signature");
+    assert.notEqual(getScope(), initial);
+    const rotated = getScope();
+    client.reloadTokenFromStorage();
+    assert.notEqual(getScope(), rotated);
+    assert.equal(
+        new URL(
+            client.getYtMusicStreamUrl("dQw4w9WgXcQ"),
+            window.location.origin,
+        ).searchParams.has("preloadSession"),
         false,
     );
-    assert.doesNotMatch(url, new RegExp(ACCESS_TOKEN));
     client.clearToken();
+    otherClient.clearToken();
+    assert.equal(getScope(), null);
+});
+
+test("each audio load has a non-secret playback session for byte representation isolation", () => {
+    const client = new AudioClient();
+    const first = new URL(
+        client.getYtMusicStreamUrl("jNQXAC9IVRw"),
+        window.location.origin,
+    );
+    const second = new URL(
+        client.getYtMusicStreamUrl("jNQXAC9IVRw"),
+        window.location.origin,
+    );
+    assert.match(
+        first.searchParams.get("playbackSession") ?? "",
+        /^[0-9a-f-]{36}$/i,
+    );
+    assert.notEqual(
+        first.searchParams.get("playbackSession"),
+        second.searchParams.get("playbackSession"),
+    );
+});
+test("speculative YouTube URLs stay stable so repeated progress ticks honor preload ownership and cooldown", () => {
+    const client = new AudioClient();
+    client.setToken(ACCESS_TOKEN);
+    const first = client.getYtMusicStreamUrl(
+        "jNQXAC9IVRw",
+        undefined,
+        true,
+        "preload",
+    );
+    const second = client.getYtMusicStreamUrl(
+        "jNQXAC9IVRw",
+        undefined,
+        true,
+        "preload",
+    );
+    assert.equal(first, second);
+    assert.equal(
+        new URL(first, window.location.origin).searchParams.has(
+            "playbackSession",
+        ),
+        false,
+    );
+    client.setToken("other-user.payload.signature");
+    assert.notEqual(
+        client.getYtMusicStreamUrl("jNQXAC9IVRw", undefined, true, "preload"),
+        first,
+    );
+    client.clearToken();
+});
+
+test("credential updates revoke the controlling worker's completed preload bytes", () => {
+    const original = Object.getOwnPropertyDescriptor(
+        navigator,
+        "serviceWorker",
+    );
+    const messages: unknown[] = [];
+    Object.defineProperty(navigator, "serviceWorker", {
+        configurable: true,
+        value: {
+            controller: {
+                postMessage: (message: unknown) => messages.push(message),
+            },
+        },
+    });
+    try {
+        const client = new MediaClient();
+        messages.length = 0;
+        client.setToken(ACCESS_TOKEN);
+        client.reloadTokenFromStorage();
+        client.clearToken();
+        assert.deepEqual(
+            messages,
+            Array.from({ length: 3 }, () => ({
+                type: "CLEAR_STREAM_PRELOAD_CACHE",
+            })),
+        );
+        assert.doesNotMatch(JSON.stringify(messages), /payload|signature/);
+    } finally {
+        if (original)
+            Object.defineProperty(navigator, "serviceWorker", original);
+        else Reflect.deleteProperty(navigator, "serviceWorker");
+    }
 });

@@ -562,7 +562,8 @@ async function serveSubsonicPeerFallback(input: {
             quality: input.quality,
             fallback,
         });
-        if (result.status === "served") return true;
+        if (result.status === "served" || result.status === "cancelled")
+            return true;
         if (result.status !== "failed") continue;
         log.warn("Mapped peer fallback failed", { error: result.failure });
         if (isMappedProviderResponseUnusable(result.responseState)) {

@@ -3,6 +3,13 @@ import { musicBrainzService } from "../musicbrainz";
 import { logger } from "../../utils/logger";
 import { redisClient } from "../../utils/redis";
 import { rateLimiter } from "../rateLimiter";
+import { runMusicBrainzRequest } from "../musicbrainzRequestGate";
+
+jest.mock("../musicbrainzRequestGate", () => ({
+    runMusicBrainzRequest: jest.fn(async (request: () => Promise<unknown>) =>
+        request(),
+    ),
+}));
 
 jest.mock("axios");
 
@@ -67,6 +74,35 @@ describe("musicBrainzService", () => {
             async (_bucket: string, requestFn: () => Promise<unknown>) =>
                 requestFn(),
         );
+    });
+
+    it("paces every HTTP attempt including fallback searches within one cache lookup", async () => {
+        mockHttpGet.mockResolvedValue({ data: { recordings: [] } });
+        await musicBrainzService.searchRecording(
+            "Missing. Song",
+            "Test Artist",
+        );
+        expect(mockHttpGet.mock.calls.length).toBeGreaterThanOrEqual(2);
+        expect(runMusicBrainzRequest).toHaveBeenCalledTimes(
+            mockHttpGet.mock.calls.length,
+        );
+    });
+
+    it("does not cache provider failures as an hour-long negative album or recording match", async () => {
+        mockHttpGet.mockRejectedValue({
+            response: { status: 503 },
+            message: "unavailable",
+        });
+        await expect(
+            musicBrainzService.searchAlbum("Missing Album", "Test Artist"),
+        ).resolves.toBeNull();
+        await expect(
+            musicBrainzService.searchRecording("Missing Song", "Test Artist"),
+        ).resolves.toBeNull();
+        expect(mockRedisSetEx.mock.calls).toEqual([
+            ["mb:search:album:Test Artist:Missing Album", 120, "null"],
+            ["mb:search:recording:Test Artist:Missing Song", 120, "null"],
+        ]);
     });
 
     it("returns cached artist search results without touching HTTP/rate limiter", async () => {
@@ -157,6 +193,27 @@ describe("musicBrainzService", () => {
             { params: { inc: "isrcs", fmt: "json" } },
         );
         expect(mockRateLimiterExecute).toHaveBeenCalledTimes(2);
+    });
+
+    it("defers failed background identity lookups instead of retrying ahead of interactive requests", async () => {
+        mockHttpGet.mockRejectedValueOnce(new Error("upstream unavailable"));
+        const result =
+            await musicBrainzService.lookupRecordingIdentityByMetadata({
+                artist: "Artist",
+                title: "Optional",
+                duration: 180,
+            });
+        expect(result).toBeNull();
+        expect(mockRateLimiterExecute).toHaveBeenCalledWith(
+            "musicbrainz",
+            expect.any(Function),
+            { priority: -1, skipRetry: true },
+        );
+        expect(mockRedisSetEx).toHaveBeenCalledWith(
+            "mb:identity:v1:Artist:Optional:180",
+            120,
+            "null",
+        );
     });
 
     it("keeps free-text searches in Axios query params instead of the request path", async () => {
@@ -317,14 +374,18 @@ describe("musicBrainzService", () => {
         );
     });
 
-    it("rethrows from cachedRequest when no fallback value is configured", async () => {
+    it("defers an album lookup after admission failure with only a short negative cache", async () => {
         const upstreamError = new Error("search request failed");
         mockRateLimiterExecute.mockRejectedValueOnce(upstreamError);
 
         await expect(
             musicBrainzService.searchAlbum("Uncached Album", "Some Artist"),
-        ).rejects.toBe(upstreamError);
-        expect(mockRedisSetEx).not.toHaveBeenCalled();
+        ).resolves.toBeNull();
+        expect(mockRedisSetEx).toHaveBeenCalledWith(
+            "mb:search:album:Some Artist:Uncached Album",
+            120,
+            "null",
+        );
     });
 
     it("maps release-group/release wrapper methods to expected API params", async () => {
@@ -847,7 +908,7 @@ describe("musicBrainzService", () => {
         );
         expect(mockRedisSetEx).toHaveBeenCalledWith(
             "mb:search:recording:Broken Artist:Broken Song",
-            3600,
+            120,
             "null",
         );
     });

@@ -8,6 +8,14 @@ import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 
 import { Howl, HowlOptions, Howler } from "howler";
 import { DEFAULT_AUDIO_VOLUME, clampAudioVolume } from "@/lib/audio-volume";
+import {
+    createAudioPreloadLease,
+    type AudioPreloadLeaseController,
+} from "@/lib/audio-engine/audioPreloadLease";
+import type {
+    AudioPreloadLease,
+    AudioPreloadResult,
+} from "@/lib/audio-engine/types";
 
 interface ExtendedHowlOptions extends HowlOptions {
     xhr?: {
@@ -92,6 +100,7 @@ class HowlerEngine {
     private preloadSrc: string | null = null;
     private preloadFormat: string | undefined = undefined;
     private isPreloading: boolean = false;
+    private preloadController: AudioPreloadLeaseController | null = null;
 
     constructor() {
         // Initialize event listener maps
@@ -515,15 +524,15 @@ class HowlerEngine {
         src: string,
         format?: string,
         requestOptions?: HowlerRequestOptions,
-    ): void {
+    ): AudioPreloadLease | null {
         // Don't preload if same as current source
         if (this.state.currentSrc === src) {
-            return;
+            return null;
         }
 
         // Don't preload if already preloading/preloaded same source
         if (this.preloadSrc === src) {
-            return;
+            return this.preloadController?.lease ?? null;
         }
 
         // Cancel any existing preload first
@@ -532,6 +541,24 @@ class HowlerEngine {
         this.isPreloading = true;
         this.preloadSrc = src;
         this.preloadFormat = format;
+        const controller = createAudioPreloadLease(src, () => {
+            if (this.preloadController !== controller) {
+                return;
+            }
+            if (this.preloadHowl) {
+                try {
+                    this.preloadHowl.unload();
+                } catch {
+                    // Intentionally ignored: cleanup errors are harmless
+                }
+            }
+            this.preloadHowl = null;
+            this.preloadSrc = null;
+            this.preloadFormat = undefined;
+            this.isPreloading = false;
+            this.preloadController = null;
+        });
+        this.preloadController = controller;
 
         // Detect if running in Android WebView
         const isAndroidWebView =
@@ -565,33 +592,39 @@ class HowlerEngine {
         this.preloadHowl = new Howl({
             ...howlConfig,
             onload: () => {
+                if (this.preloadController !== controller) {
+                    return;
+                }
                 this.isPreloading = false;
+                controller.settle({ state: "ready" });
             },
             onloaderror: (id, error) => {
+                if (this.preloadController !== controller) {
+                    return;
+                }
                 sharedFrontendLogger.error(
                     "[HowlerEngine] Preload error:",
                     error,
                 );
-                this.cancelPreload();
+                this.cancelPreload({ state: "failed", code: String(error) });
             },
         });
+        return controller.lease;
     }
 
     /**
      * Cancel any in-progress preload
      */
-    cancelPreload(): void {
-        if (this.preloadHowl) {
-            try {
-                this.preloadHowl.unload();
-            } catch {
-                // Intentionally ignored: cleanup errors are harmless
-            }
+    cancelPreload(result: AudioPreloadResult = { state: "cancelled" }): void {
+        const controller = this.preloadController;
+        controller?.settle(result);
+        controller?.lease.cancel();
+        if (!controller) {
             this.preloadHowl = null;
+            this.preloadSrc = null;
+            this.preloadFormat = undefined;
+            this.isPreloading = false;
         }
-        this.preloadSrc = null;
-        this.preloadFormat = undefined;
-        this.isPreloading = false;
     }
 
     /**
@@ -623,6 +656,7 @@ class HowlerEngine {
         this.preloadSrc = null;
         this.preloadFormat = undefined;
         this.isPreloading = false;
+        this.preloadController = null;
 
         return howl;
     }

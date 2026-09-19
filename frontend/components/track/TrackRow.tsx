@@ -1,6 +1,7 @@
 "use client";
 
-import { AudioLines, Download, Music, Play } from "lucide-react";
+import type { SyntheticEvent } from "react";
+import { Download, Music, Play } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
 import { CachedImage } from "@/components/ui/CachedImage";
@@ -11,8 +12,43 @@ import { InQueueBadge, UnplayableBadge } from "./badges";
 import { useOptionalDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
 import type { DeviceOfflineTrack } from "@/features/device-offline/types";
 import type { TrackRowProps } from "./types";
+import { CurrentTrackPlaybackIndicator } from "./TrackPlaybackIndicator";
 
 const DEFAULT_ACCENT = "#3b82f6";
+const INTERACTIVE_DESCENDANT_SELECTOR = [
+    "a",
+    "button",
+    "input",
+    "label",
+    "select",
+    "textarea",
+    "summary",
+    '[contenteditable]:not([contenteditable="false"])',
+    '[tabindex]:not([tabindex="-1"])',
+    '[role="button"]',
+    '[role="checkbox"]',
+    '[role="link"]',
+    '[role="menuitem"]',
+    '[role="option"]',
+    '[role="switch"]',
+].join(",");
+
+function isInteractiveDescendant(
+    event: Pick<SyntheticEvent<HTMLDivElement>, "currentTarget" | "target">,
+): boolean {
+    const target = event.target as EventTarget & {
+        closest?: (selector: string) => Element | null;
+    };
+    const interactiveAncestor = target?.closest?.(
+        INTERACTIVE_DESCENDANT_SELECTOR,
+    );
+
+    // The row itself has role="button" and tabIndex=0. Only a different
+    // interactive descendant owns the bubbled activation.
+    return Boolean(
+        interactiveAncestor && interactiveAncestor !== event.currentTarget,
+    );
+}
 
 /**
  * Renders the TrackRow component.
@@ -72,13 +108,20 @@ export function TrackRow({
             data-tv-card
             data-tv-card-index={index}
             data-track-id={item.id}
-            onClick={onPlay}
+            onClick={(event) => {
+                if (isInteractiveDescendant(event)) return;
+                onPlay?.();
+            }}
             role="button"
             aria-disabled={item.isPlayable === false ? true : undefined}
             aria-label={`Воспроизвести «${item.displayTitle ?? item.title}», исполнитель ${item.artistName}`}
             tabIndex={0}
             onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && onPlay) {
+                if (
+                    (e.key === "Enter" || e.key === " ") &&
+                    onPlay &&
+                    !isInteractiveDescendant(e)
+                ) {
                     e.preventDefault();
                     onPlay();
                 }
@@ -104,14 +147,7 @@ export function TrackRow({
                         )}
                         style={isPlaying ? { color: accentColor } : undefined}
                     >
-                        {isPlaying ? (
-                            <AudioLines
-                                className="w-4 h-4"
-                                style={{ color: accentColor }}
-                            />
-                        ) : (
-                            index + 1
-                        )}
+                        {index + 1}
                     </span>
                     <Play className="w-4 h-4 text-white hidden group-hover:block fill-current" />
                 </div>
@@ -142,6 +178,7 @@ export function TrackRow({
                         )}
                         style={isPlaying ? { color: accentColor } : undefined}
                     >
+                        {isPlaying && <CurrentTrackPlaybackIndicator />}
                         <span className="truncate">
                             {item.displayTitle ?? item.title}
                         </span>
@@ -166,7 +203,7 @@ export function TrackRow({
                                 variant="muted"
                             />
                         )}
-                        {isInQueue && <InQueueBadge />}
+                        {isInQueue && !isPlaying && <InQueueBadge />}
                     </h3>
                     {artistContent !== undefined ? (
                         artistContent

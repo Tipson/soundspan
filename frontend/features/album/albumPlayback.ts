@@ -14,9 +14,7 @@ export function isAlbumTrackPlayable(
         return track.peer?.online === true;
     }
     if (source === "library") return true;
-    if (track.streamSource === "tidal") {
-        return Boolean(track.tidalTrackId);
-    }
+    if (track.streamSource === "tidal") return false;
     if (track.streamSource === "youtube") {
         return Boolean(track.youtubeVideoId?.trim());
     }
@@ -49,10 +47,6 @@ export function toAlbumPlaybackTrack(track: Track, album: Album) {
         filePath: track.filePath,
         source: track.source,
         peer: track.peer,
-        ...(track.streamSource === "tidal" && {
-            streamSource: "tidal" as const,
-            tidalTrackId: track.tidalTrackId,
-        }),
         ...(track.streamSource === "youtube" && {
             streamSource: "youtube" as const,
             youtubeVideoId: track.youtubeVideoId,

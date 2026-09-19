@@ -41,11 +41,13 @@ test("discover search owns a client budget above backend deadlines and below the
         "music",
         50,
         controller.signal,
+        "tracks",
     );
 
     assert.deepEqual(client.calls, [
         {
-            endpoint: "/search/discover?q=massive%20attack&type=music&limit=50",
+            endpoint:
+                "/search/discover?q=massive%20attack&type=music&limit=50&scope=tracks",
             timeoutMs: 14_000,
             retryOnTimeout: false,
             signal: controller.signal,

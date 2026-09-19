@@ -2,12 +2,15 @@ const mockMappingFindFirst = jest.fn();
 const mockMappingCreate = jest.fn();
 const mockMappingUpdate = jest.fn();
 const mockCanonicalFindFirst = jest.fn();
+const mockCanonicalFindUnique = jest.fn();
 const mockCanonicalUpsert = jest.fn();
 const mockYoutubeUpsert = jest.fn();
 const mockTidalUpsert = jest.fn();
+const mockTransaction = jest.fn();
 
 jest.mock("../../../utils/db", () => ({
     prisma: {
+        $transaction: mockTransaction,
         trackMapping: {
             findFirst: mockMappingFindFirst,
             create: mockMappingCreate,
@@ -15,6 +18,7 @@ jest.mock("../../../utils/db", () => ({
         },
         canonicalRecording: {
             findFirst: mockCanonicalFindFirst,
+            findUnique: mockCanonicalFindUnique,
             upsert: mockCanonicalUpsert,
         },
         trackYtMusic: { upsert: mockYoutubeUpsert },
@@ -59,12 +63,35 @@ describe("default canonical identity persistence", () => {
         mockMappingCreate.mockResolvedValue({ id: "mapping-new" });
         mockMappingUpdate.mockResolvedValue({ id: "mapping-existing" });
         mockCanonicalFindFirst.mockReset();
+        mockCanonicalFindUnique.mockImplementation(
+            async ({ where }: { where: { id: string } }) => ({
+                id: where.id,
+                canonicalKey: "meta:artist:song:183",
+                mergedIntoId: null,
+                identitySource: null,
+            }),
+        );
         mockCanonicalUpsert.mockResolvedValue({
             id: "canonical-new",
             canonicalKey: "meta:artist:song:183",
         });
         mockYoutubeUpsert.mockResolvedValue({ id: "youtube-row" });
         mockTidalUpsert.mockResolvedValue({ id: "tidal-row" });
+        mockTransaction.mockImplementation(
+            async (load: (database: unknown) => Promise<unknown>) =>
+                load({
+                    trackMapping: {
+                        findFirst: mockMappingFindFirst,
+                        create: mockMappingCreate,
+                        update: mockMappingUpdate,
+                    },
+                    canonicalRecording: {
+                        findUnique: mockCanonicalFindUnique,
+                    },
+                    trackYtMusic: { upsert: mockYoutubeUpsert },
+                    trackTidal: { upsert: mockTidalUpsert },
+                }),
+        );
     });
 
     it.each([
@@ -155,6 +182,29 @@ describe("default canonical identity persistence", () => {
         expect(mockMappingCreate).not.toHaveBeenCalled();
     });
 
+    it("recovers when another request creates the provider mapping first", async () => {
+        mockMappingFindFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: "mapping-raced" });
+        mockCanonicalFindFirst.mockResolvedValue({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        mockMappingCreate.mockRejectedValueOnce({ code: "P2002" });
+
+        await expect(
+            canonicalIdentityResolver.resolve(candidate("youtube")),
+        ).resolves.toEqual({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        expect(mockMappingUpdate).toHaveBeenCalledWith({
+            where: { id: "mapping-raced" },
+            data: { canonicalRecordingId: "canonical-existing" },
+        });
+    });
+
     it.each([
         [" GB-ABC-12-34567 ", 0.95],
         [undefined, 0.72],
@@ -205,6 +255,45 @@ describe("default canonical identity persistence", () => {
             where: { id: "mapping-existing" },
             data: { canonicalRecordingId: "canonical-existing" },
         });
+    });
+
+    it("recovers a concurrent Tidal provider mapping create", async () => {
+        mockMappingFindFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: "tidal-mapping-raced" });
+        mockCanonicalFindFirst.mockResolvedValue({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        mockMappingCreate.mockRejectedValueOnce({ code: "P2002" });
+
+        await expect(
+            canonicalIdentityResolver.resolve(candidate("tidal")),
+        ).resolves.toEqual({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        expect(mockMappingUpdate).toHaveBeenCalledWith({
+            where: { id: "tidal-mapping-raced" },
+            data: { canonicalRecordingId: "canonical-existing" },
+        });
+    });
+
+    it("does not hide an unrelated provider mapping create failure", async () => {
+        mockMappingFindFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null);
+        mockCanonicalFindFirst.mockResolvedValue({
+            id: "canonical-existing",
+            canonicalKey: "meta:artist:song:183",
+        });
+        const error = new Error("database unavailable");
+        mockMappingCreate.mockRejectedValueOnce(error);
+
+        await expect(
+            canonicalIdentityResolver.resolve(candidate("youtube")),
+        ).rejects.toBe(error);
     });
 
     it("accepts a narrow imported-provider identity without exposing recommendation fields", async () => {

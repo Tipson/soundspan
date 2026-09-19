@@ -20,6 +20,36 @@ function createHarness() {
 }
 
 describe("stream proxy request abort", () => {
+    it.each(["request-aborted", "response-destroyed"])(
+        "does not start provider work after an earlier disconnect: %s",
+        async (reason) => {
+            const { req, res } = createHarness();
+            if (reason === "request-aborted") req.aborted = true;
+            else Object.defineProperty(res, "destroyed", { value: true });
+            const acquire = jest.fn(async () => "unwanted provider work");
+
+            await expect(
+                acquireAbortableStreamProxy(req, res, acquire),
+            ).resolves.toBeNull();
+            expect(acquire).not.toHaveBeenCalled();
+            expect(req.listenerCount("aborted")).toBe(0);
+            expect(res.listenerCount("close")).toBe(0);
+        },
+    );
+
+    it("does not treat an already completed response as a disconnect", () => {
+        const { req, res } = createHarness();
+        Object.defineProperty(res, "destroyed", { value: true });
+        Object.defineProperty(res, "writableEnded", { value: true });
+        const scope = createStreamProxyRequestAbort(req, res);
+        try {
+            expect(scope.signal.aborted).toBe(false);
+            expect(scope.wasClientAborted()).toBe(false);
+        } finally {
+            scope.dispose();
+        }
+    });
+
     it("aborts a pending provider request when the browser cancels playback", () => {
         const { req, res } = createHarness();
         const scope = createStreamProxyRequestAbort(req, res);

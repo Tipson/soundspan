@@ -296,11 +296,6 @@ mock.module("@/components/ui/YouTubeBadge", {
         YouTubeBadge: () => React.createElement("span", null, "YT"),
     },
 });
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => React.createElement("span", null, "TIDAL"),
-    },
-});
 
 // Mock TrackPreferenceButtons
 mock.module("@/components/player/TrackPreferenceButtons", {

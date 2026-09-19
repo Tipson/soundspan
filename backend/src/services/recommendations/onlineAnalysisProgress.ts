@@ -7,6 +7,10 @@ import { ExpiringMemo } from "../../workers/enrichmentIdlePolicy";
 const memo = new ExpiringMemo<
     Awaited<ReturnType<typeof loadOnlineAnalysisProgress>>
 >(30_000);
+const liveCanonicalRecordingWhere: Prisma.CanonicalRecordingWhereInput = {
+    mergedIntoId: null,
+    NOT: { identitySource: "identity-merged" },
+};
 
 /** Read the reservation counter, which includes denied attempts, not completions. */
 async function readBudgetChecks(now: Date): Promise<number | null> {
@@ -39,15 +43,24 @@ export async function loadOnlineAnalysisProgress(now = new Date()) {
                     select: { id: true, family: true },
                     orderBy: { createdAt: "desc" },
                 });
-                const total = await db.canonicalRecording.count();
+                const total = await db.canonicalRecording.count({
+                    where: liveCanonicalRecordingWhere,
+                });
                 const audioCompleted = await db.canonicalRecording.count({
-                    where: { analysisStatus: "completed" },
+                    where: {
+                        ...liveCanonicalRecordingWhere,
+                        analysisStatus: "completed",
+                    },
                 });
                 const audioFailed = await db.canonicalRecording.count({
-                    where: { analysisStatus: "failed" },
+                    where: {
+                        ...liveCanonicalRecordingWhere,
+                        analysisStatus: "failed",
+                    },
                 });
                 const audioLast24h = await db.canonicalRecording.count({
                     where: {
+                        ...liveCanonicalRecordingWhere,
                         analysisStatus: "completed",
                         analyzedAt: { gte: since },
                     },
@@ -56,6 +69,7 @@ export async function loadOnlineAnalysisProgress(now = new Date()) {
                 if (activeSpace) {
                     const vector = { spaceId: activeSpace.id };
                     const where: Prisma.CanonicalRecordingWhereInput = {
+                        ...liveCanonicalRecordingWhere,
                         embeddings: { some: vector },
                     };
                     const completed = await db.canonicalRecording.count({
@@ -63,12 +77,14 @@ export async function loadOnlineAnalysisProgress(now = new Date()) {
                     });
                     const failed = await db.canonicalRecording.count({
                         where: {
+                            ...liveCanonicalRecordingWhere,
                             embeddingStatus: "failed",
                             embeddings: { none: vector },
                         },
                     });
                     const completedLast24h = await db.canonicalRecording.count({
                         where: {
+                            ...liveCanonicalRecordingWhere,
                             embeddings: {
                                 some: { ...vector, analyzedAt: { gte: since } },
                             },
@@ -83,6 +99,7 @@ export async function loadOnlineAnalysisProgress(now = new Date()) {
                 }
                 const activeAssets = await db.canonicalRecording.count({
                     where: {
+                        ...liveCanonicalRecordingWhere,
                         analysisLeases: {
                             some: {
                                 status: {

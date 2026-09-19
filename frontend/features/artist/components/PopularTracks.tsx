@@ -6,7 +6,6 @@ import type { Track, Artist } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatTime } from "@/utils/formatTime";
 import { formatNumber } from "@/utils/formatNumber";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import { TrackList, LoadingBadge } from "@/components/track";
@@ -14,7 +13,10 @@ import type { TrackRowItem, TrackRowSlots, RowState } from "@/components/track";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
-import { resolvePreferenceTrackId } from "@/lib/trackRef";
+import {
+    isRetiredRemoteOnlyTrack,
+    resolvePreferenceTrackId,
+} from "@/lib/trackRef";
 import { useTrackAlbumResolutions } from "../hooks/useTrackAlbumResolutions";
 import { MusicDetailTrackSurface } from "@/components/music-detail";
 
@@ -34,22 +36,23 @@ interface PopularTracksProps {
 }
 
 function toRowItem(track: Track): TrackRowItem {
+    const hasLocalFile = Boolean(track.filePath?.trim());
+    const isYouTube =
+        track.streamSource === "youtube" && Boolean(track.youtubeVideoId);
+    const isFederatedPlayable =
+        track.source === "federated" && track.peer?.online === true;
     return {
         id: track.id,
         title: track.title,
         displayTitle: track.displayTitle,
         artistName: track.artist?.name ?? "",
         duration: track.duration,
-        streamSource:
-            track.streamSource === "tidal" || track.streamSource === "youtube"
-                ? track.streamSource
-                : undefined,
-        tidalTrackId: track.tidalTrackId,
+        streamSource: track.streamSource === "youtube" ? "youtube" : undefined,
         youtubeVideoId: track.youtubeVideoId,
         coverArtUrl: track.album?.coverArt
             ? api.getCoverArtUrl(track.album.coverArt, 80)
             : null,
-        isPlayable: track.source !== "federated" || track.peer?.online === true,
+        isPlayable: hasLocalFile || isYouTube || isFederatedPlayable,
         unplayableReason:
             track.source === "federated" && track.peer?.online === false
                 ? "peer_offline"
@@ -86,15 +89,12 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
         (track: Track, index: number) => {
             const isYtMusic =
                 track.streamSource === "youtube" && !!track.youtubeVideoId;
-            const isTidalTrack =
-                track.streamSource === "tidal" && !!track.tidalTrackId;
             const hasLocalFile =
                 typeof track.filePath === "string" &&
                 track.filePath.trim().length > 0;
             const isPlayable =
                 (track.source === "federated" && track.peer?.online === true) ||
                 hasLocalFile ||
-                isTidalTrack ||
                 isYtMusic;
 
             if (!isPlayable) return;
@@ -107,26 +107,21 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
         (track: Track, _index: number, _state: RowState): TrackRowSlots => {
             const isYtMusic =
                 track.streamSource === "youtube" && !!track.youtubeVideoId;
-            const isTidalTrack =
-                track.streamSource === "tidal" && !!track.tidalTrackId;
+            const isRetiredProvider = isRetiredRemoteOnlyTrack(track);
             const hasLocalFile =
                 typeof track.filePath === "string" &&
                 track.filePath.trim().length > 0;
             const isPlayable =
                 (track.source === "federated" && track.peer?.online === true) ||
                 hasLocalFile ||
-                isTidalTrack ||
                 isYtMusic;
-            const isUnowned =
-                !track.album?.id ||
-                !track.album?.title ||
-                track.album.title === "Unknown Album";
+            const isFederatedPlayable =
+                track.source === "federated" && track.peer?.online === true;
             const isAwaitingProviderMatch =
                 isProviderMatching &&
-                isUnowned &&
                 !hasLocalFile &&
-                !isTidalTrack &&
-                !isYtMusic;
+                !isYtMusic &&
+                !isFederatedPlayable;
 
             const preferenceTrackId = resolvePreferenceTrackId({
                 ...track,
@@ -147,7 +142,6 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
             return {
                 titleBadges: (
                     <>
-                        {isTidalTrack && <TidalBadge />}
                         {isYtMusic && <YouTubeBadge />}
                         {track.source === "federated" && track.peer && (
                             <PeerBadge
@@ -197,47 +191,50 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                 {formatTime(track.duration)}
                             </span>
                         )}
-                        <TrackPreferenceButtons
-                            trackId={preferenceTrackId}
-                            mode="both"
-                            buttonSizeClassName="h-11 w-11"
-                            iconSizeClassName="h-4 w-4"
-                            metadata={buildPreferenceMetadata({
-                                ...track,
-                                id: preferenceTrackId,
-                            })}
-                        />
-                        <TrackOverflowMenu
-                            triggerClassName="h-11 w-11 p-0"
-                            track={{
-                                id: track.id,
-                                title: track.displayTitle ?? track.title,
-                                artist: {
-                                    name: track.artist?.name ?? artist.name,
-                                    id: track.artist?.id ?? artist.id,
-                                },
-                                album: {
-                                    title: albumTitle ?? "",
-                                    id: albumId || undefined,
-                                    coverArt: track.album?.coverArt,
-                                },
-                                duration: track.duration,
-                                streamSource:
-                                    track.streamSource === "tidal" ||
-                                    track.streamSource === "youtube"
-                                        ? track.streamSource
-                                        : undefined,
-                                tidalTrackId: track.tidalTrackId,
-                                youtubeVideoId: track.youtubeVideoId,
-                                source: track.source,
-                                peer: track.peer,
-                            }}
-                            showPlayNext={isPlayable}
-                            showAddToQueue={isPlayable}
-                            showAddToPlaylist={isPlayable}
-                            showMatchVibe={isPlayable}
-                            showVibeMap={isPlayable}
-                        />
+                        {!isRetiredProvider && (
+                            <TrackPreferenceButtons
+                                trackId={preferenceTrackId}
+                                mode="both"
+                                buttonSizeClassName="h-11 w-11"
+                                iconSizeClassName="h-4 w-4"
+                                metadata={buildPreferenceMetadata({
+                                    ...track,
+                                    id: preferenceTrackId,
+                                })}
+                            />
+                        )}
+                        {!isRetiredProvider && (
+                            <TrackOverflowMenu
+                                triggerClassName="h-11 w-11 p-0"
+                                track={{
+                                    id: track.id,
+                                    title: track.displayTitle ?? track.title,
+                                    artist: {
+                                        name: track.artist?.name ?? artist.name,
+                                        id: track.artist?.id ?? artist.id,
+                                    },
+                                    album: {
+                                        title: albumTitle ?? "",
+                                        id: albumId || undefined,
+                                        coverArt: track.album?.coverArt,
+                                    },
+                                    duration: track.duration,
+                                    filePath: track.filePath,
+                                    streamSource:
+                                        track.streamSource === "youtube"
+                                            ? "youtube"
+                                            : undefined,
+                                    youtubeVideoId: track.youtubeVideoId,
+                                    source: track.source,
+                                    peer: track.peer,
+                                }}
+                                showPlayNext={isPlayable}
+                                showAddToQueue={isPlayable}
+                                showAddToPlaylist={isPlayable}
+                                showMatchVibe={isPlayable}
+                                showVibeMap={isPlayable}
+                            />
+                        )}
                     </div>
                 ),
                 rowClassName:

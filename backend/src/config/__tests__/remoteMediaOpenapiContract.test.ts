@@ -146,9 +146,11 @@ describe("remote-media OpenAPI request contracts", () => {
             "thumbnailUrl",
         ];
 
-        expect(variantProperties(schema, "tidalTrackId")).toEqual(
-            expect.arrayContaining(["tidalTrackId", ...remoteFields]),
-        );
+        expect(
+            schema.oneOf?.some((variant) =>
+                variant.required?.includes("tidalTrackId"),
+            ),
+        ).toBe(false);
         expect(variantProperties(schema, "youtubeVideoId")).toEqual(
             expect.arrayContaining(["youtubeVideoId", ...remoteFields]),
         );
@@ -156,13 +158,13 @@ describe("remote-media OpenAPI request contracts", () => {
 
     test.each([
         ["local", { trackId: "track-1" }, true],
-        ["TIDAL", tidalRequest, true],
+        ["retired TIDAL", tidalRequest, false],
         ["YouTube", youtubeRequest, true],
-        ["missing remote metadata", { tidalTrackId: 991 }, false],
+        ["missing remote metadata", { youtubeVideoId: "video-7" }, false],
         ["no identifier", { title: "No ID" }, false],
         [
             "conflicting identifiers",
-            { trackId: "track-1", ...tidalRequest },
+            { trackId: "track-1", ...youtubeRequest },
             false,
         ],
     ])("playlist add documents the %s request", (_label, payload, accepted) => {
@@ -173,7 +175,7 @@ describe("remote-media OpenAPI request contracts", () => {
 
     test.each([
         ["local", { trackId: "track-1" }, true],
-        ["TIDAL", tidalRequest, true],
+        ["retired TIDAL", tidalRequest, false],
         ["YouTube", youtubeRequest, true],
         ["missing remote metadata", { youtubeVideoId: "video-7" }, false],
         ["no identifier", {}, false],
@@ -198,9 +200,11 @@ describe("remote-media OpenAPI request contracts", () => {
             "thumbnailUrl",
         ];
 
-        expect(variantProperties(schema, "tidalTrackId")).toEqual(
-            expect.arrayContaining(["tidalTrackId", ...remoteFields]),
-        );
+        expect(
+            schema.oneOf?.some((variant) =>
+                variant.required?.includes("tidalTrackId"),
+            ),
+        ).toBe(false);
         expect(variantProperties(schema, "youtubeVideoId")).toEqual(
             expect.arrayContaining(["youtubeVideoId", ...remoteFields]),
         );

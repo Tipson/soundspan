@@ -35,9 +35,10 @@ export interface NetworkNextTrackPreloadInput {
 
 /**
  * Starts one network-backed YouTube preload as soon as the current source has
- * produced stable audible progress. At that point its own provider spool has
- * completed, so the bounded sidecar can prepare the next queue item without
- * delaying startup of the track the listener actually selected.
+ * produced stable playback progress. This does not imply its provider spool
+ * has completed: growing responses can already be playing. Sidecar admission
+ * and resource reservations, not this timing check, isolate background work
+ * from the track the listener actually selected.
  */
 export function resolveNetworkNextTrackPreloadDecision(
     input: NetworkNextTrackPreloadInput,

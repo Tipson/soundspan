@@ -8,11 +8,17 @@ import { ytMusicService, type YtMusicRadioTrack } from "../youtubeMusic";
 import {
     buildCanonicalRecordingKey,
     canonicalIdentityResolver,
+    findMappedCanonicalCandidates,
 } from "./canonicalIdentity";
 import { recommendationExposureStore } from "./exposureStore";
-import { recommendationFeatureStore } from "./featureStore";
+import {
+    recommendationFeatureStore,
+    loadSavedMoodCandidates,
+} from "./featureStore";
 import { recommendationMoodEmbeddingStore } from "./moodEmbedding";
+import { recordingLanguageStore } from "./recordingLanguageRuntime";
 import { remoteAnalysisHotSetScheduler } from "./remoteAnalysisHotSet";
+import { loadSavedCanonicalKeys } from "./savedRecordings";
 import { UnifiedRecommendationService } from "./recommendationService";
 import type { RecommendRequest, RecommendationCandidate } from "./types";
 
@@ -112,6 +118,9 @@ async function loadSimilarCandidates(request: RecommendRequest) {
 }
 
 export const unifiedRecommendationService = new UnifiedRecommendationService({
+    loadSavedCanonicalKeys,
+    loadSavedMoodCandidates,
+    prepareLanguages: (tracks) => recordingLanguageStore.prepare(tracks),
     mode: config.recommendations.mode,
     hybridRolloutPercent: config.recommendations.hybridRolloutPercent,
     explorationRate: config.recommendations.explorationRate,
@@ -124,6 +133,7 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
     loadSimilarCandidates,
     resolveCanonical: (candidate) =>
         canonicalIdentityResolver.resolve(candidate),
+    loadCanonicalMappings: findMappedCanonicalCandidates,
     enrichCandidates: (candidates) =>
         recommendationFeatureStore.enrichCandidates(candidates),
     loadRecentExposures: (userId, now) =>

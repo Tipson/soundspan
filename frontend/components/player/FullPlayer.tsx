@@ -38,6 +38,7 @@ import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { PlaybackQualityBadgeWithStats } from "./PlaybackQualityBadgeWithStats";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
+import { PlaybackReport } from "./PlaybackReport";
 import { PeerBadge } from "@/components/ui/PeerBadge";
 import { ru } from "@/lib/i18n/ru";
 
@@ -147,7 +148,7 @@ export function FullPlayer() {
             return;
         }
 
-        if (isBuffering) return;
+        if (isBuffering && !isPlaying) return;
         if (isPlaying) {
             pause();
             return;
@@ -186,13 +187,13 @@ export function FullPlayer() {
             volumeHoverTimeoutRef.current = null;
         }
         setShowVolumePopup(true);
-    }, []);
+    }, [setShowVolumePopup]);
 
     const handleVolumeMouseLeave = useCallback(() => {
         volumeHoverTimeoutRef.current = setTimeout(() => {
             setShowVolumePopup(false);
         }, 300);
-    }, []);
+    }, [setShowVolumePopup]);
 
     // Click on open space toggles overlay player on/off
     const handleBarClick = useCallback(
@@ -460,11 +461,13 @@ export function FullPlayer() {
                                             ? "bg-content/80 text-surface"
                                             : "cursor-not-allowed bg-surface-active text-content-disabled",
                                 )}
-                                disabled={!hasMedia || isBuffering}
+                                disabled={
+                                    !hasMedia || (isBuffering && !isPlaying)
+                                }
                                 aria-label={
                                     audioError
                                         ? ru.player.retry
-                                        : isBuffering
+                                        : isBuffering && !isPlaying
                                           ? ru.player.buffering
                                           : isPlaying
                                             ? ru.common.pause
@@ -473,7 +476,7 @@ export function FullPlayer() {
                                 title={
                                     audioError
                                         ? ru.player.retry
-                                        : isBuffering
+                                        : isBuffering && !isPlaying
                                           ? ru.player.buffering
                                           : isPlaying
                                             ? ru.common.pause
@@ -485,7 +488,7 @@ export function FullPlayer() {
                                 )}
                                 {audioError ? (
                                     <RefreshCw className="w-6 h-6 relative z-10" />
-                                ) : isBuffering ? (
+                                ) : isBuffering && !isPlaying ? (
                                     <Loader2 className="w-6 h-6 animate-spin relative z-10" />
                                 ) : isPlaying ? (
                                     <Pause className="w-6 h-6 relative z-10" />
@@ -603,7 +606,15 @@ export function FullPlayer() {
                                     showPlayNext={false}
                                     triggerClassName="!flex !h-10 !w-10 !items-center !justify-center !p-0 !opacity-100 text-content-muted hover:text-content"
                                     menuClassName="bottom-full top-auto mb-1 mt-0 z-[10001]"
-                                    extraItemsAfter={playerDiagnostics}
+                                    extraItemsAfter={
+                                        <>
+                                            {playerDiagnostics}
+                                            <PlaybackReport
+                                                key={currentTrack.id}
+                                                track={currentTrack}
+                                            />
+                                        </>
+                                    }
                                 />
                             )}
 
@@ -612,6 +623,19 @@ export function FullPlayer() {
                                 className="relative z-[10000] flex items-center justify-center"
                                 onMouseEnter={handleVolumeMouseEnter}
                                 onMouseLeave={handleVolumeMouseLeave}
+                                onFocus={handleVolumeMouseEnter}
+                                onBlur={(event) => {
+                                    if (
+                                        !event.currentTarget.contains(
+                                            event.relatedTarget,
+                                        )
+                                    ) {
+                                        setShowVolumePopup(false);
+                                    }
+                                }}
+                                role="group"
+                                aria-label={ru.player.volume}
+                                data-player-volume-control="desktop"
                             >
                                 <button
                                     onClick={toggleMute}
@@ -631,37 +655,39 @@ export function FullPlayer() {
 
                                 <div
                                     className={cn(
-                                        "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-1.5 py-3 bg-surface-hover border border-white/10 rounded-lg shadow-xl transition-all duration-200 overflow-hidden",
+                                        "absolute bottom-full right-0 mb-2 w-44 rounded-xl border border-white/10 bg-surface-hover p-3 shadow-xl transition-all duration-200",
                                         showVolumePopup
                                             ? "opacity-100 scale-100 pointer-events-auto"
                                             : "opacity-0 scale-95 pointer-events-none",
                                     )}
+                                    aria-hidden={!showVolumePopup}
+                                    data-player-volume-popover="horizontal"
                                 >
-                                    <div className="flex flex-col items-center gap-3 h-28">
-                                        <div className="relative h-full w-3 flex items-center justify-center overflow-hidden">
-                                            <input
-                                                type="range"
-                                                min="0"
-                                                max="100"
-                                                value={volume * 100}
-                                                onChange={handleVolumeChange}
-                                                aria-label={ru.player.volume}
-                                                aria-valuemin={0}
-                                                aria-valuemax={100}
-                                                aria-valuenow={Math.round(
-                                                    volume * 100,
-                                                )}
-                                                aria-valuetext={`${Math.round(volume * 100)} percent`}
-                                                style={{
-                                                    background: `linear-gradient(to right, var(--music-ink) ${volume * 100}%, var(--music-line-strong) ${volume * 100}%)`,
-                                                }}
-                                                className="absolute w-24 h-1 rounded-full appearance-none cursor-pointer -rotate-90 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-white/30"
-                                            />
-                                        </div>
-                                        <span className="text-[10px] text-gray-400 tabular-nums mt-0.5">
-                                            {Math.round(volume * 100)}
+                                    <div className="flex items-center justify-between gap-3 text-xs">
+                                        <span className="font-medium text-content-secondary">
+                                            {ru.player.volume}
                                         </span>
+                                        <output className="font-semibold tabular-nums text-content">
+                                            {Math.round(volume * 100)}%
+                                        </output>
                                     </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={volume * 100}
+                                        onChange={handleVolumeChange}
+                                        aria-label={ru.player.volume}
+                                        aria-valuemin={0}
+                                        aria-valuemax={100}
+                                        aria-valuenow={Math.round(volume * 100)}
+                                        aria-valuetext={`${Math.round(volume * 100)}%`}
+                                        data-orientation="horizontal"
+                                        style={{
+                                            background: `linear-gradient(to right, var(--music-ink) ${volume * 100}%, var(--music-line-strong) ${volume * 100}%)`,
+                                        }}
+                                        className="mt-3 h-1.5 w-full cursor-pointer appearance-none rounded-full [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-white/30"
+                                    />
                                 </div>
                             </div>
 

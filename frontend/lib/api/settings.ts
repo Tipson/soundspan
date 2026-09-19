@@ -28,6 +28,8 @@ export interface SystemFeatures {
     audioAnalysis: boolean;
     discovery: boolean;
     autoPlaylists: boolean;
+    /** Explicit opt-in independent Audius playback catalog; older servers omit it. */
+    audius?: boolean;
     federation: boolean;
     vibe: VibeSystemStatus;
     /** Loudness normalization reference in LUFS (LOUDNESS_TARGET_LUFS). */

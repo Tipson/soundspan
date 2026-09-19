@@ -1,230 +1,39 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-    AudioWaveform,
-    Loader2,
-    Pause,
-    Play,
-    RotateCcw,
-    SkipForward,
-} from "lucide-react";
+import { AudioWaveform, Loader2, Pause, Play, RotateCcw } from "lucide-react";
 import { usePersonalizedHomeFeed } from "@/features/home/hooks/usePersonalizedHomeFeed";
+import { selectWaveTracks } from "@/features/home/selectWaveTracks";
 import type {
-    PersonalizedHomeMode,
     PersonalizedHomeMood,
-    PersonalizedTrack,
+    PersonalizedHomeLanguage,
 } from "@/features/home/types";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAuth } from "@/lib/auth-context";
-import { BRAND_SLUG } from "@/lib/brand";
+import { useWaveStartWarmup } from "@/hooks/useWaveStartWarmup";
 import { usePlaybackStatus } from "@/lib/audio-playback-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { isListenTogetherActiveOrPending } from "@/lib/listen-together-session";
 import { api } from "@/lib/api";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
 import { ru } from "@/lib/i18n/ru";
-import { NowPlayingConnected } from "./NowPlayingConnected";
+import {
+    persistWaveSelection,
+    readWaveSelection,
+    replaceWaveSelection,
+    type WaveSelectionMode,
+} from "@/lib/waveSelection";
 import { VibeAmbientMotion } from "./VibeAmbientMotion";
 import {
     WaveDirectionSheet,
     WAVE_MOODS,
     WAVE_MODES,
+    WAVE_LANGUAGES,
     type WaveFeedMode,
     type WaveMood,
 } from "./WaveDirectionSheet";
 
-type SupportedPersonalizedMode = Extract<PersonalizedHomeMode, WaveFeedMode>;
-
-const WAVE_MODE_IDS = new Set<WaveFeedMode>(["for-you", "new", "familiar"]);
-const WAVE_MOOD_IDS = new Set<PersonalizedHomeMood>([
-    "calm",
-    "energetic",
-    "focus",
-    "workout",
-    "favorites",
-    "forgotten",
-]);
-const WAVE_SELECTION_KEY_PREFIX = `${BRAND_SLUG}_wave_selection_v1`;
-
-function waveSelectionStorageKey(ownerId: string): string {
-    return `${WAVE_SELECTION_KEY_PREFIX}:${encodeURIComponent(ownerId)}`;
-}
-
-function readPersistedWaveSelection(ownerId: string | null): {
-    mode: SupportedPersonalizedMode;
-    mood: PersonalizedHomeMood | null;
-} {
-    if (!ownerId || typeof window === "undefined") {
-        return { mode: "for-you", mood: null };
-    }
-    try {
-        const raw = window.localStorage.getItem(
-            waveSelectionStorageKey(ownerId),
-        );
-        if (!raw) return { mode: "for-you", mood: null };
-        const parsed = JSON.parse(raw) as { mode?: unknown; mood?: unknown };
-        return {
-            mode:
-                typeof parsed.mode === "string" &&
-                WAVE_MODE_IDS.has(parsed.mode as WaveFeedMode)
-                    ? (parsed.mode as SupportedPersonalizedMode)
-                    : "for-you",
-            mood:
-                typeof parsed.mood === "string" &&
-                WAVE_MOOD_IDS.has(parsed.mood as PersonalizedHomeMood)
-                    ? (parsed.mood as PersonalizedHomeMood)
-                    : null,
-        };
-    } catch {
-        return { mode: "for-you", mood: null };
-    }
-}
-
-function persistWaveSelection(
-    ownerId: string | null,
-    mode: WaveFeedMode,
-    mood: WaveMood | null,
-): void {
-    if (!ownerId || typeof window === "undefined") return;
-    try {
-        window.localStorage.setItem(
-            waveSelectionStorageKey(ownerId),
-            JSON.stringify({ mode, mood }),
-        );
-    } catch {
-        // The applied in-memory selection remains usable in restricted storage.
-    }
-}
-
-function readWaveSelection(ownerId: string | null): {
-    mode: SupportedPersonalizedMode;
-    mood: PersonalizedHomeMood | null;
-} {
-    const persisted = readPersistedWaveSelection(ownerId);
-    if (typeof window === "undefined") return persisted;
-    const params = new URLSearchParams(window.location.search);
-    const requestedMode = params.get("mode");
-    const requestedMood = params.get("mood");
-    const hasModeOverride = params.has("mode");
-    const hasMoodOverride = params.has("mood");
-    return {
-        mode:
-            requestedMode && WAVE_MODE_IDS.has(requestedMode as WaveFeedMode)
-                ? (requestedMode as SupportedPersonalizedMode)
-                : persisted.mode,
-        mood:
-            hasMoodOverride &&
-            requestedMood &&
-            WAVE_MOOD_IDS.has(requestedMood as PersonalizedHomeMood)
-                ? (requestedMood as PersonalizedHomeMood)
-                : hasModeOverride || hasMoodOverride
-                  ? null
-                  : persisted.mood,
-    };
-}
-
-function replaceWaveSelection(
-    mode: WaveFeedMode,
-    mood: PersonalizedHomeMood | null,
-): void {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("mode", mode);
-    if (mood) url.searchParams.set("mood", mood);
-    else url.searchParams.delete("mood");
-    window.history.replaceState(window.history.state, "", url);
-}
-
-function uniqueTracks(tracks: readonly PersonalizedTrack[]) {
-    const seen = new Set<string>();
-    return tracks.filter((track) => {
-        const key = track.youtubeVideoId || track.id;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-}
-
-function balancedUniqueTracks(
-    shelves: readonly (readonly PersonalizedTrack[])[],
-): PersonalizedTrack[] {
-    const positions = shelves.map(() => 0);
-    const seen = new Set<string>();
-    const result: PersonalizedTrack[] = [];
-    let addedTrack = true;
-
-    while (addedTrack) {
-        addedTrack = false;
-        shelves.forEach((shelf, shelfIndex) => {
-            while (positions[shelfIndex] < shelf.length) {
-                const track = shelf[positions[shelfIndex]];
-                positions[shelfIndex] += 1;
-                const key = track.youtubeVideoId || track.id;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                result.push(track);
-                addedTrack = true;
-                break;
-            }
-        });
-    }
-
-    return result;
-}
-
-function mixSparseRecentTracks(
-    freshTracks: readonly PersonalizedTrack[],
-    recentTracks: readonly PersonalizedTrack[],
-): PersonalizedTrack[] {
-    const fresh = uniqueTracks(freshTracks);
-    if (fresh.length === 0) return uniqueTracks(recentTracks);
-
-    const freshKeys = new Set(
-        fresh.map((track) => track.youtubeVideoId || track.id),
-    );
-    const recent = uniqueTracks(recentTracks).filter(
-        (track) => !freshKeys.has(track.youtubeVideoId || track.id),
-    );
-    const recentLimit = Math.min(recent.length, Math.floor(fresh.length / 5));
-    if (recentLimit === 0) return fresh;
-
-    const result: PersonalizedTrack[] = [];
-    let recentIndex = 0;
-    fresh.forEach((track, index) => {
-        result.push(track);
-        if ((index + 1) % 5 === 0 && recentIndex < recentLimit) {
-            result.push(recent[recentIndex]);
-            recentIndex += 1;
-        }
-    });
-    return result;
-}
-
-function selectWaveTracks(
-    shelves:
-        | {
-              quickPicks: PersonalizedTrack[];
-              discovery: PersonalizedTrack[];
-              listenAgain: PersonalizedTrack[];
-          }
-        | undefined,
-    mode: WaveFeedMode,
-): PersonalizedTrack[] {
-    if (!shelves) return [];
-    if (mode === "new") return uniqueTracks(shelves.discovery);
-    if (mode === "familiar") {
-        return uniqueTracks(
-            shelves.listenAgain.length > 0
-                ? shelves.listenAgain
-                : shelves.quickPicks,
-        );
-    }
-    return mixSparseRecentTracks(
-        balancedUniqueTracks([shelves.quickPicks, shelves.discovery]),
-        shelves.listenAgain,
-    );
-}
+type SupportedPersonalizedMode = WaveSelectionMode;
 
 // A Wave retune can fan out into several provider radio requests and a fresh
 // stream extraction. Keep rapid successive Apply actions latest-wins before
@@ -243,6 +52,10 @@ export function VibeProviderFallback() {
     );
     const [requestedMode, setRequestedMode] =
         useState<SupportedPersonalizedMode>("for-you");
+    const [activeLanguage, setActiveLanguage] =
+        useState<PersonalizedHomeLanguage>("any");
+    const [requestedLanguage, setRequestedLanguage] =
+        useState<PersonalizedHomeLanguage>("any");
     const [requestedMood, setRequestedMood] =
         useState<PersonalizedHomeMood | null>(null);
     const [isTuneOpen, setIsTuneOpen] = useState(false);
@@ -255,15 +68,17 @@ export function VibeProviderFallback() {
     const [pendingRetune, setPendingRetune] = useState<{
         mode: WaveFeedMode;
         mood: WaveMood | null;
+        language: PersonalizedHomeLanguage;
         generation: number;
     } | null>(null);
-    const { advanceQueue, pause, play, playTracks } = useAudioControls();
+    const { pause, play, playTracks } = useAudioControls();
     const { isPlaying } = usePlaybackStatus();
     const {
         currentTrack,
         vibeMode,
         waveMode,
         waveMood,
+        waveLanguage = "any",
         setIsShuffle,
         setShuffleIndices,
         setVibeMode,
@@ -271,6 +86,7 @@ export function VibeProviderFallback() {
         setVibeSourceFeatures,
         setWaveMode,
         setWaveMood,
+        setWaveLanguage,
     } = useAudioState();
     const { data, isLoading, isError, refetch } = usePersonalizedHomeFeed(
         12,
@@ -278,6 +94,7 @@ export function VibeProviderFallback() {
         requestedMode,
         requestedMood,
         "wave",
+        requestedLanguage,
     );
 
     useEffect(() => {
@@ -294,7 +111,9 @@ export function VibeProviderFallback() {
             const selection = readWaveSelection(ownerId);
             const shouldRetuneActiveWave =
                 vibeMode &&
-                (selection.mode !== waveMode || selection.mood !== waveMood);
+                (selection.mode !== waveMode ||
+                    selection.mood !== waveMood ||
+                    selection.language !== waveLanguage);
             if (shouldRetuneActiveWave) {
                 retuneGenerationRef.current += 1;
                 setPendingRetune({
@@ -305,18 +124,30 @@ export function VibeProviderFallback() {
                 setPendingRetune(null);
                 setRequestedMode(selection.mode);
                 setRequestedMood(selection.mood);
+                setRequestedLanguage(selection.language);
             }
             setActiveMode(selection.mode);
             setActiveMood(selection.mood);
+            setActiveLanguage(selection.language);
             if (!shouldRetuneActiveWave) {
                 setWaveMode(selection.mode);
                 setWaveMood(selection.mood);
+                setWaveLanguage(selection.language);
             }
         });
         return () => {
             mounted = false;
         };
-    }, [ownerId, setWaveMode, setWaveMood, vibeMode, waveMode, waveMood]);
+    }, [
+        ownerId,
+        setWaveMode,
+        setWaveMood,
+        setWaveLanguage,
+        vibeMode,
+        waveMode,
+        waveMood,
+        waveLanguage,
+    ]);
     useEffect(() => {
         if (!pendingRetune) return;
         const generation = pendingRetune.generation;
@@ -324,6 +155,7 @@ export function VibeProviderFallback() {
             if (retuneGenerationRef.current !== generation) return;
             setRequestedMode(pendingRetune.mode);
             setRequestedMood(pendingRetune.mood);
+            setRequestedLanguage(pendingRetune.language);
         }, RETUNE_REQUEST_DEBOUNCE_MS);
         return () => window.clearTimeout(timeout);
     }, [pendingRetune]);
@@ -332,6 +164,15 @@ export function VibeProviderFallback() {
         [data?.shelves, requestedMode],
     );
     const queue = useMemo(() => tracks.map(toProviderPlaybackTrack), [tracks]);
+    const handoffStartWarmup = useWaveStartWarmup(
+        tracks[0]?.youtubeVideoId ?? null,
+        Boolean(ownerId) &&
+            !isPlaying &&
+            !vibeMode &&
+            !isLoading &&
+            !isError &&
+            !isListenTogetherActiveOrPending(),
+    );
 
     useEffect(() => {
         if (!pendingRetune) return;
@@ -343,6 +184,7 @@ export function VibeProviderFallback() {
             pendingRetune.generation !== retuneGenerationRef.current ||
             pendingRetune.mode !== requestedMode ||
             pendingRetune.mood !== requestedMood ||
+            pendingRetune.language !== requestedLanguage ||
             isLoading
         ) {
             return;
@@ -385,6 +227,7 @@ export function VibeProviderFallback() {
         setVibeQueueIds(retunedQueue.map((track) => track.id));
         setWaveMode(pendingRetune.mode);
         setWaveMood(pendingRetune.mood);
+        setWaveLanguage(pendingRetune.language);
         queueMicrotask(() => setRetuneNotice("updated"));
     }, [
         currentTrack?.id,
@@ -395,6 +238,7 @@ export function VibeProviderFallback() {
         queue,
         requestedMode,
         requestedMood,
+        requestedLanguage,
         setIsShuffle,
         setShuffleIndices,
         setVibeMode,
@@ -402,6 +246,7 @@ export function VibeProviderFallback() {
         setVibeSourceFeatures,
         setWaveMode,
         setWaveMood,
+        setWaveLanguage,
         vibeMode,
     ]);
     useEffect(() => {
@@ -500,17 +345,21 @@ export function VibeProviderFallback() {
         }
         setWaveMode(activeMode);
         setWaveMood(activeMood);
+        setWaveLanguage(activeLanguage);
         setIsShuffle(false);
         setShuffleIndices([]);
+        handoffStartWarmup();
         playTracks(queue, 0, true);
         setVibeMode(true);
         setVibeSourceFeatures(null);
         setVibeQueueIds(queue.map((track) => track.id));
     }, [
+        handoffStartWarmup,
         playTracks,
         queue,
         activeMode,
         activeMood,
+        activeLanguage,
         setVibeMode,
         setVibeQueueIds,
         setVibeSourceFeatures,
@@ -518,6 +367,7 @@ export function VibeProviderFallback() {
         setShuffleIndices,
         setWaveMode,
         setWaveMood,
+        setWaveLanguage,
     ]);
     const hasActiveWave = vibeMode && currentTrack !== null;
     const toggleWavePlayback = useCallback(() => {
@@ -535,36 +385,48 @@ export function VibeProviderFallback() {
         queueMicrotask(() => tuneButtonRef.current?.focus());
     }, []);
     const applyDirection = useCallback(
-        (mode: WaveFeedMode, mood: WaveMood | null) => {
+        (
+            mode: WaveFeedMode,
+            mood: WaveMood | null,
+            language: PersonalizedHomeLanguage,
+        ) => {
             const shouldRetune =
-                vibeMode && (mode !== waveMode || mood !== waveMood);
+                vibeMode &&
+                (mode !== waveMode ||
+                    mood !== waveMood ||
+                    language !== waveLanguage);
             const shouldRefetchPending =
                 shouldRetune &&
                 pendingRetune?.mode === mode &&
-                pendingRetune.mood === mood;
+                pendingRetune.mood === mood &&
+                pendingRetune.language === language;
             if (shouldRetune) {
                 retuneGenerationRef.current += 1;
                 setPendingRetune({
                     mode,
                     mood,
+                    language,
                     generation: retuneGenerationRef.current,
                 });
             } else {
                 setPendingRetune(null);
                 setRequestedMode(mode);
                 setRequestedMood(mood);
+                setRequestedLanguage(language);
             }
             if (shouldRetune) setRetuneNotice(null);
             else if (!vibeMode) setRetuneNotice("saved");
             else setRetuneNotice(null);
             setActiveMode(mode);
             setActiveMood(mood);
+            setActiveLanguage(language);
             if (!vibeMode) {
                 setWaveMode(mode);
                 setWaveMood(mood);
+                setWaveLanguage(language);
             }
-            persistWaveSelection(ownerId, mode, mood);
-            replaceWaveSelection(mode, mood);
+            persistWaveSelection(ownerId, mode, mood, language);
+            replaceWaveSelection(mode, mood, language);
             setIsTuneOpen(false);
             queueMicrotask(() => tuneButtonRef.current?.focus());
             if (shouldRefetchPending) void refetch();
@@ -575,9 +437,11 @@ export function VibeProviderFallback() {
             refetch,
             setWaveMode,
             setWaveMood,
+            setWaveLanguage,
             vibeMode,
             waveMode,
             waveMood,
+            waveLanguage,
         ],
     );
 
@@ -589,6 +453,7 @@ export function VibeProviderFallback() {
     return (
         <main
             data-wave-mode={activeMode}
+            data-wave-language={activeLanguage}
             className={`relative h-full min-h-0 overflow-hidden bg-surface px-0 pt-0 ${currentTrack ? "pb-[calc(var(--app-mini-player-height)+var(--app-bottom-nav-height)+var(--safe-area-bottom)+4px)]" : "pb-[calc(var(--app-bottom-nav-height)+var(--safe-area-bottom))]"} sm:p-3 lg:p-5`}
         >
             <style>{`
@@ -790,9 +655,14 @@ export function VibeProviderFallback() {
                             type="button"
                             onClick={toggleWavePlayback}
                             disabled={!hasActiveWave && !canPlay}
-                            aria-label={primaryControlLabel}
+                            aria-label={
+                                !hasActiveWave && isLoading
+                                    ? ru.vibe.tuning
+                                    : primaryControlLabel
+                            }
+                            aria-busy={!hasActiveWave && isLoading}
                             aria-pressed={hasActiveWave && isPlaying}
-                            className="wave-density-toggle group relative z-10 flex h-28 min-h-20 w-28 min-w-20 flex-col items-center justify-center gap-1.5 rounded-full bg-white px-4 text-center text-sm font-black text-black shadow-2xl shadow-black/40 transition-[transform,background-color,box-shadow] duration-200 ease-out hover:scale-[1.035] hover:bg-brand-light hover:shadow-brand/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-transparent disabled:scale-100 disabled:bg-white/15 disabled:text-content-muted motion-reduce:transition-none sm:h-32 sm:w-32 sm:text-base"
+                            className={`wave-density-toggle group relative z-10 flex h-28 min-h-20 w-28 min-w-20 flex-col items-center justify-center gap-1.5 rounded-full bg-white px-4 text-center text-sm font-black text-black shadow-2xl shadow-black/40 transition-[transform,background-color,box-shadow] duration-200 ease-out hover:scale-[1.035] hover:bg-brand-light hover:shadow-brand/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-transparent disabled:scale-100 motion-reduce:transition-none sm:h-32 sm:w-32 sm:text-base ${!hasActiveWave && isLoading ? "disabled:bg-white/85 disabled:text-black" : "disabled:bg-white/20 disabled:text-content-secondary"}`}
                         >
                             {!hasActiveWave && isLoading ? (
                                 <Loader2
@@ -810,12 +680,26 @@ export function VibeProviderFallback() {
                                     aria-hidden="true"
                                 />
                             )}
-                            <span className="max-w-full leading-[1.05] [text-wrap:balance]">
+                            <span
+                                data-testid="wave-main-label"
+                                className="max-w-full whitespace-nowrap leading-[1.05]"
+                            >
                                 {!hasActiveWave && isLoading
-                                    ? ru.vibe.tuning
-                                    : primaryControlLabel}
+                                    ? "Загрузка…"
+                                    : hasActiveWave && isPlaying
+                                      ? "Пауза"
+                                      : "Слушать"}
                             </span>
                         </button>
+                        {!hasActiveWave && isLoading && (
+                            <span
+                                data-testid="wave-loading-status"
+                                role="status"
+                                className="sr-only"
+                            >
+                                {ru.vibe.tuning}
+                            </span>
+                        )}
                     </div>
 
                     <div
@@ -839,6 +723,17 @@ export function VibeProviderFallback() {
                             <span className="font-medium text-content-secondary">
                                 {activeMoodDefinition.label}
                             </span>
+                            {activeLanguage !== "any" && (
+                                <span>
+                                    ·{" "}
+                                    {
+                                        WAVE_LANGUAGES.find(
+                                            (item) =>
+                                                item.id === activeLanguage,
+                                        )?.label
+                                    }
+                                </span>
+                            )}
                         </p>
                         <button
                             ref={tuneButtonRef}
@@ -891,9 +786,17 @@ export function VibeProviderFallback() {
                             role={isError ? "alert" : "status"}
                         >
                             <p>
-                                {isError ? ru.vibe.loadFailed : ru.vibe.empty}
+                                {isError
+                                    ? ru.vibe.loadFailed
+                                    : requestedLanguage !== "any"
+                                      ? data?.languageStatus?.pending
+                                          ? "Определяем язык подходящих вам треков. Повторите чуть позже или выберите «Любое»."
+                                          : "Пока нет подходящих треков с этим языком. Попробуйте «Любое»."
+                                      : requestedMood
+                                        ? "Пока мало подходящих треков для этого настроения. Попробуйте «На своей волне» или вернитесь позже."
+                                        : ru.vibe.empty}
                             </p>
-                            {isError && (
+                            {(isError || requestedLanguage !== "any") && (
                                 <button
                                     type="button"
                                     onClick={
@@ -914,145 +817,13 @@ export function VibeProviderFallback() {
                         </div>
                     )}
                 </div>
-
-                {hasActiveWave && (currentTrack || nextTracks.length > 0) && (
-                    <div className="wave-density-bottom wave-material relative hidden shrink-0 border-t border-white/10 bg-black/30 px-4 py-4 backdrop-blur-2xl min-[900px]:block min-[1025px]:px-8">
-                        <div className="wave-density-bottom-grid mx-auto grid max-w-6xl gap-4 min-[900px]:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)] min-[900px]:items-center">
-                            {currentTrack ? (
-                                <section
-                                    data-testid="wave-now-playing-panel"
-                                    aria-labelledby="wave-now-playing-title"
-                                    className="wave-density-now min-w-0 rounded-2xl bg-white/[0.045] p-3 sm:p-4"
-                                >
-                                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
-                                        <div className="min-w-0">
-                                            <h2
-                                                id="wave-now-playing-title"
-                                                className="text-xs font-bold uppercase tracking-[0.16em] text-brand-light"
-                                            >
-                                                {ru.vibe.nowPlaying}
-                                            </h2>
-                                            <p className="mt-1 text-xs text-content-muted">
-                                                {ru.vibe.feedbackHint}
-                                            </p>
-                                        </div>
-                                        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
-                                            <NowPlayingConnected
-                                                track={currentTrack}
-                                                onMapPresent={false}
-                                                moodColor={null}
-                                                onFlyTo={() => undefined}
-                                                appearance="wave"
-                                                showPlaybackToggle={false}
-                                            />
-                                            <button
-                                                data-testid="wave-skip"
-                                                type="button"
-                                                onClick={() =>
-                                                    advanceQueue("manual")
-                                                }
-                                                aria-label={ru.vibe.skipAria}
-                                                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-content-body transition-[transform,background-color,border-color] duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
-                                            >
-                                                <SkipForward
-                                                    className="h-4 w-4"
-                                                    aria-hidden="true"
-                                                />
-                                                {ru.vibe.skip}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </section>
-                            ) : (
-                                <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-left">
-                                    <p className="text-sm font-semibold text-content">
-                                        {ru.vibe.ready}
-                                    </p>
-                                    <p className="mt-1 text-xs leading-5 text-content-muted">
-                                        {ru.vibe.readyDescription}
-                                    </p>
-                                </div>
-                            )}
-
-                            {nextTracks.length > 0 && (
-                                <aside
-                                    data-testid="wave-next-preview"
-                                    aria-label={ru.vibe.upNextAria}
-                                    className="min-w-0"
-                                >
-                                    <div className="flex items-baseline justify-between gap-3">
-                                        <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-content-body">
-                                            {hasActiveWave
-                                                ? ru.vibe.upNext
-                                                : ru.vibe.startsHere}
-                                        </h2>
-                                        <span className="text-xs text-content-muted">
-                                            {ru.vibe.keepsGoing}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 grid gap-1.5">
-                                        {nextTracks.map((track) => {
-                                            const rawCover =
-                                                track.album?.coverArt ?? null;
-                                            const cover =
-                                                rawCover &&
-                                                !rawCover.startsWith("/") &&
-                                                !rawCover.startsWith("data:") &&
-                                                !rawCover.startsWith("blob:")
-                                                    ? api.getCoverArtUrl(
-                                                          rawCover,
-                                                          96,
-                                                      )
-                                                    : rawCover;
-                                            return (
-                                                <div
-                                                    key={track.id}
-                                                    className="wave-density-next-row flex min-w-0 items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/[0.04]"
-                                                >
-                                                    {cover ? (
-                                                        // eslint-disable-next-line @next/next/no-img-element
-                                                        <img
-                                                            src={cover}
-                                                            alt=""
-                                                            loading="lazy"
-                                                            className="h-9 w-9 shrink-0 rounded-lg object-cover"
-                                                        />
-                                                    ) : (
-                                                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.07] text-content-muted">
-                                                            <AudioWaveform
-                                                                className="h-4 w-4"
-                                                                aria-hidden="true"
-                                                            />
-                                                        </span>
-                                                    )}
-                                                    <span className="min-w-0">
-                                                        <span className="block truncate text-sm font-semibold text-content">
-                                                            {track.title}
-                                                        </span>
-                                                        {track.artist?.name && (
-                                                            <span className="block truncate text-xs text-content-muted">
-                                                                {
-                                                                    track.artist
-                                                                        .name
-                                                                }
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </aside>
-                            )}
-                        </div>
-                    </div>
-                )}
             </section>
 
             {isTuneOpen && (
                 <WaveDirectionSheet
                     activeMode={activeMode}
                     activeMood={activeMood}
+                    activeLanguage={activeLanguage}
                     isWaveActive={vibeMode}
                     isRetunePending={Boolean(pendingRetune)}
                     onApply={applyDirection}

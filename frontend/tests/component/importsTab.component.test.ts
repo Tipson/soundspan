@@ -11,8 +11,11 @@ GlobalRegistrator.register();
 let jobsResponse: Array<Record<string, unknown>> = [];
 let listCalls = 0;
 let retryCalls: string[] = [];
+let cancelCalls = 0;
 let pushedRoutes: string[] = [];
 let listImportJobsImpl = async () => ({ jobs: jobsResponse });
+let cancelImportJobImpl = async () => ({});
+let retryImportJobImpl = async (_jobId: string) => ({ job: jobsResponse[0] });
 
 mock.module("@/lib/api", {
     namedExports: {
@@ -21,10 +24,13 @@ mock.module("@/lib/api", {
                 listCalls += 1;
                 return listImportJobsImpl();
             },
-            cancelImportJob: async () => ({}),
+            cancelImportJob: async () => {
+                cancelCalls += 1;
+                return cancelImportJobImpl();
+            },
             retryImportJob: async (jobId: string) => {
                 retryCalls.push(jobId);
-                return { job: jobsResponse[0] };
+                return retryImportJobImpl(jobId);
             },
         },
     },
@@ -64,8 +70,11 @@ beforeEach(() => {
     jobsResponse = [];
     listCalls = 0;
     retryCalls = [];
+    cancelCalls = 0;
     pushedRoutes = [];
     listImportJobsImpl = async () => ({ jobs: jobsResponse });
+    cancelImportJobImpl = async () => ({});
+    retryImportJobImpl = async (_jobId: string) => ({ job: jobsResponse[0] });
     document.body.replaceChildren();
 });
 
@@ -177,6 +186,139 @@ async function flushAsync(): Promise<void> {
     await React.act(async () => {
         await Promise.resolve();
         await Promise.resolve();
+    });
+}
+
+test("a failed initial read is not presented as an empty import history and can be retried", async () => {
+    listImportJobsImpl = async () => {
+        throw new Error("network failure");
+    };
+    const { ImportsTab } = await import("../../components/activity/ImportsTab");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+        await React.act(async () =>
+            root.render(React.createElement(ImportsTab)),
+        );
+        await flushAsync();
+        assert.match(
+            container.querySelector('[role="alert"]')?.textContent ?? "",
+            /Не удалось обновить импорты/,
+        );
+        assert.doesNotMatch(container.textContent ?? "", /Импортов пока нет/);
+        const retry = [...container.querySelectorAll("button")].find((button) =>
+            button.textContent?.includes("Обновить"),
+        );
+        assert.ok(retry);
+        listImportJobsImpl = async () => ({ jobs: [] });
+        await React.act(async () => retry.click());
+        await flushAsync();
+        assert.equal(container.querySelector('[role="alert"]'), null);
+        assert.match(container.textContent ?? "", /Импортов пока нет/);
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});
+
+test("a failed refresh preserves the last known playlist and marks progress as stale", async () => {
+    jobsResponse = [
+        {
+            id: "job-last-known",
+            status: "completed",
+            playlistName: "Сохранённый плейлист",
+            sourceType: "spotify",
+            progress: 100,
+            summary: { total: 10, unresolved: 2 },
+            createdPlaylistId: "saved",
+            createdAt: "2026-09-05T00:00:00.000Z",
+        },
+    ];
+    const { ImportsTab } = await import("../../components/activity/ImportsTab");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+        await React.act(async () =>
+            root.render(React.createElement(ImportsTab)),
+        );
+        await flushAsync();
+        listImportJobsImpl = async () => {
+            throw new Error("offline");
+        };
+        window.dispatchEvent(new CustomEvent("import-jobs-changed"));
+        await flushAsync();
+        assert.match(container.textContent ?? "", /Сохранённый плейлист/);
+        assert.match(container.textContent ?? "", /8 готово/);
+        assert.match(
+            container.querySelector('[role="alert"]')?.textContent ?? "",
+            /последние полученные данные/,
+        );
+    } finally {
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});
+
+for (const operation of ["cancel", "retry"] as const) {
+    test(`a rejected ${operation} action stays visible and is recoverable`, async () => {
+        jobsResponse = [
+            {
+                id: "job-action",
+                status: operation === "cancel" ? "resolving" : "completed",
+                playlistName: "Импорт",
+                sourceType: "spotify",
+                progress: 50,
+                summary: { total: 10, unresolved: 5 },
+                createdAt: "2026-09-05T00:00:00.000Z",
+            },
+        ];
+        const fail = async (): Promise<never> => {
+            throw new Error("private upstream details");
+        };
+        if (operation === "cancel") cancelImportJobImpl = fail;
+        else retryImportJobImpl = fail;
+        const { ImportsTab } =
+            await import("../../components/activity/ImportsTab");
+        const { createRoot } = await import("react-dom/client");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const root = createRoot(container);
+        try {
+            await React.act(async () =>
+                root.render(React.createElement(ImportsTab)),
+            );
+            await flushAsync();
+            const label =
+                operation === "cancel" ? "Отменить" : "Повторить поиск";
+            const button = [...container.querySelectorAll("button")].find((b) =>
+                b.textContent?.includes(label),
+            );
+            assert.ok(button);
+            await React.act(async () => button.click());
+            await flushAsync();
+            assert.match(
+                container.querySelector('[role="alert"]')?.textContent ?? "",
+                operation === "cancel"
+                    ? /Не удалось отменить импорт/
+                    : /Не удалось повторить поиск/,
+            );
+            assert.doesNotMatch(
+                container.textContent ?? "",
+                /private upstream details/,
+            );
+            cancelImportJobImpl = async () => ({});
+            retryImportJobImpl = async () => ({ job: jobsResponse[0] });
+            await React.act(async () => button.click());
+            await flushAsync();
+            assert.equal(container.querySelector('[role="alert"]'), null);
+        } finally {
+            await React.act(async () => root.unmount());
+            container.remove();
+        }
     });
 }
 
@@ -327,6 +469,168 @@ test("queues a fresh event refresh until the in-flight job request settles", asy
     } finally {
         initial.resolve({ jobs: [] });
         refresh.resolve({ jobs: [] });
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});
+
+test("keeps a successful in-chain snapshot when its queued newer refresh fails", async () => {
+    let finish!: (value: { jobs: Array<Record<string, unknown>> }) => void;
+    const initial = new Promise<{ jobs: Array<Record<string, unknown>> }>(
+        (resolve) => {
+            finish = resolve;
+        },
+    );
+    listImportJobsImpl = async () => {
+        if (listCalls === 1) return initial;
+        throw new Error("queued refresh failed");
+    };
+    const { ImportsTab } = await import("../../components/activity/ImportsTab");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+        await React.act(async () =>
+            root.render(React.createElement(ImportsTab)),
+        );
+        window.dispatchEvent(new CustomEvent("import-jobs-changed"));
+        await flushAsync();
+        finish({
+            jobs: [
+                {
+                    id: "latest-success",
+                    status: "completed",
+                    playlistName: "Полученный плейлист",
+                    sourceType: "spotify",
+                    progress: 100,
+                    summary: { total: 10, unresolved: 0 },
+                    createdAt: "2026-09-05T00:00:00.000Z",
+                },
+            ],
+        });
+        await flushAsync();
+        assert.equal(listCalls, 2);
+        assert.match(container.textContent ?? "", /Полученный плейлист/);
+        assert.match(
+            container.querySelector('[role="alert"]')?.textContent ?? "",
+            /последние полученные данные/,
+        );
+    } finally {
+        finish({ jobs: [] });
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});
+
+for (const operation of ["cancel", "retry"] as const) {
+    test(`${operation} admits only one request per job during rapid repeated clicks`, async () => {
+        let finish!: () => void;
+        const pending = new Promise<void>((resolve) => {
+            finish = resolve;
+        });
+        cancelImportJobImpl = async () => {
+            await pending;
+            return {};
+        };
+        retryImportJobImpl = async () => {
+            await pending;
+            return { job: jobsResponse[0] };
+        };
+        jobsResponse = [
+            {
+                id: "single-action",
+                status: operation === "cancel" ? "resolving" : "completed",
+                playlistName: "Импорт",
+                sourceType: "spotify",
+                progress: 50,
+                summary: { total: 10, unresolved: 5 },
+                createdAt: "2026-09-05T00:00:00.000Z",
+            },
+        ];
+        const { ImportsTab } =
+            await import("../../components/activity/ImportsTab");
+        const { createRoot } = await import("react-dom/client");
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const root = createRoot(container);
+        try {
+            await React.act(async () =>
+                root.render(React.createElement(ImportsTab)),
+            );
+            await flushAsync();
+            const label =
+                operation === "cancel" ? "Отменить" : "Повторить поиск";
+            const button = [...container.querySelectorAll("button")].find((b) =>
+                b.textContent?.includes(label),
+            );
+            assert.ok(button);
+            await React.act(async () => {
+                button.click();
+                button.click();
+            });
+            assert.equal(
+                operation === "cancel" ? cancelCalls : retryCalls.length,
+                1,
+            );
+            assert.equal(button.disabled, true);
+            finish();
+            await flushAsync();
+            assert.equal(button.disabled, false);
+            assert.equal(container.querySelector('[role="alert"]'), null);
+        } finally {
+            finish();
+            await React.act(async () => root.unmount());
+            container.remove();
+        }
+    });
+}
+
+test("actions for distinct jobs remain independent", async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+    });
+    cancelImportJobImpl = async () => {
+        await pending;
+        return {};
+    };
+    jobsResponse = ["first", "second"].map((id) => ({
+        id,
+        status: "resolving",
+        playlistName: `Импорт ${id}`,
+        sourceType: "spotify",
+        progress: 50,
+        summary: null,
+        createdAt: "2026-09-05T00:00:00.000Z",
+    }));
+    const { ImportsTab } = await import("../../components/activity/ImportsTab");
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+        await React.act(async () =>
+            root.render(React.createElement(ImportsTab)),
+        );
+        await flushAsync();
+        const buttons = [...container.querySelectorAll("button")].filter(
+            (button) => button.textContent?.includes("Отменить"),
+        );
+        assert.equal(buttons.length, 2);
+        await React.act(async () => {
+            buttons[0].click();
+            buttons[1].click();
+        });
+        assert.equal(cancelCalls, 2);
+        assert.ok(buttons.every((button) => button.disabled));
+
+        finish();
+        await flushAsync();
+        await flushAsync();
+        assert.ok(buttons.every((button) => !button.disabled));
+    } finally {
+        finish();
         await React.act(async () => root.unmount());
         container.remove();
     }

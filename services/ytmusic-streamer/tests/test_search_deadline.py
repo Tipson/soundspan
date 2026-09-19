@@ -32,6 +32,89 @@ async def _wait_for_provider_jobs(app: Any, expected: int, wait_seconds: float =
         await asyncio.sleep(0.005)
 
 
+@pytest.mark.anyio
+async def test_search_and_batch_share_one_cross_user_flight_and_cache(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Public provider work and its settled result are independent of user id."""
+    import app
+
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="test-search-singleflight")
+    started = threading.Event()
+    release = threading.Event()
+    calls = 0
+
+    def blocked_search(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        started.set()
+        if not release.wait(timeout=2):
+            raise TimeoutError("test provider release timed out")
+        return [{"videoId": "dQw4w9WgXcQ"}], "native"
+
+    app._search_cache.clear()
+    app._search_provider_jobs.clear()
+    monkeypatch.setattr(app, "SEARCH_PROVIDER_CONCURRENCY", 1)
+    monkeypatch.setattr(app, "_search_provider_executor", executor)
+    monkeypatch.setattr(app, "_search_with_mode_fallback", blocked_search)
+
+    first = asyncio.create_task(
+        client.post("/search?user_id=user-1", json={"query": "  Radio   Head  ", "filter": "songs"})
+    )
+    second: asyncio.Task[Any] | None = None
+    try:
+        await _wait_for_thread_event(started)
+        second = asyncio.create_task(
+            client.post(
+                "/search/batch?user_id=user-2",
+                json={
+                    "queries": [
+                        {
+                            "query": "radio head",
+                            "filter": "songs",
+                            "limit": 20,
+                        },
+                    ]
+                },
+            )
+        )
+        await asyncio.sleep(0.05)
+
+        assert calls == 1
+        assert len(app._search_provider_jobs) == 1
+
+        release.set()
+        responses = await asyncio.gather(first, second)
+        assert [response.status_code for response in responses] == [200, 200]
+        assert responses[0].json() == {
+            "results": [{"videoId": "dQw4w9WgXcQ"}],
+            "total": 1,
+        }
+        assert responses[1].json() == {
+            "results": [
+                {
+                    "results": [{"videoId": "dQw4w9WgXcQ"}],
+                    "total": 1,
+                    "error": None,
+                }
+            ]
+        }
+
+        cached = await client.post(
+            "/search?user_id=user-3",
+            json={"query": "RADIO HEAD", "filter": "songs"},
+        )
+        assert cached.status_code == 200
+        assert cached.json() == responses[0].json()
+        assert calls == 1
+    finally:
+        release.set()
+        pending = [task for task in (first, second) if task is not None]
+        await asyncio.gather(*pending, return_exceptions=True)
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
 def test_search_budgets_finish_before_backend_abort() -> None:
     """The provider and endpoint budgets must leave margin inside backend's eight seconds."""
     import app
@@ -83,6 +166,46 @@ def test_public_search_fallback_does_not_pin_shared_identity(
         assert "__public__" not in app._ytmusic_auto_tv_fallback_users
     finally:
         app._ytmusic_auto_tv_fallback_users.discard("__public__")
+
+
+def test_public_search_ignores_authenticated_user_strategy_pin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Private #813 state must not choose a strategy for public catalog search."""
+    import app
+
+    attempted_strategies: list[str] = []
+
+    def search_once(
+        _user_id: str,
+        _query: str,
+        _filter: Any,
+        _limit: int,
+        strategy: str,
+        *,
+        use_unauth_client: bool,
+    ) -> list[dict[str, str]]:
+        assert use_unauth_client is True
+        attempted_strategies.append(strategy)
+        return []
+
+    app._ytmusic_auto_tv_fallback_users.add("pinned-user")
+    monkeypatch.setattr(app, "SEARCH_MODE", "auto")
+    monkeypatch.setattr(app, "_search_once", search_once)
+
+    try:
+        _results, strategy = app._search_with_mode_fallback(
+            "pinned-user",
+            "Radiohead",
+            "songs",
+            20,
+            use_unauth_client=True,
+        )
+    finally:
+        app._ytmusic_auto_tv_fallback_users.discard("pinned-user")
+
+    assert strategy == "native"
+    assert attempted_strategies == ["native"]
 
 
 def test_public_search_uses_provider_safe_english_locale(
@@ -248,7 +371,9 @@ async def test_search_deadline_retains_blocked_workers_and_rejects_queueing(
     monkeypatch.setattr(app, "_search_with_mode_fallback", blocked_search)
 
     first_requests = [
-        asyncio.create_task(client.post(f"/search?user_id=u{index}", json={"query": "blocked"}))
+        asyncio.create_task(
+            client.post(f"/search?user_id=u{index}", json={"query": f"blocked-{index}"})
+        )
         for index in range(concurrency)
     ]
     try:

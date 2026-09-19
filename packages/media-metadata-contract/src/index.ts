@@ -8,6 +8,9 @@ export const CANONICAL_MEDIA_SOURCE_VALUES = [
     "tidal",
     "youtube",
     "youtube-direct",
+    "audius",
+    "vk",
+    "yandex",
 ] as const;
 
 /** Canonical source identifier shared across media metadata consumers. */
@@ -24,7 +27,8 @@ export type ResolvedMediaSource = Exclude<
 >;
 
 /** Source identifiers accepted by the audio engine boundary. */
-export type AudioEngineSourceType = "local" | "peer" | "tidal" | "ytmusic";
+export type AudioEngineSourceType =
+    "local" | "peer" | "tidal" | "ytmusic" | "audius" | "vk" | "yandex";
 
 /** Canonical provider identity and optional provider-specific track metadata. */
 export interface CanonicalMediaProviderIdentity {
@@ -70,7 +74,8 @@ export type FederationCapability =
     (typeof FEDERATION_CAPABILITY_VALUES)[number];
 
 /** Source discriminator emitted by unified track response serializers. */
-export type UnifiedTrackSource = "local" | "tidal" | "youtube" | "federated";
+export type UnifiedTrackSource =
+    "local" | "tidal" | "youtube" | "federated" | "audius" | "vk" | "yandex";
 
 /** Safe peer provenance attached to a federated unified track response. */
 export interface FederatedTrackPeer {
@@ -197,7 +202,10 @@ export const normalizeCanonicalMediaSource = (
         value === "peer" ||
         value === "tidal" ||
         value === "youtube" ||
-        value === "youtube-direct"
+        value === "youtube-direct" ||
+        value === "audius" ||
+        value === "vk" ||
+        value === "yandex"
     ) {
         return value;
     }
@@ -277,7 +285,12 @@ export const normalizeCanonicalMediaProviderIdentity = (value: {
         };
     }
 
-    if (source === "peer") {
+    if (
+        source === "peer" ||
+        source === "audius" ||
+        source === "vk" ||
+        source === "yandex"
+    ) {
         return { source, providerTrackId };
     }
 
@@ -299,6 +312,13 @@ export const toLegacyStreamFields = (
     }
     if (provider.source === "peer") {
         return { streamSource: "peer" };
+    }
+    if (
+        provider.source === "audius" ||
+        provider.source === "vk" ||
+        provider.source === "yandex"
+    ) {
+        return { streamSource: provider.source };
     }
     if (provider.source === "youtube") {
         return {
@@ -325,3 +345,9 @@ export const toAudioEngineSourceType = (
     }
     return source;
 };
+export {
+    AUDIUS_MEDIA_ORIGINS,
+    isAllowedAudiusStreamUrl,
+    isAllowedAudiusContentNodeUrl,
+    isAllowedAudiusCdnUrl,
+} from "./audius";

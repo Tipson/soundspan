@@ -19,12 +19,15 @@ export function useProviderArtistFallback(
             normalizedArtistName,
             "music",
             PROVIDER_ARTIST_SEARCH_LIMIT,
+            "artists",
         ),
         queryFn: () =>
             api.discoverSearch(
                 normalizedArtistName,
                 "music",
                 PROVIDER_ARTIST_SEARCH_LIMIT,
+                undefined,
+                "artists",
             ),
         enabled: canSearch,
         staleTime: 5 * 60 * 1000,

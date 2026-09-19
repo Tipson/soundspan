@@ -10,6 +10,7 @@ import {
     resolveDeviceOfflinePlaybackIdentity,
     resolveDeviceOfflinePlaybackUrl,
     setDeviceOfflineRuntimeState,
+    subscribeToDeviceOfflinePlaybackInvalidations,
 } from "../../features/device-offline/playbackResolver";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
 import {
@@ -80,6 +81,129 @@ function fakeVault(open: DeviceAudioVault["open"]): DeviceAudioVault {
 
 afterEach(() => clearDeviceOfflineRuntimeState());
 
+test("an invalid persisted identity does not prevent healthy downloads from being published", () => {
+    const corrupt = { ...readyRecord("user-1", "corrupt"), trackIdentity: 42 };
+    setDeviceOfflineRuntimeState("user-1", [
+        corrupt as unknown as DeviceOfflineDownloadRecord,
+        readyRecord("user-1", "healthy"),
+    ]);
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), "healthy");
+});
+
+test("playback ticks do not reparse the downloaded collection after publication", (t) => {
+    const NativeURL = globalThis.URL;
+    let parses = 0;
+    t.mock.method(
+        globalThis,
+        "URL",
+        class extends NativeURL {
+            constructor(...args: ConstructorParameters<typeof URL>) {
+                super(...args);
+                parses++;
+            }
+        },
+    );
+    const records = Array.from({ length: 40 }, (_, i) => ({
+        ...readyRecord("user-1", `record-${i}`),
+        trackIdentity: `youtube:video-${i}`,
+        sourceUrl: `/api/ytmusic/stream-public/video-${i}`,
+        track: { ...TRACK, id: `yt:video-${i}`, youtubeVideoId: `video-${i}` },
+    }));
+    setDeviceOfflineRuntimeState("user-1", records);
+    parses = 0;
+
+    for (let tick = 0; tick < 200; tick++) {
+        const track = { ...records[tick % records.length].track };
+        assert.equal(hasDeviceOfflinePlaybackCopy(track), true);
+        assert.equal(
+            resolveDeviceOfflinePlaybackIdentity(track),
+            `record-${tick % records.length}`,
+        );
+        assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+    }
+    assert.equal(
+        parses,
+        0,
+        "unchanged download routes must not be parsed on playback ticks",
+    );
+});
+
+test("publication preserves preferred quality, newest fallback, and stable ties", () => {
+    const oldAuto = { ...readyRecord("user-1", "old-auto"), updatedAt: 2 };
+    const newAuto = { ...readyRecord("user-1", "new-auto"), updatedAt: 4 };
+    const high = {
+        ...readyRecord("user-1", "high"),
+        quality: "high",
+        updatedAt: 9,
+    };
+    const tiedHigh = { ...high, key: "tied-high" };
+    const unavailable = {
+        ...high,
+        key: "unavailable",
+        updatedAt: 20,
+        status: "error" as const,
+    };
+    setDeviceOfflineRuntimeState("user-1", [
+        oldAuto,
+        newAuto,
+        high,
+        tiedHigh,
+        unavailable,
+    ]);
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), "new-auto");
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK, " HIGH "), "high");
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity(TRACK, "unknown"),
+        "high",
+    );
+});
+
+test("republishing records updates hits, misses, qualities and owner capabilities", () => {
+    const records = [readyRecord("user-1", "first")];
+    setDeviceOfflineRuntimeState("user-1", records);
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), "first");
+    const otherTrack = { ...TRACK, youtubeVideoId: "other" };
+    assert.equal(hasDeviceOfflinePlaybackCopy(otherTrack), false);
+    records[0].trackIdentity = "youtube:other";
+    records[0].track = otherTrack;
+    records[0].sourceUrl = "/api/ytmusic/stream-public/other";
+    records[0].quality = "high";
+    setDeviceOfflineRuntimeState("user-1", records);
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity(otherTrack, "high"),
+        "first",
+    );
+    setDeviceOfflineRuntimeState("user-2", records);
+    assert.equal(hasDeviceOfflinePlaybackCopy(otherTrack), false);
+    setDeviceOfflineRuntimeState("user-1", records);
+    assert.equal(hasDeviceOfflinePlaybackCopy(otherTrack), true);
+    clearDeviceOfflineRuntimeState();
+    assert.equal(hasDeviceOfflinePlaybackCopy(otherTrack), false);
+});
+
+test("an explicitly downloaded track never substitutes a network URL when its copy is absent", async () => {
+    setDeviceOfflineRuntimeState("user-1", []);
+    await assert.rejects(
+        acquireDeviceOfflinePlaybackSource(
+            { ...TRACK, playbackSourcePolicy: "device-only" },
+            "/network-must-not-play",
+            new AbortController().signal,
+        ),
+    );
+});
+
+test("unverified legacy download cannot escape to the network in a downloaded queue", async () => {
+    setDeviceOfflineRuntimeState("user-1", [readyRecord("user-1", "legacy")]);
+    await assert.rejects(
+        acquireDeviceOfflinePlaybackSource(
+            { ...TRACK, playbackSourcePolicy: "device-only" },
+            "/network-must-not-play",
+            new AbortController().signal,
+        ),
+    );
+});
+
 test("offline playback errors distinguish missing downloads from a damaged local copy", () => {
     assert.match(
         getDeviceOfflinePlaybackErrorMessage(false),
@@ -119,6 +243,87 @@ test("tracks without a verified ready record have no device playback identity", 
     assert.equal(resolveDeviceOfflinePlaybackIdentity(TRACK), null);
     assert.equal(resolveDeviceOfflineMediaIdentity(TRACK), TRACK.id);
     assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+});
+
+test("playback reuses provenance-verified legacy provider keys without reviving retired TIDAL", () => {
+    const localTrack = {
+        id: "local-legacy",
+        filePath: "/music/local.flac",
+        source: "local" as const,
+    };
+    const localRecord = {
+        ...readyRecord("user-1", "legacy-local-key"),
+        trackIdentity: "tidal:991",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+        track: {
+            ...TRACK,
+            ...localTrack,
+            tidalTrackId: 991,
+            youtubeVideoId: undefined,
+            streamSource: undefined,
+        },
+    };
+    const youtubeTrack = {
+        ...TRACK,
+        id: "yt:active-video",
+        youtubeVideoId: "active-video",
+    };
+    const youtubeRecord = {
+        ...readyRecord("user-1", "legacy-youtube-key"),
+        trackIdentity: "tidal:992",
+        sourceUrl: "/api/ytmusic/stream-public/active-video",
+        track: {
+            ...youtubeTrack,
+            tidalTrackId: 992,
+        },
+    };
+    setDeviceOfflineRuntimeState("user-1", [localRecord, youtubeRecord]);
+
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity(localTrack),
+        "legacy-local-key",
+    );
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity(youtubeTrack),
+        "legacy-youtube-key",
+    );
+    assert.equal(
+        resolveDeviceOfflinePlaybackIdentity({
+            id: "tidal:992",
+            streamSource: "tidal",
+            tidalTrackId: 992,
+        }),
+        null,
+    );
+});
+
+test("legacy playback aliases stay owner-scoped and reject mismatched asset routes", () => {
+    const localTrack = {
+        id: "local-legacy",
+        filePath: "/music/local.flac",
+        source: "local" as const,
+    };
+    const unsafe = {
+        ...readyRecord("user-1", "unsafe-key"),
+        trackIdentity: "tidal:991",
+        sourceUrl: "/api/ytmusic/stream-public/unrelated-video",
+        track: {
+            ...TRACK,
+            ...localTrack,
+            tidalTrackId: 991,
+            youtubeVideoId: "unrelated-video",
+            streamSource: "tidal" as const,
+        },
+    };
+    const otherOwner = {
+        ...unsafe,
+        key: "other-owner-key",
+        ownerId: "user-2",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+    };
+    setDeviceOfflineRuntimeState("user-1", [unsafe, otherOwner]);
+
+    assert.equal(resolveDeviceOfflinePlaybackIdentity(localTrack), null);
 });
 
 test("managed device playback opens an owner-scoped vault lease", async (t) => {
@@ -246,6 +451,45 @@ test("a recoverable vault access failure falls back to the clean network URL", a
     assert.equal(source.url, "/network");
 });
 
+test("device-only playback retains a vault failure even when networking is available", async (t) => {
+    const failure = new DeviceAudioVaultError(
+        "permission_required",
+        "Reconnect folder",
+        "user-action",
+    );
+    t.after(
+        installDeviceAudioVaultFactory(() =>
+            fakeVault(async () => {
+                throw failure;
+            }),
+        ),
+    );
+    setDeviceOfflineRuntimeState("user-1", [
+        {
+            ...readyRecord("user-1", "restricted"),
+            mediaRef: "fsa1:owner:restricted" as DeviceAudioVaultRef,
+        },
+    ]);
+    await assert.rejects(
+        acquireDeviceOfflinePlaybackSource(
+            { ...TRACK, playbackSourcePolicy: "device-only" },
+            "/network",
+            new AbortController().signal,
+        ),
+        (error) => error === failure,
+    );
+});
+
+test("switching a queue occurrence to device-only invalidates a previously loaded network identity", () => {
+    assert.notEqual(
+        resolveDeviceOfflineMediaIdentity(TRACK),
+        resolveDeviceOfflineMediaIdentity({
+            ...TRACK,
+            playbackSourcePolicy: "device-only",
+        }),
+    );
+});
+
 test("an offline cold-start never replaces a ready device file with an unreachable network URL", async (t) => {
     const previousNavigator = Object.getOwnPropertyDescriptor(
         globalThis,
@@ -273,6 +517,15 @@ test("an offline cold-start never replaces a ready device file with an unreachab
         }),
     );
     t.after(restore);
+    const invalidations: Array<{
+        ownerId: string;
+        recordKey: string;
+        reason: "missing" | "integrity";
+    }> = [];
+    const unsubscribe = subscribeToDeviceOfflinePlaybackInvalidations(
+        (invalidation) => invalidations.push(invalidation),
+    );
+    t.after(unsubscribe);
     setDeviceOfflineRuntimeState("user-1", [
         {
             ...readyRecord("user-1", "cold-start-key"),
@@ -288,7 +541,48 @@ test("an offline cold-start never replaces a ready device file with an unreachab
         ),
         (error: unknown) => error === localFailure,
     );
-    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), true);
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+    assert.deepEqual(invalidations, [
+        {
+            ownerId: "user-1",
+            recordKey: "cold-start-key",
+            reason: "missing",
+        },
+    ]);
+});
+
+test("a missing managed file is evicted immediately and online playback falls back to the network", async (t) => {
+    const restore = installDeviceAudioVaultFactory(() =>
+        fakeVault(async () => {
+            throw new DeviceAudioVaultError(
+                "not_found",
+                "The retained device file was deleted",
+                "retry",
+            );
+        }),
+    );
+    t.after(restore);
+    const invalidations: string[] = [];
+    const unsubscribe = subscribeToDeviceOfflinePlaybackInvalidations(
+        ({ recordKey, reason }) => invalidations.push(`${recordKey}:${reason}`),
+    );
+    t.after(unsubscribe);
+    setDeviceOfflineRuntimeState("user-1", [
+        {
+            ...readyRecord("user-1", "missing-key"),
+            mediaRef: "opfs1:owner:missing" as DeviceAudioVaultRef,
+        },
+    ]);
+
+    const source = await acquireDeviceOfflinePlaybackSource(
+        TRACK,
+        "/network",
+        new AbortController().signal,
+    );
+
+    assert.equal(source.url, "/network");
+    assert.equal(hasDeviceOfflinePlaybackCopy(TRACK), false);
+    assert.deepEqual(invalidations, ["missing-key:missing"]);
 });
 
 test("an aborted managed acquisition releases a late vault URL", async (t) => {

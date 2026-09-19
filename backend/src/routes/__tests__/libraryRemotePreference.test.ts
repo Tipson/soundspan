@@ -167,6 +167,7 @@ jest.mock("../../utils/redis", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        underJest: true,
         music: {
             musicPath: "/music",
             transcodeCachePath: "/tmp/soundspan-cache",
@@ -610,22 +611,7 @@ describe("library remote track preference endpoints", () => {
             });
         });
 
-        it("repairs placeholder metadata inline before liking a tidal track", async () => {
-            mockEnsureRemoteTrack.mockResolvedValueOnce({
-                provider: "tidal",
-                id: "tt-repaired",
-                created: false,
-            });
-            mockPrisma.likedRemoteTrack.upsert.mockResolvedValueOnce({});
-            mockResolveRemoteTrackMetadataForRequest.mockResolvedValueOnce({
-                title: "Blinded By The Light",
-                artist: "Manfred Mann's Earth Band",
-                album: "The Roaring Silence",
-                duration: 428,
-                isrc: "USWB10800347",
-                explicit: false,
-            });
-
+        it("rejects retired TIDAL likes before metadata or persistence", async () => {
             const res = await request(app)
                 .post("/api/library/remote-tracks/tidal:69778330/preference")
                 .set(AUTH_HEADER, AUTH_VALUE)
@@ -639,28 +625,17 @@ describe("library remote track preference endpoints", () => {
                     },
                 });
 
-            expect(res.status).toBe(200);
+            expect(res.status).toBe(400);
+            expect(res.body).toEqual({ error: "retired_provider" });
             expect(
                 mockResolveRemoteTrackMetadataForRequest,
-            ).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    provider: "tidal",
-                    userId: TEST_USER_ID,
-                    tidalId: 69778330,
-                }),
-            );
-            expect(mockEnsureRemoteTrack).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    provider: "tidal",
-                    tidalId: 69778330,
-                    title: "Blinded By The Light",
-                    artist: "Manfred Mann's Earth Band",
-                    album: "The Roaring Silence",
-                    duration: 428,
-                    isrc: "USWB10800347",
-                    explicit: false,
-                }),
-            );
+            ).not.toHaveBeenCalled();
+            expect(mockEnsureRemoteTrack).not.toHaveBeenCalled();
+            expect(
+                mockPrisma.remotePreferenceIntent.upsert,
+            ).not.toHaveBeenCalled();
+            expect(mockPrisma.likedRemoteTrack.upsert).not.toHaveBeenCalled();
+            expect(mockPrisma.dislikedEntity.upsert).not.toHaveBeenCalled();
         });
 
         it("keeps a later dislike when an equal-time older like finishes materializing last", async () => {
@@ -799,39 +774,21 @@ describe("library remote track preference endpoints", () => {
             }
         });
 
-        it("upserts tidal: track on thumbs_up", async () => {
-            mockEnsureRemoteTrack.mockResolvedValueOnce({
-                provider: "tidal",
-                id: "tidal-row-1",
-                created: true,
-            });
-            mockPrisma.likedRemoteTrack.upsert.mockResolvedValueOnce({});
-
+        it("rejects retired TIDAL dislikes before preference persistence", async () => {
             const res = await request(app)
                 .post("/api/library/remote-tracks/tidal:987654/preference")
                 .set(AUTH_HEADER, AUTH_VALUE)
-                .send({
-                    signal: "thumbs_up",
-                    metadata: { title: "Song", artist: "Artist" },
-                });
+                .send({ signal: "thumbs_down" });
 
-            expect(res.status).toBe(200);
-            expect(mockEnsureRemoteTrack).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    provider: "tidal",
-                    tidalId: 987654,
-                }),
-            );
-            expect(mockPrisma.likedRemoteTrack.upsert).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: {
-                        userId_trackTidalId: {
-                            userId: TEST_USER_ID,
-                            trackTidalId: "tidal-row-1",
-                        },
-                    },
-                }),
-            );
+            expect(res.status).toBe(400);
+            expect(res.body).toEqual({ error: "retired_provider" });
+            expect(mockEnsureRemoteTrack).not.toHaveBeenCalled();
+            expect(
+                mockPrisma.remotePreferenceIntent.upsert,
+            ).not.toHaveBeenCalled();
+            expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+            expect(mockPrisma.likedRemoteTrack.upsert).not.toHaveBeenCalled();
+            expect(mockPrisma.dislikedEntity.upsert).not.toHaveBeenCalled();
         });
 
         it("atomically replaces a YouTube like with a canonical per-user dislike", async () => {
@@ -881,37 +838,39 @@ describe("library remote track preference endpoints", () => {
             );
         });
 
-        it("normalizes a TIDAL dislike to its numeric canonical id", async () => {
+        it("clears an existing TIDAL preference without materialization", async () => {
             mockPrisma.trackTidal.findUnique.mockResolvedValueOnce({
-                id: "tidal-row-disliked",
+                id: "tidal-row-existing",
             });
 
             const res = await request(app)
                 .post("/api/library/remote-tracks/tidal:000987654/preference")
                 .set(AUTH_HEADER, AUTH_VALUE)
-                .send({ signal: "thumbs_down" });
+                .send({ signal: "clear" });
 
             expect(res.status).toBe(200);
-            expect(res.body.signal).toBe("thumbs_down");
+            expect(res.body.signal).toBe("clear");
+            expect(res.body.state).toBe("neutral");
+            expect(
+                mockResolveRemoteTrackMetadataForRequest,
+            ).not.toHaveBeenCalled();
+            expect(mockEnsureRemoteTrack).not.toHaveBeenCalled();
             expect(mockPrisma.likedRemoteTrack.deleteMany).toHaveBeenCalledWith(
                 {
                     where: {
                         userId: TEST_USER_ID,
-                        trackTidalId: "tidal-row-disliked",
+                        trackTidalId: "tidal-row-existing",
                     },
                 },
             );
-            expect(mockPrisma.dislikedEntity.upsert).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: {
-                        userId_entityType_entityId: {
-                            userId: TEST_USER_ID,
-                            entityType: "track",
-                            entityId: "tidal:987654",
-                        },
-                    },
-                }),
-            );
+            expect(mockPrisma.dislikedEntity.deleteMany).toHaveBeenCalledWith({
+                where: {
+                    userId: TEST_USER_ID,
+                    entityType: "track",
+                    entityId: "tidal:987654",
+                },
+            });
+            expect(mockPrisma.dislikedEntity.upsert).not.toHaveBeenCalled();
         });
 
         it("keeps repeated thumbs_down requests idempotent on the same canonical row", async () => {

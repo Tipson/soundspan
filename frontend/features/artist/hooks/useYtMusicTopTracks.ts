@@ -83,19 +83,23 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
         };
     }, []);
 
-    // Identify unowned tracks that need matching
-    // Skip any tracks already enriched by TIDAL (TIDAL takes priority)
+    // Identify tracks without a usable playback source. Album ownership is
+    // metadata and must not suppress provider matching: catalog-only artist
+    // tracks can have a complete album while still lacking playable audio.
+    // Historical TIDAL rows are deliberately re-matched to YouTube.
     const unownedTracks = useMemo(() => {
         if (!ytMusicAvailable || !topTracks) return [];
 
-        return topTracks.filter(
-            (t) =>
-                t.streamSource !== "tidal" &&
-                !(t.streamSource === "youtube" && !!t.youtubeVideoId) &&
-                (!t.album?.id ||
-                    !t.album?.title ||
-                    t.album.title === "Unknown Album"),
-        );
+        return topTracks.filter((track) => {
+            const hasLocalFile = Boolean(track.filePath?.trim());
+            const hasYouTubeSource =
+                track.streamSource === "youtube" &&
+                Boolean(track.youtubeVideoId);
+            const hasFederatedSource =
+                track.source === "federated" && track.peer?.online === true;
+
+            return !hasLocalFile && !hasYouTubeSource && !hasFederatedSource;
+        });
     }, [topTracks, ytMusicAvailable]);
 
     // Match unowned tracks against YTMusic (single batch call)
@@ -173,15 +177,11 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
         };
     }, [unownedTracks, artistKey, artist?.name]);
 
-    // Produce enriched top-tracks with streamSource + youtubeVideoId
-    // Preserve any existing TIDAL enrichment — don't overwrite
+    // Produce enriched top-tracks with streamSource + youtubeVideoId.
     const enrichedTopTracks = useMemo((): Track[] | undefined => {
         if (!topTracks) return undefined;
-        if (Object.keys(matches).length === 0) return topTracks;
 
         return topTracks.map((track) => {
-            // Don't overwrite TIDAL-enriched tracks
-            if (track.streamSource === "tidal") return track;
             const match = matches[track.id];
             if (match) {
                 return {
@@ -190,6 +190,13 @@ export function useYtMusicTopTracks(artist: Artist | null | undefined) {
                     youtubeVideoId: match.videoId,
                     // Use YT Music duration if the track doesn't have one
                     duration: track.duration || match.duration,
+                };
+            }
+            if (track.streamSource === "tidal") {
+                return {
+                    ...track,
+                    streamSource: undefined,
+                    tidalTrackId: undefined,
                 };
             }
             return track;

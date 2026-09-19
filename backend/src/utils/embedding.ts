@@ -1,3 +1,7 @@
+const MAX_CACHED_EMBEDDINGS = 2_048;
+const MAX_CACHED_EMBEDDING_TEXT_LENGTH = 16_384;
+const parsedEmbeddings = new Map<string, { text: string; values: number[] }>();
+
 /**
  * Parse a pgvector embedding from its text representation "[0.1,0.2,...]"
  * into a number array.
@@ -5,6 +9,50 @@
 export function parseEmbedding(text: string): number[] {
     if (typeof text !== "string" || text.trim() === "") {
         throw new Error("Invalid embedding: expected non-empty string");
+    }
+    // A short bucket key avoids hashing the entire pgvector string repeatedly.
+    // It is only a lookup hint: reuse always requires exact full-text equality.
+    const cacheKey =
+        text.length <= MAX_CACHED_EMBEDDING_TEXT_LENGTH
+            ? `${text.length}:${text.slice(0, 64)}`
+            : null;
+    const cached =
+        cacheKey === null ? undefined : parsedEmbeddings.get(cacheKey);
+    if (cached?.text === text) {
+        parsedEmbeddings.delete(cacheKey!);
+        parsedEmbeddings.set(cacheKey!, cached);
+        return [...cached.values];
+    }
+
+    // pgvector's decimal array syntax can be parsed without allocating a
+    // trimmed string for each coordinate. Keep the legacy fallback for other
+    // numeric spellings accepted by existing callers.
+    try {
+        const parsed: unknown = JSON.parse(text);
+        if (
+            Array.isArray(parsed) &&
+            parsed.length > 0 &&
+            parsed.every(
+                (value: unknown) =>
+                    typeof value === "number" && Number.isFinite(value),
+            )
+        ) {
+            // Exact content is immutable even when a recording is re-analyzed.
+            // Cache only bounded standard vectors; callers always own a copy.
+            if (parsed.length === 512 && cacheKey !== null) {
+                // A collision replaces this bucket; it never shares a result.
+                parsedEmbeddings.delete(cacheKey);
+                if (parsedEmbeddings.size >= MAX_CACHED_EMBEDDINGS) {
+                    parsedEmbeddings.delete(
+                        parsedEmbeddings.keys().next().value!,
+                    );
+                }
+                parsedEmbeddings.set(cacheKey, { text, values: [...parsed] });
+            }
+            return parsed;
+        }
+    } catch {
+        // Non-JSON numeric input is validated by the compatibility path below.
     }
 
     const values = text

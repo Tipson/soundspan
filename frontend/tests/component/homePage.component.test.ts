@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const state = {
+    online: true,
     isLoading: false,
     recommended: [{ id: "artist-2" }] as unknown[],
     mixes: [{ id: "mix-1", name: "Daily Mix", trackCount: 10 }] as unknown[],
@@ -34,6 +35,12 @@ const marker = (label: string) => {
     Component.displayName = `Mock${label.replace(/[^a-zA-Z0-9]/g, "")}`;
     return Component;
 };
+mock.module("@/hooks/useNetworkOnline", {
+    namedExports: { useNetworkOnline: () => state.online },
+});
+mock.module("@/features/device-offline/components/DownloadsList", {
+    namedExports: { DownloadsList: marker("local-downloads") },
+});
 
 mock.module("@/features/home/hooks/useHomeData", {
     namedExports: {
@@ -138,6 +145,7 @@ mock.module("@/components/ui/LastFmBadge", {
 });
 
 beforeEach(() => {
+    state.online = true;
     state.isLoading = false;
     state.mixes = [{ id: "mix-1", name: "Daily Mix", trackCount: 10 }];
     state.discoverWeekly = {
@@ -159,6 +167,18 @@ beforeEach(() => {
     state.isPersonalizedLoading = false;
     state.isPersonalizedUnavailable = false;
     state.showYtMusicExplore = true;
+});
+
+test("offline home opens downloads instead of waiting for the online feed", async () => {
+    state.online = false;
+    state.isLoading = true;
+    const HomePage = (await import("../../app/page")).default;
+    const html = renderToStaticMarkup(React.createElement(HomePage));
+    assert.match(html, /local-downloads/);
+    assert.doesNotMatch(
+        html,
+        /loading-screen|compact-wave-hero|продолжают работать/,
+    );
 });
 
 test("Home shows a loading screen before the unified feed is ready", async () => {

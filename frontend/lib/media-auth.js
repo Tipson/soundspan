@@ -10,9 +10,9 @@ const MEDIA_COOKIE_PATTERN = new RegExp(
     "gi",
 );
 const MEDIA_COOKIE_AUTH_PATHS = [
+    /^\/api\/music-sources\/leases\/[a-f0-9]{48}\/stream\/?$/,
     /^\/api\/library\/cover-art(?:\/|$)/,
     /^\/api\/browse\/ytmusic\/image\/?$/,
-    /^\/api\/browse\/tidal\/image\/?$/,
     /^\/api\/social\/profile-picture\/[^/]+\/?$/,
     /^\/api\/audiobooks\/[^/]+\/cover\/?$/,
     /^\/api\/podcasts\/(?:episodes\/)?[^/]+\/cover\/?$/,
@@ -20,7 +20,6 @@ const MEDIA_COOKIE_AUTH_PATHS = [
     /^\/api\/artists\/preview-stream\/[^/]+\/?$/,
     /^\/api\/ytmusic\/(?:stream|stream-public)\/[^/]+\/?$/,
     /^\/api\/youtube\/stream\/[^/]+\/?$/,
-    /^\/api\/tidal-streaming\/stream\/[^/]+\/?$/,
     /^\/api\/audiobooks\/[^/]+\/stream\/?$/,
     /^\/api\/podcasts\/[^/]+\/episodes\/[^/]+\/stream\/?$/,
 ];
@@ -43,6 +42,17 @@ function syncBrowserMediaAuthCookie(token) {
     const value = token ? encodeURIComponent(token) : "";
     const expiry = token ? "" : "; Max-Age=0";
     document.cookie = `${MEDIA_AUTH_COOKIE_NAME}=${value}; Path=${MEDIA_AUTH_COOKIE_PATH}; SameSite=Strict${secure}${expiry}`;
+    // Includes logout and cross-tab reload, even when the shared cookie was
+    // already replaced by another tab. Send no credentials to the worker.
+    try {
+        if (typeof navigator !== "undefined") {
+            navigator.serviceWorker?.controller?.postMessage({
+                type: "CLEAR_STREAM_PRELOAD_CACHE",
+            });
+        }
+    } catch {
+        // A missing/retiring worker must not prevent credential revocation.
+    }
 }
 
 /** @param {unknown} value */

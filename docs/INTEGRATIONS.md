@@ -203,6 +203,15 @@ soundspan also exposes provider mapping and playlist import routes for cross-pro
 | `POST /api/import/jobs/:jobId/cancel`    | Cancel a queued or running import job                                |
 | `POST /api/import/m3u/preview`           | Parse and preview an uploaded M3U playlist before import             |
 
+The Imports activity tab exposes the created playlist while unresolved tracks
+continue matching, with ready/unresolved counts and an approximate remaining
+time when available. A failed history refresh preserves the last known jobs and
+marks the view as stale with a manual refresh action; it is not displayed as an
+empty history. Failed cancellation and unresolved-track retry actions display
+an error beside the affected job without exposing raw upstream details.
+Repeated actions for the same job are coalesced while its request is in flight;
+actions for separate jobs remain independent.
+
 ## TIDAL Streaming
 
 Stream unowned tracks via per-user TIDAL OAuth.

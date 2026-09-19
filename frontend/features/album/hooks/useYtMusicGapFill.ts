@@ -108,20 +108,27 @@ export function useYtMusicGapFill(
         };
     }, []);
 
-    // Find unowned tracks that need matching
-    // Skip any tracks already enriched by TIDAL (TIDAL takes priority)
+    // Find unowned tracks that need matching. Historical TIDAL rows are
+    // deliberately re-matched to the active YouTube provider.
     const unownedTracks = useMemo(() => {
         if (!albumTracks || !ytMusicAvailable) return [];
 
-        // For discovery albums, ALL tracks need matching (minus TIDAL-enriched ones)
+        // For discovery albums, match everything without an exact YouTube id.
         if (source === "discovery") {
-            return albumTracks.filter((t) => t.streamSource !== "tidal");
+            return albumTracks.filter(
+                (t) =>
+                    !(
+                        t.streamSource === "youtube" &&
+                        Boolean(t.youtubeVideoId)
+                    ),
+            );
         }
 
         // For library albums, only tracks without a local file need matching
-        // (also skip any already enriched by TIDAL — TIDAL takes priority)
         return albumTracks.filter(
-            (t) => t.streamSource !== "tidal" && !t.filePath,
+            (t) =>
+                !t.filePath &&
+                !(t.streamSource === "youtube" && Boolean(t.youtubeVideoId)),
         );
     }, [albumTracks, source, ytMusicAvailable]);
 
@@ -228,15 +235,11 @@ export function useYtMusicGapFill(
         };
     }, [unownedTracks, album?.id, album?.title, album?.artist?.name]);
 
-    // Produce enriched tracks with streamSource + youtubeVideoId
-    // Preserve any existing TIDAL enrichment — don't overwrite
+    // Produce enriched tracks with streamSource + youtubeVideoId.
     const enrichedTracks = useMemo((): Track[] | undefined => {
         if (!albumTracks) return undefined;
-        if (Object.keys(matches).length === 0) return albumTracks;
 
         return albumTracks.map((track) => {
-            // Don't overwrite TIDAL-enriched tracks
-            if (track.streamSource === "tidal") return track;
             const match = matches[track.id];
             if (match) {
                 return {
@@ -245,6 +248,13 @@ export function useYtMusicGapFill(
                     youtubeVideoId: match.videoId,
                     // Use YT Music duration if the track doesn't have one
                     duration: track.duration || match.duration,
+                };
+            }
+            if (track.streamSource === "tidal") {
+                return {
+                    ...track,
+                    streamSource: undefined,
+                    tidalTrackId: undefined,
                 };
             }
             return track;

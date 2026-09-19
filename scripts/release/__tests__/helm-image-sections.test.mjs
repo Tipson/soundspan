@@ -33,9 +33,6 @@ backendWorker:
 frontend:
   image:
     tag: ${version}
-tidalSidecar:
-  image:
-    tag: ${version}
 ytmusicStreamer:
   image:
     tag: ${version}

@@ -20,6 +20,7 @@ import {
 } from "./browserStorage";
 import {
     isLikedPlaylistTrackDownloadable,
+    loadAllDeviceOfflineLikes,
     likedPlaylistTrackToDeviceTrack,
     subscribeToDeviceOfflineLikedChanges,
 } from "./likedAutomation";
@@ -35,6 +36,7 @@ import {
     hasPreparedDeviceOfflinePlaybackSource,
     prepareDeviceOfflinePlaybackSource,
     setDeviceOfflineRuntimeState,
+    subscribeToDeviceOfflinePlaybackInvalidations,
 } from "./playbackResolver";
 import {
     resolveBrowserDeviceOfflineTransferCapability,
@@ -43,7 +45,11 @@ import {
 import { startPhysicalFileDownload } from "./physicalFileExport";
 import { DeviceOfflineSessionGuard } from "./sessionGuard";
 import { getDeviceDownloadSourceUrl } from "./sourceUrl";
-import { resolveDeviceOfflineTrackIdentity } from "./trackIdentity";
+import {
+    resolveCompatibleDeviceOfflineRecordIdentity,
+    resolveDeviceOfflineTrackIdentity,
+} from "./trackIdentity";
+import { isTrackActionable } from "@/lib/trackRef";
 import {
     getDeviceAudioVault,
     type DeviceAudioAccessState,
@@ -168,6 +174,8 @@ export interface DeviceOfflineContextValue {
     records: DeviceOfflineDownloadRecord[];
     queueItems: DeviceOfflineQueueItem[];
     automationSettings: DeviceOfflineAutomationSettings | null;
+    automationError: string | null;
+    retryAutomation(): Promise<void>;
     capability: ReturnType<typeof resolveDeviceOfflineTransferCapability>;
     download(
         input: Omit<DeviceOfflineDownloadInput, "ownerId">,
@@ -275,6 +283,14 @@ export function DeviceOfflineProvider({
     const autoSyncPromises = useRef(
         new Map<string, { dirty: boolean; promise: Promise<void> }>(),
     );
+    const [automationFailure, setAutomationFailure] = useState<{
+        ownerId: string;
+        message: string;
+    } | null>(null);
+    const automationError =
+        automationFailure?.ownerId === ownerId
+            ? automationFailure.message
+            : null;
     const reconciledOwnerRef = useRef<string | null>(null);
     const reconcileRequestRef = useRef<{
         ownerId: string;
@@ -676,6 +692,14 @@ export function DeviceOfflineProvider({
         };
     }, [load, manager]);
 
+    useEffect(
+        () =>
+            subscribeToDeviceOfflinePlaybackInvalidations((invalidation) => {
+                if (invalidation.ownerId === ownerId) void load(true);
+            }),
+        [load, ownerId],
+    );
+
     useEffect(() => {
         if (!queueManager) return;
         return queueManager.subscribe(() => void loadQueue());
@@ -777,8 +801,14 @@ export function DeviceOfflineProvider({
         const access = await vault.requestLegacyAccess();
         const next = access ? toDeviceOfflineStorageState(access) : null;
         setLegacyStorage(next);
+        if (next?.status === "ready") {
+            await legacyMigrationRunRef.current?.promise;
+            if (legacyMigrationRunRef.current)
+                legacyMigrationRunRef.current.complete = false;
+            await resumeLegacyMigration();
+        }
         return next;
-    }, [vault]);
+    }, [resumeLegacyMigration, vault]);
 
     const requireManualStorage = useCallback(async () => {
         const next =
@@ -815,9 +845,15 @@ export function DeviceOfflineProvider({
                 }
                 const settings = await queueManager.getSettings(ownerId);
                 if (!settings.autoDownloadLiked || !isCurrentSession()) return;
-                const liked = await api.getLikedPlaylist({ limit: 10_000 });
+                const liked = await loadAllDeviceOfflineLikes(
+                    (params) => api.getLikedPlaylist(params),
+                    () =>
+                        isCurrentSession() &&
+                        navigator.onLine !== false &&
+                        document.visibilityState !== "hidden",
+                );
                 if (!isCurrentSession()) return;
-                const newestLiked = [...liked.tracks].sort(
+                const newestLiked = [...liked].sort(
                     (left, right) =>
                         Date.parse(right.likedAt) - Date.parse(left.likedAt),
                 );
@@ -840,15 +876,30 @@ export function DeviceOfflineProvider({
                     });
                 await queueManager.syncAutoLiked(ownerId, requests);
                 if (!isCurrentSession()) return;
-                await queueManager.resume(ownerId);
+                setAutomationFailure(null);
+                // A long download queue must not delay a later like/unlike refresh.
+                void queueManager
+                    .resume(ownerId)
+                    .catch(() => undefined)
+                    .finally(loadQueue);
                 await loadQueue();
             } while (entry.dirty && isCurrentSession());
         };
-        entry.promise = execute().finally(() => {
-            if (autoSyncPromises.current.get(ownerId) === entry) {
-                autoSyncPromises.current.delete(ownerId);
-            }
-        });
+        entry.promise = execute()
+            .catch((error) => {
+                if (isCurrentSession())
+                    setAutomationFailure({
+                        ownerId,
+                        message:
+                            "Не удалось обновить список любимых треков для загрузки. Проверьте интернет и повторите попытку.",
+                    });
+                throw error;
+            })
+            .finally(() => {
+                if (autoSyncPromises.current.get(ownerId) === entry) {
+                    autoSyncPromises.current.delete(ownerId);
+                }
+            });
         autoSyncPromises.current.set(ownerId, entry);
         return entry.promise;
     }, [
@@ -918,6 +969,11 @@ export function DeviceOfflineProvider({
     const resume = useCallback(
         async (record: DeviceOfflineDownloadRecord) => {
             if (record.ownerId !== ownerId) return;
+            if (!isTrackActionable(record.track)) {
+                throw new Error(
+                    "Этот источник TIDAL больше недоступен для загрузки",
+                );
+            }
             if (queueManager && ownerId) {
                 await requireManualStorage();
                 await queueManager.enqueueBatch([
@@ -994,6 +1050,11 @@ export function DeviceOfflineProvider({
             if (!ownerId || record.ownerId !== ownerId) {
                 throw new Error(
                     "Эта копия на устройстве принадлежит другому аккаунту",
+                );
+            }
+            if (!isTrackActionable(record.track)) {
+                throw new Error(
+                    "Этот источник TIDAL больше недоступен для воспроизведения",
                 );
             }
             if (record.status !== "ready") {
@@ -1076,30 +1137,41 @@ export function DeviceOfflineProvider({
             }
         >();
         for (const record of records) {
-            const current = index.get(record.trackIdentity);
-            if (!current) {
-                index.set(record.trackIdentity, {
-                    latest: record,
-                    latestReady: record.status === "ready" ? record : null,
-                });
-                continue;
-            }
-            if (record.updatedAt > current.latest.updatedAt) {
-                current.latest = record;
-            }
-            if (
-                record.status === "ready" &&
-                (!current.latestReady ||
-                    record.updatedAt > current.latestReady.updatedAt)
-            ) {
-                current.latestReady = record;
+            if (!ownerId || record.ownerId !== ownerId) continue;
+            const compatibleIdentity =
+                record.status === "ready"
+                    ? resolveCompatibleDeviceOfflineRecordIdentity(record)
+                    : null;
+            const identities = compatibleIdentity
+                ? [record.trackIdentity, compatibleIdentity]
+                : [record.trackIdentity];
+            for (const identity of identities) {
+                const current = index.get(identity);
+                if (!current) {
+                    index.set(identity, {
+                        latest: record,
+                        latestReady: record.status === "ready" ? record : null,
+                    });
+                    continue;
+                }
+                if (record.updatedAt > current.latest.updatedAt) {
+                    current.latest = record;
+                }
+                if (
+                    record.status === "ready" &&
+                    (!current.latestReady ||
+                        record.updatedAt > current.latestReady.updatedAt)
+                ) {
+                    current.latestReady = record;
+                }
             }
         }
         return index;
-    }, [records]);
+    }, [ownerId, records]);
 
     const recordForTrack = useCallback(
         (track: DeviceOfflineTrack) => {
+            if (!isTrackActionable(track)) return null;
             const identity = resolveDeviceOfflineTrackIdentity(track);
             return recordIndex.get(identity)?.latest ?? null;
         },
@@ -1108,6 +1180,7 @@ export function DeviceOfflineProvider({
 
     const readyRecordForTrack = useCallback(
         (track: DeviceOfflineTrack) => {
+            if (!isTrackActionable(track)) return null;
             const identity = resolveDeviceOfflineTrackIdentity(track);
             return recordIndex.get(identity)?.latestReady ?? null;
         },
@@ -1201,6 +1274,18 @@ export function DeviceOfflineProvider({
         }
     }, [load, loadQueue, ownerId, queueManager, storage.status]);
 
+    const refresh = useCallback(() => load(true), [load]);
+
+    const retryAutomation = useCallback(async () => {
+        if (!queueManager || !ownerId) return;
+        await queueManager.retryAutomaticDownloads(ownerId);
+        await syncAutoLiked();
+        void queueManager
+            .resume(ownerId)
+            .catch(() => undefined)
+            .finally(loadQueue);
+    }, [loadQueue, ownerId, queueManager, syncAutoLiked]);
+
     const value = useMemo<DeviceOfflineContextValue>(
         () => ({
             isHydrated,
@@ -1211,6 +1296,8 @@ export function DeviceOfflineProvider({
             records,
             queueItems,
             automationSettings,
+            automationError,
+            retryAutomation,
             capability,
             download,
             resume,
@@ -1226,7 +1313,7 @@ export function DeviceOfflineProvider({
             setupStorage,
             setupLegacyStorage,
             retryStorage,
-            refresh: () => load(false),
+            refresh,
         }),
         [
             capability,
@@ -1238,11 +1325,11 @@ export function DeviceOfflineProvider({
             exportDownload,
             isHydrated,
             isQueueHydrated,
-            load,
             preparePlayback,
             readyRecordForTrack,
             recordForTrack,
             records,
+            refresh,
             queueItems,
             resume,
             retryStorage,
@@ -1252,6 +1339,8 @@ export function DeviceOfflineProvider({
             legacyStorage,
             storageError,
             automationSettings,
+            automationError,
+            retryAutomation,
             updateAutomationSettings,
         ],
     );

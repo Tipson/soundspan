@@ -22,6 +22,23 @@ export function LibraryPlaylistCard({
     return (
         <Link
             href={href}
+            onClick={
+                href === "/library?tab=downloads"
+                    ? (event) => {
+                          if (
+                              event.button !== 0 ||
+                              event.metaKey ||
+                              event.ctrlKey ||
+                              event.shiftKey ||
+                              event.altKey
+                          )
+                              return;
+                          event.preventDefault();
+                          // This collection is already part of the mounted library page.
+                          window.history.pushState(null, "", href);
+                      }
+                    : undefined
+            }
             data-library-static-playlist={accent}
             className="group min-w-0 rounded-[20px] border border-transparent p-2 transition-[transform,background-color,border-color] hover:-translate-y-0.5 hover:border-white/[0.08] hover:bg-white/[0.045] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none motion-reduce:transition-none"
         >

@@ -5,22 +5,66 @@ import type {
     RecommendationMood,
     ScoredRecommendation,
 } from "./types";
+import {
+    buildRecommendationAlbumKey,
+    normalizeRecommendationArtistKey,
+} from "./identityKeys";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
+const MAX_RECENT_ARTIST_PENALTY = 0.6;
+// Reuse the existing diversity strength, not an additional hard album quota.
+const DIVERSITY_PENALTY = 0.42;
 const MAX_TRACKS_PER_ARTIST = 2;
 const MAX_TRACKS_PER_ALBUM = 2;
+const MAX_CACHED_CENTROID_SETS = 32;
+// Count UTF-16 code units conservatively as two bytes; values add < 1 MiB.
+const MAX_CENTROID_KEY_UNITS = 16 * 1024 * 1024;
+const centroidSets = new Map<string, number[][]>();
+let centroidKeyUnits = 0;
+
+function packCentroidInput(
+    vectors: readonly (readonly number[])[],
+    count: number,
+): { key: string; packed: Float64Array } | null {
+    if (
+        vectors.length > 500 ||
+        !Number.isInteger(count) ||
+        count < 1 ||
+        count > 5
+    )
+        return null;
+    if (vectors.some((vector) => vector.length !== 512)) return null;
+    const packed = new Float64Array(vectors.length * 512);
+    for (let row = 0; row < vectors.length; row += 1) {
+        if (!(row in vectors)) return null;
+        const vector = vectors[row];
+        for (let axis = 0; axis < vector.length; axis += 1) {
+            // Sparse/invalid legacy input retains the uncached path.
+            const value = vector[axis];
+            if (!Number.isFinite(value)) return null;
+            packed[row * 512 + axis] = value;
+        }
+    }
+    // Full IEEE-754 bytes preserve ordering, duplicates and negative zero.
+    // No hash collision, account key or time-based freshness decision is used.
+    return {
+        key: `${count}:${Buffer.from(packed.buffer).toString("base64")}`,
+        packed,
+    };
+}
 
 function normalizeVector(vector: readonly number[]): number[] | null {
-    if (
-        vector.length === 0 ||
-        vector.some((value) => !Number.isFinite(value))
-    ) {
-        return null;
+    if (vector.length === 0) return null;
+    let squaredNorm = 0;
+    for (let index = 0; index < vector.length; index += 1) {
+        // Preserve the callbacks' treatment of sparse legacy vectors.
+        if (!(index in vector)) continue;
+        const value = vector[index];
+        if (!Number.isFinite(value)) return null;
+        squaredNorm += value * value;
     }
-    const norm = Math.sqrt(
-        vector.reduce((sum, value) => sum + value * value, 0),
-    );
+    const norm = Math.sqrt(squaredNorm);
     if (norm <= Number.EPSILON) return null;
     return vector.map((value) => value / norm);
 }
@@ -39,7 +83,25 @@ export function buildTasteCentroids(
     rawVectors: readonly (readonly number[])[],
     maxCentroids = 5,
 ): number[][] {
-    const vectors = rawVectors
+    // Inspect exact raw contents before normalization: repeated snapshots avoid
+    // both clustering and thousands of redundant vector normalizations.
+    const input = packCentroidInput(rawVectors, maxCentroids);
+    const cacheKey = input?.key ?? null;
+    const cached = cacheKey === null ? undefined : centroidSets.get(cacheKey);
+    if (cached && cacheKey !== null) {
+        centroidSets.delete(cacheKey);
+        centroidSets.set(cacheKey, cached);
+        return cached.map((center) => [...center]);
+    }
+    // On a miss use the checked snapshot, keeping caller reads bounded and
+    // preserving the legacy path for sparse, oversized or invalid vectors.
+    const vectors = (
+        input
+            ? rawVectors.map((_vector, row) =>
+                  Array.from(input.packed.subarray(row * 512, (row + 1) * 512)),
+              )
+            : rawVectors
+    )
         .map(normalizeVector)
         .filter((vector): vector is number[] => vector !== null);
     if (vectors.length === 0) return [];
@@ -91,6 +153,21 @@ export function buildTasteCentroids(
             if (normalized) centers[index] = normalized;
         });
     }
+    if (cacheKey !== null) {
+        while (
+            centroidSets.size >= MAX_CACHED_CENTROID_SETS ||
+            centroidKeyUnits + cacheKey.length > MAX_CENTROID_KEY_UNITS
+        ) {
+            const oldest = centroidSets.keys().next().value!;
+            centroidSets.delete(oldest);
+            centroidKeyUnits -= oldest.length;
+        }
+        centroidSets.set(
+            cacheKey,
+            centers.map((center) => [...center]),
+        );
+        centroidKeyUnits += cacheKey.length;
+    }
     return centers;
 }
 
@@ -103,15 +180,31 @@ function stableUnitInterval(value: string): number {
     return (hash >>> 0) / 4_294_967_295;
 }
 
-function moodFeatureScore(
+/** Score a listening context from measured features, without changing candidate sources. */
+export function moodFeatureScore(
     candidate: RecommendationCandidate,
     mood: RecommendationMood | null,
 ): number {
     if (!mood) return candidate.moodSimilarity ?? 0;
     if (candidate.moodSimilarity !== undefined) return candidate.moodSimilarity;
+    if (mood === "favorites") return candidate.accountAffinity ?? 0;
     const features = candidate.audioFeatures;
     if (!features) return 0;
-    const energy = features.energy ?? 0.5;
+    // Pending canonical rows also have a feature object, but no measurements.
+    // Do not reward them as an invented 0.5 mood match.
+    if (
+        mood !== "forgotten" &&
+        [
+            features.arousal,
+            features.energy,
+            features.danceability,
+            features.instrumentalness,
+        ].every((value) => value == null)
+    )
+        return 0;
+    // Canonical energy is RMS-derived and saturates on loud masters. Arousal
+    // captures perceptual intensity; retain energy for older/unanalysed rows.
+    const energy = features.arousal ?? features.energy ?? 0.5;
     const valence = features.valence ?? 0.5;
     const danceability = features.danceability ?? 0.5;
     const instrumentalness = features.instrumentalness ?? 0.5;
@@ -121,48 +214,121 @@ function moodFeatureScore(
         case "energetic":
             return energy * 0.7 + danceability * 0.3;
         case "focus":
+            // Low distraction matters more than absence of vocals: heavy
+            // instrumental tracks must not outrank gentle personal music.
             return (
-                instrumentalness * 0.6 +
-                (1 - danceability) * 0.2 +
-                (1 - Math.abs(energy - 0.45)) * 0.2
+                (1 - energy) * 0.5 +
+                instrumentalness * 0.35 +
+                (1 - danceability) * 0.15
             );
         case "workout":
             return energy * 0.55 + danceability * 0.45;
-        case "favorites":
-            return candidate.accountAffinity ?? 0;
         case "forgotten":
             return valence * 0.1;
     }
 }
 
+/** Explicit listening intent matters in both rollout arms; neutral mode is unchanged. */
+export function moodRankingScore(
+    candidate: RecommendationCandidate,
+    mood: RecommendationMood | null,
+): number {
+    const explicitContext =
+        mood === "calm" ||
+        mood === "energetic" ||
+        mood === "focus" ||
+        mood === "workout";
+    return moodFeatureScore(candidate, mood) * (explicitContext ? 2.4 : 0.8);
+}
+
+function latestCanonicalExposureTimes(
+    exposures: readonly RecommendationExposureSignal[],
+): ReadonlyMap<string, number> {
+    const latest = new Map<string, number>();
+    for (const exposure of exposures) {
+        const key = exposure.canonicalKey;
+        // Preserve the scan's NaN behavior for invalid dates as well as its
+        // pre-epoch and duplicate handling; this index changes cost, not policy.
+        latest.set(
+            key,
+            Math.max(
+                latest.get(key) ?? Number.NEGATIVE_INFINITY,
+                exposure.exposedAt.getTime(),
+            ),
+        );
+    }
+    return latest;
+}
+
 function latestExposureAge(
     key: string,
-    exposures: readonly RecommendationExposureSignal[],
+    latestExposures: ReadonlyMap<string, number>,
     now: Date,
 ): number | null {
-    let newest = Number.NEGATIVE_INFINITY;
-    for (const exposure of exposures) {
-        if (exposure.canonicalKey !== key) continue;
-        newest = Math.max(newest, exposure.exposedAt.getTime());
-    }
+    const newest = latestExposures.get(key) ?? Number.NEGATIVE_INFINITY;
     return Number.isFinite(newest) ? Math.max(0, now.getTime() - newest) : null;
 }
 
+function latestArtistExposureTimes(
+    exposures: readonly RecommendationExposureSignal[],
+): ReadonlyMap<string, number> {
+    const latest = new Map<string, number>();
+    for (const exposure of exposures) {
+        if (!exposure.artistKey) continue;
+        const artistKey = normalizeRecommendationArtistKey(exposure.artistKey);
+        const exposedAt = exposure.exposedAt.getTime();
+        if (!artistKey || !Number.isFinite(exposedAt)) continue;
+        latest.set(artistKey, Math.max(latest.get(artistKey) ?? 0, exposedAt));
+    }
+    return latest;
+}
+
+function latestAlbumExposureTimes(
+    exposures: readonly RecommendationExposureSignal[],
+): ReadonlyMap<string, number> {
+    const latest = new Map<string, number>();
+    for (const exposure of exposures) {
+        const time = exposure.exposedAt.getTime();
+        if (!exposure.albumKey || !Number.isFinite(time)) continue;
+        latest.set(
+            exposure.albumKey,
+            Math.max(
+                latest.get(exposure.albumKey) ?? Number.NEGATIVE_INFINITY,
+                time,
+            ),
+        );
+    }
+    return latest;
+}
+
+function latestArtistExposureAge(
+    artist: string,
+    latestExposures: ReadonlyMap<string, number>,
+    now: Date,
+): number | null {
+    const artistKey = normalizeRecommendationArtistKey(artist);
+    const exposedAt = artistKey ? latestExposures.get(artistKey) : undefined;
+    return exposedAt === undefined
+        ? null
+        : Math.max(0, now.getTime() - exposedAt);
+}
+
+interface DiversityCandidate {
+    canonicalKey: string;
+    artist: string;
+    album: string;
+    embedding: number[] | null;
+}
+
 function candidateSimilarity(
-    left: RecommendationCandidate,
-    right: RecommendationCandidate,
+    left: DiversityCandidate,
+    right: DiversityCandidate,
 ): number {
     if (left.canonicalKey === right.canonicalKey) return 1;
-    const leftArtist = left.artist.name.trim().toLocaleLowerCase();
-    const rightArtist = right.artist.name.trim().toLocaleLowerCase();
-    if (leftArtist && leftArtist === rightArtist) return 0.82;
-    const leftAlbum = left.album.title.trim().toLocaleLowerCase();
-    const rightAlbum = right.album.title.trim().toLocaleLowerCase();
-    if (leftAlbum && leftAlbum === rightAlbum) return 0.9;
+    if (left.artist && left.artist === right.artist) return 0.82;
+    if (left.album && left.album === right.album) return 0.9;
     if (left.embedding && right.embedding) {
-        const a = normalizeVector(left.embedding);
-        const b = normalizeVector(right.embedding);
-        if (a && b) return Math.max(0, cosine(a, b));
+        return Math.max(0, cosine(left.embedding, right.embedding));
     }
     return 0;
 }
@@ -170,9 +336,12 @@ function candidateSimilarity(
 function baseScore(
     candidate: RecommendationCandidate,
     options: RankRecommendationOptions,
+    latestArtistExposures: ReadonlyMap<string, number>,
+    latestCanonicalExposures: ReadonlyMap<string, number>,
+    latestAlbumExposures: ReadonlyMap<string, number>,
 ): number {
     let score = candidate.providerPrior + (candidate.accountAffinity ?? 0);
-    score += moodFeatureScore(candidate, options.mood) * 0.8;
+    score += moodRankingScore(candidate, options.mood);
     const vector = candidate.embedding
         ? normalizeVector(candidate.embedding)
         : null;
@@ -193,21 +362,15 @@ function baseScore(
                 ),
             ) * 0.4;
     }
-    const moodVector = options.moodEmbedding
-        ? normalizeVector(options.moodEmbedding)
-        : null;
+    const moodVector = options.moodEmbedding;
     if (vector && moodVector && vector.length === moodVector.length) {
         score += cosine(vector, moodVector) * 0.9;
     }
-    const sessionPositive = options.sessionPositiveEmbedding
-        ? normalizeVector(options.sessionPositiveEmbedding)
-        : null;
+    const sessionPositive = options.sessionPositiveEmbedding;
     if (vector && sessionPositive && vector.length === sessionPositive.length) {
         score += cosine(vector, sessionPositive) * 1.8;
     }
-    const sessionNegative = options.sessionNegativeEmbedding
-        ? normalizeVector(options.sessionNegativeEmbedding)
-        : null;
+    const sessionNegative = options.sessionNegativeEmbedding;
     if (vector && sessionNegative && vector.length === sessionNegative.length) {
         score -= Math.max(0, cosine(vector, sessionNegative)) * 0.9;
     }
@@ -221,11 +384,31 @@ function baseScore(
     }
     const exposureAge = latestExposureAge(
         candidate.canonicalKey,
-        options.exposures,
+        latestCanonicalExposures,
         options.now,
     );
     if (exposureAge !== null && exposureAge < SEVEN_DAYS_MS) {
         score -= 2 * (1 - exposureAge / SEVEN_DAYS_MS);
+    }
+    const artistExposureAge = latestArtistExposureAge(
+        candidate.artist.name,
+        latestArtistExposures,
+        options.now,
+    );
+    if (artistExposureAge !== null && artistExposureAge < ONE_DAY_MS) {
+        score -=
+            MAX_RECENT_ARTIST_PENALTY * (1 - artistExposureAge / ONE_DAY_MS);
+    }
+    const albumKey = buildRecommendationAlbumKey(
+        candidate.artist.name,
+        candidate.album.title,
+    );
+    const albumExposureAge =
+        albumKey === null
+            ? null
+            : latestExposureAge(albumKey, latestAlbumExposures, options.now);
+    if (albumExposureAge !== null && albumExposureAge < ONE_DAY_MS) {
+        score -= DIVERSITY_PENALTY * (1 - albumExposureAge / ONE_DAY_MS);
     }
     const exploration =
         stableUnitInterval(`${options.sessionId}:${candidate.canonicalKey}`) -
@@ -261,14 +444,55 @@ export function rankRecommendationCandidates(
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
 ): ScoredRecommendation[] {
-    const fresh = rankRecommendationCandidatePool(candidates, options, true);
+    // These vectors are common to every candidate, including fallback and
+    // exploration. Normalize once without mutating the caller's options.
+    const preparedOptions: RankRecommendationOptions = {
+        ...options,
+        moodEmbedding: options.moodEmbedding
+            ? normalizeVector(options.moodEmbedding)
+            : null,
+        sessionPositiveEmbedding: options.sessionPositiveEmbedding
+            ? normalizeVector(options.sessionPositiveEmbedding)
+            : null,
+        sessionNegativeEmbedding: options.sessionNegativeEmbedding
+            ? normalizeVector(options.sessionNegativeEmbedding)
+            : null,
+    };
+    const latestArtistExposures = latestArtistExposureTimes(options.exposures);
+    const latestAlbumExposures = latestAlbumExposureTimes(options.exposures);
+    const latestCanonicalExposures = latestCanonicalExposureTimes(
+        options.exposures,
+    );
+    const fresh = rankRecommendationCandidatePool(
+        candidates,
+        preparedOptions,
+        latestArtistExposures,
+        latestCanonicalExposures,
+        latestAlbumExposures,
+        true,
+    );
     const shouldBackfillRecent =
         fresh.length === 0 ||
         (options.perLaneLimit !== undefined && fresh.length < options.limit);
     const ranked = !shouldBackfillRecent
         ? fresh
-        : rankRecommendationCandidatePool(candidates, options, false, fresh);
-    return applyExplorationQuota(ranked, candidates, options);
+        : rankRecommendationCandidatePool(
+              candidates,
+              preparedOptions,
+              latestArtistExposures,
+              latestCanonicalExposures,
+              latestAlbumExposures,
+              false,
+              fresh,
+          );
+    return applyExplorationQuota(
+        ranked,
+        candidates,
+        preparedOptions,
+        latestArtistExposures,
+        latestCanonicalExposures,
+        latestAlbumExposures,
+    );
 }
 
 function isExplorationCandidate(candidate: RecommendationCandidate): boolean {
@@ -282,6 +506,9 @@ function applyExplorationQuota(
     selected: ScoredRecommendation[],
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
+    latestArtistExposures: ReadonlyMap<string, number>,
+    latestCanonicalExposures: ReadonlyMap<string, number>,
+    latestAlbumExposures: ReadonlyMap<string, number>,
 ): ScoredRecommendation[] {
     const rate = Math.max(0, Math.min(0.3, options.explorationRate ?? 0));
     const target = Math.min(selected.length, Math.round(options.limit * rate));
@@ -300,7 +527,7 @@ function applyExplorationQuota(
             options.dislikedCanonicalKeys.has(candidate.canonicalKey) ||
             latestExposureAge(
                 candidate.canonicalKey,
-                options.exposures,
+                latestCanonicalExposures,
                 options.now,
             ) !== null
         ) {
@@ -319,7 +546,13 @@ function applyExplorationQuota(
                     new Set([...track.candidateSources, "exploration"]),
                 ),
             },
-            score: baseScore(track, options),
+            score: baseScore(
+                track,
+                options,
+                latestArtistExposures,
+                latestCanonicalExposures,
+                latestAlbumExposures,
+            ),
         }))
         .sort(
             (left, right) =>
@@ -336,7 +569,7 @@ function applyExplorationQuota(
     const albumCounts = new Map<string, number>();
     const laneCounts = new Map<string, number>();
     const keys = (track: RecommendationCandidate) => {
-        const artist = track.artist.name.trim().toLocaleLowerCase();
+        const artist = normalizeRecommendationArtistKey(track.artist.name);
         return {
             artist,
             album: `${artist}:${track.album.title.trim().toLocaleLowerCase()}`,
@@ -412,6 +645,9 @@ function applyExplorationQuota(
 function rankRecommendationCandidatePool(
     candidates: readonly RecommendationCandidate[],
     options: RankRecommendationOptions,
+    latestArtistExposures: ReadonlyMap<string, number>,
+    latestCanonicalExposures: ReadonlyMap<string, number>,
+    latestAlbumExposures: ReadonlyMap<string, number>,
     enforceOneDayCooldown: boolean,
     initialSelections: readonly ScoredRecommendation[] = [],
 ): ScoredRecommendation[] {
@@ -429,7 +665,7 @@ function rankRecommendationCandidatePool(
         if (!providerTrackId) continue;
         const age = latestExposureAge(
             candidate.canonicalKey,
-            options.exposures,
+            latestCanonicalExposures,
             options.now,
         );
         if (enforceOneDayCooldown && age !== null && age < ONE_DAY_MS) continue;
@@ -440,13 +676,54 @@ function rankRecommendationCandidatePool(
     }
 
     const scored = [...bestByCanonical.values()]
-        .map((track) => ({ track, score: baseScore(track, options) }))
+        .map((track) => ({
+            track,
+            score: baseScore(
+                track,
+                options,
+                latestArtistExposures,
+                latestCanonicalExposures,
+                latestAlbumExposures,
+            ),
+        }))
         .sort(
             (left, right) =>
                 right.score - left.score ||
                 left.track.canonicalKey.localeCompare(right.track.canonicalKey),
         );
     const selected: ScoredRecommendation[] = [...initialSelections];
+    // Request-local preparation preserves exact scoring and sees mutations on
+    // the next call. Each vector is normalized once for this diversity pass.
+    const prepared = new Map<RecommendationCandidate, DiversityCandidate>();
+    const prepare = (track: RecommendationCandidate): DiversityCandidate => {
+        let value = prepared.get(track);
+        if (!value) {
+            value = {
+                canonicalKey: track.canonicalKey,
+                artist: normalizeRecommendationArtistKey(track.artist.name),
+                album: track.album.title.trim().toLocaleLowerCase(),
+                embedding: track.embedding
+                    ? normalizeVector(track.embedding)
+                    : null,
+            };
+            prepared.set(track, value);
+        }
+        return value;
+    };
+    const redundancy = new Map<RecommendationCandidate, number>();
+    const includeSimilarity = (picked: RecommendationCandidate) => {
+        const right = prepare(picked);
+        for (const entry of scored) {
+            redundancy.set(
+                entry.track,
+                Math.max(
+                    redundancy.get(entry.track) ?? 0,
+                    candidateSimilarity(prepare(entry.track), right),
+                ),
+            );
+        }
+    };
+    for (const picked of initialSelections) includeSimilarity(picked.track);
     const artistCounts = new Map<string, number>();
     const albumCounts = new Map<string, number>();
     const laneCounts = new Map<
@@ -460,7 +737,9 @@ function rankRecommendationCandidatePool(
             : null;
 
     for (const picked of selected) {
-        const artistKey = picked.track.artist.name.trim().toLocaleLowerCase();
+        const artistKey = normalizeRecommendationArtistKey(
+            picked.track.artist.name,
+        );
         const albumKey = `${artistKey}:${picked.track.album.title
             .trim()
             .toLocaleLowerCase()}`;
@@ -478,12 +757,9 @@ function rankRecommendationCandidatePool(
         let bestIndex = -1;
         let bestMmr = Number.NEGATIVE_INFINITY;
         scored.forEach((entry, index) => {
-            const artistKey = entry.track.artist.name
-                .trim()
-                .toLocaleLowerCase();
-            const albumKey = `${artistKey}:${entry.track.album.title
-                .trim()
-                .toLocaleLowerCase()}`;
+            const identity = prepare(entry.track);
+            const artistKey = identity.artist;
+            const albumKey = `${artistKey}:${identity.album}`;
             if ((artistCounts.get(artistKey) ?? 0) >= MAX_TRACKS_PER_ARTIST) {
                 return;
             }
@@ -497,14 +773,9 @@ function rankRecommendationCandidatePool(
             ) {
                 return;
             }
-            const redundancy = selected.length
-                ? Math.max(
-                      ...selected.map((picked) =>
-                          candidateSimilarity(entry.track, picked.track),
-                      ),
-                  )
-                : 0;
-            const mmr = entry.score - redundancy * 0.42;
+            const mmr =
+                entry.score -
+                (redundancy.get(entry.track) ?? 0) * DIVERSITY_PENALTY;
             if (mmr > bestMmr) {
                 bestMmr = mmr;
                 bestIndex = index;
@@ -513,7 +784,10 @@ function rankRecommendationCandidatePool(
         if (bestIndex < 0) break;
         const [winner] = scored.splice(bestIndex, 1);
         selected.push(winner);
-        const artistKey = winner.track.artist.name.trim().toLocaleLowerCase();
+        if (selected.length < options.limit) includeSimilarity(winner.track);
+        const artistKey = normalizeRecommendationArtistKey(
+            winner.track.artist.name,
+        );
         const albumKey = `${artistKey}:${winner.track.album.title
             .trim()
             .toLocaleLowerCase()}`;

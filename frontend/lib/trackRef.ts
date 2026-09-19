@@ -2,6 +2,8 @@ import type {
     CanonicalMediaSource,
     UnifiedTrackSource,
 } from "@soundspan/media-metadata-contract";
+import type { Track as AudioTrack } from "@/lib/audio-state-context";
+import { musicSourceCandidateSchema } from "./audio/musicSourcePlayback";
 
 export type TrackRef =
     | { trackId: string }
@@ -32,7 +34,9 @@ type ProviderSource = CanonicalMediaSource;
 type TrackRefInput = {
     id?: string | null;
     hasLocalFile?: boolean;
-    source?: UnifiedTrackSource | null;
+    filePath?: string | null;
+    mediaSource?: ProviderSource | null;
+    source?: UnifiedTrackSource | CanonicalMediaSource | null;
     title?: string | null;
     displayTitle?: string | null;
     duration?: number | string | null;
@@ -137,13 +141,30 @@ function prefixedTrackIdRef(
     return null;
 }
 
-function resolveStreamSource(input: TrackRefInput): ProviderSource | null {
-    return input.streamSource ?? input.provider?.source ?? null;
+/** Resolve provider authority in normalized transport precedence order. */
+export function resolveTrackProviderSource(
+    input: TrackRefInput,
+): ProviderSource | null {
+    const sourceFallback =
+        input.source === "local" ||
+        input.source === "tidal" ||
+        input.source === "youtube" ||
+        input.source === "audius" ||
+        input.source === "vk" ||
+        input.source === "yandex"
+            ? input.source
+            : null;
+    return (
+        input.provider?.source ??
+        input.mediaSource ??
+        input.streamSource ??
+        sourceFallback
+    );
 }
 
 function resolveYouTubeVideoId(input: TrackRefInput): string | null {
     const explicit = normalizeNonEmptyString(
-        input.youtubeVideoId ?? input.provider?.youtubeVideoId,
+        input.provider?.youtubeVideoId ?? input.youtubeVideoId,
     );
     if (explicit !== null) {
         return explicit;
@@ -159,7 +180,7 @@ function resolveYouTubeVideoId(input: TrackRefInput): string | null {
 
 function resolveTidalTrackId(input: TrackRefInput): number | null {
     const explicit = normalizeTidalTrackId(
-        input.tidalTrackId ?? input.provider?.tidalTrackId,
+        input.provider?.tidalTrackId ?? input.tidalTrackId,
     );
     if (explicit !== null) {
         return explicit;
@@ -173,12 +194,152 @@ function resolveTidalTrackId(input: TrackRefInput): number | null {
     return null;
 }
 
-function hasPersistedPreferenceIdentity(input: TrackRefInput): boolean {
+/** Returns whether the row has an explicit local playback identity. */
+export function hasLocalTrackBacking(input: TrackRefInput): boolean {
     return (
         input.hasLocalFile === true ||
-        input.source === "local" ||
+        normalizeNonEmptyString(input.filePath) !== null ||
+        resolveTrackProviderSource(input) === "local"
+    );
+}
+
+/**
+ * Identifies historical TIDAL-only rows retained for library management after
+ * the provider was retired. A real local file or an active YouTube identity
+ * takes precedence over incidental legacy TIDAL metadata.
+ */
+export function isRetiredRemoteOnlyTrack(input: TrackRefInput): boolean {
+    if (hasLocalTrackBacking(input)) return false;
+
+    const streamSource = resolveTrackProviderSource(input);
+    const hasActiveYouTubeIdentity =
+        (streamSource === "youtube" || streamSource === "youtube-direct") &&
+        resolveYouTubeVideoId(input) !== null;
+    if (hasActiveYouTubeIdentity) return false;
+
+    return (
+        streamSource === "tidal" ||
+        input.source === "tidal" ||
+        input.id?.startsWith("tidal:") === true ||
+        input.tidalTrackId != null ||
+        input.provider?.tidalTrackId != null
+    );
+}
+
+/** Shared action fence for retained tracks from retired remote providers. */
+export function isTrackActionable(input: TrackRefInput): boolean {
+    return !isRetiredRemoteOnlyTrack(input);
+}
+
+/** Sources accepted by personal playback but not by persistence/download contracts. */
+export function isPlaybackOnlyTrack(input: TrackRefInput): boolean {
+    return (
+        !hasLocalTrackBacking(input) &&
+        (resolveTrackProviderSource(input) === "audius" ||
+            resolveTrackProviderSource(input) === "vk" ||
+            resolveTrackProviderSource(input) === "yandex" ||
+            /^(audius|vk|yandex):/.test(input.id ?? ""))
+    );
+}
+
+/**
+ * Normalize the identity fields consumed by player, queue, playlist, and
+ * device actions. Real local media wins all incidental remote metadata;
+ * supported YouTube media receives one canonical provider identity.
+ */
+export function normalizeActionableAudioTrack(
+    track: AudioTrack,
+): AudioTrack | null {
+    if (isRetiredRemoteOnlyTrack(track)) return null;
+    if (hasLocalTrackBacking(track)) {
+        return {
+            ...track,
+            mediaSource: "local",
+            provider: undefined,
+            source: "local",
+            streamSource: undefined,
+            tidalTrackId: undefined,
+            youtubeVideoId: undefined,
+            youtubeAudioFormat: undefined,
+        };
+    }
+
+    const providerSource = resolveTrackProviderSource(track);
+    if (providerSource === "vk" || providerSource === "yandex") {
+        const parsed = musicSourceCandidateSchema.safeParse(
+            track.musicSourceRecording,
+        );
+        if (
+            !parsed.success ||
+            parsed.data.provider !== providerSource ||
+            track.id !== `${providerSource}:${parsed.data.id}` ||
+            track.provider?.providerTrackId !== parsed.data.id
+        )
+            return null;
+        return {
+            ...track,
+            mediaSource: providerSource,
+            source: providerSource,
+            streamSource: providerSource,
+            musicSourceRecording: parsed.data,
+            youtubeVideoId: undefined,
+            tidalTrackId: undefined,
+            youtubeAudioFormat: undefined,
+        };
+    }
+    if (providerSource === "audius") {
+        const id = track.provider?.providerTrackId;
+        if (
+            !id ||
+            !/^[A-Za-z0-9]{3,32}$/.test(id) ||
+            track.id !== `audius:${id}`
+        )
+            return null;
+        return {
+            ...track,
+            mediaSource: "audius",
+            source: "audius",
+            streamSource: "audius",
+            provider: { source: "audius", providerTrackId: id },
+            tidalTrackId: undefined,
+            youtubeVideoId: undefined,
+            youtubeAudioFormat: undefined,
+        };
+    }
+    let reference: TrackRef;
+    try {
+        reference = toTrackRef(track);
+    } catch {
+        return null;
+    }
+    if ("tidalTrackId" in reference) return null;
+    if (!("youtubeVideoId" in reference)) return track;
+
+    const source =
+        providerSource === "youtube-direct" ? "youtube-direct" : "youtube";
+    return {
+        ...track,
+        mediaSource: source,
+        provider: {
+            ...track.provider,
+            source,
+            providerTrackId:
+                track.provider?.providerTrackId ?? reference.youtubeVideoId,
+            tidalTrackId: undefined,
+            youtubeVideoId: reference.youtubeVideoId,
+        },
+        source: "youtube",
+        streamSource: source,
+        tidalTrackId: undefined,
+        youtubeVideoId: reference.youtubeVideoId,
+    };
+}
+
+function hasPersistedPreferenceIdentity(input: TrackRefInput): boolean {
+    return (
+        hasLocalTrackBacking(input) ||
         input.source === "federated" ||
-        resolveStreamSource(input) === "local"
+        resolveTrackProviderSource(input) === "local"
     );
 }
 
@@ -194,19 +355,7 @@ export function resolvePreferenceTrackId(
         return input.id;
     }
 
-    const prefixed = prefixedTrackIdRef(input.id);
-    if (prefixed && "tidalTrackId" in prefixed) {
-        return `tidal:${prefixed.tidalTrackId}`;
-    }
-    if (prefixed && "youtubeVideoId" in prefixed) {
-        return `yt:${prefixed.youtubeVideoId}`;
-    }
-
-    const providerSource =
-        resolveStreamSource(input) ??
-        (input.source === "tidal" || input.source === "youtube"
-            ? input.source
-            : null);
+    const providerSource = resolveTrackProviderSource(input);
     const tidalTrackId = resolveTidalTrackId(input);
     const youtubeVideoId = resolveYouTubeVideoId(input);
 
@@ -218,6 +367,14 @@ export function resolvePreferenceTrackId(
         youtubeVideoId
     ) {
         return `yt:${youtubeVideoId}`;
+    }
+
+    const prefixed = prefixedTrackIdRef(input.id);
+    if (prefixed && "tidalTrackId" in prefixed) {
+        return `tidal:${prefixed.tidalTrackId}`;
+    }
+    if (prefixed && "youtubeVideoId" in prefixed) {
+        return `yt:${prefixed.youtubeVideoId}`;
     }
     if (tidalTrackId !== null) {
         return `tidal:${tidalTrackId}`;
@@ -233,14 +390,13 @@ export function resolvePreferenceTrackId(
  * Returns whether the provided reference shape identifies a non-local provider track.
  */
 export function isRemoteTrack(input: TrackRefInput | TrackRef): boolean {
-    const streamSource = resolveStreamSource(input as TrackRefInput);
-    if (streamSource === "local") {
-        return false;
-    }
-
     if ("trackId" in input) {
         return false;
     }
+
+    if (hasLocalTrackBacking(input)) return false;
+
+    const streamSource = resolveTrackProviderSource(input);
 
     if (
         "youtubeVideoId" in input &&
@@ -271,7 +427,10 @@ export function isRemoteTrack(input: TrackRefInput | TrackRef): boolean {
     return (
         streamSource === "youtube" ||
         streamSource === "youtube-direct" ||
-        streamSource === "tidal"
+        streamSource === "tidal" ||
+        streamSource === "audius" ||
+        streamSource === "vk" ||
+        streamSource === "yandex"
     );
 }
 
@@ -279,15 +438,30 @@ export function isRemoteTrack(input: TrackRefInput | TrackRef): boolean {
  * Normalizes mixed track payloads into a strict local/remote track reference union.
  */
 export function toTrackRef(input: TrackRefInput): TrackRef {
-    const source = resolveStreamSource(input);
+    const source = resolveTrackProviderSource(input);
 
-    if (source === "local") {
+    if (hasLocalTrackBacking(input)) {
         if (typeof input.id === "string" && input.id.trim()) {
             return {
                 trackId: input.id,
             };
         }
         throw new Error("Local track reference is missing track id");
+    }
+
+    if (source === "audius" || input.id?.startsWith("audius:")) {
+        throw new Error(
+            "Audius supports playback only; playlist and library writes are unavailable",
+        );
+    }
+    if (
+        source === "vk" ||
+        source === "yandex" ||
+        /^(vk|yandex):/.test(input.id ?? "")
+    ) {
+        throw new Error(
+            "Service catalog track requires a persistent catalog reference",
+        );
     }
 
     if (source === "youtube" || source === "youtube-direct") {
@@ -389,6 +563,9 @@ function resolveRemoteMetadata(input: TrackRefInput): {
  * Builds a playlist add payload using provider identifiers and required remote metadata.
  */
 export function toAddToPlaylistRef(input: TrackRefInput): AddToPlaylistRef {
+    if (isRetiredRemoteOnlyTrack(input)) {
+        throw new Error("Retired TIDAL tracks cannot be added to playlists");
+    }
     const trackRef = toTrackRef(input);
 
     if ("trackId" in trackRef) {

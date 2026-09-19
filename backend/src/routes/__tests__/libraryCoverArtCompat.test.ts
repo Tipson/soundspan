@@ -66,6 +66,7 @@ jest.mock("../../utils/redis", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        underJest: true,
         audiobookshelf: undefined,
         features: { federation: false },
         get audiobookshelfEnv() {
@@ -2063,8 +2064,8 @@ describe("library cover-art proxy compatibility", () => {
 
         expect(mockFetchExternalImage).toHaveBeenCalledWith({
             url: "https://example.com/recovered.jpg",
-            timeoutMs: 15000,
-            maxRetries: 3,
+            timeoutMs: 5000,
+            maxRetries: 1,
         });
         expect(res.statusCode).toBe(200);
         expect(res.send).toHaveBeenCalledWith(
@@ -2093,6 +2094,71 @@ describe("library cover-art proxy compatibility", () => {
         await invokeWithErrorHandler(coverArtHandler, req, res);
 
         expect(res.statusCode).toBe(500);
+    });
+
+    it("temporarily suppresses repeated fetches for an unavailable cover", async () => {
+        mockFetchExternalImage.mockResolvedValueOnce({
+            ok: false,
+            status: "fetch_error",
+            url: "https://example.com/unavailable.jpg",
+            message: "timeout",
+        });
+        const firstReq = {
+            query: { url: "https://example.com/unavailable.jpg" },
+            params: {},
+            headers: {},
+        } as any;
+        const firstRes = createRes();
+
+        await coverArtHandler(firstReq, firstRes);
+
+        expect(firstRes.statusCode).toBe(502);
+        expect(mockRedisSetEx).toHaveBeenCalledWith(
+            expect.stringMatching(/^cover-art-failure:/),
+            5 * 60,
+            "1",
+        );
+
+        jest.clearAllMocks();
+        mockRedisGet.mockResolvedValueOnce(null).mockResolvedValueOnce("1");
+        const secondRes = createRes();
+        await coverArtHandler(firstReq, secondRes);
+
+        expect(secondRes.statusCode).toBe(503);
+        expect(mockFetchExternalImage).not.toHaveBeenCalled();
+    });
+
+    it("coalesces concurrent external fetches across requested sizes", async () => {
+        let releaseFetch!: (value: unknown) => void;
+        mockFetchExternalImage.mockReturnValueOnce(
+            new Promise((resolve) => {
+                releaseFetch = resolve;
+            }),
+        );
+        const request = (size: string) => ({
+            query: { url: "https://example.com/shared.jpg", size },
+            params: {},
+            headers: { accept: "image/webp" },
+        });
+        const firstRes = createRes();
+        const secondRes = createRes();
+
+        const first = coverArtHandler(request("128"), firstRes);
+        const second = coverArtHandler(request("256"), secondRes);
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(mockFetchExternalImage).toHaveBeenCalledTimes(1);
+
+        releaseFetch({
+            ok: true,
+            buffer: Buffer.from("shared-image"),
+            contentType: "image/jpeg",
+            etag: "shared-etag",
+            url: "https://example.com/shared.jpg",
+        });
+        await Promise.all([first, second]);
+
+        expect(firstRes.statusCode).toBe(200);
+        expect(secondRes.statusCode).toBe(200);
     });
 });
 

@@ -16,26 +16,39 @@ import {
 export interface RuntimeProviderTrack {
     mediaSource?: CanonicalMediaSource;
     provider?: CanonicalMediaProviderIdentity;
-    streamSource?: "local" | "peer" | "tidal" | "youtube" | "youtube-direct";
+    streamSource?: CanonicalMediaSource;
     tidalTrackId?: number;
     youtubeVideoId?: string;
     youtubeAudioFormat?: "mp4" | "webm";
+}
+
+function normalizeRuntimeProvider(
+    track: RuntimeProviderTrack,
+): CanonicalMediaProviderIdentity {
+    return normalizeCanonicalMediaProviderIdentity({
+        mediaSource: track.provider?.source ?? track.mediaSource,
+        providerTrackId: track.provider?.providerTrackId,
+        tidalTrackId: track.provider?.tidalTrackId ?? track.tidalTrackId,
+        youtubeVideoId: track.provider?.youtubeVideoId ?? track.youtubeVideoId,
+        streamSource: track.streamSource,
+    });
+}
+
+/** Returns true for retained metadata from the removed TIDAL integration. */
+export function isRetiredProviderTrack(track: RuntimeProviderTrack): boolean {
+    return normalizeRuntimeProvider(track).source === "tidal";
 }
 
 /** Resolves the next music item eligible for gapless preload. */
 export function getNextTrackInfo(
     queue: {
         id: string;
+        playbackSourcePolicy?: "device-only";
         itemType?: string;
         filePath?: string;
         mediaSource?: CanonicalMediaSource;
         provider?: CanonicalMediaProviderIdentity;
-        streamSource?:
-            | "local"
-            | "peer"
-            | "tidal"
-            | "youtube"
-            | "youtube-direct";
+        streamSource?: CanonicalMediaSource;
         tidalTrackId?: number;
         youtubeVideoId?: string;
         youtubeAudioFormat?: "mp4" | "webm";
@@ -46,11 +59,12 @@ export function getNextTrackInfo(
     repeatMode: "off" | "one" | "all",
 ): {
     id: string;
+    playbackSourcePolicy?: "device-only";
     itemType?: string;
     filePath?: string;
     mediaSource?: CanonicalMediaSource;
     provider?: CanonicalMediaProviderIdentity;
-    streamSource?: "local" | "peer" | "tidal" | "youtube" | "youtube-direct";
+    streamSource?: CanonicalMediaSource;
     tidalTrackId?: number;
     youtubeVideoId?: string;
     youtubeAudioFormat?: "mp4" | "webm";
@@ -87,18 +101,26 @@ export function getNextTrackInfo(
 export function resolveDirectTrackSourceType(
     track: RuntimeProviderTrack,
 ): AudioEngineSourceType {
-    const provider = normalizeCanonicalMediaProviderIdentity({
-        mediaSource: track.mediaSource,
-        providerTrackId: track.provider?.providerTrackId,
-        tidalTrackId: track.provider?.tidalTrackId ?? track.tidalTrackId,
-        youtubeVideoId: track.provider?.youtubeVideoId ?? track.youtubeVideoId,
-        streamSource: track.streamSource,
-    });
-    return toAudioEngineSourceType(provider.source);
+    return toAudioEngineSourceType(normalizeRuntimeProvider(track).source);
+}
+
+/** A confirmed loss of playback while the listener's play intent remains active. */
+export class PlaybackInterruptionError extends Error {
+    constructor(
+        readonly reason:
+            | "unexpected_stop"
+            | "unexpected_pause"
+            | "audio_pipeline_stall"
+            | "device_source_error",
+    ) {
+        super(`Playback interrupted: ${reason}`);
+        this.name = "PlaybackInterruptionError";
+    }
 }
 
 /** Classifies retryable transport and source-availability failures. */
 export function isLikelyTransientStreamError(error: unknown): boolean {
+    if (error instanceof PlaybackInterruptionError) return true;
     const message = (
         error instanceof Error ? error.message : String(error || "")
     )

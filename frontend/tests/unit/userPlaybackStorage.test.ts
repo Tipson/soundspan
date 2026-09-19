@@ -25,6 +25,7 @@ test("activating an unowned playback store clears identity state but preserves d
         soundspan_queue: '[{"id":"track-a"}]',
         soundspan_current_time: "42",
         soundspan_is_playing: "true",
+        soundspan_vibe_mode: "true",
         soundspan_volume: "0.7",
         soundspan_repeat_mode: "all",
     });
@@ -36,6 +37,7 @@ test("activating an unowned playback store clears identity state but preserves d
     assert.equal(values.has("soundspan_queue"), false);
     assert.equal(values.has("soundspan_current_time"), false);
     assert.equal(values.has("soundspan_is_playing"), false);
+    assert.equal(values.has("soundspan_vibe_mode"), false);
     assert.equal(values.get("soundspan_volume"), "0.7");
     assert.equal(values.get("soundspan_repeat_mode"), "all");
 });

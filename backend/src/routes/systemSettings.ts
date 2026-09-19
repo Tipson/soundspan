@@ -97,28 +97,16 @@ const systemSettingsSchema = z.object({
     transcodeCacheMaxGb: z.number().optional(),
     soulseekConcurrentDownloads: z.number().min(1).max(10).optional(),
 
-    downloadSource: z
-        .enum(["soulseek", "lidarr", "tidal", "youtube"])
-        .optional(),
+    downloadSource: z.enum(["soulseek", "lidarr", "youtube"]).optional(),
     playbackSourceOrder: z
         .string()
         .refine(isPlaybackSourceOrder, "Invalid playback source order")
         .optional(),
     primaryFailureFallback: z
-        .enum(["none", "lidarr", "soulseek", "tidal", "youtube"])
+        .enum(["none", "lidarr", "soulseek", "youtube"])
         .optional(),
 
     federationInstanceName: federationInstanceNameSchema,
-    // TIDAL — credential fields (tidalAccessToken, tidalRefreshToken,
-    // tidalUserId) are deliberately absent: they are managed exclusively
-    // by the /tidal-auth device flow. Accepting them here let a stale
-    // settings form round-trip wipe the admin download connection.
-    tidalEnabled: z.boolean().optional(),
-    tidalCountryCode: z.string().nullable().optional(),
-    tidalQuality: z
-        .enum(["LOW", "HIGH", "LOSSLESS", "HI_RES_LOSSLESS"])
-        .optional(),
-    tidalFileTemplate: z.string().nullable().optional(),
 
     // YouTube Music streaming
     ytMusicEnabled: z.boolean().optional(),
@@ -180,9 +168,6 @@ function buildEnvironmentUpdate(
  *       200:
  *         description: >
  *           System settings object with decrypted sensitive fields.
- *           TIDAL token material is never included; the boolean
- *           `tidalConnected` reports whether the admin download
- *           connection is established.
  *       401:
  *         description: Not authenticated
  *       403:
@@ -219,13 +204,16 @@ router.get("/", async (req, res) => {
             });
         }
 
-        // Decrypt sensitive fields before sending to client
+        // Decrypt sensitive fields before sending to client.
         // Use safeDecrypt to handle corrupted encrypted values gracefully.
-        // TIDAL tokens are never sent to the client — only a connection
-        // flag; the tokens live solely server-side (see /tidal-auth flow).
         const {
-            tidalAccessToken: storedTidalAccessToken,
-            tidalRefreshToken: storedTidalRefreshToken,
+            tidalAccessToken: _storedTidalAccessToken,
+            tidalRefreshToken: _storedTidalRefreshToken,
+            tidalUserId: _storedTidalUserId,
+            tidalCountryCode: _storedTidalCountryCode,
+            tidalEnabled: _storedTidalEnabled,
+            tidalQuality: _storedTidalQuality,
+            tidalFileTemplate: _storedTidalFileTemplate,
             spotifyClientId: _storedSpotifyClientId,
             spotifyClientSecret: _storedSpotifyClientSecret,
             ...clientSafeSettings
@@ -240,9 +228,6 @@ router.get("/", async (req, res) => {
             audiobookshelfApiKey: safeDecrypt(settings.audiobookshelfApiKey),
             soulseekPassword: safeDecrypt(settings.soulseekPassword),
             ytMusicClientSecret: safeDecrypt(settings.ytMusicClientSecret),
-            tidalConnected: !!(
-                storedTidalAccessToken && storedTidalRefreshToken
-            ),
         };
 
         res.json(decryptedSettings);
@@ -269,8 +254,7 @@ router.get("/", async (req, res) => {
  *             description: >
  *               Partial settings update, including the federation display
  *               name. Non-empty secrets replace stored values, empty secrets
- *               remain unchanged, and null clears them. TIDAL credentials are
- *               managed only through the TIDAL authentication endpoints.
+ *               remain unchanged, and null clears them.
  *             properties:
  *               federationInstanceName: { type: string, nullable: true, maxLength: 100, description: Empty or whitespace-only values clear the name }
  *     responses:
@@ -850,7 +834,7 @@ router.post("/test-lastfm", async (req, res) => {
         // Test with a known artist (The Beatles)
         const testArtist = "The Beatles";
 
-        const response = await axios.get("http://ws.audioscrobbler.com/2.0/", {
+        const response = await axios.get("https://ws.audioscrobbler.com/2.0/", {
             params: {
                 method: "artist.getinfo",
                 artist: testArtist,
@@ -873,12 +857,14 @@ router.post("/test-lastfm", async (req, res) => {
         }
     } catch (error: any) {
         logger.error("Last.fm test error:", error.message);
-        if (
-            error.response?.status === 403 ||
-            error.response?.data?.error === 10
-        ) {
+        const lastfmErrorCode = Number(error.response?.data?.error);
+        if (lastfmErrorCode === 10 || lastfmErrorCode === 26) {
             res.status(502).json({
                 error: "Invalid Last.fm API key",
+            });
+        } else if (lastfmErrorCode === 11 || lastfmErrorCode === 16) {
+            res.status(503).json({
+                error: "Last.fm is temporarily unavailable",
             });
         } else {
             res.status(500).json({
@@ -1141,170 +1127,6 @@ router.post("/test-spotify", async (req, res) => {
         res.status(500).json({
             error: "Failed to test Spotify credentials",
         });
-    }
-});
-
-/**
- * @openapi
- * /api/system-settings/test-tidal:
- *   post:
- *     summary: Test TIDAL connection or verify existing session
- *     tags: [System Settings]
- *     security:
- *       - apiKeyAuth: []
- *     responses:
- *       200:
- *         description: TIDAL session is valid
- *       401:
- *         description: Not authenticated
- *       403:
- *         description: Admin access required
- *       502:
- *         description: No valid TIDAL session
- *       503:
- *         description: TIDAL service is not running
- */
-// Test TIDAL connection — initiate device auth or verify existing session
-router.post("/test-tidal", async (req, res) => {
-    try {
-        const { tidalService } = await import("../services/tidal");
-
-        // First check if the sidecar is reachable
-        const healthy = await tidalService.isSidecarHealthy();
-        if (!healthy) {
-            return res.status(503).json({
-                error: "TIDAL service is not running",
-                details:
-                    "The tidal-streamer container is not reachable. Make sure it is running.",
-            });
-        }
-
-        // Try to verify existing session
-        const session = await tidalService.verifySession();
-        if (session.valid) {
-            return res.json({
-                success: true,
-                message: `Connected to TIDAL (user: ${session.userId})`,
-            });
-        }
-
-        // No valid session — return info so the UI can trigger device auth
-        return res.status(502).json({
-            error: "Not authenticated to TIDAL",
-            details:
-                "Use the TIDAL settings panel to authenticate via device authorization.",
-        });
-    } catch (error: any) {
-        logger.error("[TIDAL-TEST] Error:", error.message);
-        res.status(500).json({
-            error: "Failed to test TIDAL connection",
-        });
-    }
-});
-
-/**
- * @openapi
- * /api/system-settings/tidal-auth/device:
- *   post:
- *     summary: Initiate TIDAL device authorization (step 1)
- *     tags: [System Settings]
- *     security:
- *       - apiKeyAuth: []
- *     responses:
- *       200:
- *         description: Device authorization initiated, returns device code and verification URL
- *       401:
- *         description: Not authenticated
- *       403:
- *         description: Admin access required
- *       503:
- *         description: TIDAL service is not running
- */
-// TIDAL device auth — Step 1: get device code
-router.post("/tidal-auth/device", async (req, res) => {
-    try {
-        const { tidalService } = await import("../services/tidal");
-
-        const healthy = await tidalService.isSidecarHealthy();
-        if (!healthy) {
-            return res.status(503).json({
-                error: "TIDAL service is not running",
-            });
-        }
-
-        const deviceAuth = await tidalService.initiateDeviceAuth();
-        res.json(deviceAuth);
-    } catch (error: any) {
-        logger.error("[TIDAL-AUTH] Device auth error:", error.message);
-        res.status(500).json({ error: "Failed to initiate TIDAL auth" });
-    }
-});
-
-/**
- * @openapi
- * /api/system-settings/tidal-auth/token:
- *   post:
- *     summary: Poll for TIDAL device authorization token (step 2)
- *     tags: [System Settings]
- *     security:
- *       - apiKeyAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [device_code]
- *             properties:
- *               device_code:
- *                 type: string
- *     responses:
- *       200:
- *         description: TIDAL authentication completed successfully
- *       202:
- *         description: Authorization pending, user has not yet approved
- *       400:
- *         description: device_code is required
- *       401:
- *         description: Not authenticated
- *       403:
- *         description: Admin access required
- *       500:
- *         description: Failed to complete TIDAL auth
- */
-// TIDAL device auth — Step 2: poll for token
-router.post("/tidal-auth/token", async (req, res) => {
-    try {
-        const { device_code } = req.body;
-        if (!device_code) {
-            return sendRouteError(res, 400, "device_code is required");
-        }
-
-        const { tidalService } = await import("../services/tidal");
-        const tokens = await tidalService.pollDeviceAuth(device_code);
-
-        if (!tokens) {
-            // User hasn't authorised yet
-            return res.status(202).json({ status: "pending" });
-        }
-
-        // Save tokens to database
-        await tidalService.saveTokens({
-            accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
-            userId: tokens.user_id,
-            countryCode: tokens.country_code,
-        });
-
-        res.json({
-            success: true,
-            user_id: tokens.user_id,
-            country_code: tokens.country_code,
-            username: tokens.username,
-        });
-    } catch (error: any) {
-        logger.error("[TIDAL-AUTH] Token exchange error:", error.message);
-        res.status(500).json({ error: "Failed to complete TIDAL auth" });
     }
 });
 

@@ -41,7 +41,6 @@ mock.module("@/features/explore/hooks/useUserSettingsExplorePrefs", {
     namedExports: {
         useUserSettingsExplorePrefs: () => ({
             showYtMusicExplore: true,
-            showTidalExplore: false,
         }),
     },
 });

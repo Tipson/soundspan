@@ -23,11 +23,17 @@
 
 import {
     type AudioEngine,
+    type AudioEngineDiagnosticState,
     type AudioEngineEventHandler,
     type AudioEngineEventType,
     type AudioEngineLoadOptions,
+    type AudioPreloadLease,
     type AudioEngineSource,
 } from "@/lib/audio-engine/types";
+import {
+    createAudioPreloadLease,
+    type AudioPreloadLeaseController,
+} from "@/lib/audio-engine/audioPreloadLease";
 import {
     createInitialNativeEngineState,
     NATIVE_ENGINE_END_PAUSE_EPSILON_SEC,
@@ -50,11 +56,14 @@ export interface NativeAudioElementLike {
     readonly duration: number;
     readonly paused: boolean;
     readonly ended: boolean;
+    readonly readyState?: number;
+    readonly networkState?: number;
     muted: boolean;
     volume: number;
     preload: string;
     crossOrigin: string | null;
     readonly error: { code: number; message?: string } | null;
+    readonly buffered?: Pick<TimeRanges, "length" | "start" | "end">;
     play(): Promise<void> | void;
     pause(): void;
     removeAttribute(name: string): void;
@@ -185,6 +194,8 @@ export class NativeAudioElementEngine implements AudioEngine {
     private element: NativeAudioElementLike | null = null;
     private preloadElement: NativeAudioElementLike | null = null;
     private preloadedUrl: string | null = null;
+    private preloadController: AudioPreloadLeaseController | null = null;
+    private preloadReadinessCleanup: (() => void) | null = null;
     private policyState: NativeEnginePolicyState =
         createInitialNativeEngineState();
     private lastSource: AudioEngineSource | null = null;
@@ -327,6 +338,43 @@ export class NativeAudioElementEngine implements AudioEngine {
         return toFiniteDuration(this.element?.duration ?? 0);
     }
 
+    getDiagnosticState(): AudioEngineDiagnosticState {
+        return {
+            nativePaused: this.element?.paused ?? null,
+            readyState: this.element?.readyState ?? null,
+            networkState: this.element?.networkState ?? null,
+            mediaErrorCode: this.element?.error?.code ?? null,
+            audioContextState: this.iosBridge.getState() ?? "not_used",
+        };
+    }
+
+    /** Read the engine-owned element, which need not be attached to the DOM. */
+    getBufferedAheadSec(): number | null {
+        const element = this.element;
+        if (!element || !Number.isFinite(element.currentTime)) return null;
+        try {
+            const buffered = element.buffered;
+            if (!buffered) return null;
+            for (let index = 0; index < buffered.length; index += 1) {
+                const start = buffered.start(index);
+                const end = buffered.end(index);
+                if (!Number.isFinite(start) || !Number.isFinite(end))
+                    return null;
+                if (
+                    element.currentTime >= start &&
+                    element.currentTime <= end
+                ) {
+                    return Math.max(0, end - element.currentTime);
+                }
+            }
+            // A later range is separated by a gap; it cannot play at this position.
+            return 0;
+        } catch {
+            // A media pipeline being replaced can invalidate a TimeRanges read.
+            return null;
+        }
+    }
+
     isPlaying(): boolean {
         return Boolean(
             this.element && !this.element.paused && !this.element.ended,
@@ -357,23 +405,82 @@ export class NativeAudioElementEngine implements AudioEngine {
     preload(
         source: AudioEngineSource | string,
         options?: AudioEngineLoadOptions,
-    ): void;
-    preload(source: AudioEngineSource | string, format?: string): void;
+    ): AudioPreloadLease | null;
     preload(
         source: AudioEngineSource | string,
-        _optionsOrFormat?: AudioEngineLoadOptions | string,
-    ): void {
+        format?: string,
+    ): AudioPreloadLease | null;
+    preload(
+        source: AudioEngineSource | string,
+        optionsOrFormat?: AudioEngineLoadOptions | string,
+    ): AudioPreloadLease | null {
         const resolvedSource = resolveSource(source);
         const url = resolvedSource.url;
-        if (!url || url === this.lastSource?.url || url === this.preloadedUrl) {
-            return;
+        const crossOrigin =
+            typeof optionsOrFormat === "object" &&
+            optionsOrFormat?.withCredentials
+                ? "use-credentials"
+                : "anonymous";
+        if (!url || this.isDestroyed || url === this.lastSource?.url) {
+            return null;
+        }
+        if (
+            url === this.preloadedUrl &&
+            this.preloadElement?.crossOrigin === crossOrigin
+        ) {
+            return this.preloadController?.lease ?? null;
         }
         const buffer = this.ensurePreloadElement();
         if (!buffer) {
-            return;
+            return null;
         }
+
+        this.preloadController?.lease.cancel();
+        const controller = createAudioPreloadLease(url, () => {
+            if (this.preloadController !== controller) {
+                return;
+            }
+            this.preloadReadinessCleanup?.();
+            this.preloadReadinessCleanup = null;
+            this.preloadController = null;
+            this.preloadedUrl = null;
+            this.releaseElement(buffer);
+        });
+        const handleReady = (): void => {
+            if (
+                this.preloadController !== controller ||
+                this.preloadedUrl !== url
+            ) {
+                return;
+            }
+            this.preloadReadinessCleanup?.();
+            this.preloadReadinessCleanup = null;
+            controller.settle({ state: "ready" });
+        };
+        const handleError = (): void => {
+            if (this.preloadController !== controller) {
+                return;
+            }
+            const code = buffer.error?.code;
+            controller.settle({
+                state: "failed",
+                ...(typeof code === "number" ? { code: String(code) } : {}),
+            });
+            controller.lease.cancel();
+        };
+        buffer.addEventListener("canplay", handleReady);
+        buffer.addEventListener("error", handleError);
+        this.preloadReadinessCleanup = () => {
+            buffer.removeEventListener("canplay", handleReady);
+            buffer.removeEventListener("error", handleError);
+        };
+        this.preloadController = controller;
+        // Match load() before src starts the request. Credential mode also
+        // participates in dedupe so a lease never reuses a different mode.
+        buffer.crossOrigin = crossOrigin;
         buffer.src = url;
         this.preloadedUrl = url;
+        return controller.lease;
     }
 
     reload(): void {
@@ -417,6 +524,9 @@ export class NativeAudioElementEngine implements AudioEngine {
 
     destroy(): void {
         this.isDestroyed = true;
+        this.preloadController?.lease.cancel();
+        this.preloadReadinessCleanup?.();
+        this.preloadReadinessCleanup = null;
         this.cancelRetryTimer();
         this.stopTicker();
         this.disarmGestureRetry();
@@ -563,8 +673,8 @@ export class NativeAudioElementEngine implements AudioEngine {
         }
         this.loadGeneration += 1;
         if (this.preloadedUrl === source.url) {
-            // Consumed by this load; the buffer element stays for reuse.
-            this.preloadedUrl = null;
+            // The main element now owns playback; stop the background buffer.
+            this.preloadController?.lease.cancel();
         }
         element.crossOrigin = this.lastLoadOptions?.withCredentials
             ? "use-credentials"
@@ -589,6 +699,24 @@ export class NativeAudioElementEngine implements AudioEngine {
         if (!element) {
             sharedFrontendLogger.warn("[NativeAudioEngine] No audio loaded");
             return;
+        }
+        // Reassert before each real play, including lock-screen resume and
+        // source handoff. WebKit may have changed its category while paused.
+        // Unsupported/rejected Audio Session API must never prevent play().
+        try {
+            const session =
+                typeof navigator === "undefined"
+                    ? undefined
+                    : (
+                          navigator as Navigator & {
+                              audioSession?: { type: string };
+                          }
+                      ).audioSession;
+            if (session && session.type !== "playback") {
+                session.type = "playback";
+            }
+        } catch {
+            this.telemetry("audio_session_configuration_failed", {});
         }
         if (this.iosBridgeGate()) {
             this.iosBridge.ensureForElement(

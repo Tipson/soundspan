@@ -11,7 +11,8 @@ own YouTube Music account. Credentials are stored as individual files
 
 The Node.js backend communicates with this service over HTTP on port 8586,
 passing `user_id` as a query parameter for per-user credential scoping on
-user-private operations and per-user cache segmentation for public search.
+user-private operations. Public search uses one cross-user cache and in-flight
+request identity because it never consumes user OAuth credentials.
 """
 
 # This remains the Uvicorn and test entrypoint. It assembles the route modules
@@ -43,6 +44,7 @@ import ytmusic_models as _models
 import ytmusic_runtime as _runtime
 import ytmusic_search as _search
 import ytmusic_stream as _stream
+import ytmusic_tail_warmup as _tail_warmup_module
 
 app = _runtime.app
 
@@ -53,6 +55,7 @@ _MODULES = (
     _search,
     _auth,
     _stream,
+    _tail_warmup_module,
     _library,
     _downloads,
     _album_downloads,

@@ -117,6 +117,7 @@ services:
             VIBE_PROVIDER_URL: ${VIBE_PROVIDER_URL:-http://vibe-provider-dclap:${DCLAP_HTTP_PORT:-8092}}
             FEDERATION_ENABLED: ${FEDERATION_ENABLED:-false}
             FEATURE_REQUESTS: ${FEATURE_REQUESTS:-true}
+            FEATURE_AUDIUS: ${FEATURE_AUDIUS:-false}
             REQUESTS_PER_USER_PER_DAY: ${REQUESTS_PER_USER_PER_DAY:-10}
             FEDERATION_ALLOW_PRIVATE_PEERS: ${FEDERATION_ALLOW_PRIVATE_PEERS:-false}
             FEDERATION_ALLOW_PROXY: ${FEDERATION_ALLOW_PROXY:-false}
@@ -169,10 +170,9 @@ services:
             LOG_QUERIES: ${LOG_QUERIES:-false}
             PLAYLIST_LOG_DIR: "${PLAYLIST_LOG_DIR:-}"
 
-            # Streaming sidecars (both optional — features hidden when unavailable)
+            # Streaming sidecar (optional — features hidden when unavailable)
             # Backend code defaults to 127.0.0.1; docker-compose overrides with
             # service names so containers resolve each other on the Docker network.
-            TIDAL_SIDECAR_URL: ${TIDAL_SIDECAR_URL:-http://tidal-streamer:8585}
             YTMUSIC_STREAMER_URL: ${YTMUSIC_STREAMER_URL:-http://ytmusic-streamer:8586}
         volumes:
             - ${MUSIC_PATH:-./music}:/music
@@ -279,7 +279,6 @@ services:
             # Worker jobs resolve/play provider candidates too. Container-local
             # 127.0.0.1 defaults point back at the worker itself, so split
             # deployments must use Compose DNS just like the API service.
-            TIDAL_SIDECAR_URL: ${TIDAL_SIDECAR_URL:-http://tidal-streamer:8585}
             YTMUSIC_STREAMER_URL: ${YTMUSIC_STREAMER_URL:-http://ytmusic-streamer:8586}
             LASTFM_API_KEY: "${LASTFM_API_KEY:-}"
             LASTFM_SHARED_SECRET: "${LASTFM_SHARED_SECRET:-}"
@@ -304,6 +303,7 @@ services:
             VIBE_PROVIDER_URL: ${VIBE_PROVIDER_URL:-http://vibe-provider-dclap:${DCLAP_HTTP_PORT:-8092}}
             FEDERATION_ENABLED: ${FEDERATION_ENABLED:-false}
             FEATURE_REQUESTS: ${FEATURE_REQUESTS:-true}
+            FEATURE_AUDIUS: ${FEATURE_AUDIUS:-false}
             REQUESTS_PER_USER_PER_DAY: ${REQUESTS_PER_USER_PER_DAY:-10}
             FEDERATION_ALLOW_PRIVATE_PEERS: ${FEDERATION_ALLOW_PRIVATE_PEERS:-false}
             FEDERATION_ALLOW_PROXY: ${FEDERATION_ALLOW_PROXY:-false}
@@ -416,61 +416,8 @@ services:
             retries: 5
 
     # ==============================================================================
-    # STREAMING SIDECARS (TIDAL & YouTube Music)
+    # STREAMING SIDECAR (YouTube Music)
     # ==============================================================================
-
-    # TIDAL Sidecar - Python FastAPI service using tiddl for TIDAL downloads + streaming
-    #
-    # This single container handles two functions:
-    #   1. Downloads: Admin authenticates, downloads go to /music (Soulseek/Lidarr alternative)
-    #   2. Streaming: Each user links their own TIDAL account for gap-fill streaming
-    #
-    # Authentication:
-    #   - Download auth: Admin device-code flow via Settings > TIDAL
-    #   - Streaming auth: Per-user device-code flow via Settings > TIDAL Streaming
-    #
-    # K8s note: /music should be RWX (ReadWriteMany) if multiple pods share it;
-    # tidal_data can be RWO (ReadWriteOnce).
-    tidal-streamer:
-        build:
-            context: .
-            dockerfile: services/tidal-streamer/Dockerfile
-        container_name: ${SOUNDSPAN_TIDAL_CONTAINER_NAME:-soundspan_tidal_streamer}
-        environment:
-            - TIDDL_PATH=/data/.tiddl
-            - MUSIC_PATH=/music
-            - HTTP_PROXY=${HTTP_PROXY:-}
-            - HTTPS_PROXY=${HTTPS_PROXY:-}
-            - NO_PROXY=${NO_PROXY:-127.0.0.1,localhost,backend,postgres,redis,tidal-streamer,ytmusic-streamer}
-            # Seconds to wait between each track download to avoid TIDAL rate limits (default: 3)
-            - TIDAL_TRACK_DELAY=${TIDAL_TRACK_DELAY:-3}
-            # Shared secret authenticating backend→sidecar calls (F31). Must match
-            # the backend's INTERNAL_API_SECRET or the sidecar rejects with 403.
-            - "INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - generate one with: openssl rand -base64 32}"
-        volumes:
-            - ${MUSIC_PATH:-./music}:/music
-            - tidal_data:/data
-        depends_on:
-            backend:
-                condition: service_healthy
-        restart: unless-stopped
-        healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:8585/health"]
-            interval: 30s
-            timeout: 10s
-            retries: 3
-            start_period: 15s
-        networks:
-            default:
-                aliases:
-                    - tidal-downloader # Old service name kept as a DNS alias for pre-rename TIDAL_SIDECAR_URL values.
-        deploy:
-            resources:
-                limits:
-                    memory: 512M
-                    cpus: "2"
-                reservations:
-                    memory: 128M
 
     # YouTube Music Streamer - Python FastAPI sidecar for YouTube Music streaming
     #
@@ -530,7 +477,7 @@ services:
             YTMUSIC_SPOOL_DIR: "${YTMUSIC_SPOOL_DIR:-}"
             HTTP_PROXY: ${HTTP_PROXY:-}
             HTTPS_PROXY: ${HTTPS_PROXY:-}
-            NO_PROXY: ${NO_PROXY:-127.0.0.1,localhost,backend,postgres,redis,tidal-streamer,ytmusic-streamer}
+            NO_PROXY: ${NO_PROXY:-127.0.0.1,localhost,backend,postgres,redis,ytmusic-streamer}
             YTMUSIC_SPOOL_CONCURRENCY: ${YTMUSIC_SPOOL_CONCURRENCY:-2}
             YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT: ${YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT:-300}
             YTMUSIC_SPOOL_MAX_BYTES: ${YTMUSIC_SPOOL_MAX_BYTES:-268435456}
@@ -580,6 +527,8 @@ services:
             POSTGRES_DB: ${POSTGRES_DB:-soundspan}
             MUSIC_PATH: /music
             ACOUSTID_API_KEY: "${ACOUSTID_API_KEY:-}"
+            BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://backend:3006}
+            INTERNAL_API_SECRET: "${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - generate one with: openssl rand -base64 32}"
             BATCH_SIZE: ${AUDIO_ANALYSIS_BATCH_SIZE:-10}
             SLEEP_INTERVAL: ${AUDIO_ANALYSIS_INTERVAL:-5}
             # BRPOP timeout for blocking wait (seconds). Also controls DB reconciliation interval.
@@ -663,8 +612,7 @@ volumes:
     postgres_data:
     backend_cache:
     backend_logs:
-    # Streaming sidecars
-    tidal_data:
+    # Streaming sidecar
     ytmusic_data:
 
 networks:

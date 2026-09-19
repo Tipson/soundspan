@@ -1,11 +1,146 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    isRetiredRemoteOnlyTrack,
     isRemoteTrack,
+    isTrackActionable,
+    resolvePreferenceTrackId,
     toAddToPlaylistRef,
     toTrackRef,
     type AddToPlaylistRef,
 } from "../../lib/trackRef";
+
+test("retired remote-only TIDAL identity is not actionable", () => {
+    const historical = {
+        id: "tidal:991",
+        streamSource: "tidal" as const,
+        tidalTrackId: 991,
+    };
+
+    assert.equal(isRetiredRemoteOnlyTrack(historical), true);
+    assert.equal(isTrackActionable(historical), false);
+    assert.equal(isTrackActionable({ id: "tidal:991" }), false);
+});
+
+test("local or active YouTube backing wins over incidental TIDAL metadata", () => {
+    const localWithStaleTidal = {
+        id: "local-track-1",
+        filePath: "/music/local-track-1.flac",
+        streamSource: "tidal" as const,
+        tidalTrackId: 991,
+    };
+    const youtubeWithStaleTidal = {
+        id: "tidal:991",
+        source: "youtube" as const,
+        youtubeVideoId: "active-video",
+        tidalTrackId: 991,
+    };
+
+    assert.equal(isRetiredRemoteOnlyTrack(localWithStaleTidal), false);
+    assert.equal(isTrackActionable(localWithStaleTidal), true);
+    assert.equal(isRetiredRemoteOnlyTrack(youtubeWithStaleTidal), false);
+    assert.equal(isTrackActionable(youtubeWithStaleTidal), true);
+    assert.deepEqual(toTrackRef(youtubeWithStaleTidal), {
+        youtubeVideoId: "active-video",
+    });
+    assert.equal(
+        resolvePreferenceTrackId(youtubeWithStaleTidal),
+        "yt:active-video",
+    );
+    assert.equal(
+        resolvePreferenceTrackId({
+            id: "tidal:991",
+            streamSource: "tidal",
+            tidalTrackId: 991,
+        }),
+        "tidal:991",
+        "historical preference identity remains available for unlike/clear",
+    );
+});
+
+test("provider authority follows provider, canonical media, stream, source, then id prefix", () => {
+    const cases = [
+        {
+            input: {
+                id: "yt:prefixed-video",
+                provider: {
+                    source: "tidal" as const,
+                    tidalTrackId: 991,
+                },
+                mediaSource: "youtube" as const,
+                streamSource: "youtube" as const,
+                source: "youtube" as const,
+                youtubeVideoId: "source-video",
+            },
+            expected: { tidalTrackId: 991 },
+            actionable: false,
+        },
+        {
+            input: {
+                id: "yt:prefixed-video",
+                mediaSource: "tidal" as const,
+                streamSource: "youtube" as const,
+                source: "youtube" as const,
+                tidalTrackId: 992,
+                youtubeVideoId: "source-video",
+            },
+            expected: { tidalTrackId: 992 },
+            actionable: false,
+        },
+        {
+            input: {
+                id: "yt:prefixed-video",
+                streamSource: "tidal" as const,
+                source: "youtube" as const,
+                tidalTrackId: 993,
+                youtubeVideoId: "source-video",
+            },
+            expected: { tidalTrackId: 993 },
+            actionable: false,
+        },
+        {
+            input: {
+                id: "tidal:994",
+                source: "youtube" as const,
+                youtubeVideoId: "source-video",
+            },
+            expected: { youtubeVideoId: "source-video" },
+            actionable: true,
+        },
+        {
+            input: { id: "tidal:995" },
+            expected: { tidalTrackId: 995 },
+            actionable: false,
+        },
+    ];
+
+    for (const { input, expected, actionable } of cases) {
+        assert.deepEqual(toTrackRef(input), expected);
+        assert.equal(isTrackActionable(input), actionable);
+    }
+});
+
+test("canonical-only retired TIDAL is fenced while canonical local backing wins stale fields", () => {
+    const canonicalTidal = {
+        id: "canonical-tidal-row",
+        mediaSource: "tidal" as const,
+        tidalTrackId: 991,
+    };
+    const canonicalLocal = {
+        id: "canonical-local-row",
+        mediaSource: "local" as const,
+        tidalTrackId: 992,
+    };
+
+    assert.equal(isRetiredRemoteOnlyTrack(canonicalTidal), true);
+    assert.equal(isTrackActionable(canonicalTidal), false);
+    assert.equal(isRemoteTrack(canonicalTidal), true);
+    assert.throws(() => toAddToPlaylistRef(canonicalTidal), /retired tidal/i);
+    assert.equal(isRetiredRemoteOnlyTrack(canonicalLocal), false);
+    assert.deepEqual(toTrackRef(canonicalLocal), {
+        trackId: "canonical-local-row",
+    });
+});
 
 test("toTrackRef returns local ref for local tracks", () => {
     const ref = toTrackRef({
@@ -126,25 +261,32 @@ test("toAddToPlaylistRef maps local refs to playlist body", () => {
     assert.deepEqual(payload, { trackId: "local-track-99" });
 });
 
-test("toAddToPlaylistRef maps tidal refs to playlist body", () => {
-    const payload: AddToPlaylistRef = toAddToPlaylistRef({
-        id: "ignored-local-id",
+test("toAddToPlaylistRef keeps a real local file local despite stale TIDAL metadata", () => {
+    const payload = toAddToPlaylistRef({
+        id: "local-track-with-stale-provider",
+        filePath: "/music/local.flac",
         streamSource: "tidal",
-        tidalTrackId: "777",
-        title: "Remote TIDAL Track",
-        artist: { name: "Remote Artist" },
-        album: { title: "Remote Album" },
-        duration: 245,
-        isrc: "US-R1L-99-12345",
+        tidalTrackId: 991,
     });
-    assert.deepEqual(payload, {
-        tidalTrackId: 777,
-        title: "Remote TIDAL Track",
-        artist: "Remote Artist",
-        album: "Remote Album",
-        duration: 245,
-        isrc: "US-R1L-99-12345",
-    });
+
+    assert.deepEqual(payload, { trackId: "local-track-with-stale-provider" });
+});
+
+test("toAddToPlaylistRef rejects retired TIDAL writes", () => {
+    assert.throws(
+        () =>
+            toAddToPlaylistRef({
+                id: "tidal:777",
+                streamSource: "tidal",
+                tidalTrackId: "777",
+                title: "Remote TIDAL Track",
+                artist: { name: "Remote Artist" },
+                album: { title: "Remote Album" },
+                duration: 245,
+                isrc: "US-R1L-99-12345",
+            }),
+        /retired tidal/i,
+    );
 });
 
 test("toAddToPlaylistRef rejects non-integer tidal ids", () => {
@@ -211,9 +353,9 @@ test("toAddToPlaylistRef rejects remote refs missing required metadata", () => {
 
     // Missing duration defaults to 0 instead of throwing
     const noDuration = toAddToPlaylistRef({
-        id: "tidal:1234",
-        streamSource: "tidal",
-        tidalTrackId: 1234,
+        id: "yt:video-no-duration",
+        streamSource: "youtube",
+        youtubeVideoId: "video-no-duration",
         title: "Missing Duration",
         artist: { name: "Artist" },
         album: { title: "Album" },

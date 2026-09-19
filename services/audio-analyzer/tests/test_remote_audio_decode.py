@@ -22,6 +22,108 @@ from remote_audio_decode import (
 REMOTE_AUDIO_REFERENCE = ".soundspan-analysis-spool/123e4567-e89b-12d3-a456-426614174000.audio"
 
 
+def test_long_remote_audio_analyzes_middle_not_instrumental_intro(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A long intro must not represent the complete song's vocal/mood features."""
+    executable = tmp_path / "ffmpeg"
+    executable.touch()
+    asset = tmp_path / "asset.audio"
+    asset.touch()
+    commands: list[list[str]] = []
+
+    def run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        commands.append(args)
+        output = b"322.0\n" if "-show_entries" in args else np.ones(8, dtype="<f4").tobytes()
+        return subprocess.CompletedProcess(args, 0, stdout=output)
+
+    monkeypatch.setattr(shutil, "which", lambda _name: str(executable))
+    monkeypatch.setattr(subprocess, "run", run)
+    decode_remote_audio(str(asset), max_duration=90)
+    decoder = commands[-1]
+    assert "-ss" in decoder
+    assert float(decoder[decoder.index("-ss") + 1]) == pytest.approx(116)
+    assert decoder.index("-ss") < decoder.index("-i")
+    assert decoder[decoder.index("-t") + 1] == "90"
+
+
+@pytest.mark.parametrize("duration", [b"N/A", b"nan", b"inf", b"-1", b"1000000"])
+def test_unusable_duration_keeps_bounded_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    duration: bytes,
+) -> None:
+    """Untrusted container metadata cannot produce an invalid or unlimited seek."""
+    executable = tmp_path / "ffmpeg"
+    executable.touch()
+    asset = tmp_path / "asset.audio"
+    asset.touch()
+    commands: list[list[str]] = []
+
+    def run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        commands.append(args)
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            stdout=(duration if "-show_entries" in args else np.ones(8, dtype="<f4").tobytes()),
+        )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: str(executable))
+    monkeypatch.setattr(subprocess, "run", run)
+    decode_remote_audio(str(asset), max_duration=90)
+    assert "-ss" not in commands[-1]
+    assert commands[-1][commands[-1].index("-t") + 1] == "90"
+
+
+def test_real_decode_uses_song_body_instead_of_intro(tmp_path: Path) -> None:
+    """Different frequencies make excerpt selection observable in decoded audio."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None or shutil.which("ffprobe") is None:
+        pytest.skip("ffmpeg/ffprobe unavailable")
+    asset = tmp_path / "asset.wav"
+    subprocess.run(  # noqa: S603 -- trusted executable, generated fixture only
+        [
+            ffmpeg,
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            r"aevalsrc=if(lt(t\,2)\,sin(2*PI*220*t)\,sin(2*PI*880*t)):s=44100:d=6",
+            str(asset),
+        ],
+        check=True,
+        timeout=10,
+        capture_output=True,
+    )
+    audio = decode_remote_audio(str(asset), max_duration=2)
+    spectrum = np.abs(np.fft.rfft(audio))
+    frequency = np.fft.rfftfreq(len(audio), 1 / PCM_SAMPLE_RATE)[np.argmax(spectrum)]
+    assert frequency == pytest.approx(880, abs=2)
+
+
+def test_feature_extraction_exception_is_not_a_completed_analysis(
+    loaded_analyzer: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Partial features must not be persisted as a successful canonical analysis."""
+    analyzer = object.__new__(loaded_analyzer.AudioAnalyzer)
+    monkeypatch.setattr(loaded_analyzer, "ESSENTIA_AVAILABLE", True)
+    monkeypatch.setattr(loaded_analyzer, "measure_loudness", lambda *_args: None)
+    monkeypatch.setattr(loaded_analyzer, "compute_fingerprint", lambda *_args: None)
+    monkeypatch.setattr(analyzer, "validate_audio", lambda *_args: (True, None))
+    analyzer.rhythm_extractor = lambda _audio: (120, [], 1, [], [])
+    analyzer.key_extractor = lambda _audio: ("C", "major", 1)
+
+    def fail(_audio: object) -> float:
+        raise RuntimeError("internal sensitive detail")
+
+    analyzer.loudness = fail
+    result = analyzer.analyze("asset.audio", decoded_audio=np.ones(32, dtype=np.float32))
+    assert result.get("_error") == "Audio feature extraction failed"
+
+
 class RecordingAnalyzer:
     """Record ordinary and predecoded analysis calls at the runtime boundary."""
 
@@ -92,8 +194,9 @@ def test_decode_remote_audio_invokes_bounded_system_ffmpeg(
     assert decoded.dtype == np.float32
     assert decoded.shape == expected.shape
     assert np.array_equal(decoded, expected)
-    assert len(calls) == 1
-    args, kwargs = calls[0]
+    decoder_calls = [call for call in calls if "-show_entries" not in call[0]]
+    assert len(decoder_calls) == 1
+    args, kwargs = decoder_calls[0]
     assert args[0] == str(ffmpeg_path.resolve())
     assert args[args.index("-i") + 1] == str(audio_path.resolve())
     assert args[args.index("-ac") + 1] == "1"
@@ -105,7 +208,7 @@ def test_decode_remote_audio_invokes_bounded_system_ffmpeg(
     assert kwargs["shell"] is False
     assert kwargs["stdout"] is subprocess.PIPE
     assert kwargs["stderr"] is subprocess.DEVNULL
-    assert kwargs["timeout"] == 3.5
+    assert 0 < kwargs["timeout"] <= 3.5
 
 
 def test_generated_reference_is_predecoded_with_timeout_below_batch(

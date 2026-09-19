@@ -30,6 +30,7 @@ import type {
     VibeModeStartResult,
     VibeQueueMutationKind,
 } from "../audio-controls-types";
+import { getPlaybackIntentGeneration } from "../audio-engine/playbackAdvanceOrigin";
 
 type AudioState = ReturnType<typeof useAudioState>;
 const MAX_PROVIDER_CONTINUATION_PAGES = 2;
@@ -70,6 +71,7 @@ export function useVibeModeControls({
         vibeMode: state.vibeMode,
         waveMode: state.waveMode,
         waveMood: state.waveMood,
+        waveLanguage: state.waveLanguage,
     });
 
     useLayoutEffect(() => {
@@ -81,6 +83,7 @@ export function useVibeModeControls({
             vibeMode: state.vibeMode,
             waveMode: state.waveMode,
             waveMood: state.waveMood,
+            waveLanguage: state.waveLanguage,
         };
     }, [
         state.currentIndex,
@@ -89,6 +92,7 @@ export function useVibeModeControls({
         state.vibeMode,
         state.waveMode,
         state.waveMood,
+        state.waveLanguage,
     ]);
 
     const startVibeMode = useCallback(
@@ -100,6 +104,7 @@ export function useVibeModeControls({
                 return { success: false, trackCount: 0 };
             }
             const requestGeneration = ++requestGenerationRef.current;
+            const playbackIntentGeneration = getPlaybackIntentGeneration();
             const replaceUpcoming =
                 options?.queueStrategy === "replace-upcoming";
             const requestContext = {
@@ -108,17 +113,37 @@ export function useVibeModeControls({
                 queue: state.queue,
                 waveMode: state.waveMode,
                 waveMood: state.waveMood,
+                waveLanguage: state.waveLanguage,
+                vibeMode: state.vibeMode,
             };
             const requestIsCurrent = () => {
                 const currentContext = playbackContextRef.current;
                 if (requestGenerationRef.current !== requestGeneration) {
                     return false;
                 }
+                // Tail-only adaptation preserves the current selection. Other
+                // continuations belong to the playback command that requested
+                // them and must not rewrite a later pause, replay or seek.
+                if (
+                    !replaceUpcoming &&
+                    getPlaybackIntentGeneration() !== playbackIntentGeneration
+                ) {
+                    return false;
+                }
+                if (
+                    currentContext.vibeMode !== requestContext.vibeMode ||
+                    currentContext.waveMode !== requestContext.waveMode ||
+                    currentContext.waveMood !== requestContext.waveMood ||
+                    currentContext.waveLanguage !== requestContext.waveLanguage
+                )
+                    return false;
                 if (replaceUpcoming) {
                     return (
                         currentContext.vibeMode &&
                         currentContext.waveMode === requestContext.waveMode &&
                         currentContext.waveMood === requestContext.waveMood &&
+                        currentContext.waveLanguage ===
+                            requestContext.waveLanguage &&
                         Boolean(
                             currentContext.track &&
                             isProviderRadioTrack(currentContext.track),
@@ -160,6 +185,8 @@ export function useVibeModeControls({
                                 25,
                                 state.waveMode,
                                 state.vibeMode ? state.waveMood : null,
+                                undefined,
+                                state.vibeMode ? state.waveLanguage : "any",
                             ),
                             {
                                 timeoutMs: PERSONALIZED_HOME_REQUEST_TIMEOUT_MS,
@@ -175,6 +202,7 @@ export function useVibeModeControls({
                                 ? playbackContextRef.current.queue
                                 : state.queue,
                             25,
+                            state.waveMode,
                         );
                         cursor =
                             typeof feed.nextCursor === "number"
@@ -231,6 +259,7 @@ export function useVibeModeControls({
                                 feed,
                                 latestContext.queue,
                                 25,
+                                latestContext.waveMode,
                             );
                         if (freshContinuation.length === 0) {
                             return { success: false, trackCount: 0 };
@@ -250,8 +279,6 @@ export function useVibeModeControls({
                             ...history,
                             ...freshContinuation,
                         ];
-                        const firstFreshTrack = freshContinuation[0];
-
                         state.setIsShuffle(false);
                         state.setShuffleIndices([]);
                         state.setVibeMode(true);
@@ -260,11 +287,10 @@ export function useVibeModeControls({
                             replacementQueue.map((track) => track.id),
                         );
                         state.setQueue(replacementQueue);
-                        state.setCurrentAudiobook(null);
-                        state.setCurrentPodcast(null);
-                        state.setPlaybackType("track");
-                        state.setCurrentTrack(firstFreshTrack);
-                        state.setCurrentIndex(history.length);
+                        // Adapt only the upcoming tail. The user may already
+                        // be listening to (or have paused) the latest selection.
+                        // Replacing it here aborts healthy playback and discards
+                        // its prepared source when the request finishes late.
                         reportLocalQueueCommit("replace-upcoming");
                         return {
                             success: true,
@@ -294,6 +320,7 @@ export function useVibeModeControls({
                                 feed,
                                 previousQueue,
                                 25,
+                                state.waveMode,
                             );
                         return freshContinuation.length > 0
                             ? [...previousQueue, ...freshContinuation]

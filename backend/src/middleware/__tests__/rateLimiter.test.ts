@@ -10,7 +10,11 @@ type RateLimitOptions = {
     validate: { trustProxy: boolean };
     store?: unknown;
     skipSuccessfulRequests?: boolean;
-    skip?: (req: { path: string }) => boolean;
+    skip?: (req: {
+        path: string;
+        headers?: Record<string, string | undefined>;
+        query?: Record<string, unknown>;
+    }) => boolean;
     keyGenerator?: (req: {
         ip: string;
         user?: { id: string };
@@ -61,6 +65,7 @@ describe("rateLimiter middleware config", () => {
         jest.doMock("express-rate-limit", () => ({
             __esModule: true,
             default: (options: RateLimitOptions) => mockRateLimit(options),
+            ipKeyGenerator: (ip: string) => ip,
         }));
         jest.doMock("../rateLimitStore", () => ({
             createRedisRateLimitOptions: mockCreateRedisRateLimitOptions,
@@ -69,15 +74,18 @@ describe("rateLimiter middleware config", () => {
         return import("../rateLimiter");
     }
 
-    function getOptions(index: number): RateLimitOptions {
-        return mockRateLimit.mock.calls[index][0] as RateLimitOptions;
+    function getOptions(module: object, exportName: string): RateLimitOptions {
+        return (module as Record<string, unknown>)[
+            exportName
+        ] as RateLimitOptions;
     }
 
     it("creates each limiter with the documented window and max values", async () => {
         const mod = await loadRateLimiterModule();
 
-        expect(mockRateLimit).toHaveBeenCalledTimes(19);
+        expect(mockRateLimit).toHaveBeenCalledTimes(20);
         expect(mod.apiLimiter).toBeDefined();
+        expect(mod.internalCanonicalIdentityLimiter).toBeDefined();
         expect(mod.adminSurfaceLimiter).toBeDefined();
         expect(mod.shareLinkLimiter).toBeDefined();
         expect(mod.playbackStateLimiter).toBeDefined();
@@ -98,29 +106,74 @@ describe("rateLimiter middleware config", () => {
         expect(mod.federationPeerLimiter).toBeDefined();
 
         const expectedConfigs = [
-            { index: 0, windowMs: 60_000, max: 5000 },
-            { index: 1, windowMs: 60_000, max: 5000 },
-            { index: 2, windowMs: 60_000, max: 5000 },
-            { index: 3, windowMs: 60_000, max: 600 },
-            { index: 4, windowMs: 900_000, max: 40 },
-            { index: 5, windowMs: 300_000, max: 60 },
-            { index: 6, windowMs: 900_000, max: 40 },
-            { index: 7, windowMs: 60_000, max: 5000 },
-            { index: 8, windowMs: 60_000, max: 500 },
-            { index: 9, windowMs: 60_000, max: 5000 },
-            { index: 10, windowMs: 60_000, max: 10_000 },
-            { index: 11, windowMs: 60_000, max: 100 },
-            { index: 12, windowMs: 60_000, max: 120 },
-            { index: 13, windowMs: 900_000, max: 20 },
-            { index: 14, windowMs: 60_000, max: 20 },
-            { index: 15, windowMs: 60_000, max: 30 },
-            { index: 16, windowMs: 60_000, max: 20 },
-            { index: 17, windowMs: 60_000, max: 60 },
-            { index: 18, windowMs: 60_000, max: 1000 },
+            { exportName: "apiLimiter", windowMs: 60_000, max: 5000 },
+            {
+                exportName: "internalCanonicalIdentityLimiter",
+                windowMs: 60_000,
+                max: 300,
+            },
+            {
+                exportName: "adminSurfaceLimiter",
+                windowMs: 60_000,
+                max: 5000,
+            },
+            {
+                exportName: "shareLinkLimiter",
+                windowMs: 60_000,
+                max: 5000,
+            },
+            {
+                exportName: "playbackStateLimiter",
+                windowMs: 60_000,
+                max: 600,
+            },
+            { exportName: "authLimiter", windowMs: 900_000, max: 40 },
+            { exportName: "refreshLimiter", windowMs: 300_000, max: 60 },
+            { exportName: "oidcFlowLimiter", windowMs: 900_000, max: 40 },
+            {
+                exportName: "libraryMetadataLimiter",
+                windowMs: 60_000,
+                max: 5000,
+            },
+            { exportName: "imageLimiter", windowMs: 60_000, max: 500 },
+            {
+                exportName: "coverArtLimiter",
+                windowMs: 60_000,
+                max: 5000,
+            },
+            {
+                exportName: "streamingLimiter",
+                windowMs: 60_000,
+                max: 10_000,
+            },
+            { exportName: "downloadLimiter", windowMs: 60_000, max: 100 },
+            { exportName: "lyricsLimiter", windowMs: 60_000, max: 120 },
+            {
+                exportName: "lyricsMutationLimiter",
+                windowMs: 900_000,
+                max: 20,
+            },
+            {
+                exportName: "musicBrainzArtistSearchLimiter",
+                windowMs: 60_000,
+                max: 20,
+            },
+            { exportName: "ytMusicSearchLimiter", windowMs: 60_000, max: 30 },
+            {
+                exportName: "ytMusicStreamLimiter",
+                windowMs: 60_000,
+                max: 120,
+            },
+            { exportName: "webhookLimiter", windowMs: 60_000, max: 60 },
+            {
+                exportName: "federationPeerLimiter",
+                windowMs: 60_000,
+                max: 1000,
+            },
         ];
 
         for (const config of expectedConfigs) {
-            expect(getOptions(config.index)).toEqual(
+            expect(getOptions(mod, config.exportName)).toEqual(
                 expect.objectContaining({
                     windowMs: config.windowMs,
                     max: config.max,
@@ -128,30 +181,38 @@ describe("rateLimiter middleware config", () => {
             );
         }
 
-        expect(getOptions(4).skipSuccessfulRequests).toBe(true);
-        expect(getOptions(5).skipSuccessfulRequests).toBe(true);
-        expect(getOptions(6).skipSuccessfulRequests).not.toBe(true);
+        expect(getOptions(mod, "authLimiter").skipSuccessfulRequests).toBe(
+            true,
+        );
+        expect(getOptions(mod, "refreshLimiter").skipSuccessfulRequests).toBe(
+            true,
+        );
+        expect(
+            getOptions(mod, "oidcFlowLimiter").skipSuccessfulRequests,
+        ).not.toBe(true);
     });
 
     it.each([
-        ["admin-surface", 1],
-        ["share-link", 2],
-        ["auth", 4],
-        ["auth-refresh", 5],
-        ["oidc-flow", 6],
-        ["cover-art-surface", 9],
-        ["streaming-surface", 10],
-        ["musicbrainz-artist-search", 14],
-        ["webhook", 17],
-        ["federation-peer", 18],
-    ])("uses the namespaced shared store for %s", async (name, index) => {
-        await loadRateLimiterModule();
+        ["canonical-identity-promotion", "internalCanonicalIdentityLimiter"],
+        ["admin-surface", "adminSurfaceLimiter"],
+        ["share-link", "shareLinkLimiter"],
+        ["auth", "authLimiter"],
+        ["auth-refresh", "refreshLimiter"],
+        ["oidc-flow", "oidcFlowLimiter"],
+        ["cover-art-surface", "coverArtLimiter"],
+        ["streaming-surface", "streamingLimiter"],
+        ["musicbrainz-artist-search", "musicBrainzArtistSearchLimiter"],
+        ["webhook", "webhookLimiter"],
+        ["federation-peer", "federationPeerLimiter"],
+    ])("uses the namespaced shared store for %s", async (name, exportName) => {
+        const mod = await loadRateLimiterModule();
 
-        expect(getOptions(index).store).toBe(`redis:${name}`);
+        expect(getOptions(mod, exportName).store).toBe(`redis:${name}`);
     });
 
     it.each([
         "share-link",
+        "canonical-identity-promotion",
         "auth",
         "auth-refresh",
         "oidc-flow",
@@ -177,24 +238,27 @@ describe("rateLimiter middleware config", () => {
     );
 
     it.each([
-        ["general API", 0],
-        ["playback state", 3],
-        ["library metadata", 7],
-        ["external image proxy", 8],
-        ["download", 11],
-        ["lyrics lookup", 12],
-        ["lyrics mutation", 13],
-        ["YouTube Music search", 15],
-        ["YouTube Music stream", 16],
-    ])("keeps the %s limiter in memory", async (_name, index) => {
-        await loadRateLimiterModule();
+        ["general API", "apiLimiter"],
+        ["playback state", "playbackStateLimiter"],
+        ["library metadata", "libraryMetadataLimiter"],
+        ["external image proxy", "imageLimiter"],
+        ["download", "downloadLimiter"],
+        ["lyrics lookup", "lyricsLimiter"],
+        ["lyrics mutation", "lyricsMutationLimiter"],
+        ["YouTube Music search", "ytMusicSearchLimiter"],
+        ["YouTube Music stream", "ytMusicStreamLimiter"],
+    ])("keeps the %s limiter in memory", async (_name, exportName) => {
+        const mod = await loadRateLimiterModule();
 
-        expect(getOptions(index).store).toBeUndefined();
+        expect(getOptions(mod, exportName).store).toBeUndefined();
     });
 
     it("keys authenticated federation limits by peer identity", async () => {
-        await loadRateLimiterModule();
-        const keyGenerator = getOptions(18).keyGenerator!;
+        const mod = await loadRateLimiterModule();
+        const keyGenerator = getOptions(
+            mod,
+            "federationPeerLimiter",
+        ).keyGenerator!;
 
         expect(
             keyGenerator({ ip: "10.0.0.1", federationPeer: { id: "peer-1" } }),
@@ -203,13 +267,56 @@ describe("rateLimiter middleware config", () => {
     });
 
     it("keys MusicBrainz artist search limits by authenticated account", async () => {
-        await loadRateLimiterModule();
-        const keyGenerator = getOptions(14).keyGenerator!;
+        const mod = await loadRateLimiterModule();
+        const keyGenerator = getOptions(
+            mod,
+            "musicBrainzArtistSearchLimiter",
+        ).keyGenerator!;
 
         expect(
             keyGenerator({ ip: "10.0.0.1", user: { id: "account-1" } }),
         ).toBe("account-1");
         expect(keyGenerator({ ip: "10.0.0.1" })).toBe("unresolved-account");
+    });
+
+    it("counts only uncached YouTube Music stream starts per account", async () => {
+        const mod = await loadRateLimiterModule();
+        const options = getOptions(mod, "ytMusicStreamLimiter");
+        const skip = options.skip!;
+        const keyGenerator = options.keyGenerator!;
+
+        expect(
+            skip({
+                path: "/api/ytmusic/stream-public/video-1",
+                headers: { range: "bytes=524288-1048575" },
+                query: {},
+            }),
+        ).toBe(true);
+        expect(
+            skip({
+                path: "/api/ytmusic/stream-public/video-1",
+                headers: { range: "bytes=0-524287" },
+                query: {},
+            }),
+        ).toBe(false);
+        expect(
+            skip({
+                path: "/api/ytmusic/stream-info/video-1",
+                headers: {},
+                query: { cachedOnly: "true" },
+            }),
+        ).toBe(true);
+        expect(
+            skip({
+                path: "/api/ytmusic/stream-info/video-1",
+                headers: {},
+                query: {},
+            }),
+        ).toBe(false);
+        expect(
+            keyGenerator({ ip: "10.0.0.1", user: { id: "account-1" } }),
+        ).toBe("account-1");
+        expect(keyGenerator({ ip: "10.0.0.1" })).toBe("10.0.0.1");
     });
 
     it("uses standard headers, disables legacy headers, and disables trustProxy validation for all limiters", async () => {
@@ -227,8 +334,10 @@ describe("rateLimiter middleware config", () => {
     });
 
     it("apiLimiter skip function bypasses only intended health, streaming, and polling endpoints", async () => {
-        await loadRateLimiterModule();
-        const skip = getOptions(0).skip as (req: { path: string }) => boolean;
+        const mod = await loadRateLimiterModule();
+        const skip = getOptions(mod, "apiLimiter").skip as (req: {
+            path: string;
+        }) => boolean;
 
         expect(skip({ path: "/health" })).toBe(true);
         expect(skip({ path: "/api/health" })).toBe(true);
@@ -258,8 +367,8 @@ describe("rateLimiter middleware config", () => {
     });
 
     it("apiLimiter handler logs the offending request and sends the configured limit response", async () => {
-        await loadRateLimiterModule();
-        const handler = getOptions(0).handler as NonNullable<
+        const mod = await loadRateLimiterModule();
+        const handler = getOptions(mod, "apiLimiter").handler as NonNullable<
             RateLimitOptions["handler"]
         >;
         const res = {} as RateLimitHandlerResponse;
@@ -288,8 +397,8 @@ describe("rateLimiter middleware config", () => {
     });
 
     it("authLimiter handler logs the client IP and sends the configured limit response", async () => {
-        await loadRateLimiterModule();
-        const handler = getOptions(4).handler as NonNullable<
+        const mod = await loadRateLimiterModule();
+        const handler = getOptions(mod, "authLimiter").handler as NonNullable<
             RateLimitOptions["handler"]
         >;
         const res = {} as RateLimitHandlerResponse;
@@ -318,10 +427,9 @@ describe("rateLimiter middleware config", () => {
     });
 
     it("refreshLimiter returns the stable JSON rate-limit response", async () => {
-        await loadRateLimiterModule();
-        const handler = getOptions(5).handler as NonNullable<
-            RateLimitOptions["handler"]
-        >;
+        const mod = await loadRateLimiterModule();
+        const handler = getOptions(mod, "refreshLimiter")
+            .handler as NonNullable<RateLimitOptions["handler"]>;
         const res = {} as RateLimitHandlerResponse;
         res.status = jest.fn((_: number) => res);
         res.send = jest.fn();

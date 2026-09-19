@@ -19,6 +19,38 @@ import type {
 } from "../../features/device-offline/types";
 import { DeviceOfflineDownloadError } from "../../features/device-offline/downloadError";
 
+test("storage exhaustion pauses the durable queue until an explicit retry", async () => {
+    const harness = createHarness({
+        downloadOutcomes: [
+            new DeviceOfflineDownloadError(
+                "quota",
+                "Недостаточно места на устройстве",
+            ),
+            "ready",
+            "ready",
+        ],
+    });
+    await harness.manager.syncAutoLiked("user-1", [
+        request("user-1", TRACK, "auto-liked"),
+        request(
+            "user-1",
+            { ...TRACK, id: "yt:second", youtubeVideoId: "second" },
+            "auto-liked",
+        ),
+    ]);
+    await harness.manager.resume("user-1");
+    await harness.manager.resume("user-1");
+    assert.equal(
+        harness.calls.length,
+        1,
+        "focus/reconnect must not drain the queue into storage errors",
+    );
+    await harness.manager.retryAutomaticDownloads("user-1");
+    await harness.manager.resume("user-1");
+    assert.equal(harness.downloads.length, 2);
+    assert.equal((await harness.manager.list("user-1")).length, 0);
+});
+
 const TRACK: DeviceOfflineTrack = {
     id: "yt:video-1",
     title: "One",
@@ -601,118 +633,101 @@ test("offline queue remains local and resumes an interrupted lease on the next o
     assert.equal((await harness.manager.list("user-1")).length, 0);
 });
 
-test("auto-liked defaults off, respects its per-device limit, and never crosses owners", async () => {
+test("auto-liked is enabled for new and legacy devices, has no count cap, and never crosses owners", async () => {
     const harness = createHarness();
-    const autoRequests = Array.from({ length: 30 }, (_, index) => {
-        const videoId = `auto-${index}`;
-        return request(
+    harness.store.settings.set("user-1", {
+        ownerId: "user-1",
+        autoDownloadLiked: false,
+        autoDownloadLikedLimit: 25,
+        autoDownloadMaxBytes: 1000,
+        updatedAt: 1,
+    });
+    assert.equal(
+        (await harness.manager.getSettings("user-1")).autoDownloadLiked,
+        true,
+    );
+    const requests = Array.from({ length: 220 }, (_, index) =>
+        request(
             "user-1",
             {
                 ...TRACK,
-                id: `yt:${videoId}`,
-                youtubeVideoId: videoId,
-                title: `Auto ${index}`,
+                id: `yt:auto-${index}`,
+                youtubeVideoId: `auto-${index}`,
             },
             "auto-liked",
-        );
-    });
-    await harness.manager.syncAutoLiked("user-1", autoRequests);
-    await harness.manager.resume("user-1");
-    assert.equal(harness.calls.length, 0);
-
-    await harness.manager.updateSettings("user-1", {
-        autoDownloadLiked: true,
-        autoDownloadLikedLimit: 25,
-    });
-    await harness.manager.syncAutoLiked("user-1", autoRequests);
-    assert.equal((await harness.manager.list("user-1")).length, 25);
+        ),
+    );
+    await harness.manager.syncAutoLiked("user-1", [
+        ...requests,
+        request("user-2", TRACK, "auto-liked"),
+    ]);
+    assert.equal((await harness.manager.list("user-1")).length, 220);
     assert.equal((await harness.manager.list("user-2")).length, 0);
     await harness.manager.resume("user-1");
-    assert.equal(harness.calls.length, 25);
-    assert.ok(
-        harness.calls.every((input) => input.management === "auto-liked"),
-    );
+    assert.equal(harness.calls.length, 220);
+    assert.equal(harness.downloads.length, 220);
+    assert.deepEqual(harness.deleted, []);
 });
 
-test("auto budget evicts only oldest auto-managed ready copies and never manual copies", async () => {
+test("sync and download retain all existing automatic and manual copies above the old byte cap", async () => {
     const harness = createHarness();
     harness.downloads.push(
-        readyRecord("user-1", "manual-old", "manual", 1, 900),
-        readyRecord("user-1", "auto-old", "auto-liked", 2, 900),
-        readyRecord("user-1", "auto-new", "auto-liked", 3, 900),
+        readyRecord("user-1", "manual-old", "manual", 1, 3_000_000_000),
+        readyRecord("user-1", "auto-old", "auto-liked", 2, 3_000_000_000),
+        readyRecord("user-2", "other-owner", "auto-liked", 3, 3_000_000_000),
     );
     await harness.manager.updateSettings("user-1", {
-        autoDownloadLiked: true,
-        autoDownloadLikedLimit: 1,
-        autoDownloadMaxBytes: 1_000,
+        autoDownloadLikedLimit: 25,
+        autoDownloadMaxBytes: 1000,
     });
-
-    await harness.manager.enforceAutoBudget("user-1");
-
-    assert.deepEqual(harness.deleted, ["auto-old"]);
-    assert.ok(harness.downloads.some((record) => record.key === "manual-old"));
-    assert.ok(harness.downloads.some((record) => record.key === "auto-new"));
-});
-
-test("auto budget cannot delete a copy promoted to manual while eviction is pending", async () => {
-    let releaseAutoDelete!: () => void;
-    const autoDeleteGate = new Promise<void>((resolve) => {
-        releaseAutoDelete = resolve;
-    });
-    const harness = createHarness({ autoDeleteGate });
-    harness.downloads.push({
-        ...readyRecord("user-1", "auto-race", "auto-liked", 1, 1_500),
-        trackIdentity: "youtube:video-1",
-        track: TRACK,
-    });
-    await harness.manager.updateSettings("user-1", {
-        autoDownloadLiked: true,
-        autoDownloadMaxBytes: 1_000,
-    });
-
-    const eviction = harness.manager.enforceAutoBudget("user-1");
-    await harness.autoDeleteStarted;
-    const manualAction = harness.manager.enqueueBatch([
-        request("user-1", TRACK, "manual"),
+    await harness.manager.syncAutoLiked("user-1", [
+        request("user-1", TRACK, "auto-liked"),
     ]);
-    await manualAction;
-    releaseAutoDelete();
-    await eviction;
-
+    await harness.manager.resume("user-1");
+    assert.equal(harness.downloads.length, 4);
     assert.deepEqual(harness.deleted, []);
-    assert.equal(harness.downloads[0]?.management, "manual");
-    assert.equal(harness.downloads[0]?.key, "auto-race");
 });
 
-test("a manual action queues a fresh copy when budget eviction wins before promotion", async () => {
+test("an explicit pause survives reload without changing another owner's automatic policy", async () => {
+    const harness = createHarness();
+    await harness.manager.updateSettings("user-1", {
+        autoDownloadLiked: false,
+    });
+    await harness.manager.syncAutoLiked("user-1", [
+        request("user-1", TRACK, "auto-liked"),
+    ]);
+    await harness.manager.resume("user-1");
+    assert.equal(harness.calls.length, 0);
+    assert.equal(
+        (await harness.manager.getSettings("user-1")).autoDownloadLiked,
+        false,
+    );
+    assert.equal(
+        (await harness.manager.getSettings("user-2")).autoDownloadLiked,
+        true,
+    );
+});
+
+test("a manual action queues a fresh copy if another tab deletes it before promotion", async () => {
     let releasePromotion!: () => void;
     const promotionGate = new Promise<void>((resolve) => {
         releasePromotion = resolve;
     });
     const harness = createHarness({ promotionGate });
     harness.downloads.push({
-        ...readyRecord("user-1", "delete-wins", "auto-liked", 1, 1_500),
+        ...readyRecord("user-1", "delete-wins", "auto-liked", 1),
         trackIdentity: "youtube:video-1",
         track: TRACK,
     });
-    await harness.manager.updateSettings("user-1", {
-        autoDownloadLiked: true,
-        autoDownloadMaxBytes: 1_000,
-    });
-
-    const manualAction = harness.manager.enqueueBatch([
+    const action = harness.manager.enqueueBatch([
         request("user-1", TRACK, "manual"),
     ]);
     await harness.promotionStarted;
-    assert.deepEqual(await harness.manager.enforceAutoBudget("user-1"), [
-        "delete-wins",
-    ]);
+    harness.downloads.splice(0, 1);
     releasePromotion();
-    const result = await manualAction;
-
+    const result = await action;
     assert.equal(result.alreadyReady, 0);
     assert.equal(result.queued, 1);
-    assert.equal((await harness.manager.list("user-1")).length, 1);
 });
 
 test("a queue claimed by a retired auth runtime cannot start a download under replacement credentials", async () => {
@@ -902,6 +917,106 @@ test("manual collection action promotes an existing auto copy without redownload
     assert.equal(harness.calls.length, 0);
 });
 
+test("manual collection reuses a provenance-verified legacy provider key", async () => {
+    const harness = createHarness();
+    const localTrack = {
+        ...TRACK,
+        id: "local-legacy",
+        filePath: "/music/local.flac",
+        source: "local" as const,
+        streamSource: undefined,
+        youtubeVideoId: undefined,
+    };
+    harness.downloads.push({
+        ...readyRecord("user-1", "legacy-ready", "manual", 1),
+        trackIdentity: "tidal:991",
+        sourceUrl: "/api/library/tracks/local-legacy/stream",
+        track: { ...localTrack, tidalTrackId: 991 },
+    });
+
+    const result = await harness.manager.enqueueBatch([
+        request("user-1", localTrack),
+    ]);
+
+    assert.equal(result.alreadyReady, 1);
+    assert.equal(result.queued, 0);
+    assert.equal(harness.calls.length, 0);
+});
+
+test("enqueue drops retired TIDAL before creating durable queue work", async () => {
+    const harness = createHarness();
+    const retiredTrack = {
+        ...TRACK,
+        id: "tidal:991",
+        streamSource: "tidal" as const,
+        tidalTrackId: 991,
+        youtubeVideoId: undefined,
+    };
+
+    const result = await harness.manager.enqueueBatch([
+        {
+            ...request("user-1", retiredTrack),
+            sourceUrl: "/api/tidal/stream/991",
+        },
+        request("user-1"),
+    ]);
+
+    assert.deepEqual(result, { total: 1, queued: 1, alreadyReady: 0 });
+    assert.deepEqual(
+        (await harness.manager.list("user-1")).map(
+            (item) => item.trackIdentity,
+        ),
+        ["youtube:video-1"],
+    );
+    assert.equal(harness.calls.length, 0);
+});
+
+test("resume terminally rejects persisted retired TIDAL work without download or retry", async () => {
+    const harness = createHarness();
+    const statuses = ["queued", "interrupted", "error"] as const;
+    for (const [index, status] of statuses.entries()) {
+        const tidalTrack = {
+            ...TRACK,
+            id: `tidal:${991 + index}`,
+            streamSource: "tidal" as const,
+            tidalTrackId: 991 + index,
+            youtubeVideoId: undefined,
+        };
+        const item = await harness.store.upsert({
+            ...request("user-1", tidalTrack),
+            key: `retired-${status}`,
+            trackIdentity: `tidal:${991 + index}`,
+            sourceUrl: `/api/tidal/stream/${991 + index}`,
+            quality: "auto",
+            now: index + 1,
+        });
+        harness.store.items.set(item.key, {
+            ...item,
+            status,
+            errorMessage: status === "error" ? "Previous failure" : null,
+        });
+    }
+
+    await harness.manager.resume("user-1");
+
+    assert.equal(harness.calls.length, 0);
+    assert.deepEqual(harness.retryDelays, []);
+    const remaining = await harness.manager.list("user-1");
+    assert.equal(remaining.length, 3);
+    assert.ok(remaining.every((item) => item.status === "error"));
+    assert.ok(
+        remaining
+            .filter((item) => item.key !== "retired-error")
+            .every((item) =>
+                item.errorMessage?.includes("TIDAL больше недоступен"),
+            ),
+    );
+    assert.equal(
+        remaining.find((item) => item.key === "retired-error")?.errorMessage,
+        "Previous failure",
+    );
+});
+
 test("per-device automation settings are owner-scoped and normalized", async () => {
     const harness = createHarness();
     assert.deepEqual(await harness.manager.getSettings("user-1"), {
@@ -913,10 +1028,11 @@ test("per-device automation settings are owner-scoped and normalized", async () 
         autoDownloadLikedLimit: 9_999,
     });
     assert.equal(updated.autoDownloadLiked, true);
-    assert.equal(updated.autoDownloadLikedLimit, 200);
+    assert.equal(updated.autoDownloadLikedLimit, 0);
+    assert.equal(updated.autoDownloadMaxBytes, 0);
     assert.equal(
         (await harness.manager.getSettings("user-2")).autoDownloadLiked,
-        false,
+        true,
     );
 });
 
@@ -982,7 +1098,7 @@ test("a long foreground item renews its cross-tab queue lease", async () => {
     const running = harness.manager.resume("user-1");
     for (
         let attempt = 0;
-        attempt < 10 && harness.calls.length === 0;
+        attempt < 50 && harness.calls.length === 0;
         attempt++
     ) {
         await Promise.resolve();

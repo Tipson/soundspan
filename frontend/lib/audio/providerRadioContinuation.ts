@@ -1,9 +1,11 @@
 import type {
     PersonalizedHomeFeed,
     PersonalizedHomeMood,
+    PersonalizedHomeLanguage,
     PersonalizedTrack,
 } from "@/features/home/types";
 import type { Track, WaveMode } from "@/lib/audio-state-context";
+import { selectWaveTracks } from "@/features/home/selectWaveTracks";
 import {
     appendRecommendationClientContext,
     getRecommendationClientContext,
@@ -35,10 +37,6 @@ function providerVideoId(track: ProviderQueueEntry): string | null {
 function providerQueueIdentity(track: ProviderQueueEntry): string {
     const videoId = providerVideoId(track);
     if (videoId) return videoId;
-    const tidalTrackId = track.provider?.tidalTrackId ?? track.tidalTrackId;
-    if (Number.isSafeInteger(tidalTrackId) && Number(tidalTrackId) > 0) {
-        return `tidal:${tidalTrackId}`;
-    }
     return track.id;
 }
 
@@ -49,13 +47,7 @@ export function isProviderRadioTrack(track: Track): boolean {
             track.streamSource === "youtube-direct" ||
             track.provider?.source === "youtube") &&
         providerVideoId(track) !== null;
-    const tidalTrackId = track.provider?.tidalTrackId ?? track.tidalTrackId;
-    const tidalTrack =
-        (track.streamSource === "tidal" ||
-            track.provider?.source === "tidal") &&
-        Number.isSafeInteger(tidalTrackId) &&
-        Number(tidalTrackId) > 0;
-    return youtubeTrack || tidalTrack;
+    return youtubeTrack;
 }
 
 /** Builds one bounded continuation request without allowing the queue in the URL to grow forever. */
@@ -66,6 +58,7 @@ export function buildProviderRadioContinuationPath(
     mode: WaveMode,
     mood: PersonalizedHomeMood | null = null,
     context: RecommendationClientContext | null = getRecommendationClientContext(),
+    language: PersonalizedHomeLanguage = "any",
 ): string {
     const excludedTrackIds = Array.from(
         new Set(existingQueue.map(providerQueueIdentity).filter(Boolean)),
@@ -78,6 +71,7 @@ export function buildProviderRadioContinuationPath(
         sessionId: getRecommendationSessionId(),
     });
     if (mood) params.set("mood", mood);
+    if (language !== "any") params.set("language", language);
     appendRecommendationClientContext(params, context);
     if (excludedTrackIds.length > 0) {
         params.set("exclude", excludedTrackIds.join(","));
@@ -126,18 +120,6 @@ export function toProviderPlaybackTrack(
         };
     }
 
-    const tidalTrackId = track.tidalTrackId ?? track.provider.tidalTrackId;
-    if (tidalTrackId !== null && tidalTrackId !== undefined) {
-        return {
-            ...baseTrack,
-            id: `tidal:${tidalTrackId}`,
-            source: "tidal",
-            provider: { source: "tidal", tidalTrackId },
-            streamSource: "tidal",
-            tidalTrackId,
-        };
-    }
-
     return {
         ...baseTrack,
         source: "local",
@@ -146,22 +128,26 @@ export function toProviderPlaybackTrack(
     };
 }
 
-/** Selects fresh, directly playable continuation rows across provider shelves. */
+/** Continues the selected Wave mode using the same lane policy as its first page. */
 export function collectProviderRadioContinuation(
     feed: PersonalizedHomeFeed,
     existingQueue: ProviderQueueEntry[],
     limit: number,
+    mode: WaveMode = "for-you",
 ): Track[] {
     const excludedTrackIds = new Set(existingQueue.map(providerQueueIdentity));
     const selected: Track[] = [];
     const boundedLimit = Math.max(0, Math.floor(limit));
-    const candidates = [
-        ...feed.shelves.discovery,
-        ...feed.shelves.quickPicks,
-        ...feed.shelves.listenAgain,
-    ];
+    if (boundedLimit === 0) return [];
+    const candidates = selectWaveTracks(feed.shelves, mode);
 
     for (const candidate of candidates) {
+        if (
+            candidate.source !== "library" &&
+            providerVideoId(candidate) === null
+        ) {
+            continue;
+        }
         const identity = providerQueueIdentity(candidate);
         if (!identity || excludedTrackIds.has(identity)) continue;
         excludedTrackIds.add(identity);

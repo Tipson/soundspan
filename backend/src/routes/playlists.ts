@@ -61,7 +61,6 @@ type ReorderPlaylistItem = {
 
 type MappingAvailabilityRow = {
     trackId: string | null;
-    trackTidalId: string | null;
     trackYtMusicId: string | null;
 };
 
@@ -71,7 +70,6 @@ type ResolutionPartition = {
 };
 
 type FallbackIds = {
-    tidalIds: string[];
     ytIds: string[];
 };
 
@@ -311,9 +309,6 @@ function getFallbackToken(
     item: UnifiedPlaylistItemRecord,
     profile: UserProviderProfile,
 ): string | null {
-    if (item.trackTidalId && (!profile.hasTidal || !item.trackTidal)) {
-        return `t:${item.trackTidalId}`;
-    }
     if (item.trackYtMusicId && (!profile.hasYtMusic || !item.trackYtMusic)) {
         return `y:${item.trackYtMusicId}`;
     }
@@ -325,9 +320,7 @@ function mappingSupportsProfile(
     profile: UserProviderProfile,
 ): boolean {
     return Boolean(
-        mapping.trackId ||
-        (mapping.trackTidalId && profile.hasTidal) ||
-        (mapping.trackYtMusicId && profile.hasYtMusic),
+        mapping.trackId || (mapping.trackYtMusicId && profile.hasYtMusic),
     );
 }
 
@@ -335,7 +328,6 @@ function addMappingTokens(
     tokens: Set<string>,
     mapping: MappingAvailabilityRow,
 ): void {
-    if (mapping.trackTidalId) tokens.add(`t:${mapping.trackTidalId}`);
     if (mapping.trackYtMusicId) tokens.add(`y:${mapping.trackYtMusicId}`);
 }
 
@@ -343,35 +335,25 @@ function collectFallbackIds(
     items: UnifiedPlaylistItemRecord[],
     profile: UserProviderProfile,
 ): FallbackIds {
-    const tidalIds = new Set<string>();
     const ytIds = new Set<string>();
     items.forEach((item) => {
         const token = getFallbackToken(item, profile);
-        if (token?.startsWith("t:")) tidalIds.add(token.slice(2));
         if (token?.startsWith("y:")) ytIds.add(token.slice(2));
     });
-    return { tidalIds: Array.from(tidalIds), ytIds: Array.from(ytIds) };
+    return { ytIds: Array.from(ytIds) };
 }
 
 async function loadFallbackMappings(
     ids: FallbackIds,
 ): Promise<MappingAvailabilityRow[]> {
-    if (ids.tidalIds.length === 0 && ids.ytIds.length === 0) return [];
+    if (ids.ytIds.length === 0) return [];
     return prisma.trackMapping.findMany({
         where: {
             stale: false,
-            OR: [
-                ...(ids.tidalIds.length > 0
-                    ? [{ trackTidalId: { in: ids.tidalIds } }]
-                    : []),
-                ...(ids.ytIds.length > 0
-                    ? [{ trackYtMusicId: { in: ids.ytIds } }]
-                    : []),
-            ],
+            trackYtMusicId: { in: ids.ytIds },
         },
         select: {
             trackId: true,
-            trackTidalId: true,
             trackYtMusicId: true,
         },
     });
@@ -445,7 +427,9 @@ async function resolvePlaylistDetailItems(
 const addTrackSchema = z
     .object({
         trackId: z.string().trim().min(1).optional(),
-        tidalTrackId: z.coerce.number().int().positive().optional(),
+        // Keep an explicit tombstone so legacy clients receive a validation
+        // error instead of silently degrading a TIDAL request into another shape.
+        tidalTrackId: z.never().optional(),
         youtubeVideoId: z.string().trim().min(1).optional(),
         title: z.string().trim().min(1).optional(),
         artist: z.string().trim().min(1).optional(),
@@ -457,24 +441,20 @@ const addTrackSchema = z
         thumbnailUrl: z.string().trim().min(1).optional(),
     })
     .superRefine((value, ctx) => {
-        const identifierCount = [
-            value.trackId,
-            value.tidalTrackId,
-            value.youtubeVideoId,
-        ].filter((entry) => entry !== undefined).length;
+        const identifierCount = [value.trackId, value.youtubeVideoId].filter(
+            (entry) => entry !== undefined,
+        ).length;
         if (identifierCount !== 1) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message:
-                    "Exactly one of trackId, tidalTrackId, or youtubeVideoId is required.",
+                    "Exactly one of trackId or youtubeVideoId is required.",
                 path: ["trackId"],
             });
             return;
         }
 
-        const needsRemoteMetadata =
-            value.tidalTrackId !== undefined ||
-            value.youtubeVideoId !== undefined;
+        const needsRemoteMetadata = value.youtubeVideoId !== undefined;
         if (!needsRemoteMetadata) return;
 
         if (!value.title) {
@@ -533,8 +513,7 @@ async function resolvePlaylistItemReference(
     }
 
     const ensured = await trackMappingService.ensureRemoteTrack({
-        provider: data.tidalTrackId !== undefined ? "tidal" : "youtube",
-        tidalId: data.tidalTrackId,
+        provider: "youtube",
         videoId: data.youtubeVideoId,
         title: data.title as string,
         artist: data.artist as string,
@@ -545,17 +524,11 @@ async function resolvePlaylistItemReference(
         explicit: data.explicit,
         thumbnailUrl: data.thumbnailUrl,
     });
-    return ensured.provider === "tidal"
-        ? {
-              trackId: null,
-              trackTidalId: ensured.id,
-              trackYtMusicId: null,
-          }
-        : {
-              trackId: null,
-              trackTidalId: null,
-              trackYtMusicId: ensured.id,
-          };
+    return {
+        trackId: null,
+        trackTidalId: null,
+        trackYtMusicId: ensured.id,
+    };
 }
 
 function getPlaylistItemReferenceWhere(
@@ -564,9 +537,6 @@ function getPlaylistItemReferenceWhere(
 ): Prisma.PlaylistItemWhereInput {
     if (reference.trackId) {
         return { playlistId, trackId: reference.trackId };
-    }
-    if (reference.trackTidalId) {
-        return { playlistId, trackTidalId: reference.trackTidalId };
     }
     if (!reference.trackYtMusicId) throw new Error("Missing track reference");
     return { playlistId, trackYtMusicId: reference.trackYtMusicId };
@@ -1521,42 +1491,6 @@ router.delete("/:id", async (req, res) => {
  *                     minLength: 1
  *                     description: Local library track ID
  *               - type: object
- *                 required: [tidalTrackId, title, artist, album, duration]
- *                 not:
- *                   anyOf:
- *                     - required: [trackId]
- *                     - required: [youtubeVideoId]
- *                 properties:
- *                   tidalTrackId:
- *                     type: integer
- *                     minimum: 1
- *                   title:
- *                     type: string
- *                     minLength: 1
- *                   artist:
- *                     type: string
- *                     minLength: 1
- *                   album:
- *                     type: string
- *                     minLength: 1
- *                   duration:
- *                     type: integer
- *                     minimum: 0
- *                     description: Track duration in seconds
- *                   isrc:
- *                     type: string
- *                     minLength: 1
- *                     maxLength: 64
- *                   quality:
- *                     type: string
- *                     minLength: 1
- *                     maxLength: 64
- *                   explicit:
- *                     type: boolean
- *                   thumbnailUrl:
- *                     type: string
- *                     minLength: 1
- *               - type: object
  *                 required: [youtubeVideoId, title, artist, album, duration]
  *                 not:
  *                   anyOf:
@@ -1609,6 +1543,22 @@ router.post("/:id/items", async (req, res) => {
     try {
         if (!req.user) return res.status(401).json({ error: "Unauthorized" });
         const userId = req.user.id;
+        const requestedTrackId =
+            req.body && typeof req.body === "object"
+                ? (req.body as { trackId?: unknown }).trackId
+                : undefined;
+        if (
+            (req.body &&
+                typeof req.body === "object" &&
+                Object.prototype.hasOwnProperty.call(
+                    req.body,
+                    "tidalTrackId",
+                )) ||
+            (typeof requestedTrackId === "string" &&
+                requestedTrackId.trim().toLowerCase().startsWith("tidal:"))
+        ) {
+            return res.status(400).json({ error: "retired_provider" });
+        }
         const parsedBody = addTrackSchema.safeParse(req.body);
         if (!parsedBody.success) {
             return res.status(400).json({

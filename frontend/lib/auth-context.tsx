@@ -10,7 +10,7 @@ import {
     useMemo,
     useCallback,
 } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { api } from "./api";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import {
@@ -62,7 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
-    const pathname = usePathname();
     const authEpochRef = useRef(0);
 
     useEffect(() => {
@@ -83,22 +82,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 sessionGeneration === api.getSessionGeneration();
 
             try {
+                // Open the last validated local account before checking the
+                // server: onLine stays true on a train's unusable connection.
+                // URL-token replacement above has already retired old identity.
+                const offlineUser = api.getToken()
+                    ? readCachedAuthUser()
+                    : null;
+                if (offlineUser) {
+                    activateUserPlaybackStorage(offlineUser.id);
+                    setUser(offlineUser);
+                    setIsAuthenticated(true);
+                    setIsLoading(false);
+                    if (navigator.onLine === false) return;
+                }
                 const userData = await api.getCurrentUser();
                 if (!isCurrentAuthAttempt()) return;
+                if (offlineUser && offlineUser.id !== userData.id) {
+                    revokeAuthenticatedRuntime({ notifyAuthProvider: false });
+                }
                 activateUserPlaybackStorage(userData.id);
                 writeCachedAuthUser(userData);
                 setUser(userData);
                 setIsAuthenticated(true);
 
                 // Check onboarding status - redirect if needed
+                const activePathname = window.location.pathname;
                 if (
                     userData.onboardingComplete === false &&
-                    pathname !== "/onboarding"
+                    activePathname !== "/onboarding"
                 ) {
                     router.push("/onboarding");
                 } else if (
                     userData.onboardingComplete &&
-                    pathname === "/onboarding"
+                    activePathname === "/onboarding"
                 ) {
                     router.push("/");
                 }
@@ -126,16 +142,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(null);
 
                 // If we're already on onboarding page, allow access
-                if (pathname === "/onboarding") {
+                const activePathname = window.location.pathname;
+                if (activePathname === "/onboarding") {
                     setIsLoading(false);
                     return;
                 }
 
                 // If not on a public path, check if we need onboarding
                 const isPublic =
-                    publicPaths.includes(pathname) ||
+                    publicPaths.includes(activePathname) ||
                     publicPrefixes.some((prefix) =>
-                        pathname.startsWith(prefix),
+                        activePathname.startsWith(prefix),
                     );
                 if (!isPublic) {
                     // Check if any users exist in the system
@@ -165,6 +182,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         checkAuth();
+        return () => {
+            authEpochRef.current += 1;
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Only run once on mount
 
@@ -287,14 +307,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     setUser(userData);
                     setIsAuthenticated(true);
 
+                    const activePathname = window.location.pathname;
                     if (
                         userData.onboardingComplete === false &&
-                        pathname !== "/onboarding"
+                        activePathname !== "/onboarding"
                     ) {
                         router.push("/onboarding");
                     } else if (
                         userData.onboardingComplete &&
-                        pathname === "/onboarding"
+                        activePathname === "/onboarding"
                     ) {
                         router.push("/");
                     }
@@ -318,7 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             authEpochRef.current += 1;
             window.removeEventListener("storage", handleCrossTabSessionChange);
         };
-    }, [pathname, router]);
+    }, [router]);
 
     // Listen for session-expired events from the API client (stale/invalid tokens)
     useEffect(() => {

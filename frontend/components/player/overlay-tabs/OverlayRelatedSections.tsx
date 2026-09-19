@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Loader2, Music as MusicIcon, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 import { getArtistHref } from "@/utils/artistRoute";
-import { TidalBadge } from "@/components/ui/TidalBadge";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { TrackPreferenceButtons } from "../TrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
@@ -98,7 +97,6 @@ function SimilarSongBadge({
             </span>
         );
     }
-    if (streamMatch?.streamSource === "tidal") return <TidalBadge />;
     if (streamMatch?.streamSource === "youtube") return <YouTubeBadge />;
     if (track.lastFmUrl) {
         return (

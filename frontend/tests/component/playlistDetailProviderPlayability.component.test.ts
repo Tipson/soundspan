@@ -1,8 +1,48 @@
 import assert from "node:assert/strict";
-import { beforeEach, mock, test } from "node:test";
+import { after, beforeEach, mock, test } from "node:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+GlobalRegistrator.register({
+    url: "https://soundspan.test/playlist/playlist-1",
+});
+(
+    globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+after(() => GlobalRegistrator.unregister());
+
+async function renderWithActions(Page: React.ComponentType): Promise<string> {
+    const { createRoot } = await import("react-dom/client");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const client = new QueryClient();
+    try {
+        await React.act(async () =>
+            root.render(
+                React.createElement(
+                    QueryClientProvider,
+                    { client },
+                    React.createElement(Page),
+                ),
+            ),
+        );
+        const more = container.querySelector<HTMLButtonElement>(
+            '[aria-label="Ещё действия"]',
+        );
+        assert.ok(more);
+        await React.act(async () => more.click());
+        const dialog = document.querySelector('[role="dialog"]');
+        assert.ok(dialog);
+        return container.innerHTML + dialog.outerHTML;
+    } finally {
+        await React.act(async () => root.unmount());
+        client.clear();
+        container.remove();
+    }
+}
 
 const state = {
     isLoading: false,
@@ -150,12 +190,6 @@ mock.module("@/components/ui/TrackOverflowMenu", {
     },
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: {
-        TidalBadge: () => React.createElement("span", null, "TIDAL"),
-    },
-});
-
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: {
         YouTubeBadge: () => React.createElement("span", null, "YOUTUBE"),
@@ -300,6 +334,12 @@ mock.module("@/utils/formatTime", {
 mock.module("@/lib/logger", {
     namedExports: {
         frontendLogger: {
+            child: () => ({
+                error: () => undefined,
+                warn: () => undefined,
+                info: () => undefined,
+                debug: () => undefined,
+            }),
             error: () => undefined,
             warn: () => undefined,
             info: () => undefined,
@@ -487,17 +527,18 @@ test("playlist detail renders consolidated action bar buttons", async () => {
     const mod = await import("../../app/playlist/[id]/page");
     const PlaylistDetailPage = mod.default;
 
-    const queryClient = new QueryClient();
-    const html = renderToStaticMarkup(
-        React.createElement(
-            QueryClientProvider,
-            { client: queryClient },
-            React.createElement(PlaylistDetailPage),
-        ),
-    );
+    const html = await renderWithActions(PlaylistDetailPage);
 
     // Canonical order: Play, Shuffle, Add to Queue, Like All, Radio
-    assert.match(html, /<span>Воспроизвести всё<\/span>/);
+    assert.match(html, /aria-label="Воспроизвести всё"/);
+    assert.match(
+        html,
+        /<span[^>]*data-playlist-primary-label="compact"[^>]*>Слушать<\/span>/,
+    );
+    assert.match(
+        html,
+        /<span[^>]*data-playlist-primary-label="full"[^>]*>Воспроизвести всё<\/span>/,
+    );
     assert.match(html, /title="Воспроизвести вперемешку"/);
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить все треки в любимые"/);
@@ -508,28 +549,20 @@ test("playlist detail renders consolidated action bar buttons", async () => {
     assert.ok(hero);
     assert.match(hero, /data-music-detail="actions"/);
     assert.match(hero, /data-detail-action-tier="primary"/);
-    assert.match(hero, /data-detail-action-tier="secondary"/);
+    assert.match(hero, /aria-label="Ещё действия"/);
+    assert.doesNotMatch(hero, /data-detail-action-tier="secondary"/);
+    assert.match(html, /data-detail-action-tier="secondary"/);
 });
 
 test("playlist detail offers a device download for playable tracks only", async () => {
     const mod = await import("../../app/playlist/[id]/page");
     const PlaylistDetailPage = mod.default;
-    const queryClient = new QueryClient();
-    const html = renderToStaticMarkup(
-        React.createElement(
-            QueryClientProvider,
-            { client: queryClient },
-            React.createElement(PlaylistDetailPage),
-        ),
-    );
+    const html = await renderWithActions(PlaylistDetailPage);
 
     assert.match(html, /data-testid="device-collection-download"/);
     assert.match(html, /data-collection-id="playlist:playlist-1"/);
     assert.match(html, /data-collection-label="Mixed Playlist"/);
-    assert.match(
-        html,
-        /data-track-ids="track-local-1,tidal:991,yt:yt-video-7"/,
-    );
+    assert.match(html, /data-track-ids="track-local-1,yt:yt-video-7"/);
 });
 
 test("generated radio playlist detail adds append and regenerate actions", async () => {
@@ -541,20 +574,13 @@ test("generated radio playlist detail adds append and regenerate actions", async
     };
     const mod = await import("../../app/playlist/[id]/page");
     const PlaylistDetailPage = mod.default;
-    const queryClient = new QueryClient();
-    const html = renderToStaticMarkup(
-        React.createElement(
-            QueryClientProvider,
-            { client: queryClient },
-            React.createElement(PlaylistDetailPage),
-        ),
-    );
+    const html = await renderWithActions(PlaylistDetailPage);
 
     assert.match(html, /Добавить ещё треки/);
     assert.match(html, /Собрать заново/);
 });
 
-test("playlist detail renders overflow menu for remote tracks (tidal + youtube)", async () => {
+test("playlist detail omits playback actions for retired provider rows", async () => {
     const mod = await import("../../app/playlist/[id]/page");
     const PlaylistDetailPage = mod.default;
 
@@ -568,14 +594,13 @@ test("playlist detail renders overflow menu for remote tracks (tidal + youtube)"
     );
 
     // The mock TrackOverflowMenu renders <button aria-label="Track actions">actions</button>.
-    // We expect 3 overflow menus: one for local, one for tidal, one for youtube.
-    // The unplayable/missing track should NOT get an overflow menu.
+    // Local and YouTube rows remain actionable. Retired and missing rows do not.
     const overflowCount = (html.match(/aria-label="Track actions"/g) || [])
         .length;
     assert.equal(
         overflowCount,
-        3,
-        `Expected 3 overflow menus (local + tidal + youtube), got ${overflowCount}`,
+        2,
+        `Expected 2 overflow menus (local + youtube), got ${overflowCount}`,
     );
 });
 
@@ -595,13 +620,13 @@ test("playlist rows keep the compact like-only preference control", async () => 
     const compactPreferenceCount = (
         html.match(/data-preference-mode="up-only"/g) ?? []
     ).length;
-    assert.equal(compactPreferenceCount, 3);
+    assert.equal(compactPreferenceCount, 2);
     assert.doesNotMatch(html, /data-preference-mode="both"/);
     assert.deepEqual(
         state.preferenceProps.map(
             ({ buttonSizeClassName }) => buttonSizeClassName,
         ),
-        ["h-11 w-11", "h-11 w-11", "h-11 w-11"],
+        ["h-11 w-11", "h-11 w-11"],
     );
     assert.deepEqual(
         state.preferenceProps.map(({ trackId, metadata }) => ({
@@ -610,16 +635,6 @@ test("playlist rows keep the compact like-only preference control", async () => 
         })),
         [
             { trackId: "track-local-1", metadata: undefined },
-            {
-                trackId: "tidal:991",
-                metadata: {
-                    title: "Tidal Song",
-                    artist: "Tidal Artist",
-                    album: "Tidal Album",
-                    duration: 245,
-                    thumbnailUrl: undefined,
-                },
-            },
             {
                 trackId: "yt:yt-video-7",
                 metadata: {
@@ -642,11 +657,15 @@ test("pending playlist rows expose named 44px recovery controls", async () => {
         pendingCount: 1,
         pendingTracks: [
             {
+                id: "pending-1",
+                type: "pending",
+                sort: 5,
                 pending: {
                     id: "pending-1",
                     title: "Missing Song",
                     artist: "Missing Artist",
                     album: "Missing Album",
+                    previewUrl: null,
                 },
             },
         ],
@@ -690,7 +709,7 @@ test("playlist detail renders provider badges and unplayable fallback messaging"
 
     assert.doesNotMatch(html, /1 local \/ 1 TIDAL \/ 1 YouTube/);
     assert.match(html, /Local Song/);
-    assert.match(html, /TIDAL/);
+    assert.doesNotMatch(html, /TIDAL/);
     assert.match(html, /YOUTUBE/);
     assert.match(html, /НЕДОСТУПНО/);
     assert.match(html, /Сейчас этот трек недоступен для воспроизведения\./);
@@ -758,4 +777,46 @@ test("playlist detail distinguishes removed tracks without changing missing-prov
     assert.match(html, /opacity-60/);
     assert.match(html, /НЕДОСТУПНО/);
     assert.match(html, /Сейчас этот трек недоступен для воспроизведения\./);
+});
+
+test("playlist detail interleaves pending and playable rows by source sort", async () => {
+    const playlist = state.playlist;
+    assert.ok(playlist);
+    const items = playlist.items;
+    assert.ok(Array.isArray(items));
+    const firstTrack = items[0];
+    assert.ok(firstTrack);
+    state.playlist = {
+        ...playlist,
+        items: [{ ...firstTrack, sort: 1 }],
+        pendingCount: 1,
+        pendingTracks: [
+            {
+                id: "pending-after-track",
+                type: "pending",
+                sort: 2,
+                pending: {
+                    id: "pending-after-track",
+                    title: "Pending After Track",
+                    artist: "Pending Artist",
+                    album: "Pending Album",
+                    previewUrl: null,
+                },
+            },
+        ],
+    };
+
+    const mod = await import("../../app/playlist/[id]/page");
+    const queryClient = new QueryClient();
+    const html = renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: queryClient },
+            React.createElement(mod.default),
+        ),
+    );
+
+    assert.ok(html.indexOf("Local Song") < html.indexOf("Pending After Track"));
+    assert.match(html, /ИЩЕТСЯ/);
+    assert.match(html, /Повторить загрузку «Pending After Track»/);
 });

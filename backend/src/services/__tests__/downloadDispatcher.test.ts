@@ -41,24 +41,11 @@ jest.mock("../soulseek", () => ({
     },
 }));
 
-const mockTidalAvailable = jest.fn();
-jest.mock("../tidal", () => ({
-    tidalService: {
-        isAvailable: (...args: unknown[]) => mockTidalAvailable(...args),
-    },
-}));
-
 const mockYoutubeAvailable = jest.fn();
 jest.mock("../youtubeDownload", () => ({
     youtubeDownloadService: {
         isAvailable: (...args: unknown[]) => mockYoutubeAvailable(...args),
     },
-}));
-
-const mockProcessTidalDownload = jest.fn();
-jest.mock("../tidalLibraryDownload", () => ({
-    processTidalDownload: (...args: unknown[]) =>
-        mockProcessTidalDownload(...args),
 }));
 
 const mockProcessYoutubeDownload = jest.fn();
@@ -108,11 +95,9 @@ describe("dispatchAlbumDownload", () => {
             downloadSource: "soulseek",
             primaryFailureFallback: "none",
         });
-        mockTidalAvailable.mockResolvedValue(false);
         mockLidarrAvailable.mockResolvedValue(true);
         mockSoulseekAvailable.mockResolvedValue(true);
         mockYoutubeAvailable.mockResolvedValue(false);
-        mockProcessTidalDownload.mockResolvedValue(undefined);
         mockProcessYoutubeDownload.mockResolvedValue(undefined);
         mockProcessSoulseekDownload.mockResolvedValue(undefined);
         mockStartDownload.mockResolvedValue({ success: true });
@@ -136,62 +121,39 @@ describe("dispatchAlbumDownload", () => {
         expect(mockStartDownload).not.toHaveBeenCalled();
     });
 
-    it("dispatches an available configured TIDAL source", async () => {
-        mockGetSystemSettings.mockResolvedValue({
-            downloadSource: "tidal",
-            primaryFailureFallback: "none",
-        });
-        mockTidalAvailable.mockResolvedValue(true);
-
-        await dispatchAlbumDownload(baseParams);
-
-        expect(mockProcessTidalDownload).toHaveBeenCalledWith(
-            "job-1",
-            "Artist",
-            "Album",
-            "user-1",
-        );
-        expect(mockTidalAvailable).toHaveBeenCalledTimes(1);
-        expect(mockLidarrAvailable).toHaveBeenCalledTimes(1);
-        expect(mockSoulseekAvailable).toHaveBeenCalledTimes(1);
-        expect(mockYoutubeAvailable).toHaveBeenCalledTimes(1);
-        expect(mockStartDownload).not.toHaveBeenCalled();
-    });
-
     it("dispatches a resolved routing snapshot without probing sources twice", async () => {
         mockGetSystemSettings.mockResolvedValue({
-            downloadSource: "tidal",
+            downloadSource: "youtube",
             primaryFailureFallback: "none",
         });
-        mockTidalAvailable.mockResolvedValue(true);
+        mockYoutubeAvailable.mockResolvedValue(true);
         const routing = await resolveAlbumDownloadRouting(baseParams);
 
         await dispatchResolvedAlbumDownload(routing, baseParams);
 
         expect(mockGetSystemSettings).toHaveBeenCalledTimes(1);
-        expect(mockTidalAvailable).toHaveBeenCalledTimes(1);
         expect(mockLidarrAvailable).toHaveBeenCalledTimes(1);
         expect(mockSoulseekAvailable).toHaveBeenCalledTimes(1);
         expect(mockYoutubeAvailable).toHaveBeenCalledTimes(1);
-        expect(mockProcessTidalDownload).toHaveBeenCalledTimes(1);
+        expect(mockProcessYoutubeDownload).toHaveBeenCalledTimes(1);
     });
 
-    it("passes the resolved Soulseek runtime fallback snapshot to TIDAL", async () => {
+    it("passes the resolved Soulseek runtime fallback snapshot to YouTube", async () => {
         mockGetSystemSettings.mockResolvedValue({
-            downloadSource: "tidal",
+            downloadSource: "youtube",
             primaryFailureFallback: "soulseek",
         });
-        mockTidalAvailable.mockResolvedValue(true);
+        mockYoutubeAvailable.mockResolvedValue(true);
         const routing = await resolveAlbumDownloadRouting(baseParams);
         mockGetSystemSettings.mockResolvedValue({
-            downloadSource: "tidal",
+            downloadSource: "youtube",
             primaryFailureFallback: "lidarr",
         });
 
         await dispatchResolvedAlbumDownload(routing, baseParams);
 
         expect(mockGetSystemSettings).toHaveBeenCalledTimes(1);
-        expect(mockProcessTidalDownload).toHaveBeenCalledWith(
+        expect(mockProcessYoutubeDownload).toHaveBeenCalledWith(
             "job-1",
             "Artist",
             "Album",
@@ -203,9 +165,10 @@ describe("dispatchAlbumDownload", () => {
 
     it("uses YouTube as an available explicit fallback", async () => {
         mockGetSystemSettings.mockResolvedValue({
-            downloadSource: "tidal",
+            downloadSource: "soulseek",
             primaryFailureFallback: "youtube",
         });
+        mockSoulseekAvailable.mockResolvedValue(false);
         mockYoutubeAvailable.mockResolvedValue(true);
 
         await dispatchAlbumDownload(baseParams);
@@ -333,24 +296,24 @@ describe("dispatchAlbumDownload", () => {
 
     it("fails without dispatch when the unavailable primary uses Skip", async () => {
         mockGetSystemSettings.mockResolvedValue({
-            downloadSource: "tidal",
+            downloadSource: "youtube",
             primaryFailureFallback: "none",
         });
 
         await dispatchAlbumDownload(baseParams);
 
-        expect(mockProcessTidalDownload).not.toHaveBeenCalled();
+        expect(mockProcessYoutubeDownload).not.toHaveBeenCalled();
         expect(mockStartDownload).not.toHaveBeenCalled();
         expect(mockUpdate).toHaveBeenCalledWith({
             where: { id: "job-1" },
             data: {
                 status: "failed",
-                error: 'tidal is unavailable and "When primary source fails" is set to Skip',
+                error: 'youtube is unavailable and "When primary source fails" is set to Skip',
                 completedAt: expect.any(Date),
                 metadata: {
                     preserved: true,
-                    currentSource: "tidal",
-                    statusText: "tidal unavailable — skipped",
+                    currentSource: "youtube",
+                    statusText: "youtube unavailable — skipped",
                     failedAt: expect.any(String),
                 },
             },
@@ -359,7 +322,7 @@ describe("dispatchAlbumDownload", () => {
 
     it("uses the explicitly configured manager fallback", async () => {
         mockGetSystemSettings.mockResolvedValue({
-            downloadSource: "tidal",
+            downloadSource: "youtube",
             primaryFailureFallback: "lidarr",
         });
 
@@ -381,7 +344,7 @@ describe("dispatchAlbumDownload", () => {
             metadata: "scalar metadata",
         });
         mockGetSystemSettings.mockResolvedValue({
-            downloadSource: "tidal",
+            downloadSource: "youtube",
             primaryFailureFallback: "lidarr",
         });
         mockLidarrAvailable.mockResolvedValue(false);
@@ -393,11 +356,11 @@ describe("dispatchAlbumDownload", () => {
             where: { id: "job-1" },
             data: {
                 status: "failed",
-                error: "tidal is unavailable and the configured fallback (lidarr) is also unavailable",
+                error: "youtube is unavailable and the configured fallback (lidarr) is also unavailable",
                 completedAt: expect.any(Date),
                 metadata: {
-                    currentSource: "tidal",
-                    statusText: "tidal and fallback lidarr unavailable",
+                    currentSource: "youtube",
+                    statusText: "youtube and fallback lidarr unavailable",
                     failedAt: expect.any(String),
                 },
             },
@@ -405,7 +368,7 @@ describe("dispatchAlbumDownload", () => {
     });
 
     it("preserves the legacy availability ladder when fallback is absent", async () => {
-        mockGetSystemSettings.mockResolvedValue({ downloadSource: "tidal" });
+        mockGetSystemSettings.mockResolvedValue({ downloadSource: "youtube" });
 
         await dispatchAlbumDownload(baseParams);
 

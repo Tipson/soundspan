@@ -24,6 +24,7 @@ import {
     normalizeLoginReturnTo,
 } from "@/features/auth/oidc";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import type { AuthConfig } from "@/lib/api/auth";
 import { BRAND_NAME } from "@/lib/brand";
 import { frontendLogger } from "@/lib/logger";
@@ -201,6 +202,18 @@ function useOidcCodeExchange(
 function LoginPageContent() {
     const router = useRouter();
     const parameters = useLoginParameters();
+    const { isAuthenticated, isLoading } = useAuth();
+    useEffect(() => {
+        if (isAuthenticated && !isLoading && !parameters.hasOidcCallback) {
+            router.replace(parameters.returnTo);
+        }
+    }, [
+        isAuthenticated,
+        isLoading,
+        parameters.hasOidcCallback,
+        parameters.returnTo,
+        router,
+    ]);
     const [error, setError] = useCallbackError(parameters);
     const exchange = useOidcCodeExchange(
         parameters.ssoCode,
@@ -314,6 +327,15 @@ function LoginCard({ config, parameters, exchange, error }: LoginCardProps) {
                 </div>
             )}
             {flow}
+            <p className="mt-5 text-center text-sm text-content-muted">
+                Пока нет доступа?{" "}
+                <a
+                    href="/welcome"
+                    className="inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-brand-light hover:text-content focus-visible:ring-2 focus-visible:ring-brand-light"
+                >
+                    Оставить заявку
+                </a>
+            </p>
             {config.localLoginEnabled &&
                 !parameters.ssoLink &&
                 !parameters.ssoInvite && (

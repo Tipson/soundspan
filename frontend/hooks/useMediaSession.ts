@@ -4,7 +4,7 @@ import {
     usePlaybackStatus,
 } from "@/lib/audio-context";
 import { usePlaybackProgress } from "@/lib/audio-playback-context";
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { api } from "@/lib/api";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { ru } from "@/lib/i18n/ru";
@@ -36,6 +36,41 @@ export function useMediaSession() {
     // Track if this device has initiated playback locally
     // Prevents cross-device media session interference from state sync
     const hasPlayedLocallyRef = useRef(false);
+    const actionCleanupRef = useRef<(() => void) | null>(null);
+    const actionControlsRef = useRef({
+        pause,
+        resume,
+        next,
+        previous,
+        seek,
+        skipForward,
+        skipBackward,
+        playbackType,
+    });
+
+    // Keep OS subscriptions stable while exposing the latest committed queue
+    // actions. A pause or track change must not briefly remove lock-screen Play.
+    useLayoutEffect(() => {
+        actionControlsRef.current = {
+            pause,
+            resume,
+            next,
+            previous,
+            seek,
+            skipForward,
+            skipBackward,
+            playbackType,
+        };
+    }, [
+        pause,
+        resume,
+        next,
+        previous,
+        seek,
+        skipForward,
+        skipBackward,
+        playbackType,
+    ]);
 
     // Set flag when playback starts on this device
     useEffect(() => {
@@ -232,7 +267,12 @@ export function useMediaSession() {
 
         // Only register handlers if this device has initiated playback
         // Prevents cross-device interference from state sync
-        if (!hasActiveMedia || !hasPlayedLocallyRef.current) {
+        if (!hasActiveMedia) {
+            actionCleanupRef.current?.();
+            actionCleanupRef.current = null;
+            return;
+        }
+        if (!hasPlayedLocallyRef.current || actionCleanupRef.current) {
             return;
         }
 
@@ -243,31 +283,33 @@ export function useMediaSession() {
             // synchronizing declarative playback state, otherwise WebKit can
             // advance the Media Session clock without audible output.
             audioEngine.play();
-            resume();
+            actionControlsRef.current.resume();
         });
 
         navigator.mediaSession.setActionHandler("pause", () => {
             // Keep pause equally immediate so the same background session
             // cannot leave a short sample playing while React is suspended.
             audioEngine.pause();
-            pause();
+            actionControlsRef.current.pause();
         });
 
         navigator.mediaSession.setActionHandler("previoustrack", () => {
-            if (playbackType === "track") {
-                previous();
+            const actions = actionControlsRef.current;
+            if (actions.playbackType === "track") {
+                actions.previous();
             } else {
                 // For audiobooks/podcasts, seek backward 30s
-                skipBackward(30);
+                actions.skipBackward(30);
             }
         });
 
         navigator.mediaSession.setActionHandler("nexttrack", () => {
-            if (playbackType === "track") {
-                next();
+            const actions = actionControlsRef.current;
+            if (actions.playbackType === "track") {
+                actions.next();
             } else {
                 // For audiobooks/podcasts, seek forward 30s
-                skipForward(30);
+                actions.skipForward(30);
             }
         });
 
@@ -276,20 +318,24 @@ export function useMediaSession() {
             navigator.mediaSession.setActionHandler(
                 "seekbackward",
                 (details) => {
-                    skipBackward(details.seekOffset || 10);
+                    actionControlsRef.current.skipBackward(
+                        details.seekOffset || 10,
+                    );
                 },
             );
 
             navigator.mediaSession.setActionHandler(
                 "seekforward",
                 (details) => {
-                    skipForward(details.seekOffset || 10);
+                    actionControlsRef.current.skipForward(
+                        details.seekOffset || 10,
+                    );
                 },
             );
 
             navigator.mediaSession.setActionHandler("seekto", (details) => {
                 if (details.seekTime !== undefined) {
-                    seek(details.seekTime);
+                    actionControlsRef.current.seek(details.seekTime);
                 }
             });
         } catch {
@@ -297,7 +343,7 @@ export function useMediaSession() {
         }
 
         // Cleanup
-        return () => {
+        actionCleanupRef.current = () => {
             if ("mediaSession" in navigator) {
                 navigator.mediaSession.setActionHandler("play", null);
                 navigator.mediaSession.setActionHandler("pause", null);
@@ -318,18 +364,14 @@ export function useMediaSession() {
                 }
             }
         };
-    }, [
-        pause,
-        resume,
-        next,
-        previous,
-        seek,
-        skipForward,
-        skipBackward,
-        isPlaying,
-        playbackType,
-        hasActiveMedia,
-    ]);
+    }, [hasActiveMedia, isPlaying]);
+
+    useEffect(() => {
+        return () => {
+            actionCleanupRef.current?.();
+            actionCleanupRef.current = null;
+        };
+    }, []);
 
     // Update position state for scrubbing on lock screen
     useEffect(() => {

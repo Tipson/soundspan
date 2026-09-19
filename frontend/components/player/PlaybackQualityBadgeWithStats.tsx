@@ -9,8 +9,6 @@ import {
     useStreamBitrate,
     friendlyCodecName,
     formatSampleRateKHz,
-    isLikelyLosslessTidal,
-    estimateTidalLossyBitrateKbps,
     type PlaybackQualityBadge as PlaybackQualityBadgeValue,
 } from "@/hooks/useStreamBitrate";
 import { PlaybackQualityBadge } from "./PlaybackQualityBadge";
@@ -23,13 +21,11 @@ interface PlaybackQualityBadgeWithStatsProps {
 }
 
 const VARIANT_ACCENT: Record<PlaybackQualityBadgeValue["variant"], string> = {
-    tidal: "text-[#00BFFF]",
     youtube: "text-red-400",
     local: "text-emerald-400",
 };
 
 const SERVICE_LABELS: Record<PlaybackQualityBadgeValue["variant"], string> = {
-    tidal: "TIDAL",
     youtube: "YouTube Music",
     local: "Локальная библиотека",
 };
@@ -84,7 +80,7 @@ export function PlaybackQualityBadgeWithStats({
 
     const { currentTrack } = useAudioState();
     const { streamProfile } = usePlaybackStatus();
-    const { tidalQuality, localQuality, bitrate, codec } = useStreamBitrate();
+    const { localQuality, bitrate, codec } = useStreamBitrate();
 
     const clearCloseTimeout = useCallback(() => {
         if (closeTimeoutRef.current) {
@@ -160,34 +156,7 @@ export function PlaybackQualityBadgeWithStats({
         rows.push({ label: "Файл", value: parts[parts.length - 1] });
     }
 
-    if (variant === "tidal" && tidalQuality) {
-        rows.push({
-            label: "Кодек",
-            value: friendlyCodecName(tidalQuality.codec).toUpperCase(),
-        });
-        rows.push({ label: "Качество", value: tidalQuality.quality });
-        const tidalBitrate = isLikelyLosslessTidal(tidalQuality)
-            ? null
-            : estimateTidalLossyBitrateKbps(tidalQuality.quality);
-        rows.push({
-            label: "Битрейт",
-            value: tidalBitrate ? `${tidalBitrate} kbps` : null,
-        });
-        rows.push({
-            label: "Разрядность",
-            value: tidalQuality.bitDepth
-                ? `${tidalQuality.bitDepth}-bit`
-                : null,
-        });
-        rows.push({
-            label: "Частота дискретизации",
-            value: formatSampleRateKHz(tidalQuality.sampleRate),
-        });
-        rows.push({
-            label: "Без потерь",
-            value: isLikelyLosslessTidal(tidalQuality),
-        });
-    } else if (variant === "youtube") {
+    if (variant === "youtube") {
         rows.push({
             label: "Кодек",
             value: codec ? friendlyCodecName(codec).toUpperCase() : null,

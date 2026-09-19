@@ -4,7 +4,7 @@ import test from "node:test";
 
 const files = [
     "../../app/my-history/page.tsx",
-    "../../app/playlists/page.tsx",
+    "../../app/library/page.tsx",
     "../../features/library/components/AlbumsGrid.tsx",
     "../../features/library/components/ArtistsGrid.tsx",
     "../../features/library/components/TracksList.tsx",
@@ -47,7 +47,6 @@ test("personal library and history keep product-owned copy Russian", () => {
         "История прослушиваний",
         "Недавно слушали",
         "Любимые треки",
-        "Источник плейлистов",
         "Альбомов пока нет",
         "Исполнителей пока нет",
         "Треков пока нет",

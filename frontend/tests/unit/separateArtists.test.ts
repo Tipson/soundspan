@@ -85,3 +85,13 @@ test("retains all tracks even when perfect separation is impossible", () => {
         input.map((item) => item.id).sort(),
     );
 });
+
+test("preserves exact round-robin order as unequal buckets are exhausted", () => {
+    const input = ["a1", "b1", "c1", "a2", "d1", "b2", "a3", "a4"];
+    const original = [...input];
+    assert.deepEqual(
+        separateArtists(input, (item) => item[0]),
+        ["a1", "b1", "c1", "d1", "a2", "b2", "a3", "a4"],
+    );
+    assert.deepEqual(input, original);
+});

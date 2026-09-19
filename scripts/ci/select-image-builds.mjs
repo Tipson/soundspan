@@ -74,20 +74,6 @@ const images = Object.freeze({
             "import importlib.util as u; s = u.spec_from_file_location('smoke_entry', '/app/__main__.py'); m = u.module_from_spec(s); s.loader.exec_module(m)",
         smoke_user: "",
     },
-    "tidal-streamer": {
-        id: "tidal-streamer",
-        job_name: "Build & Push TIDAL Streamer Image",
-        image_name: "tidal-streamer",
-        alias_image_name: "tidal-downloader",
-        context: ".",
-        file: "./services/tidal-streamer/Dockerfile",
-        target: "",
-        build_contexts: "",
-        include_frontend_build_args: false,
-        cache_scope: "tidal-streamer",
-        smoke_import: "import app",
-        smoke_user: "",
-    },
     "ytmusic-streamer": {
         id: "ytmusic-streamer",
         job_name: "Build & Push YTMusic Streamer Image",
@@ -109,7 +95,7 @@ const groups = Object.freeze({
     backend: ["backend", "backend-worker"],
     frontend: ["frontend"],
     analysis: ["audio-analyzer", "vibe-provider-dclap"],
-    streaming: ["tidal-streamer", "ytmusic-streamer"],
+    streaming: ["ytmusic-streamer"],
 });
 
 const globalBuildInputs = new Set([

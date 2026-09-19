@@ -25,7 +25,6 @@ EXCLUDED = {
     "PWD",
     "REDIS_URL",
     "SHLVL",
-    "TIDAL_SIDECAR_URL",
     "YTMUSIC_STREAMER_URL",
 }
 SECRET_KEYS = {
@@ -62,7 +61,6 @@ def render(args: argparse.Namespace) -> str:
         "backend",
         "postgres",
         "redis",
-        "tidal-streamer",
         "ytmusic-streamer",
         "audio-analyzer",
         "vibe-provider-dclap",
@@ -90,9 +88,7 @@ def render(args: argparse.Namespace) -> str:
         "SOUNDSPAN_IMAGE_TAG": args.image_tag,
         "SOUNDSPAN_PULL_POLICY": "never",
         "SOUNDSPAN_REDIS_CONTAINER_NAME": f"soundspan-{suffix}-redis",
-        "SOUNDSPAN_TIDAL_CONTAINER_NAME": f"soundspan-{suffix}-tidal",
         "SOUNDSPAN_YTMUSIC_CONTAINER_NAME": f"soundspan-{suffix}-ytmusic",
-        "TIDAL_DATA_PATH": args.tidal_data_path,
         "YTMUSIC_DATA_PATH": args.ytmusic_data_path,
     }
 
@@ -118,7 +114,6 @@ def main() -> None:
     parser.add_argument("--music-path", required=True)
     parser.add_argument("--analysis-spool-path", required=True)
     parser.add_argument("--music-volume-marker-path", required=True)
-    parser.add_argument("--tidal-data-path", required=True)
     parser.add_argument("--ytmusic-data-path", required=True)
     args = parser.parse_args()
 

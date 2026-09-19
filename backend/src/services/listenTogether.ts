@@ -130,6 +130,24 @@ function normalizeJoinCode(input: string): string {
     return input.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+function isRetiredTidalTrackId(trackId: string | undefined): boolean {
+    return trackId?.trim().toLowerCase().startsWith("tidal:") === true;
+}
+
+function assertNoRetiredProviderQueueInputs(
+    inputs: readonly QueueTrackInput[],
+): void {
+    if (
+        inputs.some(
+            (input) =>
+                input.tidalTrackId !== undefined ||
+                isRetiredTidalTrackId(input.trackId),
+        )
+    ) {
+        throw new GroupError("INVALID", "retired_provider");
+    }
+}
+
 async function generateJoinCode(): Promise<string> {
     for (let attempt = 0; attempt < JOIN_CODE_MAX_ATTEMPTS; attempt++) {
         let candidate = "";
@@ -187,10 +205,9 @@ export async function validateQueueTracks(
     inputs: QueueTrackInput[],
 ): Promise<SyncQueueItem[]> {
     if (!inputs.length) return [];
+    assertNoRetiredProviderQueueInputs(inputs);
 
     const localInputs: Array<{ input: QueueTrackInput; trackId: string }> = [];
-    const tidalInputs: Array<{ input: QueueTrackInput; tidalTrackId: number }> =
-        [];
     const youtubeInputs: Array<{
         input: QueueTrackInput;
         youtubeVideoId: string;
@@ -201,30 +218,18 @@ export async function validateQueueTracks(
             typeof input.trackId === "string" && input.trackId.trim().length > 0
                 ? input.trackId.trim()
                 : null;
-        const tidalTrackId =
-            typeof input.tidalTrackId === "number" &&
-            Number.isFinite(input.tidalTrackId) &&
-            input.tidalTrackId > 0
-                ? Math.trunc(input.tidalTrackId)
-                : null;
         const youtubeVideoId =
             typeof input.youtubeVideoId === "string" &&
             input.youtubeVideoId.trim().length > 0
                 ? input.youtubeVideoId.trim()
                 : null;
-        const presentCount = [
-            localTrackId,
-            tidalTrackId,
-            youtubeVideoId,
-        ].filter(Boolean).length;
+        const presentCount = [localTrackId, youtubeVideoId].filter(
+            Boolean,
+        ).length;
         if (presentCount !== 1) continue;
 
         if (localTrackId) {
             localInputs.push({ input, trackId: localTrackId });
-            continue;
-        }
-        if (tidalTrackId) {
-            tidalInputs.push({ input, tidalTrackId });
             continue;
         }
         if (youtubeVideoId) {
@@ -303,57 +308,6 @@ export async function validateQueueTracks(
                     : undefined,
             });
         }
-    }
-
-    for (const entry of tidalInputs) {
-        const title = (entry.input.title ?? "").trim();
-        const artist = (entry.input.artist ?? "").trim();
-        const album = (entry.input.album ?? "").trim();
-        const duration =
-            typeof entry.input.duration === "number" &&
-            Number.isFinite(entry.input.duration)
-                ? Math.max(1, Math.trunc(entry.input.duration))
-                : 180;
-        const ensured = await trackMappingService.ensureRemoteTrack({
-            provider: "tidal",
-            tidalId: entry.tidalTrackId,
-            title: title || "Unknown Track",
-            artist: artist || "Unknown Artist",
-            album: album || "Unknown Album",
-            duration,
-            isrc: entry.input.isrc,
-        });
-        const mapping = await prisma.trackMapping.findFirst({
-            where: { trackTidalId: ensured.id, stale: false },
-            select: { id: true },
-            orderBy: [{ confidence: "desc" }, { createdAt: "desc" }],
-        });
-
-        queue.push({
-            id: `tidal:${entry.tidalTrackId}`,
-            title: title || "Unknown Track",
-            duration,
-            artist: {
-                id: `tidal-artist:${entry.tidalTrackId}`,
-                name: artist || "Unknown Artist",
-            },
-            album: {
-                id: `tidal-album:${entry.tidalTrackId}`,
-                title: album || "Unknown Album",
-                coverArt: null,
-            },
-            mediaSource: "tidal",
-            provider: {
-                source: "tidal",
-                providerTrackId: String(entry.tidalTrackId),
-                tidalTrackId: entry.tidalTrackId,
-            },
-            streamSource: "tidal",
-            tidalTrackId: entry.tidalTrackId,
-            trackTidalId: ensured.id,
-            trackMappingId: mapping?.id,
-            originSource: "tidal",
-        });
     }
 
     for (const entry of youtubeInputs) {
@@ -596,6 +550,10 @@ export async function createGroup(
     username: string,
     options: CreateGroupOptions = {},
 ): Promise<GroupSnapshot> {
+    assertNoRetiredProviderQueueInputs(options.queueTracks ?? []);
+    if (options.queueTrackIds?.some(isRetiredTidalTrackId)) {
+        throw new GroupError("INVALID", "retired_provider");
+    }
     return withListenTogetherMutationAdmission("create-group", () =>
         createAdmittedGroup(userId, username, options),
     );

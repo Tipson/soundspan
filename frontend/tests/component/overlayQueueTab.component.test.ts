@@ -41,9 +41,6 @@ mock.module("@/hooks/useStreamBitrate", {
     },
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: { TidalBadge: () => null },
-});
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: { YouTubeBadge: () => null },
 });
@@ -177,35 +174,21 @@ test("the playing row pins Сейчас играет and hides its remove contro
     await unmount(mounted);
 });
 
-test("played rows use a Russian status label", async () => {
-    const { createRoot } = await import("react-dom/client");
-    const { OverlayQueueTrackRow } =
-        await import("../../components/player/overlay-tabs/OverlayQueueRows");
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await React.act(async () => {
-        root.render(
-            React.createElement(OverlayQueueTrackRow, {
-                track: makeQueue(
-                    1,
-                )[0] as unknown as import("@/lib/queue-item").TrackQueueItem,
-                queueIndex: 0,
-                isCurrentTrack: false,
-                isPlayedTrack: true,
-                onPlayFromQueue: () => undefined,
-                onRemoveFromQueue: () => undefined,
-            }),
-        );
+test("a manual jump does not label skipped queue positions as listened", async () => {
+    const mounted = await mountQueueTab({
+        queue: makeQueue(5),
+        currentIndex: 3,
     });
 
-    assert.ok(container.textContent?.includes("Прослушано"));
-    await React.act(async () => root.unmount());
-    container.remove();
+    assert.ok(
+        mounted.container.querySelectorAll("[data-queue-index]").length > 0,
+    );
+    assert.ok(!mounted.container.textContent?.includes("Прослушано"));
+
+    await unmount(mounted);
 });
 
-test("row actions dispatch play, remove, and clear callbacks", async () => {
+test("track rows dispatch play and clear without an inline removal button", async () => {
     const played: number[] = [];
     const removed: number[] = [];
     let cleared = 0;
@@ -240,7 +223,11 @@ test("row actions dispatch play, remove, and clear callbacks", async () => {
     });
 
     assert.deepEqual(played, [2]);
-    assert.deepEqual(removed, [2]);
+    assert.deepEqual(removed, []);
+    assert.equal(
+        secondRow.querySelector('button[title="Удалить из очереди"]'),
+        null,
+    );
     assert.equal(cleared, 1);
     await unmount(mounted);
 });

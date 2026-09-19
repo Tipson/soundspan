@@ -17,7 +17,7 @@ soundspan is built for people who want streaming convenience without giving up o
 ## Highlights
 
 - Local FLAC, MP3, AAC/M4A, OGG/Opus, WAV, WMA, APE, and WavPack library with automatic MusicBrainz/Last.fm enrichment
-- YouTube Music and TIDAL gap-fill streaming with per-user OAuth and quality controls
+- YouTube Music gap-fill streaming with an OAuth-free public path and optional per-user OAuth
 - DCLAP ONNX-powered vibe matching and mood mixer presets
 - Podcast search/subscribe via RSS with resume, played-state tracking, and mobile skip controls
 - Audiobookshelf integration with unified browsing/playback and progress sync
@@ -38,6 +38,9 @@ soundspan is built for people who want streaming convenience without giving up o
 <a href="assets/screenshots/web-player-lyrics.png"><img src="assets/screenshots/web-player-lyrics.png" width="750" alt="Player overlay with lyrics and quality badges"/></a>
 
 For the full feature list and release notes, see [`CHANGELOG.md`](CHANGELOG.md).
+
+Optional anonymous YouTube challenge recovery and its operational limits are
+documented in [YouTube PO recovery](docs/YOUTUBE_PO_RECOVERY.md).
 
 ---
 
@@ -89,7 +92,7 @@ For deployment variants, release channels, compose files, and updates, see [`doc
 - Configuration and security: [`docs/CONFIGURATION_AND_SECURITY.md`](docs/CONFIGURATION_AND_SECURITY.md)
 - OIDC and SSO setup: [`docs/OIDC_SSO.md`](docs/OIDC_SSO.md)
 - Environment variables reference: [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md)
-- Integration setup (Lidarr, Soulseek, YouTube Music, TIDAL, OpenSubsonic): [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md)
+- Integration setup (Lidarr, Soulseek, YouTube Music, Last.fm, OpenSubsonic): [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md)
 - Vibe analysis and optional GPU acceleration: [`docs/ADVANCED_ANALYSIS_AND_GPU.md`](docs/ADVANCED_ANALYSIS_AND_GPU.md)
 - Kubernetes deployment: [`docs/KUBERNETES.md`](docs/KUBERNETES.md)
 - Reverse proxy and tunnel routing: [`docs/REVERSE_PROXY_AND_TUNNELS.md`](docs/REVERSE_PROXY_AND_TUNNELS.md)
@@ -107,7 +110,6 @@ soundspan supports optional integrations for discovery, downloads, and client co
 - Audiobookshelf
 - Soulseek
 - YouTube Music
-- TIDAL (streaming + downloads)
 - Last.fm and ListenBrainz scrobbling
 - AcoustID track identification
 - OpenSubsonic-compatible `/rest` API
@@ -157,7 +159,6 @@ graph TD
     PG["PostgreSQL"]
     RD["Redis"]
     YT["YT Music<br/>:8586 (Opt.)"]
-    TD["TIDAL Sidecar<br/>:8585 (Opt.)"]
     VP["DCLAP ONNX Provider<br/>:8092"]
     Lidarr["Lidarr<br/>(Optional)"]
     ABS["Audiobookshelf<br/>(Optional)"]
@@ -170,7 +171,6 @@ graph TD
     BW --> PG
     BW --> RD
     BE <--> YT
-    BE <--> TD
     BE -->|text/audio embeddings| VP
     BE <--> Lidarr
     BE <--> ABS
@@ -180,17 +180,16 @@ graph TD
     BE --> RD
 ```
 
-| Component           | Purpose                                           | Default Port         |
-| ------------------- | ------------------------------------------------- | -------------------- |
-| Frontend            | Web interface (Next.js)                           | 3030                 |
-| Backend             | API server (Express.js)                           | 3006                 |
-| Backend Worker      | Background queues, processors, and scheduled jobs | 3010 health endpoint |
-| PostgreSQL          | Primary database (with pgvector and pg_trgm)      | 5432                 |
-| Redis               | Cache and queue backend                           | 6379                 |
-| TIDAL Sidecar       | TIDAL streaming/download proxy                    | 8585                 |
-| YT Music Streamer   | YouTube Music streaming proxy                     | 8586                 |
+| Component           | Purpose                                                                       | Default Port         |
+| ------------------- | ----------------------------------------------------------------------------- | -------------------- |
+| Frontend            | Web interface (Next.js)                                                       | 3030                 |
+| Backend             | API server (Express.js)                                                       | 3006                 |
+| Backend Worker      | Background queues, processors, and scheduled jobs                             | 3010 health endpoint |
+| PostgreSQL          | Primary database (with pgvector and pg_trgm)                                  | 5432                 |
+| Redis               | Cache and queue backend                                                       | 6379                 |
+| YT Music Streamer   | YouTube Music streaming proxy                                                 | 8586                 |
 | Audio Analyzer      | MusiCNN analysis and local Chromaprint fingerprints; optional AcoustID lookup | —                    |
-| DCLAP Vibe Provider | ONNX text/audio embedding service                 | 8092 (internal)      |
+| DCLAP Vibe Provider | ONNX text/audio embedding service                                             | 8092 (internal)      |
 
 ---
 
@@ -204,10 +203,10 @@ graph TD
 
 soundspan is a self-hosted music management tool intended for content you own or can legally access.
 
-For optional third-party integrations (YouTube Music, TIDAL, Soulseek):
+For optional third-party integrations (YouTube Music and Soulseek):
 
 - You are responsible for compliance with applicable terms and laws
-- soundspan is not affiliated with Google, YouTube, TIDAL, or Soulseek
+- soundspan is not affiliated with Google, YouTube, or Soulseek
 - Streaming/downloading features require your own valid subscriptions where applicable
 
 soundspan is provided "as is" without warranty.
@@ -231,8 +230,6 @@ soundspan is released under the [GNU General Public License v3.0](LICENSE).
 - [Fanart.tv](https://fanart.tv/) - artist imagery
 - [Lidarr](https://lidarr.audio/) - music collection management
 - [Audiobookshelf](https://www.audiobookshelf.org/) - audiobook/podcast server
-- [TIDAL](https://tidal.com/) - streaming and downloads
-- [tiddl](https://github.com/oskvr37/tiddl) - TIDAL API library
 - [ytmusicapi](https://github.com/sigma67/ytmusicapi) - YouTube Music API wrapper
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - stream extraction
 

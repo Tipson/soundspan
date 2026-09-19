@@ -1,7 +1,7 @@
 """Search normalization, parsing, caching, and HTTP routes."""
 
 import asyncio
-import random
+import json
 import re
 import threading
 import time
@@ -12,6 +12,7 @@ import requests
 from fastapi import HTTPException, Query
 from ytmusic_client import (
     SEARCH_MODE,
+    YTMUSIC_LOCATION,
     _invalidate_ytmusic,
     _is_issue_813_invalid_argument_error,
     _is_oauth_auth_error,
@@ -29,7 +30,9 @@ from services.common.sidecar_runtime_utils import env_float, env_int
 
 # Max queries accepted in a single batch search request.
 _BATCH_SEARCH_MAX_QUERIES = 50
-BATCH_CONCURRENCY = env_int("YTMUSIC_BATCH_CONCURRENCY", "3")
+SEARCH_PROVIDER_CONCURRENCY = env_int("YTMUSIC_BATCH_CONCURRENCY", "3")
+# Legacy names remain importable while both endpoints use one admission pool.
+BATCH_CONCURRENCY = SEARCH_PROVIDER_CONCURRENCY
 _batch_semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
 BATCH_DELAY_MIN = env_float("YTMUSIC_BATCH_DELAY_MIN", "0.3")
 BATCH_DELAY_MAX = env_float("YTMUSIC_BATCH_DELAY_MAX", "1.0")
@@ -38,7 +41,6 @@ BATCH_DELAY_MAX = env_float("YTMUSIC_BATCH_DELAY_MAX", "1.0")
 # request eight seconds before using partial results. Keep both the provider
 # transport and this endpoint inside that budget, and never queue work behind
 # blocked provider threads.
-SEARCH_PROVIDER_CONCURRENCY = 3
 SEARCH_PROVIDER_REQUEST_TIMEOUT_SECONDS = 5.0
 SEARCH_ENDPOINT_TIMEOUT_SECONDS = 6.0
 _SEARCH_PROVIDER_DRAIN_SECONDS = 6.0
@@ -51,6 +53,7 @@ _SEARCH_PROVIDER_TIMEOUT_DETAIL = "YouTube Music search timed out"
 _PUBLIC_SEARCH_LANGUAGE = "en"
 _SearchProviderResult = tuple[JsonList, Literal["tv", "native"]]
 _SearchProviderJob = asyncio.Future[_SearchProviderResult]
+_PublicSearchKey = str
 
 
 class _SearchProviderDeadlineError(TimeoutError):
@@ -61,7 +64,7 @@ _search_provider_executor = ThreadPoolExecutor(
     max_workers=SEARCH_PROVIDER_CONCURRENCY,
     thread_name_prefix="ytmusic-search-provider",
 )
-_search_provider_jobs: set[_SearchProviderJob] = set()
+_search_provider_jobs: dict[_PublicSearchKey, _SearchProviderJob] = {}
 _search_provider_admitting = True
 
 # Search result cache (in-memory, short TTL to reduce duplicate requests).
@@ -766,6 +769,66 @@ def _search_cache_key(
     return f"{user_id}:{strategy}:{query}:{filter_ or ''}:{limit}"
 
 
+def _normalize_public_search_query(query: str) -> str:
+    """Normalize only public cache identity without changing provider input."""
+    return " ".join(query.split()).casefold()
+
+
+def _public_search_key(
+    query: str,
+    filter_: str | None,
+    limit: int,
+) -> _PublicSearchKey:
+    """Build one cross-user identity for public search cache and in-flight work."""
+    identity = (
+        SEARCH_MODE,
+        _PUBLIC_SEARCH_LANGUAGE,
+        YTMUSIC_LOCATION,
+        _normalize_public_search_query(query),
+        filter_ or "",
+        limit,
+    )
+    return "public:" + json.dumps(identity, ensure_ascii=False, separators=(",", ":"))
+
+
+def _get_cached_public_search(
+    query: str,
+    filter_: str | None,
+    limit: int,
+) -> _SearchProviderResult | None:
+    """Return a settled public-search outcome shared by every user."""
+    key = _public_search_key(query, filter_, limit)
+    with _search_cache_lock:
+        entry = _search_cache.get(key)
+        if entry and entry.get("expires_at", 0) <= time.time():
+            del _search_cache[key]
+            entry = None
+    if entry and entry.get("expires_at", 0) > time.time():
+        strategy = entry.get("strategy")
+        if strategy in {"tv", "native"}:
+            log.debug("Public search cache hit: %s", key)
+            return cast(JsonList, entry["results"]), cast(Literal["tv", "native"], strategy)
+    return None
+
+
+def _set_cached_public_search(
+    key: _PublicSearchKey,
+    result: _SearchProviderResult,
+) -> None:
+    """Store one successful public-search outcome under its policy identity."""
+    results, strategy = result
+    with _search_cache_lock:
+        _search_cache[key] = {
+            "results": results,
+            "strategy": strategy,
+            "expires_at": time.time() + SEARCH_CACHE_TTL,
+        }
+        expired_count = _clean_search_cache_locked()
+        _bound_cache(_search_cache, SEARCH_CACHE_MAX)
+    if expired_count:
+        log.debug("Cleaned %s expired search cache entries", expired_count)
+
+
 def _get_cached_search(
     user_id: str,
     query: str,
@@ -872,11 +935,19 @@ def _search_with_mode_fallback(
     `use_unauth_client=True` routes search through public clients so queries do
     not use user OAuth sessions.
     """
-    strategy = _resolve_user_search_strategy(user_id)
+    public_user_id = "__public__"
+    search_user_id = public_user_id if use_unauth_client else user_id
+    strategy = (
+        "tv"
+        if use_unauth_client and SEARCH_MODE == "tv"
+        else "native"
+        if use_unauth_client
+        else _resolve_user_search_strategy(user_id)
+    )
     if strategy == "tv":
         return (
             _search_once(
-                user_id,
+                search_user_id,
                 query,
                 filter_,
                 limit,
@@ -889,7 +960,7 @@ def _search_with_mode_fallback(
     try:
         return (
             _search_once(
-                user_id,
+                search_user_id,
                 query,
                 filter_,
                 limit,
@@ -927,7 +998,7 @@ def _search_with_mode_fallback(
             _invalidate_ytmusic(user_id)
         return (
             _search_once(
-                user_id,
+                search_user_id,
                 query,
                 filter_,
                 limit,
@@ -955,11 +1026,32 @@ def _clean_search_cache() -> None:
         log.debug(f"Cleaned {expired_count} expired search cache entries")
 
 
-def _consume_search_provider_job(job: _SearchProviderJob) -> None:
-    """Retire provider work only after its dedicated worker has settled."""
-    _search_provider_jobs.discard(job)
+def _consume_search_provider_job(
+    key: _PublicSearchKey,
+    job: _SearchProviderJob,
+) -> None:
+    """Publish success before retiring the matching in-flight provider job."""
+    if _search_provider_jobs.get(key) is not job:
+        return
     if not job.cancelled():
-        _ = job.exception()
+        try:
+            result = job.result()
+        except Exception as error:
+            log.debug(
+                "Public search provider job failed: %s",
+                type(error).__name__,
+            )
+        else:
+            _set_cached_public_search(key, result)
+    if _search_provider_jobs.get(key) is job:
+        _search_provider_jobs.pop(key, None)
+
+
+def _reap_completed_search_provider_jobs() -> None:
+    """Release settled other-key capacity before applying the global cap."""
+    for key, job in tuple(_search_provider_jobs.items()):
+        if job.done():
+            _consume_search_provider_job(key, job)
 
 
 def _submit_search_provider_job(
@@ -968,7 +1060,12 @@ def _submit_search_provider_job(
     filter_: Literal["songs", "albums", "artists", "videos"] | None,
     limit: int,
 ) -> _SearchProviderJob:
-    """Admit one public search without queueing behind occupied workers."""
+    """Join or admit one public search without queueing unique provider work."""
+    key = _public_search_key(query, filter_, limit)
+    existing = _search_provider_jobs.get(key)
+    if existing is not None:
+        return existing
+    _reap_completed_search_provider_jobs()
     if not _search_provider_admitting or len(_search_provider_jobs) >= SEARCH_PROVIDER_CONCURRENCY:
         raise HTTPException(status_code=503, detail=_SEARCH_PROVIDER_CAPACITY_DETAIL)
 
@@ -978,15 +1075,16 @@ def _submit_search_provider_job(
         loop.run_in_executor(
             _search_provider_executor,
             _search_with_mode_fallback,
-            user_id,
+            "__public__",
             query,
             filter_,
             limit,
             True,
         ),
     )
-    _search_provider_jobs.add(job)
-    job.add_done_callback(_consume_search_provider_job)
+    _ = user_id  # retained for the route-compatible call shape and request logging
+    _search_provider_jobs[key] = job
+    job.add_done_callback(lambda completed: _consume_search_provider_job(key, completed))
     return job
 
 
@@ -996,7 +1094,11 @@ async def _run_search_provider(
     filter_: Literal["songs", "albums", "artists", "videos"] | None,
     limit: int,
 ) -> _SearchProviderResult:
-    """Await admitted search work while retaining timed-out worker slots."""
+    """Resolve one cached or coalesced public search within the endpoint deadline."""
+    cached = _get_cached_public_search(query, filter_, limit)
+    if cached is not None:
+        return cached
+    key = _public_search_key(query, filter_, limit)
     job = _submit_search_provider_job(user_id, query, filter_, limit)
     deadline = asyncio.timeout(SEARCH_ENDPOINT_TIMEOUT_SECONDS)
     try:
@@ -1006,6 +1108,9 @@ async def _run_search_provider(
         if deadline.expired():
             raise _SearchProviderDeadlineError from error
         raise
+    finally:
+        if job.done():
+            _consume_search_provider_job(key, job)
 
 
 def _drain_search_provider_executor(
@@ -1053,7 +1158,7 @@ async def search(req: SearchRequest, user_id: str = Query(...)) -> JsonObject:
     """Search YouTube Music for songs, albums, or artists.
 
     Search uses an unauthenticated client context so user OAuth search history
-    is not touched. user_id is still used for cache segmentation and pacing.
+    is not touched. Public cache and in-flight work are shared across users.
 
     Mode behavior is controlled by YTMUSIC_SEARCH_MODE:
       - auto (default): native first; public fallback is request-scoped and an
@@ -1099,14 +1204,7 @@ async def search(req: SearchRequest, user_id: str = Query(...)) -> JsonObject:
 
 @app.post("/search/batch")
 async def search_batch(req: BatchSearchRequest, user_id: str = Query(...)) -> JsonObject:
-    """Run multiple search queries with controlled concurrency.
-
-    Uses a semaphore to limit parallel InnerTube requests (default: 3)
-    and adds random delays between requests to look organic.
-
-    Rate-pacing: requests are throttled via _batch_semaphore and
-    inter-request delays instead of firing all N simultaneously.
-    """
+    """Run public search rows through the shared cache, singleflight, and deadline."""
     if len(req.queries) > _BATCH_SEARCH_MAX_QUERIES:
         raise HTTPException(
             status_code=422,
@@ -1115,60 +1213,45 @@ async def search_batch(req: BatchSearchRequest, user_id: str = Query(...)) -> Js
 
     async def _run_one(q: BatchSearchQuery) -> JsonObject:
         """Execute and sanitize one query in the batch."""
-        # Check primary cache first — avoids consuming a semaphore slot.
-        strategy = _resolve_user_search_strategy(user_id)
-        cached = _get_cached_search(user_id, q.query, q.filter, q.limit, strategy)
-        if cached is not None:
-            return {"results": cached, "total": len(cached), "error": None}
-
-        semaphore = _batch_semaphore
-        await semaphore.acquire()
-        provider_job: asyncio.Task[_SearchProviderResult] | None = None
         try:
-            # Random delay between requests within the batch
-            delay = random.uniform(  # noqa: S311 -- request pacing jitter is not security-sensitive
-                BATCH_DELAY_MIN, BATCH_DELAY_MAX
+            items, _used_strategy = await _run_search_provider(
+                user_id,
+                q.query,
+                q.filter,
+                q.limit,
             )
-            await asyncio.sleep(delay)
-            provider_job = asyncio.create_task(
-                asyncio.to_thread(
-                    _search_with_mode_fallback,
-                    user_id,
-                    q.query,
-                    q.filter,
-                    q.limit,
-                    True,  # use_unauth_client
-                )
-            )
-
-            def _release_provider_slot(job: asyncio.Future[_SearchProviderResult]) -> None:
-                """Release capacity only after the uncancellable worker has settled."""
-                semaphore.release()
-                if not job.cancelled():
-                    _ = job.exception()
-
-            provider_job.add_done_callback(_release_provider_slot)
-            try:
-                items, _used_strategy = await asyncio.shield(provider_job)
-                return {"results": items, "total": len(items), "error": None}
-            except HTTPException:
-                raise
-            except Exception as e:
-                log.warning(f"Batch search failed for query={q.query!r}: {e}")
-                return {"results": [], "total": 0, "error": "search failed"}
-        finally:
-            # Cancellation before the worker task is created still owns a slot.
-            # Once created, the task's callback owns release even if this request
-            # disconnects while its blocking provider call is still running.
-            if provider_job is None:
-                semaphore.release()
+            return {"results": items, "total": len(items), "error": None}
+        except HTTPException as error:
+            log.warning("Batch search rejected for query=%r: %s", q.query, error.detail)
+            return {"results": [], "total": 0, "error": str(error.detail)}
+        except (requests.Timeout, TimeoutError) as error:
+            log.warning("Batch search timed out for query=%r: %s", q.query, type(error).__name__)
+            return {"results": [], "total": 0, "error": _SEARCH_PROVIDER_TIMEOUT_DETAIL}
+        except Exception as error:
+            log.warning("Batch search failed for query=%r: %s", q.query, error)
+            return {"results": [], "total": 0, "error": "search failed"}
 
     log.debug(
         f"Batch search: {len(req.queries)} queries for user {user_id} "
-        f"(concurrency={BATCH_CONCURRENCY})"
+        f"(shared_provider_concurrency={SEARCH_PROVIDER_CONCURRENCY})"
     )
-    results = await asyncio.gather(*[_run_one(q) for q in req.queries])
-    return {"results": list(results)}
+    work_queue: asyncio.Queue[tuple[int, BatchSearchQuery]] = asyncio.Queue()
+    for index, query in enumerate(req.queries):
+        work_queue.put_nowait((index, query))
+    results: list[JsonObject | None] = [None] * len(req.queries)
+
+    async def _run_worker() -> None:
+        """Keep one batch row active per globally available provider slot."""
+        while True:
+            try:
+                index, query = work_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            results[index] = await _run_one(query)
+
+    worker_count = min(SEARCH_PROVIDER_CONCURRENCY, len(req.queries))
+    await asyncio.gather(*[_run_worker() for _ in range(worker_count)])
+    return {"results": [cast(JsonObject, result) for result in results]}
 
 
 @app.post("/search/debug")

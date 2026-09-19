@@ -1,15 +1,17 @@
 import type { Prisma } from "@prisma/client";
 
-import { prisma } from "../../utils/db";
 import {
     canonicalIdentityResolver,
     providerTrackIdentityToCandidate,
+    resolveCanonicalSurvivor,
+    runCanonicalIdentityTransaction,
     type ProviderTrackIdentity,
     type ResolvedCanonicalRecording,
 } from "./canonicalIdentity";
 import type { RecommendationCandidate } from "./types";
 
 export type DurableIdentitySource =
+    | "acoustid"
     | "musicbrainz-metadata"
     | "musicbrainz-isrc"
     | "tidal-isrc"
@@ -23,6 +25,25 @@ export interface DurableIdentity {
     source?: DurableIdentitySource;
 }
 
+export type DurableIdentityPersistenceResult =
+    | { status: "completed"; targetCanonicalId: string }
+    | { status: "deferred"; targetCanonicalId: string }
+    | { status: "stale"; targetCanonicalId: null };
+
+export interface CanonicalIdentityPromotionFence {
+    expectedFingerprint: string;
+    expectedLookupStatus: "merge_pending";
+}
+
+const ACTIVE_ANALYSIS_LEASE_STATUSES = [
+    "downloading",
+    "downloaded",
+    "queued_essentia",
+    "processing",
+    "expiring",
+    "cleanup_failed",
+] as const;
+
 function normalizeIsrc(value: string | null | undefined): string | null {
     const normalized = value?.replace(/[^a-z0-9]/giu, "").toUpperCase() ?? "";
     return /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(normalized) ? normalized : null;
@@ -32,70 +53,63 @@ async function mergeCanonicalFeatures(
     transaction: Prisma.TransactionClient,
     sourceCanonicalId: string,
     targetCanonicalId: string,
+    policy: {
+        preferSourceAnalysis: boolean;
+        preferSourceEmbedding: boolean;
+        sourceEmbeddingCompleted: boolean;
+    },
 ): Promise<void> {
     await transaction.$executeRaw`
         UPDATE "CanonicalRecording" AS target
         SET fingerprint = COALESCE(target.fingerprint, source.fingerprint),
-            bpm = COALESCE(target.bpm, source.bpm),
-            key = COALESCE(target.key, source.key),
-            energy = COALESCE(target.energy, source.energy),
-            loudness = COALESCE(target.loudness, source.loudness),
-            valence = COALESCE(target.valence, source.valence),
-            danceability = COALESCE(target.danceability, source.danceability),
-            arousal = COALESCE(target.arousal, source.arousal),
-            instrumentalness = COALESCE(target.instrumentalness, source.instrumentalness),
-            acousticness = COALESCE(target.acousticness, source.acousticness),
-            speechiness = COALESCE(target.speechiness, source.speechiness),
+            bpm = CASE WHEN ${policy.preferSourceAnalysis} THEN source.bpm ELSE target.bpm END,
+            key = CASE WHEN ${policy.preferSourceAnalysis} THEN source.key ELSE target.key END,
+            energy = CASE WHEN ${policy.preferSourceAnalysis} THEN source.energy ELSE target.energy END,
+            loudness = CASE WHEN ${policy.preferSourceAnalysis} THEN source.loudness ELSE target.loudness END,
+            valence = CASE WHEN ${policy.preferSourceAnalysis} THEN source.valence ELSE target.valence END,
+            danceability = CASE WHEN ${policy.preferSourceAnalysis} THEN source.danceability ELSE target.danceability END,
+            arousal = CASE WHEN ${policy.preferSourceAnalysis} THEN source.arousal ELSE target.arousal END,
+            instrumentalness = CASE WHEN ${policy.preferSourceAnalysis} THEN source.instrumentalness ELSE target.instrumentalness END,
+            acousticness = CASE WHEN ${policy.preferSourceAnalysis} THEN source.acousticness ELSE target.acousticness END,
+            speechiness = CASE WHEN ${policy.preferSourceAnalysis} THEN source.speechiness ELSE target.speechiness END,
             "moodTags" = CASE
-                WHEN cardinality(target."moodTags") = 0 THEN source."moodTags"
+                WHEN ${policy.preferSourceAnalysis} THEN source."moodTags"
                 ELSE target."moodTags"
             END,
             "essentiaGenres" = CASE
-                WHEN cardinality(target."essentiaGenres") = 0 THEN source."essentiaGenres"
+                WHEN ${policy.preferSourceAnalysis} THEN source."essentiaGenres"
                 ELSE target."essentiaGenres"
             END,
             "analysisStatus" = CASE
-                WHEN target."analysisStatus" <> 'completed'
-                 AND source."analysisStatus" = 'completed'
-                    THEN 'completed'
+                WHEN ${policy.preferSourceAnalysis} THEN source."analysisStatus"
                 ELSE target."analysisStatus"
             END,
             "analysisVersion" = CASE
-                WHEN target."analysisStatus" <> 'completed'
-                 AND source."analysisStatus" = 'completed'
-                    THEN source."analysisVersion"
+                WHEN ${policy.preferSourceAnalysis} THEN source."analysisVersion"
                 ELSE target."analysisVersion"
             END,
             "analyzedAt" = CASE
-                WHEN target."analysisStatus" <> 'completed'
-                 AND source."analysisStatus" = 'completed'
-                    THEN source."analyzedAt"
+                WHEN ${policy.preferSourceAnalysis} THEN source."analyzedAt"
                 ELSE target."analyzedAt"
             END,
             "analysisError" = CASE
-                WHEN source."analysisStatus" = 'completed' THEN NULL
+                WHEN ${policy.preferSourceAnalysis} THEN source."analysisError"
                 ELSE target."analysisError"
             END,
             "embeddingStatus" = CASE
-                WHEN target."embeddingStatus" <> 'completed'
-                 AND source."embeddingStatus" = 'completed'
-                    THEN 'completed'
+                WHEN ${policy.preferSourceEmbedding} THEN source."embeddingStatus"
                 ELSE target."embeddingStatus"
             END,
             "embeddingVersion" = CASE
-                WHEN target."embeddingStatus" <> 'completed'
-                 AND source."embeddingStatus" = 'completed'
-                    THEN source."embeddingVersion"
+                WHEN ${policy.preferSourceEmbedding} THEN source."embeddingVersion"
                 ELSE target."embeddingVersion"
             END,
             "embeddingAnalyzedAt" = CASE
-                WHEN target."embeddingStatus" <> 'completed'
-                 AND source."embeddingStatus" = 'completed'
-                    THEN source."embeddingAnalyzedAt"
+                WHEN ${policy.preferSourceEmbedding} THEN source."embeddingAnalyzedAt"
                 ELSE target."embeddingAnalyzedAt"
             END,
             "embeddingError" = CASE
-                WHEN source."embeddingStatus" = 'completed' THEN NULL
+                WHEN ${policy.preferSourceEmbedding} THEN source."embeddingError"
                 ELSE target."embeddingError"
             END,
             "updatedAt" = NOW()
@@ -113,8 +127,278 @@ async function mergeCanonicalFeatures(
         SELECT ${targetCanonicalId}, space_id, embedding, analyzed_at
         FROM canonical_recording_embeddings
         WHERE canonical_recording_id = ${sourceCanonicalId}
-        ON CONFLICT (canonical_recording_id, space_id) DO NOTHING
+          AND ${policy.sourceEmbeddingCompleted}
+        ON CONFLICT (canonical_recording_id, space_id) DO UPDATE
+        SET embedding = EXCLUDED.embedding,
+            analyzed_at = EXCLUDED.analyzed_at
+        WHERE ${policy.preferSourceEmbedding}
     `;
+}
+
+/** Apply one durable identity promotion inside its caller-owned transaction. */
+export async function persistCanonicalDurableIdentityInTransaction(
+    transaction: Prisma.TransactionClient,
+    candidate: RecommendationCandidate,
+    identity: DurableIdentity,
+    fence?: CanonicalIdentityPromotionFence,
+): Promise<DurableIdentityPersistenceResult> {
+    const sourceCanonicalId = candidate.canonicalRecordingId;
+    if (!sourceCanonicalId || (!identity.recordingMbid && !identity.isrc)) {
+        throw new Error("Canonical identity promotion is incomplete");
+    }
+    const identityLockKey = identity.recordingMbid ?? `isrc:${identity.isrc!}`;
+    await transaction.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${identityLockKey}, 0))
+    `;
+    const sourceAlias = await transaction.canonicalRecording.findUnique({
+        where: { id: sourceCanonicalId },
+        select: {
+            id: true,
+            canonicalKey: true,
+            mergedIntoId: true,
+            identitySource: true,
+            recordingMbid: true,
+            isrc: true,
+            fingerprint: true,
+            identityLookupStatus: true,
+        },
+    });
+    if (!sourceAlias) {
+        throw new Error("Canonical recording is missing");
+    }
+    if (
+        fence &&
+        (sourceAlias.fingerprint !== fence.expectedFingerprint ||
+            sourceAlias.identityLookupStatus !== fence.expectedLookupStatus ||
+            sourceAlias.mergedIntoId !== null)
+    ) {
+        return { status: "stale", targetCanonicalId: null };
+    }
+    if (
+        (identity.recordingMbid &&
+            sourceAlias.recordingMbid &&
+            identity.recordingMbid !== sourceAlias.recordingMbid) ||
+        (identity.isrc &&
+            sourceAlias.isrc &&
+            identity.isrc !== sourceAlias.isrc)
+    ) {
+        throw new Error(
+            "Canonical identity conflicts with its source recording",
+        );
+    }
+    const source = await resolveCanonicalSurvivor(transaction, sourceAlias);
+    const identityMatchSelect = {
+        id: true,
+        canonicalKey: true,
+        mergedIntoId: true,
+        identitySource: true,
+        recordingMbid: true,
+        isrc: true,
+    } as const;
+    const [recordingMbidMatch, isrcMatches] = await Promise.all([
+        identity.recordingMbid
+            ? transaction.canonicalRecording.findFirst({
+                  where: {
+                      id: { not: source.id },
+                      mergedIntoId: null,
+                      NOT: { identitySource: "identity-merged" },
+                      recordingMbid: identity.recordingMbid,
+                  },
+                  select: identityMatchSelect,
+              })
+            : null,
+        identity.isrc
+            ? transaction.canonicalRecording.findMany({
+                  where: {
+                      id: { not: source.id },
+                      mergedIntoId: null,
+                      NOT: { identitySource: "identity-merged" },
+                      isrc: identity.isrc,
+                  },
+                  select: identityMatchSelect,
+                  take: 2,
+              })
+            : [],
+    ]);
+    if (isrcMatches.length > 1) {
+        throw new Error(
+            "Canonical identity resolves to multiple canonical survivors",
+        );
+    }
+    const isrcMatch = isrcMatches[0] ?? null;
+    if (
+        recordingMbidMatch &&
+        isrcMatch &&
+        recordingMbidMatch.id !== isrcMatch.id
+    ) {
+        throw new Error(
+            "Canonical identity resolves to multiple canonical survivors",
+        );
+    }
+    const existing = recordingMbidMatch ?? isrcMatch;
+    if (
+        existing &&
+        ((identity.recordingMbid &&
+            existing.recordingMbid &&
+            identity.recordingMbid !== existing.recordingMbid) ||
+            (identity.isrc && existing.isrc && identity.isrc !== existing.isrc))
+    ) {
+        throw new Error("Canonical identity conflicts with its survivor");
+    }
+    const target = existing
+        ? await resolveCanonicalSurvivor(transaction, existing)
+        : source;
+    const targetId = target.id;
+    if (existing) {
+        const now = new Date();
+        const [sourceState, targetState, activeChildAlias] = await Promise.all([
+            transaction.canonicalRecording.findUnique({
+                where: { id: source.id },
+                select: {
+                    analysisStatus: true,
+                    embeddingStatus: true,
+                    analysisLeases: {
+                        where: {
+                            status: {
+                                in: [...ACTIVE_ANALYSIS_LEASE_STATUSES],
+                            },
+                            expiresAt: { gt: now },
+                        },
+                        select: { id: true },
+                        take: 1,
+                    },
+                },
+            }),
+            transaction.canonicalRecording.findUnique({
+                where: { id: targetId },
+                select: {
+                    analysisStatus: true,
+                    embeddingStatus: true,
+                    analysisLeases: {
+                        where: {
+                            status: {
+                                in: [...ACTIVE_ANALYSIS_LEASE_STATUSES],
+                            },
+                            expiresAt: { gt: now },
+                        },
+                        select: { id: true },
+                        take: 1,
+                    },
+                },
+            }),
+            transaction.canonicalRecording.findFirst({
+                where: {
+                    mergedIntoId: source.id,
+                    OR: [
+                        { analysisStatus: "processing" },
+                        { embeddingStatus: "processing" },
+                        {
+                            analysisLeases: {
+                                some: {
+                                    status: {
+                                        in: [...ACTIVE_ANALYSIS_LEASE_STATUSES],
+                                    },
+                                    expiresAt: { gt: now },
+                                },
+                            },
+                        },
+                    ],
+                },
+                select: { id: true },
+            }),
+        ]);
+        if (
+            sourceState?.analysisStatus === "processing" ||
+            sourceState?.embeddingStatus === "processing" ||
+            targetState?.analysisStatus === "processing" ||
+            targetState?.embeddingStatus === "processing" ||
+            (sourceState?.analysisLeases?.length ?? 0) > 0 ||
+            (targetState?.analysisLeases?.length ?? 0) > 0 ||
+            activeChildAlias !== null
+        ) {
+            return { status: "deferred", targetCanonicalId: source.id };
+        }
+        const preferSourceAnalysis =
+            targetState?.analysisStatus !== "completed" &&
+            sourceState?.analysisStatus === "completed";
+        const preferSourceEmbedding =
+            targetState?.embeddingStatus !== "completed" &&
+            sourceState?.embeddingStatus === "completed";
+        await mergeCanonicalFeatures(transaction, source.id, targetId, {
+            preferSourceAnalysis,
+            preferSourceEmbedding,
+            sourceEmbeddingCompleted:
+                sourceState?.embeddingStatus === "completed",
+        });
+        await transaction.trackMapping.updateMany({
+            where: {
+                canonicalRecordingId: source.id,
+                stale: false,
+            },
+            data: { canonicalRecordingId: targetId },
+        });
+        await transaction.recommendationExposure.updateMany({
+            where: { canonicalRecordingId: source.id },
+            data: {
+                canonicalRecordingId: targetId,
+                canonicalKey: target.canonicalKey,
+            },
+        });
+        await transaction.canonicalRecording.updateMany({
+            where: { mergedIntoId: source.id },
+            data: { mergedIntoId: targetId },
+        });
+        await transaction.canonicalRecording.update({
+            where: { id: source.id },
+            data: {
+                mergedIntoId: targetId,
+                identitySource: "identity-merged",
+                identityLookupStatus: "completed",
+                identityLookupError: null,
+                identityLookupUpdatedAt: new Date(),
+            },
+        });
+    }
+    const targetIdentity =
+        await transaction.canonicalRecording.findUniqueOrThrow({
+            where: { id: targetId },
+            select: {
+                recordingMbid: true,
+                isrc: true,
+                identitySource: true,
+                identityConfidence: true,
+                identityVersion: true,
+            },
+        });
+    const preserveExistingProvenance =
+        Boolean(targetIdentity.recordingMbid || targetIdentity.isrc) &&
+        (targetIdentity.identityVersion > 1 ||
+            targetIdentity.identityConfidence >= identity.confidence);
+    await transaction.canonicalRecording.update({
+        where: { id: targetId },
+        data: {
+            isrc: targetIdentity.isrc ?? identity.isrc ?? undefined,
+            recordingMbid:
+                targetIdentity.recordingMbid ??
+                identity.recordingMbid ??
+                undefined,
+            identitySource: preserveExistingProvenance
+                ? undefined
+                : (identity.source ??
+                  (identity.recordingMbid ? "musicbrainz-isrc" : "tidal-isrc")),
+            identityConfidence: preserveExistingProvenance
+                ? undefined
+                : identity.confidence,
+            identityVersion: preserveExistingProvenance
+                ? undefined
+                : Math.max(1, targetIdentity.identityVersion),
+            identityLookupStatus: "completed",
+            identityLookupRetryCount: 0,
+            identityLookupError: null,
+            identityLookupUpdatedAt: new Date(),
+        },
+    });
+    return { status: "completed", targetCanonicalId: targetId };
 }
 
 /** Persist durable ISRC/MBID identity and merge provider mappings atomically. */
@@ -126,90 +410,16 @@ export async function persistCanonicalDurableIdentity(
     if (!sourceCanonicalId || (!identity.recordingMbid && !identity.isrc)) {
         return;
     }
-    const promotion = await prisma.$transaction(async (transaction) => {
-        const identityLockKey =
-            identity.recordingMbid ?? `isrc:${identity.isrc!}`;
-        await transaction.$executeRaw`
-            SELECT pg_advisory_xact_lock(hashtextextended(${identityLockKey}, 0))
-        `;
-        const existing = await transaction.canonicalRecording.findFirst({
-            where: {
-                id: { not: sourceCanonicalId },
-                OR: [
-                    ...(identity.recordingMbid
-                        ? [{ recordingMbid: identity.recordingMbid }]
-                        : []),
-                    ...(identity.isrc ? [{ isrc: identity.isrc }] : []),
-                ],
-            },
-            select: { id: true },
-        });
-        const targetId = existing?.id ?? sourceCanonicalId;
-        if (existing) {
-            const sourceState = await transaction.canonicalRecording.findUnique(
-                {
-                    where: { id: sourceCanonicalId },
-                    select: {
-                        analysisStatus: true,
-                        embeddingStatus: true,
-                    },
-                },
-            );
-            if (
-                sourceState?.analysisStatus === "processing" ||
-                sourceState?.embeddingStatus === "processing"
-            ) {
-                return { targetId: sourceCanonicalId, deferred: true };
-            }
-            await mergeCanonicalFeatures(
-                transaction,
-                sourceCanonicalId,
-                targetId,
-            );
-            await transaction.trackMapping.updateMany({
-                where: {
-                    canonicalRecordingId: sourceCanonicalId,
-                    stale: false,
-                },
-                data: { canonicalRecordingId: targetId },
-            });
-            await transaction.recommendationExposure.updateMany({
-                where: { canonicalRecordingId: sourceCanonicalId },
-                data: { canonicalRecordingId: targetId },
-            });
-            await transaction.canonicalRecording.update({
-                where: { id: sourceCanonicalId },
-                data: {
-                    identitySource: "identity-merged",
-                    identityLookupStatus: "completed",
-                    identityLookupError: null,
-                    identityLookupUpdatedAt: new Date(),
-                },
-            });
-        }
-        await transaction.canonicalRecording.update({
-            where: { id: targetId },
-            data: {
-                isrc: identity.isrc ?? undefined,
-                recordingMbid: identity.recordingMbid ?? undefined,
-                identitySource:
-                    identity.source ??
-                    (identity.recordingMbid
-                        ? "musicbrainz-isrc"
-                        : "tidal-isrc"),
-                identityConfidence: identity.confidence,
-                identityVersion: 1,
-                identityLookupStatus: "completed",
-                identityLookupRetryCount: 0,
-                identityLookupError: null,
-                identityLookupUpdatedAt: new Date(),
-            },
-        });
-        return { targetId, deferred: false };
-    });
+    const promotion = await runCanonicalIdentityTransaction((transaction) =>
+        persistCanonicalDurableIdentityInTransaction(
+            transaction,
+            candidate,
+            identity,
+        ),
+    );
 
-    if (promotion.deferred) return;
-    const targetCanonicalId = promotion.targetId;
+    if (promotion.status !== "completed") return;
+    const targetCanonicalId = promotion.targetCanonicalId;
     if (identity.tidalTrackId === null) return;
     await canonicalIdentityResolver.resolve({
         ...candidate,

@@ -2,7 +2,7 @@
  * Resolves the playback duration to display, choosing between the audio
  * engine's reported duration and the known metadata duration.
  *
- * For remote streams delivered as fragmented MP4 (e.g. TIDAL HI_RES_LOSSLESS),
+ * For remote streams delivered as fragmented MP4,
  * the `<audio>` element may report only a single fragment's duration (~4 s)
  * instead of the full track length.  When the loaded duration is less than
  * half the metadata duration for a remote stream, the metadata value is more
@@ -46,7 +46,7 @@ export function resolvePlaybackDuration(input: {
 export function resolveRemoteStreamFormat(
     streamSource: "local" | "tidal" | "youtube" | string | undefined | null,
 ): string | undefined {
-    if (streamSource === "tidal" || streamSource === "youtube") {
+    if (streamSource === "youtube") {
         return "mp4";
     }
     return undefined;
@@ -119,7 +119,7 @@ export function isAdvancePlayIntentFresh(
 /**
  * Resolves the engine format hint for a track load or preload.
  *
- * TIDAL/YT Music remote streams get the extensionless-URL hint; direct
+ * YouTube Music remote streams get the extensionless-URL hint; direct
  * YouTube audio reports its container; peer streams get NO hint because
  * the body may be the peer's original container or provider bytes from
  * the stream-time fallback ladder, and the engine detects the container
@@ -137,7 +137,10 @@ export function resolveTrackFormatHint(
     if (track.streamSource === "youtube-direct") {
         return track.youtubeAudioFormat === "webm" ? "webm" : "mp4";
     }
-    if (track.streamSource === "tidal" || track.streamSource === "youtube") {
+    if (track.streamSource === "tidal") {
+        return undefined;
+    }
+    if (track.streamSource === "youtube") {
         return resolveRemoteStreamFormat(track.streamSource);
     }
     if (track.streamSource === "peer") {

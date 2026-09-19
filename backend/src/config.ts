@@ -530,6 +530,7 @@ const envSchema = z
         RECOMMENDATION_EXPLORATION_PERCENT:
             recommendationExplorationPercentEnvSchema,
         REMOTE_ANALYSIS_ENABLED: booleanEnvSchema,
+        FEATURE_AUDIUS: booleanEnvSchema,
         REMOTE_ANALYSIS_DAILY_BUDGET: remoteAnalysisDailyBudgetEnvSchema,
         REMOTE_ANALYSIS_CONCURRENCY: remoteAnalysisConcurrencyEnvSchema,
         LOUDNESS_BACKFILL_BATCH_SIZE: loudnessBackfillBatchSizeEnvSchema,
@@ -929,8 +930,8 @@ export const config = {
     },
 
     // Coarse feature flags for ML/recommendation subsystems.
-    // All default ON to preserve existing behavior; operators can disable
-    // them per-deployment (e.g. via the Helm chart's config.features values).
+    // Existing analysis defaults remain enabled; optional integrations opt in.
+    // Operators can override them through the Helm chart's config.features.
     features: {
         // Audio analysis queueing/consumption (Essentia + CLAP vibe embeddings)
         audioAnalysis: parseEnvBool(process.env.AUDIO_ANALYSIS_ENABLED, true),
@@ -942,6 +943,8 @@ export const config = {
         federation: parseEnvBool(process.env.FEDERATION_ENABLED, false),
         // User-facing album request queue and fulfillment reconciler.
         requests: parseEnvBool(process.env.FEATURE_REQUESTS, true),
+        // Independent Audius catalog; never an automatic playback fallback.
+        audius: parseEnvBool(process.env.FEATURE_AUDIUS, false),
     },
 
     requests: {
@@ -1063,11 +1066,6 @@ export const config = {
 
     // YouTube Music region hint for browse/discovery proxies.
     ytmusicRegion: process.env.YTMUSIC_REGION || "US",
-
-    tidal: {
-        // TIDAL streamer sidecar base URL.
-        sidecarUrl: process.env.TIDAL_SIDECAR_URL || "http://127.0.0.1:8585",
-    },
 
     // YouTube Music streamer sidecar (also serves the regular-YouTube /yt/
     // endpoints used for URL-paste streaming and download-to-library)

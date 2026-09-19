@@ -2,9 +2,15 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 mock.module("next/navigation", {
-    namedExports: { useRouter: () => ({ push: () => undefined }) },
+    namedExports: {
+        useRouter: () => ({
+            push: () => undefined,
+            replace: () => undefined,
+        }),
+    },
 });
 
 mock.module("@/lib/api", {
@@ -19,7 +25,13 @@ mock.module("@/lib/api", {
 
 test("sync starts in a named, accessible progress surface", async () => {
     const { default: SyncPage } = await import("../../app/sync/page");
-    const html = renderToStaticMarkup(React.createElement(SyncPage));
+    const html = renderToStaticMarkup(
+        React.createElement(
+            QueryClientProvider,
+            { client: new QueryClient() },
+            React.createElement(SyncPage),
+        ),
+    );
 
     assert.match(html, /data-utility-page="sync"/);
     assert.doesNotMatch(html, /data-utility-page="sync"[^>]*\bpb-/);

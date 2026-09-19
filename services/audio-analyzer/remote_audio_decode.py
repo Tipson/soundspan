@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import shutil
 import subprocess
+import time
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 from uuid import UUID
@@ -91,9 +92,10 @@ def decode_remote_audio(
     max_duration: int,
     timeout_seconds: float = _FFMPEG_TIMEOUT_SECONDS,
 ) -> Any:
-    """Decode bounded mono 44.1 kHz float32 PCM without invoking Essentia's decoder."""
+    """Decode a bounded central excerpt as mono 44.1 kHz float32 PCM."""
     duration = _bounded_duration(max_duration)
     timeout = _bounded_timeout(timeout_seconds)
+    deadline = time.monotonic() + timeout
     ffmpeg_path = _resolve_ffmpeg_executable()
     try:
         resolved_audio_path = Path(file_path).resolve(strict=True)
@@ -102,12 +104,14 @@ def decode_remote_audio(
     if not resolved_audio_path.is_file():
         raise RemoteAudioDecodeError("Remote audio asset is unavailable")
 
+    start = _central_excerpt_start(resolved_audio_path, duration, min(3.0, timeout / 5))
     output_limit = duration * PCM_SAMPLE_RATE * _PCM_DTYPE.itemsize
     command = [
         ffmpeg_path,
         "-nostdin",
         "-v",
         "error",
+        *(["-ss", str(start)] if start > 0 else []),
         "-i",
         str(resolved_audio_path),
         "-map",
@@ -127,6 +131,9 @@ def decode_remote_audio(
         str(output_limit),
         "pipe:1",
     ]
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RemoteAudioDecodeError("Remote audio decode timed out")
     try:
         completed = subprocess.run(  # noqa: S603 -- absolute trusted executable, argv only
             command,
@@ -134,7 +141,7 @@ def decode_remote_audio(
             shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            timeout=timeout,
+            timeout=remaining,
         )
     except subprocess.TimeoutExpired as error:
         # subprocess.run kills and waits for its direct child before raising.
@@ -158,6 +165,41 @@ def decode_remote_audio(
     if decoded.size == 0 or not np.isfinite(decoded).all():
         raise RemoteAudioDecodeError("Remote audio decoder returned invalid PCM")
     return decoded
+
+
+def _central_excerpt_start(audio_path: Path, duration: int, timeout: float) -> float:
+    """Avoid scoring only intros; retain a bounded prefix if duration is unavailable."""
+    executable = shutil.which("ffprobe")
+    if executable is None:
+        return 0.0
+    try:
+        probe = str(Path(executable).resolve(strict=True))
+        result = subprocess.run(  # noqa: S603 -- trusted executable, resolved local asset
+            [
+                probe,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(audio_path),
+            ],
+            check=False,
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+        )
+        if result.returncode or len(result.stdout) > 128:
+            raise ValueError("Invalid duration probe")
+        total = float(result.stdout)
+        if not math.isfinite(total) or total <= 0 or total > 86_400:
+            raise ValueError("Invalid audio duration")
+        return max(0.0, (total - duration) / 2)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        logger.warning("Audio duration unavailable; using bounded prefix for analysis")
+        return 0.0
 
 
 def _bounded_duration(max_duration: int) -> int:

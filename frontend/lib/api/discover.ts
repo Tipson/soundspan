@@ -183,7 +183,10 @@ export function WithDiscover<TBase extends ApiClientConstructor>(Base: TBase) {
             type: "music" | "podcasts" | "all" = "music",
             limit: number = 20,
             signal?: AbortSignal,
+            scope: "all" | "tracks" | "albums" | "artists" = "all",
         ) {
+            const scopeQuery =
+                type === "music" && scope !== "all" ? `&scope=${scope}` : "";
             return this.request<{
                 results: ApiData[];
                 aliasInfo: {
@@ -196,7 +199,7 @@ export function WithDiscover<TBase extends ApiClientConstructor>(Base: TBase) {
                     canRequestMoreTracks: boolean;
                 };
             }>(
-                `/search/discover?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}`,
+                `/search/discover?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}${scopeQuery}`,
                 {
                     signal,
                     timeoutMs: DISCOVER_SEARCH_TIMEOUT_MS,

@@ -72,6 +72,123 @@ describe("unified recommendation engine", () => {
         exclude: [],
     };
 
+    it.each(["baseline", "active", "shadow"] as const)(
+        "keeps every explicit mood lane eligible in %s, even with a high provider score",
+        async (mode) => {
+            const deps = dependencies(mode);
+            const candidates = [
+                "quickPicks",
+                "discovery",
+                "listenAgain",
+            ].flatMap((lane) =>
+                [0.2, 0.8, null, NaN, 2].map((arousal, i) =>
+                    candidate(`${lane}-${i}`, {
+                        lane: lane as RecommendationCandidate["lane"],
+                        providerPrior: i * 10,
+                        audioFeatures: { arousal, energy: 0.1 },
+                    }),
+                ),
+            );
+            deps.loadCandidates.mockResolvedValue({
+                candidates,
+                nextCursor: 1,
+                degradedSources: [],
+            });
+            for (const [mood, suffix] of [
+                ["calm", "0"],
+                ["focus", "0"],
+                ["energetic", "1"],
+                ["workout", "1"],
+            ] as const) {
+                const result = await new RecommendationEngine(deps).recommend({
+                    ...request,
+                    intent: { ...request.intent, mood },
+                });
+                expect(result.tracks).toHaveLength(3);
+                expect(
+                    result.tracks.every((track) =>
+                        track.id.endsWith(`-${suffix}`),
+                    ),
+                ).toBe(true);
+            }
+            const neutral = await new RecommendationEngine(deps).recommend({
+                ...request,
+                limit: 30,
+            });
+            expect(neutral.tracks.length).toBeGreaterThan(3);
+        },
+    );
+
+    it.each(["baseline", "active"] as const)(
+        "keeps Wave cooldown strict in %s even when lanes cannot be filled",
+        async (mode) => {
+            const deps = dependencies(mode);
+            const result = await new RecommendationEngine(deps).recommend({
+                ...request,
+                perLaneLimit: 12,
+                limit: 36,
+            });
+            expect(result.tracks.map((track) => track.id)).toEqual([
+                "yt:fresh",
+            ]);
+        },
+    );
+
+    it("does not auto-select hour-long mixes but preserves an ordinary long song", async () => {
+        const deps = dependencies("baseline");
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [
+                candidate("mix", {
+                    title: "The Gym Beats Vol.4 NONSTOP MEGAMIX",
+                    duration: 3522,
+                }),
+                candidate("background", {
+                    title: "Attract Positive Energy, Peace & Success",
+                    duration: 3629,
+                }),
+                candidate("song", {
+                    title: "Shine On You Crazy Diamond",
+                    duration: 810,
+                }),
+            ],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend(request);
+        expect(result.tracks.map((track) => track.id)).toEqual(["yt:song"]);
+    });
+
+    it("applies mood audio features inside personal candidates in baseline too", async () => {
+        const deps = dependencies("baseline");
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [
+                candidate("loud", {
+                    audioFeatures: {
+                        energy: 1,
+                        danceability: 1,
+                        instrumentalness: 0,
+                    },
+                }),
+                candidate("quiet", {
+                    audioFeatures: {
+                        arousal: 0.2,
+                        energy: 0.2,
+                        danceability: 0.2,
+                        instrumentalness: 1,
+                    },
+                }),
+            ],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            limit: 1,
+            intent: { ...request.intent, mood: "calm" },
+        });
+        expect(result.tracks[0].id).toBe("yt:quiet");
+    });
+
     it("serves one account-scoped ranked result with persistent anti-repeat", async () => {
         const deps = dependencies();
         const engine = new RecommendationEngine(deps);
@@ -139,6 +256,31 @@ describe("unified recommendation engine", () => {
         );
     });
 
+    it("assigns active rollout per recommendation session instead of pinning one account", async () => {
+        const algorithms: string[] = [];
+        for (const sessionId of ["session-0", "session-6", "session-6"]) {
+            const deps = dependencies("active");
+            deps.hybridRolloutPercent = 25;
+            deps.loadRecentExposures.mockResolvedValue([]);
+            const engine = new RecommendationEngine(deps);
+
+            await engine.recommend({ ...request, sessionId });
+            algorithms.push(
+                deps.recordGeneration.mock.calls[0]?.[0]?.algorithm,
+            );
+            expect(deps.recordGeneration).toHaveBeenNthCalledWith(
+                1,
+                expect.objectContaining({
+                    context: expect.objectContaining({
+                        experimentAssignment: "session-switchback-v1",
+                    }),
+                }),
+            );
+        }
+
+        expect(algorithms).toEqual(["baseline-v1", "hybrid-v2", "hybrid-v2"]);
+    });
+
     it("keeps playable fallback candidates when an optional adapter degrades", async () => {
         const deps = dependencies();
         deps.loadCandidates.mockResolvedValue({
@@ -153,6 +295,47 @@ describe("unified recommendation engine", () => {
         expect(result.tracks).toHaveLength(1);
         expect(result.degradedSources).toEqual(["listenbrainz", "dclap"]);
         expect(result.nextCursor).toBe(2);
+    });
+
+    it("keeps playable tracks and dislikes when analysis and taste enrichment fail", async () => {
+        const deps = {
+            ...dependencies(),
+            enrichCandidates: jest
+                .fn()
+                .mockRejectedValue(new Error("analysis unavailable")),
+        };
+        deps.loadRecentExposures.mockResolvedValue([]);
+        deps.loadTasteContext.mockRejectedValue(new Error("taste unavailable"));
+        deps.loadDislikedCanonicalKeys.mockResolvedValue(
+            new Set(["meta:artist-recent:recent:180"]),
+        );
+
+        const result = await new RecommendationEngine(deps).recommend(request);
+
+        expect(result.tracks.map((track) => track.id)).toEqual(["yt:fresh"]);
+        expect(result.degradedSources).toEqual(
+            expect.arrayContaining(["canonical-features", "taste-profile"]),
+        );
+        expect(result.tracks[0].embedding).toBeUndefined();
+    });
+
+    it("serves both arms at fifty percent without excluding tracks lacking embeddings", async () => {
+        const algorithms = new Set<string>();
+        for (let index = 0; index < 32; index++) {
+            const deps = dependencies();
+            deps.hybridRolloutPercent = 50;
+            deps.loadRecentExposures.mockResolvedValue([]);
+            const result = await new RecommendationEngine(deps).recommend({
+                ...request,
+                sessionId: `rollout-${index}`,
+            });
+            expect(result.tracks).toHaveLength(2);
+            expect(
+                result.tracks.every((track) => track.embedding === undefined),
+            ).toBe(true);
+            algorithms.add(deps.recordGeneration.mock.calls[0]?.[0]?.algorithm);
+        }
+        expect(algorithms).toEqual(new Set(["baseline-v1", "hybrid-v2"]));
     });
 
     it("keeps the served result available when telemetry rejects it", async () => {
@@ -201,5 +384,61 @@ describe("unified recommendation engine", () => {
                 audioFeatures: { energy: 0.8 },
             }),
         );
+    });
+
+    it.each(["baseline", "active"] as const)(
+        "excludes alternate uploads of a saved recording from Discoveries in %s",
+        async (mode) => {
+            const deps = {
+                ...dependencies(mode),
+                loadSavedCanonicalKeys: jest
+                    .fn()
+                    .mockResolvedValue(new Set(["saved-recording"])),
+            };
+            deps.loadCandidates.mockResolvedValue({
+                candidates: [
+                    candidate("alternate-upload", {
+                        canonicalKey: "saved-recording",
+                        lane: "discovery",
+                    }),
+                    candidate("unheard", {
+                        artist: { id: null, name: "Artist of saved recording" },
+                        lane: "discovery",
+                    }),
+                ],
+                nextCursor: 1,
+                degradedSources: [],
+            });
+            const result = await new RecommendationEngine(deps).recommend({
+                ...request,
+                intent: { ...request.intent, direction: "new" },
+            });
+            expect(result.tracks.map((t) => t.id)).toEqual(["yt:unheard"]);
+            expect(deps.loadSavedCanonicalKeys).toHaveBeenCalledWith(
+                "alice",
+                expect.any(Array),
+            );
+        },
+    );
+
+    it("does not query saved exclusions for the ordinary mix", async () => {
+        const deps = { ...dependencies(), loadSavedCanonicalKeys: jest.fn() };
+        await new RecommendationEngine(deps).recommend(request);
+        expect(deps.loadSavedCanonicalKeys).not.toHaveBeenCalled();
+    });
+
+    it("does not present unchecked discoveries when saved identity lookup fails", async () => {
+        const deps = {
+            ...dependencies("baseline"),
+            loadSavedCanonicalKeys: jest
+                .fn()
+                .mockRejectedValue(new Error("DB unavailable")),
+        };
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            intent: { ...request.intent, direction: "new" },
+        });
+        expect(result.tracks).toEqual([]);
+        expect(result.degradedSources).toContain("saved-recordings");
     });
 });

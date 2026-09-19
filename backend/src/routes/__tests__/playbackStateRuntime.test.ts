@@ -348,6 +348,29 @@ describe("playbackState routes runtime", () => {
         );
     });
 
+    it("preserves only the explicit device-only source policy in saved track queues", async () => {
+        mockUpsert.mockResolvedValueOnce({ id: "state-policy" });
+        const req = {
+            user: { id: "u1" },
+            header: () => "device-a",
+            body: {
+                playbackType: "track",
+                trackId: "t1",
+                queue: [
+                    { id: "t1", playbackSourcePolicy: "device-only" },
+                    { id: "t2", playbackSourcePolicy: { arbitrary: true } },
+                ],
+            },
+        } as any;
+        await postState(req, createRes());
+        const saved = mockUpsert.mock.calls[0][0];
+        expect(saved.update.queue[0].playbackSourcePolicy).toBe("device-only");
+        expect(saved.create.queue[0].playbackSourcePolicy).toBe("device-only");
+        expect(saved.update.queue[1]).not.toHaveProperty(
+            "playbackSourcePolicy",
+        );
+    });
+
     it("sanitizes queue payload and upserts bounded values", async () => {
         mockUpsert.mockResolvedValueOnce({
             id: "state-2",

@@ -62,24 +62,6 @@ jest.mock("../../services/youtubeMusic", () => ({
     ytMusicService,
 }));
 
-const tidalStreamingService = {
-    isEnabled: jest.fn(),
-    isAvailable: jest.fn(),
-    getAuthStatus: jest.fn(),
-    getUserPreferredQuality: jest.fn(),
-    getHomeShelves: jest.fn(),
-    getExploreShelves: jest.fn(),
-    getGenres: jest.fn(),
-    getMoods: jest.fn(),
-    getMixes: jest.fn(),
-    getGenrePlaylists: jest.fn(),
-    getBrowsePlaylist: jest.fn(),
-    getBrowseMix: jest.fn(),
-};
-jest.mock("../../services/tidalStreaming", () => ({
-    tidalStreamingService,
-}));
-
 const browseImageCacheKey = jest.fn((url: string) => `cache:${url}`);
 const getBrowseImageFromCache = jest.fn();
 const fetchAndCacheBrowseImage = jest.fn();
@@ -97,7 +79,7 @@ jest.mock("../../utils/systemSettings", () => ({
 
 jest.mock("../../config", () => ({ config: { ytmusicRegion: "US" } }));
 
-import router, { _resetTidalBrowseCache, _resetYtBrowseCache } from "../browse";
+import router, { _resetYtBrowseCache } from "../browse";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
 
 const app = createRouteTestApp("/api/browse", router);
@@ -115,7 +97,6 @@ describe("browse branch coverage", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         _resetYtBrowseCache();
-        _resetTidalBrowseCache();
 
         mockGetSystemSettings.mockResolvedValue({ ytMusicEnabled: true });
         deezerService.parseUrl.mockReturnValue(null);
@@ -138,19 +119,6 @@ describe("browse branch coverage", () => {
             tracks: [],
         });
         ytMusicService.getLibraryPlaylists.mockResolvedValue([]);
-
-        tidalStreamingService.isEnabled.mockResolvedValue(true);
-        tidalStreamingService.isAvailable.mockResolvedValue(true);
-        tidalStreamingService.getAuthStatus.mockResolvedValue({
-            authenticated: true,
-        });
-        tidalStreamingService.getUserPreferredQuality.mockResolvedValue("HIGH");
-        tidalStreamingService.getHomeShelves.mockResolvedValue([]);
-        tidalStreamingService.getGenrePlaylists.mockResolvedValue([]);
-        tidalStreamingService.getBrowsePlaylist.mockResolvedValue({
-            id: "tidal-pl",
-            tracks: [],
-        });
 
         getBrowseImageFromCache.mockReturnValue(null);
         fetchAndCacheBrowseImage.mockResolvedValue(null);
@@ -209,16 +177,6 @@ describe("browse branch coverage", () => {
                 .send({
                     url: "https://music.youtube.com/playlist?list=BAD!ID",
                 });
-
-            expect(res.status).toBe(400);
-            expect(res.body.error).toMatch(/unsupported/i);
-        });
-
-        it("rejects tidal playlist URL with invalid non-hex playlist id", async () => {
-            const res = await request(app)
-                .post("/api/browse/playlists/parse")
-                .set(AUTH_HEADER, AUTH_VALUE)
-                .send({ url: "https://listen.tidal.com/playlist/not_hex" });
 
             expect(res.status).toBe(400);
             expect(res.body.error).toMatch(/unsupported/i);
@@ -300,47 +258,6 @@ describe("browse branch coverage", () => {
 
             expect(res.status).toBe(404);
             expect(res.body).toEqual({ error: "Failed to fetch image" });
-        });
-
-        it("returns 400 for invalid tidal image URL", async () => {
-            const res = await request(app)
-                .get("/api/browse/tidal/image?url=not-a-valid-url")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(res.status).toBe(400);
-            expect(res.body).toEqual({ error: "Invalid URL" });
-        });
-
-        it("returns 404 when tidal image fetch misses", async () => {
-            const res = await request(app)
-                .get(
-                    "/api/browse/tidal/image?url=https://resources.tidal.com/images/missing.jpg",
-                )
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(res.status).toBe(404);
-            expect(res.body).toEqual({ error: "Failed to fetch image" });
-        });
-
-        it("serves cached tidal image", async () => {
-            const filePath = makeTempImagePath();
-            getBrowseImageFromCache.mockReturnValueOnce({
-                filePath,
-                contentType: "image/jpeg",
-            });
-
-            try {
-                const res = await request(app)
-                    .get(
-                        "/api/browse/tidal/image?url=https://resources.tidal.com/images/cached.jpg",
-                    )
-                    .set(AUTH_HEADER, AUTH_VALUE);
-
-                expect(res.status).toBe(200);
-                expect(fetchAndCacheBrowseImage).not.toHaveBeenCalled();
-            } finally {
-                fs.rmSync(filePath, { force: true });
-            }
         });
     });
 
@@ -666,220 +583,6 @@ describe("browse branch coverage", () => {
             expect(first.status).toBe(200);
             expect(cached.status).toBe(200);
             expect(ytMusicService.getLibraryPlaylists).toHaveBeenCalledTimes(1);
-        });
-    });
-
-    describe("tidal availability/auth/error branches", () => {
-        it("returns 403 when tidal sidecar is unavailable", async () => {
-            tidalStreamingService.isAvailable.mockResolvedValueOnce(false);
-
-            const res = await request(app)
-                .get("/api/browse/tidal/home")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(res.status).toBe(403);
-            expect(res.body.error).toMatch(/not enabled or not available/i);
-        });
-
-        it("returns 403 when user tidal credentials are not authenticated", async () => {
-            tidalStreamingService.getAuthStatus.mockResolvedValueOnce({
-                authenticated: false,
-            });
-
-            const res = await request(app)
-                .get("/api/browse/tidal/home")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(res.status).toBe(403);
-            expect(res.body).toEqual({
-                error: "TIDAL credentials not authenticated",
-            });
-        });
-
-        it("allows request through when tidal auth status lookup throws", async () => {
-            tidalStreamingService.getAuthStatus.mockRejectedValueOnce(
-                new Error("status failed"),
-            );
-            tidalStreamingService.getHomeShelves.mockResolvedValueOnce([
-                { title: "shelf", contents: [] },
-            ]);
-
-            const res = await request(app)
-                .get("/api/browse/tidal/home")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(res.status).toBe(200);
-            expect(res.body).toEqual({
-                shelves: [{ title: "shelf", contents: [] }],
-                source: "tidal",
-            });
-        });
-
-        it("covers tidal explore cached and 500 branches", async () => {
-            tidalStreamingService.getExploreShelves.mockResolvedValue([
-                { title: "explore", contents: [] },
-            ]);
-
-            const first = await request(app)
-                .get("/api/browse/tidal/explore")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            const cached = await request(app)
-                .get("/api/browse/tidal/explore")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(first.status).toBe(200);
-            expect(cached.status).toBe(200);
-            expect(
-                tidalStreamingService.getExploreShelves,
-            ).toHaveBeenCalledTimes(1);
-
-            _resetTidalBrowseCache();
-            tidalStreamingService.getExploreShelves.mockRejectedValueOnce(
-                new Error("explore down"),
-            );
-            const failing = await request(app)
-                .get("/api/browse/tidal/explore")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({
-                error: "Failed to fetch TIDAL explore content",
-            });
-        });
-
-        it("covers tidal genres 500 branch", async () => {
-            tidalStreamingService.getGenres.mockRejectedValueOnce(
-                new Error("genres down"),
-            );
-
-            const res = await request(app)
-                .get("/api/browse/tidal/genres")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(res.status).toBe(500);
-            expect(res.body).toEqual({ error: "Failed to fetch TIDAL genres" });
-        });
-
-        it("covers tidal moods cached and 500 branches", async () => {
-            tidalStreamingService.getMoods.mockResolvedValue([{ path: "m" }]);
-            const first = await request(app)
-                .get("/api/browse/tidal/moods")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            const cached = await request(app)
-                .get("/api/browse/tidal/moods")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            expect(first.status).toBe(200);
-            expect(cached.status).toBe(200);
-            expect(tidalStreamingService.getMoods).toHaveBeenCalledTimes(1);
-
-            _resetTidalBrowseCache();
-            tidalStreamingService.getMoods.mockRejectedValueOnce(
-                new Error("moods down"),
-            );
-            const failing = await request(app)
-                .get("/api/browse/tidal/moods")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({
-                error: "Failed to fetch TIDAL moods",
-            });
-        });
-
-        it("covers tidal mixes cached and 500 branches", async () => {
-            tidalStreamingService.getMixes.mockResolvedValue([{ mixId: "m1" }]);
-            const first = await request(app)
-                .get("/api/browse/tidal/mixes")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            const cached = await request(app)
-                .get("/api/browse/tidal/mixes")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            expect(first.status).toBe(200);
-            expect(cached.status).toBe(200);
-            expect(tidalStreamingService.getMixes).toHaveBeenCalledTimes(1);
-
-            _resetTidalBrowseCache();
-            tidalStreamingService.getMixes.mockRejectedValueOnce(
-                new Error("mixes down"),
-            );
-            const failing = await request(app)
-                .get("/api/browse/tidal/mixes")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({
-                error: "Failed to fetch TIDAL mixes",
-            });
-        });
-
-        it("returns 400 when tidal genre-playlists path is too long", async () => {
-            const tooLongPath = "x".repeat(201);
-
-            const res = await request(app)
-                .get(`/api/browse/tidal/genre-playlists?path=${tooLongPath}`)
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(res.status).toBe(400);
-            expect(res.body).toEqual({ error: "path parameter too long" });
-        });
-
-        it("covers tidal genre-playlists cached and 500 branches", async () => {
-            tidalStreamingService.getGenrePlaylists.mockResolvedValue([
-                { playlistId: "g1" },
-            ]);
-            const first = await request(app)
-                .get("/api/browse/tidal/genre-playlists?path=Pop")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            const cached = await request(app)
-                .get("/api/browse/tidal/genre-playlists?path=Pop")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            expect(first.status).toBe(200);
-            expect(cached.status).toBe(200);
-            expect(
-                tidalStreamingService.getGenrePlaylists,
-            ).toHaveBeenCalledTimes(1);
-
-            _resetTidalBrowseCache();
-            tidalStreamingService.getGenrePlaylists.mockRejectedValueOnce(
-                new Error("genre playlists down"),
-            );
-            const failing = await request(app)
-                .get("/api/browse/tidal/genre-playlists?path=Pop")
-                .set(AUTH_HEADER, AUTH_VALUE);
-            expect(failing.status).toBe(500);
-            expect(failing.body).toEqual({
-                error: "Failed to fetch TIDAL genre playlists",
-            });
-        });
-
-        it("clamps tidal playlist limit to 500", async () => {
-            await request(app)
-                .get("/api/browse/tidal/playlist/pl-1?limit=999")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(
-                tidalStreamingService.getBrowsePlaylist,
-            ).toHaveBeenCalledWith("user-1", "pl-1", "HIGH", 500);
-        });
-
-        it("drops invalid tidal playlist limit values", async () => {
-            await request(app)
-                .get("/api/browse/tidal/playlist/pl-1?limit=0")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(
-                tidalStreamingService.getBrowsePlaylist,
-            ).toHaveBeenCalledWith("user-1", "pl-1", "HIGH", undefined);
-        });
-
-        it("covers tidal mix route 500 branch", async () => {
-            tidalStreamingService.getBrowseMix.mockRejectedValueOnce(
-                new Error("mix detail down"),
-            );
-
-            const res = await request(app)
-                .get("/api/browse/tidal/mix/mix-1")
-                .set(AUTH_HEADER, AUTH_VALUE);
-
-            expect(res.status).toBe(500);
-            expect(res.body).toEqual({ error: "Failed to fetch TIDAL mix" });
         });
     });
 });

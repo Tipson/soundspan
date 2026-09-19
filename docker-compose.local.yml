@@ -57,6 +57,9 @@ services:
             # Connect to host machine's services (or Docker services)
             REDIS_URL: redis://redis-local:6379
             DATABASE_URL: postgresql://soundspan:soundspan@postgres-local:5432/soundspan
+            ACOUSTID_API_KEY: ${ACOUSTID_API_KEY:-}
+            BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://host.docker.internal:3007}
+            INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-}
             # Music path inside container (mounted from host)
             MUSIC_PATH: /music
             BATCH_SIZE: 10
@@ -73,6 +76,8 @@ services:
                 condition: service_healthy
             redis-local:
                 condition: service_healthy
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
         restart: unless-stopped
 
     # DCLAP HTTP provider - standalone provider for local testing.

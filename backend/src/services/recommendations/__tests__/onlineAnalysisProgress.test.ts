@@ -66,10 +66,16 @@ test("reports shared canonical coverage, independent stages, real active vectors
         },
     });
     expect(count).toHaveBeenCalledWith({
-        where: { embeddings: { some: { spaceId: "active-space" } } },
+        where: {
+            mergedIntoId: null,
+            NOT: { identitySource: "identity-merged" },
+            embeddings: { some: { spaceId: "active-space" } },
+        },
     });
     expect(count).toHaveBeenCalledWith({
         where: {
+            mergedIntoId: null,
+            NOT: { identitySource: "identity-merged" },
             embeddingStatus: "failed",
             embeddings: { none: { spaceId: "active-space" } },
         },
@@ -82,6 +88,14 @@ test("reports shared canonical coverage, independent stages, real active vectors
     expect(redisClient.get).toHaveBeenCalledWith(
         "recommendation:remote-analysis:budget:2026-09-03",
     );
+    for (const [request] of count.mock.calls) {
+        expect(request.where).toEqual(
+            expect.objectContaining({
+                mergedIntoId: null,
+                NOT: { identitySource: "identity-merged" },
+            }),
+        );
+    }
 });
 
 test("Redis failure does not turn a real database snapshot into zero counts", async () => {

@@ -53,13 +53,6 @@ jest.mock("../../services/youtubeMusic", () => ({
     },
 }));
 
-jest.mock("../../services/tidalStreaming", () => ({
-    tidalStreamingService: {
-        isEnabled: jest.fn(),
-        isAvailable: jest.fn(),
-    },
-}));
-
 jest.mock("../../services/browseImageCache", () => ({
     getBrowseImageCacheRoot: () => "/tmp",
     browseImageCacheKey: jest.fn(() => "browse-image-cache-key"),

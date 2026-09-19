@@ -7,6 +7,8 @@ import { HomeOnlineDiscovery } from "@/features/home/components/HomeOnlineDiscov
 import { HomeWaveHero } from "@/features/home/components/HomeWaveHero";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
 import { ru } from "@/lib/i18n/ru";
+import { useNetworkOnline } from "@/hooks/useNetworkOnline";
+import { DownloadsList } from "@/features/device-offline/components/DownloadsList";
 
 function PlaylistSkeleton() {
     return (
@@ -49,6 +51,23 @@ function PlaylistSkeleton() {
 
 /** Unified online-first music landing: immediate Wave, personal feed, catalog. */
 export default function HomePage() {
+    const online = useNetworkOnline();
+    if (!online) {
+        return (
+            <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
+                <h1 className="text-2xl font-bold">Загруженное</h1>
+                <p role="status" className="text-sm text-content-muted">
+                    Нет подключения к интернету. Слушайте музыку, сохранённую на
+                    этом устройстве.
+                </p>
+                <DownloadsList />
+            </main>
+        );
+    }
+    return <OnlineHomePage />;
+}
+
+function OnlineHomePage() {
     const {
         mixes,
         discoverWeekly,
@@ -103,7 +122,13 @@ export default function HomePage() {
                             role="status"
                             className="relative z-10 rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning"
                         >
-                            {ru.home.unavailable}
+                            {ru.home.unavailable}{" "}
+                            <a
+                                className="underline"
+                                href="/library?tab=downloads"
+                            >
+                                Открыть загрузки
+                            </a>
                         </p>
                     )}
 

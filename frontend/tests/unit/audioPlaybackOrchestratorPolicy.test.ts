@@ -20,8 +20,8 @@ test("buffered-ahead above threshold does not trigger pause recovery", () => {
     assert.equal(shouldAttemptRecoveryOnUnexpectedPause(2, 1), false);
 });
 
-test("TIDAL streams use mp4 format hint for Howler codec gate", () => {
-    assert.equal(resolveRemoteStreamFormat("tidal"), "mp4");
+test("retired TIDAL streams do not receive an active format hint", () => {
+    assert.equal(resolveRemoteStreamFormat("tidal"), undefined);
 });
 
 test("YouTube streams use mp4 format hint for Howler codec gate", () => {
@@ -132,7 +132,7 @@ test("local stream uses low loaded duration when no metadata available", () => {
 });
 
 test("format hint follows the source: remote hinted, peer detected, local by extension", () => {
-    assert.equal(resolveTrackFormatHint({ streamSource: "tidal" }), "mp4");
+    assert.equal(resolveTrackFormatHint({ streamSource: "tidal" }), undefined);
     assert.equal(resolveTrackFormatHint({ streamSource: "youtube" }), "mp4");
     assert.equal(
         resolveTrackFormatHint({

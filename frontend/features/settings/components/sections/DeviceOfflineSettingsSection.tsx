@@ -1,25 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useDeviceOffline } from "@/features/device-offline/DeviceOfflineProvider";
-import { DEVICE_OFFLINE_AUTO_LIMIT_OPTIONS } from "@/features/device-offline/offlineQueue";
-import {
-    SettingsRow,
-    SettingsSection,
-    SettingsSelect,
-    SettingsToggle,
-} from "../ui";
-import { pluralRu, ru } from "@/lib/i18n/ru";
-
-const limitOptions = DEVICE_OFFLINE_AUTO_LIMIT_OPTIONS.map((limit) => ({
-    value: String(limit),
-    label: `${limit} ${pluralRu(limit, ["трек", "трека", "треков"])}`,
-}));
+import { SettingsRow, SettingsSection, SettingsToggle } from "../ui";
+import { ru } from "@/lib/i18n/ru";
 
 /** User-owned controls for liked-song files retained on this device. */
 export function DeviceOfflineSettingsSection() {
     const {
         automationSettings,
+        automationError,
+        retryAutomation,
+        records,
+        queueItems,
         isQueueHydrated,
         storageError,
         storage,
@@ -29,8 +23,43 @@ export function DeviceOfflineSettingsSection() {
     } = useDeviceOffline();
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const enabled = automationSettings?.autoDownloadLiked ?? false;
-    const limit = automationSettings?.autoDownloadLikedLimit ?? 100;
+    const enabled = automationSettings?.autoDownloadLiked ?? true;
+    const [online, setOnline] = useState(true);
+    useEffect(() => {
+        const updateNetwork = () => setOnline(navigator.onLine !== false);
+        updateNetwork();
+        window.addEventListener("online", updateNetwork);
+        window.addEventListener("offline", updateNetwork);
+        return () => {
+            window.removeEventListener("online", updateNetwork);
+            window.removeEventListener("offline", updateNetwork);
+        };
+    }, []);
+    const automatic = queueItems.filter(
+        (item) => item.management === "auto-liked",
+    );
+    const pending = automatic.filter((item) => item.status !== "error").length;
+    const failures = automatic.filter((item) => item.status === "error");
+    const storageBlock = queueItems.find((item) => item.requiresStorageAction);
+    const ready = records.filter(
+        (record) =>
+            record.status === "ready" && record.management === "auto-liked",
+    ).length;
+    const stateMessage = !enabled
+        ? "Автозагрузка приостановлена вами."
+        : !online
+          ? "Нет подключения к интернету. Загрузка продолжится после подключения."
+          : storage.status !== "ready"
+            ? "Автозагрузка включена и ждёт доступа к хранилищу."
+            : storageBlock
+              ? storageBlock.errorMessage
+              : automationError
+                ? automationError
+                : pending > 0
+                  ? `Осталось скачать: ${pending}. Сохранено автоматически: ${ready}.`
+                  : failures.length > 0
+                    ? `Не удалось скачать треков: ${failures.length}. Остальные доступные копии сохранены.`
+                    : `Сохранено автоматически: ${ready}. Новые любимые треки скачиваются при открытом Soundspan.`;
     const baseControlsUnavailable =
         isSaving ||
         !isQueueHydrated ||
@@ -38,8 +67,6 @@ export function DeviceOfflineSettingsSection() {
         !automationSettings;
     const toggleUnavailable =
         baseControlsUnavailable || (storage.status !== "ready" && !enabled);
-    const limitUnavailable =
-        baseControlsUnavailable || storage.status !== "ready";
     const reconnectRememberedFolder =
         Boolean(storage.directoryName) &&
         (storage.status === "needs-setup" || storage.status === "error");
@@ -57,11 +84,7 @@ export function DeviceOfflineSettingsSection() {
         }
     };
 
-    const update = async (
-        patch:
-            | { autoDownloadLiked: boolean }
-            | { autoDownloadLikedLimit: number },
-    ) => {
+    const update = async (patch: { autoDownloadLiked: boolean }) => {
         setIsSaving(true);
         setError(null);
         try {
@@ -181,7 +204,7 @@ export function DeviceOfflineSettingsSection() {
             <SettingsRow
                 htmlFor="device-auto-download-liked"
                 label="Автоматически скачивать любимые треки на это устройство"
-                description="По умолчанию выключено. После настройки хранилища Soundspan постепенно сохраняет любимые треки, пока приложение открыто и устройство в сети, а после прерывания продолжает позже."
+                description="Включено по умолчанию: сохраняем любимые треки без ограничения количества и объёма со стороны Soundspan. Нужны интернет и свободное место на устройстве."
             >
                 <SettingsToggle
                     id="device-auto-download-liked"
@@ -192,28 +215,46 @@ export function DeviceOfflineSettingsSection() {
                     }
                 />
             </SettingsRow>
-            <SettingsRow
-                htmlFor="device-auto-download-limit"
-                label="Лимит автоматических загрузок"
-                description="Сначала удаляются самые старые автоматические копии. Треки, которые вы скачали вручную, этот лимит не удаляет."
-            >
-                <SettingsSelect
-                    id="device-auto-download-limit"
-                    value={String(limit)}
-                    disabled={limitUnavailable}
-                    options={limitOptions}
-                    onChange={(value) =>
-                        void update({
-                            autoDownloadLikedLimit: Number(value),
-                        })
-                    }
-                />
-            </SettingsRow>
-            <p className="text-xs leading-5 text-gray-400" aria-live="polite">
-                Автоматические копии занимают не более 2 ГБ в хранилище
-                Soundspan на этом устройстве. Обычная PWA не может надёжно
-                скачивать в фоне, поэтому не закрывайте Soundspan до завершения
-                текущей загрузки.
+            <div className="rounded-xl border border-line bg-surface-raised p-4">
+                <p
+                    className="text-sm leading-6 text-content-body"
+                    role="status"
+                >
+                    {stateMessage}
+                </p>
+                {(automationError || storageBlock || failures.length > 0) && (
+                    <button
+                        type="button"
+                        disabled={
+                            isSaving || !online || storage.status !== "ready"
+                        }
+                        onClick={() => {
+                            setIsSaving(true);
+                            setError(null);
+                            void retryAutomation()
+                                .catch(() =>
+                                    setError(
+                                        "Повторная загрузка не удалась. Проверьте доступ к хранилищу и интернету.",
+                                    ),
+                                )
+                                .finally(() => setIsSaving(false));
+                        }}
+                        className="mt-3 min-h-11 rounded-full border border-brand/40 px-4 text-sm font-semibold text-brand disabled:opacity-50"
+                    >
+                        Повторить загрузку
+                    </button>
+                )}
+                <Link
+                    href="/library?tab=downloads"
+                    className="mt-3 block w-fit text-sm font-semibold text-brand underline underline-offset-4"
+                >
+                    Открыть загрузки
+                </Link>
+            </div>
+            <p className="text-xs leading-5 text-content-muted">
+                Оставьте Soundspan открытым до завершения загрузки. При закрытии
+                приложения или потере сети очередь сохраняется. Уже скачанную
+                музыку можно слушать без интернета.
             </p>
             {error && (
                 <p className="mt-2 text-xs text-red-400" role="alert">

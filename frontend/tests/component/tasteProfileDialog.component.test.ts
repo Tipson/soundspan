@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
 import { after, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -19,7 +20,9 @@ after(() => {
 
 function findButton(container: ParentNode, label: string) {
     return Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent?.trim() === label,
+        (button) =>
+            button.textContent?.trim() === label ||
+            button.getAttribute("aria-label") === label,
     );
 }
 
@@ -102,9 +105,11 @@ async function waitFor(
     condition: () => boolean,
     timeoutMs: number = 1_000,
 ): Promise<void> {
-    const startedAt = Date.now();
+    // WSL wall-clock corrections can jump forward during a concurrent suite.
+    // An elapsed timeout must use the monotonic Node clock instead.
+    const startedAt = performance.now();
     while (!condition()) {
-        if (Date.now() - startedAt >= timeoutMs) {
+        if (performance.now() - startedAt >= timeoutMs) {
             assert.fail("condition was not met before timeout");
         }
         await React.act(async () => {
@@ -112,6 +117,21 @@ async function waitFor(
         });
     }
 }
+
+test("DOM readiness waits survive a forward wall-clock adjustment", async (t) => {
+    let wallClockReads = 0;
+    t.mock.method(Date, "now", () => (wallClockReads++ === 0 ? 0 : 60_000));
+    let ready = false;
+    const readyTimer = setTimeout(() => {
+        ready = true;
+    }, 20);
+    try {
+        await waitFor(() => ready);
+        assert.equal(ready, true);
+    } finally {
+        clearTimeout(readyTimer);
+    }
+});
 
 test("onboarding is a Russian accessible dialog and explains that it does not create likes", async () => {
     const mounted = await mountDialog();
@@ -125,6 +145,48 @@ test("onboarding is a Russian accessible dialog and explains that it does not cr
     assert.match(dialog.textContent ?? "", /Настроим музыку под вас/);
     assert.match(dialog.textContent ?? "", /не ставит лайки автоматически/i);
     assert.match(dialog.textContent ?? "", /Шаг 1 из 3/);
+
+    await mounted.cleanup();
+});
+
+test("onboarding exposes the 10-per-group and 16-total limits in a viewport-safe layout", async () => {
+    const mounted = await mountDialog();
+    const dialog = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="taste-profile-dialog"]',
+    );
+    const scrollRegion = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="taste-profile-scroll-region"]',
+    );
+    const footer = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="taste-profile-footer"]',
+    );
+    const actions = mounted.container.querySelector<HTMLElement>(
+        '[data-testid="taste-profile-actions"]',
+    );
+
+    assert.ok(dialog);
+    assert.ok(scrollRegion);
+    assert.ok(footer);
+    assert.ok(actions);
+    assert.match(
+        dialog.textContent ?? "",
+        /не больше 10 жанров и 10 артистов/i,
+    );
+    assert.match(dialog.textContent ?? "", /Жанры 0 из 10 · Всего 0 из 16/);
+    assert.match(dialog.className, /h-\[100dvh\]/);
+    assert.match(dialog.className, /sm:max-h-/);
+    assert.match(scrollRegion.className, /flex-1/);
+    assert.match(scrollRegion.className, /overscroll-contain/);
+    assert.match(actions.className, /grid-cols-2/);
+
+    const next = findButton(mounted.container, "Дальше: артисты");
+    const skip = findButton(mounted.container, "Пропустить настройку");
+    assert.ok(next);
+    assert.ok(skip);
+    assert.equal(next.textContent?.trim(), "К артистам");
+    assert.equal(skip.textContent?.trim(), "Пропустить");
+    assert.match(next.className, /whitespace-nowrap/);
+    assert.match(skip.className, /whitespace-nowrap/);
 
     await mounted.cleanup();
 });

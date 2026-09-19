@@ -12,6 +12,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from types import ModuleType
+from typing import ClassVar
 
 import acoustid_backfill
 import canonical_acoustid_backfill
@@ -504,11 +505,11 @@ def test_fingerprint_upsert_and_lookup_claim_round_trip(loaded_analyzer: ModuleT
         _drop_test_schema(schema_name)
 
 
-def test_canonical_fingerprint_lookup_promotes_online_identity(
+def test_canonical_fingerprint_lookup_hands_identity_to_backend(
     loaded_analyzer: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Prove canonical claim, MBID persistence and deployment locking in PostgreSQL."""
+    """Prove canonical claim and backend handoff without Python-side promotion."""
     assert TEST_DATABASE_URL is not None
     schema_name = f"canonical_identity_{uuid.uuid4().hex}"
     connection = psycopg2.connect(TEST_DATABASE_URL, connect_timeout=5)
@@ -559,6 +560,13 @@ def test_canonical_fingerprint_lookup_promotes_online_identity(
                 "score": 0.98,
             }
 
+    class PromotionClient:
+        calls: ClassVar[list[dict[str, object]]] = []
+
+        def submit(self, **payload: object) -> str:
+            self.calls.append(payload)
+            return "accepted"
+
     database = _configure_database(loaded_analyzer, schema_name)
     monkeypatch.setattr(
         canonical_acoustid_backfill,
@@ -566,7 +574,13 @@ def test_canonical_fingerprint_lookup_promotes_online_identity(
         f"soundspan:test:canonical-acoustid:{uuid.uuid4().hex}",
     )
     try:
-        worker = CanonicalAcoustIDBackfill(database, "configured", client=Client())
+        promotion_client = PromotionClient()
+        worker = CanonicalAcoustIDBackfill(
+            database,
+            "configured",
+            client=Client(),
+            promotion_client=promotion_client,
+        )
         assert worker.run_once() is True
         cursor = database.get_cursor()
         cursor.execute(
@@ -578,20 +592,28 @@ def test_canonical_fingerprint_lookup_promotes_online_identity(
         database.commit()
         cursor.close()
         assert row == {
-            "recordingMbid": "online-recording-mbid",
-            "identitySource": "acoustid",
-            "identityLookupStatus": "completed",
+            "recordingMbid": None,
+            "identitySource": "chromaprint",
+            "identityLookupStatus": "processing",
         }
+        assert promotion_client.calls == [
+            {
+                "source_canonical_id": "canonical-online",
+                "expected_fingerprint": "online-fingerprint",
+                "recording_mbid": "online-recording-mbid",
+                "confidence": 0.98,
+            }
+        ]
     finally:
         database.close()
         _drop_test_schema(schema_name)
 
 
-def test_canonical_identity_merge_preserves_analysis_and_embeddings(
+def test_canonical_identity_handoff_does_not_mutate_merge_state(
     loaded_analyzer: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Merge duplicate identity without orphaning analyzed online features."""
+    """Leave every merge mutation to the backend's durable transaction."""
     assert TEST_DATABASE_URL is not None
     schema_name = f"canonical_merge_{uuid.uuid4().hex}"
     connection = psycopg2.connect(TEST_DATABASE_URL, connect_timeout=5)
@@ -608,6 +630,7 @@ def test_canonical_identity_merge_preserves_analysis_and_embeddings(
                         duration INTEGER NOT NULL,
                         "recordingMbid" TEXT UNIQUE,
                         "identitySource" TEXT NOT NULL DEFAULT 'metadata',
+                        "mergedIntoId" TEXT,
                         "identityConfidence" DOUBLE PRECISION NOT NULL DEFAULT 0.5,
                         "identityLookupStatus" TEXT NOT NULL DEFAULT 'pending',
                         "identityLookupRetryCount" INTEGER NOT NULL DEFAULT 0,
@@ -639,6 +662,17 @@ def test_canonical_identity_merge_preserves_analysis_and_embeddings(
                         id TEXT PRIMARY KEY,
                         "canonicalRecordingId" TEXT,
                         "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    CREATE TABLE {}."RecommendationExposure" (
+                        id TEXT PRIMARY KEY,
+                        "canonicalRecordingId" TEXT,
+                        "canonicalKey" TEXT NOT NULL
+                    );
+                    CREATE TABLE {}."AnalysisAssetLease" (
+                        id TEXT PRIMARY KEY,
+                        "canonicalRecordingId" TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        "expiresAt" TIMESTAMPTZ NOT NULL
                     );
                     CREATE TABLE {}.canonical_recording_embeddings (
                         canonical_recording_id TEXT NOT NULL,
@@ -686,15 +720,39 @@ def test_canonical_identity_merge_preserves_analysis_and_embeddings(
                         'dclap-v1',
                         NOW()
                     );
+                    INSERT INTO {}."CanonicalRecording" (
+                        id,
+                        fingerprint,
+                        duration,
+                        "identitySource",
+                        "mergedIntoId",
+                        "identityLookupStatus"
+                    ) VALUES (
+                        'canonical-child-alias',
+                        NULL,
+                        247,
+                        'identity-merged',
+                        'canonical-source',
+                        'completed'
+                    );
                     INSERT INTO {}.canonical_recording_embeddings (
                         canonical_recording_id,
                         space_id,
                         embedding
                     ) VALUES ('canonical-source', 'dclap-v1', '[0.1,0.2]');
                     INSERT INTO {}."TrackMapping" (id, "canonicalRecordingId")
-                    VALUES ('mapping-source', 'canonical-source')
+                    VALUES ('mapping-source', 'canonical-source');
+                    INSERT INTO {}."RecommendationExposure" (
+                        id,
+                        "canonicalRecordingId",
+                        "canonicalKey"
+                    ) VALUES (
+                        'exposure-source',
+                        'canonical-source',
+                        'meta:artist:song:247'
+                    )
                     """
-                ).format(*[sql.Identifier(schema_name) for _ in range(8)])
+                ).format(*[sql.Identifier(schema_name) for _ in range(13)])
             )
     finally:
         connection.close()
@@ -708,6 +766,13 @@ def test_canonical_identity_merge_preserves_analysis_and_embeddings(
                 "score": 0.99,
             }
 
+    class PromotionClient:
+        calls: ClassVar[list[dict[str, object]]] = []
+
+        def submit(self, **payload: object) -> str:
+            self.calls.append(payload)
+            return "accepted"
+
     database = _configure_database(loaded_analyzer, schema_name)
     monkeypatch.setattr(
         canonical_acoustid_backfill,
@@ -715,7 +780,13 @@ def test_canonical_identity_merge_preserves_analysis_and_embeddings(
         f"soundspan:test:canonical-merge:{uuid.uuid4().hex}",
     )
     try:
-        worker = CanonicalAcoustIDBackfill(database, "configured", client=Client())
+        promotion_client = PromotionClient()
+        worker = CanonicalAcoustIDBackfill(
+            database,
+            "configured",
+            client=Client(),
+            promotion_client=promotion_client,
+        )
         assert worker.run_once() is True
 
         cursor = database.get_cursor()
@@ -727,7 +798,7 @@ def test_canonical_identity_merge_preserves_analysis_and_embeddings(
         )
         target = cursor.fetchone()
         cursor.execute(
-            'SELECT "identitySource", "identityLookupStatus" '
+            'SELECT "identitySource", "identityLookupStatus", "mergedIntoId" '
             'FROM "CanonicalRecording" WHERE id = %s',
             ("canonical-source",),
         )
@@ -743,30 +814,51 @@ def test_canonical_identity_merge_preserves_analysis_and_embeddings(
             ("mapping-source",),
         )
         mapping = cursor.fetchone()
+        cursor.execute(
+            'SELECT "canonicalRecordingId", "canonicalKey" '
+            'FROM "RecommendationExposure" WHERE id = %s',
+            ("exposure-source",),
+        )
+        exposure = cursor.fetchone()
+        cursor.execute(
+            'SELECT "mergedIntoId" FROM "CanonicalRecording" WHERE id = %s',
+            ("canonical-child-alias",),
+        )
+        child_alias = cursor.fetchone()
         database.commit()
         cursor.close()
 
         assert target == {
-            "fingerprint": "source-fingerprint",
-            "bpm": 128.0,
-            "energy": 0.82,
-            "moodTags": ["energetic"],
-            "essentiaGenres": ["electronic"],
-            "analysisStatus": "completed",
-            "analysisVersion": "essentia-v1",
-            "embeddingStatus": "completed",
-            "embeddingVersion": "dclap-v1",
+            "fingerprint": None,
+            "bpm": None,
+            "energy": None,
+            "moodTags": [],
+            "essentiaGenres": [],
+            "analysisStatus": "pending",
+            "analysisVersion": None,
+            "embeddingStatus": "pending",
+            "embeddingVersion": None,
         }
         assert source == {
-            "identitySource": "acoustid-merged",
-            "identityLookupStatus": "completed",
+            "identitySource": "metadata",
+            "identityLookupStatus": "processing",
+            "mergedIntoId": None,
         }
-        assert embedding == {
-            "canonical_recording_id": "canonical-target",
-            "space_id": "dclap-v1",
-            "embedding": "[0.1,0.2]",
+        assert embedding is None
+        assert mapping == {"canonicalRecordingId": "canonical-source"}
+        assert exposure == {
+            "canonicalRecordingId": "canonical-source",
+            "canonicalKey": "meta:artist:song:247",
         }
-        assert mapping == {"canonicalRecordingId": "canonical-target"}
+        assert child_alias == {"mergedIntoId": "canonical-source"}
+        assert promotion_client.calls == [
+            {
+                "source_canonical_id": "canonical-source",
+                "expected_fingerprint": "source-fingerprint",
+                "recording_mbid": "shared-recording-mbid",
+                "confidence": 0.99,
+            }
+        ]
     finally:
         database.close()
         _drop_test_schema(schema_name)

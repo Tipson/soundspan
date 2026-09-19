@@ -260,7 +260,12 @@ describe("unifiedTrackResponse", () => {
             trackYtMusic: null,
         });
         expect(tidal.provider.source).toBe("tidal");
-        expect(tidal.playback.isPlayable).toBe(true);
+        expect(tidal.playback).toEqual({
+            isPlayable: false,
+            reason: "retired_provider",
+            message:
+                "Playback is unavailable because the TIDAL integration has been retired.",
+        });
         expect(tidal.track).toMatchObject({
             id: "tidal:991",
             streamSource: "tidal",

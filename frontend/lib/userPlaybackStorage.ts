@@ -17,6 +17,7 @@ const USER_BOUND_KEYS = [
     "current_index",
     "is_shuffle",
     "is_playing",
+    "vibe_mode",
     "current_time",
     "current_time_track_id",
     LAST_PLAYBACK_STATE_SAVE_AT_KEY_SUFFIX,

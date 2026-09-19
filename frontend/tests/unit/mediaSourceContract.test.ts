@@ -38,12 +38,18 @@ test("CANONICAL_MEDIA_SOURCE_VALUES lists every canonical media source", () => {
         "tidal",
         "youtube",
         "youtube-direct",
+        "audius",
+        "vk",
+        "yandex",
     ]);
 });
 
 test("normalizeCanonicalMediaSource normalizes supported source values", () => {
     assert.equal(normalizeCanonicalMediaSource("ytmusic"), "youtube");
     assert.equal(normalizeCanonicalMediaSource("local"), "local");
+    assert.equal(normalizeCanonicalMediaSource("audius"), "audius");
+    assert.equal(normalizeCanonicalMediaSource("vk"), "vk");
+    assert.equal(normalizeCanonicalMediaSource("yandex"), "yandex");
     assert.equal(normalizeCanonicalMediaSource("tidal"), "tidal");
     assert.equal(normalizeCanonicalMediaSource("youtube"), "youtube");
     assert.equal(
@@ -56,6 +62,13 @@ test("normalizeCanonicalMediaSource normalizes supported source values", () => {
 });
 
 test("resolveCanonicalMediaSource resolves explicit and inferred sources", () => {
+    assert.equal(
+        resolveCanonicalMediaSource({
+            mediaSource: "audius",
+            youtubeVideoId: "unrelated",
+        }),
+        "audius",
+    );
     assert.equal(
         resolveCanonicalMediaSource({ mediaSource: "tidal" }),
         "tidal",
@@ -80,6 +93,10 @@ test("resolveCanonicalMediaSource resolves explicit and inferred sources", () =>
 });
 
 test("toLegacyStreamFields maps canonical identities to legacy fields", () => {
+    assert.deepEqual(
+        toLegacyStreamFields({ source: "audius", providerTrackId: "7AlA9" }),
+        { streamSource: "audius" },
+    );
     assert.deepEqual(
         toLegacyStreamFields({ source: "tidal", tidalTrackId: 5 }),
         {
@@ -114,5 +131,6 @@ test("toAudioEngineSourceType maps canonical sources to engine sources", () => {
     assert.equal(toAudioEngineSourceType("youtube"), "ytmusic");
     assert.equal(toAudioEngineSourceType("youtube-direct"), "ytmusic");
     assert.equal(toAudioEngineSourceType("local"), "local");
+    assert.equal(toAudioEngineSourceType("audius"), "audius");
     assert.equal(toAudioEngineSourceType("tidal"), "tidal");
 });

@@ -1,20 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     Download,
     HardDriveDownload,
     Play,
+    Pause,
     RotateCcw,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAudioControls } from "@/lib/audio-controls-context";
-import type { Track } from "@/lib/audio-state-context";
+import { useAudioState, type Track } from "@/lib/audio-state-context";
+import { usePlaybackStatus } from "@/lib/audio-playback-context";
+import { TrackPlaybackIndicator } from "@/components/track/TrackPlaybackIndicator";
 import { useDeviceOffline } from "../DeviceOfflineProvider";
 import type { DeviceOfflineQueueItem } from "../offlineQueue";
-import type { DeviceOfflineDownloadRecord } from "../types";
+import type { DeviceOfflineDownloadRecord, DeviceOfflineTrack } from "../types";
 import { ru } from "@/lib/i18n/ru";
+import { formatTrackCountRu } from "@/lib/i18n/libraryOperationsRu";
+import {
+    isTrackActionable,
+    normalizeActionableAudioTrack,
+} from "@/lib/trackRef";
 
 function formatBytes(value: number | null): string {
     if (!value || value < 1) return ru.downloads.sizeUnavailable;
@@ -29,6 +37,12 @@ function formatBytes(value: number | null): string {
 }
 
 function statusCopy(record: DeviceOfflineDownloadRecord): string {
+    if (
+        !isTrackActionable(record.track) &&
+        !isDeviceFileDeleteRecovery(record)
+    ) {
+        return "Источник TIDAL больше недоступен. Эту запись можно удалить с устройства.";
+    }
     if (record.status === "ready") return formatBytes(record.totalBytes);
     if (record.status === "downloading") {
         if (record.transferMode === "background") {
@@ -51,6 +65,18 @@ function statusCopy(record: DeviceOfflineDownloadRecord): string {
         return `${ru.downloads.downloading} — ${ru.downloads.keepOpen}`;
     }
     if (record.status === "interrupted") {
+        if (
+            record.errorCode === "device_file_missing" ||
+            record.errorCode === "cache_missing"
+        ) {
+            return "Файл удалён с устройства — скачайте трек снова.";
+        }
+        if (
+            record.errorCode === "device_file_integrity" ||
+            record.errorCode === "cache_integrity"
+        ) {
+            return "Файл повреждён — скачайте трек снова.";
+        }
         return `${ru.downloads.interrupted} — ${record.errorMessage ?? "передача остановилась до готовности файла"}. Повтор запустит загрузку трека заново.`;
     }
     return `${ru.downloads.failed} — ${record.errorMessage ?? "копию не удалось сохранить"}. ${ru.downloads.retryTrack}.`;
@@ -99,6 +125,9 @@ function deleteConfirmation(
 }
 
 function queueStatusCopy(item: DeviceOfflineQueueItem): string {
+    if (!isTrackActionable(item.track)) {
+        return "Источник TIDAL больше недоступен. Эту задачу можно удалить с устройства.";
+    }
     if (item.status === "processing") {
         return ru.downloads.starting;
     }
@@ -114,9 +143,56 @@ function queueStatusCopy(item: DeviceOfflineQueueItem): string {
     return ru.downloads.queued;
 }
 
+function normalizeSearch(value: string): string {
+    return value.normalize("NFKC").toLocaleLowerCase("ru").replaceAll("ё", "е");
+}
+
+function summarizeDownloads(
+    records: DeviceOfflineDownloadRecord[],
+): string | null {
+    const durations = new Map<string, number>();
+    for (const record of records) {
+        if (record.status !== "ready") continue;
+        const track = normalizeActionableAudioTrack(record.track as Track);
+        if (!track) continue;
+        const duration =
+            Number.isFinite(track.duration) && track.duration > 0
+                ? track.duration
+                : 0;
+        // Different quality copies are one song. Prefer known metadata to zero.
+        if (!durations.get(track.id)) durations.set(track.id, duration);
+    }
+    if (durations.size === 0) return null;
+    const values = [...durations.values()];
+    const seconds = values.reduce((total, duration) => total + duration, 0);
+    const incomplete = values.some((duration) => duration === 0);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    let durationCopy = "длительность неизвестна";
+    if (seconds > 0) {
+        durationCopy =
+            hours > 0
+                ? `${hours} ч${minutes % 60 ? ` ${minutes % 60} мин` : ""}`
+                : minutes > 0
+                  ? `${minutes} мин`
+                  : "меньше минуты";
+        if (incomplete) {
+            durationCopy =
+                minutes > 0
+                    ? `не менее ${durationCopy}`
+                    : "длительность уточняется";
+        }
+    }
+    return `Загружено: ${formatTrackCountRu(durations.size)} · ${durationCopy}`;
+}
+
+/** Search and manage this device's copies without changing the playback queue. */
 export function DownloadsList() {
+    const [search, setSearch] = useState("");
     const [exportingKey, setExportingKey] = useState<string | null>(null);
-    const { playNow } = useAudioControls();
+    const { playTracks, pause, resume: resumePlayback } = useAudioControls();
+    const { currentTrack } = useAudioState();
+    const { isPlaying } = usePlaybackStatus();
     const {
         isHydrated,
         isQueueHydrated,
@@ -135,7 +211,35 @@ export function DownloadsList() {
         resume,
         enqueueCollection,
         retryStorage,
+        refresh,
     } = useDeviceOffline();
+    const downloadsSummary = useMemo(
+        () => summarizeDownloads(records),
+        [records],
+    );
+    useEffect(() => {
+        const verify = () => void refresh();
+        const verifyWhenVisible = () => {
+            if (document.visibilityState === "visible") verify();
+        };
+        verify();
+        window.addEventListener("focus", verify);
+        document.addEventListener("visibilitychange", verifyWhenVisible);
+        return () => {
+            window.removeEventListener("focus", verify);
+            document.removeEventListener("visibilitychange", verifyWhenVisible);
+        };
+    }, [refresh]);
+    const searchTerms = normalizeSearch(search)
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    const matchesSearch = (track: DeviceOfflineTrack) => {
+        const text = normalizeSearch(
+            `${track.title} ${track.artist.name} ${track.album.title}`,
+        );
+        return searchTerms.every((term) => text.includes(term));
+    };
     const visibleQueueItems = queueItems.filter(
         (item) =>
             !records.some(
@@ -144,6 +248,22 @@ export function DownloadsList() {
                     record.quality === item.quality,
             ),
     );
+    const displayRecords = useMemo(
+        () =>
+            [...records].sort(
+                (left, right) =>
+                    right.createdAt - left.createdAt ||
+                    left.key.localeCompare(right.key),
+            ),
+        [records],
+    );
+    const matchingRecords = displayRecords.filter((record) =>
+        matchesSearch(record.track),
+    );
+    const matchingQueueItems = visibleQueueItems.filter((item) =>
+        matchesSearch(item.track),
+    );
+    const matchingCount = matchingRecords.length + matchingQueueItems.length;
     const reconnectRememberedFolder =
         Boolean(storage.directoryName) &&
         (storage.status === "needs-setup" || storage.status === "error");
@@ -157,25 +277,30 @@ export function DownloadsList() {
         legacyStorage.status !== "ready";
     const storageNotice =
         storage.status === "ready" ? (
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/65">
-                {usesPrivateStorage ? (
-                    <>
-                        <span className="font-medium text-white/85">
-                            Личное хранилище Soundspan.
-                        </span>{" "}
-                        {storage.explanation} {capability.explanation}
-                    </>
-                ) : (
-                    <>
-                        Папка на устройстве:{" "}
-                        <span className="font-medium text-white/85">
-                            {storage.directoryName ??
-                                "выбранная папка Soundspan"}
-                        </span>
-                        . {capability.explanation}
-                    </>
-                )}
-            </div>
+            <details className="text-xs text-content-muted">
+                <summary className="w-fit cursor-pointer py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                    О хранении загрузок
+                </summary>
+                <div className="mt-1 rounded-xl border border-white/10 px-4 py-3 text-sm">
+                    {usesPrivateStorage ? (
+                        <>
+                            <span className="font-medium text-white/85">
+                                Личное хранилище Soundspan.
+                            </span>{" "}
+                            {storage.explanation} {capability.explanation}
+                        </>
+                    ) : (
+                        <>
+                            Папка на устройстве:{" "}
+                            <span className="font-medium text-white/85">
+                                {storage.directoryName ??
+                                    "выбранная папка Soundspan"}
+                            </span>
+                            . {capability.explanation}
+                        </>
+                    )}
+                </div>
+            </details>
         ) : (
             <div className="flex flex-col gap-3 rounded-xl border border-warning/25 bg-warning/10 px-4 py-4 text-sm text-content-body sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -240,9 +365,9 @@ export function DownloadsList() {
             <div>
                 <p className="font-semibold">Откройте прежнюю папку загрузок</p>
                 <p className="mt-1 text-content-muted">
-                    Новые треки сохраняются внутри Soundspan и больше не
-                    попадают в галерею. Доступ к старой папке нужен только для
-                    уже загруженных файлов.
+                    {usesPrivateStorage
+                        ? "Разрешите доступ один раз: скопируем старые треки в личное хранилище Soundspan. Исходные файлы останутся в папке. После успешного переноса повторное разрешение не потребуется."
+                        : "Доступ к старой папке нужен для уже загруженных файлов."}
                 </p>
             </div>
             <button
@@ -265,7 +390,7 @@ export function DownloadsList() {
         );
     }
 
-    if (records.length === 0 && visibleQueueItems.length === 0) {
+    if (records.length === 0 && visibleQueueItems.length === 0 && !search) {
         if (storageErrorNotice) return storageErrorNotice;
         if (storage.status !== "ready") return storageNotice;
         return (
@@ -287,95 +412,190 @@ export function DownloadsList() {
             {storageErrorNotice}
             {storageNotice}
             {legacyStorageNotice}
-            <div className="overflow-hidden rounded-xl border border-white/10">
-                {visibleQueueItems.map((item) => (
-                    <div
-                        key={`queue:${item.key}`}
-                        className="flex min-h-16 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-3 py-2 last:border-b-0"
+            {downloadsSummary && (
+                <p
+                    aria-label="Сводка загрузок"
+                    className="text-sm leading-6 text-content-muted"
+                >
+                    {downloadsSummary}
+                </p>
+            )}
+            <div className="flex items-center gap-2">
+                <input
+                    type="search"
+                    aria-label="Поиск в загрузках"
+                    placeholder="Трек, исполнитель или альбом"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-base text-white placeholder:text-white/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                />
+                {search && (
+                    <button
+                        type="button"
+                        aria-label="Очистить поиск"
+                        onClick={() => setSearch("")}
+                        className="min-h-11 shrink-0 rounded-lg px-3 text-sm text-white/65 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                     >
+                        Сбросить
+                    </button>
+                )}
+            </div>
+            {searchTerms.length > 0 && (
+                <p role="status" className="text-sm text-white/60">
+                    {matchingCount > 0
+                        ? `Найдено: ${matchingCount}`
+                        : "Ничего не найдено. Измените запрос или сбросьте поиск."}
+                </p>
+            )}
+            <div className="overflow-hidden rounded-xl border border-white/10">
+                {matchingQueueItems.map((item) => {
+                    const actionable = isTrackActionable(item.track);
+                    return (
                         <div
-                            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white/35"
-                            aria-hidden="true"
+                            key={`queue:${item.key}`}
+                            className="flex min-h-16 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-3 py-2 last:border-b-0"
                         >
-                            <HardDriveDownload className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-white">
-                                {item.track.title}
-                            </p>
-                            <p className="truncate text-xs text-white/50">
-                                {managementCopy(item.management)} ·{" "}
-                                {item.track.artist.name} ·{" "}
-                                {queueStatusCopy(item)}
-                            </p>
-                        </div>
-                        {(item.status === "error" ||
-                            item.status === "interrupted") && (
+                            <div
+                                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-white/35"
+                                aria-hidden="true"
+                            >
+                                <HardDriveDownload className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-white">
+                                    {item.track.title}
+                                </p>
+                                <p className="truncate text-xs text-white/50">
+                                    {managementCopy(item.management)} ·{" "}
+                                    {item.track.artist.name} ·{" "}
+                                    {queueStatusCopy(item)}
+                                </p>
+                            </div>
+                            {actionable &&
+                                (item.status === "error" ||
+                                    item.status === "interrupted") && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            void enqueueCollection({
+                                                tracks: [item.track as Track],
+                                                collectionId:
+                                                    item.collectionId ??
+                                                    `retry:${item.key}`,
+                                                collectionLabel:
+                                                    item.collectionLabel ??
+                                                    item.track.title,
+                                                quality: item.quality,
+                                            }).catch(() =>
+                                                toast.error(
+                                                    ru.downloads.retryFailed,
+                                                ),
+                                            );
+                                        }}
+                                        className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
+                                        aria-label={`${ru.downloads.retry}: ${item.track.title}`}
+                                        title={ru.downloads.retry}
+                                    >
+                                        <RotateCcw className="h-4 w-4" />
+                                    </button>
+                                )}
                             <button
                                 type="button"
                                 onClick={() => {
-                                    void enqueueCollection({
-                                        tracks: [item.track as Track],
-                                        collectionId:
-                                            item.collectionId ??
-                                            `retry:${item.key}`,
-                                        collectionLabel:
-                                            item.collectionLabel ??
-                                            item.track.title,
-                                        quality: item.quality,
-                                    }).catch(() =>
-                                        toast.error(ru.downloads.retryFailed),
+                                    if (
+                                        !window.confirm(
+                                            deleteConfirmation(
+                                                item.track.title,
+                                                item.management,
+                                            ),
+                                        )
+                                    ) {
+                                        return;
+                                    }
+                                    void cancelQueuedDownload(item).catch(() =>
+                                        toast.error(ru.downloads.removeFailed),
                                     );
                                 }}
-                                className="grid h-11 w-11 place-items-center rounded-full text-white/65 hover:bg-white/10 hover:text-white"
-                                aria-label={`${ru.downloads.retry}: ${item.track.title}`}
-                                title={ru.downloads.retry}
+                                className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"
+                                aria-label={`${ru.downloads.removeDevice}: ${item.track.title}`}
+                                title={ru.downloads.removeDevice}
                             >
-                                <RotateCcw className="h-4 w-4" />
+                                <Trash2
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
                             </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (
-                                    !window.confirm(
-                                        deleteConfirmation(
-                                            item.track.title,
-                                            item.management,
-                                        ),
-                                    )
-                                ) {
-                                    return;
-                                }
-                                void cancelQueuedDownload(item).catch(() =>
-                                    toast.error(ru.downloads.removeFailed),
-                                );
-                            }}
-                            className="grid h-11 w-11 place-items-center rounded-full text-white/55 hover:bg-red-500/15 hover:text-red-300"
-                            aria-label={`${ru.downloads.removeDevice}: ${item.track.title}`}
-                            title={ru.downloads.removeDevice}
-                        >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                    </div>
-                ))}
-                {records.map((record) => {
+                        </div>
+                    );
+                })}
+                {matchingRecords.map((record) => {
                     const percent = progressPercent(record);
+                    const playbackTrack = normalizeActionableAudioTrack(
+                        record.track as Track,
+                    );
+                    const actionable = playbackTrack !== null;
+                    const isCurrent =
+                        record.status === "ready" &&
+                        actionable &&
+                        currentTrack?.playbackSourcePolicy === "device-only" &&
+                        playbackTrack.id === currentTrack?.id;
+                    const playing = isCurrent && isPlaying;
                     return (
                         <div
                             key={record.key}
                             data-download-status={record.status}
+                            aria-current={isCurrent ? "true" : undefined}
                             className="flex min-h-16 items-center gap-3 border-b border-white/[0.07] bg-black/20 px-3 py-2 last:border-b-0"
                         >
-                            {record.status === "ready" ? (
+                            {record.status === "ready" && actionable ? (
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        if (!playbackTrack) return;
+                                        if (isCurrent) {
+                                            if (isPlaying) pause();
+                                            else resumePlayback();
+                                            return;
+                                        }
+                                        const seen = new Set<string>();
+                                        const tracks = matchingRecords.flatMap(
+                                            (candidate) => {
+                                                if (
+                                                    candidate.status !== "ready"
+                                                )
+                                                    return [];
+                                                const track =
+                                                    normalizeActionableAudioTrack(
+                                                        candidate.track as Track,
+                                                    );
+                                                if (
+                                                    !track ||
+                                                    seen.has(track.id)
+                                                )
+                                                    return [];
+                                                seen.add(track.id);
+                                                return [
+                                                    {
+                                                        ...track,
+                                                        playbackSourcePolicy:
+                                                            "device-only" as const,
+                                                    },
+                                                ];
+                                            },
+                                        );
+                                        const index = tracks.findIndex(
+                                            (track) =>
+                                                track.id === playbackTrack.id,
+                                        );
+                                        if (index < 0) return;
                                         void preparePlayback(record)
                                             .then(() =>
-                                                playNow({
-                                                    ...(record.track as Track),
-                                                }),
+                                                playTracks(
+                                                    tracks,
+                                                    index,
+                                                    false,
+                                                    { replaceQueue: true },
+                                                ),
                                             )
                                             .catch(() =>
                                                 toast.error(
@@ -385,9 +605,13 @@ export function DownloadsList() {
                                             );
                                     }}
                                     className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand text-black transition hover:brightness-110"
-                                    aria-label={`${ru.common.play}: ${record.track.title}`}
+                                    aria-label={`${playing ? ru.common.pause : ru.common.play}: ${record.track.title}`}
                                 >
-                                    <Play className="h-4 w-4 fill-current" />
+                                    {playing ? (
+                                        <Pause className="h-4 w-4 fill-current" />
+                                    ) : (
+                                        <Play className="h-4 w-4 fill-current" />
+                                    )}
                                 </button>
                             ) : record.status === "downloading" ? (
                                 <button
@@ -407,14 +631,41 @@ export function DownloadsList() {
                                 </div>
                             )}
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-white">
-                                    {record.track.title}
+                                <p
+                                    className={`flex min-w-0 items-center gap-2 text-sm font-semibold ${isCurrent ? "text-brand" : "text-white"}`}
+                                >
+                                    {isCurrent && (
+                                        <TrackPlaybackIndicator
+                                            playing={playing}
+                                        />
+                                    )}
+                                    <span className="truncate">
+                                        {record.track.title}
+                                    </span>
                                 </p>
+                                {isCurrent && (
+                                    <p className="text-xs font-semibold text-brand">
+                                        {playing ? "Играет" : "На паузе"}
+                                    </p>
+                                )}
                                 <p className="truncate text-xs text-white/50">
                                     {managementCopy(record.management)} ·{" "}
-                                    {record.track.artist.name} ·{" "}
-                                    {statusCopy(record)}
+                                    {record.track.artist.name}
+                                    {record.status === "ready"
+                                        ? ` · ${statusCopy(record)}`
+                                        : ""}
                                 </p>
+                                {record.status !== "ready" &&
+                                    record.status !== "downloading" && (
+                                        <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-warning">
+                                            {statusCopy(record)}
+                                        </p>
+                                    )}
+                                {record.status === "downloading" && (
+                                    <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-white/65">
+                                        {statusCopy(record)}
+                                    </p>
+                                )}
                                 {record.status === "downloading" && (
                                     <div
                                         className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"
@@ -441,6 +692,7 @@ export function DownloadsList() {
                             </div>
                             {(record.status === "interrupted" ||
                                 record.status === "error") &&
+                                actionable &&
                                 !isDeviceFileDeleteRecovery(record) && (
                                     <button
                                         type="button"

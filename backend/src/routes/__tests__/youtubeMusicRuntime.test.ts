@@ -783,9 +783,9 @@ describe("youtube music route runtime behavior", () => {
             { ...reqBase, params: { videoId: "song-1" } } as any,
             songAuthErrorRes,
         );
-        expect(songAuthErrorRes.statusCode).toBe(401);
+        expect(songAuthErrorRes.statusCode).toBe(502);
         expect(songAuthErrorRes.body).toEqual({
-            error: "YouTube Music authentication expired or invalid. Please reconnect your account.",
+            error: "YouTube Music metadata is temporarily unavailable",
         });
 
         ytMusicService.getSong.mockRejectedValueOnce({
@@ -853,7 +853,7 @@ describe("youtube music route runtime behavior", () => {
             content_type: "audio/webm",
         });
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "vid-1",
             "high",
         );
@@ -901,7 +901,7 @@ describe("youtube music route runtime behavior", () => {
         await streamInfoHandler(streamInfoReq, streamInfoRes);
         expect(streamInfoRes.statusCode).toBe(200);
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "vid-1",
             "low",
         );
@@ -916,11 +916,14 @@ describe("youtube music route runtime behavior", () => {
         await streamHandler(streamReq, streamRes);
         expect(streamRes.statusCode).toBe(206);
         expect(ytMusicService.getStreamProxy).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "vid-1",
             "low",
             undefined,
-            { signal: expect.any(AbortSignal) },
+            {
+                signal: expect.any(AbortSignal),
+                purpose: "interactive",
+            },
         );
     });
 
@@ -965,11 +968,14 @@ describe("youtube music route runtime behavior", () => {
         expect(successRes.headers["content-type"]).toBe("audio/webm");
         expect(streamData.pipe).toHaveBeenCalledWith(successRes);
         expect(ytMusicService.getStreamProxy).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "vid-1",
             "medium",
             "bytes=0-200",
-            { signal: expect.any(AbortSignal) },
+            {
+                signal: expect.any(AbortSignal),
+                purpose: "interactive",
+            },
         );
 
         if (!onError) {
@@ -1165,6 +1171,24 @@ describe("youtube music route runtime behavior", () => {
         data.destroyed = true;
         closeHandler();
         expect(data.destroy).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses public song metadata even when a personal OAuth session is present", async () => {
+        const handler = getLastHandler("/song/:videoId", "get");
+        const response = createRes();
+        await handler(
+            {
+                user: { id: "metadata-user" },
+                params: { videoId: "dQw4w9WgXcQ" },
+            } as any,
+            response,
+        );
+        expect(response.statusCode).toBe(200);
+        expect(ytMusicService.getSong).toHaveBeenCalledWith(
+            "__public__",
+            "dQw4w9WgXcQ",
+        );
+        expect(ytMusicService.getAuthStatus).not.toHaveBeenCalled();
     });
 
     it("handles library songs and albums retrieval with fallback errors", async () => {

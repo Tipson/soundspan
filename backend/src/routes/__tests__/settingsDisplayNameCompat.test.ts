@@ -20,12 +20,6 @@ jest.mock("../../services/staleJobCleanup", () => ({
     },
 }));
 
-jest.mock("../../services/tidalStreaming", () => ({
-    tidalStreamingService: {
-        clearUserQualityCache: jest.fn(),
-    },
-}));
-
 jest.mock("../../utils/db", () => ({
     prisma: {
         userSettings: {
@@ -200,7 +194,6 @@ describe("settings displayName compatibility", () => {
                 offlineEnabled: false,
                 maxCacheSizeMb: 5120,
                 showYtMusicExplore: true,
-                showTidalExplore: true,
             },
         });
         expect(res.statusCode).toBe(200);
@@ -451,7 +444,7 @@ describe("settings displayName compatibility", () => {
         });
     });
 
-    it("persists showTidalExplore via upsert", async () => {
+    it("strips showTidalExplore from old-client updates and responses", async () => {
         mockUserSettingsUpsert.mockResolvedValue({
             userId: "user-1",
             playbackQuality: "original",
@@ -469,7 +462,7 @@ describe("settings displayName compatibility", () => {
 
         const req = {
             user: { id: "user-1" },
-            body: { showTidalExplore: false },
+            body: { showTidalExplore: false, wifiOnly: true },
         } as any;
         const res = createRes();
 
@@ -477,15 +470,12 @@ describe("settings displayName compatibility", () => {
 
         expect(mockUserSettingsUpsert).toHaveBeenCalledWith(
             expect.objectContaining({
-                update: expect.objectContaining({ showTidalExplore: false }),
+                update: { wifiOnly: true },
             }),
         );
         expect(res.statusCode).toBe(200);
-        expect(res.body).toEqual(
-            expect.objectContaining({
-                showTidalExplore: false,
-            }),
-        );
+        expect(res.body).not.toHaveProperty("showTidalExplore");
+        expect(res.body).not.toHaveProperty("tidalStreamingQuality");
     });
 
     it("returns 500 when cleanup-stale-jobs fails", async () => {

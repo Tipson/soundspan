@@ -363,8 +363,11 @@ test("desktop sidebar exposes liked tracks, playlist creation, and direct playli
     assert.doesNotMatch(html, /Скрытый/);
     assert.doesNotMatch(html, /Чужой плейлист/);
     assert.doesNotMatch(html, /href="\/playlists"/);
+    assert.match(html, /href="\/library\?create=1"/);
+    assert.match(html, /href="\/import"/);
     assert.match(html, /aria-label="Создать плейлист"/);
     assert.match(html, />Создать плейлист</);
+    assert.match(html, />Импорт плейлиста</);
     assert.doesNotMatch(html, /Сортировка и фильтры|Все плейлисты/);
     assert.match(html, /data-shell-playlist-list="personal"/);
     const playlistList = html.match(
@@ -393,12 +396,12 @@ test("limits permanent playlist shortcuts and shows All playlists only for overf
     );
     assert.match(html, /href="\/playlist\/playlist-50"/);
     assert.doesNotMatch(html, /href="\/playlist\/playlist-51"/);
-    assert.match(html, /href="\/playlists"/);
+    assert.match(html, /href="\/library"/);
     assert.match(html, />Все плейлисты</);
 
     state.playlists = state.playlists.slice(0, 4);
     const compactHtml = renderSidebarToStaticMarkup(Sidebar);
-    assert.doesNotMatch(compactHtml, /href="\/playlists"/);
+    assert.doesNotMatch(compactHtml, />Все плейлисты</);
     assert.doesNotMatch(compactHtml, />Все плейлисты</);
 });
 
@@ -470,13 +473,14 @@ test("playlist list exposes a compact retry after a query failure", async () => 
     }
 });
 
-test("desktop Library navigation can enter the precached Downloads shell offline", async () => {
+test("desktop Library navigation supports local downloads and exposes a direct offline action", async () => {
     const { Sidebar } = await import("../../components/layout/Sidebar");
     const html = renderSidebarToStaticMarkup(Sidebar);
 
     const libraryLink = html.match(/<a[^>]*href="\/library"[^>]*>/);
     assert.ok(libraryLink, "Expected desktop Library link");
     assert.match(libraryLink[0], /data-has-on-click="true"/);
+    assert.match(html, /aria-haspopup="dialog"[^>]*>[\s\S]*?Загруженное/);
 });
 
 test("keeps federated peer playlist details outside the personal shell list", async () => {

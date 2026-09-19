@@ -6,9 +6,6 @@ const mockPrisma = {
         update: jest.fn(),
         updateMany: jest.fn(),
     },
-    userSettings: {
-        findMany: jest.fn(),
-    },
     trackTidal: {
         findMany: jest.fn(),
     },
@@ -45,16 +42,8 @@ jest.mock("../../config", () => ({
         },
     },
 }));
-jest.mock("../tidalStreaming", () => ({
-    tidalStreamingService: {
-        restoreOAuth: jest.fn(),
-        findMatchesForAlbum: jest.fn(),
-    },
-}));
-
 import { trackReconciliationService } from "../trackReconciliation";
 import { trackMappingService } from "../trackMappingService";
-import { tidalStreamingService } from "../tidalStreaming";
 
 describe("TrackReconciliationService", () => {
     beforeEach(() => {
@@ -67,7 +56,6 @@ describe("TrackReconciliationService", () => {
         mockPrisma.trackTidal.findMany.mockReset();
         mockPrisma.trackYtMusic.findMany.mockReset();
         mockPrisma.track.findMany.mockReset();
-        mockPrisma.userSettings.findMany.mockReset();
         mockPrisma.$transaction.mockReset();
         // Default: empty local library
         mockPrisma.track.findMany.mockResolvedValue([]);
@@ -81,7 +69,6 @@ describe("TrackReconciliationService", () => {
         );
         mockPrisma.trackMapping.findFirst.mockResolvedValue(null);
         mockPrisma.trackMapping.findMany.mockResolvedValue([]);
-        mockPrisma.userSettings.findMany.mockResolvedValue([]);
         mockPrisma.trackMapping.create.mockImplementation(
             async (args: any) => ({
                 id: `orphan-mapping-${Math.random().toString(36).slice(2, 8)}`,
@@ -90,12 +77,6 @@ describe("TrackReconciliationService", () => {
                 createdAt: new Date(),
             }),
         );
-        (tidalStreamingService.restoreOAuth as jest.Mock).mockResolvedValue(
-            false,
-        );
-        (
-            tidalStreamingService.findMatchesForAlbum as jest.Mock
-        ).mockResolvedValue([]);
     });
 
     describe("reconcile", () => {
@@ -842,346 +823,6 @@ describe("TrackReconciliationService", () => {
             const result = await trackReconciliationService.reconcileOrphans();
 
             expect(result.created).toBe(0);
-        });
-    });
-
-    describe("reconcileYoutubeToTidal", () => {
-        it("returns early when no YT-only mappings exist", async () => {
-            mockPrisma.trackMapping.findMany.mockResolvedValueOnce([]);
-
-            const result =
-                await trackReconciliationService.reconcileYoutubeToTidal();
-
-            expect(result).toEqual({ processed: 0, upgraded: 0, skipped: 0 });
-            expect(tidalStreamingService.restoreOAuth).not.toHaveBeenCalled();
-            expect(
-                tidalStreamingService.findMatchesForAlbum,
-            ).not.toHaveBeenCalled();
-        });
-
-        it("skips when no TIDAL-authenticated user is available", async () => {
-            mockPrisma.trackMapping.findMany.mockResolvedValueOnce([
-                {
-                    id: "yt-only-1",
-                    trackId: "local-track-1",
-                    trackTidalId: null,
-                    trackYtMusicId: "yt-row-1",
-                    confidence: 0.8,
-                    source: "gap-fill",
-                    trackYtMusic: {
-                        title: "Song",
-                        artist: "Artist",
-                        album: "Album",
-                        duration: 200,
-                    },
-                },
-            ]);
-            mockPrisma.userSettings.findMany.mockResolvedValueOnce([]);
-
-            const result =
-                await trackReconciliationService.reconcileYoutubeToTidal();
-
-            expect(result).toEqual({ processed: 1, upgraded: 0, skipped: 1 });
-            expect(tidalStreamingService.restoreOAuth).not.toHaveBeenCalled();
-            expect(
-                tidalStreamingService.findMatchesForAlbum,
-            ).not.toHaveBeenCalled();
-        });
-
-        it("upgrades YT-only mapping when TIDAL match is found", async () => {
-            mockPrisma.trackMapping.findMany.mockResolvedValueOnce([
-                {
-                    id: "yt-only-2",
-                    trackId: "local-track-2",
-                    trackTidalId: null,
-                    trackYtMusicId: "yt-row-2",
-                    confidence: 0.82,
-                    source: "import-match",
-                    trackYtMusic: {
-                        title: "Cast of Frozen",
-                        artist: "Some Artist",
-                        album: "Frozen",
-                        duration: 193,
-                    },
-                },
-            ]);
-            mockPrisma.userSettings.findMany.mockResolvedValueOnce([
-                {
-                    userId: "tidal-user-1",
-                    tidalOAuthJson:
-                        '{"access_token":"access","refresh_token":"refresh","user_id":"1","country_code":"US"}',
-                },
-            ]);
-            (
-                tidalStreamingService.restoreOAuth as jest.Mock
-            ).mockResolvedValueOnce(true);
-            (
-                tidalStreamingService.findMatchesForAlbum as jest.Mock
-            ).mockResolvedValueOnce([
-                {
-                    id: 123456,
-                    title: "Cast of Frozen",
-                    artist: "Some Artist",
-                    duration: 193,
-                    isrc: "USAA10000001",
-                },
-            ]);
-            mockPrisma.trackMapping.findFirst.mockResolvedValueOnce(null);
-            mockPrisma.trackMapping.update.mockResolvedValueOnce({
-                id: "yt-only-2",
-            });
-            const upsertSpy = jest
-                .spyOn(trackMappingService, "upsertTrackTidal")
-                .mockResolvedValueOnce({ id: "tidal-row-2" } as any);
-
-            const result =
-                await trackReconciliationService.reconcileYoutubeToTidal();
-
-            expect(tidalStreamingService.restoreOAuth).toHaveBeenCalledWith(
-                "tidal-user-1",
-                expect.any(String),
-            );
-            expect(
-                tidalStreamingService.findMatchesForAlbum,
-            ).toHaveBeenCalledWith("tidal-user-1", [
-                {
-                    artist: "Some Artist",
-                    title: "Cast of Frozen",
-                    albumTitle: "Frozen",
-                    duration: 193,
-                    isrc: undefined,
-                },
-            ]);
-            expect(upsertSpy).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    tidalId: 123456,
-                    title: "Cast of Frozen",
-                    artist: "Some Artist",
-                    album: "Frozen",
-                    duration: 193,
-                    isrc: "USAA10000001",
-                }),
-            );
-            expect(mockPrisma.trackMapping.update).toHaveBeenCalledWith({
-                where: { id: "yt-only-2" },
-                data: expect.objectContaining({
-                    trackTidalId: "tidal-row-2",
-                }),
-            });
-            expect(result).toEqual({ processed: 1, upgraded: 1, skipped: 0 });
-
-            upsertSpy.mockRestore();
-        });
-
-        it("falls back to next TIDAL user when first restore fails", async () => {
-            mockPrisma.trackMapping.findMany.mockResolvedValueOnce([
-                {
-                    id: "yt-only-fallback-1",
-                    trackId: "local-track-fallback-1",
-                    trackTidalId: null,
-                    trackYtMusicId: "yt-row-fallback-1",
-                    confidence: 0.8,
-                    source: "gap-fill",
-                    trackYtMusic: {
-                        title: "Fallback Song",
-                        artist: "Fallback Artist",
-                        album: "Fallback Album",
-                        duration: 210,
-                    },
-                },
-            ]);
-            mockPrisma.userSettings.findMany.mockResolvedValueOnce([
-                {
-                    userId: "tidal-user-bad",
-                    tidalOAuthJson:
-                        '{"access_token":"bad","refresh_token":"bad","user_id":"9","country_code":"US"}',
-                },
-                {
-                    userId: "tidal-user-good",
-                    tidalOAuthJson:
-                        '{"access_token":"good","refresh_token":"good","user_id":"10","country_code":"US"}',
-                },
-            ]);
-            (tidalStreamingService.restoreOAuth as jest.Mock)
-                .mockResolvedValueOnce(false)
-                .mockResolvedValueOnce(true);
-            (
-                tidalStreamingService.findMatchesForAlbum as jest.Mock
-            ).mockResolvedValueOnce([
-                {
-                    id: 654321,
-                    title: "Fallback Song",
-                    artist: "Fallback Artist",
-                    duration: 210,
-                    isrc: "USAA10000002",
-                },
-            ]);
-            mockPrisma.trackMapping.findFirst.mockResolvedValueOnce(null);
-            mockPrisma.trackMapping.update.mockResolvedValueOnce({
-                id: "yt-only-fallback-1",
-            });
-            const upsertSpy = jest
-                .spyOn(trackMappingService, "upsertTrackTidal")
-                .mockResolvedValueOnce({ id: "tidal-row-fallback-1" } as any);
-
-            const result =
-                await trackReconciliationService.reconcileYoutubeToTidal();
-
-            expect(tidalStreamingService.restoreOAuth).toHaveBeenNthCalledWith(
-                1,
-                "tidal-user-bad",
-                expect.any(String),
-            );
-            expect(tidalStreamingService.restoreOAuth).toHaveBeenNthCalledWith(
-                2,
-                "tidal-user-good",
-                expect.any(String),
-            );
-            expect(
-                tidalStreamingService.findMatchesForAlbum,
-            ).toHaveBeenCalledWith("tidal-user-good", [
-                {
-                    artist: "Fallback Artist",
-                    title: "Fallback Song",
-                    albumTitle: "Fallback Album",
-                    duration: 210,
-                    isrc: undefined,
-                },
-            ]);
-            expect(result).toEqual({ processed: 1, upgraded: 1, skipped: 0 });
-
-            upsertSpy.mockRestore();
-        });
-
-        it("skips upgrade when a conflicting mapping already exists", async () => {
-            mockPrisma.trackMapping.findMany.mockResolvedValueOnce([
-                {
-                    id: "yt-only-conflict-1",
-                    trackId: "local-track-conflict-1",
-                    trackTidalId: null,
-                    trackYtMusicId: "yt-row-conflict-1",
-                    confidence: 0.8,
-                    source: "gap-fill",
-                    trackYtMusic: {
-                        title: "Conflict Song",
-                        artist: "Conflict Artist",
-                        album: "Conflict Album",
-                        duration: 205,
-                    },
-                },
-            ]);
-            mockPrisma.userSettings.findMany.mockResolvedValueOnce([
-                {
-                    userId: "tidal-user-1",
-                    tidalOAuthJson:
-                        '{"access_token":"access","refresh_token":"refresh","user_id":"1","country_code":"US"}',
-                },
-            ]);
-            (
-                tidalStreamingService.restoreOAuth as jest.Mock
-            ).mockResolvedValueOnce(true);
-            (
-                tidalStreamingService.findMatchesForAlbum as jest.Mock
-            ).mockResolvedValueOnce([
-                {
-                    id: 222333,
-                    title: "Conflict Song",
-                    artist: "Conflict Artist",
-                    duration: 205,
-                    isrc: "USAA10000003",
-                },
-            ]);
-            const upsertSpy = jest
-                .spyOn(trackMappingService, "upsertTrackTidal")
-                .mockResolvedValueOnce({ id: "tidal-row-conflict-1" } as any);
-            mockPrisma.trackMapping.findFirst.mockResolvedValueOnce({
-                id: "existing-conflict",
-            });
-
-            const result =
-                await trackReconciliationService.reconcileYoutubeToTidal();
-
-            expect(mockPrisma.trackMapping.update).not.toHaveBeenCalled();
-            expect(result).toEqual({ processed: 1, upgraded: 0, skipped: 1 });
-
-            upsertSpy.mockRestore();
-        });
-
-        it("scans beyond the first user-settings page when restoring TIDAL auth", async () => {
-            mockPrisma.trackMapping.findMany.mockResolvedValueOnce([
-                {
-                    id: "yt-only-paged-1",
-                    trackId: "local-track-paged-1",
-                    trackTidalId: null,
-                    trackYtMusicId: "yt-row-paged-1",
-                    confidence: 0.8,
-                    source: "gap-fill",
-                    trackYtMusic: {
-                        title: "Paged Song",
-                        artist: "Paged Artist",
-                        album: "Paged Album",
-                        duration: 205,
-                    },
-                },
-            ]);
-            mockPrisma.userSettings.findMany
-                .mockResolvedValueOnce([
-                    {
-                        userId: "tidal-user-1",
-                        tidalOAuthJson:
-                            '{"access_token":"bad","refresh_token":"bad","user_id":"1","country_code":"US"}',
-                    },
-                ])
-                .mockResolvedValueOnce([
-                    {
-                        userId: "tidal-user-2",
-                        tidalOAuthJson:
-                            '{"access_token":"good","refresh_token":"good","user_id":"2","country_code":"US"}',
-                    },
-                ]);
-            (tidalStreamingService.restoreOAuth as jest.Mock)
-                .mockResolvedValueOnce(false)
-                .mockResolvedValueOnce(true);
-            (
-                tidalStreamingService.findMatchesForAlbum as jest.Mock
-            ).mockResolvedValueOnce([
-                {
-                    id: 333444,
-                    title: "Paged Song",
-                    artist: "Paged Artist",
-                    duration: 205,
-                    isrc: "USAA10000004",
-                },
-            ]);
-            mockPrisma.trackMapping.findFirst.mockResolvedValueOnce(null);
-            mockPrisma.trackMapping.update.mockResolvedValueOnce({
-                id: "yt-only-paged-1",
-            });
-            const upsertSpy = jest
-                .spyOn(trackMappingService, "upsertTrackTidal")
-                .mockResolvedValueOnce({ id: "tidal-row-paged-1" } as any);
-
-            const result =
-                await trackReconciliationService.reconcileYoutubeToTidal();
-
-            expect(mockPrisma.userSettings.findMany).toHaveBeenNthCalledWith(
-                1,
-                expect.objectContaining({
-                    take: 100,
-                    orderBy: { userId: "asc" },
-                }),
-            );
-            expect(mockPrisma.userSettings.findMany).toHaveBeenNthCalledWith(
-                2,
-                expect.objectContaining({
-                    take: 100,
-                    cursor: { userId: "tidal-user-1" },
-                    skip: 1,
-                }),
-            );
-            expect(result).toEqual({ processed: 1, upgraded: 1, skipped: 0 });
-
-            upsertSpy.mockRestore();
         });
     });
 });

@@ -5,6 +5,7 @@ import {
 } from "./platform";
 import {
     buildDeviceOfflineVirtualUrl,
+    deviceOfflineRecordMatchesTrack,
     normalizeDeviceOfflineQuality,
     resolveDeviceOfflineTrackIdentity,
 } from "./trackIdentity";
@@ -39,6 +40,7 @@ import {
     removeDeviceAudioRecord,
 } from "./vaultRecordAccess";
 import { migrateLegacyDeviceAudioCache } from "./legacyCacheMigration";
+import { migrateLegacyDirectoryAudio } from "./legacyDirectoryMigration";
 import {
     deleteManagedDeviceOfflineRecord,
     promoteReadyDeviceOfflineRecord,
@@ -52,6 +54,7 @@ import {
     interruptExpiredForegroundRecord,
     type ForegroundLeaseDisposition,
 } from "./foregroundLease";
+import { isTrackActionable } from "@/lib/trackRef";
 export {
     clampForegroundLeaseClockSkew,
     DEVICE_OFFLINE_FOREGROUND_LEASE_TTL_MS,
@@ -259,7 +262,7 @@ export class DeviceOfflineDownloadManager {
         return records.sort((left, right) => right.updatedAt - left.updatedAt);
     }
 
-    /** Move prior CacheStorage copies after the user explicitly selects a folder. */
+    /** Retain legacy cache/folder copies in the active vault after access is ready. */
     async migrateLegacyCache(ownerId: string): Promise<number> {
         const vault = this.dependencies.audioVault;
         if (!vault) return 0;
@@ -268,7 +271,7 @@ export class DeviceOfflineDownloadManager {
         this.assertCurrentAuthRuntime(ownerId, lease);
         const records = await this.list(ownerId);
         this.assertCurrentAuthRuntime(ownerId, lease);
-        const migrated = await migrateLegacyDeviceAudioCache({
+        const migrationInput = {
             ownerId,
             authGeneration: lease.generation,
             records,
@@ -277,13 +280,19 @@ export class DeviceOfflineDownloadManager {
             origin: this.dependencies.origin,
             signal: lease.signal,
             now: this.dependencies.now,
-            publish: (expected, next) =>
+            publish: (
+                expected: DeviceOfflineDownloadRecord,
+                next: DeviceOfflineDownloadRecord,
+            ) =>
                 this.dependencies.metadataStore.putIfCurrent(
                     expected,
                     next,
                     isAuthorized,
                 ),
-        });
+        };
+        const migrated =
+            (await migrateLegacyDeviceAudioCache(migrationInput)) +
+            (await migrateLegacyDirectoryAudio(migrationInput));
         if (migrated > 0) this.notify();
         return migrated;
     }
@@ -565,6 +574,14 @@ export class DeviceOfflineDownloadManager {
     download(
         input: DeviceOfflineDownloadInput,
     ): Promise<DeviceOfflineDownloadRecord> {
+        if (!isTrackActionable(input.track)) {
+            return Promise.reject(
+                new DeviceOfflineDownloadError(
+                    "invalid_source",
+                    "Этот источник TIDAL больше недоступен для загрузки",
+                ),
+            );
+        }
         const authRuntimeLease = this.ownerLease(input.ownerId);
         this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
         const quality = normalizeDeviceOfflineQuality(input.quality);
@@ -608,12 +625,32 @@ export class DeviceOfflineDownloadManager {
             this.dependencies.origin,
         );
         const trackIdentity = resolveDeviceOfflineTrackIdentity(input.track);
-        const previous =
-            await this.dependencies.metadataStore.getByTrackQuality(
-                input.ownerId,
-                trackIdentity,
-                input.quality,
-            );
+        let previous = await this.dependencies.metadataStore.getByTrackQuality(
+            input.ownerId,
+            trackIdentity,
+            input.quality,
+        );
+        if (!previous) {
+            const ownerRecords =
+                await this.dependencies.metadataStore.listByOwner(
+                    input.ownerId,
+                );
+            previous =
+                ownerRecords
+                    .filter(
+                        (record) =>
+                            record.ownerId === input.ownerId &&
+                            record.quality === input.quality &&
+                            record.status === "ready" &&
+                            deviceOfflineRecordMatchesTrack(
+                                record,
+                                input.track,
+                            ),
+                    )
+                    .sort(
+                        (left, right) => right.updatedAt - left.updatedAt,
+                    )[0] ?? null;
+        }
         this.assertCurrentAuthRuntime(input.ownerId, authRuntimeLease);
         const requestedManagement = input.management ?? "manual";
         const reusable = await reuseReadyDeviceOfflineRecord(
@@ -621,11 +658,14 @@ export class DeviceOfflineDownloadManager {
             {
                 previous,
                 ownerId: input.ownerId,
+                authGeneration: authRuntimeLease.generation,
                 trackIdentity,
                 quality: input.quality,
                 requestedManagement,
                 isAuthorized,
                 notifyChanged: () => this.notify(),
+                matchesTrack: (record) =>
+                    deviceOfflineRecordMatchesTrack(record, input.track),
                 assertAuthorized: () =>
                     this.assertCurrentAuthRuntime(
                         input.ownerId,
@@ -634,6 +674,7 @@ export class DeviceOfflineDownloadManager {
             },
         );
         if (reusable.record) return reusable.record;
+        if (previous?.trackIdentity !== trackIdentity) previous = null;
         const { management } = reusable;
         const key = this.dependencies.createKey();
         const virtualUrl = buildDeviceOfflineVirtualUrl(key);

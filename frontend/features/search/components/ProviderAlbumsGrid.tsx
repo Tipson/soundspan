@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Disc3 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { DiscoverResult } from "../types";
+import { CachedImage } from "@/components/ui/CachedImage";
 
 interface ProviderAlbumsGridProps {
     albums: DiscoverResult[];
@@ -47,14 +47,16 @@ export function ProviderAlbumsGrid({
                     >
                         <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-surface-elevated shadow-lg shadow-black/20">
                             {imageUrl ? (
-                                <Image
+                                <CachedImage
                                     src={imageUrl}
                                     alt={album.name}
                                     fill
                                     sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
                                     className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
                                     loading="lazy"
-                                    unoptimized
+                                    fallback={
+                                        <Disc3 className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />
+                                    }
                                 />
                             ) : (
                                 <Disc3 className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />

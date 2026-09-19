@@ -17,6 +17,7 @@ type LoadOptions = {
     execError?: string;
     execErrorCode?: string;
     execErrorStdout?: string;
+    execDelayMs?: number;
 };
 
 type ValidatorModule = {
@@ -85,15 +86,30 @@ describe("validateMusicConfig", () => {
             }
             createdPaths.add(String(candidate));
         });
-        const execFileSync = jest.fn(() => {
-            if (options.execError) {
-                throw Object.assign(new Error(options.execError), {
-                    code: options.execErrorCode,
-                    stdout: options.execErrorStdout,
-                });
-            }
-            return options.execOutput ?? "ffmpeg version 7.0";
-        });
+        const execFileSync = jest.fn(
+            (
+                _binary: unknown,
+                _args: unknown,
+                execution?: { timeout?: number },
+            ) => {
+                if (
+                    (options.execDelayMs ?? 0) >
+                    (execution?.timeout ?? Infinity)
+                ) {
+                    throw Object.assign(new Error("slow executable start"), {
+                        code: "ETIMEDOUT",
+                        stdout: "",
+                    });
+                }
+                if (options.execError) {
+                    throw Object.assign(new Error(options.execError), {
+                        code: options.execErrorCode,
+                        stdout: options.execErrorStdout,
+                    });
+                }
+                return options.execOutput ?? "ffmpeg version 7.0";
+            },
+        );
         const getSystemSettings = jest
             .fn()
             .mockResolvedValue(options.settings ?? null);
@@ -321,7 +337,7 @@ describe("validateMusicConfig", () => {
             {
                 encoding: "utf8",
                 maxBuffer: 65536,
-                timeout: 5000,
+                timeout: 30000,
             },
         );
         expect(logger.warn).toHaveBeenCalledWith(
@@ -416,8 +432,38 @@ describe("validateMusicConfig", () => {
             {
                 encoding: "utf8",
                 maxBuffer: 65536,
-                timeout: 5000,
+                timeout: 30000,
             },
+        );
+    });
+
+    it("allows a cold disk-backed ffmpeg startup without skipping version validation", async () => {
+        const { validateMusicConfig } = loadValidator({
+            execDelayMs: 12_000,
+            execOutput: "ffmpeg version 5.1.9",
+        });
+        await expect(validateMusicConfig()).resolves.toEqual(
+            expect.objectContaining({ musicPath: "/music" }),
+        );
+    });
+
+    it("still bounds a hung ffmpeg startup", async () => {
+        const { validateMusicConfig, execFileSync } = loadValidator({
+            execDelayMs: 60_000,
+        });
+        await expect(validateMusicConfig()).rejects.toThrow(
+            "Unable to execute FFmpeg",
+        );
+        expect(execFileSync.mock.calls[0][2]?.timeout).toBe(30_000);
+    });
+
+    it("rejects a slow unsupported ffmpeg executable", async () => {
+        const { validateMusicConfig } = loadValidator({
+            execDelayMs: 12_000,
+            execOutput: "ffmpeg version 4.3.9",
+        });
+        await expect(validateMusicConfig()).rejects.toThrow(
+            "FFmpeg 4.3 is unsupported",
         );
     });
 

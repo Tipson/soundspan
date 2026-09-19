@@ -132,7 +132,7 @@ export function shouldRestoreCachedOfflineSession(input: {
     if (status === 401 || status === 403) return false;
     if (input.error instanceof TypeError) return true;
     return (
-        !input.online &&
-        (status === null || [408, 502, 503, 504].includes(status))
+        (status !== null && [408, 502, 503, 504].includes(status)) ||
+        (!input.online && status === null)
     );
 }

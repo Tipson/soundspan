@@ -13,7 +13,12 @@ import {
 } from "@/hooks/trackPreferenceSignals";
 import {
     applyOrderedOptimisticTrackPreferenceMutation,
+    buildOptimisticTrackPreferenceResponse,
     completeOrderedTrackPreferenceMutation,
+    getLatestTrackPreferenceIntent,
+    releaseTrackPreferenceIntent,
+    reserveTrackPreferenceIntent,
+    type ReservedTrackPreferenceIntent,
     type TrackPreferenceOptimisticQueryClient,
 } from "@/hooks/trackPreferenceOptimistic";
 import { queryKeys } from "@/lib/queryKeys";
@@ -94,6 +99,7 @@ export function useTrackPreference(
     });
 
     const preferenceMutation = useMutation({
+        scope: { id: `track-preference:${normalizedTrackId}` },
         mutationFn: async (signal: TrackPreferenceSignal) => {
             if (!trackId) {
                 throw new Error("Track ID is required");
@@ -153,28 +159,71 @@ export function useTrackPreference(
         preferenceQuery.data ?? null;
     const signal = preference?.signal ?? "clear";
 
-    const setSignal = async (nextSignal: TrackPreferenceSignal) => {
-        if (!trackId) {
-            return null;
+    const mutateReservedSignal = async (
+        intent: ReservedTrackPreferenceIntent,
+    ) => {
+        if (!trackId) return null;
+        try {
+            const response = await preferenceMutation.mutateAsync(
+                intent.signal,
+            );
+            const latest =
+                queryClient.getQueryData<TrackPreferenceResponse>(queryKey);
+            const latestIntent = getLatestTrackPreferenceIntent(
+                queryClient as TrackPreferenceOptimisticQueryClient,
+                trackId,
+            );
+            // A caller such as the player must not act on an older response
+            // after the listener already changed or cleared the preference,
+            // even before the newer onMutate callback has reached the cache.
+            if (latestIntent?.token !== intent.token) {
+                return latest?.signal === latestIntent?.signal
+                    ? latest
+                    : buildOptimisticTrackPreferenceResponse(
+                          trackId,
+                          latestIntent?.signal ?? latest?.signal ?? "clear",
+                      );
+            }
+            return latest?.signal === response.signal
+                ? response
+                : (latest ?? response);
+        } finally {
+            releaseTrackPreferenceIntent(
+                queryClient as TrackPreferenceOptimisticQueryClient,
+                trackId,
+                intent,
+            );
         }
-        const response = await preferenceMutation.mutateAsync(nextSignal);
-        const latest =
-            queryClient.getQueryData<TrackPreferenceResponse>(queryKey);
-        // A caller such as the player must not act on an older response after
-        // the listener already changed or cleared the optimistic preference.
-        return latest?.signal === response.signal
-            ? response
-            : (latest ?? response);
+    };
+
+    const setSignal = async (nextSignal: TrackPreferenceSignal) => {
+        if (!trackId) return null;
+        const intent = reserveTrackPreferenceIntent(
+            queryClient as TrackPreferenceOptimisticQueryClient,
+            trackId,
+            () => nextSignal,
+        );
+        return mutateReservedSignal(intent);
     };
 
     const toggleLike = async () => {
-        const nextSignal = getNextTrackPreferenceSignal(signal);
-        return setSignal(nextSignal);
+        if (!trackId) return null;
+        const intent = reserveTrackPreferenceIntent(
+            queryClient as TrackPreferenceOptimisticQueryClient,
+            trackId,
+            getNextTrackPreferenceSignal,
+        );
+        return mutateReservedSignal(intent);
     };
 
     const toggleDislike = async () => {
-        const nextSignal = getNextTrackDislikeSignal(signal);
-        return setSignal(nextSignal);
+        if (!trackId) return null;
+        const intent = reserveTrackPreferenceIntent(
+            queryClient as TrackPreferenceOptimisticQueryClient,
+            trackId,
+            getNextTrackDislikeSignal,
+        );
+        return mutateReservedSignal(intent);
     };
 
     return {

@@ -40,7 +40,6 @@ function renderSingleHostCompose() {
                 SOUNDSPAN_IMAGE_REPOSITORY: "ghcr.io/example/soundspan",
                 SOUNDSPAN_IMAGE_TAG: "main-deadbee",
                 SOUNDSPAN_EGRESS_NETWORK: "music-stack_soundspan-internal",
-                TIDAL_DATA_PATH: "/opt/soundspan/tidal",
                 YTMUSIC_DATA_PATH: "/opt/soundspan/ytmusic",
                 YTMUSIC_SPOOL_CONCURRENCY: "4",
                 YTMUSIC_SPOOL_DOWNLOAD_TIMEOUT: "420",
@@ -85,11 +84,11 @@ test("single-host split overlay preserves tuned YouTube Music streaming limits",
     assert.equal(environment.YTMUSIC_YTDLP_SOCKET_TIMEOUT, "25");
 });
 
-test("split worker reaches provider sidecars through Compose DNS", () => {
+test("split worker reaches the YouTube Music sidecar through Compose DNS", () => {
     const config = renderSingleHostCompose();
     const environment = config.services["backend-worker"].environment;
 
-    assert.equal(environment.TIDAL_SIDECAR_URL, "http://tidal-streamer:8585");
+    assert.equal(environment.TIDAL_SIDECAR_URL, undefined);
     assert.equal(
         environment.YTMUSIC_STREAMER_URL,
         "http://ytmusic-streamer:8586",
@@ -109,7 +108,7 @@ test("single-host split overlay keeps API and worker responsibilities separate",
     );
 });
 
-test("provider sidecars retain the isolated egress proxy network", () => {
+test("the YouTube Music sidecar retains the isolated egress proxy network", () => {
     const config = renderSingleHostCompose();
 
     assert.equal(config.networks["soundspan-egress"].external, true);
@@ -122,17 +121,11 @@ test("provider sidecars retain the isolated egress proxy network", () => {
             .ipv4_address,
         "172.30.121.11",
     );
+    assert.equal(config.services["tidal-streamer"], undefined);
     assert.equal(
-        config.services["tidal-streamer"].networks["soundspan-egress"]
-            .ipv4_address,
-        "172.30.121.10",
+        config.services["ytmusic-streamer"].environment.HTTPS_PROXY,
+        "http://172.30.121.9:18118",
     );
-    for (const serviceName of ["ytmusic-streamer", "tidal-streamer"]) {
-        assert.equal(
-            config.services[serviceName].environment.HTTPS_PROXY,
-            "http://172.30.121.9:18118",
-        );
-    }
 });
 
 test("backend runtimes reach the scoped egress proxy from allowlisted addresses", () => {
@@ -188,10 +181,6 @@ test("single-host split overlay keeps the library read-only for core runtimes", 
     assert.equal(
         mountFor(config, "ytmusic-streamer", "/data").source,
         "/opt/soundspan/ytmusic",
-    );
-    assert.equal(
-        mountFor(config, "tidal-streamer", "/data").source,
-        "/opt/soundspan/tidal",
     );
     assert.equal(
         mountFor(config, "ytmusic-streamer", "/run/music-volume").read_only,

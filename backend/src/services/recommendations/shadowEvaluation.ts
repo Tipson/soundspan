@@ -1,4 +1,7 @@
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "../../utils/db";
+import { isEarlyRecommendationSkip as isEarlySkip } from "./playbackEvidence";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
@@ -31,6 +34,7 @@ export interface RecommendationEvaluationGenerationSample {
     served: boolean;
     latencyMs: number;
     createdAt: Date;
+    context?: unknown;
     exposures: RecommendationEvaluationExposureSample[];
 }
 
@@ -135,6 +139,23 @@ export interface RecommendationArtistEvaluation {
     artistDiversityRate: number;
 }
 
+/** Equal-account behavior rates for users who received both rollout variants. */
+export interface RecommendationSwitchbackRates {
+    meaningfulCompletionRate: number;
+    earlySkipRate: number;
+    failureRate: number;
+}
+
+/** Within-account evidence from served baseline and Hybrid sessions. */
+export interface RecommendationWithinAccountSwitchbackEvaluation {
+    comparableAccountCount: number;
+    baselineAttributedCount: number;
+    hybridAttributedCount: number;
+    baseline: RecommendationSwitchbackRates | null;
+    hybrid: RecommendationSwitchbackRates | null;
+    hybridMinusBaseline: RecommendationSwitchbackRates | null;
+}
+
 export interface RecommendationShadowEvaluationReport {
     window: RecommendationShadowEvaluationWindow;
     algorithms: {
@@ -146,6 +167,7 @@ export interface RecommendationShadowEvaluationReport {
         meanJaccardOverlap: number;
         meanBaselineCoverage: number;
     };
+    withinAccountSwitchback: RecommendationWithinAccountSwitchbackEvaluation;
     dataQuality: RecommendationDataQualityEvaluation | null;
 }
 
@@ -235,17 +257,6 @@ function isCompleted(
     return (
         exposure.outcome === "completed" ||
         (exposure.completionRatio ?? 0) >= 0.85
-    );
-}
-
-function isEarlySkip(
-    exposure: RecommendationEvaluationExposureSample,
-): boolean {
-    if (exposure.outcome !== "skipped") return false;
-    return (
-        (exposure.completionRatio ?? 0) <= 0.2 ||
-        (typeof exposure.listenedSeconds === "number" &&
-            exposure.listenedSeconds < 30)
     );
 }
 
@@ -476,6 +487,120 @@ function aggregateAlgorithm(
     };
 }
 
+function servedGenerationsByAccount(
+    generations: readonly RecommendationEvaluationGenerationSample[],
+): Map<string, RecommendationEvaluationGenerationSample[]> {
+    const grouped = new Map<
+        string,
+        RecommendationEvaluationGenerationSample[]
+    >();
+    for (const generation of generations) {
+        if (!generation.served) continue;
+        const current = grouped.get(generation.userId) ?? [];
+        current.push(generation);
+        grouped.set(generation.userId, current);
+    }
+    return grouped;
+}
+
+function isSessionSwitchbackGeneration(
+    generation: RecommendationEvaluationGenerationSample,
+): boolean {
+    return (
+        typeof generation.context === "object" &&
+        generation.context !== null &&
+        !Array.isArray(generation.context) &&
+        (generation.context as Record<string, unknown>)[
+            "experimentAssignment"
+        ] === "session-switchback-v1"
+    );
+}
+
+function attributedCount(
+    generations: readonly RecommendationEvaluationGenerationSample[],
+): number {
+    return generations
+        .flatMap((generation) => generation.exposures)
+        .filter(isViewed)
+        .filter(isAttributed).length;
+}
+
+function switchbackRates(
+    evaluations: readonly RecommendationPlayabilityEvaluation[],
+): RecommendationSwitchbackRates {
+    return {
+        meaningfulCompletionRate: mean(
+            evaluations.map((item) => item.meaningfulCompletionRate),
+        ),
+        earlySkipRate: mean(evaluations.map((item) => item.earlySkipRate)),
+        failureRate: mean(evaluations.map((item) => item.failureRate)),
+    };
+}
+
+function evaluateWithinAccountSwitchback(
+    baseline: readonly RecommendationEvaluationGenerationSample[],
+    hybrid: readonly RecommendationEvaluationGenerationSample[],
+): RecommendationWithinAccountSwitchbackEvaluation {
+    const baselineByAccount = servedGenerationsByAccount(
+        baseline.filter(isSessionSwitchbackGeneration),
+    );
+    const hybridByAccount = servedGenerationsByAccount(
+        hybrid.filter(isSessionSwitchbackGeneration),
+    );
+    const baselineEvaluations: RecommendationPlayabilityEvaluation[] = [];
+    const hybridEvaluations: RecommendationPlayabilityEvaluation[] = [];
+    let baselineAttributedCount = 0;
+    let hybridAttributedCount = 0;
+
+    for (const [userId, baselineGenerations] of baselineByAccount) {
+        const hybridGenerations = hybridByAccount.get(userId);
+        if (!hybridGenerations) continue;
+        const baselineEvaluation = playabilityEvaluation(
+            exposureRows(baselineGenerations).filter(({ exposure }) =>
+                isViewed(exposure),
+            ),
+        );
+        const hybridEvaluation = playabilityEvaluation(
+            exposureRows(hybridGenerations).filter(({ exposure }) =>
+                isViewed(exposure),
+            ),
+        );
+        if (!baselineEvaluation || !hybridEvaluation) continue;
+        baselineEvaluations.push(baselineEvaluation);
+        hybridEvaluations.push(hybridEvaluation);
+        baselineAttributedCount += attributedCount(baselineGenerations);
+        hybridAttributedCount += attributedCount(hybridGenerations);
+    }
+
+    if (baselineEvaluations.length === 0) {
+        return {
+            comparableAccountCount: 0,
+            baselineAttributedCount: 0,
+            hybridAttributedCount: 0,
+            baseline: null,
+            hybrid: null,
+            hybridMinusBaseline: null,
+        };
+    }
+    const baselineRates = switchbackRates(baselineEvaluations);
+    const hybridRates = switchbackRates(hybridEvaluations);
+    return {
+        comparableAccountCount: baselineEvaluations.length,
+        baselineAttributedCount,
+        hybridAttributedCount,
+        baseline: baselineRates,
+        hybrid: hybridRates,
+        hybridMinusBaseline: {
+            meaningfulCompletionRate:
+                hybridRates.meaningfulCompletionRate -
+                baselineRates.meaningfulCompletionRate,
+            earlySkipRate:
+                hybridRates.earlySkipRate - baselineRates.earlySkipRate,
+            failureRate: hybridRates.failureRate - baselineRates.failureRate,
+        },
+    };
+}
+
 function experimentKey(
     generation: RecommendationEvaluationGenerationSample,
 ): string {
@@ -605,6 +730,10 @@ export class RecommendationShadowEvaluationService {
                 hybrid: aggregateAlgorithm(hybrid, generations),
             },
             pairedShadow: evaluatePairs(baseline, hybrid),
+            withinAccountSwitchback: evaluateWithinAccountSwitchback(
+                baseline,
+                hybrid,
+            ),
             dataQuality,
         };
     }
@@ -614,7 +743,10 @@ export const recommendationShadowEvaluation =
     new RecommendationShadowEvaluationService({
         loadGenerations: (since, until) =>
             prisma.recommendationGeneration.findMany({
-                where: { createdAt: { gte: since, lt: until } },
+                where: {
+                    createdAt: { gte: since, lt: until },
+                    user: { isTestAccount: false },
+                },
                 orderBy: { createdAt: "asc" },
                 select: {
                     id: true,
@@ -628,6 +760,7 @@ export const recommendationShadowEvaluation =
                     served: true,
                     latencyMs: true,
                     createdAt: true,
+                    context: true,
                     exposures: {
                         select: {
                             canonicalKey: true,
@@ -643,6 +776,10 @@ export const recommendationShadowEvaluation =
                 },
             }),
         loadDataQuality: async (since, until) => {
+            const liveCanonicalWhere: Prisma.CanonicalRecordingWhereInput = {
+                mergedIntoId: null,
+                NOT: { identitySource: "identity-merged" },
+            };
             const [
                 canonicalRecordingCount,
                 isrcCount,
@@ -653,27 +790,50 @@ export const recommendationShadowEvaluation =
                 viewedImpressionCount,
                 participatingAccounts,
             ] = await Promise.all([
-                prisma.canonicalRecording.count(),
                 prisma.canonicalRecording.count({
-                    where: { isrc: { not: null } },
+                    where: liveCanonicalWhere,
                 }),
                 prisma.canonicalRecording.count({
-                    where: { recordingMbid: { not: null } },
+                    where: {
+                        ...liveCanonicalWhere,
+                        isrc: { not: null },
+                    },
                 }),
                 prisma.canonicalRecording.count({
-                    where: { fingerprint: { not: null } },
+                    where: {
+                        ...liveCanonicalWhere,
+                        recordingMbid: { not: null },
+                    },
                 }),
                 prisma.canonicalRecording.count({
-                    where: { analysisStatus: "completed" },
+                    where: {
+                        ...liveCanonicalWhere,
+                        fingerprint: { not: null },
+                    },
                 }),
                 prisma.canonicalRecording.count({
-                    where: { embeddings: { some: {} } },
+                    where: {
+                        ...liveCanonicalWhere,
+                        analysisStatus: "completed",
+                    },
+                }),
+                prisma.canonicalRecording.count({
+                    where: {
+                        ...liveCanonicalWhere,
+                        embeddings: { some: {} },
+                    },
                 }),
                 prisma.recommendationExposure.count({
-                    where: { viewedAt: { gte: since, lt: until } },
+                    where: {
+                        viewedAt: { gte: since, lt: until },
+                        user: { isTestAccount: false },
+                    },
                 }),
                 prisma.recommendationExposure.findMany({
-                    where: { viewedAt: { gte: since, lt: until } },
+                    where: {
+                        viewedAt: { gte: since, lt: until },
+                        user: { isTestAccount: false },
+                    },
                     distinct: ["userId"],
                     select: { userId: true },
                 }),

@@ -684,6 +684,7 @@ When `deploymentMode=individual` and `backendWorker.enabled=true`, the chart inj
 | `DISCOVERY_ENABLED` | `config.features.discovery` | No | `true` |
 | `AUTO_PLAYLISTS_ENABLED` | `config.features.autoPlaylists` | No | `true` |
 | `FEATURE_REQUESTS` | `config.features.requests` | No | `true` |
+| `FEATURE_AUDIUS` | `config.features.audius` | No | App default: `false` (chart leaves unset unless configured); experimental limited-origin Audius search/personal playback; final live acceptance still blocked |
 | `FEDERATION_ENABLED` | `config.features.federation` | No | `false` |
 | `SCAN_FILE_CONCURRENCY` | `config.scanFileConcurrency` | No | App default: `3` (chart leaves unset unless configured) |
 | `CATALOG_PERSISTENCE` | `config.catalogPersistence` | No | App default: `true` (chart leaves unset unless configured) |

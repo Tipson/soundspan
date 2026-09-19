@@ -26,7 +26,6 @@ import {
 import { useAlbumRequest } from "@/features/album/hooks/useAlbumRequest";
 import { useTrackDeepLink } from "@/features/album/hooks/useTrackDeepLink";
 import { useYtMusicGapFill } from "@/features/album/hooks/useYtMusicGapFill";
-import { useTidalGapFill } from "@/features/album/hooks/useTidalGapFill";
 import { useTrackPreview } from "@/hooks/useTrackPreview";
 import type { Track as AlbumTrack } from "@/features/album/types";
 import { toAddToPlaylistRef, type AddToPlaylistRef } from "@/lib/trackRef";
@@ -96,18 +95,10 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         reloadAlbum,
     } = useAlbumData(id);
     const {
-        enrichedTracks: tidalEnrichedTracks,
-        isMatching: isTidalMatching,
-        isStatusResolved: isTidalStatusResolved,
-    } = useTidalGapFill(rawAlbum, source ?? undefined);
-    const tidalAlbum = rawAlbum
-        ? { ...rawAlbum, tracks: tidalEnrichedTracks || rawAlbum.tracks }
-        : rawAlbum;
-    const {
         enrichedTracks,
         isMatching: isYtMatching,
         isStatusResolved: isYtStatusResolved,
-    } = useYtMusicGapFill(tidalAlbum, source);
+    } = useYtMusicGapFill(rawAlbum, source);
     const {
         playAlbum,
         shufflePlay,
@@ -125,7 +116,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         requestAlbum,
     } = useAlbumRequest(rawAlbum);
 
-    // Use enriched tracks (with TIDAL + YT Music gap-fill) when available
+    // Use YouTube Music gap-fill tracks when available.
     const album = rawAlbum
         ? { ...rawAlbum, tracks: enrichedTracks || rawAlbum.tracks }
         : rawAlbum;
@@ -145,23 +136,16 @@ export default function AlbumPage({ params }: AlbumPageProps) {
               imageUrl: album.coverUrl || album.coverArt || null,
           }
         : null;
-    const isProviderMatching =
-        !isTidalStatusResolved ||
-        !isYtStatusResolved ||
-        isTidalMatching ||
-        isYtMatching;
+    const isProviderMatching = !isYtStatusResolved || isYtMatching;
     const canDeleteFromLibrary = source === "library" && libraryDeletionAllowed;
     const hasTracks = Boolean(album?.tracks && album.tracks.length > 0);
     const deviceDownloadTracks = (album?.tracks ?? [])
         .filter((track: AlbumTrack) => {
             const hasLocalSource = source === "library";
-            const hasTidalSource =
-                track.streamSource === "tidal" &&
-                typeof track.tidalTrackId === "number";
             const hasYouTubeSource =
                 track.streamSource === "youtube" &&
                 Boolean(track.youtubeVideoId);
-            return hasLocalSource || hasTidalSource || hasYouTubeSource;
+            return hasLocalSource || hasYouTubeSource;
         })
         .map((track: AlbumTrack) => toAlbumPlaybackTrack(track, album!));
     const showTrackPlaceholder = detailsLoading && !hasTracks;

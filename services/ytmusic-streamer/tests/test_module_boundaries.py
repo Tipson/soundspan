@@ -21,6 +21,7 @@ def test_entrypoint_assembles_routes_from_each_boundary_module() -> None:
     import ytmusic_lifecycle
     import ytmusic_search
     import ytmusic_stream
+    import ytmusic_tail_warmup
 
     expected_modules = {
         "/health": ytmusic_lifecycle.__name__,
@@ -28,6 +29,7 @@ def test_entrypoint_assembles_routes_from_each_boundary_module() -> None:
         "/search": ytmusic_search.__name__,
         "/album/{browse_id}": ytmusic_library.__name__,
         "/stream/{video_id}": ytmusic_stream.__name__,
+        "/tail-warmup/reconcile": ytmusic_tail_warmup.__name__,
         "/yt/download": ytmusic_downloads.__name__,
         "/yt/download/album": ytmusic_album_downloads.__name__,
         "/yt/album-search": ytmusic_album_downloads.__name__,

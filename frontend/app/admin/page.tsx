@@ -65,6 +65,14 @@ const LibrarySafetySection = dynamic(
     { loading: renderSectionFallback },
 );
 
+const TestApplicationsSection = dynamic(
+    () =>
+        import("@/features/settings/components/sections/TestApplicationsSection").then(
+            (mod) => mod.TestApplicationsSection,
+        ),
+    { loading: renderSectionFallback },
+);
+
 const UserManagementSection = dynamic(
     () =>
         import("@/features/settings/components/sections/UserManagementSection").then(
@@ -244,6 +252,7 @@ export default function AdminPage() {
                     onUpdate={updateSystemSettings}
                 />
 
+                <TestApplicationsSection />
                 <UserManagementSection />
 
                 {federation && (

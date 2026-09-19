@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { renderExpandedDetailActions } from "./renderExpandedDetailActions";
 
 const icon = (name: string) => {
     const MockIcon = (props: Record<string, unknown> = {}) =>
@@ -12,6 +13,7 @@ const icon = (name: string) => {
 
 mock.module("lucide-react", {
     namedExports: {
+        X: icon("close"),
         Play: icon("play"),
         Pause: icon("pause"),
         Shuffle: icon("shuffle"),
@@ -91,11 +93,33 @@ const baseProps = {
     isInListenTogetherGroup: false,
 };
 
+test("album's initial dock shows only playback, shuffle and More", async () => {
+    const { AlbumActionBar } =
+        await import("../../features/album/components/AlbumActionBar");
+    const html = renderToStaticMarkup(
+        React.createElement(AlbumActionBar, {
+            ...baseProps,
+            librarySaveControl: React.createElement(
+                "button",
+                null,
+                "Сохранить в коллекцию",
+            ),
+            deviceDownloadControl: React.createElement(
+                "button",
+                null,
+                "Скачать",
+            ),
+        }),
+    );
+    assert.equal([...html.matchAll(/<button\b/g)].length, 3);
+    assert.doesNotMatch(html, /Сохранить в коллекцию/);
+});
+
 test("AlbumActionBar renders share button near other album actions", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, baseProps),
     );
 
@@ -108,7 +132,7 @@ test("AlbumActionBar renders the explicit personal-library control", async () =>
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             librarySaveControl: React.createElement(
@@ -126,7 +150,7 @@ test("AlbumActionBar keeps the device copy control separate from server acquisit
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             downloadsEnabled: false,
@@ -146,7 +170,7 @@ test("AlbumActionBar still renders share button for non-library albums", async (
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             album: {
@@ -164,7 +188,7 @@ test("AlbumActionBar keeps remote albums playable without server acquisition con
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             album: {
@@ -194,7 +218,7 @@ test("AlbumActionBar hides server requests in the online-first action bar", asyn
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             album: {
@@ -218,7 +242,7 @@ test("AlbumActionBar hides server request status in the online-first action bar"
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             album: {
@@ -243,7 +267,7 @@ test("AlbumActionBar never shows Request to viewers with direct downloads", asyn
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             album: {
@@ -265,7 +289,7 @@ test("AlbumActionBar never shows Request to viewers with direct downloads", asyn
 test("AlbumActionBar icon controls are touch-sized and have accessible names", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             onAddAllToQueue: noop,
@@ -294,7 +318,7 @@ test("AlbumActionBar separates listening intent from secondary collection action
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             librarySaveControl: React.createElement(
@@ -313,9 +337,9 @@ test("AlbumActionBar separates listening intent from secondary collection action
     const primary = html.match(
         /<div[^>]*data-detail-action-tier="primary"[^>]*>[\s\S]*?<\/div>/,
     )?.[0];
-    const secondary = html.match(
-        /<div[^>]*data-detail-action-tier="secondary"[^>]*>[\s\S]*?<\/div>/,
-    )?.[0];
+    const secondary = new DOMParser()
+        .parseFromString(html, "text/html")
+        .querySelector('[data-detail-action-tier="secondary"]')?.innerHTML;
     assert.ok(primary);
     assert.ok(secondary);
     assert.match(primary, /Воспроизвести всё/);
@@ -334,7 +358,7 @@ test("AlbumActionBar hides acquisition controls for a synthetic remote release g
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             album: {
@@ -355,7 +379,7 @@ test("AlbumActionBar exposes a touch-sized delete action only for deletable loca
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
 
-    const localHtml = renderToStaticMarkup(
+    const localHtml = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             canDeleteFromLibrary: true,
@@ -365,7 +389,7 @@ test("AlbumActionBar exposes a touch-sized delete action only for deletable loca
     assert.match(localHtml, /title="Удалить альбом из медиатеки сервера"/);
     assert.match(localHtml, /h-11 w-11/);
 
-    const remoteHtml = renderToStaticMarkup(
+    const remoteHtml = await renderExpandedDetailActions(
         React.createElement(AlbumActionBar, {
             ...baseProps,
             source: "remote" as const,

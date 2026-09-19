@@ -7,6 +7,8 @@ import {
     getBrowserDeviceOfflineManager,
 } from "../../features/device-offline/browserStorage";
 import type { DeviceOfflineDownloadRecord } from "../../features/device-offline/types";
+import type { DeviceOfflineMetadataStore } from "../../features/device-offline/downloadManager";
+import type { DeviceAudioVaultRef } from "../../features/device-offline/vault/types";
 
 GlobalRegistrator.register({ url: "https://soundspan.test/" });
 
@@ -227,4 +229,130 @@ test("a blocked IndexedDB open closes a late handle and successful handles close
     assert.equal(successfulCloseCalls, 1);
     assert.deepEqual(await manager.list("user-1"), []);
     assert.equal(openCalls, 3);
+    database.onversionchange?.();
+});
+
+test("IndexedDB replacement protects concurrent manual promotion and the inspected file identity", async (t) => {
+    const originalIndexedDb = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "indexedDB",
+    );
+    const expected: DeviceOfflineDownloadRecord = {
+        key: "old-key",
+        ownerId: "user-1",
+        trackIdentity: "local:track-1",
+        quality: "original",
+        virtualUrl: "/__offline/audio/old-key",
+        mediaRef: "vault:old" as DeviceAudioVaultRef,
+        sourceUrl: "/api/tracks/track-1/stream",
+        track: {
+            id: "track-1",
+            title: "Song",
+            artist: { name: "Artist" },
+            album: { title: "Album" },
+            duration: 180,
+        },
+        status: "ready",
+        transferMode: "foreground",
+        backgroundFetchId: null,
+        bytesReceived: 6,
+        totalBytes: 6,
+        contentType: "audio/mp4",
+        persistenceGranted: null,
+        management: "auto-liked",
+        attempt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        errorCode: null,
+        errorMessage: null,
+    };
+    const next: DeviceOfflineDownloadRecord = {
+        ...expected,
+        key: "next-key",
+        status: "downloading",
+        attempt: 2,
+        mediaRef: undefined,
+    };
+    let current = structuredClone(expected);
+    const deleted: string[] = [];
+    const written: DeviceOfflineDownloadRecord[] = [];
+    const database = {
+        onversionchange: null as (() => void) | null,
+        close: () => undefined,
+        transaction: (_name: string, mode: string) => {
+            assert.equal(mode, "readwrite");
+            const transaction = {
+                oncomplete: null as (() => void) | null,
+                objectStore: () => ({
+                    index: () => ({
+                        get: () => {
+                            const request = {
+                                result: current,
+                                onsuccess: null as (() => void) | null,
+                            };
+                            queueMicrotask(() => {
+                                request.onsuccess?.();
+                                transaction.oncomplete?.();
+                            });
+                            return request;
+                        },
+                    }),
+                    delete: (key: string) => deleted.push(key),
+                    put: (record: DeviceOfflineDownloadRecord) =>
+                        written.push(structuredClone(record)),
+                }),
+            };
+            return transaction;
+        },
+    };
+    Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: {
+            open: () => {
+                const request = {
+                    result: database,
+                    onsuccess: null as (() => void) | null,
+                };
+                queueMicrotask(() => request.onsuccess?.());
+                return request;
+            },
+        },
+    });
+    t.after(() => {
+        database.onversionchange?.();
+        if (originalIndexedDb)
+            Object.defineProperty(globalThis, "indexedDB", originalIndexedDb);
+        else Reflect.deleteProperty(globalThis, "indexedDB");
+    });
+    // Exercise the production store callback, not an in-memory claim implementation.
+    const store = (
+        getBrowserDeviceOfflineManager() as unknown as {
+            dependencies: { metadataStore: DeviceOfflineMetadataStore };
+        }
+    ).dependencies.metadataStore;
+    for (const changed of [
+        { management: "manual" as const },
+        { management: undefined },
+        { mediaRef: "vault:uninspected" as DeviceAudioVaultRef },
+        { totalBytes: 12 },
+    ]) {
+        current = { ...expected, ...changed };
+        assert.equal(
+            await store.claimReplacement(expected, next),
+            false,
+            JSON.stringify(changed),
+        );
+        assert.deepEqual(deleted, []);
+        assert.deepEqual(written, []);
+    }
+    current = { ...expected, management: "manual" };
+    assert.equal(
+        await store.claimReplacement(expected, {
+            ...next,
+            management: "manual",
+        }),
+        true,
+    );
+    assert.deepEqual(deleted, [expected.key]);
+    assert.equal(written[0].management, "manual");
 });

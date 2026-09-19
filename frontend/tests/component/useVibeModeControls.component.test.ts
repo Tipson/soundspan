@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 import ReactDefault from "react";
+import {
+    recordExplicitPlaybackPause,
+    recordExplicitPlaybackResume,
+    writePlaybackAdvanceOrigin,
+} from "../../lib/audio-engine/playbackAdvanceOrigin";
+import { audioSeekEmitter } from "../../lib/audio-seek-emitter";
 
 interface Deferred<T> {
     promise: Promise<T>;
@@ -85,6 +91,7 @@ mock.module("react", {
 });
 
 const feedRequests: Array<Deferred<Record<string, unknown>>> = [];
+const vibeRequests: Array<Deferred<Record<string, unknown>>> = [];
 const feedRequestPaths: string[] = [];
 const feedRequestOptions: Array<
     { timeoutMs?: number; retryOnTimeout?: boolean } | undefined
@@ -103,10 +110,11 @@ mock.module("@/lib/api", {
                 feedRequestOptions.push(options);
                 return request.promise;
             },
-            getVibeSimilarTracks: async () => ({
-                tracks: [],
-                sourceFeatures: null,
-            }),
+            getVibeSimilarTracks: () => {
+                const request = deferred<Record<string, unknown>>();
+                vibeRequests.push(request);
+                return request.promise;
+            },
         },
     },
 });
@@ -137,9 +145,11 @@ mock.module("sonner", {
 
 beforeEach(() => {
     feedRequests.length = 0;
+    vibeRequests.length = 0;
     feedRequestPaths.length = 0;
     feedRequestOptions.length = 0;
     activeHarness = null;
+    recordExplicitPlaybackResume();
 });
 
 function makeProviderTrack(videoId: string) {
@@ -179,6 +189,7 @@ function makeAudioState(
             vibeMode,
             waveMode,
             waveMood,
+            waveLanguage: "ru",
             setIsShuffle: () => mutations.push("shuffle"),
             setShuffleIndices: () => mutations.push("shuffle-indices"),
             setVibeMode: () => mutations.push("vibe-mode"),
@@ -212,6 +223,7 @@ test("provider continuation keeps the active Wave mood outside the Vibe route", 
     const requestUrl = new URL(feedRequestPaths[0], "https://soundspan.test");
     assert.equal(requestUrl.searchParams.get("mode"), "new");
     assert.equal(requestUrl.searchParams.get("mood"), "workout");
+    assert.equal(requestUrl.searchParams.get("language"), "ru");
 
     feedRequests[0].resolve({
         shelves: {
@@ -259,9 +271,9 @@ test("provider radio advances its cursor and sends the bounded queue exclusions 
     await Promise.resolve();
     feedRequests[0].resolve({
         shelves: {
-            discovery: [firstFresh],
+            discovery: [makeProviderTrack("discovery-decoy")],
             quickPicks: [],
-            listenAgain: [],
+            listenAgain: [firstFresh],
         },
         degraded: false,
         reason: null,
@@ -283,9 +295,9 @@ test("provider radio advances its cursor and sends the bounded queue exclusions 
 
     feedRequests[1].resolve({
         shelves: {
-            discovery: [makeProviderTrack("CCCCCCCCCCC")],
+            discovery: [makeProviderTrack("another-discovery-decoy")],
             quickPicks: [],
-            listenAgain: [],
+            listenAgain: [makeProviderTrack("CCCCCCCCCCC")],
         },
         degraded: false,
         reason: null,
@@ -416,6 +428,36 @@ test("manual duplicate selection is committed before a matching Vibe token can e
     assert.deepEqual(manuallySelected.mutations, []);
 });
 
+test("an in-flight continuation cannot append tracks after language changes", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const harness = new HookLifecycleHarness();
+    const track = makeProviderTrack("AAAAAAAAAAA");
+    const initial = makeAudioState(track, [track], 0, true);
+    function HookProbe(state: typeof initial.state) {
+        harness.beginRender();
+        activeHarness = harness;
+        const controls = useVibeModeControls({
+            state: state as never,
+            getActiveListenTogetherSession: () => null,
+            showQueueMutationToasts: () => undefined,
+        });
+        harness.commitRender();
+        return controls;
+    }
+    const pending = HookProbe(initial.state).startVibeMode();
+    HookProbe({ ...initial.state, waveLanguage: "foreign" });
+    feedRequests[0].resolve({
+        shelves: {
+            discovery: [makeProviderTrack("BBBBBBBBBBB")],
+            quickPicks: [],
+            listenAgain: [],
+        },
+    });
+    assert.deepEqual(await pending, { success: false, trackCount: 0 });
+    assert.deepEqual(initial.mutations, []);
+});
+
 test("late provider radio response is ignored after the active track changes", async () => {
     const { useVibeModeControls } =
         await import("../../lib/audio/useVibeModeControls");
@@ -460,7 +502,7 @@ test("late provider radio response is ignored after the active track changes", a
     assert.deepEqual(second.mutations, []);
 });
 
-test("adaptive provider refresh replaces the stale tail after the latest active track", async () => {
+test("adaptive provider refresh replaces only the tail after the latest selection is paused", async () => {
     const { useVibeModeControls } =
         await import("../../lib/audio/useVibeModeControls");
     const harness = new HookLifecycleHarness();
@@ -543,6 +585,7 @@ test("adaptive provider refresh replaces the stale tail after the latest active 
     });
     await Promise.resolve();
 
+    recordExplicitPlaybackPause();
     HookProbe(advancedState);
     feedRequests[0].resolve({
         shelves: {
@@ -561,7 +604,113 @@ test("adaptive provider refresh replaces the stale tail after the latest active 
         committed.queue?.map((track) => track.id),
         [first.id, second.id, freshOne.id, freshTwo.id],
     );
-    assert.equal(committed.currentTrack?.id, freshOne.id);
-    assert.equal(committed.currentIndex, 2);
+    // A late recommendation response must not replace the user's selection.
+    assert.equal(committed.currentTrack, null);
+    assert.equal(committed.currentIndex, null);
     assert.equal(committed.mutation, "replace-upcoming");
 });
+
+for (const continuation of ["provider append", "Audio-DNA replace"] as const) {
+    for (const action of [
+        "pause",
+        "resume",
+        "seek",
+        "automatic advance",
+    ] as const) {
+        test(`${continuation} response respects a later ${action} on the same queue occurrence`, async () => {
+            const { useVibeModeControls } =
+                await import("../../lib/audio/useVibeModeControls");
+            const harness = new HookLifecycleHarness();
+            const providerSeed = makeProviderTrack("AAAAAAAAAAA");
+            const audio = makeAudioState(providerSeed);
+            const seed =
+                continuation === "provider append"
+                    ? providerSeed
+                    : {
+                          id: "local-audio-dna-seed",
+                          title: "Local seed",
+                          duration: 180,
+                          artist: { id: "artist-local", name: "Artist" },
+                          album: { id: "album-local", title: "Album" },
+                      };
+            const state = { ...audio.state, currentTrack: seed, queue: [seed] };
+            harness.beginRender();
+            activeHarness = harness;
+            const controls = useVibeModeControls({
+                state: state as never,
+                getActiveListenTogetherSession: () => null,
+                showQueueMutationToasts: () => undefined,
+            });
+            harness.commitRender();
+            const commits: Array<{ token: object; mutation: string }> = [];
+            const queueCommitToken = {};
+            const pending = controls.startVibeMode({
+                queueCommitToken,
+                onLocalQueueCommit: (commit) => commits.push(commit),
+            });
+            await Promise.resolve();
+            assert.equal(
+                continuation === "provider append"
+                    ? feedRequests.length
+                    : vibeRequests.length,
+                1,
+            );
+
+            // Pause, replay and seek need not change the queue object, index,
+            // track ID or trigger a React render before the response arrives.
+            if (action === "pause") recordExplicitPlaybackPause();
+            else if (action === "resume") recordExplicitPlaybackResume();
+            else if (action === "seek") audioSeekEmitter.emit(4);
+            else writePlaybackAdvanceOrigin(null, seed.id);
+
+            if (continuation === "provider append") {
+                feedRequests[0].resolve({
+                    shelves: {
+                        discovery: [makeProviderTrack("BBBBBBBBBBB")],
+                        quickPicks: [],
+                        listenAgain: [],
+                    },
+                    degraded: false,
+                    seedCount: 1,
+                });
+            } else {
+                vibeRequests[0].resolve({
+                    tracks: [
+                        {
+                            id: "local-audio-dna-next",
+                            title: "Matched track",
+                            duration: 200,
+                            artist: { id: "artist-next", name: "Next artist" },
+                            album: { id: "album-next", title: "Next album" },
+                        },
+                    ],
+                    sourceFeatures: null,
+                });
+            }
+
+            if (action === "automatic advance") {
+                assert.deepEqual(await pending, {
+                    success: true,
+                    trackCount: 1,
+                });
+                assert.equal(audio.mutations.includes("queue"), true);
+                assert.deepEqual(commits, [
+                    {
+                        token: queueCommitToken,
+                        mutation:
+                            continuation === "provider append"
+                                ? "append"
+                                : "replace",
+                    },
+                ]);
+            } else {
+                assert.deepEqual(await pending, {
+                    success: false,
+                    trackCount: 0,
+                });
+                assert.deepEqual(commits, []);
+                assert.deepEqual(audio.mutations, []);
+            }
+        });
+    }
+}

@@ -3,25 +3,18 @@
 import { SettingsSection, SettingsRow, SettingsSelect } from "../ui";
 import { SystemSettings } from "../../types";
 import { adminActivityRu } from "@/lib/i18n/adminActivityRu";
+import { ServerMusicSources } from "./ServerMusicSources";
 
-const DEFAULT_ORDER = "library,peers,tidal,ytmusic";
+const DEFAULT_ORDER = "library,peers,ytmusic";
 
 const orderOptions = [
     {
         value: DEFAULT_ORDER,
-        label: `${adminActivityRu.admin.playbackSources.library} → ${adminActivityRu.admin.playbackSources.peers} → TIDAL → YouTube Music (${adminActivityRu.admin.playbackSources.default})`,
+        label: `${adminActivityRu.admin.playbackSources.library} → ${adminActivityRu.admin.playbackSources.peers} → YouTube Music (${adminActivityRu.admin.playbackSources.default})`,
     },
     {
-        value: "library,peers,ytmusic,tidal",
-        label: `${adminActivityRu.admin.playbackSources.library} → ${adminActivityRu.admin.playbackSources.peers} → YouTube Music → TIDAL`,
-    },
-    {
-        value: "library,tidal,ytmusic,peers",
-        label: `${adminActivityRu.admin.playbackSources.library} → TIDAL → YouTube Music → ${adminActivityRu.admin.playbackSources.peers}`,
-    },
-    {
-        value: "library,ytmusic,tidal,peers",
-        label: `${adminActivityRu.admin.playbackSources.library} → YouTube Music → TIDAL → ${adminActivityRu.admin.playbackSources.peers}`,
+        value: "library,ytmusic,peers",
+        label: `${adminActivityRu.admin.playbackSources.library} → YouTube Music → ${adminActivityRu.admin.playbackSources.peers}`,
     },
 ];
 
@@ -36,6 +29,16 @@ function resolveOrderOptions(stored: string) {
     ];
 }
 
+function withoutRetiredProviders(stored: string): string {
+    const normalized = stored
+        .split(",")
+        .map((provider) => provider.trim())
+        .filter((provider) =>
+            ["library", "peers", "ytmusic"].includes(provider),
+        );
+    return normalized.length > 0 ? normalized.join(",") : DEFAULT_ORDER;
+}
+
 interface PlaybackSourcesSectionProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
@@ -48,7 +51,9 @@ export function PlaybackSourcesSection({
     settings,
     onUpdate,
 }: PlaybackSourcesSectionProps) {
-    const stored = settings.playbackSourceOrder || DEFAULT_ORDER;
+    const stored = withoutRetiredProviders(
+        settings.playbackSourceOrder || DEFAULT_ORDER,
+    );
 
     return (
         <SettingsSection
@@ -68,6 +73,7 @@ export function PlaybackSourcesSection({
                     options={resolveOrderOptions(stored)}
                 />
             </SettingsRow>
+            <ServerMusicSources />
         </SettingsSection>
     );
 }

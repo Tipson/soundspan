@@ -216,7 +216,8 @@ function formatPersistedTrackItem(
 }
 
 /**
- * Normalize a materialized TIDAL track row into the canonical unified track contract.
+ * Normalize a historical materialized TIDAL row for display and migration.
+ * TIDAL playback is retired; callers must never treat this identity as playable.
  */
 export function normalizeTidalTrack(
     tidal: UnifiedTrackTidalRecord,
@@ -340,7 +341,7 @@ function normalizeUnknownTrackItem(
 
 /**
  * Playlist response formatter that keeps existing provider/playback wrappers while
- * emitting normalized track content from canonical local/tidal/youtube normalizers.
+ * emitting normalized track content from canonical local/legacy-tidal/youtube normalizers.
  */
 export function formatUnifiedTrackItem(
     item: UnifiedPlaylistItemRecord,
@@ -351,7 +352,6 @@ export function formatUnifiedTrackItem(
 
     if (item.trackTidal) {
         const normalizedTrack = normalizeTidalTrack(item.trackTidal);
-        const isPlayable = normalizedTrack.provider.tidalTrackId !== null;
         return {
             ...buildBaseTrackItem(item),
             provider: {
@@ -360,18 +360,12 @@ export function formatUnifiedTrackItem(
                 tidalTrackId: normalizedTrack.provider.tidalTrackId,
                 youtubeVideoId: null,
             },
-            playback: isPlayable
-                ? {
-                      isPlayable: true,
-                      reason: null,
-                      message: null,
-                  }
-                : {
-                      isPlayable: false,
-                      reason: "missing_tidal_track_id",
-                      message:
-                          "Playback is unavailable because this TIDAL item is missing a valid track id.",
-                  },
+            playback: {
+                isPlayable: false,
+                reason: "retired_provider",
+                message:
+                    "Playback is unavailable because the TIDAL integration has been retired.",
+            },
             track: formatPlaylistDetailTrack(normalizedTrack),
         };
     }

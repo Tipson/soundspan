@@ -1,10 +1,15 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/db";
 import { parseEmbedding } from "../../utils/embedding";
-import { buildTasteCentroids } from "./rankerV2";
+import { buildTasteCentroids, moodFeatureScore } from "./rankerV2";
+import { normalizeRecommendationArtistKey } from "./identityKeys";
+import { isWaveMusicCandidate } from "./wavePolicy";
+import { isEarlyRecommendationSkip } from "./playbackEvidence";
 import type { RecommendationCandidate } from "./types";
 import type {
     RecommendationRequestContext,
     RecommendationSurface,
+    RecommendationMood,
 } from "./types";
 
 const TASTE_LOOKBACK_DAYS = 180;
@@ -16,6 +21,7 @@ export interface CanonicalFeatureRow {
     embedding: number[] | null;
     bpm: number | null;
     energy: number | null;
+    arousal?: number | null;
     valence: number | null;
     danceability: number | null;
     instrumentalness: number | null;
@@ -41,6 +47,8 @@ interface RecommendationFeatureStoreDependencies {
         userId: string,
         since: Date,
     ) => Promise<RecommendationTasteRow[]>;
+    /** Unique, current saved recordings; no inferred listening events. */
+    loadLikedEmbeddings?: (userId: string) => Promise<number[][]>;
     loadDislikedCanonicalKeys: (userId: string) => Promise<string[]>;
     loadSeedCanonicalRecordingId: (seedId: string) => Promise<string | null>;
     loadSessionRows: (
@@ -59,10 +67,7 @@ interface RecommendationFeatureStoreDependencies {
 
 function tasteDelta(row: RecommendationTasteRow): number {
     if (row.outcome === "failed") return 0;
-    if (
-        row.outcome === "skipped" &&
-        ((row.completionRatio ?? 0) <= 0.2 || (row.listenedSeconds ?? 0) < 30)
-    ) {
+    if (isEarlyRecommendationSkip(row)) {
         return -1;
     }
     if (row.outcome === "completed" || (row.completionRatio ?? 0) >= 0.85) {
@@ -111,6 +116,7 @@ export class RecommendationFeatureStore {
                     ...candidate.audioFeatures,
                     bpm: row.bpm,
                     energy: row.energy,
+                    arousal: row.arousal,
                     valence: row.valence,
                     danceability: row.danceability,
                     instrumentalness: row.instrumentalness,
@@ -138,24 +144,27 @@ export class RecommendationFeatureStore {
             this.dependencies.now().getTime() -
                 TASTE_LOOKBACK_DAYS * 24 * 60 * 60 * 1_000,
         );
-        const [rows, sessionRows, contextRows] = await Promise.all([
-            this.dependencies.loadTasteRows(userId, since),
-            options?.sessionId
-                ? this.dependencies.loadSessionRows(
-                      userId,
-                      options.sessionId,
-                      30,
-                  )
-                : Promise.resolve([]),
-            options?.surface && options.context
-                ? this.dependencies.loadContextRows(
-                      userId,
-                      options.surface,
-                      options.context,
-                      since,
-                  )
-                : Promise.resolve([]),
-        ]);
+        const [rows, sessionRows, contextRows, likedEmbeddings] =
+            await Promise.all([
+                this.dependencies.loadTasteRows(userId, since),
+                options?.sessionId
+                    ? this.dependencies.loadSessionRows(
+                          userId,
+                          options.sessionId,
+                          30,
+                      )
+                    : Promise.resolve([]),
+                options?.surface && options.context
+                    ? this.dependencies.loadContextRows(
+                          userId,
+                          options.surface,
+                          options.context,
+                          since,
+                      )
+                    : Promise.resolve([]),
+                this.dependencies.loadLikedEmbeddings?.(userId) ??
+                    Promise.resolve([]),
+            ]);
         const positive = rows
             .filter((row) => tasteDelta(row) > 0)
             .map((row) => row.embedding);
@@ -163,7 +172,13 @@ export class RecommendationFeatureStore {
             .filter((row) => tasteDelta(row) < 0)
             .map((row) => row.embedding);
         return {
-            positiveCentroids: buildTasteCentroids(positive, 5),
+            // Separate bounded anchors keep imported/saved taste directions
+            // from being drowned out by repeated passive Wave listening.
+            // Ranking still uses the best match, not a sum of extra rewards.
+            positiveCentroids: [
+                ...buildTasteCentroids(positive, 5),
+                ...buildTasteCentroids(likedEmbeddings, 5),
+            ],
             negativeCentroids: buildTasteCentroids(negative, 3),
             sessionPositiveEmbedding: decayedSessionEmbedding(
                 sessionRows,
@@ -175,7 +190,9 @@ export class RecommendationFeatureStore {
                 this.dependencies.now(),
                 -1,
             ),
-            sessionSignalCount: sessionRows.length,
+            sessionSignalCount: sessionRows.filter(
+                (row) => tasteDelta(row) !== 0,
+            ).length,
             contextCentroids: buildTasteCentroids(
                 contextRows
                     .filter((row) => tasteDelta(row) > 0)
@@ -238,6 +255,7 @@ interface RawCanonicalFeatureRow {
     embedding: string | null;
     bpm: number | null;
     energy: number | null;
+    arousal: number | null;
     valence: number | null;
     danceability: number | null;
     instrumentalness: number | null;
@@ -269,6 +287,7 @@ async function loadCanonicalFeatures(
             active_embedding.embedding,
             cr.bpm,
             cr.energy,
+            cr.arousal,
             cr.valence,
             cr.danceability,
             cr.instrumentalness
@@ -317,6 +336,154 @@ async function loadTasteRows(
         const embedding = safelyParseVector(row.embedding);
         return embedding ? [{ ...row, embedding }] : [];
     });
+}
+
+/** Resolve current likes to distinct canonical vectors in the active space. */
+export async function loadLikedTasteEmbeddings(
+    userId: string,
+): Promise<number[][]> {
+    const eligible: Prisma.CanonicalRecordingWhereInput = {
+        mergedIntoId: null,
+        identitySource: { not: "identity-merged" },
+        embeddings: {
+            some: { space: { status: "active", cleaningAt: null } },
+        },
+    };
+    // Separate provider predicates let PostgreSQL start from indexed likes
+    // instead of probing every analyzed recording through a correlated OR.
+    const providerFilters: Prisma.TrackMappingWhereInput[] = [
+        { track: { is: { likedBy: { some: { userId } } } } },
+        { trackYtMusic: { is: { likedBy: { some: { userId } } } } },
+        { trackTidal: { is: { likedBy: { some: { userId } } } } },
+    ];
+    const providerRows = await Promise.all(
+        providerFilters.map((provider) =>
+            prisma.canonicalRecording.findMany({
+                where: {
+                    ...eligible,
+                    mappings: { some: { stale: false, ...provider } },
+                },
+                orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+                take: MAX_TASTE_ROWS,
+                select: { id: true },
+            }),
+        ),
+    );
+    const canonicalIds = [
+        ...new Set(providerRows.flatMap((rows) => rows.map((row) => row.id))),
+    ];
+    if (canonicalIds.length === 0) return [];
+    // The global top 500 is contained in the union of each provider's top 500.
+    // Keep final ordering in PostgreSQL, including its text collation on ties.
+    const recordings = await prisma.canonicalRecording.findMany({
+        where: { ...eligible, id: { in: canonicalIds } },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        take: MAX_TASTE_ROWS,
+        select: { id: true },
+    });
+    const rows = await loadCanonicalFeatures(recordings.map((row) => row.id));
+    return rows.flatMap((row) => (row.embedding ? [row.embedding] : []));
+}
+
+/** Rank a bounded saved-music reserve before the provider shelf truncation. */
+export async function loadSavedMoodCandidates(
+    userId: string,
+    mood: RecommendationMood,
+): Promise<RecommendationCandidate[]> {
+    if (!["calm", "energetic", "focus", "workout"].includes(mood)) return [];
+    const mappingWhere = {
+        stale: false,
+        trackYtMusic: { is: { likedBy: { some: { userId } } } },
+    };
+    const rows = await prisma.canonicalRecording.findMany({
+        where: {
+            mergedIntoId: null,
+            identitySource: { not: "identity-merged" },
+            analysisStatus: "completed",
+            arousal: { not: null },
+            mappings: { some: mappingWhere },
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        take: MAX_TASTE_ROWS,
+        select: {
+            id: true,
+            canonicalKey: true,
+            bpm: true,
+            energy: true,
+            arousal: true,
+            valence: true,
+            danceability: true,
+            instrumentalness: true,
+            mappings: {
+                where: mappingWhere,
+                orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+                take: 1,
+                select: {
+                    trackYtMusic: {
+                        select: {
+                            videoId: true,
+                            title: true,
+                            artist: true,
+                            album: true,
+                            duration: true,
+                            thumbnailUrl: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+    const candidates: RecommendationCandidate[] = rows.flatMap((row) => {
+        const track = row.mappings[0]?.trackYtMusic;
+        if (!track) return [];
+        return [
+            {
+                id: `yt:${track.videoId}`,
+                canonicalRecordingId: row.id,
+                canonicalKey: row.canonicalKey,
+                title: track.title,
+                duration: track.duration,
+                artist: { id: null, name: track.artist },
+                album: {
+                    id: null,
+                    title: track.album,
+                    coverArt: track.thumbnailUrl,
+                },
+                source: "youtube" as const,
+                streamSource: "youtube" as const,
+                youtubeVideoId: track.videoId,
+                provider: { tidalTrackId: null, youtubeVideoId: track.videoId },
+                candidateSources: ["saved-mood"],
+                providerPrior: 1.15,
+                accountAffinity: 0.55,
+                lane: "quickPicks" as const,
+                audioFeatures: {
+                    bpm: row.bpm,
+                    energy: row.energy,
+                    arousal: row.arousal,
+                    valence: row.valence,
+                    danceability: row.danceability,
+                    instrumentalness: row.instrumentalness,
+                },
+            },
+        ];
+    });
+    candidates.sort(
+        (a, b) =>
+            moodFeatureScore(b, mood) - moodFeatureScore(a, mood) ||
+            a.canonicalKey.localeCompare(b.canonicalKey),
+    );
+    const artists = new Map<string, number>();
+    const selected: RecommendationCandidate[] = [];
+    for (const candidate of candidates) {
+        if (!isWaveMusicCandidate(candidate)) continue;
+        const artist = normalizeRecommendationArtistKey(candidate.artist.name);
+        if ((artists.get(artist) ?? 0) >= 4) continue;
+        artists.set(artist, (artists.get(artist) ?? 0) + 1);
+        selected.push(candidate);
+        if (selected.length >= 48) break;
+    }
+    return selected;
 }
 
 async function loadSessionRows(
@@ -596,6 +763,7 @@ async function loadSeedCanonicalRecordingId(
 export const recommendationFeatureStore = new RecommendationFeatureStore({
     loadCanonicalFeatures,
     loadTasteRows,
+    loadLikedEmbeddings: loadLikedTasteEmbeddings,
     loadDislikedCanonicalKeys,
     loadSeedCanonicalRecordingId,
     loadSessionRows,

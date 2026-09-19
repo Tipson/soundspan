@@ -20,6 +20,59 @@ function candidate(id: string): RecommendationCandidate {
 }
 
 describe("canonical recommendation feature store", () => {
+    it("anchors an unplayed saved library in the audio taste profile", async () => {
+        const dependencies = {
+            loadCanonicalFeatures: jest.fn().mockResolvedValue([]),
+            loadTasteRows: jest.fn().mockResolvedValue([]),
+            loadLikedEmbeddings: jest.fn().mockResolvedValue([
+                [1, 0],
+                [0, 1],
+            ]),
+            loadDislikedCanonicalKeys: jest.fn().mockResolvedValue([]),
+            loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
+            now: () => new Date("2026-09-01T12:00:00Z"),
+        };
+        const taste = await new RecommendationFeatureStore(
+            dependencies,
+        ).loadTasteContext("alice");
+        expect(dependencies.loadLikedEmbeddings).toHaveBeenCalledWith("alice");
+        expect(taste.positiveCentroids.length).toBeGreaterThan(0);
+        expect(taste.negativeCentroids).toEqual([]);
+        expect(taste.sessionSignalCount).toBe(0);
+    });
+
+    it("does not let hundreds of passive plays erase a saved taste direction", async () => {
+        const dependencies = {
+            loadCanonicalFeatures: jest.fn().mockResolvedValue([]),
+            loadTasteRows: jest.fn().mockResolvedValue(
+                Array.from({ length: 500 }, () => ({
+                    embedding: [1, 0],
+                    outcome: "completed",
+                    completionRatio: 1,
+                    listenedSeconds: 200,
+                })),
+            ),
+            loadLikedEmbeddings: jest.fn().mockResolvedValue([[0, 1]]),
+            loadDislikedCanonicalKeys: jest.fn().mockResolvedValue([]),
+            loadSeedCanonicalRecordingId: jest.fn().mockResolvedValue(null),
+            loadSessionRows: jest.fn().mockResolvedValue([]),
+            loadContextRows: jest.fn().mockResolvedValue([]),
+            now: () => new Date("2026-09-01T12:00:00Z"),
+        };
+        const taste = await new RecommendationFeatureStore(
+            dependencies,
+        ).loadTasteContext("alice");
+        expect(taste.positiveCentroids.some((center) => center[1] > 0.99)).toBe(
+            true,
+        );
+        expect(taste.positiveCentroids.some((center) => center[0] > 0.99)).toBe(
+            true,
+        );
+        expect(taste.positiveCentroids.length).toBeLessThanOrEqual(10);
+    });
+
     it("enriches all candidates through one bounded canonical lookup", async () => {
         const dependencies = {
             loadCanonicalFeatures: jest.fn().mockResolvedValue([
@@ -28,6 +81,7 @@ describe("canonical recommendation feature store", () => {
                     embedding: [1, 0],
                     bpm: 128,
                     energy: 0.9,
+                    arousal: 0.3,
                     valence: 0.7,
                     danceability: 0.8,
                     instrumentalness: 0.1,
@@ -57,6 +111,7 @@ describe("canonical recommendation feature store", () => {
                 audioFeatures: expect.objectContaining({
                     bpm: 128,
                     energy: 0.9,
+                    arousal: 0.3,
                 }),
             }),
         );

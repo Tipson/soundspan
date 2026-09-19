@@ -17,6 +17,23 @@ function request(pathname: string) {
     return new NextRequest(url);
 }
 
+test("welcome serves its public document with a self-only script policy", async () => {
+    const { proxy } = await loadProxyModule();
+    const response = proxy(request("/welcome?source=telegram"));
+    assert.equal(
+        response.headers.get("x-middleware-rewrite"),
+        "https://soundspan.test/welcome/index.html?source=telegram",
+    );
+    const policy = response.headers.get("Content-Security-Policy") ?? "";
+    assert.match(policy, /script-src 'self';/);
+    assert.match(policy, /frame-ancestors 'none'/);
+    assert.doesNotMatch(policy, /strict-dynamic/);
+    assert.equal(
+        proxy(request("/welcome-other")).headers.get("x-middleware-rewrite"),
+        null,
+    );
+});
+
 test("proxy keeps /api/* routes as passthrough responses", async () => {
     const { proxy } = await loadProxyModule();
     const response = proxy(request("/api/docs/"));

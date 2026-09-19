@@ -40,6 +40,8 @@ Repository contract for soundspan.
 
 ## Repository-Specific Rules
 
+- **Action density:** keep music-detail toolbars focused on playback, shuffle, and a single secondary-actions entry. Move collection management into a labelled, accessible sheet instead of shrinking tap targets or wrapping several button groups. Check narrow mobile and desktop layouts, long Russian labels, busy states, and Back/Escape behavior when changing these surfaces.
+
 - **API boundary:** Use `frontend/lib/api.ts` as the frontend API boundary. No direct `fetch` calls from components.
 - **Backend config:** Read env through `backend/src/config.ts`.
 - **Database access:** Prefer Prisma for all DB access. Raw SQL (`$queryRaw`/`$executeRaw`) is permitted **only** for the classes of query Prisma cannot express, namely:

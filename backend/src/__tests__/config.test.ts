@@ -1014,20 +1014,16 @@ describe("config module", () => {
         });
     });
 
-    it("configures the YouTube Music region and TIDAL sidecar URL", async () => {
+    it("configures the YouTube Music region", async () => {
         const defaults = await loadConfigModule({
             YTMUSIC_REGION: undefined,
-            TIDAL_SIDECAR_URL: undefined,
         });
         expect(defaults.config.ytmusicRegion).toBe("US");
-        expect(defaults.config.tidal.sidecarUrl).toBe("http://127.0.0.1:8585");
 
         const overrides = await loadConfigModule({
             YTMUSIC_REGION: "GB",
-            TIDAL_SIDECAR_URL: "http://tidal:8585",
         });
         expect(overrides.config.ytmusicRegion).toBe("GB");
-        expect(overrides.config.tidal.sidecarUrl).toBe("http://tidal:8585");
     });
 
     it("exposes the optional one-shot admin reset password", async () => {

@@ -230,7 +230,7 @@ def _get_workers_from_db() -> int:
 # Previous default used auto-scaling which could cause OOM on memory-constrained systems
 DEFAULT_WORKERS = 2
 NUM_WORKERS = env_int("NUM_WORKERS", DEFAULT_WORKERS)
-ESSENTIA_VERSION = "2.1b6-enhanced-v3"
+ESSENTIA_VERSION = "2.1b6-enhanced-v4-center"
 
 # Retry configuration
 MAX_RETRIES = env_int("MAX_RETRIES", 3)  # Max retry attempts per track
@@ -744,6 +744,7 @@ class AudioAnalyzer:
         except Exception as e:
             logger.error(f"Analysis error: {e}")
             traceback.print_exc()
+            result["_error"] = "Audio feature extraction failed"
         finally:
             for k in ["_spectral_centroid", "_spectral_flatness", "_zcr"]:
                 result.pop(k, None)

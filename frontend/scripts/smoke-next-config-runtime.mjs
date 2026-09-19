@@ -72,7 +72,7 @@ try {
     );
     assert.equal(
         reportOnlyPolicy.replace(/'nonce-[^']+'/u, "'nonce-{NONCE}'"),
-        "default-src 'self'; script-src 'self' 'nonce-{NONCE}' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+        "default-src 'self'; script-src 'self' 'nonce-{NONCE}' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https://creatornode.audius.co https://audius-content-7.figment.io https://audius-02.staked.cloud https://validator.eeba4a6ca56a0d87af802270217c2a51.r2.cloudflarestorage.com; connect-src 'self' ws: wss:; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     );
 
     process.env.CSP_ENFORCE = "true";

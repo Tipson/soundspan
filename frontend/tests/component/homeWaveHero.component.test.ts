@@ -11,6 +11,7 @@ GlobalRegistrator.register();
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const calls = {
+    feedQueries: [] as unknown[][],
     playTracks: [] as unknown[][],
     images: [] as Array<Record<string, unknown>>,
     isShuffle: [] as unknown[],
@@ -20,6 +21,24 @@ const calls = {
     vibeSourceFeatures: [] as unknown[],
     waveMode: [] as unknown[],
 };
+let waveFeed: unknown = undefined;
+let waveLoading = false;
+let playing = false;
+let activeWave = false;
+let currentTrack: { id: string } | null = null;
+const pause = mock.fn();
+const play = mock.fn();
+mock.module("@/lib/audio-playback-context", {
+    namedExports: { usePlaybackStatus: () => ({ isPlaying: playing }) },
+});
+mock.module("@/features/home/hooks/usePersonalizedHomeFeed", {
+    namedExports: {
+        usePersonalizedHomeFeed: (...args: unknown[]) => {
+            calls.feedQueries.push(args);
+            return { data: waveFeed, isLoading: waveLoading };
+        },
+    },
+});
 
 const Icon = () => React.createElement("i");
 
@@ -28,6 +47,7 @@ mock.module("lucide-react", {
         AudioWaveform: Icon,
         ChevronRight: Icon,
         Play: Icon,
+        Pause: Icon,
     },
 });
 
@@ -51,6 +71,8 @@ mock.module("@/lib/api", {
 mock.module("@/lib/audio-controls-context", {
     namedExports: {
         useAudioControls: () => ({
+            pause,
+            play,
             playTracks: (...args: unknown[]) => calls.playTracks.push(args),
         }),
     },
@@ -59,6 +81,8 @@ mock.module("@/lib/audio-controls-context", {
 mock.module("@/lib/audio-state-context", {
     namedExports: {
         useAudioState: () => ({
+            vibeMode: activeWave,
+            currentTrack,
             waveMode: "new",
             waveMood: "focus",
             setIsShuffle: (value: unknown) => calls.isShuffle.push(value),
@@ -97,6 +121,20 @@ const track = (id: string, title: string, coverArt: string | null = null) => ({
 });
 
 beforeEach(() => {
+    playing = false;
+    activeWave = false;
+    currentTrack = null;
+    pause.mock.resetCalls();
+    play.mock.resetCalls();
+    calls.feedQueries.length = 0;
+    waveLoading = false;
+    waveFeed = {
+        shelves: {
+            quickPicks: [track("wave-quick", "Quick", "/quick.jpg")],
+            discovery: [track("wave-fresh", "Fresh", "/fresh.jpg")],
+            listenAgain: [track("wave-again", "Again", "/again.jpg")],
+        },
+    };
     calls.playTracks.length = 0;
     calls.images.length = 0;
     calls.isShuffle.length = 0;
@@ -109,6 +147,54 @@ beforeEach(() => {
 
 afterEach(() => {
     document.body.innerHTML = "";
+});
+
+test("home Wave follows shared playback and resumes without replacing the queue", async () => {
+    const { HomeWaveHero } =
+        await import("../../features/home/components/HomeWaveHero");
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const render = async () =>
+        act(async () =>
+            root.render(
+                React.createElement(HomeWaveHero, {
+                    personalizedFeed: null,
+                    isLoading: waveLoading,
+                }),
+            ),
+        );
+    const button = () => container.querySelector("button")!;
+    try {
+        await render();
+        await act(async () => button().click());
+        assert.equal(calls.playTracks.length, 1);
+        activeWave = true;
+        currentTrack = { id: "wave-fresh" };
+        playing = true;
+        await render();
+        assert.equal(button().textContent, "Пауза");
+        assert.equal(button().getAttribute("aria-pressed"), "true");
+        await act(async () => button().click());
+        assert.equal(pause.mock.callCount(), 1);
+        playing = false;
+        waveLoading = true;
+        waveFeed = undefined;
+        await render();
+        assert.equal(button().textContent, "Продолжить");
+        assert.equal(button().disabled, false);
+        await act(async () => button().click());
+        assert.equal(play.mock.callCount(), 1);
+        assert.equal(calls.playTracks.length, 1);
+        playing = true;
+        await render();
+        assert.equal(button().textContent, "Пауза");
+        activeWave = false;
+        await render();
+        assert.equal(button().getAttribute("aria-pressed"), "false");
+        assert.equal(button().disabled, true);
+    } finally {
+        await act(async () => root.unmount());
+    }
 });
 
 test("home Wave hero starts a balanced personalized queue as Vibe", async () => {
@@ -165,14 +251,22 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
         (calls.playTracks[0]?.[0] as Array<{ id: string }>).map(
             (item) => item.id,
         ),
-        ["fresh", "quick", "again"],
+        ["wave-fresh"],
     );
     assert.deepEqual(calls.playTracks[0]?.slice(1), [0, true]);
     assert.deepEqual(calls.isShuffle, [false]);
     assert.deepEqual(calls.shuffleIndices, [[]]);
     assert.deepEqual(calls.vibeMode, [true]);
     assert.deepEqual(calls.vibeSourceFeatures, [null]);
-    assert.deepEqual(calls.vibeQueueIds, [["fresh", "quick", "again"]]);
+    assert.deepEqual(calls.vibeQueueIds, [["wave-fresh"]]);
+    assert.deepEqual(calls.feedQueries[0], [
+        12,
+        true,
+        "new",
+        "focus",
+        "wave",
+        "any",
+    ]);
     assert.deepEqual(calls.waveMode, []);
     assert.doesNotMatch(container.textContent ?? "", /tracks ready/i);
     assert.match(container.textContent ?? "", /Моя волна/i);
@@ -187,6 +281,8 @@ test("home Wave hero starts a balanced personalized queue as Vibe", async () => 
 });
 
 test("home Wave hero keeps play disabled while no recommendations are ready", async () => {
+    waveFeed = undefined;
+    waveLoading = true;
     const { HomeWaveHero } =
         await import("../../features/home/components/HomeWaveHero");
     const container = document.createElement("div");
@@ -206,6 +302,9 @@ test("home Wave hero keeps play disabled while no recommendations are ready", as
         'button[aria-label="Включить мою волну"]',
     );
     assert.ok(playButton?.disabled);
+    assert.equal(playButton.dataset.homeWaveState, "loading");
+    assert.match(playButton.className, /disabled:bg-none/);
+    assert.match(playButton.className, /disabled:bg-white\/\[0\.08\]/);
     assert.match(container.textContent ?? "", /Настраиваем мою волну/);
 
     await act(async () => root.unmount());

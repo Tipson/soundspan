@@ -22,6 +22,7 @@ import { clampTime } from "@/utils/formatTime";
 import { CurrentTrackPreferenceButtons } from "@/components/player/CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
 import { ru } from "@/lib/i18n/ru";
+import { isPlaybackOnlyTrack } from "@/lib/trackRef";
 
 /**
  * Renders the MiniPlayer component.
@@ -160,23 +161,27 @@ export function MiniPlayer() {
                         )}
                     </div>
 
-                    {playbackType === "track" && currentTrack?.id && (
-                        <div
-                            className="hidden flex-shrink-0 items-center min-[360px]:flex"
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
-                            role="group"
-                            aria-label={ru.player.preference}
-                        >
-                            <CurrentTrackPreferenceButtons
-                                trackId={currentTrack.id}
-                                mode="up-only"
-                                buttonSizeClassName="h-11 w-11"
-                                iconSizeClassName="h-4 w-4"
-                                metadata={buildPreferenceMetadata(currentTrack)}
-                            />
-                        </div>
-                    )}
+                    {playbackType === "track" &&
+                        currentTrack?.id &&
+                        !isPlaybackOnlyTrack(currentTrack) && (
+                            <div
+                                className="hidden flex-shrink-0 items-center min-[360px]:flex"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                role="group"
+                                aria-label={ru.player.preference}
+                            >
+                                <CurrentTrackPreferenceButtons
+                                    trackId={currentTrack.id}
+                                    mode="up-only"
+                                    buttonSizeClassName="h-11 w-11"
+                                    iconSizeClassName="h-4 w-4"
+                                    metadata={buildPreferenceMetadata(
+                                        currentTrack,
+                                    )}
+                                />
+                            </div>
+                        )}
 
                     <div
                         className="flex flex-shrink-0 items-center"
@@ -190,7 +195,7 @@ export function MiniPlayer() {
                                 if (audioError) {
                                     clearAudioError();
                                     resume();
-                                } else if (!isBuffering) {
+                                } else if (!isBuffering || isPlaying) {
                                     if (isPlaying) {
                                         pause();
                                     } else {
@@ -202,14 +207,14 @@ export function MiniPlayer() {
                                 "h-11 w-11 rounded-full transition shadow-md flex items-center justify-center",
                                 audioError
                                     ? "bg-error text-content hover:brightness-110"
-                                    : isBuffering
+                                    : isBuffering && !isPlaying
                                       ? "bg-content/80 text-surface"
                                       : "bg-content text-surface hover:scale-105",
                             )}
                             aria-label={
                                 audioError
                                     ? ru.player.retry
-                                    : isBuffering
+                                    : isBuffering && !isPlaying
                                       ? ru.player.buffering
                                       : isPlaying
                                         ? ru.common.pause
@@ -218,7 +223,7 @@ export function MiniPlayer() {
                             title={
                                 audioError
                                     ? ru.player.retry
-                                    : isBuffering
+                                    : isBuffering && !isPlaying
                                       ? ru.player.buffering
                                       : isPlaying
                                         ? ru.common.pause
@@ -227,7 +232,7 @@ export function MiniPlayer() {
                         >
                             {audioError ? (
                                 <RefreshCw className="h-5 w-5" />
-                            ) : isBuffering ? (
+                            ) : isBuffering && !isPlaying ? (
                                 <Loader2 className="h-5 w-5 animate-spin" />
                             ) : isPlaying ? (
                                 <Pause className="h-5 w-5" />

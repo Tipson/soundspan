@@ -4,7 +4,6 @@ import { SettingsSection } from "../ui";
 import { SystemSettings } from "../../types";
 import { LidarrCard } from "./LidarrSection";
 import { SoulseekCard } from "./SoulseekSection";
-import { TidalCard } from "./TidalSection";
 
 interface DownloadServicesSectionProps {
     settings: SystemSettings;
@@ -48,12 +47,6 @@ export function DownloadServicesSection({
                     onUpdate={onUpdate}
                     onTest={onTest}
                     isTesting={testingServices.slskd || false}
-                />
-                <TidalCard
-                    settings={settings}
-                    onUpdate={onUpdate}
-                    onTest={onTest}
-                    isTesting={testingServices.tidal || false}
                 />
             </div>
         </SettingsSection>

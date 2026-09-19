@@ -262,7 +262,11 @@ describe("search discover compatibility", () => {
             "__public__",
             "radiohead",
             20,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(mockYtMusicDiscoverySearch).toHaveBeenNthCalledWith(
             2,
@@ -270,7 +274,11 @@ describe("search discover compatibility", () => {
             "__public__",
             "massive attack",
             20,
-            { timeoutMs: 8_000, maxRetries: 0 },
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
         );
         expect(mockYtMusicSearch).not.toHaveBeenCalled();
 
@@ -325,5 +333,63 @@ describe("search discover compatibility", () => {
             ]),
         );
         expect(mockRedisSetEx).not.toHaveBeenCalled();
+    });
+
+    it("serves track view from the playable catalog without waiting for Last.fm metadata", async () => {
+        mockYtMusicDiscoverySearch.mockResolvedValueOnce({
+            tracks: [
+                {
+                    source: "youtube",
+                    provider: "ytmusic",
+                    providerTrackId: "zombie-video",
+                    title: "Zombie",
+                    artistName: "The Cranberries",
+                    albumTitle: "No Need to Argue",
+                    durationSec: 306,
+                    thumbnailUrl: "https://img/zombie.jpg",
+                    raw: {},
+                },
+            ],
+            albums: [],
+            artists: [],
+            failedFilters: [],
+        });
+        const res = createRes();
+
+        await discoverHandler(
+            {
+                query: {
+                    q: "The Cranberries",
+                    type: "music",
+                    limit: "50",
+                    scope: "tracks",
+                },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.results).toEqual([
+            expect.objectContaining({
+                youtubeVideoId: "zombie-video",
+                name: "Zombie",
+            }),
+        ]);
+        expect(mockGetArtistCorrection).not.toHaveBeenCalled();
+        expect(mockSearchArtists).not.toHaveBeenCalled();
+        expect(mockSearchTracks).not.toHaveBeenCalled();
+        expect(mockYtMusicDiscoverySearch).toHaveBeenCalledWith(
+            ytMusicService,
+            "__public__",
+            "The Cranberries",
+            50,
+            expect.objectContaining({
+                timeoutMs: 8_000,
+                maxRetries: 0,
+                signal: expect.any(Object),
+            }),
+            ["songs"],
+        );
     });
 });

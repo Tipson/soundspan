@@ -708,18 +708,6 @@ async function processTrackMappingReconcileJob(): Promise<boolean> {
             } else if (result.processed > 0) {
                 log.debug(`No new links found (${result.processed} checked)`);
             }
-
-            const upgradeResult =
-                await trackReconciliationService.reconcileYoutubeToTidal();
-            if (upgradeResult.upgraded > 0) {
-                log.info(
-                    `Upgraded ${upgradeResult.upgraded} YT mappings to TIDAL (${upgradeResult.skipped} skipped)`,
-                );
-            } else if (upgradeResult.processed > 0) {
-                log.debug(
-                    `No YT->TIDAL upgrades found (${upgradeResult.processed} checked)`,
-                );
-            }
         },
     );
     return claim.acquired;

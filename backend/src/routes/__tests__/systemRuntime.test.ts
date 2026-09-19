@@ -97,6 +97,7 @@ describe("system routes runtime", () => {
             discovery: true,
             autoPlaylists: true,
             loudnessTargetLufs: -18,
+            audius: false,
         });
     });
 

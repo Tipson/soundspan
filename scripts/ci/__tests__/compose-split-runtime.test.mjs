@@ -34,7 +34,6 @@ test("prebuilt overlay covers every buildable split service", async () => {
         "frontend",
         "audio-analyzer",
         "vibe-provider-dclap",
-        "tidal-streamer",
         "ytmusic-streamer",
     ]) {
         assert.match(
@@ -43,6 +42,7 @@ test("prebuilt overlay covers every buildable split service", async () => {
             `${service} needs an immutable image override`,
         );
     }
+    assert.doesNotMatch(overlay, /^    tidal-streamer:\s*$/m);
 });
 
 test("prebuilt split API cannot duplicate worker processors", async () => {

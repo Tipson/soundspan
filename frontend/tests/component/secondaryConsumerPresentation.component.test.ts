@@ -6,7 +6,6 @@ const surfaceFiles = {
     queue: "../../app/queue/page.tsx",
     radio: "../../app/radio/page.tsx",
     history: "../../app/my-history/page.tsx",
-    playlists: "../../app/playlists/page.tsx",
     import: "../../app/import/page.tsx",
     device: "../../app/device/page.tsx",
 } as const;
@@ -69,12 +68,7 @@ test("route-level waits use the shared Russian loading presentation", () => {
             new URL("../../app/queue/loading.tsx", import.meta.url),
             "utf8",
         ),
-        readFileSync(
-            new URL("../../app/playlists/loading.tsx", import.meta.url),
-            "utf8",
-        ),
         surfaceSources.history,
-        surfaceSources.playlists,
         surfaceSources.import,
         surfaceSources.device,
     ];

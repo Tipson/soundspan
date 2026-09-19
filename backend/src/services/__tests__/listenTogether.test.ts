@@ -412,6 +412,72 @@ describe("listenTogether service", () => {
         ]);
     });
 
+    it("rejects retired TIDAL queue inputs before group mutation", async () => {
+        const { listenTogether, prisma, groupManager } = loadService();
+
+        await expect(
+            listenTogether.createGroup("host-1", "Host", {
+                queueTracks: [
+                    {
+                        tidalTrackId: 991,
+                        title: "Legacy",
+                        artist: "Retired Artist",
+                        album: "Retired Album",
+                        duration: 180,
+                    },
+                ],
+            }),
+        ).rejects.toMatchObject({
+            code: "INVALID",
+            message: "retired_provider",
+        });
+
+        expect(prisma.syncGroupMember.findFirst).not.toHaveBeenCalled();
+        expect(prisma.track.findMany).not.toHaveBeenCalled();
+        expect(prisma.trackMapping.findMany).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(groupManager.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects retired legacy queueTrackIds before group mutation", async () => {
+        const { listenTogether, prisma, groupManager } = loadService();
+
+        await expect(
+            listenTogether.createGroup("host-1", "Host", {
+                queueTrackIds: ["tidal:991"],
+            }),
+        ).rejects.toMatchObject({
+            code: "INVALID",
+            message: "retired_provider",
+        });
+
+        expect(prisma.syncGroupMember.findFirst).not.toHaveBeenCalled();
+        expect(prisma.track.findMany).not.toHaveBeenCalled();
+        expect(prisma.trackMapping.findMany).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(groupManager.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["provider field", { tidalTrackId: 991 }],
+        ["pseudo-local prefix", { trackId: "tidal:991" }],
+    ])(
+        "rejects direct retired TIDAL queue validation via %s before database access",
+        async (_label, input) => {
+            const { listenTogether, prisma } = loadService();
+
+            await expect(
+                listenTogether.validateQueueTracks([input]),
+            ).rejects.toMatchObject({
+                code: "INVALID",
+                message: "retired_provider",
+            });
+
+            expect(prisma.track.findMany).not.toHaveBeenCalled();
+            expect(prisma.trackMapping.findMany).not.toHaveBeenCalled();
+        },
+    );
+
     it("rejects group creation while the user is pending deletion", async () => {
         const { listenTogether, prisma } = loadService();
 

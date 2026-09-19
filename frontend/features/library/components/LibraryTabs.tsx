@@ -8,7 +8,7 @@ import { ru } from "@/lib/i18n/ru";
 export type LibraryTab = "playlists" | "albums" | "artists";
 
 interface LibraryTabsProps {
-    activeTab: LibraryTab;
+    activeTab: LibraryTab | null;
 }
 
 const TABS: ReadonlyArray<{
@@ -25,15 +25,24 @@ const TABS: ReadonlyArray<{
     { id: "artists", label: ru.library.artists, href: "/library?tab=artists" },
 ];
 
-/** Personal Library navigation; playlists also contains liked and device music. */
+/** Personal Library navigation; standalone collections have no selected tab. */
 export function LibraryTabs({ activeTab }: LibraryTabsProps) {
     const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
+    const stripRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
-        activeLinkRef.current?.scrollIntoView({
-            block: "nearest",
-            inline: "center",
-        });
+        const link = activeLinkRef.current;
+        const strip = stripRef.current;
+        if (!link || !strip) return;
+        const tabBounds = link.getBoundingClientRect();
+        const stripBounds = strip.getBoundingClientRect();
+        // Reveal only the clipped horizontal edge. scrollIntoView also moves
+        // the main page, overriding restored or manually chosen scroll positions.
+        if (tabBounds.left < stripBounds.left) {
+            strip.scrollLeft += tabBounds.left - stripBounds.left;
+        } else if (tabBounds.right > stripBounds.right) {
+            strip.scrollLeft += tabBounds.right - stripBounds.right;
+        }
     }, [activeTab]);
 
     return (
@@ -49,7 +58,10 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-y-px right-0 z-10 w-10 bg-gradient-to-l from-surface to-transparent sm:hidden"
             />
-            <div className="flex snap-x snap-mandatory gap-1 overflow-x-auto pr-12 scroll-px-1 [scrollbar-width:none] sm:pr-0 [&::-webkit-scrollbar]:hidden">
+            <div
+                ref={stripRef}
+                className="flex snap-x snap-mandatory gap-1 overflow-x-auto pr-12 scroll-px-1 [scrollbar-width:none] sm:pr-0 [&::-webkit-scrollbar]:hidden"
+            >
                 {TABS.map((tab, index) => {
                     const active = tab.id === activeTab;
                     return (
@@ -57,6 +69,19 @@ export function LibraryTabs({ activeTab }: LibraryTabsProps) {
                             key={tab.id}
                             ref={active ? activeLinkRef : undefined}
                             href={tab.href}
+                            onClick={(event) => {
+                                if (
+                                    event.button !== 0 ||
+                                    event.metaKey ||
+                                    event.ctrlKey ||
+                                    event.shiftKey ||
+                                    event.altKey
+                                )
+                                    return;
+                                event.preventDefault();
+                                // Query-only tabs share this mounted page; no RSC request is needed.
+                                window.history.pushState(null, "", tab.href);
+                            }}
                             data-tv-card
                             data-tv-card-index={index}
                             data-library-tab={tab.id}

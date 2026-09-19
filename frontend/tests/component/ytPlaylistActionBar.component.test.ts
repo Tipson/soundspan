@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { renderExpandedDetailActions } from "./renderExpandedDetailActions";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as realTrackRef from "../../lib/trackRef";
 
 const state = {
     isLoading: false,
@@ -19,6 +21,7 @@ const Icon = (props: Record<string, unknown> = {}) =>
 
 mock.module("lucide-react", {
     namedExports: {
+        X: Icon,
         ArrowLeft: Icon,
         Play: Icon,
         Pause: Icon,
@@ -156,6 +159,7 @@ mock.module(
 
 mock.module("@/lib/trackRef", {
     namedExports: {
+        ...realTrackRef,
         toAddToPlaylistRef: (track: Record<string, unknown>) => track,
     },
 });
@@ -247,7 +251,7 @@ async function renderPage() {
     // loading state works and write a note about the limitation.
 
     const queryClient = new QueryClient();
-    const mod = await import("../../app/explore/yt-playlist/[id]/page");
+    const mod = await import("../../app/explore/yt-playlist/[id]/pageContent");
     const Page = mod.default;
     return renderToStaticMarkup(
         React.createElement(
@@ -277,7 +281,7 @@ test("yt-playlist page explains the initial loading state in Russian", async () 
 });
 
 test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonical track surface", async () => {
-    const mod = await import("../../app/explore/yt-playlist/[id]/page");
+    const mod = await import("../../app/explore/yt-playlist/[id]/pageContent");
     const ActionDock = (
         mod as unknown as {
             YtPlaylistActionDock: React.ComponentType<Record<string, unknown>>;
@@ -315,7 +319,7 @@ test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonic
         onToggleLikeAll: () => undefined,
         onBack: () => undefined,
     });
-    const html = renderToStaticMarkup(
+    const html = await renderExpandedDetailActions(
         React.createElement(EditorialSurface, {
             playlist,
             isAlbumType: false,
@@ -331,7 +335,8 @@ test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonic
     assert.ok(hero);
     assert.match(hero, /data-music-detail="actions"/);
     assert.match(hero, /data-detail-action-tier="primary"/);
-    assert.match(hero, /data-detail-action-tier="secondary"/);
+    assert.doesNotMatch(hero, /data-detail-action-tier="secondary"/);
+    assert.match(html, /data-detail-action-tier="secondary"/);
     assert.match(hero, /Очень длинное название плейлиста YouTube Music/);
     assert.match(html, /data-music-detail="tracks"/);
     assert.match(html, /track-list/);

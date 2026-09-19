@@ -1,4 +1,5 @@
 import {
+    deviceOfflineRecordMatchesTrack,
     normalizeDeviceOfflineQuality,
     resolveDeviceOfflineTrackIdentity,
 } from "./trackIdentity";
@@ -9,27 +10,33 @@ import type {
     DeviceOfflineTrack,
 } from "./types";
 import type { AuthRuntimeLease } from "@/lib/auth-runtime-generation";
-import { DeviceOfflineDownloadError } from "./downloadError";
+import {
+    DeviceOfflineDownloadError,
+    classifyDeviceOfflineFailure,
+} from "./downloadError";
 import { DeviceAudioVaultError } from "./vault";
+import { isTrackActionable } from "@/lib/trackRef";
 
 export const DEVICE_OFFLINE_QUEUE_LEASE_MS = 60_000;
 export const DEVICE_OFFLINE_QUEUE_HEARTBEAT_MS = 20_000;
 export const DEVICE_OFFLINE_QUEUE_RETRY_DELAYS_MS = [500, 1_500] as const;
-export const DEVICE_OFFLINE_AUTO_MAX_BYTES = 2 * 1024 * 1024 * 1024;
-export const DEVICE_OFFLINE_AUTO_LIMIT_OPTIONS = [25, 50, 100, 200] as const;
+const DEVICE_OFFLINE_AUTOMATION_POLICY_VERSION = 2;
 
 export interface DeviceOfflineAutomationSettings {
     ownerId: string;
     autoDownloadLiked: boolean;
+    /** Legacy persisted fields: zero means no application-imposed limit. */
     autoDownloadLikedLimit: number;
     autoDownloadMaxBytes: number;
+    policyVersion?: number;
     updatedAt: number;
 }
 
 export const DEFAULT_DEVICE_OFFLINE_AUTOMATION_SETTINGS = {
-    autoDownloadLiked: false,
-    autoDownloadLikedLimit: 100,
-    autoDownloadMaxBytes: DEVICE_OFFLINE_AUTO_MAX_BYTES,
+    autoDownloadLiked: true,
+    autoDownloadLikedLimit: 0,
+    autoDownloadMaxBytes: 0,
+    policyVersion: DEVICE_OFFLINE_AUTOMATION_POLICY_VERSION,
     updatedAt: 0,
 } as const;
 
@@ -57,6 +64,7 @@ export interface DeviceOfflineQueueItem {
     createdAt: number;
     updatedAt: number;
     errorMessage: string | null;
+    requiresStorageAction?: boolean;
 }
 
 export interface DeviceOfflineQueueRequest {
@@ -232,6 +240,9 @@ export function mergeDeviceOfflineQueueItem(
             existing.status === "processing" || preserveAutomaticError
                 ? existing.errorMessage
                 : null,
+        requiresStorageAction: preserveAutomaticError
+            ? existing.requiresStorageAction
+            : false,
     };
 }
 
@@ -263,6 +274,12 @@ export function claimNextDeviceOfflineQueueItem(
     leaseExpiresAt: number,
 ): DeviceOfflineQueueItem | null {
     const owned = items.filter((item) => item.ownerId === ownerId);
+    if (
+        owned.some(
+            (item) => item.status === "error" && item.requiresStorageAction,
+        )
+    )
+        return null;
     const hasLiveProcessing = owned.some(
         (item) =>
             item.status === "processing" &&
@@ -300,34 +317,21 @@ export function claimNextDeviceOfflineQueueItem(
     };
 }
 
-function normalizeAutoLimit(value: number | undefined): number {
-    const requested = Number.isFinite(value) ? Number(value) : 100;
-    return DEVICE_OFFLINE_AUTO_LIMIT_OPTIONS.reduce((closest, option) =>
-        Math.abs(option - requested) < Math.abs(closest - requested)
-            ? option
-            : closest,
-    );
-}
-
 function normalizeSettings(
     ownerId: string,
     stored: Partial<DeviceOfflineAutomationSettings> | null,
 ): DeviceOfflineAutomationSettings {
     return {
         ownerId,
-        autoDownloadLiked: stored?.autoDownloadLiked === true,
-        autoDownloadLikedLimit: normalizeAutoLimit(
-            stored?.autoDownloadLikedLimit,
-        ),
-        autoDownloadMaxBytes:
-            typeof stored?.autoDownloadMaxBytes === "number" &&
-            Number.isFinite(stored.autoDownloadMaxBytes) &&
-            stored.autoDownloadMaxBytes > 0
-                ? Math.min(
-                      DEVICE_OFFLINE_AUTO_MAX_BYTES,
-                      Math.floor(stored.autoDownloadMaxBytes),
-                  )
-                : DEVICE_OFFLINE_AUTO_MAX_BYTES,
+        // Migrate the former default-off policy once. An explicit pause under
+        // the new policy remains owner-scoped and survives subsequent reloads.
+        autoDownloadLiked:
+            stored?.policyVersion === DEVICE_OFFLINE_AUTOMATION_POLICY_VERSION
+                ? stored.autoDownloadLiked !== false
+                : true,
+        autoDownloadLikedLimit: 0,
+        autoDownloadMaxBytes: 0,
+        policyVersion: DEVICE_OFFLINE_AUTOMATION_POLICY_VERSION,
         updatedAt:
             typeof stored?.updatedAt === "number" &&
             Number.isFinite(stored.updatedAt)
@@ -344,13 +348,15 @@ function recordManagement(
 
 function findReadyRecord(
     records: DeviceOfflineDownloadRecord[],
-    trackIdentity: string,
+    ownerId: string,
+    track: DeviceOfflineTrack,
     quality: string,
 ): DeviceOfflineDownloadRecord | null {
     return (
         records.find(
             (record) =>
-                record.trackIdentity === trackIdentity &&
+                record.ownerId === ownerId &&
+                deviceOfflineRecordMatchesTrack(record, track) &&
                 record.quality === quality &&
                 record.status === "ready",
         ) ?? null
@@ -465,6 +471,7 @@ export class DeviceOfflineQueueManager {
     ): Promise<DeviceOfflineBatchEnqueueResult> {
         const unique = new Map<string, DeviceOfflineQueueRequest>();
         for (const request of requests) {
+            if (!isTrackActionable(request.track)) continue;
             const quality = normalizeDeviceOfflineQuality(request.quality);
             const identity = resolveDeviceOfflineTrackIdentity(request.track);
             unique.set(
@@ -502,7 +509,12 @@ export class DeviceOfflineQueueManager {
                 this.assertOwnerAuthCurrent(request.ownerId, authRuntimeLease);
                 downloadsByOwner.set(request.ownerId, records);
             }
-            const ready = findReadyRecord(records, trackIdentity, quality);
+            const ready = findReadyRecord(
+                records,
+                request.ownerId,
+                request.track,
+                quality,
+            );
             if (ready) {
                 let retainedReady: DeviceOfflineDownloadRecord | null = ready;
                 if (
@@ -616,10 +628,7 @@ export class DeviceOfflineQueueManager {
             const identity = resolveDeviceOfflineTrackIdentity(request.track);
             if (!unique.has(identity)) unique.set(identity, request);
         }
-        const selected = [...unique.values()].slice(
-            0,
-            settings.autoDownloadLikedLimit,
-        );
+        const selected = [...unique.values()];
         const keep = new Set(
             selected.map((request) =>
                 resolveDeviceOfflineTrackIdentity(request.track),
@@ -634,9 +643,7 @@ export class DeviceOfflineQueueManager {
             this.notify();
             return { total: 0, queued: 0, alreadyReady: 0 };
         }
-        const result = await this.enqueueBatch(selected);
-        await this.enforceAutoBudget(ownerId);
-        return result;
+        return this.enqueueBatch(selected);
     }
 
     private async removePendingAutomaticItems(
@@ -660,6 +667,35 @@ export class DeviceOfflineQueueManager {
 
     pause(ownerId: string): void {
         this.pausedOwners.add(ownerId);
+    }
+
+    /** Explicit user retry after freeing space or restoring access; never changes ownership. */
+    async retryAutomaticDownloads(ownerId: string): Promise<void> {
+        const lease = this.ownerLease(ownerId);
+        this.assertOwnerAuthCurrent(ownerId, lease);
+        for (const item of await this.list(ownerId)) {
+            this.assertOwnerAuthCurrent(ownerId, lease);
+            if (
+                item.status !== "error" ||
+                (item.management !== "auto-liked" &&
+                    !item.requiresStorageAction)
+            )
+                continue;
+            await this.dependencies.store.putIfCurrent(
+                item,
+                {
+                    ...item,
+                    status: "queued",
+                    errorMessage: null,
+                    requiresStorageAction: false,
+                    leaseId: null,
+                    leaseExpiresAt: null,
+                    updatedAt: this.dependencies.now(),
+                },
+                () => this.isOwnerAuthCurrent(ownerId, lease),
+            );
+        }
+        this.notify();
     }
 
     resume(ownerId: string): Promise<void> {
@@ -700,6 +736,11 @@ export class DeviceOfflineQueueManager {
             this.isRuntimeActive(ownerId, authRuntimeLease) &&
             this.dependencies.isOnline()
         ) {
+            const blocked = (await this.list(ownerId)).some(
+                (item) => item.status === "error" && item.requiresStorageAction,
+            );
+            if (blocked || !this.isRuntimeActive(ownerId, authRuntimeLease))
+                return;
             const settings = await this.getSettings(ownerId);
             if (!this.isRuntimeActive(ownerId, authRuntimeLease)) return;
             const item = await this.dependencies.store.claimNext(
@@ -715,7 +756,6 @@ export class DeviceOfflineQueueManager {
             this.notify();
             const shouldContinue = await this.processItem(
                 item,
-                settings,
                 authRuntimeLease,
             );
             this.notify();
@@ -725,7 +765,6 @@ export class DeviceOfflineQueueManager {
 
     private async processItem(
         claimed: DeviceOfflineQueueItem,
-        settings: DeviceOfflineAutomationSettings,
         authRuntimeLease: AuthRuntimeLease,
     ): Promise<boolean> {
         const heartbeat = this.dependencies.scheduleLeaseHeartbeat?.(() => {
@@ -755,6 +794,15 @@ export class DeviceOfflineQueueManager {
                 await this.cleanupCancelledTrack(claimed, authRuntimeLease);
                 return true;
             }
+            if (!isTrackActionable(claimed.track)) {
+                await this.markQueueFailure(
+                    claimed,
+                    "error",
+                    "Этот источник TIDAL больше недоступен для загрузки.",
+                    authRuntimeLease,
+                );
+                return true;
+            }
             const records = await this.dependencies.downloads.list(
                 claimed.ownerId,
             );
@@ -763,7 +811,8 @@ export class DeviceOfflineQueueManager {
             }
             const ready = findReadyRecord(
                 records,
-                claimed.trackIdentity,
+                claimed.ownerId,
+                claimed.track,
                 claimed.quality,
             );
             if (this.isTrackCancelled(claimed)) {
@@ -834,20 +883,6 @@ export class DeviceOfflineQueueManager {
                     latest.ownerId,
                     downloaded.key,
                 );
-            } else {
-                await this.enforceAutoBudget(latest.ownerId, settings);
-                const retained = (
-                    await this.dependencies.downloads.list(latest.ownerId)
-                ).some((record) => record.key === downloaded.key);
-                if (!retained) {
-                    await this.markQueueFailure(
-                        latest,
-                        "error",
-                        "Этот трек превышает лимит автоматической загрузки.",
-                        authRuntimeLease,
-                    );
-                    return true;
-                }
             }
             await this.deleteLatestQueueItem(
                 latest.ownerId,
@@ -866,6 +901,14 @@ export class DeviceOfflineQueueManager {
             const latest = await this.dependencies.store.getByKey(claimed.key);
             if (!latest) return true;
             const interrupted = !this.dependencies.isOnline();
+            const failure = classifyDeviceOfflineFailure(error);
+            const requiresStorageAction =
+                failure.code === "quota" ||
+                [
+                    "device_file_permission_required",
+                    "device_file_permission_denied",
+                    "device_file_setup_required",
+                ].includes(failure.code);
             await this.markQueueFailure(
                 latest,
                 interrupted ? "interrupted" : "error",
@@ -873,8 +916,9 @@ export class DeviceOfflineQueueManager {
                     ? error.message
                     : "Не удалось скачать трек",
                 authRuntimeLease,
+                requiresStorageAction,
             );
-            return !interrupted;
+            return !interrupted && !requiresStorageAction;
         } finally {
             if (heartbeat !== undefined) {
                 this.dependencies.cancelLeaseHeartbeat?.(heartbeat);
@@ -960,6 +1004,7 @@ export class DeviceOfflineQueueManager {
         status: "interrupted" | "error",
         errorMessage: string,
         authRuntimeLease: AuthRuntimeLease,
+        requiresStorageAction = false,
     ): Promise<void> {
         await this.dependencies.store.putIfCurrent(
             expected,
@@ -970,6 +1015,7 @@ export class DeviceOfflineQueueManager {
                 leaseExpiresAt: null,
                 updatedAt: this.dependencies.now(),
                 errorMessage,
+                requiresStorageAction,
             },
             () => this.isOwnerAuthCurrent(expected.ownerId, authRuntimeLease),
         );
@@ -1117,51 +1163,6 @@ export class DeviceOfflineQueueManager {
             authRuntimeLease,
         );
     }
-
-    async enforceAutoBudget(
-        ownerId: string,
-        providedSettings?: DeviceOfflineAutomationSettings,
-    ): Promise<string[]> {
-        const authRuntimeLease = this.ownerLease(ownerId);
-        this.assertOwnerAuthCurrent(ownerId, authRuntimeLease);
-        const settings = providedSettings ?? (await this.getSettings(ownerId));
-        const deleted: string[] = [];
-        while (true) {
-            this.assertOwnerAuthCurrent(ownerId, authRuntimeLease);
-            const automatic = (await this.dependencies.downloads.list(ownerId))
-                .filter(
-                    (record) =>
-                        record.status === "ready" &&
-                        recordManagement(record) === "auto-liked",
-                )
-                .sort(
-                    (left, right) =>
-                        left.createdAt - right.createdAt ||
-                        left.updatedAt - right.updatedAt,
-                );
-            const bytes = automatic.reduce(
-                (total, record) => total + Math.max(0, record.totalBytes ?? 0),
-                0,
-            );
-            if (
-                automatic.length <= settings.autoDownloadLikedLimit &&
-                bytes <= settings.autoDownloadMaxBytes
-            ) {
-                break;
-            }
-            const oldest = automatic[0];
-            if (!oldest) break;
-            if (
-                await this.dependencies.downloads.deleteAutoManagedIfCurrent(
-                    ownerId,
-                    oldest,
-                )
-            ) {
-                deleted.push(oldest.key);
-            }
-        }
-        return deleted;
-    }
 }
 
 /** Summarize actual ready records plus pending queue work for one collection. */
@@ -1172,20 +1173,22 @@ export function summarizeDeviceOfflineCollection(
     quality = "auto",
 ): DeviceOfflineCollectionStatus {
     const normalizedQuality = normalizeDeviceOfflineQuality(quality);
-    const identities = Array.from(
-        new Set(
-            tracks.map((track) => resolveDeviceOfflineTrackIdentity(track)),
-        ),
-    );
+    const tracksByIdentity = new Map<string, DeviceOfflineTrack>();
+    for (const track of tracks) {
+        const identity = resolveDeviceOfflineTrackIdentity(track);
+        if (!tracksByIdentity.has(identity)) {
+            tracksByIdentity.set(identity, track);
+        }
+    }
     let ready = 0;
     let autoReady = 0;
     let queued = 0;
     let processing = 0;
     let errors = 0;
-    for (const identity of identities) {
+    for (const [identity, track] of tracksByIdentity) {
         const record = records.find(
             (candidate) =>
-                candidate.trackIdentity === identity &&
+                deviceOfflineRecordMatchesTrack(candidate, track) &&
                 candidate.quality === normalizedQuality,
         );
         if (record?.status === "ready") {
@@ -1204,7 +1207,7 @@ export function summarizeDeviceOfflineCollection(
         } else if (item?.status === "error" || record) errors += 1;
     }
     return {
-        total: identities.length,
+        total: tracksByIdentity.size,
         ready,
         autoReady,
         queued,

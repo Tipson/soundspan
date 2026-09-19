@@ -232,7 +232,7 @@ describe("youtubeMusic routes branch coverage", () => {
 
         expect(res.status).toBe(200);
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "video-1",
             "high",
         );
@@ -247,7 +247,7 @@ describe("youtubeMusic routes branch coverage", () => {
 
         expect(res.status).toBe(200);
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "video-1",
             "high",
         );
@@ -263,7 +263,7 @@ describe("youtubeMusic routes branch coverage", () => {
             expect.objectContaining({ select: { ytMusicQuality: true } }),
         );
         expect(ytMusicService.getStreamInfo).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "video-1",
             "custom-quality",
         );
@@ -315,11 +315,11 @@ describe("youtubeMusic routes branch coverage", () => {
         expect(res.headers["accept-ranges"]).toBeUndefined();
     });
 
-    it("returns song details for authenticated browse path", async () => {
+    it("uses the public catalog for an authenticated Soundspan listener's song details", async () => {
         const res = await request(app).get("/api/ytmusic/song/video-1");
         expect(res.status).toBe(200);
         expect(ytMusicService.getSong).toHaveBeenCalledWith(
-            "user-1",
+            "__public__",
             "video-1",
         );
     });

@@ -141,7 +141,7 @@ describe("youtubeMusic service branch coverage", () => {
         );
     });
 
-    it("passes empty params/headers branches in stream and playlists calls", async () => {
+    it("passes default stream purpose, empty headers, and playlist defaults", async () => {
         mockClient.get
             .mockResolvedValueOnce({ data: { ok: true } })
             .mockResolvedValueOnce({ data: { pipe: jest.fn() } })
@@ -153,12 +153,24 @@ describe("youtubeMusic service branch coverage", () => {
         });
 
         await ytMusicService.getStreamProxy("u1", "video-id");
-        expect(mockClient.get).toHaveBeenNthCalledWith(2, "/proxy/video-id", {
-            params: { user_id: "u1" },
-            headers: {},
-            responseType: "stream",
-            timeout: 120000,
-        });
+        expect(mockClient.get).toHaveBeenNthCalledWith(
+            2,
+            "/proxy/video-id",
+            expect.objectContaining({
+                params: { user_id: "u1", purpose: "interactive" },
+                headers: {},
+                responseType: "stream",
+                timeout: 120000,
+                httpAgent: expect.objectContaining({
+                    maxSockets: 120,
+                    maxTotalSockets: 120,
+                }),
+                httpsAgent: expect.objectContaining({
+                    maxSockets: 120,
+                    maxTotalSockets: 120,
+                }),
+            }),
+        );
 
         await expect(ytMusicService.getLibraryPlaylists("u1")).resolves.toEqual(
             [],

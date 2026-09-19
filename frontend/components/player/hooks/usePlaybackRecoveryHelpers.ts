@@ -72,6 +72,9 @@ export function usePlaybackRecoveryHelpers({
     }, []);
 
     const resolveBufferedAheadSec = useCallback((): number | null => {
+        if (audioEngine.getActiveEngineDescriptor() === "native") {
+            return audioEngine.getBufferedAheadSec();
+        }
         if (typeof document === "undefined") {
             return null;
         }

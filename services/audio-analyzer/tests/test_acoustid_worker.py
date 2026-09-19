@@ -44,7 +44,7 @@ def test_lookup_worker_defaults_to_combined_local_and_online_backfill() -> None:
         "",
     )
 
-    assert worker._backfill_factory is acoustid_worker.CombinedAcoustIDBackfill
+    assert worker._backfill_factory is acoustid_worker._create_backfill
 
 
 def test_lookup_worker_runs_off_analysis_thread_and_closes_its_database() -> None:

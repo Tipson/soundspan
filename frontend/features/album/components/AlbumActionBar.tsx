@@ -21,6 +21,7 @@ import {
     type AlbumActionVisibility,
 } from "../albumActionVisibility";
 import { MusicDetailActionDock } from "@/components/music-detail";
+import { MusicDetailSecondaryActions } from "@/components/music-detail/MusicDetailSecondaryActions";
 import { ru } from "@/lib/i18n/ru";
 
 const BRAND_PLAY = "var(--color-brand-hover)";
@@ -78,7 +79,16 @@ function PlaybackControls(props: PlaybackControlsProps) {
                     <Play className="w-5 h-5 fill-current text-black ml-0.5" />
                 )}
                 <span>
-                    {props.showPause ? ru.common.pause : ru.common.playAll}
+                    {props.showPause ? (
+                        ru.common.pause
+                    ) : (
+                        <>
+                            <span className="sm:hidden">Слушать</span>
+                            <span className="hidden sm:inline">
+                                {ru.common.playAll}
+                            </span>
+                        </>
+                    )}
                 </span>
             </button>
             <button
@@ -166,6 +176,9 @@ function AlbumPreferenceButton(props: {
                     className={cn("h-4 w-4", props.liked && "fill-current")}
                 />
             )}
+            <span>
+                {props.liked ? ru.catalog.unlikeAlbum : ru.catalog.likeAlbum}
+            </span>
         </button>
     );
 }
@@ -197,6 +210,7 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     aria-label={ru.common.addQueue}
                 >
                     <ListMusic className="w-5 h-5" />
+                    <span>{ru.common.addQueue}</span>
                 </button>
             )}
             {props.visibility.canShareAlbum && (
@@ -208,6 +222,7 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     aria-label={ru.catalog.shareAlbum}
                 >
                     <Share2 className="h-5 w-5" />
+                    <span>{ru.catalog.shareAlbum}</span>
                 </button>
             )}
             {props.visibility.canShowAddToPlaylist && (
@@ -219,6 +234,7 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     aria-label={ru.common.addPlaylist}
                 >
                     <Plus className="w-5 h-5" />
+                    <span>{ru.common.addPlaylist}</span>
                 </button>
             )}
             {props.visibility.canShowAlbumPreference &&
@@ -238,6 +254,7 @@ function SecondaryControls(props: SecondaryControlsProps) {
                     aria-label={ru.catalog.deleteAlbum}
                 >
                     <Trash2 className="h-5 w-5" aria-hidden="true" />
+                    <span>{ru.catalog.deleteAlbum}</span>
                 </button>
             )}
         </>
@@ -282,7 +299,7 @@ function ActionControlRow(props: {
         <MusicDetailActionDock label={ru.catalog.albumControls}>
             <div
                 data-detail-action-tier="primary"
-                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
+                className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none"
             >
                 {actions.isInListenTogetherGroup &&
                 visibility.hasLockedControls ? (
@@ -301,23 +318,38 @@ function ActionControlRow(props: {
                     )
                 )}
             </div>
-            <div
-                data-detail-action-tier="secondary"
-                className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
-            >
-                <SecondaryControls
-                    visibility={visibility}
-                    onAddAllToQueue={actions.onAddAllToQueue}
-                    onAddToPlaylist={actions.onAddToPlaylist}
-                    onShare={props.onShare}
-                    onToggleAlbumLike={actions.onToggleAlbumLike}
-                    liked={actions.isAlbumLiked ?? false}
-                    applying={actions.isApplyingAlbumPreference ?? false}
-                    onDeleteAlbum={actions.onDeleteAlbum}
-                    librarySaveControl={actions.librarySaveControl}
-                    deviceDownloadControl={actions.deviceDownloadControl}
-                />
-            </div>
+            <MusicDetailSecondaryActions>
+                {(close) => (
+                    <SecondaryControls
+                        visibility={visibility}
+                        onAddAllToQueue={() => {
+                            close();
+                            actions.onAddAllToQueue?.();
+                        }}
+                        onAddToPlaylist={() => {
+                            close();
+                            actions.onAddToPlaylist();
+                        }}
+                        onShare={() => {
+                            close();
+                            props.onShare();
+                        }}
+                        onToggleAlbumLike={actions.onToggleAlbumLike}
+                        liked={actions.isAlbumLiked ?? false}
+                        applying={actions.isApplyingAlbumPreference ?? false}
+                        onDeleteAlbum={
+                            actions.onDeleteAlbum
+                                ? () => {
+                                      close();
+                                      actions.onDeleteAlbum?.();
+                                  }
+                                : undefined
+                        }
+                        librarySaveControl={actions.librarySaveControl}
+                        deviceDownloadControl={actions.deviceDownloadControl}
+                    />
+                )}
+            </MusicDetailSecondaryActions>
         </MusicDetailActionDock>
     );
 }

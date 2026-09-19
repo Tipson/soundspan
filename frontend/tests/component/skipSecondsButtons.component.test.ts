@@ -3,6 +3,7 @@ import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as realTrackRef from "../../lib/trackRef";
 
 /**
  * Component tests for issue #20: wire the existing 15-second skip
@@ -475,9 +476,6 @@ mock.module("@/lib/api", {
     },
 });
 
-mock.module("@/components/ui/TidalBadge", {
-    namedExports: { TidalBadge: () => null },
-});
 mock.module("@/components/ui/YouTubeBadge", {
     namedExports: { YouTubeBadge: () => null },
 });
@@ -517,6 +515,7 @@ mock.module("@/lib/logger", {
 
 mock.module("@/lib/trackRef", {
     namedExports: {
+        ...realTrackRef,
         toAddToPlaylistRef: () => ({}),
         isRemoteTrack: () => false,
     },
@@ -821,6 +820,32 @@ test("FullPlayer: skip buttons are disabled and inert while canSeek is false; Pr
 // ---------------------------------------------------------------------------
 // OverlayPlayer
 // ---------------------------------------------------------------------------
+
+test("OverlayPlayer reserves only its mobile drag header from browser scrolling", async () => {
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+    try {
+        const header = mounted.container.querySelector<HTMLElement>(
+            ".overlay-player-chrome",
+        );
+        assert.ok(header);
+        assert.equal(header.style.touchAction, "none");
+        const content = mounted.container.querySelector<HTMLElement>(
+            ".overlay-player-layout",
+        );
+        assert.ok(content);
+        assert.notEqual(
+            content.style.touchAction,
+            "none",
+            "content keeps ordinary touch scrolling",
+        );
+    } finally {
+        await unmount(mounted);
+    }
+});
 
 test("OverlayPlayer leaves desktop chrome and the player dock uncovered", async () => {
     isMobileViewport = false;

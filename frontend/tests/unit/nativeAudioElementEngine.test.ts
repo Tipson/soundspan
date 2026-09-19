@@ -15,9 +15,70 @@ import {
 
 type ElementListener = (event: unknown) => void;
 
+test("native playback configures the audio session before start and resume", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    const session = { type: "auto" };
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: { audioSession: session },
+    });
+    const h = createHarness({ isPageHidden: () => true });
+    try {
+        h.engine.load("/first.mp3", { autoplay: true });
+        h.mainElement().fireLoadedMetadata(180);
+        assert.equal(session.type, "playback");
+        h.engine.pause();
+        session.type = "auto";
+        h.engine.play();
+        assert.equal(session.type, "playback");
+        session.type = "auto";
+        h.engine.load("/second.mp3", { autoplay: true });
+        h.mainElement().fireLoadedMetadata(180);
+        assert.equal(session.type, "playback");
+    } finally {
+        h.engine.destroy();
+        if (descriptor)
+            Object.defineProperty(globalThis, "navigator", descriptor);
+        else Reflect.deleteProperty(globalThis, "navigator");
+    }
+});
+
 type PlayBehavior =
     | { kind: "resolve" }
     | { kind: "reject"; name: string; message: string };
+
+test("unsupported audio session configuration does not block native play", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            audioSession: {
+                get type() {
+                    return "auto";
+                },
+                set type(_value: string) {
+                    throw new Error("unsupported");
+                },
+            },
+        },
+    });
+    const h = createHarness();
+    try {
+        h.engine.load("/first.mp3", { autoplay: true });
+        h.mainElement().fireLoadedMetadata(180);
+        assert.equal(h.mainElement().paused, false);
+        assert.ok(
+            h.telemetryEvents.some(
+                (e) => e.event === "audio_session_configuration_failed",
+            ),
+        );
+    } finally {
+        h.engine.destroy();
+        if (descriptor)
+            Object.defineProperty(globalThis, "navigator", descriptor);
+        else Reflect.deleteProperty(globalThis, "navigator");
+    }
+});
 
 class FakeAudioElement implements NativeAudioElementLike {
     currentTime = 0;
@@ -29,10 +90,22 @@ class FakeAudioElement implements NativeAudioElementLike {
     preload = "";
     crossOrigin: string | null = null;
     error: { code: number; message?: string } | null = null;
+    readyState = 0;
+    networkState = 0;
+    bufferedRanges: Array<[number, number]> = [];
+
+    get buffered(): TimeRanges {
+        return {
+            length: this.bufferedRanges.length,
+            start: (index) => this.bufferedRanges[index][0],
+            end: (index) => this.bufferedRanges[index][1],
+        };
+    }
 
     playCalls = 0;
     pauseCalls = 0;
     srcAssignments = 0;
+    crossOriginAtSrc: Array<string | null> = [];
     playBehavior: PlayBehavior = { kind: "resolve" };
 
     private srcValue = "";
@@ -46,6 +119,7 @@ class FakeAudioElement implements NativeAudioElementLike {
     // the in-progress stream and resets readiness.
     set src(value: string) {
         this.srcAssignments += 1;
+        this.crossOriginAtSrc.push(this.crossOrigin);
         this.srcValue = value;
         this.paused = true;
         this.ended = false;
@@ -269,6 +343,67 @@ const createHarness = (
 const flushMicrotasks = async (): Promise<void> => {
     await new Promise((resolve) => setImmediate(resolve));
 };
+
+test("buffer recovery measures the active native element, excluding preload and gaps", () => {
+    const h = createHarness();
+    try {
+        assert.equal(h.engine.getBufferedAheadSec(), null);
+        h.engine.load("/current.webm");
+        const main = h.mainElement();
+        main.currentTime = 83;
+        assert.equal(h.engine.getBufferedAheadSec(), 0);
+        main.bufferedRanges = [
+            [0, 80],
+            [90, 120],
+        ];
+        assert.equal(h.engine.getBufferedAheadSec(), 0);
+        main.bufferedRanges = [
+            [0, 83.25],
+            [90, 120],
+        ];
+        assert.equal(h.engine.getBufferedAheadSec(), 0.25);
+        h.engine.preload("/next.webm");
+        h.elements[1].bufferedRanges = [[0, 240]];
+        assert.equal(h.engine.getBufferedAheadSec(), 0.25);
+        main.currentTime = Number.NaN;
+        assert.equal(h.engine.getBufferedAheadSec(), null);
+    } finally {
+        h.engine.destroy();
+    }
+    assert.equal(h.engine.getBufferedAheadSec(), null);
+});
+
+test("native diagnostics read only the owned active element without exposing its URL or changing playback", () => {
+    const h = createHarness();
+    try {
+        h.engine.load("blob:private-device-recording", { autoplay: true });
+        const main = h.mainElement();
+        main.fireLoadedMetadata(180);
+        main.readyState = 4;
+        main.networkState = 1;
+        main.currentTime = 3;
+        main.paused = true;
+        main.error = { code: 2, message: "credential-bearing raw error" };
+        h.engine.preload("https://media.example/?token=private");
+        const before = [main.playCalls, main.pauseCalls, main.srcAssignments];
+        const snapshot = h.engine.getDiagnosticState();
+        assert.deepEqual(snapshot, {
+            nativePaused: true,
+            readyState: 4,
+            networkState: 1,
+            mediaErrorCode: 2,
+            audioContextState: "not_used",
+        });
+        assert.deepEqual(
+            [main.playCalls, main.pauseCalls, main.srcAssignments],
+            before,
+        );
+        assert.equal(JSON.stringify(snapshot).includes("private"), false);
+        assert.equal(JSON.stringify(snapshot).includes("credential"), false);
+    } finally {
+        h.engine.destroy();
+    }
+});
 
 const eventTypes = (harness: Harness): string[] =>
     harness.events.map((event) => event.type);
@@ -866,6 +1001,87 @@ test("preload uses a single muted buffer element that never plays", () => {
     assert.equal(buffer.volume, 0);
     assert.equal(buffer.playCalls, 0);
     assert.equal(buffer.src, "https://stream.example/track-3.flac");
+});
+
+test("preload lease becomes ready only after the buffer emits canplay", async () => {
+    const harness = createHarness();
+    const lease = harness.engine.preload("https://stream.example/ready.flac");
+    assert.ok(lease);
+    let settled = false;
+    void lease.result.then(() => {
+        settled = true;
+    });
+    await Promise.resolve();
+    assert.equal(settled, false);
+
+    harness.elements[0]?.fire("canplay");
+    assert.deepEqual(await lease.result, { state: "ready" });
+});
+
+test("preload configures the same request mode as playback before assigning src", () => {
+    for (const withCredentials of [false, true]) {
+        const harness = createHarness();
+        harness.engine.load("https://stream.example/current.flac", {
+            withCredentials,
+        });
+        const main = harness.mainElement();
+        harness.engine.preload("https://stream.example/next.flac", {
+            withCredentials,
+        });
+        const buffer = harness.elements[1];
+        assert.equal(
+            buffer.crossOriginAtSrc[0],
+            main.crossOriginAtSrc[0],
+            "the first preload request must use playback's CORS/credentials mode",
+        );
+        assert.equal(buffer.playCalls, 0);
+        assert.equal(main.src, "https://stream.example/current.flac");
+        harness.engine.destroy();
+    }
+});
+
+test("same-URL preload dedupe respects credential mode and cancels only the old lease", async () => {
+    const harness = createHarness();
+    const url = "https://stream.example/next.flac";
+    const first = harness.engine.preload(url, { withCredentials: true });
+    assert.ok(first);
+    const buffer = harness.elements[0];
+    const assignments = buffer.srcAssignments;
+    assert.strictEqual(
+        harness.engine.preload(url, { withCredentials: true }),
+        first,
+    );
+    assert.equal(buffer.srcAssignments, assignments);
+
+    const replacement = harness.engine.preload(url, "flac");
+    assert.ok(replacement);
+    assert.notStrictEqual(replacement, first);
+    assert.deepEqual(await first.result, { state: "cancelled" });
+    assert.equal(buffer.crossOriginAtSrc.at(-1), "anonymous");
+    assert.equal(buffer.srcAssignments, assignments + 1);
+    first.cancel();
+    assert.equal(
+        buffer.src,
+        url,
+        "old cancellation must not clear replacement",
+    );
+    buffer.fire("canplay");
+    assert.deepEqual(await replacement.result, { state: "ready" });
+    assert.equal(harness.elements.length, 1);
+    assert.equal(buffer.playCalls, 0);
+    harness.engine.destroy();
+});
+
+test("a replacement preload cancels the previous readiness lease", async () => {
+    const harness = createHarness();
+    const first = harness.engine.preload("https://stream.example/first.flac");
+    const second = harness.engine.preload("https://stream.example/second.flac");
+    assert.ok(first);
+    assert.ok(second);
+
+    assert.deepEqual(await first.result, { state: "cancelled" });
+    harness.elements[0]?.fire("canplay");
+    assert.deepEqual(await second.result, { state: "ready" });
 });
 
 test("preload skips the currently loaded source", () => {

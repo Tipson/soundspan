@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { SimilarArtist } from "../types";
 import { Music, Library } from "lucide-react";
 import { api } from "@/lib/api";
 import { getArtistRouteParam } from "@/utils/artistRoute";
 import { pluralRu, ru } from "@/lib/i18n/ru";
+import { CachedImage } from "@/components/ui/CachedImage";
 
 interface SimilarArtistsProps {
     similarArtists: SimilarArtist[];
@@ -65,13 +65,15 @@ export function SimilarArtists({
                             {/* Circular Artist Image */}
                             <div className="w-full aspect-square bg-surface-highlight rounded-full mb-2.5 overflow-hidden relative shadow-lg">
                                 {imageUrl ? (
-                                    <Image
+                                    <CachedImage
                                         src={imageUrl}
                                         alt={artist.name}
                                         fill
                                         sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
                                         className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
-                                        unoptimized
+                                        fallback={
+                                            <Music className="w-12 h-12 text-gray-400" />
+                                        }
                                     />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center">

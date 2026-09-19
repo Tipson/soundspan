@@ -52,6 +52,7 @@ jest.mock("../../config", () => ({
             discovery: false,
             autoPlaylists: true,
             federation: true,
+            audius: true,
         },
     },
 }));
@@ -117,6 +118,7 @@ describe("system routes integration", () => {
             autoPlaylists: true,
             federation: true,
             loudnessTargetLufs: -18,
+            audius: true,
         });
         expect(mockGetFeatures).toHaveBeenCalledTimes(1);
     });

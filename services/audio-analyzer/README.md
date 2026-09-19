@@ -37,13 +37,48 @@ asset name, emits bounded mono float32 PCM, discards decoder stderr, and returns
 safe failures to canonical persistence and cleanup without first invoking
 Essentia's codec runtime. Ordinary library paths continue to use MonoLoader.
 
+Remote scalar analysis uses at most 90 contiguous seconds from the center of
+the decoded file, so a long musical/video introduction does not represent the
+entire recording. FFprobe duration inspection shares the decoder's total time
+budget; short files use their available audio. Unavailable duration metadata
+falls back to a bounded prefix with a warning. Scalar version
+`2.1b6-enhanced-v4-center` distinguishes these results from prefix analysis;
+older completed results are retained until a scoped reanalysis is requested.
+This is excerpt analysis, not proof that every section has the same mood.
+Canonical DCLAP embeddings retain their own full-file, bounded segment recipe
+and embedding-space identity. Feature extraction exceptions produce a failed
+result instead of persisting partially filled fields as completed.
+
 Set `ACOUSTID_API_KEY` to enable claim-based AcoustID lookups. One shared client
 limits requests to three per second and uses bounded timeouts and retries. Local
 track fingerprints retain their recording and release-group lookup, while
 `canonical_acoustid_backfill.py` resolves remote canonical fingerprints to a
-recording MBID and moves provider mappings to an existing durable identity when
-needed. Both paths require score `0.70` or higher. Without a key, lookup stays
-disabled and fingerprint computation continues.
+recording MBID and hands the fenced result to the backend through
+`BACKEND_INTERNAL_URL` plus the shared `INTERNAL_API_SECRET`. The backend is the
+only owner of canonical promotion/merge mutations and retries durable intents
+after active analysis leases finish. Both lookup paths require score `0.70` or
+higher. Without a key, lookup stays disabled and fingerprint computation
+continues.
+
+`BACKEND_INTERNAL_URL` is privileged operator configuration: the analyzer sends
+the internal secret to that origin. Keep it on the private deployment network
+(or an explicitly trusted HTTPS origin) and do not derive it from request data.
+
+### Canonical-promotion rollout and rollback
+
+The promotion-intent migration quarantines unresolved legacy
+`acoustid-merged` rows and installs a database invariant that rejects any new
+completed merge marker without `mergedIntoId`. This makes a rolling upgrade
+fail closed: an older analyzer transaction is rolled back and its processing
+claim becomes eligible for stale reclaim after the analyzer is upgraded.
+
+For a database rollback, first stop every audio-analyzer and backend-worker
+process. Reset `CanonicalRecording.identityLookupStatus` from `merge_pending`
+to `pending` only for sources referenced by non-settled promotion intents, then
+drop the intent table. Keep the alias invariant during an application rollback;
+drop it only after all legacy analyzer writers are stopped and affected rows
+have been validated, otherwise the old writer can recreate live-looking
+aliases without a survivor.
 
 Run the CI-equivalent unit suite from the repository root:
 

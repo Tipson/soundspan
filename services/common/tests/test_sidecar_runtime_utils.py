@@ -10,7 +10,7 @@ import pytest
 from services.common.sidecar_runtime_utils import ensure_repository_root_on_path
 
 
-@pytest.mark.parametrize("sidecar", ["tidal-streamer", "ytmusic-streamer"])
+@pytest.mark.parametrize("sidecar", ["ytmusic-streamer", "audio-analyzer"])
 def test_shallow_container_module_path_does_not_append(
     monkeypatch: pytest.MonkeyPatch, sidecar: str
 ) -> None:
@@ -28,7 +28,7 @@ def test_deep_repository_module_path_appends_root_once(
 ) -> None:
     """An in-tree sidecar module exposes the repository package root."""
     repository_root = tmp_path / "checkout"
-    module_path = repository_root / "services" / "tidal-streamer" / "app.py"
+    module_path = repository_root / "services" / "ytmusic-streamer" / "app.py"
     module_path.parent.mkdir(parents=True)
     monkeypatch.setattr(sys, "path", ["existing"])
 

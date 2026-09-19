@@ -2006,15 +2006,14 @@ describe("library catalog list runtime coverage", () => {
         expect(mockTrackFindMany).not.toHaveBeenCalled();
     });
 
-    it("returns remote liked tracks with streamSource and provider IDs", async () => {
+    it("returns supported remote liked tracks and excludes retired TIDAL rows from totals", async () => {
         const ytLikedAt = new Date("2026-03-01T12:00:00.000Z");
         const tidalLikedAt = new Date("2026-03-01T11:00:00.000Z");
         const localLikedAt = new Date("2026-03-01T10:00:00.000Z");
 
         mockLikedTrackCount.mockResolvedValueOnce(1);
-        mockRemoteLikedTrackCount.mockResolvedValueOnce(2);
+        mockRemoteLikedTrackCount.mockResolvedValueOnce(1);
         mockUserSettingsFindUnique.mockResolvedValueOnce({
-            tidalOAuthJson: "tidal-token",
             ytMusicOAuthJson: "yt-token",
         });
         mockLikedTrackFindMany.mockResolvedValueOnce([
@@ -2070,11 +2069,25 @@ describe("library catalog list runtime coverage", () => {
         await likedPlaylistHandler(req, res);
 
         expect(res.statusCode).toBe(200);
-        expect(res.body.total).toBe(3);
-        expect(res.body.tracks).toHaveLength(3);
+        expect(mockRemoteLikedTrackCount).toHaveBeenCalledWith({
+            where: {
+                userId: "user-1",
+                trackYtMusicId: { not: null },
+            },
+        });
+        expect(mockRemoteLikedTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: {
+                    userId: "user-1",
+                    trackYtMusicId: { not: null },
+                },
+            }),
+        );
+        expect(res.body.total).toBe(2);
+        expect(res.body.tracks).toHaveLength(2);
 
         // Tracks should be ordered by likedAt descending
-        const [ytTrack, tidalTrack, localTrack] = res.body.tracks;
+        const [ytTrack, localTrack] = res.body.tracks;
 
         // YouTube remote track
         expect(ytTrack.id).toBe("yt:dQw4w9WgXcQ");
@@ -2090,17 +2103,6 @@ describe("library catalog list runtime coverage", () => {
         );
         expect(ytTrack.source).toBe("youtube");
 
-        // Tidal remote track
-        expect(tidalTrack.id).toBe("tidal:123456789");
-        expect(tidalTrack.title).toBe("Tidal Song");
-        expect(tidalTrack.streamSource).toBe("tidal");
-        expect(tidalTrack.tidalTrackId).toBe(123456789);
-        expect(tidalTrack.youtubeVideoId).toBeUndefined();
-        expect(tidalTrack.filePath).toBeNull();
-        expect(tidalTrack.artist.name).toBe("Tidal Artist");
-        expect(tidalTrack.album.title).toBe("Tidal Album");
-        expect(tidalTrack.source).toBe("tidal");
-
         // Local track should NOT have streaming fields
         expect(localTrack.id).toBe("local-1");
         expect(localTrack.streamSource).toBeUndefined();
@@ -2109,7 +2111,7 @@ describe("library catalog list runtime coverage", () => {
         expect(localTrack.filePath).toBeDefined();
     });
 
-    it("merge-sorts local and remote liked tracks by likedAt descending", async () => {
+    it("merge-sorts local and supported remote liked tracks by likedAt descending", async () => {
         // Tests the cursor stability concern: interleaved local+remote timestamps
         const t1 = new Date("2026-03-01T14:00:00.000Z"); // remote yt — newest
         const t2 = new Date("2026-03-01T13:00:00.000Z"); // local
@@ -2117,9 +2119,8 @@ describe("library catalog list runtime coverage", () => {
         const t4 = new Date("2026-03-01T11:00:00.000Z"); // local — oldest
 
         mockLikedTrackCount.mockResolvedValueOnce(2);
-        mockRemoteLikedTrackCount.mockResolvedValueOnce(2);
+        mockRemoteLikedTrackCount.mockResolvedValueOnce(1);
         mockUserSettingsFindUnique.mockResolvedValueOnce({
-            tidalOAuthJson: "tidal-token",
             ytMusicOAuthJson: "yt-token",
         });
         mockLikedTrackFindMany.mockResolvedValueOnce([
@@ -2182,10 +2183,9 @@ describe("library catalog list runtime coverage", () => {
         expect(res.body.tracks.map((t: any) => t.id)).toEqual([
             "yt:vid1", // t1 — newest
             "local-a", // t2
-            "tidal:987", // t3
             "local-b", // t4 — oldest
         ]);
-        expect(res.body.total).toBe(4);
+        expect(res.body.total).toBe(3);
     });
 
     it("keeps pagination open when same-timestamp remote likes exceed the fetch window", async () => {

@@ -87,6 +87,7 @@ jest.mock("../../middleware/asyncHandler", () => ({
 
 jest.mock("../../config", () => ({
     config: {
+        underJest: true,
         audiobookshelf: undefined,
         music: {
             musicPath: "/music",

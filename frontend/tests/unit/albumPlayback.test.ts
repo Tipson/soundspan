@@ -70,7 +70,7 @@ test("album queue selection removes offline peers and keeps the selected row ind
     assert.equal(selection.tracks[1].youtubeVideoId, "selected");
 });
 
-test("discovery album playback excludes metadata and preview-only rows", () => {
+test("discovery album playback excludes metadata, preview-only, and retired-provider rows", () => {
     const album = {
         id: "discovery-album",
         title: "Discovery Album",
@@ -106,7 +106,7 @@ test("discovery album playback excludes metadata and preview-only rows", () => {
 
     assert.deepEqual(
         selection.tracks.map((track) => track.id),
-        ["youtube:playable", "tidal:42"],
+        ["youtube:playable"],
     );
     assert.equal(selection.startIndex, 0);
 });

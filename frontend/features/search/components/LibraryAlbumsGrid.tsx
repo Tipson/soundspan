@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Disc3 } from "lucide-react";
-import Image from "next/image";
 import { api } from "@/lib/api";
 import { Album } from "../types";
 import { PeerBadge } from "@/components/ui/PeerBadge";
+import { CachedImage } from "@/components/ui/CachedImage";
 
 interface LibraryAlbumsGridProps {
     albums: Album[];
@@ -47,14 +47,16 @@ export function LibraryAlbumsGrid({
                     >
                         <div className="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-surface-elevated shadow-lg shadow-black/20">
                             {coverArtId ? (
-                                <Image
+                                <CachedImage
                                     src={api.getCoverArtUrl(coverArtId, 200)}
                                     alt={album.title}
                                     fill
                                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
                                     className="object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
                                     loading="lazy"
-                                    unoptimized
+                                    fallback={
+                                        <Disc3 className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />
+                                    }
                                 />
                             ) : (
                                 <Disc3 className="h-10 w-10 text-content-muted sm:h-12 sm:w-12" />

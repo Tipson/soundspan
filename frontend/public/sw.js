@@ -1,4 +1,11 @@
 // soundspan Service Worker
+importScripts("/stream-preload-cache.js");
+const completedStreamPreloads = self.createCompletedStreamPreloadCache({
+    origin: self.location.origin,
+    parseRange: parseSingleByteRange,
+    fetch: (request) => fetch(request),
+});
+
 const CACHE_NAME = "soundspan-v4";
 const IMAGE_CACHE_NAME = "soundspan-images-v3";
 const IMAGE_METADATA_CACHE_NAME = "soundspan-images-metadata-v2";
@@ -19,6 +26,7 @@ const MAX_CONCURRENT_IMAGE_REQUESTS = 4;
 const REQUEST_DELAY_MS = 10;
 const IMAGE_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const NAVIGATION_NETWORK_TIMEOUT_MS = 5_000;
+const BOOTSTRAP_NETWORK_TIMEOUT_MS = 1_500;
 const LEGACY_BACKGROUND_OPERATION_TIMEOUT_MS = 3_000;
 
 const CRITICAL_PRECACHE_DOCUMENTS = ["/", "/library?tab=downloads"];
@@ -92,7 +100,10 @@ async function retireLegacyBackgroundFetches() {
             return aborted.state === "resolved" && aborted.value !== false;
         }),
     );
-    return results.every(Boolean);
+    // The caller uses this as a migration signal. Reload the legacy client
+    // even if one best-effort abort failed, otherwise its old bundle can
+    // recreate the retired transfer protocol.
+    return ids.length > 0 && results.length === ids.length;
 }
 
 function isImageRoute(pathname) {
@@ -182,25 +193,64 @@ function queueImageRequest(request, cacheKey) {
     });
 }
 
-async function fetchNavigationWithTimeout(request) {
+async function fetchWithTimeout(request, timeoutMs, waitForBody = false) {
     const controller = new AbortController();
     let timeoutHandle;
     const timeout = new Promise((_, reject) => {
         timeoutHandle = setTimeout(() => {
             controller.abort();
             reject(
-                new Error("Истекло время ожидания сетевого запроса навигации"),
+                new Error("Истекло время ожидания сетевого запроса запуска"),
             );
-        }, NAVIGATION_NETWORK_TIMEOUT_MS);
+        }, timeoutMs);
     });
     try {
         return await Promise.race([
-            fetch(request, { signal: controller.signal }),
+            fetch(request, { signal: controller.signal }).then(
+                async (response) => {
+                    // beforeInteractive cannot execute headers alone. Keep its
+                    // tiny configuration body inside the same cancellation budget.
+                    if (waitForBody && response.ok)
+                        await response.clone().arrayBuffer();
+                    return response;
+                },
+            ),
             timeout,
         ]);
     } finally {
         clearTimeout(timeoutHandle);
     }
+}
+
+async function prepareNavigationBootstrap(response, cache) {
+    const html = await response.clone().text();
+    const assets = new Set();
+    for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
+        const asset = new URL(match[1], self.location.origin);
+        if (
+            asset.origin === self.location.origin &&
+            (asset.pathname === "/runtime-config" ||
+                (asset.pathname.startsWith("/_next/static/") &&
+                    /\.(?:js|css)$/.test(asset.pathname)))
+        ) {
+            assets.add(asset.toString());
+        }
+    }
+    // Never replace a usable cached document with a shell whose scripts were
+    // lost during a network change. Immutable assets may be shared by pages;
+    // only publish the document after every bootstrap dependency is retained.
+    await Promise.all(
+        [...assets].map(async (url) => {
+            if (await cache.match(url)) return;
+            const asset = await fetchWithTimeout(
+                new Request(url),
+                NAVIGATION_NETWORK_TIMEOUT_MS,
+                true,
+            );
+            if (!asset.ok) throw new Error("Ресурс запуска недоступен");
+            await cache.put(url, asset);
+        }),
+    );
 }
 
 function parseSingleByteRange(value, size) {
@@ -670,6 +720,12 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("message", (event) => {
+    if (event.data?.type === "CLEAR_STREAM_PRELOAD_CACHE") {
+        // The browser-authenticated sender owns the cache, never a payload id.
+        if (event.source?.id)
+            completedStreamPreloads.clearClient(event.source.id);
+        return;
+    }
     if (event.data?.type === "DEVICE_OFFLINE_CAPABILITIES_REQUEST") {
         event.ports?.[0]?.postMessage({
             type: "DEVICE_OFFLINE_CAPABILITIES",
@@ -684,7 +740,11 @@ self.addEventListener("activate", (event) => {
     event.waitUntil(
         (async () => {
             const cacheNames = await caches.keys();
-            await retireLegacyBackgroundFetches().catch(() => false);
+            const hasLegacyShellCache = cacheNames.some(
+                (name) => name.startsWith("soundspan-v") && name !== CACHE_NAME,
+            );
+            const hadLegacyBackgroundFetches =
+                await retireLegacyBackgroundFetches().catch(() => false);
             await Promise.all(
                 cacheNames
                     .filter(
@@ -697,11 +757,10 @@ self.addEventListener("activate", (event) => {
                     .map((name) => caches.delete(name)),
             );
             await self.clients.claim();
-            // Activation is the only reliable migration barrier for already
-            // open clients: an old shell cache or Background Fetch ID may have
-            // been evicted before this worker can inspect it. Navigating every
-            // window client exactly once per worker activation prevents an old
-            // JavaScript bundle from recreating the retired transfer protocol.
+            // Reload once only while crossing the legacy shell boundary. A
+            // routine worker update must not tear down the persistent audio
+            // provider in an already open client.
+            if (!hasLegacyShellCache && !hadLegacyBackgroundFetches) return;
             const windowClients = await self.clients.matchAll({
                 type: "window",
                 includeUncontrolled: true,
@@ -778,6 +837,19 @@ self.addEventListener("fetch", (event) => {
         request.headers.has("Next-Url") ||
         request.headers.has("Next-Router-Prefetch");
     if (isNextRouteRequest) return;
+    if (
+        url.origin === self.location.origin &&
+        /^\/api\/ytmusic\/stream-public\/[A-Za-z0-9_-]{11}$/.test(
+            url.pathname,
+        ) &&
+        url.searchParams.has("preloadSession") &&
+        event.clientId
+    ) {
+        event.respondWith(
+            completedStreamPreloads.handle(request, event.clientId),
+        );
+        return;
+    }
     if (url.pathname.includes("/stream")) return;
     if (url.pathname.startsWith("/_next/image")) return;
 
@@ -814,12 +886,36 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
         (async () => {
             try {
+                // These resources gate hydration. A known-offline launch must
+                // not wait for the browser's network failure detection.
+                const isBootstrap =
+                    url.origin === self.location.origin &&
+                    url.pathname === "/runtime-config";
+                if (
+                    self.navigator?.onLine === false &&
+                    (request.mode === "navigate" || isBootstrap)
+                ) {
+                    throw new TypeError("offline");
+                }
                 const response =
                     request.mode === "navigate"
-                        ? await fetchNavigationWithTimeout(request)
-                        : await fetch(request);
+                        ? await fetchWithTimeout(
+                              request,
+                              NAVIGATION_NETWORK_TIMEOUT_MS,
+                              true,
+                          )
+                        : isBootstrap
+                          ? await fetchWithTimeout(
+                                request,
+                                BOOTSTRAP_NETWORK_TIMEOUT_MS,
+                                true,
+                            )
+                          : await fetch(request);
                 if (response.status === 200) {
                     const cache = await caches.open(CACHE_NAME);
+                    if (request.mode === "navigate") {
+                        await prepareNavigationBootstrap(response, cache);
+                    }
                     await cache.put(request, response.clone());
                 }
                 return response;
@@ -831,7 +927,14 @@ self.addEventListener("fetch", (event) => {
                     const root = await cache.match(
                         new URL("/", self.location.origin).toString(),
                     );
-                    if (root) return root;
+                    // Keep the document and address in sync: a cached homepage
+                    // is not the HTML for an uncached library or artist route.
+                    if (root) {
+                        return Response.redirect(
+                            new URL("/", self.location.origin).toString(),
+                            302,
+                        );
+                    }
                 }
                 return new Response("Нет подключения к интернету", {
                     status: 503,
@@ -840,3 +943,4 @@ self.addEventListener("fetch", (event) => {
         })(),
     );
 });
+// Soundspan app build: "jnhfucjBbsU86It4z0Q6i"

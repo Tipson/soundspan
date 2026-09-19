@@ -36,9 +36,14 @@ jest.mock("../../utils/db", () => ({
         user: { findMany: jest.fn() },
         userSettings: { findMany: jest.fn() },
         federationPeer: { findMany: jest.fn() },
+        musicSourceConnection: { findMany: jest.fn() },
         systemSettings: { findMany: jest.fn() },
         apiKey: { findMany: jest.fn() },
     },
+}));
+
+jest.mock("../../workers/queues", () => ({
+    schedulerMaintenanceQueue: {},
 }));
 
 jest.mock("../../config", () => ({
@@ -90,6 +95,9 @@ describe("admin secrets-status route", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockFederationPeerFindMany.mockResolvedValue([]);
+        (prisma.musicSourceConnection.findMany as jest.Mock).mockResolvedValue(
+            [],
+        );
     });
 
     it("counts legacy vs v2 encrypted settings values per model", async () => {
@@ -112,6 +120,9 @@ describe("admin secrets-status route", () => {
         mockFederationPeerFindMany.mockResolvedValue([
             { outboundToken: "v2:peer:salt:tag:ciphertext" },
         ]);
+        (prisma.musicSourceConnection.findMany as jest.Mock).mockResolvedValue([
+            { token: "v2:music:salt:tag:ciphertext" },
+        ]);
         // 1 v2 + 1 legacy; unset columns ignored.
         mockSystemSettingsFindMany.mockResolvedValue([
             { lidarrApiKey: "v2:x:y:z:w", openaiApiKey: "33:44" },
@@ -129,12 +140,13 @@ describe("admin secrets-status route", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({
             settingsCipher: {
-                total: 9,
-                v2: 5,
+                total: 10,
+                v2: 6,
                 legacy: 4,
                 migrationComplete: false,
                 byModel: {
                     federationPeer: { total: 1, v2: 1, legacy: 0 },
+                    musicSourceConnection: { total: 1, v2: 1, legacy: 0 },
                     // subsonicPassword (v2 + legacy) + twoFactorSecret (v2) +
                     // twoFactorRecoveryCodes (legacy)
                     user: { total: 4, v2: 2, legacy: 2 },
@@ -155,6 +167,9 @@ describe("admin secrets-status route", () => {
         });
         // Only counts are returned — never the secret values themselves.
         expect(JSON.stringify(res.body)).not.toContain("v2:salt:iv:tag:ct");
+        expect(JSON.stringify(res.body)).not.toContain(
+            "v2:music:salt:tag:ciphertext",
+        );
     });
 
     it("reports migrationComplete once everything is v2 (no legacy left)", async () => {

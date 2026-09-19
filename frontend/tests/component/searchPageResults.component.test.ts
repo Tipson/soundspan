@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 const state = {
     query: "massive attack",
+    catalogNotice: null as string | null,
     view: null as string | null,
     libraryTracks: [] as unknown[],
     libraryAlbums: [] as unknown[],
@@ -99,6 +100,7 @@ mock.module("@/features/search/hooks/useSearchData", {
         useSearchData: (input: Record<string, unknown>) => {
             calls.searchData.push(input);
             return {
+                catalogNotice: state.catalogNotice,
                 libraryResults: {
                     tracks: state.libraryTracks,
                     albums: state.libraryAlbums,
@@ -170,6 +172,9 @@ mock.module("@/features/search/components/TopResult", {
 });
 mock.module("@/features/search/components/EmptyState", {
     namedExports: { EmptyState: () => null },
+});
+mock.module("@/features/search/components/AudiusSearchPanel", {
+    namedExports: { AudiusSearchPanel: marker("audius-search") },
 });
 mock.module("@/features/search/components/LibraryTracksList", {
     namedExports: {
@@ -272,6 +277,7 @@ beforeEach(() => {
         ...Array.from({ length: 4 }, (_, index) => providerAlbum(index)),
     ];
     state.isDiscoverSearching = false;
+    state.catalogNotice = null;
     state.canRequestMoreDiscoverTracks = false;
     state.hasNextLibraryTracks = false;
     calls.searchData.length = 0;
@@ -357,6 +363,7 @@ test("All opens with the canonical artist, popular tracks, and albums on one edi
     assert.deepEqual(calls.embeddedAlbumGrids, [true, true]);
     assert.equal(calls.searchData[0]?.libraryType, "all");
     assert.equal(calls.searchData[0]?.libraryLimit, 20);
+    assert.equal(calls.searchData[0]?.discoverScope, "all");
 
     const artistIndex = html.indexOf('data-search-primary-result="artist"');
     const tracksIndex = html.indexOf('data-search-tracks-surface="open"');
@@ -381,6 +388,7 @@ test("Tracks renders the complete loaded prefix and offers honest continuation",
     assert.equal(calls.searchData[0]?.libraryType, "tracks");
     assert.equal(calls.searchData[0]?.libraryLimit, 50);
     assert.equal(calls.searchData[0]?.discoverLimit, 50);
+    assert.equal(calls.searchData[0]?.discoverScope, "tracks");
     assert.deepEqual(calls.libraryTrackLimits, [40]);
     assert.deepEqual(calls.discoverTrackLimits, [30]);
     assert.match(html, /Показать ещё \(70 загружено\)/);
@@ -399,4 +407,16 @@ test("partial local results disclose that the online catalog is still loading", 
     const html = renderToStaticMarkup(React.createElement(SearchPage));
 
     assert.match(html, /Ищем в онлайн-каталоге/);
+});
+test("an empty search still discloses a partial provider outage", async () => {
+    state.catalogNotice = "VK временно недоступен";
+    state.libraryTracks = [];
+    state.libraryAlbums = [];
+    state.libraryArtists = [];
+    state.discoverResults = [];
+    const SearchPage = (await import("../../app/search/page")).default;
+    assert.match(
+        renderToStaticMarkup(React.createElement(SearchPage)),
+        /VK временно недоступен/,
+    );
 });
