@@ -72,6 +72,53 @@ describe("unified recommendation engine", () => {
         exclude: [],
     };
 
+    it.each(["baseline", "active", "shadow"] as const)(
+        "keeps every explicit mood lane eligible in %s, even with a high provider score",
+        async (mode) => {
+            const deps = dependencies(mode);
+            const candidates = [
+                "quickPicks",
+                "discovery",
+                "listenAgain",
+            ].flatMap((lane) =>
+                [0.2, 0.8, null, NaN, 2].map((arousal, i) =>
+                    candidate(`${lane}-${i}`, {
+                        lane: lane as RecommendationCandidate["lane"],
+                        providerPrior: i * 10,
+                        audioFeatures: { arousal, energy: 0.1 },
+                    }),
+                ),
+            );
+            deps.loadCandidates.mockResolvedValue({
+                candidates,
+                nextCursor: 1,
+                degradedSources: [],
+            });
+            for (const [mood, suffix] of [
+                ["calm", "0"],
+                ["focus", "0"],
+                ["energetic", "1"],
+                ["workout", "1"],
+            ] as const) {
+                const result = await new RecommendationEngine(deps).recommend({
+                    ...request,
+                    intent: { ...request.intent, mood },
+                });
+                expect(result.tracks).toHaveLength(3);
+                expect(
+                    result.tracks.every((track) =>
+                        track.id.endsWith(`-${suffix}`),
+                    ),
+                ).toBe(true);
+            }
+            const neutral = await new RecommendationEngine(deps).recommend({
+                ...request,
+                limit: 30,
+            });
+            expect(neutral.tracks.length).toBeGreaterThan(3);
+        },
+    );
+
     it.each(["baseline", "active"] as const)(
         "keeps Wave cooldown strict in %s even when lanes cannot be filled",
         async (mode) => {
@@ -124,6 +171,7 @@ describe("unified recommendation engine", () => {
                 }),
                 candidate("quiet", {
                     audioFeatures: {
+                        arousal: 0.2,
                         energy: 0.2,
                         danceability: 0.2,
                         instrumentalness: 1,

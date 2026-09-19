@@ -18,14 +18,12 @@ const WAVE_MODE_IDS = new Set<WaveSelectionMode>([
     "new",
     "familiar",
 ]);
-const WAVE_MOOD_IDS = new Set<PersonalizedHomeMood>([
-    "calm",
-    "energetic",
-    "focus",
-    "workout",
-    "favorites",
-    "forgotten",
-]);
+/** Normalize old saved settings and links to the three visible listening modes. */
+export function normalizeWaveMood(value: unknown): WaveSelectionMood {
+    if (value === "calm" || value === "focus") return "calm";
+    if (value === "energetic" || value === "workout") return "energetic";
+    return null;
+}
 const WAVE_SELECTION_KEY_PREFIX = `${BRAND_SLUG}_wave_selection_v1`;
 const DEFAULT_WAVE_SELECTION: WaveSelection = {
     mode: "for-you",
@@ -62,11 +60,7 @@ export function readPersistedWaveSelection(
                 WAVE_MODE_IDS.has(parsed.mode as WaveSelectionMode)
                     ? (parsed.mode as WaveSelectionMode)
                     : DEFAULT_WAVE_SELECTION.mode,
-            mood:
-                typeof parsed.mood === "string" &&
-                WAVE_MOOD_IDS.has(parsed.mood as PersonalizedHomeMood)
-                    ? (parsed.mood as PersonalizedHomeMood)
-                    : DEFAULT_WAVE_SELECTION.mood,
+            mood: normalizeWaveMood(parsed.mood),
         };
     } catch {
         return DEFAULT_WAVE_SELECTION;
@@ -83,7 +77,11 @@ export function persistWaveSelection(
     try {
         window.localStorage.setItem(
             waveSelectionStorageKey(ownerId),
-            JSON.stringify({ mode, mood, language: "any" }),
+            JSON.stringify({
+                mode,
+                mood: normalizeWaveMood(mood),
+                language: "any",
+            }),
         );
     } catch {
         // The applied in-memory selection remains usable in restricted storage.
@@ -105,14 +103,11 @@ export function readWaveSelection(ownerId: string | null): WaveSelection {
             WAVE_MODE_IDS.has(requestedMode as WaveSelectionMode)
                 ? (requestedMode as WaveSelectionMode)
                 : persisted.mode,
-        mood:
-            hasMoodOverride &&
-            requestedMood &&
-            WAVE_MOOD_IDS.has(requestedMood as PersonalizedHomeMood)
-                ? (requestedMood as PersonalizedHomeMood)
-                : hasModeOverride || hasMoodOverride
-                  ? null
-                  : persisted.mood,
+        mood: hasMoodOverride
+            ? normalizeWaveMood(requestedMood)
+            : hasModeOverride
+              ? null
+              : persisted.mood,
     };
 }
 
@@ -125,7 +120,8 @@ export function replaceWaveSelection(
     const url = new URL(window.location.href);
     url.searchParams.set("mode", mode);
     url.searchParams.delete("language");
-    if (mood) url.searchParams.set("mood", mood);
+    const normalizedMood = normalizeWaveMood(mood);
+    if (normalizedMood) url.searchParams.set("mood", normalizedMood);
     else url.searchParams.delete("mood");
     window.history.replaceState(window.history.state, "", url);
 }

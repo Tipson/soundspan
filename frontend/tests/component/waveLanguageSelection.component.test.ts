@@ -24,7 +24,7 @@ test("retired language restrictions are ignored without losing direction or mood
     );
     assert.deepEqual(readPersistedWaveSelection("one"), {
         mode: "new",
-        mood: "focus",
+        mood: "calm",
         language: "any",
     });
     assert.equal(readPersistedWaveSelection("two").language, "any");

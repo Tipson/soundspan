@@ -424,7 +424,7 @@ test("a retired language URL preserves direction and mood without a hidden langu
                 quickPicks: [],
                 listenAgain: [],
                 discovery:
-                    mode === "new" && mood === "focus" && language === "any"
+                    mode === "new" && mood === "calm" && language === "any"
                         ? [{ id: "personalized-discovery" }]
                         : [],
             },

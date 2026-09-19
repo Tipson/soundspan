@@ -75,7 +75,7 @@ test("wave selection is restored before Home and Vibe consume shared audio state
     });
 
     assert.deepEqual(state.appliedModes, ["new"]);
-    assert.deepEqual(state.appliedMoods, ["focus"]);
+    assert.deepEqual(state.appliedMoods, ["calm"]);
     assert.equal(state.waveLanguage, "any");
 
     await act(async () => root.unmount());

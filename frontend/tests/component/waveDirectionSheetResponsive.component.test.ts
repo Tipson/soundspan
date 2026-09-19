@@ -35,24 +35,16 @@ test("Wave keeps long mood labels readable on one line without shortening access
         );
     });
 
-    const focus = container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Для концентрации"]',
+    const moods = container.querySelector(
+        '[role="radiogroup"][aria-label="Настроение моей волны"]',
     );
-    assert.ok(focus);
-    assert.match(focus.textContent ?? "", /Фокус/);
-    assert.doesNotMatch(focus.textContent ?? "", /Для концентрации/);
-    const label = Array.from(focus.querySelectorAll("span")).find(
-        (span) => span.textContent?.trim() === "Фокус",
+    assert.ok(moods);
+    assert.deepEqual(
+        Array.from(moods.querySelectorAll('[role="radio"]')).map((node) =>
+            node.getAttribute("aria-label"),
+        ),
+        ["На своей волне", "Спокойно", "Энергично"],
     );
-    assert.ok(label);
-    assert.match(label.className, /whitespace-nowrap/);
-
-    const workout = container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Для тренировки"]',
-    );
-    assert.ok(workout);
-    assert.match(workout.textContent ?? "", /Тренировка/);
-    assert.doesNotMatch(workout.textContent ?? "", /Для тренировки/);
     const languageGroup = container.querySelector(
         '[role="radiogroup"][aria-label="Язык исполнения"]',
     );

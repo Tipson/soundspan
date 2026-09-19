@@ -4,7 +4,7 @@ import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
 import { moodRankingScore, rankRecommendationCandidates } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
-import { isWaveMusicCandidate } from "./wavePolicy";
+import { isWaveMusicCandidate, matchesWaveMood } from "./wavePolicy";
 import type {
     RecommendRequest,
     RecommendResult,
@@ -295,6 +295,12 @@ export class RecommendationEngine {
                 );
             }
         }
+        // Apply eligibility before lane quotas and either ranker, so discovery
+        // and familiar insertions cannot reintroduce an incompatible recording.
+        if (isWave)
+            candidates = candidates.filter((candidate) =>
+                matchesWaveMood(candidate, request.intent.mood),
+            );
         const excludes = new Set(
             (request.exclude ?? [])
                 .map((value) => value.trim())

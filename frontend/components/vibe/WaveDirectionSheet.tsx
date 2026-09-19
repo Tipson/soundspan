@@ -12,6 +12,7 @@ import type {
     PersonalizedHomeMood,
     PersonalizedHomeLanguage,
 } from "@/features/home/types";
+import { normalizeWaveMood } from "@/lib/waveSelection";
 import { ru } from "@/lib/i18n/ru";
 import { useDismissibleLayer } from "@/hooks/useDismissibleLayer";
 
@@ -63,26 +64,6 @@ export const WAVE_MOODS: readonly {
         id: "energetic",
         label: ru.vibe.moods.energetic[0],
         subtitle: ru.vibe.moods.energetic[1],
-    },
-    {
-        id: "focus",
-        label: ru.vibe.moods.focus[0],
-        subtitle: ru.vibe.moods.focus[1],
-    },
-    {
-        id: "workout",
-        label: ru.vibe.moods.workout[0],
-        subtitle: ru.vibe.moods.workout[1],
-    },
-    {
-        id: "favorites",
-        label: ru.vibe.moods.favorites[0],
-        subtitle: ru.vibe.moods.favorites[1],
-    },
-    {
-        id: "forgotten",
-        label: ru.vibe.moods.forgotten[0],
-        subtitle: ru.vibe.moods.forgotten[1],
     },
 ];
 
@@ -142,7 +123,9 @@ export function WaveDirectionSheet({
 }: WaveDirectionSheetProps) {
     useDismissibleLayer(true, onClose);
     const [draftMode, setDraftMode] = useState(activeMode);
-    const [draftMood, setDraftMood] = useState<WaveMood | null>(activeMood);
+    const [draftMood, setDraftMood] = useState<WaveMood | null>(
+        normalizeWaveMood(activeMood),
+    );
     const dialogRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
 

@@ -791,7 +791,7 @@ test("Tune My Wave stages a supported direction before applying it", async () =>
         dialog.querySelectorAll(
             '[role="radiogroup"][aria-label="Настроение моей волны"] [role="radio"]',
         ).length,
-        7,
+        3,
     );
     assert.match(
         dialog.textContent ?? "",
@@ -868,7 +868,7 @@ test("Tune My Wave applies mood independently and keeps both choices in the deep
     const dialog =
         mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
-    const energetic = findButtonByLabel(dialog, "Бодрое");
+    const energetic = findButtonByLabel(dialog, "Энергично");
     const newToMe = findButtonByLabel(dialog, "Больше нового");
     assert.ok(energetic);
     assert.ok(newToMe);
@@ -904,7 +904,7 @@ test("applied Wave settings persist per account, URL settings override them, and
         mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
     const familiar = findButtonByLabel(dialog, "Знакомое");
-    const calm = findButtonByLabel(dialog, "Спокойное");
+    const calm = findButtonByLabel(dialog, "Спокойно");
     assert.ok(familiar);
     assert.ok(calm);
     await React.act(async () => {
@@ -928,7 +928,7 @@ test("applied Wave settings persist per account, URL settings override them, and
     dialog = mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
     const newToMe = findButtonByLabel(dialog, "Больше нового");
-    const energetic = findButtonByLabel(dialog, "Бодрое");
+    const energetic = findButtonByLabel(dialog, "Энергично");
     assert.ok(newToMe);
     assert.ok(energetic);
     await React.act(async () => {
@@ -1030,7 +1030,7 @@ test("retuning an active Wave skips the current track, starts the newly ranked q
     const dialog =
         mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
-    const calm = findButtonByLabel(dialog, "Спокойное");
+    const calm = findButtonByLabel(dialog, "Спокойно");
     assert.ok(calm);
     await React.act(async () => calm.click());
 
@@ -1075,7 +1075,7 @@ test("rapid Wave retunes apply only the latest selection and start one replaceme
     });
     const callsBeforeRetune = state.playTracksCallCount;
 
-    for (const moodLabel of ["Спокойное", "Бодрое", "Для концентрации"]) {
+    for (const moodLabel of ["Спокойно", "Энергично", "Спокойно"]) {
         const tune = findButton(mounted.container, "Настроить");
         assert.ok(tune);
         await React.act(async () => tune.click());
@@ -1096,8 +1096,8 @@ test("rapid Wave retunes apply only the latest selection and start one replaceme
     await settleWaveRetune();
 
     assert.equal(state.playTracksCallCount - callsBeforeRetune, 1);
-    assert.deepEqual(state.playedTrackIds, ["yt:focus-pick"]);
-    assert.equal(state.waveMood, "focus");
+    assert.deepEqual(state.playedTrackIds, ["yt:calm-pick"]);
+    assert.equal(state.waveMood, "calm");
 
     await unmountPage(mounted);
 });
@@ -1206,7 +1206,7 @@ test("a failed active-Wave retune keeps the existing upcoming queue", async (t) 
     const dialog =
         mounted.container.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(dialog);
-    const calm = findButtonByLabel(dialog, "Спокойное");
+    const calm = findButtonByLabel(dialog, "Спокойно");
     assert.ok(calm);
     await React.act(async () => calm.click());
 

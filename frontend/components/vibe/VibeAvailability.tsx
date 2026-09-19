@@ -792,7 +792,9 @@ export function VibeProviderFallback() {
                                       ? data?.languageStatus?.pending
                                           ? "Определяем язык подходящих вам треков. Повторите чуть позже или выберите «Любое»."
                                           : "Пока нет подходящих треков с этим языком. Попробуйте «Любое»."
-                                      : ru.vibe.empty}
+                                      : requestedMood
+                                        ? "Пока мало подходящих треков для этого настроения. Попробуйте «На своей волне» или вернитесь позже."
+                                        : ru.vibe.empty}
                             </p>
                             {(isError || requestedLanguage !== "any") && (
                                 <button

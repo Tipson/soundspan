@@ -1,5 +1,10 @@
 # Changelog
 
+## Wave mood consistency
+
+- Offer three listening moods: On your wave, Calm and Energetic. Restore legacy Focus as Calm and Workout as Energetic; retired collection moods return to the neutral choice without hidden filters.
+- Apply measured perceptual-intensity eligibility to every Wave candidate lane before baseline or hybrid ranking. Unknown analysis and incompatible discovery/familiar insertions cannot fill explicit moods; explain when matching music is unavailable. Neutral playback, direction controls and the hybrid rollout remain unchanged.
+
 ## Android offline playback
 
 - Keep supported downloaded recordings on one bounded native audio timeline across prepared track transitions. Preserve per-track seek, manual pause, queue completion and repeat, with native fallback for unsupported formats.
