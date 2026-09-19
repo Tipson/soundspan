@@ -28,13 +28,7 @@ export type ResolvedMediaSource = Exclude<
 
 /** Source identifiers accepted by the audio engine boundary. */
 export type AudioEngineSourceType =
-    | "local"
-    | "peer"
-    | "tidal"
-    | "ytmusic"
-    | "audius"
-    | "vk"
-    | "yandex";
+    "local" | "peer" | "tidal" | "ytmusic" | "audius" | "vk" | "yandex";
 
 /** Canonical provider identity and optional provider-specific track metadata. */
 export interface CanonicalMediaProviderIdentity {
@@ -70,11 +64,7 @@ export interface CanonicalMediaSearchResult {
 
 /** Media types currently understood by federation v1 consumers. */
 export type FederationMediaType =
-    | "artist"
-    | "album"
-    | "track"
-    | "podcast"
-    | "audiobook";
+    "artist" | "album" | "track" | "podcast" | "audiobook";
 
 /** Complete bounded vocabulary of federation protocol capabilities. */
 export const FEDERATION_CAPABILITY_VALUES = ["track-attrs-loudness"] as const;
@@ -85,13 +75,7 @@ export type FederationCapability =
 
 /** Source discriminator emitted by unified track response serializers. */
 export type UnifiedTrackSource =
-    | "local"
-    | "tidal"
-    | "youtube"
-    | "federated"
-    | "audius"
-    | "vk"
-    | "yandex";
+    "local" | "tidal" | "youtube" | "federated" | "audius" | "vk" | "yandex";
 
 /** Safe peer provenance attached to a federated unified track response. */
 export interface FederatedTrackPeer {

@@ -3,7 +3,9 @@ import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-GlobalRegistrator.register();
+// OIDC callbacks use URL/history APIs, which require a real origin rather than
+// Happy DOM's opaque about:blank document (not navigable on newer Node 24).
+GlobalRegistrator.register({ url: "https://soundspan.test/settings" });
 (
     globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

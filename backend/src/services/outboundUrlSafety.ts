@@ -4,6 +4,7 @@ import { isBlockedAddress } from "./outboundAddressPolicy";
 const VETTED_HOSTNAME_TTL_MS = 30_000;
 const MAX_VETTED_HOSTNAMES = 256;
 const vettedHostnames = new Map<string, number>();
+const activeLookupGuards = new Map<string, number>();
 let originalLookup: typeof dns.lookup | null = null;
 let baseLookupOverride: typeof dns.lookup | null = null;
 
@@ -121,6 +122,7 @@ function registerVettedHostname(hostname: string): void {
 
 function isVettedHostname(hostname: string): boolean {
     const normalized = normalizeHostname(hostname);
+    if (activeLookupGuards.has(normalized)) return true;
     const expiry = vettedHostnames.get(normalized);
     if (expiry === undefined) {
         return false;
@@ -183,6 +185,31 @@ function installLookupGuard(): void {
         guardedLookup as unknown as typeof dns.lookup;
 }
 
+/** Keep connect-time DNS validation active until this request settles.
+ * Unlike the compatibility TTL cache, active requests cannot expire or be
+ * evicted. Capacity exhaustion rejects new hosts instead of bypassing safety.
+ * The returned release function is idempotent and supports concurrent requests.
+ */
+export function retainOutboundLookupGuard(url: string): () => void {
+    const normalized = normalizeSafeOutboundUrl(url);
+    if (!normalized) throw new Error("Invalid outbound request URL");
+    const hostname = normalizeHostname(new URL(normalized).hostname);
+    const count = activeLookupGuards.get(hostname) ?? 0;
+    if (!count && activeLookupGuards.size >= MAX_VETTED_HOSTNAMES) {
+        throw new Error("Outbound DNS guard capacity exceeded");
+    }
+    installLookupGuard();
+    activeLookupGuards.set(hostname, count + 1);
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        const remaining = (activeLookupGuards.get(hostname) ?? 1) - 1;
+        if (remaining > 0) activeLookupGuards.set(hostname, remaining);
+        else activeLookupGuards.delete(hostname);
+    };
+}
+
 /**
  * Test-only controls for resetting global guard state and supplying deterministic
  * callback-style DNS lookup behavior without using the host network.
@@ -190,6 +217,7 @@ function installLookupGuard(): void {
 export const __testHooks = {
     resetRegistry(): void {
         vettedHostnames.clear();
+        activeLookupGuards.clear();
     },
     setBaseLookup(baseLookup: typeof dns.lookup): void {
         baseLookupOverride = baseLookup;

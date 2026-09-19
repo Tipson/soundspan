@@ -6,6 +6,7 @@ import {
     normalizeSafeOutboundUrl,
     resolveSafeOutboundUrl,
     resolveSafeOutboundRedirectTarget,
+    retainOutboundLookupGuard,
 } from "./outboundUrlSafety";
 
 /**
@@ -64,6 +65,18 @@ const PROXY_AWARE_IMAGE_HOSTS = new Set([
 ]);
 
 async function fetchImageResponse(
+    url: string,
+    timeoutMs: number,
+): Promise<Response> {
+    const release = retainOutboundLookupGuard(url);
+    try {
+        return await fetchImageResponseTransport(url, timeoutMs);
+    } finally {
+        release();
+    }
+}
+
+async function fetchImageResponseTransport(
     url: string,
     timeoutMs: number,
 ): Promise<Response> {

@@ -1,5 +1,11 @@
 # Changelog
 
+## CI and dependency security
+
+- Update Next.js, sharp, anyio, multer and js-yaml dependencies to address reported security advisories; preserve blocking security checks.
+- Give OIDC component tests a real browser origin on Node 24.20 and align formatting with each package's formatter.
+- Keep image-request DNS guards active through connection establishment, even after the shared compatibility cache expires or evicts an entry. Bound concurrent guarded hosts and release guards on both successful and failed requests.
+
 ## Wave mood consistency
 
 - Offer three listening moods: On your wave, Calm and Energetic. Restore legacy Focus as Calm and Workout as Energetic; retired collection moods return to the neutral choice without hidden filters.

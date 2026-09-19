@@ -1,5 +1,6 @@
 import * as dns from "dns";
 import * as http from "http";
+import { fetchExternalImage } from "../imageProxy";
 
 const mockLookup = jest.fn();
 jest.mock("dns/promises", () => ({
@@ -12,6 +13,7 @@ import {
     normalizeSafeOutboundUrl,
     resolveSafeOutboundUrl,
     resolveSafeOutboundRedirectTarget,
+    retainOutboundLookupGuard,
 } from "../outboundUrlSafety";
 
 type LookupResult = dns.LookupAddress | dns.LookupAddress[];
@@ -275,6 +277,82 @@ describe("outboundUrlSafety", () => {
             await expect(fetch(vettedUrl!)).rejects.toMatchObject({
                 cause: { code: "EOUTBOUNDBLOCKED" },
             });
+        });
+
+        it("keeps an image request protected when its DNS guard TTL expires before connect", async () => {
+            localServer = await startLocalServer();
+            mockLookup.mockResolvedValue([
+                { address: "93.184.216.34", family: 4 },
+            ]);
+            __testHooks.setBaseLookup(
+                createBaseLookup(() => [{ address: "127.0.0.1", family: 4 }]),
+            );
+            const nativeFetch = global.fetch;
+            const start = Date.now();
+            const clock = jest.spyOn(Date, "now").mockReturnValue(start);
+            const fetchSpy = jest
+                .spyOn(global, "fetch")
+                .mockImplementation((...args) => {
+                    clock.mockReturnValue(start + 31_000);
+                    return nativeFetch(...args);
+                });
+            try {
+                const result = await fetchExternalImage({
+                    url: `http://delayed-image.test:${serverPort(localServer)}/`,
+                    maxRetries: 1,
+                });
+                expect(result).toMatchObject({
+                    ok: false,
+                    status: "fetch_error",
+                });
+            } finally {
+                fetchSpy.mockRestore();
+                clock.mockRestore();
+            }
+        });
+
+        it("retains overlapping guards through eviction and releases them independently", async () => {
+            __testHooks.setBaseLookup(
+                createBaseLookup(() => [{ address: "127.0.0.1", family: 4 }]),
+            );
+            mockLookup.mockResolvedValue([
+                { address: "93.184.216.34", family: 4 },
+            ]);
+            const releaseFirst = retainOutboundLookupGuard(
+                "https://active.test/a",
+            );
+            const releaseSecond = retainOutboundLookupGuard(
+                "https://active.test/b",
+            );
+            for (let i = 0; i < 260; i++)
+                await resolveSafeOutboundUrl(`https://host-${i}.test/`);
+            releaseFirst();
+            releaseFirst();
+            await expect(lookupAll("active.test")).rejects.toMatchObject({
+                code: "EOUTBOUNDBLOCKED",
+            });
+            releaseSecond();
+            await expect(lookupAll("active.test")).resolves.toEqual([
+                { address: "127.0.0.1", family: 4 },
+            ]);
+        });
+
+        it("fails closed at active guard capacity and recovers after release", () => {
+            const releases = Array.from({ length: 256 }, (_, i) =>
+                retainOutboundLookupGuard(`https://active-${i}.test/`),
+            );
+            try {
+                expect(() =>
+                    retainOutboundLookupGuard("https://overflow.test/"),
+                ).toThrow("capacity");
+                releases[0]();
+                retainOutboundLookupGuard("https://overflow.test/")();
+                expect(() =>
+                    retainOutboundLookupGuard("http://127.0.0.1/"),
+                ).toThrow("Invalid");
+            } finally {
+                releases.forEach((release) => release());
+            }
         });
 
         it("passes public connect-time addresses through unchanged", async () => {

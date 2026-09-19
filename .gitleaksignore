@@ -1,0 +1,6 @@
+# Exact historical finding: synthetic INTERNAL_API_SECRET used only in the
+# Audius configuration unit-test environment, never an issued credential.
+b340a7ccae6153d94805802b7b54de513e9661e0:backend/src/__tests__/audiusConfig.test.ts:generic-api-key:25
+# Exact historical finding: explanatory prose about Audius stream conditions,
+# not a credential. Other findings in these files remain blocking.
+b340a7ccae6153d94805802b7b54de513e9661e0:docs/AUDIUS.md:generic-api-key:28

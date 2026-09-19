@@ -1213,7 +1213,9 @@ mock.module("@/lib/listen-together-session", {
     namedExports: {
         subscribeListenTogetherMembership: (listener: () => void) => {
             membershipSubscribers.add(listener);
-            return () => { membershipSubscribers.delete(listener); };
+            return () => {
+                membershipSubscribers.delete(listener);
+            };
         },
         enqueueLatestListenTogetherHostTrackOperation: async (operation: {
             action: string;
@@ -1454,11 +1456,14 @@ test("group membership immediately disables solo continuity and repeat without a
         renderOrchestrator();
         assert.equal(continuity.mock.calls.at(-1)?.arguments[0], true);
         assert.equal(repeat.mock.calls.at(-1)?.arguments[0], true);
-        listenTogetherSnapshot = {groupId:"joined",isHost:false};
+        listenTogetherSnapshot = { groupId: "joined", isHost: false };
         for (const listener of membershipSubscribers) listener();
         assert.equal(continuity.mock.calls.at(-1)?.arguments[0], false);
         assert.equal(repeat.mock.calls.at(-1)?.arguments[0], false);
-    } finally { continuity.mock.restore(); repeat.mock.restore(); }
+    } finally {
+        continuity.mock.restore();
+        repeat.mock.restore();
+    }
 });
 
 const rerenderOrchestrator = (): void => {
