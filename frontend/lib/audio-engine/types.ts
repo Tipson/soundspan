@@ -119,6 +119,9 @@ export interface AudioEngine {
     seek(timeSec: number): void | Promise<void>;
     setVolume(value: number): void;
     setMuted(value: boolean): void;
+    /** Optional transport hint; queue ownership and logical repeat remain external. */
+    setRepeatCurrent?(enabled: boolean): void;
+    setContinuousEnabled?(enabled: boolean): void;
     getCurrentTime(): number;
     getDuration(): number;
     isPlaying(): boolean;

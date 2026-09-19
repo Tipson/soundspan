@@ -82,6 +82,8 @@ type Audiobook = {
 };
 
 class FakeAudioEngine {
+    setContinuousEnabled(_enabled: boolean): void {}
+    setRepeatCurrent(_enabled: boolean): void {}
     public readonly loadCalls: Array<{ args: unknown[] }> = [];
     public readonly onCalls: Array<{ event: string }> = [];
     public readonly offCalls: Array<{ event: string }> = [];
@@ -1206,8 +1208,13 @@ mock.module("@/lib/query-events", {
     },
 });
 
+const membershipSubscribers = new Set<() => void>();
 mock.module("@/lib/listen-together-session", {
     namedExports: {
+        subscribeListenTogetherMembership: (listener: () => void) => {
+            membershipSubscribers.add(listener);
+            return () => { membershipSubscribers.delete(listener); };
+        },
         enqueueLatestListenTogetherHostTrackOperation: async (operation: {
             action: string;
         }) => {
@@ -1437,6 +1444,22 @@ const renderOrchestrator = (): void => {
     assert.ok(orchestratorComponent, "orchestrator should be imported");
     hookRuntime.render(orchestratorComponent as () => null);
 };
+
+test("group membership immediately disables solo continuity and repeat without a React rerender", () => {
+    const continuity = mock.method(engine, "setContinuousEnabled");
+    const repeat = mock.method(engine, "setRepeatCurrent");
+    try {
+        audioState.playbackType = "track";
+        audioState.repeatMode = "one";
+        renderOrchestrator();
+        assert.equal(continuity.mock.calls.at(-1)?.arguments[0], true);
+        assert.equal(repeat.mock.calls.at(-1)?.arguments[0], true);
+        listenTogetherSnapshot = {groupId:"joined",isHost:false};
+        for (const listener of membershipSubscribers) listener();
+        assert.equal(continuity.mock.calls.at(-1)?.arguments[0], false);
+        assert.equal(repeat.mock.calls.at(-1)?.arguments[0], false);
+    } finally { continuity.mock.restore(); repeat.mock.restore(); }
+});
 
 const rerenderOrchestrator = (): void => {
     assert.ok(orchestratorComponent, "orchestrator should be imported");

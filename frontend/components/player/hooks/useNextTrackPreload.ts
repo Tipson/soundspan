@@ -638,6 +638,23 @@ export function useNextTrackPreload({
             return;
         }
         preloadTrack(nextTrack);
+        // Source acquisition may finish before the parent's current-track load.
+        // Rebind a device preload after that load so it belongs to the active
+        // transport, rather than a native lease from the previous transport.
+        const onLoaded = () => {
+            if (!hasDeviceOfflinePlaybackCopy(nextTrack)) return;
+            if (!enginePreloadLeaseRef.current) {
+                preloadTrack(nextTrack);
+                return;
+            }
+            enginePreloadLeaseRef.current?.cancel();
+            enginePreloadLeaseRef.current = null;
+            lastPreloadedTrackIdRef.current = null;
+            readyPreloadedTrackIdRef.current = null;
+            preloadTrack(nextTrack);
+        };
+        audioEngine.on("load", onLoaded);
+        return () => audioEngine.off("load", onLoaded);
     }, [
         playbackType,
         currentTrack,

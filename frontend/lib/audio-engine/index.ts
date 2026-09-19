@@ -1,5 +1,9 @@
 import { HowlerEngineAdapter } from "@/lib/audio-engine/howlerEngineAdapter";
 import { NativeAudioElementEngine } from "@/lib/audio-engine/nativeAudioElementEngine";
+import { ContinuousAudioEngine } from "@/lib/audio-engine/continuousAudioEngine";
+import { prepareContinuousAudioSource } from "@/lib/audio-engine/continuousAudioSource";
+import { createContinuousAudioTimeline } from "@/lib/audio-engine/continuousAudioTimeline";
+import { supportsContinuousAndroidPlayback } from "@/lib/audio-engine/continuousAudioSelection";
 import {
     detectAndroidWebView,
     resolveDirectEngineSelection,
@@ -185,6 +189,13 @@ export class HybridRuntimeAudioEngine implements RuntimeAudioEngine {
     setMuted(value: boolean): void {
         this.outputMuted = Boolean(value);
         this.howlerEngine.setMuted(this.outputMuted);
+    }
+
+    setRepeatCurrent(enabled: boolean): void {
+        this.howlerEngine.setRepeatCurrent?.(enabled);
+    }
+    setContinuousEnabled(enabled: boolean): void {
+        this.howlerEngine.setContinuousEnabled?.(enabled);
     }
 
     getCurrentTime(): number {
@@ -394,10 +405,22 @@ export const createRuntimeAudioEngine = (): RuntimeAudioEngine => {
         // Seed the direct slot synchronously so playback is available
         // immediately: the native element engine in native mode, otherwise
         // HowlerEngineAdapter (the constructor default).
+        const nativeEngine =
+            selection.engine === "native"
+                ? new NativeAudioElementEngine()
+                : null;
+        const directNativeEngine =
+            nativeEngine && supportsContinuousAndroidPlayback()
+                ? new ContinuousAudioEngine({
+                      base: nativeEngine,
+                      prepare: prepareContinuousAudioSource,
+                      createTimeline: createContinuousAudioTimeline,
+                  })
+                : nativeEngine;
         sharedRuntimeAudioEngine = new HybridRuntimeAudioEngine(
             selection.engine === "native"
                 ? {
-                      howlerEngine: new NativeAudioElementEngine(),
+                      howlerEngine: directNativeEngine!,
                       directEngineDescriptor: "native",
                   }
                 : {},

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Android offline playback candidate
+
+- Keep supported downloaded recordings on one bounded native audio timeline across prepared track transitions. Preserve per-track seek, manual pause, queue completion and repeat, with native fallback for unsupported formats.
+- Rebind early device preloads to the loaded transport and invalidate continuous transitions immediately when entering a shared listening session. Production rollout remains gated on full-app physical acceptance.
+
 - Preserve unexpected-pause recovery after synchronizing an already playing source. A no-op play command does not leave a stale user-action marker that suppresses the next background interruption.
 
 ## Production playback pacing

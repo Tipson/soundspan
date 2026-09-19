@@ -27,6 +27,7 @@ import { resolveQueueAdvance } from "@/lib/audio/queue-advance-policy";
 import {
     getListenTogetherSessionSnapshot,
     isListenTogetherActiveOrPending,
+    subscribeListenTogetherMembership,
 } from "@/lib/listen-together-session";
 import {
     isAdvancePlayIntentFresh,
@@ -114,6 +115,23 @@ export const AudioPlaybackOrchestrator = memo(
         } = usePlaybackStatus();
         const { pause, advanceQueue: next, startVibeMode } = useAudioControls();
         const queryClient = useQueryClient();
+
+        useLayoutEffect(() => {
+            const syncAuthority = () => {
+                const local = !isListenTogetherActiveOrPending();
+                audioEngine.setContinuousEnabled?.(local);
+                audioEngine.setRepeatCurrent?.(
+                    local && playbackType === "track" && repeatMode === "one",
+                );
+            };
+            syncAuthority();
+            const unsubscribe =
+                subscribeListenTogetherMembership(syncAuthority);
+            return () => {
+                unsubscribe();
+                audioEngine.setRepeatCurrent?.(false);
+            };
+        }, [playbackType, repeatMode]);
         const orchestratorRefs = H.usePlaybackOrchestratorRefs({
             currentTrack,
             playbackType,

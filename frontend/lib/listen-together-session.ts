@@ -63,6 +63,21 @@ const listenTogetherHostTrackOperationState =
 let latestHostTrackOperationGeneration = 0;
 let inMemorySessionSnapshot: ListenTogetherSessionSnapshot | null = null;
 let inMemoryMembershipPending = false;
+const membershipListeners = new Set<() => void>();
+
+/** Synchronously invalidates local playback authority when membership changes. */
+export function subscribeListenTogetherMembership(
+    listener: () => void,
+): () => void {
+    membershipListeners.add(listener);
+    return () => {
+        membershipListeners.delete(listener);
+    };
+}
+
+function notifyMembership(): void {
+    for (const listener of membershipListeners) listener();
+}
 
 const isWindowUnavailable = (): boolean => typeof window === "undefined";
 
@@ -143,7 +158,10 @@ export function setListenTogetherSessionSnapshot(
     snapshot: ListenTogetherSessionSnapshot | null,
 ): void {
     inMemorySessionSnapshot = snapshot;
-    if (isWindowUnavailable()) return;
+    if (isWindowUnavailable()) {
+        notifyMembership();
+        return;
+    }
     try {
         if (!snapshot) {
             window.localStorage.removeItem(LISTEN_TOGETHER_SESSION_STORAGE_KEY);
@@ -155,6 +173,8 @@ export function setListenTogetherSessionSnapshot(
         );
     } catch {
         // Ignore storage failures
+    } finally {
+        notifyMembership();
     }
 }
 
@@ -180,7 +200,10 @@ export function isListenTogetherMembershipPending(): boolean {
  */
 export function setListenTogetherMembershipPending(pending: boolean): void {
     inMemoryMembershipPending = pending;
-    if (isWindowUnavailable()) return;
+    if (isWindowUnavailable()) {
+        notifyMembership();
+        return;
+    }
     try {
         if (pending) {
             window.localStorage.setItem(
@@ -194,6 +217,8 @@ export function setListenTogetherMembershipPending(pending: boolean): void {
         );
     } catch {
         // Ignore storage failures
+    } finally {
+        notifyMembership();
     }
 }
 
