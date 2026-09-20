@@ -8,6 +8,42 @@ import React from "react";
 import { TasteProfileDialog } from "../../features/taste-profile/components/TasteProfileDialog";
 import type { TasteProfileSelection } from "../../features/taste-profile/types";
 import { api } from "../../lib/api";
+test("genre shortcuts fill wide rows and shrink on resize", async (t) => {
+    let width = 1400;
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    t.mock.method(
+        HTMLElement.prototype,
+        "getBoundingClientRect",
+        function (this: HTMLElement) {
+            const rect = original.call(this);
+            if (this.getAttribute("aria-label") === "Жанры")
+                return { ...rect, width };
+            if (this.dataset.genreMeasure !== undefined)
+                return { ...rect, width: 100 };
+            if (this.textContent?.trim() === "Все жанры")
+                return { ...rect, width: 140 };
+            return rect;
+        },
+    );
+    const mounted = await mountDialog();
+    const row = () => mounted.container.querySelector('[aria-label="Жанры"]')!;
+    try {
+        assert.ok(row().querySelectorAll("button").length > 7);
+        width = 350;
+        await React.act(async () => window.dispatchEvent(new Event("resize")));
+        assert.ok(row().querySelectorAll("button").length <= 3);
+        await chooseGenre(mounted.container, "Джаз");
+        assert.equal(
+            findButton(row(), "Джаз")?.getAttribute("aria-pressed"),
+            "true",
+        );
+        width = 1400;
+        await React.act(async () => window.dispatchEvent(new Event("resize")));
+        assert.ok(row().querySelectorAll("button").length > 7);
+    } finally {
+        await mounted.cleanup();
+    }
+});
 import {
     SUGGESTED_GENRES,
     suggestArtistsForGenres,

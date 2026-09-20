@@ -1,5 +1,9 @@
 # Changelog
 
+## Responsive genre shortcuts
+
+- Fill the taste setup genre row according to available width, keep the active genre visible, and expose remaining categories in the subtly accented genre palette.
+
 ## Fullscreen taste setup
 
 - Give artist selection the entire viewport, remove explanatory copy and the empty sidebar, and replace the native genre dropdown with shortcuts and a grouped genre palette. Keep pagination, selection, keyboard dismissal and mobile save controls.

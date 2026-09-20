@@ -1,11 +1,26 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
 import { GENRE_GROUPS } from "../suggestions";
 import { cn } from "@/utils/cn";
 
-const QUICK_GENRES = ["Рок", "Поп", "Хип-хоп", "Электроника", "Русский рок"];
+const QUICK_GENRES = [
+    ...new Set([
+        "Поп",
+        "Русская поп-музыка",
+        "Русский рэп",
+        "Рок",
+        "Русский рок",
+        "Хип-хоп",
+        "Электроника",
+        "Инди",
+        "R&B",
+        "Метал",
+        "Танцевальная",
+        ...GENRE_GROUPS.flatMap((group) => [...group.genres]),
+    ]),
+];
 
 /** Compact genre shortcuts with an expandable, keyboard-accessible genre palette. */
 export function TasteGenrePicker({
@@ -22,6 +37,45 @@ export function TasteGenrePicker({
     const [open, setOpen] = useState(false);
     const trigger = useRef<HTMLButtonElement>(null);
     const id = useId();
+    const row = useRef<HTMLDivElement>(null);
+    const measures = useRef<HTMLDivElement>(null);
+    const genres = useMemo(
+        () => [...new Set([value, "all", ...QUICK_GENRES])],
+        [value],
+    );
+    const [visibleCount, setVisibleCount] = useState(6);
+    const label = (genre: string) =>
+        genre === "all"
+            ? "Все исполнители"
+            : genre === "selected"
+              ? "Мои жанры"
+              : genre;
+    useLayoutEffect(() => {
+        const measure = () => {
+            const width = row.current?.getBoundingClientRect().width ?? 0;
+            if (!width || !trigger.current || !measures.current) return;
+            let remaining =
+                width - trigger.current.getBoundingClientRect().width - 8;
+            let count = 0;
+            for (const item of Array.from(measures.current.children)) {
+                const itemWidth = item.getBoundingClientRect().width;
+                if (itemWidth > remaining) break;
+                remaining -= itemWidth + 8;
+                count++;
+            }
+            setVisibleCount(Math.max(1, count));
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        if (row.current) observer.observe(row.current);
+        if (measures.current) observer.observe(measures.current);
+        if (trigger.current) observer.observe(trigger.current);
+        window.addEventListener("resize", measure);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener("resize", measure);
+        };
+    }, [genres]);
     const close = () => {
         setOpen(false);
         trigger.current?.focus();
@@ -38,7 +92,7 @@ export function TasteGenrePicker({
             aria-pressed={value === genre}
             onClick={() => choose(genre)}
             className={cn(
-                "min-h-11 shrink-0 rounded-full px-4 text-sm font-medium transition-[background-color,transform] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none motion-reduce:transform-none",
+                "min-h-11 min-w-0 truncate rounded-full px-4 text-sm font-medium transition-[background-color,transform] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none motion-reduce:transform-none",
                 value === genre
                     ? "bg-brand/20 text-brand-light"
                     : "bg-white/5 text-content-secondary hover:bg-white/10",
@@ -60,14 +114,30 @@ export function TasteGenrePicker({
                 }
             }}
         >
-            <div className="flex min-w-0 items-center gap-2" aria-label="Жанры">
-                <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none]">
-                    {chip("all", "Все исполнители")}
-                    {QUICK_GENRES.map((genre) => chip(genre))}
-                    {value !== "all" &&
-                        !QUICK_GENRES.includes(value) &&
-                        chip(value, value === "selected" ? "Мои жанры" : value)}
+            <div
+                aria-hidden="true"
+                className="pointer-events-none invisible absolute inset-x-0 top-0 h-0 overflow-hidden"
+            >
+                <div ref={measures} className="flex w-max gap-2">
+                    {genres.map((genre) => (
+                        <span
+                            key={genre}
+                            data-genre-measure=""
+                            className="shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-medium"
+                        >
+                            {label(genre)}
+                        </span>
+                    ))}
                 </div>
+            </div>
+            <div
+                ref={row}
+                className="flex min-w-0 items-center gap-2"
+                aria-label="Жанры"
+            >
+                {genres
+                    .slice(0, visibleCount)
+                    .map((genre) => chip(genre, label(genre)))}
                 <button
                     ref={trigger}
                     type="button"
@@ -75,8 +145,9 @@ export function TasteGenrePicker({
                     aria-expanded={open}
                     aria-controls={id}
                     onClick={() => setOpen(!open)}
-                    className="flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-white/10 px-4 text-sm font-medium text-content transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none"
+                    className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 text-sm font-medium text-content hover:bg-brand/20 transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none"
                 >
+                    <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
                     Все жанры
                     <ChevronDown
                         aria-hidden="true"
