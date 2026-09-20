@@ -79,23 +79,45 @@ describe("legacy vibe Redis cleanup", () => {
         );
     });
 
-    it("treats an already-absent consumer group as cleaned", async () => {
-        const client = createClient();
-        client.xGroupDestroy.mockRejectedValueOnce(
-            new Error("NOGROUP missing"),
-        );
+    it.each([
+        "NOGROUP missing",
+        "ERR The XGROUP subcommand requires the key to exist. Note that for CREATE you may want to use the MKSTREAM option to create an empty stream automatically.",
+    ])(
+        "treats an absent legacy group or stream as cleaned: %s",
+        async (message) => {
+            const client = createClient();
+            client.xGroupDestroy.mockRejectedValueOnce(new Error(message));
 
-        await expect(
-            cleanupLegacyVibeRedisArtifacts(client, logger, {
-                ownerToken: "owner-absent-group",
-            }),
-        ).resolves.toEqual({ staleReservationsDeleted: 0 });
+            await expect(
+                cleanupLegacyVibeRedisArtifacts(client, logger, {
+                    ownerToken: "owner-absent-group",
+                }),
+            ).resolves.toEqual({ staleReservationsDeleted: 0 });
 
-        expect(client.eval).toHaveBeenLastCalledWith(
-            expect.stringContaining("redis.call('SET', KEYS[2], 'done')"),
-            expect.objectContaining({ arguments: ["owner-absent-group"] }),
-        );
-    });
+            expect(client.eval).toHaveBeenLastCalledWith(
+                expect.stringContaining("redis.call('SET', KEYS[2], 'done')"),
+                expect.objectContaining({ arguments: ["owner-absent-group"] }),
+            );
+        },
+    );
+
+    it.each([
+        "WRONGTYPE Operation against a key holding the wrong kind of value",
+        "NOPERM no permissions to run the XGROUP command",
+        "Redis operation timed out",
+    ])(
+        "preserves an unexpected group destruction failure: %s",
+        async (message) => {
+            const client = createClient();
+            client.xGroupDestroy.mockRejectedValueOnce(new Error(message));
+            await expect(
+                cleanupLegacyVibeRedisArtifacts(client, logger),
+            ).rejects.toThrow(message);
+            expect(client.del).not.toHaveBeenCalled();
+            expect(client.scan).not.toHaveBeenCalled();
+            expect(client.eval).not.toHaveBeenCalled();
+        },
+    );
 
     it("checks TTL and deletes each legacy reservation atomically", async () => {
         const client = createClient();

@@ -1,5 +1,9 @@
 # Changelog
 
+## Worker startup cleanup
+
+- Complete retired embedding-queue cleanup when its Redis stream is already absent. Preserve retries for permission, wrong-type and connection failures instead of marking an unsuccessful cleanup complete.
+
 ## Collection playback and artist radio
 
 - Use a circular icon-only Play/Pause control across music collection pages, with accessible labels and consistent loading feedback. Pause and resume the active collection without restarting it or controlling an unrelated queue.
