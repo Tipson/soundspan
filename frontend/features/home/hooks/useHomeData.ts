@@ -1,4 +1,4 @@
-/** Home feed data: account signals plus live online-catalog discovery. */
+/** Home feed data: personal listening signals and mixes. */
 
 import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -7,30 +7,21 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useFeatures } from "@/lib/features-context";
 import { frontendLogger as log } from "@/lib/logger";
-import { useUserSettingsExplorePrefs } from "@/features/explore/hooks/useUserSettingsExplorePrefs";
 import { useAudioState } from "@/lib/audio-state-context";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
 import type { Mix, PersonalizedHomeFeed } from "../types";
 import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
 import {
-    mapYtMusicChartsToFeaturedPlaylists,
     queryKeys,
     useDiscoverWeeklySummaryQuery,
     useMixesQuery,
     useRefreshMixesMutation,
-    useYtMusicChartsQuery,
-    useYtMusicHomeShelvesQuery,
-    type PlaylistPreview,
-    type YtMusicHomeShelf,
 } from "@/hooks/useQueries";
 
 export interface UseHomeDataReturn {
     mixes: Mix[];
     discoverWeekly: DiscoverWeeklySummary | null;
     personalizedFeed: PersonalizedHomeFeed | null;
-    showYtMusicExplore: boolean;
-    homeShelves: YtMusicHomeShelf[];
-    chartPlaylists: PlaylistPreview[];
     isLoading: boolean;
     isRefreshingMixes: boolean;
     isPersonalizedLoading: boolean;
@@ -43,7 +34,6 @@ export function useHomeData(): UseHomeDataReturn {
     const { isAuthenticated } = useAuth();
     const { discovery, autoPlaylists } = useFeatures();
     const { waveMode, waveMood } = useAudioState();
-    const { showYtMusicExplore } = useUserSettingsExplorePrefs();
     const queryClient = useQueryClient();
     const personalizedQuery = usePersonalizedHomeFeed(
         12,
@@ -64,12 +54,6 @@ export function useHomeData(): UseHomeDataReturn {
     const mixesQuery = useMixesQuery(autoPlaylists);
     const discoverQuery = useDiscoverWeeklySummaryQuery(discovery);
 
-    const shelvesQuery = useYtMusicHomeShelvesQuery({
-        enabled: showYtMusicExplore,
-    });
-    const chartsQuery = useYtMusicChartsQuery({
-        enabled: showYtMusicExplore,
-    });
     const { mutateAsync: refreshMixes, isPending: isRefreshingMixes } =
         useRefreshMixesMutation();
 
@@ -113,12 +97,6 @@ export function useHomeData(): UseHomeDataReturn {
         mixes,
         discoverWeekly,
         personalizedFeed: personalizedQuery.data ?? null,
-        showYtMusicExplore,
-        homeShelves: shelvesQuery.data ?? [],
-        chartPlaylists: mapYtMusicChartsToFeaturedPlaylists(
-            chartsQuery.data,
-            12,
-        ),
         isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),
         isRefreshingMixes,
         isPersonalizedLoading: personalizedQuery.isLoading,

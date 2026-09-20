@@ -30,12 +30,22 @@ const playbackAutoRestartSuppressedRef: { current: boolean } = {
 let explicitPauseSequence = 0;
 let explicitPauseGeneration = 0;
 let playbackIntentGeneration = 0;
+let queueReplacementGeneration = 0;
 
 /** Fence asynchronous queue work against newer playback commands. */
 export function getPlaybackIntentGeneration(): number {
     return playbackIntentGeneration;
 }
 
+/** Reserves asynchronous user work without resuming, pausing, or replacing current media. */
+export function reservePlaybackIntent(): number {
+    queueReplacementGeneration += 1;
+    return ++playbackIntentGeneration;
+}
+/** Fences adaptive queue work while allowing ordinary pause, seek, and next actions. */
+export function getQueueReplacementGeneration(): number {
+    return queueReplacementGeneration;
+}
 /** A user seek supersedes queue work even when track and index stay the same. */
 export function recordExplicitPlaybackSeek(): void {
     playbackIntentGeneration += 1;
@@ -76,6 +86,7 @@ export function writePlaybackAdvanceOrigin(
 export function writePlaybackReplacementIntent(
     originatingTrackId: string | null,
 ): void {
+    queueReplacementGeneration += 1;
     recordExplicitPlaybackResume();
     writePlaybackAdvanceOrigin("manual", originatingTrackId);
     playbackReplacementIntentRef.current = { originatingTrackId };

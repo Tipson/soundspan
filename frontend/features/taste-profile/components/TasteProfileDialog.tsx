@@ -56,7 +56,7 @@ export interface TasteProfileDialogProps {
 }
 
 const FOCUSABLE_SELECTOR =
-    'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
 function selectionSummary(selection: TasteProfileSelection): string {
     const labels = [...selection.genres, ...selection.artists];
@@ -338,7 +338,9 @@ export function TasteProfileDialog({
                         >
                             Выберите от 3 до 16 вариантов суммарно — не больше
                             10 жанров и 10 артистов. Настройка не ставит лайки
-                            автоматически.
+                            автоматически. Ваш выбор помогает настроить
+                            рекомендации на главной. Прослушивания и лайки
+                            уточняют их дальше.
                         </p>
                     </div>
                     {mode === "edit" ? (
@@ -494,6 +496,39 @@ export function TasteProfileDialog({
                                         Жанр не найден. Попробуйте другое
                                         название или выберите артиста.
                                     </p>
+                                )}
+                                {selection.genres.length > 0 && (
+                                    <div className="border-t border-white/10 pt-4">
+                                        <p className="mb-2 text-xs font-semibold text-content-muted">
+                                            Выбранные жанры ·{" "}
+                                            {selection.genres.length}
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selection.genres.map((genre) => (
+                                                <button
+                                                    key={genre}
+                                                    type="button"
+                                                    aria-label={`Убрать жанр: ${genre}`}
+                                                    disabled={isSaving}
+                                                    onClick={() =>
+                                                        updateChoice(
+                                                            "genres",
+                                                            genre,
+                                                        )
+                                                    }
+                                                    className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3 text-sm text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                                                >
+                                                    <span className="truncate">
+                                                        {genre}
+                                                    </span>
+                                                    <X
+                                                        className="h-4 w-4 shrink-0"
+                                                        aria-hidden="true"
+                                                    />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         ) : step === "artists" ? (

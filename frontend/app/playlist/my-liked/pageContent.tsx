@@ -1,5 +1,8 @@
 "use client";
 
+import { normalizeRadioTracks } from "@/lib/radio/loadTrackRadio";
+import { requestRadioQueue } from "@/lib/radio/radioRequestIntent";
+
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,18 +10,12 @@ import {
     ListMusic,
     Loader2,
     Music,
-    Pause,
-    Play,
     Plus,
     Radio,
     Shuffle,
 } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
-import {
-    useAudioControls,
-    useAudioState,
-    usePlaybackStatus,
-} from "@/lib/audio-context";
+import { useAudioControls } from "@/lib/audio-context";
 import {
     api,
     type LikedPlaylistResponse,
@@ -31,7 +28,6 @@ import { TrackPreferenceButtons } from "@/components/player/TrackPreferenceButto
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { useToast } from "@/lib/toast-context";
-import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import {
     hasLocalTrackBacking,
@@ -194,18 +190,11 @@ function LikedTrackList({
 export default function MyLikedPlaylistPage() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
-    const { currentTrack } = useAudioState();
-    // Narrow subscription: this page only reads isPlaying, so it must not
-    // re-render on the once-per-second currentTime tick (GH #784).
-    const { isPlaying } = usePlaybackStatus();
-    const { playTracks, playNow, pause, resume, addTracksToQueue } =
-        useAudioControls();
+    const { playTracks, addTracksToQueue } = useAudioControls();
     const { data, isLoading, isError } = useLikedPlaylistQuery();
     const [removingTrackId, setRemovingTrackId] = useState<string | null>(null);
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState(false);
-    const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
-        usePlayButtonFeedback();
 
     const likedTracks = data?.tracks ?? EMPTY_TRACKS;
     const likedTrackIds = useMemo(
@@ -236,17 +225,6 @@ export default function MyLikedPlaylistPage() {
             likedTracks.reduce((sum, track) => sum + (track.duration || 0), 0),
         [likedTracks],
     );
-    const isThisPlaylistPlaying = useMemo(() => {
-        if (!currentTrack || !isPlaying || likedTracks.length === 0) {
-            return false;
-        }
-        return likedTrackIds.has(currentTrack.id);
-    }, [currentTrack, isPlaying, likedTracks.length, likedTrackIds]);
-    const primaryActionLabel =
-        isThisPlaylistPlaying && isPlaying
-            ? ru.common.pause
-            : ru.common.playAll;
-
     const coverUrl = useMemo(() => {
         if (likedTracks.length === 0) return null;
         return resolveLikedTrackCoverUrl(likedTracks[0], 200);
@@ -348,53 +326,38 @@ export default function MyLikedPlaylistPage() {
         }
     };
 
-    const handlePlayAll = () => {
-        if (audioTracks.length === 0) return;
-        if (isThisPlaylistPlaying) {
-            if (isPlaying) {
-                pause();
-            } else {
-                resume();
-            }
-            return;
-        }
-        triggerPlayFeedback();
-        playTracks(audioTracks, 0);
-    };
-
     const handleShuffle = () => {
         if (audioTracks.length < 2) return;
         playTracks(shuffleArray(audioTracks), 0);
     };
 
     const handlePlayTrack = (track: LikedPlaylistTrack) => {
-        const audioTrack = toAudioTrack(track);
-        if (audioTrack) playNow(audioTrack);
+        const index = actionableLikedTracks.indexOf(track);
+        if (index >= 0)
+            playTracks(audioTracks, index, false, {
+                replaceQueue: true,
+                preserveOrder: true,
+            });
     };
 
     const handleStartRadio = async () => {
         if (!data?.playlist.id) return;
         try {
             toast.info(ru.playlist.startingRadio);
-            const response = await api.getRadioTracks(
-                "playlist",
-                data.playlist.id,
+            const response = await requestRadioQueue(() =>
+                api.getRadioTracks("playlist", data.playlist.id),
             );
+            if (!response) return;
             if (response.tracks && response.tracks.length > 0) {
-                const tracks = response.tracks.map(
-                    (t: Record<string, unknown>) => ({
-                        id: t.id as string,
-                        title: t.title as string,
-                        artist: t.artist as { name: string; id?: string },
-                        album: t.album as {
-                            title: string;
-                            coverArt?: string;
-                            id?: string;
-                        },
-                        duration: t.duration as number,
-                    }),
-                );
-                playTracks(tracks, 0);
+                const tracks = normalizeRadioTracks(response.tracks);
+                if (tracks.length === 0) {
+                    toast.error(ru.playlist.noRadioTracks);
+                    return;
+                }
+                playTracks(tracks, 0, true, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                });
                 toast.success(
                     `Радио запущено: ${tracks.length} ${pluralRu(tracks.length, ["трек", "трека", "треков"])}`,
                 );
@@ -484,40 +447,12 @@ export default function MyLikedPlaylistPage() {
                     likedTracks.length > 0 ? (
                         <MusicDetailActionDock
                             label={ru.playlist.likedControls}
+                            className="min-h-11 w-fit gap-1 rounded-none border-0 bg-transparent p-0 shadow-none backdrop-blur-none supports-[backdrop-filter]:bg-transparent"
                         >
                             <div
                                 data-detail-action-tier="primary"
                                 className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none"
                             >
-                                <button
-                                    type="button"
-                                    onClick={handlePlayAll}
-                                    disabled={audioTracks.length === 0}
-                                    aria-label={primaryActionLabel}
-                                    className="flex min-h-11 min-w-fit flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-2 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none sm:flex-none sm:px-5"
-                                >
-                                    {showPlaySpinner ? (
-                                        <Loader2 className="h-5 w-5 animate-spin" />
-                                    ) : isThisPlaylistPlaying && isPlaying ? (
-                                        <Pause className="h-5 w-5 fill-current" />
-                                    ) : (
-                                        <Play className="ml-0.5 h-5 w-5 fill-current" />
-                                    )}
-                                    <span
-                                        data-playlist-primary-label="compact"
-                                        className="min-w-0 truncate sm:hidden"
-                                    >
-                                        {isThisPlaylistPlaying && isPlaying
-                                            ? ru.common.pause
-                                            : ru.common.listen}
-                                    </span>
-                                    <span
-                                        data-playlist-primary-label="full"
-                                        className="hidden sm:inline"
-                                    >
-                                        {primaryActionLabel}
-                                    </span>
-                                </button>
                                 {audioTracks.length > 1 && (
                                     <button
                                         onClick={handleShuffle}

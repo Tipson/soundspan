@@ -35,6 +35,7 @@ Start-here guide for `frontend/features/artist`.
 | `hooks/useYtMusicTopTracks.ts` | hooks |
 | `types.ts` | root |
 | `artistView.ts` | root |
+| `artistPlaybackContinuation.ts` | root |
 | `providerArtistFallback.ts` | root |
 
 ## Update Rule
@@ -65,3 +66,10 @@ An exact local artist shadow is extended with the same-name YouTube Music
 catalog. The Tracks view merges provider releases with every indexed track,
 while Albums and Singles & EPs expose the provider releases directly. Fuzzy
 artist matches are rejected rather than mixed into the local profile.
+
+A row in the Tracks view starts the visible ordered queue at that position.
+Unseen library pages and provider release tracks append in source order, while
+preserving the visible prefix and deduplicating the artist catalog. A different
+playback intent, changed queue, or navigation cancels the continuation. Provider
+or pagination failures leave the already playable queue intact and surface a
+partial-loading message.

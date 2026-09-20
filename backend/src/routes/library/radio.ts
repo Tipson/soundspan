@@ -31,7 +31,11 @@ import {
     toLikedResponseTrack,
 } from "../../services/libraryTrackPreferences";
 import { sendRouteError } from "../../utils/routeErrorResponse";
-import { buildRemotePlaylistRadio } from "../../services/playlistRemoteRadio";
+import {
+    buildRemotePlaylistRadio,
+    buildRemoteTrackRadio,
+    buildRemoteLikedRadio,
+} from "../../services/playlistRemoteRadio";
 import {
     buildMultiTrackRadio,
     getRadioArtistCapForLimit,
@@ -160,7 +164,7 @@ radioRouter.get("/decades", asyncHandler(handleGetDecades));
  *         required: true
  *         schema:
  *           type: string
- *           enum: [all, liked, discovery, favorites, decade, genre, mood, workout, artist, artist-name, vibe]
+ *           enum: [all, liked, discovery, favorites, decade, genre, mood, workout, artist, artist-name, vibe, youtube]
  *         description: Radio station type
  *       - in: query
  *         name: value
@@ -213,6 +217,19 @@ export async function handleGetRadio(req: Request, res: Response) {
         return sendRouteError(res, 400, "Radio type is required");
     }
 
+    if (radioType === "youtube") {
+        const videoId = (radioValue ?? "").trim();
+        if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+            return sendRouteError(
+                res,
+                400,
+                "Valid YouTube video ID required for track radio",
+            );
+        }
+        return res.json({
+            tracks: await buildRemoteTrackRadio(videoId, limitNum),
+        });
+    }
     if (radioType === "artist-name") {
         const artistName = (radioValue ?? "").trim();
         if (!artistName) {
@@ -1231,7 +1248,9 @@ export async function handleGetRadio(req: Request, res: Response) {
             }
             if (seedTrackIds.length === 0) {
                 if (radioValue === MY_LIKED_PLAYLIST_ID)
-                    return res.json({ tracks: [] });
+                    return res.json({
+                        tracks: await buildRemoteLikedRadio(userId!, limitNum),
+                    });
                 const tracks = await buildRemotePlaylistRadio(
                     radioValue,
                     limitNum,

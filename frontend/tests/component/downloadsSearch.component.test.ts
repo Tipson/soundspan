@@ -17,6 +17,7 @@ let pauses = 0;
 let resumes = 0;
 let queuedTracks: Array<{ id: string; playbackSourcePolicy?: string }> = [];
 let queueWasReplaced = false;
+let queueStartIndex = -1;
 mock.module("@/lib/audio-state-context", {
     namedExports: { useAudioState: () => ({ currentTrack }) },
 });
@@ -55,6 +56,7 @@ mock.module("@/lib/audio-controls-context", {
                 options?: { replaceQueue?: boolean },
             ) => {
                 queuedTracks = tracks;
+                queueStartIndex = _index;
                 queueWasReplaced = options?.replaceQueue === true;
             },
             pause: () => {
@@ -373,6 +375,44 @@ test("queued downloads are searchable and remain deduplicated against stored cop
         );
     } finally {
         context.queueItems = [];
+        view.close();
+    }
+});
+
+test("download row queues its filtered display order and skips incomplete copies", async () => {
+    records = Array.from({ length: 7 }, (_, i) => ({
+        ...record(
+            `t${i}`,
+            `Song ${i}`,
+            i === 0 ? "Other" : "Selected",
+            "Album",
+        ),
+        createdAt: i,
+    }));
+    records[4].status = "interrupted";
+    const view = await mount();
+    try {
+        await view.search("selected");
+        const button = view.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Воспроизвести: Song 3"]',
+        );
+        assert.ok(button);
+        await React.act(async () => button.click());
+        assert.deepEqual(
+            queuedTracks.map((track) => track.id),
+            ["t6", "t5", "t3", "t2", "t1"],
+        );
+        assert.deepEqual(
+            queuedTracks.slice(queueStartIndex).map((track) => track.id),
+            ["t3", "t2", "t1"],
+        );
+        assert.equal(queueWasReplaced, true);
+        assert.ok(
+            queuedTracks.every(
+                (track) => track.playbackSourcePolicy === "device-only",
+            ),
+        );
+    } finally {
         view.close();
     }
 });

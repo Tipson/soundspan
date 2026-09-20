@@ -34,6 +34,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
+    loadTrackRadio,
+    UnsupportedTrackRadioError,
+} from "@/lib/radio/loadTrackRadio";
+import { requestRadioQueue } from "@/lib/radio/radioRequestIntent";
+import {
     isRemoteTrack,
     isPlaybackOnlyTrack,
     normalizeActionableAudioTrack,
@@ -63,23 +68,6 @@ interface TrackOverflowMenuProps {
     className?: string;
     triggerClassName?: string;
     menuClassName?: string;
-}
-
-function isPlayableTrack(value: unknown): value is Track {
-    if (!value || typeof value !== "object") return false;
-    const candidate = value as Partial<Track> & {
-        artist?: { name?: unknown };
-        album?: { title?: unknown };
-    };
-    return (
-        typeof candidate.id === "string" &&
-        typeof candidate.title === "string" &&
-        typeof candidate.duration === "number" &&
-        Boolean(candidate.artist) &&
-        typeof candidate.artist?.name === "string" &&
-        Boolean(candidate.album) &&
-        typeof candidate.album?.title === "string"
-    );
 }
 
 /**
@@ -347,51 +335,28 @@ export function TrackOverflowMenu({
             e.stopPropagation();
             closeMenu();
             try {
-                let response: { tracks: unknown[] } | null = null;
-
-                if (isRemote && track.artist?.name) {
-                    response = await api.getRadioTracks(
-                        "artist-name",
-                        track.artist.name,
-                    );
-                } else if (track.artist?.id) {
-                    response = await api.getRadioTracks(
-                        "artist",
-                        track.artist.id,
-                    );
-                }
-
-                if (!response) {
-                    toast.error(ru.trackMenu.artistRequired);
+                const filtered = await requestRadioQueue(() =>
+                    loadTrackRadio(actionTrack),
+                );
+                if (!filtered) return;
+                if (filtered.length === 0) {
+                    toast.error(ru.trackMenu.radioNotEnough);
                     return;
                 }
-
-                if (response.tracks && response.tracks.length > 0) {
-                    const filtered = response.tracks
-                        .map((candidate) =>
-                            isPlayableTrack(candidate)
-                                ? normalizeActionableAudioTrack(candidate)
-                                : null,
-                        )
-                        .filter(
-                            (candidate): candidate is Track =>
-                                candidate !== null && candidate.id !== track.id,
-                        );
-                    const radioTracks = isActionable
-                        ? [actionTrack, ...filtered]
-                        : filtered;
-                    if (radioTracks.length === 0) {
-                        toast.error(ru.trackMenu.radioNotEnough);
-                        return;
-                    }
-                    controls.playTracks(radioTracks, 0);
-                    toast.success(
-                        `Радио «${track.artist.name}»: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,
-                    );
-                } else {
-                    toast.error(ru.trackMenu.radioNotEnough);
+                controls.playTracks(
+                    isActionable ? [actionTrack, ...filtered] : filtered,
+                    0,
+                    true,
+                    { replaceQueue: true },
+                );
+                toast.success(
+                    `Радио «${track.title}»: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,
+                );
+            } catch (error) {
+                if (error instanceof UnsupportedTrackRadioError) {
+                    toast.error(error.message);
+                    return;
                 }
-            } catch {
                 toast.error(ru.trackMenu.radioFailed);
             }
         },

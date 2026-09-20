@@ -1,7 +1,5 @@
 import { useState, type ReactNode } from "react";
 import {
-    Play,
-    Pause,
     Shuffle,
     ListMusic,
     Plus,
@@ -13,7 +11,6 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import type { ColorPalette } from "@/hooks/useImageColor";
-import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { ShareLinkModal } from "@/components/ui/ShareLinkModal";
 import type { Album, AlbumSource } from "../types";
 import {
@@ -24,7 +21,6 @@ import { MusicDetailActionDock } from "@/components/music-detail";
 import { MusicDetailSecondaryActions } from "@/components/music-detail/MusicDetailSecondaryActions";
 import { ru } from "@/lib/i18n/ru";
 
-const BRAND_PLAY = "var(--color-brand-hover)";
 const LOCK_MESSAGE = ru.catalog.listenTogetherLock;
 
 interface AlbumActionBarProps {
@@ -56,41 +52,12 @@ interface AlbumActionBarProps {
 }
 
 interface PlaybackControlsProps {
-    showPause: boolean;
-    showSpinner: boolean;
-    onPlayPause: () => void;
     onShuffle: () => void;
 }
 
 function PlaybackControls(props: PlaybackControlsProps) {
     return (
         <>
-            <button
-                type="button"
-                onClick={props.onPlayPause}
-                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] motion-reduce:transition-none sm:flex-none"
-                style={{ backgroundColor: BRAND_PLAY }}
-            >
-                {props.showSpinner ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-black" />
-                ) : props.showPause ? (
-                    <Pause className="w-5 h-5 fill-current text-black" />
-                ) : (
-                    <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                )}
-                <span>
-                    {props.showPause ? (
-                        ru.common.pause
-                    ) : (
-                        <>
-                            <span className="sm:hidden">Слушать</span>
-                            <span className="hidden sm:inline">
-                                {ru.common.playAll}
-                            </span>
-                        </>
-                    )}
-                </span>
-            </button>
             <button
                 type="button"
                 onClick={props.onShuffle}
@@ -104,22 +71,9 @@ function PlaybackControls(props: PlaybackControlsProps) {
     );
 }
 
-function LockedPlaybackControls({ showPause }: { showPause: boolean }) {
+function LockedPlaybackControls() {
     return (
         <>
-            <button
-                type="button"
-                onClick={() => toast.error(LOCK_MESSAGE)}
-                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-semibold text-content-muted shadow-lg sm:flex-none"
-                title={LOCK_MESSAGE}
-            >
-                {showPause ? (
-                    <Pause className="w-5 h-5 fill-current" />
-                ) : (
-                    <Play className="w-5 h-5 fill-current ml-0.5" />
-                )}
-                <span>{showPause ? ru.common.pause : ru.common.playAll}</span>
-            </button>
             <button
                 type="button"
                 onClick={() => toast.error(LOCK_MESSAGE)}
@@ -133,15 +87,10 @@ function LockedPlaybackControls({ showPause }: { showPause: boolean }) {
     );
 }
 
-function LockedControls(props: {
-    visibility: AlbumActionVisibility;
-    showPause: boolean;
-}) {
+function LockedControls(props: { visibility: AlbumActionVisibility }) {
     return (
         <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
-            {props.visibility.isLibraryVisible && (
-                <LockedPlaybackControls showPause={props.showPause} />
-            )}
+            {props.visibility.isLibraryVisible && <LockedPlaybackControls />}
         </div>
     );
 }
@@ -282,9 +231,6 @@ function AlbumActionModals(props: {
 function ActionControlRow(props: {
     actions: AlbumActionBarProps;
     visibility: AlbumActionVisibility;
-    showPause: boolean;
-    showSpinner: boolean;
-    onPlayPause: () => void;
     onShare: () => void;
 }) {
     const { actions, visibility } = props;
@@ -296,25 +242,20 @@ function ActionControlRow(props: {
         return null;
     }
     return (
-        <MusicDetailActionDock label={ru.catalog.albumControls}>
+        <MusicDetailActionDock
+            label={ru.catalog.albumControls}
+            className="min-h-11 w-fit gap-1 rounded-none border-0 bg-transparent p-0 shadow-none backdrop-blur-none supports-[backdrop-filter]:bg-transparent"
+        >
             <div
                 data-detail-action-tier="primary"
                 className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none"
             >
                 {actions.isInListenTogetherGroup &&
                 visibility.hasLockedControls ? (
-                    <LockedControls
-                        visibility={visibility}
-                        showPause={props.showPause}
-                    />
+                    <LockedControls visibility={visibility} />
                 ) : (
                     visibility.isLibraryVisible && (
-                        <PlaybackControls
-                            showPause={props.showPause}
-                            showSpinner={props.showSpinner}
-                            onPlayPause={props.onPlayPause}
-                            onShuffle={actions.onShuffle}
-                        />
+                        <PlaybackControls onShuffle={actions.onShuffle} />
                     )
                 )}
             </div>
@@ -357,7 +298,6 @@ function ActionControlRow(props: {
 /** Renders album actions from the pure visibility policy. */
 export function AlbumActionBar(props: AlbumActionBarProps) {
     const [showShareModal, setShowShareModal] = useState(false);
-    const showPause = Boolean(props.isPlaying && props.isPlayingThisAlbum);
     const visibility = getAlbumActionVisibility({
         source: props.source,
         owned: props.album.owned,
@@ -372,12 +312,6 @@ export function AlbumActionBar(props: AlbumActionBarProps) {
         canDeleteFromLibrary: props.canDeleteFromLibrary ?? false,
         isInListenTogetherGroup: props.isInListenTogetherGroup ?? false,
     });
-    const { showSpinner, trigger } = usePlayButtonFeedback();
-    const playPause = () => {
-        trigger();
-        if (showPause && props.onPause) props.onPause();
-        else props.onPlayAll();
-    };
     const openShare = () => setShowShareModal(true);
 
     return (
@@ -385,9 +319,6 @@ export function AlbumActionBar(props: AlbumActionBarProps) {
             <ActionControlRow
                 actions={props}
                 visibility={visibility}
-                showPause={showPause}
-                showSpinner={showSpinner}
-                onPlayPause={playPause}
                 onShare={openShare}
             />
             {props.isInListenTogetherGroup && visibility.hasLockedControls && (

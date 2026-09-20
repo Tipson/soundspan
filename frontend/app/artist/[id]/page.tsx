@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     useAudioState,
@@ -31,6 +31,9 @@ import { useArtistAlbumRequests } from "@/features/artist/hooks/useArtistAlbumRe
 import { useArtistActions } from "@/features/artist/hooks/useArtistActions";
 import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import { useYtMusicTopTracks } from "@/features/artist/hooks/useYtMusicTopTracks";
+import { getPlaybackIntentGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { extendArtistPlayback } from "@/features/artist/artistPlaybackContinuation";
+import { mergeProviderAlbumTracks } from "@/features/artist/providerArtistTracks";
 import { useArtistTracks } from "@/features/artist/hooks/useArtistTracks";
 import { useProviderArtistTracks } from "@/features/artist/hooks/useProviderArtistTracks";
 import { useProviderArtistFallback } from "@/features/artist/hooks/useProviderArtistFallback";
@@ -139,7 +142,18 @@ export default function ArtistPage() {
     const activeView = resolveArtistView(searchParams.get("view"));
     const serializedSearchParams = searchParams.toString();
     // Use split hooks to avoid re-renders from currentTime updates
-    const { currentTrack } = useAudioState();
+    const { currentTrack, queue } = useAudioState();
+    const orderedIntentRef = useRef<object | null>(null);
+    const queueRef = useRef(queue);
+    useEffect(() => {
+        queueRef.current = queue;
+    }, [queue]);
+    useEffect(() => {
+        orderedIntentRef.current = null;
+        return () => {
+            orderedIntentRef.current = null;
+        };
+    }, [pathname, activeView]);
     const { isPlaying } = usePlaybackStatus();
     const { playTracks, pause, addTracksToQueue } = useAudioControls();
     const { isPendingByMbid, downloadsEnabled } = useDownloadContext();
@@ -452,10 +466,84 @@ export default function ArtistPage() {
             (entry) => entry.source === track,
         );
         if (selectedIndex < 0) return;
-        playTracks(
-            formattedTracks.map((entry) => entry.track),
-            selectedIndex,
-        );
+        const initialQueue = formattedTracks.map((entry) => entry.track);
+        playTracks(initialQueue, selectedIndex, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        queueRef.current = initialQueue;
+        const intent = {};
+        orderedIntentRef.current = intent;
+        if (activeView !== "tracks") return;
+        const generation = getPlaybackIntentGeneration();
+        const isCurrent = () =>
+            orderedIntentRef.current === intent &&
+            getPlaybackIntentGeneration() === generation;
+        // Preserve the visible prefix, then append unseen library pages and
+        // release tracks in the same provider release order as this view.
+        async function* remainingPages() {
+            let offset = artistTracksQuery.tracks.length;
+            if (libraryArtistTracksEnabled && artist) {
+                while (offset < artistTracksQuery.total && isCurrent()) {
+                    const page = await api.getArtistTracks(artist.id, {
+                        limit: 100,
+                        offset,
+                    });
+                    if (!page.tracks.length || page.offset !== offset)
+                        throw new Error("Invalid artist pagination");
+                    offset += page.tracks.length;
+                    yield page.tracks as Track[];
+                }
+            }
+            if (
+                providerCatalogEnabled &&
+                (providerArtistTracksQuery.hasNextPage ||
+                    providerArtistTracksQuery.isLoading)
+            ) {
+                const releases = [
+                    ...new Set(
+                        providerReleases
+                            .map((release) => release.browseId?.trim())
+                            .filter((id): id is string => Boolean(id)),
+                    ),
+                ];
+                for (const browseId of releases) {
+                    if (!isCurrent()) return;
+                    const album = await api.getYtMusicAlbum(browseId);
+                    yield mergeProviderAlbumTracks([album]);
+                }
+            }
+        }
+        void extendArtistPlayback({
+            initialTracks: visibleTracks,
+            initialQueue,
+            pages: remainingPages(),
+            isCurrent,
+            getQueueIds: () => queueRef.current.map((entry) => entry.id),
+            formatTrack: (candidate) => {
+                if (
+                    isRetiredRemoteOnlyTrack(candidate) ||
+                    !(
+                        (candidate.source === "federated" &&
+                            candidate.peer?.online === true) ||
+                        candidate.filePath ||
+                        (candidate.streamSource === "youtube" &&
+                            candidate.youtubeVideoId)
+                    )
+                )
+                    return null;
+                return formatTrackForPlayback(candidate);
+            },
+            append: (tracks) => {
+                addTracksToQueue(tracks, { silent: true });
+                queueRef.current = [...queueRef.current, ...tracks];
+            },
+        }).then((status) => {
+            if (isCurrent() && status === "fetch-failed")
+                toast.error(
+                    "Не все треки исполнителя удалось добавить в очередь",
+                );
+        });
     }
 
     function handleAddAllPopularToQueue(visibleTracks: Track[]) {

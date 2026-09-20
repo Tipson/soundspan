@@ -13,14 +13,15 @@ Account-scoped first-run music-taste setup and its reusable settings editor.
 ## Integration
 
 The protected `AuthenticatedLayout` mounts the onboarding gate once with the
-current `user.id`. Settings can mount `TasteProfileEditor` after its account
-section owns an explicit open/close control; no route or global layout state is
-required.
+current `user.id`. `TasteProfileSettingsSection` mounts `TasteProfileEditor`
+through its explicit open/close control. Loading failures offer a retry in the
+dialog; failed saves keep the current choices available for another attempt.
 
 ## Selection flow
 
-1. Browse 34 genres in six groups or narrow them by text search. Genre selection
-   is optional; the listener can go directly to artists.
+1. Browse 34 genres in six groups or narrow them by text search. Selected genres
+   remain removable across searches, including saved labels outside the catalog.
+   Genre selection is optional; the listener can go directly to artists.
 2. Browse a balanced mix of the chosen genres, filter to another genre without
    implicitly selecting it, or use canonical MusicBrainz artist autocomplete.
    The curated shelf starts with twelve artists and expands on demand; it is not
@@ -49,3 +50,5 @@ implemented; no likes are created by this flow.
 - Component coverage verifies Russian copy, accessible dialog behavior,
   selection and skip flows, shell gating, and a late account-A mutation while
   account B is active.
+- Editor coverage verifies load retry, failed-save recovery, recommendation
+  invalidation, and reopening saved choices through another API read.

@@ -68,6 +68,7 @@ import { resetPersistedTrackStartPosition } from "@/lib/persisted-playback-posit
 import { resolveListenTogetherNavigationIndex } from "@/lib/listen-together-navigation";
 import {
     getPlaybackIntentGeneration,
+    reservePlaybackIntent,
     recordExplicitPlaybackPause,
     recordExplicitPlaybackResume,
     writePlaybackAdvanceOrigin,
@@ -620,7 +621,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             tracks: Track[],
             startIndex = 0,
             isVibeQueue = false,
-            options?: { replaceQueue?: boolean },
+            options?: { replaceQueue?: boolean; preserveOrder?: boolean },
         ) => {
             const playbackState = getPlaybackView();
             if (tracks.length === 0) {
@@ -708,6 +709,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 isVibeQueue,
             });
 
+            if (isVibeQueue) {
+                state.setVibeMode(true);
+                state.setVibeSourceFeatures(null);
+                state.setVibeQueueIds(tracks.map((track) => track.id));
+            }
             // If not a vibe queue and vibe mode is on, disable it
             if (!isVibeQueue && state.vibeMode) {
                 state.setVibeMode(false);
@@ -725,9 +731,14 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             playbackState.setIsPlaying(true);
             playbackState.setCurrentTime(0);
             state.setRepeatOneCount(0);
-            state.setShuffleIndices(
-                generateShuffleIndices(tracks.length, normalizedStartIndex),
-            );
+            if (options?.preserveOrder || isVibeQueue) {
+                state.setIsShuffle(false);
+                state.setShuffleIndices([]);
+            } else {
+                state.setShuffleIndices(
+                    generateShuffleIndices(tracks.length, normalizedStartIndex),
+                );
+            }
         },
         [
             state,
@@ -2134,7 +2145,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     // Set upcoming tracks without interrupting current playback
     // preserveOrder=true will skip shuffle index generation (used for vibe mode)
     const setUpcoming = useCallback(
-        (tracks: Track[], preserveOrder = false) => {
+        (tracks: Track[], preserveOrder = false, isVibeQueue = false) => {
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
@@ -2143,6 +2154,19 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
+            if (
+                tracks.length > 0 ||
+                (state.currentTrack && state.playbackType === "track")
+            ) {
+                reservePlaybackIntent();
+            }
+
+            if (isVibeQueue && tracks.length > 0) {
+                state.setIsShuffle(false);
+                state.setVibeMode(true);
+                state.setVibeSourceFeatures(null);
+                state.setVibeQueueIds(tracks.map((track) => track.id));
+            }
             if (!state.currentTrack || state.playbackType !== "track") {
                 // No current track, just start playing the new tracks
                 if (tracks.length > 0) {

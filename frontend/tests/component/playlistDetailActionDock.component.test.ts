@@ -108,7 +108,7 @@ test("playlist toolbar is compact and mounts secondary controls outside its hero
     const html = renderToStaticMarkup(
         React.createElement(PlaylistDetailActionDock, createDockProps()),
     );
-    assert.equal([...html.matchAll(/<button\b/g)].length, 3);
+    assert.equal([...html.matchAll(/<button\b/g)].length, 2);
     assert.doesNotMatch(html, /data-detail-action-tier="secondary"/);
 });
 

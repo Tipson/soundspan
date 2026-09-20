@@ -189,7 +189,7 @@ test("Home shows a loading screen before the unified feed is ready", async () =>
     assert.match(html, /loading-screen/);
 });
 
-test("Home unifies personal playback and real online discovery", async () => {
+test("Home keeps personal playback without the generic online discovery shelf", async () => {
     const HomePage = (await import("../../app/page")).default;
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
@@ -199,14 +199,13 @@ test("Home unifies personal playback and real online discovery", async () => {
     assert.match(html, /listening-dashboard:Again One,Quick One,Fresh One/);
     assert.match(html, /data-home-region="mixes"/);
     assert.match(html, /made-for-you:weekly:1:1/);
-    assert.match(html, /online-discovery:true:1/);
+    assert.doesNotMatch(html, /online-discovery/);
     assert.ok(
         html.indexOf("compact-wave-hero") < html.indexOf("listening-dashboard"),
     );
     assert.ok(
         html.indexOf("listening-dashboard") < html.indexOf("made-for-you"),
     );
-    assert.ok(html.indexOf("made-for-you") < html.indexOf("online-discovery"));
     assert.doesNotMatch(html, /home-quick-actions/);
 });
 

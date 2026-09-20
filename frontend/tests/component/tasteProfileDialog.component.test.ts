@@ -612,3 +612,76 @@ test("genre search, artist filters, and review preserve editable saved choices",
         await mounted.cleanup();
     }
 });
+
+test("saved genres stay removable while searching another genre", async () => {
+    const mounted = await mountDialog({
+        mode: "edit",
+        initialSelection: { genres: ["Редкий жанр", "Рок"], artists: ["Muse"] },
+    });
+    try {
+        const input = mounted.container.querySelector<HTMLInputElement>(
+            'input[aria-label="Найти жанр"]',
+        )!;
+        await React.act(async () => typeInto(input, "джаз"));
+        const remove = findButton(
+            mounted.container,
+            "Убрать жанр: Редкий жанр",
+        );
+        assert.ok(
+            remove,
+            "saved choices must remain editable outside the filtered catalog",
+        );
+        await React.act(async () => remove.click());
+        await React.act(async () =>
+            findButton(mounted.container, "Джаз")!.click(),
+        );
+        await React.act(async () =>
+            findButton(mounted.container, "Дальше: артисты")!.click(),
+        );
+        const filter = mounted.container.querySelector<HTMLSelectElement>(
+            'select[aria-label="Фильтр артистов по жанру"]',
+        )!;
+        const next = findButton(mounted.container, "Дальше: проверить выбор")!;
+        await React.act(async () => {
+            // Shift+Tab from the search field must include the genre selector.
+            const search =
+                mounted.container.querySelector<HTMLInputElement>(
+                    '[role="combobox"]',
+                )!;
+            search.focus();
+            search.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                    key: "Tab",
+                    shiftKey: true,
+                    bubbles: true,
+                }),
+            );
+        });
+        assert.equal(document.activeElement, filter);
+        await React.act(async () => next.click());
+        await React.act(async () =>
+            findButton(mounted.container, "Сохранить вкусы")!.click(),
+        );
+        assert.deepEqual(mounted.saves, [
+            { genres: ["Рок", "Джаз"], artists: ["Muse"] },
+        ]);
+    } finally {
+        await mounted.cleanup();
+    }
+});
+
+test("taste setup explains where the saved selection is used", async () => {
+    const mounted = await mountDialog();
+    try {
+        assert.match(
+            mounted.container.textContent ?? "",
+            /рекомендации на главной/i,
+        );
+        assert.match(
+            mounted.container.textContent ?? "",
+            /прослушивания и лайки/i,
+        );
+    } finally {
+        await mounted.cleanup();
+    }
+});

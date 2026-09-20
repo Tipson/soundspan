@@ -39,7 +39,7 @@ export interface AudioControlsContextType {
         startIndex?: number,
         isVibeQueue?: boolean,
         /** Explicit collection start replaces the queue even for the current track. */
-        options?: { replaceQueue?: boolean },
+        options?: { replaceQueue?: boolean; preserveOrder?: boolean },
     ) => void;
     playAudiobook: (audiobook: Audiobook) => void;
     playPodcast: (
@@ -80,7 +80,11 @@ export interface AudioControlsContextType {
      */
     moveQueueItem: (fromIndex: number, toIndex: number) => void;
     clearQueue: () => void;
-    setUpcoming: (tracks: Track[], preserveOrder?: boolean) => void;
+    setUpcoming: (
+        tracks: Track[],
+        preserveOrder?: boolean,
+        isVibeQueue?: boolean,
+    ) => void;
     toggleShuffle: () => void;
     toggleRepeat: () => void;
     updateCurrentTime: (time: number) => void;

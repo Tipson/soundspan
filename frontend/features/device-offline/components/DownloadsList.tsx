@@ -594,7 +594,10 @@ export function DownloadsList() {
                                                     tracks,
                                                     index,
                                                     false,
-                                                    { replaceQueue: true },
+                                                    {
+                                                        replaceQueue: true,
+                                                        preserveOrder: true,
+                                                    },
                                                 ),
                                             )
                                             .catch(() =>

@@ -34,6 +34,11 @@ import { toast } from "sonner";
 import { SeekSlider } from "./SeekSlider";
 import { useFeatures } from "@/lib/features-context";
 import { api } from "@/lib/api";
+import {
+    loadTrackRadio,
+    UnsupportedTrackRadioError,
+} from "@/lib/radio/loadTrackRadio";
+import { requestRadioQueue } from "@/lib/radio/radioRequestIntent";
 import { YouTubeBadge } from "@/components/ui/YouTubeBadge";
 import { SyncBadge } from "@/components/player/SyncBadge";
 import { useListenTogether } from "@/lib/listen-together-context";
@@ -52,27 +57,10 @@ import { OverlayLyricsTab } from "./overlay-tabs/OverlayLyricsTab";
 import { OverlayRelatedTab } from "./overlay-tabs/OverlayRelatedTab";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { isPlaybackOnlyTrack, toAddToPlaylistRef } from "@/lib/trackRef";
-import type { Track } from "@/lib/audio-state-context";
+
 import { pluralRu, ru } from "@/lib/i18n/ru";
 
 const OVERLAY_ACTIVE_TAB_KEY = OVERLAY_ACTIVE_TAB_STORAGE_KEY;
-
-function isPlayableTrack(value: unknown): value is Track {
-    if (!value || typeof value !== "object") return false;
-    const candidate = value as Partial<Track> & {
-        artist?: { name?: unknown };
-        album?: { title?: unknown };
-    };
-    return (
-        typeof candidate.id === "string" &&
-        typeof candidate.title === "string" &&
-        typeof candidate.duration === "number" &&
-        Boolean(candidate.artist) &&
-        typeof candidate.artist?.name === "string" &&
-        Boolean(candidate.album) &&
-        typeof candidate.album?.title === "string"
-    );
-}
 
 /**
  * Renders the OverlayPlayer component.
@@ -417,38 +405,23 @@ export function OverlayPlayer() {
         if (!currentTrack?.artist) return;
         setIsRadioLoading(true);
         try {
-            let response: { tracks: unknown[] } | null = null;
-            const isRemote = currentTrack.streamSource === "youtube";
-            if (isRemote && currentTrack.artist.name) {
-                response = await api.getRadioTracks(
-                    "artist-name",
-                    currentTrack.artist.name,
-                );
-            } else if (currentTrack.artist.id) {
-                response = await api.getRadioTracks(
-                    "artist",
-                    currentTrack.artist.id,
-                );
-            }
-            if (!response) {
-                toast.error("Для радио нужна информация об исполнителе");
+            const filtered = await requestRadioQueue(() =>
+                loadTrackRadio(currentTrack),
+            );
+            if (!filtered) return;
+            if (filtered.length === 0) {
+                toast.error("Недостаточно похожей музыки для радио");
                 return;
             }
-            if (response.tracks && response.tracks.length > 0) {
-                const filtered = response.tracks.filter(
-                    (t): t is Track =>
-                        isPlayableTrack(t) && t.id !== currentTrack.id,
-                );
-                setUpcoming(filtered);
-                toast.success(
-                    `Радио ${currentTrack.artist.name}: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,
-                );
-            } else {
-                toast.error(
-                    "Недостаточно похожей музыки для радио исполнителя",
-                );
+            setUpcoming(filtered, true, true);
+            toast.success(
+                `Радио ${currentTrack.title}: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,
+            );
+        } catch (error) {
+            if (error instanceof UnsupportedTrackRadioError) {
+                toast.error(error.message);
+                return;
             }
-        } catch {
             toast.error("Не удалось включить радио исполнителя");
         } finally {
             setIsRadioLoading(false);

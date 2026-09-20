@@ -49,6 +49,8 @@ const state = {
     unlikePending: false,
     currentTrack: null as { id: string } | null,
 };
+const playedQueues: Array<{ tracks: Array<{ id: string }>; index: number }> =
+    [];
 const playlistAdds: Array<{
     playlistId: string;
     reference: Record<string, unknown>;
@@ -142,7 +144,9 @@ mock.module("@/lib/audio-context", {
             isPlaying: state.isPlaying,
         }),
         useAudioControls: () => ({
-            playTracks: () => undefined,
+            playTracks: (tracks: Array<{ id: string }>, index: number) => {
+                playedQueues.push({ tracks, index });
+            },
             playNow: () => undefined,
             pause: () => undefined,
             resume: () => undefined,
@@ -383,6 +387,7 @@ function renderWithQueryClient(Component: React.ComponentType) {
 
 beforeEach(() => {
     playlistAdds.length = 0;
+    playedQueues.length = 0;
     state.likedData = {
         playlist: {
             id: "my-liked",
@@ -423,7 +428,7 @@ test("renders empty-state copy and hides action buttons when there are no tracks
     assert.doesNotMatch(html, /title="Добавить всё в очередь/);
 });
 
-test("keeps only playback, shuffle and More in the liked toolbar", async () => {
+test("keeps only shuffle and More in the liked toolbar", async () => {
     state.likedData = {
         playlist: { id: "my-liked", name: "My Liked" },
         tracks: [makeTrack("track-1", "First"), makeTrack("track-2", "Second")],
@@ -433,7 +438,7 @@ test("keeps only playback, shuffle and More in the liked toolbar", async () => {
     const rendered = document.createElement("div");
     rendered.innerHTML = renderWithQueryClient(mod.default);
     const dock = rendered.querySelector('[data-music-detail="actions"]');
-    assert.equal(dock?.querySelectorAll("button").length, 3);
+    assert.equal(dock?.querySelectorAll("button").length, 2);
     assert.ok(dock?.querySelector('[aria-label="Ещё действия"]'));
 });
 
@@ -465,20 +470,7 @@ test("renders consolidated action bar buttons when tracks exist", async () => {
     const primary = rendered.querySelector(
         'button[aria-label="Воспроизвести всё"]',
     );
-    assert.ok(
-        primary,
-        "the compact action retains its complete accessible name",
-    );
-    assert.equal(
-        primary.querySelector('[data-playlist-primary-label="compact"]')
-            ?.textContent,
-        "Слушать",
-    );
-    assert.equal(
-        primary.querySelector('[data-playlist-primary-label="full"]')
-            ?.textContent,
-        "Воспроизвести всё",
-    );
+    assert.equal(primary, null);
     assert.match(html, /title="Воспроизвести вперемешку"/);
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить всё в плейлист"/);
@@ -622,7 +614,7 @@ test("My Liked batch playlist add preserves actionable source identity", async (
     container.remove();
 });
 
-test("shows Pause primary action and active like controls when a liked track is currently playing", async () => {
+test("keeps row playback state and like controls without a duplicate Pause action", async () => {
     state.likedData = {
         playlist: {
             id: "my-liked",
@@ -644,18 +636,8 @@ test("shows Pause primary action and active like controls when a liked track is 
     const rendered = document.createElement("div");
     rendered.innerHTML = html;
     const primary = rendered.querySelector('button[aria-label="Пауза"]');
-    assert.ok(primary);
-    assert.equal(
-        primary.querySelector('[data-playlist-primary-label="compact"]')
-            ?.textContent,
-        "Пауза",
-    );
-    assert.equal(
-        primary.querySelector('[data-playlist-primary-label="full"]')
-            ?.textContent,
-        "Пауза",
-    );
-    assert.match(html, /data-icon="pause"/);
+    assert.equal(primary, null);
+    assert.match(html, /data-playback-state="playing"/);
 
     const thumbButtons = html.match(/data-testid="liked-track-thumb"/g) ?? [];
     assert.equal(
@@ -760,3 +742,48 @@ test("resolveLikedTrackCoverUrl rejects retired provider artwork and keeps activ
         "/cover/local.jpg",
     );
 });
+
+for (const position of [1, 5]) {
+    test(`liked row ${position} queues the remaining ordered collection`, async () => {
+        state.likedData = {
+            playlist: { id: "my-liked", name: "My Liked" },
+            total: 7,
+            tracks: Array.from({ length: 7 }, (_, i) =>
+                makeTrack(`track-${i + 1}`, `Song ${i + 1}`),
+            ),
+        };
+        const { default: Page } =
+            await import("../../app/playlist/my-liked/page");
+        const host = document.createElement("div");
+        document.body.append(host);
+        const root = createRoot(host);
+        try {
+            await React.act(async () =>
+                root.render(
+                    React.createElement(
+                        QueryClientProvider,
+                        { client: new QueryClient() },
+                        React.createElement(Page),
+                    ),
+                ),
+            );
+            const row = host.querySelector<HTMLElement>(
+                `[role="button"][data-track-id="track-${position}"]`,
+            );
+            assert.ok(row, "track row is rendered");
+            await React.act(async () => row.click());
+            const play = playedQueues.at(-1);
+            assert.ok(play, "row click must replace the collection queue");
+            assert.deepEqual(
+                play.tracks.slice(play.index).map((t) => t.id),
+                Array.from(
+                    { length: 8 - position },
+                    (_, i) => `track-${position + i}`,
+                ),
+            );
+        } finally {
+            await React.act(async () => root.unmount());
+            host.remove();
+        }
+    });
+}

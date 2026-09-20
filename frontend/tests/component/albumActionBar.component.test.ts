@@ -93,7 +93,7 @@ const baseProps = {
     isInListenTogetherGroup: false,
 };
 
-test("album's initial dock shows only playback, shuffle and More", async () => {
+test("album's initial dock shows only shuffle and More", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
     const html = renderToStaticMarkup(
@@ -111,7 +111,7 @@ test("album's initial dock shows only playback, shuffle and More", async () => {
             ),
         }),
     );
-    assert.equal([...html.matchAll(/<button\b/g)].length, 3);
+    assert.equal([...html.matchAll(/<button\b/g)].length, 2);
     assert.doesNotMatch(html, /Сохранить в коллекцию/);
 });
 
@@ -205,7 +205,7 @@ test("AlbumActionBar keeps remote albums playable without server acquisition con
         }),
     );
 
-    assert.match(html, />Воспроизвести всё</);
+    assert.doesNotMatch(html, />Воспроизвести всё</);
     assert.match(html, /Download to this device/);
     assert.doesNotMatch(html, />Download</);
     assert.doesNotMatch(html, />Search</);
@@ -342,7 +342,7 @@ test("AlbumActionBar separates listening intent from secondary collection action
         .querySelector('[data-detail-action-tier="secondary"]')?.innerHTML;
     assert.ok(primary);
     assert.ok(secondary);
-    assert.match(primary, /Воспроизвести всё/);
+    assert.doesNotMatch(primary, /Воспроизвести всё/);
     assert.match(primary, /Перемешать/);
     assert.doesNotMatch(primary, /Добавить всё в очередь/);
     assert.match(secondary, /Сохранить в коллекцию/);
@@ -370,7 +370,7 @@ test("AlbumActionBar hides acquisition controls for a synthetic remote release g
         }),
     );
 
-    assert.match(html, />Воспроизвести всё</);
+    assert.doesNotMatch(html, />Воспроизвести всё</);
     assert.doesNotMatch(html, />Download</);
     assert.doesNotMatch(html, />Search</);
 });

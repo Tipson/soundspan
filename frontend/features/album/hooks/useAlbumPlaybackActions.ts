@@ -24,7 +24,10 @@ function playAlbum(
     if (!requireAlbum(album)) return;
     if (!album.tracks) return;
     const selection = selectAlbumPlaybackQueue(album, startIndex);
-    controls.playTracks(selection.tracks, selection.startIndex);
+    controls.playTracks(selection.tracks, selection.startIndex, false, {
+        replaceQueue: true,
+        preserveOrder: true,
+    });
 }
 
 function shufflePlay(album: Album | null, controls: AudioControls): void {

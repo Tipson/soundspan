@@ -894,7 +894,7 @@ test("three early Wave skips refresh only the tail and respect a subsequent paus
     }
     // While recommendations are pending, the listener pauses the selection.
     playback.currentTime = 7;
-    playback.isPlaying = false;
+    controlsRef.current!.pause();
     await React.act(async () => {
         releaseFeed();
         await flushAsync();
@@ -1343,3 +1343,152 @@ test("manual next at the Wave tail waits for one refill and advances once", asyn
     assert.equal(playback.currentTime, 0);
     assert.equal(playback.isPlaying, true);
 });
+
+test("radio queue startup enables continuation even when no previous Wave was active", async () => {
+    const tracks = [makeTrack("seed", "artist"), makeTrack("next", "other")];
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub();
+    const controls = await renderControls({ state, playback });
+    controls.playTracks(tracks, 0, true, { replaceQueue: true });
+    state.commit();
+    assert.equal(state.vibeMode, true);
+});
+test("radio upcoming replacement enables continuation without restarting the current song", async () => {
+    const seed = makeTrack("seed", "artist");
+    const next = makeTrack("next", "other");
+    const state = createDeferredAudioState({
+        isShuffle: true,
+        currentTrack: seed,
+        playbackType: "track",
+        queue: [seed],
+    });
+    const playback = createPlaybackStub({ currentTime: 73 });
+    const controls = await renderControls({ state, playback });
+    controls.setUpcoming([next], true, true);
+    state.commit();
+    assert.equal(state.isShuffle, false);
+    assert.equal(state.vibeMode, true);
+    assert.equal(playback.currentTime, 73);
+    assert.equal(state.currentTrack, seed);
+    assert.deepEqual(state.queue, [seed, next]);
+});
+
+test("ordered queue explicitly clears shuffle from the previous context", async () => {
+    const tracks = [makeTrack("first", "a"), makeTrack("second", "b")];
+    const state = createDeferredAudioState({
+        isShuffle: true,
+        shuffleIndices: [1, 0],
+    });
+    const playback = createPlaybackStub();
+    const controls = await renderControls({ state, playback });
+    controls.playTracks(tracks, 0, false, {
+        replaceQueue: true,
+        preserveOrder: true,
+    });
+    state.commit();
+    assert.equal(state.isShuffle, false);
+    assert.deepEqual(state.shuffleIndices, []);
+});
+
+test("upcoming queue replacement supersedes a pending radio request", async () => {
+    const { requestRadioQueue } =
+        await import("../../lib/radio/radioRequestIntent");
+    const seed = makeTrack("seed", "artist");
+    const state = createDeferredAudioState({
+        currentTrack: seed,
+        playbackType: "track",
+        queue: [seed],
+    });
+    const playback = createPlaybackStub({ currentTime: 73 });
+    const controls = await renderControls({ state, playback });
+    let resolve!: (tracks: ReturnType<typeof makeTrack>[]) => void;
+    const pending = requestRadioQueue(
+        () =>
+            new Promise<ReturnType<typeof makeTrack>[]>((yes) => {
+                resolve = yes;
+            }),
+    );
+    const replacement = makeTrack("chosen", "artist");
+    controls.setUpcoming([replacement], true, true);
+    state.commit();
+    resolve([makeTrack("stale", "artist")]);
+    assert.equal(await pending, null);
+    assert.deepEqual(state.queue, [seed, replacement]);
+    assert.equal(playback.currentTime, 73);
+});
+
+for (const action of [
+    "pending-radio",
+    "replace-queue",
+    "replace-upcoming",
+] as const) {
+    test(`adaptive refresh cannot overwrite ${action}`, async () => {
+        const seed = {
+            ...makeTrack("yt:AAAAAAAAAAA", "a"),
+            streamSource: "youtube" as const,
+            youtubeVideoId: "AAAAAAAAAAA",
+        };
+        const chosen = {
+            ...makeTrack("yt:BBBBBBBBBBB", "b"),
+            streamSource: "youtube" as const,
+            youtubeVideoId: "BBBBBBBBBBB",
+        };
+        personalizedFeed.current = {
+            shelves: {
+                quickPicks: [],
+                listenAgain: [],
+                discovery: [
+                    {
+                        id: "yt:CCCCCCCCCCC",
+                        title: "Stale adaptive",
+                        duration: 180,
+                        trackNo: null,
+                        artist: { name: "C" },
+                        album: { title: "C" },
+                        source: "youtube",
+                        streamSource: "youtube",
+                        youtubeVideoId: "CCCCCCCCCCC",
+                        provider: {
+                            youtubeVideoId: "CCCCCCCCCCC",
+                            tidalTrackId: null,
+                        },
+                    },
+                ],
+            },
+            degraded: false,
+            reason: null,
+            seedCount: 1,
+        };
+        const state = createDeferredAudioState({
+            queue: [seed],
+            currentTrack: seed,
+            playbackType: "track",
+            vibeMode: true,
+        });
+        const playback = createPlaybackStub({ currentTime: 34 });
+        let release!: () => void;
+        personalizedFeedGate.current = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const controls = await renderControls({ state, playback });
+        const pending = controls.startVibeMode({
+            queueStrategy: "replace-upcoming",
+        });
+        if (action === "replace-queue")
+            controls.playTracks([chosen], 0, true, { replaceQueue: true });
+        else if (action === "replace-upcoming")
+            controls.setUpcoming([chosen], true, true);
+        else {
+            const { requestRadioQueue } =
+                await import("../../lib/radio/radioRequestIntent");
+            await requestRadioQueue(async () => []);
+        }
+        state.commit();
+        const selectedQueue = state.queue;
+        release();
+        const result = await pending;
+        state.commit();
+        assert.equal(result.success, false);
+        assert.equal(state.queue, selectedQueue);
+    });
+}

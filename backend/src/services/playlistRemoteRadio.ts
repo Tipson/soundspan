@@ -93,3 +93,49 @@ export async function buildRemotePlaylistRadio(
             formatPlaylistDetailTrack(normalizeYtMusicTrack(track)),
         );
 }
+
+/** Loads provider recommendations for one video without replaying its seed. */
+export async function buildRemoteTrackRadio(videoId: string, limit: number) {
+    const result = await ytMusicService.getRadio(videoId, limit);
+    const seen = new Set([videoId]);
+    return result.tracks
+        .filter((track) => {
+            if (seen.has(track.videoId)) return false;
+            seen.add(track.videoId);
+            return true;
+        })
+        .slice(0, limit)
+        .map(formatYtMusicRadioTrack);
+}
+
+/** Builds radio from the authenticated user's recent remote likes. */
+export async function buildRemoteLikedRadio(userId: string, limit: number) {
+    const entries = await prisma.likedRemoteTrack.findMany({
+        where: { userId, trackYtMusicId: { not: null } },
+        select: { trackYtMusic: { select: { videoId: true } } },
+        orderBy: { likedAt: "desc" },
+        take: PLAYLIST_REMOTE_RADIO_SEED_LIMIT,
+    });
+    const seeds = [
+        ...new Set(
+            entries.flatMap((entry) =>
+                entry.trackYtMusic ? [entry.trackYtMusic.videoId] : [],
+            ),
+        ),
+    ];
+    const results = await Promise.allSettled(
+        seeds.map((seed) => buildRemoteTrackRadio(seed, limit)),
+    );
+    const seen = new Set(seeds);
+    return results
+        .flatMap((result) =>
+            result.status === "fulfilled" ? result.value : [],
+        )
+        .filter((track) => {
+            const id = String(track.youtubeVideoId);
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        })
+        .slice(0, limit);
+}

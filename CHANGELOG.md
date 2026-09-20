@@ -1,5 +1,12 @@
 # Changelog
 
+## Personal listening and collection controls
+
+- Start an ordered collection queue from the clicked song, including subsequent playlist pages, while keeping downloaded playback device-only. Keep shuffle and collection management accessible without redundant play-all and pause panels.
+- Resolve radio from a remote recording through its provider instead of requiring a matching local-library artist; reject empty stations without replacing the listener's queue.
+- Keep selected genres visible during taste search, include artist filters in keyboard navigation, and expose recoverable profile loading and saving states.
+- Remove the generic New and Notable homepage shelf and its catalog requests, preserving Wave, personal recommendations, mixes and offline downloads.
+
 ## CI and dependency security
 
 - Update Next.js, sharp, anyio, multer and js-yaml dependencies to address reported security advisories; preserve blocking security checks.

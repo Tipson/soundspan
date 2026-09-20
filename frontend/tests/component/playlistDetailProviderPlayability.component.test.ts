@@ -529,16 +529,7 @@ test("playlist detail renders consolidated action bar buttons", async () => {
 
     const html = await renderWithActions(PlaylistDetailPage);
 
-    // Canonical order: Play, Shuffle, Add to Queue, Like All, Radio
-    assert.match(html, /aria-label="Воспроизвести всё"/);
-    assert.match(
-        html,
-        /<span[^>]*data-playlist-primary-label="compact"[^>]*>Слушать<\/span>/,
-    );
-    assert.match(
-        html,
-        /<span[^>]*data-playlist-primary-label="full"[^>]*>Воспроизвести всё<\/span>/,
-    );
+    assert.doesNotMatch(html, /aria-label="Воспроизвести всё"/);
     assert.match(html, /title="Воспроизвести вперемешку"/);
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить все треки в любимые"/);
