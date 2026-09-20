@@ -8,42 +8,96 @@ import React from "react";
 import { TasteProfileDialog } from "../../features/taste-profile/components/TasteProfileDialog";
 import type { TasteProfileSelection } from "../../features/taste-profile/types";
 import { api } from "../../lib/api";
-test("genre shortcuts fill wide rows and shrink on resize", async (t) => {
-    let width = 1400;
-    const original = HTMLElement.prototype.getBoundingClientRect;
-    t.mock.method(
-        HTMLElement.prototype,
-        "getBoundingClientRect",
-        function (this: HTMLElement) {
-            const rect = original.call(this);
-            if (this.getAttribute("aria-label") === "Жанры")
-                return { ...rect, width };
-            if (this.dataset.genreMeasure !== undefined)
-                return { ...rect, width: 100 };
-            if (this.textContent?.trim() === "Все жанры")
-                return { ...rect, width: 140 };
-            return rect;
-        },
-    );
+test("genre carousel preserves order and exposes scrolling controls", async () => {
     const mounted = await mountDialog();
-    const row = () => mounted.container.querySelector('[aria-label="Жанры"]')!;
     try {
-        assert.ok(row().querySelectorAll("button").length > 7);
-        width = 350;
-        await React.act(async () => window.dispatchEvent(new Event("resize")));
-        assert.ok(row().querySelectorAll("button").length <= 3);
+        const row = mounted.container.querySelector('[aria-label="Жанры"]')!;
+        const names = () =>
+            [...row.querySelectorAll("button")].map(
+                (button) => button.textContent,
+            );
+        const initial = names();
+        assert.ok(initial.length >= 35);
+        assert.ok(findButton(mounted.container, "Предыдущие жанры"));
+        assert.ok(findButton(mounted.container, "Следующие жанры"));
         await chooseGenre(mounted.container, "Джаз");
+        assert.deepEqual(names(), initial);
         assert.equal(
-            findButton(row(), "Джаз")?.getAttribute("aria-pressed"),
+            findButton(row, "Джаз")?.getAttribute("aria-pressed"),
             "true",
         );
-        width = 1400;
-        await React.act(async () => window.dispatchEvent(new Event("resize")));
-        assert.ok(row().querySelectorAll("button").length > 7);
     } finally {
         await mounted.cleanup();
     }
 });
+
+test("genre arrows scroll the strip and disable at its ends", async () => {
+    const mounted = await mountDialog();
+    try {
+        const row = mounted.container.querySelector<HTMLElement>(
+            '[aria-label="Жанры"]',
+        )!;
+        Object.defineProperty(row, "clientWidth", {
+            configurable: true,
+            value: 300,
+        });
+        Object.defineProperty(row, "scrollWidth", {
+            configurable: true,
+            value: 1200,
+        });
+        const moves: number[] = [];
+        row.scrollBy = ((options: ScrollToOptions) => {
+            moves.push(options.left ?? 0);
+            row.scrollLeft += options.left ?? 0;
+            row.dispatchEvent(new Event("scroll"));
+        }) as typeof row.scrollBy;
+        await React.act(async () => row.dispatchEvent(new Event("scroll")));
+        const previous = findButton(mounted.container, "Предыдущие жанры")!;
+        const next = findButton(mounted.container, "Следующие жанры")!;
+        assert.equal(previous.disabled, true);
+        assert.equal(next.disabled, false);
+        await React.act(async () => next.click());
+        assert.deepEqual(moves, [240]);
+        assert.equal(previous.disabled, false);
+        await React.act(async () => previous.click());
+        assert.equal(row.scrollLeft, 0);
+        assert.equal(previous.disabled, true);
+        await React.act(async () => {
+            row.scrollLeft = 900;
+            row.dispatchEvent(new Event("scroll"));
+        });
+        assert.equal(next.disabled, true);
+    } finally {
+        await mounted.cleanup();
+    }
+});
+
+test("taste action reacts to selections and permits saving one artist", async () => {
+    const mounted = await mountDialog();
+    try {
+        const save = findButton(mounted.container, "Сохранить вкусы")!;
+        const fill = () =>
+            save.querySelector<HTMLElement>(
+                '[data-testid="taste-action-fill"]',
+            )!;
+        assert.ok(fill());
+        const empty = fill().style.transform;
+        await React.act(async () =>
+            findButton(mounted.container, "Linkin Park")!.click(),
+        );
+        assert.equal(save.disabled, false);
+        assert.notEqual(fill().style.transform, empty);
+        await React.act(async () => save.click());
+        assert.deepEqual(mounted.saves[0].artists, ["Linkin Park"]);
+        await React.act(async () =>
+            findButton(mounted.container, "Linkin Park")!.click(),
+        );
+        assert.equal(fill().style.transform, empty);
+    } finally {
+        await mounted.cleanup();
+    }
+});
+
 import {
     SUGGESTED_GENRES,
     suggestArtistsForGenres,

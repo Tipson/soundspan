@@ -1,5 +1,9 @@
 # Changelog
 
+## Taste setup carousel and selection action
+
+- Keep full-size genre labels in a stable scrollable strip with previous/next controls and touch scrolling. Move the desktop save action under the title and animate its fill as artists are selected; retain the mobile bottom action and unrestricted selection count.
+
 ## Responsive genre shortcuts
 
 - Fill the taste setup genre row according to available width, keep the active genre visible, and expose remaining categories in the subtly accented genre palette.

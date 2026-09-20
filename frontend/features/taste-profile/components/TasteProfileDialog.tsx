@@ -276,7 +276,7 @@ export function TasteProfileDialog({
                 aria-labelledby={titleId}
                 aria-busy={isSaving}
                 tabIndex={-1}
-                className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-surface-raised text-content focus:outline-none"
+                className="relative grid h-[100dvh] w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden lg:grid-cols-[18rem_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] bg-surface-raised text-content focus:outline-none"
             >
                 {mode === "edit" && (
                     <button
@@ -289,7 +289,7 @@ export function TasteProfileDialog({
                         <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                 )}
-                <header className="shrink-0 px-5 pb-5 pr-20 pt-[max(1.5rem,var(--safe-area-top))] sm:px-10 sm:pr-20 sm:pt-8">
+                <header className="shrink-0 px-5 pb-5 pr-20 pt-[max(1.5rem,var(--safe-area-top))] sm:px-10 sm:pr-20 sm:pt-8 lg:col-start-1 lg:row-start-1 lg:px-8 lg:pb-6 lg:pt-10">
                     <h2
                         id={titleId}
                         className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl"
@@ -297,10 +297,10 @@ export function TasteProfileDialog({
                         Любимые исполнители
                     </h2>
                 </header>
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:pt-10">
                     <div
                         data-testid="taste-profile-controls"
-                        className="relative z-10 shrink-0 space-y-4 bg-surface-raised px-5 pb-5 sm:px-10"
+                        className="relative z-10 shrink-0 space-y-4 bg-surface-raised px-5 pb-5 sm:px-10 lg:pl-4 lg:pr-20"
                     >
                         <TasteGenrePicker
                             value={artistGenre}
@@ -381,7 +381,7 @@ export function TasteProfileDialog({
                     <div
                         ref={resultsRef}
                         data-testid="taste-profile-scroll-region"
-                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-2 sm:px-10"
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-2 sm:px-10 lg:pl-4"
                     >
                         {!canonicalArtistSearch.hasQuery ? (
                             <>
@@ -645,7 +645,7 @@ export function TasteProfileDialog({
                 </div>
                 <footer
                     data-testid="taste-profile-footer"
-                    className="shrink-0 border-t border-white/5 bg-surface-raised px-5 pb-[max(1rem,var(--safe-area-bottom))] pt-4 sm:px-10"
+                    className="shrink-0 border-t border-white/5 bg-surface-raised px-5 pb-[max(1rem,var(--safe-area-bottom))] pt-4 sm:px-10 lg:col-start-1 lg:row-start-2 lg:self-start lg:border-0 lg:px-8 lg:pt-0"
                 >
                     {validation.message && (
                         <p role="alert" className="mb-3 text-sm text-red-200">
@@ -659,7 +659,7 @@ export function TasteProfileDialog({
                     )}
                     <div
                         data-testid="taste-profile-actions"
-                        className="flex flex-wrap items-center justify-end gap-3"
+                        className="flex flex-wrap items-center justify-end gap-3 lg:flex-col lg:items-stretch"
                     >
                         {count > 0 && (
                             <span
@@ -674,15 +674,29 @@ export function TasteProfileDialog({
                             aria-label="Сохранить вкусы"
                             disabled={isSaving || validation.code !== "valid"}
                             onClick={() => void save()}
-                            className="inline-flex min-h-12 min-w-40 items-center justify-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-45"
+                            className="relative isolate inline-flex min-h-14 min-w-40 flex-1 items-center justify-center gap-2 overflow-hidden rounded-full border border-brand/30 bg-brand/15 px-5 text-sm font-bold text-content transition-[background-color,transform] hover:bg-brand/25 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none motion-reduce:transform-none lg:w-full lg:flex-none"
                         >
+                            <span
+                                aria-hidden="true"
+                                data-testid="taste-action-fill"
+                                className="pointer-events-none absolute inset-0 -z-10 origin-left rounded-full bg-gradient-to-r from-brand/55 to-brand/35 transition-transform duration-500 ease-out motion-reduce:transition-none"
+                                style={{
+                                    transform: `scaleX(${count === 0 ? 0 : 0.25 + 0.75 * (1 - Math.exp(-count / 4))})`,
+                                }}
+                            />
                             {isSaving && (
                                 <LoaderCircle
                                     className="h-4 w-4 animate-spin motion-reduce:animate-none"
                                     aria-hidden="true"
                                 />
                             )}
-                            {isSaving ? "Сохраняем…" : "Готово"}
+                            {isSaving
+                                ? "Сохраняем…"
+                                : count === 0
+                                  ? "Готово"
+                                  : count === 1
+                                    ? "Настроить по выбору"
+                                    : "Настроить под меня"}
                         </button>
                         {mode === "onboarding" && onSkip && (
                             <button

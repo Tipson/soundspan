@@ -1,7 +1,13 @@
 "use client";
 
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
+import {
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    SlidersHorizontal,
+    X,
+} from "lucide-react";
 import { GENRE_GROUPS } from "../suggestions";
 import { cn } from "@/utils/cn";
 
@@ -38,12 +44,13 @@ export function TasteGenrePicker({
     const trigger = useRef<HTMLButtonElement>(null);
     const id = useId();
     const row = useRef<HTMLDivElement>(null);
-    const measures = useRef<HTMLDivElement>(null);
-    const genres = useMemo(
-        () => [...new Set([value, "all", ...QUICK_GENRES])],
-        [value],
-    );
-    const [visibleCount, setVisibleCount] = useState(6);
+    const track = useRef<HTMLDivElement>(null);
+    const [edges, setEdges] = useState({ previous: false, next: false });
+    const genres = [
+        "all",
+        ...QUICK_GENRES,
+        ...(hasSavedGenres ? ["selected"] : []),
+    ];
     const label = (genre: string) =>
         genre === "all"
             ? "Все исполнители"
@@ -51,31 +58,47 @@ export function TasteGenrePicker({
               ? "Мои жанры"
               : genre;
     useLayoutEffect(() => {
-        const measure = () => {
-            const width = row.current?.getBoundingClientRect().width ?? 0;
-            if (!width || !trigger.current || !measures.current) return;
-            let remaining =
-                width - trigger.current.getBoundingClientRect().width - 8;
-            let count = 0;
-            for (const item of Array.from(measures.current.children)) {
-                const itemWidth = item.getBoundingClientRect().width;
-                if (itemWidth > remaining) break;
-                remaining -= itemWidth + 8;
-                count++;
-            }
-            setVisibleCount(Math.max(1, count));
-        };
+        const element = row.current;
+        if (!element) return;
+        const measure = () =>
+            setEdges({
+                previous: element.scrollLeft > 1,
+                next:
+                    element.scrollLeft + element.clientWidth <
+                    element.scrollWidth - 1,
+            });
         measure();
         const observer = new ResizeObserver(measure);
-        if (row.current) observer.observe(row.current);
-        if (measures.current) observer.observe(measures.current);
-        if (trigger.current) observer.observe(trigger.current);
-        window.addEventListener("resize", measure);
+        observer.observe(element);
+        if (track.current) observer.observe(track.current);
+        element.addEventListener("scroll", measure, { passive: true });
         return () => {
             observer.disconnect();
-            window.removeEventListener("resize", measure);
+            element.removeEventListener("scroll", measure);
         };
-    }, [genres]);
+    }, [hasSavedGenres]);
+    const scroll = (direction: number) => {
+        row.current?.scrollBy({
+            left: direction * row.current.clientWidth * 0.8,
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+                .matches
+                ? "auto"
+                : "smooth",
+        });
+    };
+    useLayoutEffect(() => {
+        const element = row.current;
+        const selected = element?.querySelector<HTMLButtonElement>(
+            '[aria-pressed="true"]',
+        );
+        if (!element || !selected || !element.clientWidth) return;
+        const bounds = element.getBoundingClientRect();
+        const button = selected.getBoundingClientRect();
+        if (button.left < bounds.left)
+            element.scrollLeft += button.left - bounds.left;
+        else if (button.right > bounds.right)
+            element.scrollLeft += button.right - bounds.right;
+    }, [value]);
     const close = () => {
         setOpen(false);
         trigger.current?.focus();
@@ -92,7 +115,7 @@ export function TasteGenrePicker({
             aria-pressed={value === genre}
             onClick={() => choose(genre)}
             className={cn(
-                "min-h-11 min-w-0 truncate rounded-full px-4 text-sm font-medium transition-[background-color,transform] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none motion-reduce:transform-none",
+                "min-h-11 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-[background-color,transform] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none motion-reduce:transform-none",
                 value === genre
                     ? "bg-brand/20 text-brand-light"
                     : "bg-white/5 text-content-secondary hover:bg-white/10",
@@ -103,7 +126,7 @@ export function TasteGenrePicker({
     );
     return (
         <div
-            className="relative min-w-0 text-sm font-medium"
+            className="relative min-w-0 text-base font-medium"
             role="group"
             aria-label="Фильтр по жанру"
             onKeyDown={(event) => {
@@ -114,30 +137,36 @@ export function TasteGenrePicker({
                 }
             }}
         >
-            <div
-                aria-hidden="true"
-                className="pointer-events-none invisible absolute inset-x-0 top-0 h-0 overflow-hidden"
-            >
-                <div ref={measures} className="flex w-max gap-2">
-                    {genres.map((genre) => (
-                        <span
-                            key={genre}
-                            data-genre-measure=""
-                            className="shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-medium"
-                        >
-                            {label(genre)}
-                        </span>
-                    ))}
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+                <div
+                    ref={row}
+                    aria-label="Жанры"
+                    className="min-w-0 basis-full overflow-x-auto overscroll-x-contain [scrollbar-width:none] sm:flex-1 sm:basis-0 [&::-webkit-scrollbar]:hidden"
+                >
+                    <div ref={track} className="flex w-max gap-2 p-1">
+                        {genres.map((genre) => chip(genre, label(genre)))}
+                    </div>
                 </div>
-            </div>
-            <div
-                ref={row}
-                className="flex min-w-0 items-center gap-2"
-                aria-label="Жанры"
-            >
-                {genres
-                    .slice(0, visibleCount)
-                    .map((genre) => chip(genre, label(genre)))}
+                <div className="flex shrink-0 gap-1">
+                    <button
+                        type="button"
+                        aria-label="Предыдущие жанры"
+                        disabled={disabled || !edges.previous}
+                        onClick={() => scroll(-1)}
+                        className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-content hover:bg-white/10 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                    >
+                        <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+                    </button>
+                    <button
+                        type="button"
+                        aria-label="Следующие жанры"
+                        disabled={disabled || !edges.next}
+                        onClick={() => scroll(1)}
+                        className="grid h-11 w-11 place-items-center rounded-full border border-white/15 text-content hover:bg-white/10 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
+                    >
+                        <ChevronRight aria-hidden="true" className="h-5 w-5" />
+                    </button>
+                </div>
                 <button
                     ref={trigger}
                     type="button"
@@ -145,7 +174,7 @@ export function TasteGenrePicker({
                     aria-expanded={open}
                     aria-controls={id}
                     onClick={() => setOpen(!open)}
-                    className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 text-sm font-medium text-content hover:bg-brand/20 transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none"
+                    className="ml-auto flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-4 text-sm font-medium text-content hover:bg-brand/20 transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transform-none"
                 >
                     <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
                     Все жанры
