@@ -12,6 +12,7 @@ import {
 import { shuffleArray } from "../../utils/shuffle";
 import { separateArtists } from "../../utils/separateArtists";
 import {
+    LOCAL_AUDIO_ANALYSIS_TRACK_WHERE,
     TRACK_BROWSE_WHERE,
     TRACK_VISIBLE_WHERE,
 } from "../../utils/librarySorting";
@@ -333,7 +334,8 @@ export async function handleGetRadio(req: Request, res: Response) {
                 where: {
                     ...TRACK_VISIBLE_WHERE,
                     ...TRACK_BROWSE_WHERE,
-                    album: { artistId },
+                    ...LOCAL_AUDIO_ANALYSIS_TRACK_WHERE,
+                    album: { ...TRACK_VISIBLE_WHERE.album, artistId },
                 },
                 select: {
                     id: true,
@@ -484,7 +486,11 @@ export async function handleGetRadio(req: Request, res: Response) {
                     where: {
                         ...TRACK_VISIBLE_WHERE,
                         ...TRACK_BROWSE_WHERE,
-                        album: { artistId: { in: similarArtistIds } },
+                        ...LOCAL_AUDIO_ANALYSIS_TRACK_WHERE,
+                        album: {
+                            ...TRACK_VISIBLE_WHERE.album,
+                            artistId: { in: similarArtistIds },
+                        },
                     },
                     select: {
                         id: true,

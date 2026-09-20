@@ -4,6 +4,7 @@
 
 - Use a circular icon-only Play/Pause control across music collection pages, with accessible labels and consistent loading feedback. Pause and resume the active collection without restarting it or controlling an unrelated queue.
 - Build artist radio from matching external-catalog recordings when the artist has no local audio. Preserve provider identity, bounded requests, honest empty/error states, and current playback intent, including shared-listening confirmation.
+- Exclude catalog-only track metadata from local artist-radio pools and preserve album visibility filters so artists without audio files reach external recommendations.
 
 ## Personal listening and collection controls
 

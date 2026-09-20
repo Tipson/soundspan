@@ -738,6 +738,21 @@ describe("library catalog list runtime coverage", () => {
         );
         expect(res.body).toEqual({ tracks });
         expect(buildRemoteArtistRadio).toHaveBeenCalledWith("2CELLOS", 25);
+        expect(mockTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    origin: "LOCAL",
+                    filePath: { not: null },
+                    NOT: { filePath: "" },
+                    album: {
+                        artistId: "catalog-artist",
+                        location: {
+                            in: ["LIBRARY", "DISCOVER", "REMOTE", "FEDERATED"],
+                        },
+                    },
+                }),
+            }),
+        );
     });
 
     it("artist-name radio uses the external catalog when there is no local artist row", async () => {
@@ -895,6 +910,21 @@ describe("library catalog list runtime coverage", () => {
             "a2",
             "s2",
         ]);
+        expect(mockTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    origin: "LOCAL",
+                    filePath: { not: null },
+                    NOT: { filePath: "" },
+                    album: {
+                        artistId: { in: ["artist-sim-1"] },
+                        location: {
+                            in: ["LIBRARY", "DISCOVER", "REMOTE", "FEDERATED"],
+                        },
+                    },
+                }),
+            }),
+        );
     });
 
     it("caps overrepresented similar artists in artist radio results", async () => {
