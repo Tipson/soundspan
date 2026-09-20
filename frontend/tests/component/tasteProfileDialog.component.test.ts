@@ -81,11 +81,29 @@ test("taste action reacts to selections and permits saving one artist", async ()
                 '[data-testid="taste-action-fill"]',
             )!;
         assert.ok(fill());
+        assert.match(save.textContent ?? "", /Настроить под меня/);
+        const signature = mounted.container.querySelector(
+            '[data-testid="taste-selection-signature"]',
+        );
+        assert.ok(
+            signature,
+            "musical signature is present before any selection",
+        );
+        const preview = mounted.container.querySelector(
+            '[data-testid="taste-selection-preview"]',
+        )!;
+        assert.ok(preview);
+        assert.equal(preview.querySelectorAll("[data-artist]").length, 0);
         const empty = fill().style.transform;
         await React.act(async () =>
             findButton(mounted.container, "Linkin Park")!.click(),
         );
         assert.equal(save.disabled, false);
+        assert.equal(
+            preview.querySelector("[data-artist]")?.getAttribute("data-artist"),
+            "Linkin Park",
+        );
+        assert.match(save.textContent ?? "", /Применить выбор/);
         assert.notEqual(fill().style.transform, empty);
         await React.act(async () => save.click());
         assert.deepEqual(mounted.saves[0].artists, ["Linkin Park"]);
@@ -93,6 +111,8 @@ test("taste action reacts to selections and permits saving one artist", async ()
             findButton(mounted.container, "Linkin Park")!.click(),
         );
         assert.equal(fill().style.transform, empty);
+        assert.equal(preview.querySelectorAll("[data-artist]").length, 0);
+        assert.equal(save.disabled, false);
     } finally {
         await mounted.cleanup();
     }

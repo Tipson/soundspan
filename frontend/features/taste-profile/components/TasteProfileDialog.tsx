@@ -8,7 +8,7 @@ import {
     useState,
     type FormEvent,
 } from "react";
-import { Check, LoaderCircle, Search, X } from "lucide-react";
+import { ArrowUpRight, Check, LoaderCircle, Search, X } from "lucide-react";
 import { nextFocusIndex } from "@/components/ui/focusTrapMath";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { useTasteArtistCatalog } from "../hooks/useTasteArtistCatalog";
@@ -22,6 +22,7 @@ import {
     validateTasteProfileSelection,
 } from "../model";
 import { TasteGenrePicker } from "./TasteGenrePicker";
+import { TasteSelectionSignature } from "./TasteSelectionSignature";
 import { suggestArtistsForGenres } from "../suggestions";
 import {
     useCanonicalArtistSearch,
@@ -645,8 +646,13 @@ export function TasteProfileDialog({
                 </div>
                 <footer
                     data-testid="taste-profile-footer"
-                    className="shrink-0 border-t border-white/5 bg-surface-raised px-5 pb-[max(1rem,var(--safe-area-bottom))] pt-4 sm:px-10 lg:col-start-1 lg:row-start-2 lg:self-start lg:border-0 lg:px-8 lg:pt-0"
+                    className="shrink-0 border-t border-white/5 bg-surface-raised px-5 pb-[max(1rem,var(--safe-area-bottom))] pt-4 sm:px-10 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto lg:border-0 lg:px-8 lg:pt-0"
                 >
+                    <TasteSelectionSignature
+                        artists={selection.artists}
+                        artwork={artwork}
+                        count={count}
+                    />
                     {validation.message && (
                         <p role="alert" className="mb-3 text-sm text-red-200">
                             {validation.message}
@@ -674,12 +680,12 @@ export function TasteProfileDialog({
                             aria-label="Сохранить вкусы"
                             disabled={isSaving || validation.code !== "valid"}
                             onClick={() => void save()}
-                            className="relative isolate inline-flex min-h-14 min-w-40 flex-1 items-center justify-center gap-2 overflow-hidden rounded-full border border-brand/30 bg-brand/15 px-5 text-sm font-bold text-content transition-[background-color,transform] hover:bg-brand/25 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none motion-reduce:transform-none lg:w-full lg:flex-none"
+                            className="relative isolate inline-flex min-h-14 min-w-40 flex-1 items-center justify-center gap-2 overflow-hidden rounded-full border border-brand-light/40 bg-brand px-5 text-sm font-bold text-black shadow-[0_8px_28px_-10px_rgba(168,112,255,0.6)] transition-[background-color,transform] hover:bg-brand-light active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transition-none motion-reduce:transform-none lg:w-full lg:flex-none"
                         >
                             <span
                                 aria-hidden="true"
                                 data-testid="taste-action-fill"
-                                className="pointer-events-none absolute inset-0 -z-10 origin-left rounded-full bg-gradient-to-r from-brand/55 to-brand/35 transition-transform duration-500 ease-out motion-reduce:transition-none"
+                                className="pointer-events-none absolute inset-0 -z-10 origin-left rounded-full bg-gradient-to-r from-white/35 to-white/10 transition-transform duration-500 ease-out motion-reduce:transition-none"
                                 style={{
                                     transform: `scaleX(${count === 0 ? 0 : 0.25 + 0.75 * (1 - Math.exp(-count / 4))})`,
                                 }}
@@ -693,10 +699,14 @@ export function TasteProfileDialog({
                             {isSaving
                                 ? "Сохраняем…"
                                 : count === 0
-                                  ? "Готово"
-                                  : count === 1
-                                    ? "Настроить по выбору"
-                                    : "Настроить под меня"}
+                                  ? "Настроить под меня"
+                                  : "Применить выбор"}
+                            {!isSaving && (
+                                <ArrowUpRight
+                                    className="h-4 w-4 shrink-0"
+                                    aria-hidden="true"
+                                />
+                            )}
                         </button>
                         {mode === "onboarding" && onSkip && (
                             <button
