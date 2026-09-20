@@ -4,6 +4,12 @@ import request from "supertest";
 const mockGetProfile = jest.fn();
 const mockSaveProfile = jest.fn();
 const mockSkipProfile = jest.fn();
+const mockArtistImage = jest.fn();
+jest.mock("../../services/deezer", () => ({
+    deezerService: {
+        getArtistImageStrict: (...args: unknown[]) => mockArtistImage(...args),
+    },
+}));
 
 jest.mock("../../middleware/auth", () => ({
     requireAuthOrToken: (req: Request, res: Response, next: NextFunction) => {
@@ -33,6 +39,36 @@ import { createRouteTestApp } from "./helpers/createRouteTestApp";
 const app = createRouteTestApp("/api/taste-profile", router);
 
 describe("account taste profile routes", () => {
+    it("loads a portrait by exact artist identity without resolving biography or taste seeds", async () => {
+        mockArtistImage.mockResolvedValue("https://images.example/queen.jpg");
+        const response = await request(app)
+            .get("/api/taste-profile/artist-image?name=Queen")
+            .set("x-test-user", "alice");
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            image: "https://images.example/queen.jpg",
+        });
+        expect(mockArtistImage).toHaveBeenCalledWith("Queen");
+        expect(mockGetProfile).not.toHaveBeenCalled();
+        expect(mockSaveProfile).not.toHaveBeenCalled();
+    });
+    it("validates and authenticates portrait requests before contacting the image provider", async () => {
+        expect(
+            (
+                await request(app).get(
+                    "/api/taste-profile/artist-image?name=Queen",
+                )
+            ).status,
+        ).toBe(401);
+        expect(
+            (
+                await request(app)
+                    .get("/api/taste-profile/artist-image?name=")
+                    .set("x-test-user", "alice")
+            ).status,
+        ).toBe(400);
+        expect(mockArtistImage).not.toHaveBeenCalled();
+    });
     beforeEach(() => {
         jest.clearAllMocks();
         mockGetProfile.mockResolvedValue({

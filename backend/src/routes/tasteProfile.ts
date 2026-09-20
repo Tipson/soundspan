@@ -7,6 +7,7 @@ import {
     tasteProfileService,
 } from "../services/tasteProfile";
 import { sendRouteError } from "../utils/routeErrorResponse";
+import { deezerService } from "../services/deezer";
 
 const router = Router();
 const tasteLabelSchema = z
@@ -59,6 +60,53 @@ const tasteProfileRequestSchema = z
     });
 
 router.use(requireAuthOrToken);
+
+/**
+ * @openapi
+ * /api/taste-profile/artist-image:
+ *   get:
+ *     summary: Get an exact-matched portrait without loading artist biographies or discographies
+ *     tags: [Taste profile]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *           minLength: 1
+ *           maxLength: 80
+ *     responses:
+ *       200:
+ *         description: Portrait URL or null when unavailable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [image]
+ *               properties:
+ *                 image:
+ *                   type: string
+ *                   nullable: true
+ *       400:
+ *         description: Invalid artist name
+ *       401:
+ *         description: Not authenticated
+ */
+router.get(
+    "/artist-image",
+    asyncHandler(async (req, res) => {
+        const name = tasteLabelSchema.safeParse(req.query.name);
+        if (!name.success)
+            return sendRouteError(res, 400, "Invalid artist name", {
+                code: "INVALID_ARTIST_NAME",
+            });
+        const image = await deezerService.getArtistImageStrict(name.data);
+        return res.json({ image });
+    }),
+);
 
 /**
  * @openapi

@@ -2,6 +2,8 @@
 
 ## Source recovery and taste settings
 
+- Load exact-matched taste portraits through a lightweight cached image lookup, independently of Wikidata biographies and full artist discovery.
+
 - Preserve cancelled playback attempts when an alternate source resolves late; keep recording-version checks and session-bound audio representations.
 - Save taste selections during catalog outages and retry unresolved queries on later profile reads, with a durable three-attempt limit and protection against overwriting newer edits or skips.
 - Wait for the scheduler's Redis clients before registering named Bull processors, avoiding transient MaxListeners warnings without increasing listener limits.

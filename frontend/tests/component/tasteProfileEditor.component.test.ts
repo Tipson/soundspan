@@ -47,7 +47,8 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
         needsOnboarding: false,
     };
     api.request = (async (_path: string, options?: RequestInit) => {
-        if (_path.startsWith("/artists/discover/")) return { image: null };
+        if (_path.startsWith("/taste-profile/artist-image?"))
+            return { image: null };
         if (options?.method === "PUT") {
             if (failSave) throw new Error("offline");
             const selection = JSON.parse(String(options.body));

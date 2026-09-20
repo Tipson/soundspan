@@ -25,7 +25,7 @@ export function useTasteArtistArtwork(names: readonly string[]) {
                 }
                 try {
                     const artist = await api.request<{ image?: string | null }>(
-                        `/artists/discover/${encodeURIComponent(name)}?includeDiscography=false&includeTopTracks=false&includeSimilarArtists=false`,
+                        `/taste-profile/artist-image?name=${encodeURIComponent(name)}`,
                         { signal, timeoutMs: 8_000, retryOnTimeout: false },
                     );
                     signal.throwIfAborted();
