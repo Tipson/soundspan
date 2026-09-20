@@ -1,5 +1,9 @@
 # Changelog
 
+## Fullscreen taste setup
+
+- Give artist selection the entire viewport, remove explanatory copy and the empty sidebar, and replace the native genre dropdown with shortcuts and a grouped genre palette. Keep pagination, selection, keyboard dismissal and mobile save controls.
+
 ## Artist catalog browsing
 
 - Browse genre-tagged Last.fm artists with automatic pagination, duplicate removal and retry without losing selection. The curated shelf is a labelled fallback during catalog outages.

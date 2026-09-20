@@ -19,8 +19,10 @@ dialog; failed saves keep the current choices available for another attempt.
 
 ## Selection flow
 
-The single artist-selection screen offers a labelled genre selector with 34
-genres in six groups. “Все исполнители” browses Last.fm charts; individual genres
+The fullscreen artist-selection screen provides genre shortcuts and an expandable
+“Все жанры” palette with 34 genres in six groups. Escape closes the palette and
+returns focus to its trigger. The screen contains only its title, search, filters,
+artists, selection count and save action; routine explanatory paragraphs are omitted. “Все исполнители” browses Last.fm charts; individual genres
 map to community tags. Catalog pages contain 48 artists and load near the scroll
 boundary, with an accessible load/retry button. Names are deduplicated across
 pages. Saved-genre browsing interleaves those genres one request at a time.

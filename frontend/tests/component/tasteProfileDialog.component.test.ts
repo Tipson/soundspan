@@ -148,34 +148,24 @@ test("every genre offers a meaningful selection beyond the former five artists",
 });
 
 async function chooseGenre(container: ParentNode, genre: string) {
-    const select = container.querySelector<HTMLSelectElement>(
-        'select[aria-label="Жанр исполнителей"]',
+    await React.act(async () => findButton(container, "Все жанры")!.click());
+    const panel = container.querySelector('[aria-label="Все жанры"]');
+    assert.ok(panel);
+    await React.act(async () =>
+        findButton(panel, genre === "all" ? "Все исполнители" : genre)!.click(),
     );
-    assert.ok(select);
-    await React.act(async () => {
-        select.value = genre;
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
 }
 
 test("genre navigation has a clear all-artists choice and keeps controls outside the scrolling results", async () => {
     const mounted = await mountDialog();
     try {
-        const select = mounted.container.querySelector<HTMLSelectElement>(
-            'select[aria-label="Жанр исполнителей"]',
-        );
-        assert.ok(select);
-        assert.equal(select.selectedOptions[0].textContent, "Все исполнители");
-        assert.equal(
-            Array.from(select.options).some(
-                (option) => option.textContent === "Мои жанры",
-            ),
-            false,
-        );
+        const trigger = findButton(mounted.container, "Все жанры")!;
+        assert.ok(trigger);
+        assert.equal(mounted.container.querySelector("select"), null);
         const scroll = mounted.container.querySelector(
             '[data-testid="taste-profile-scroll-region"]',
         )!;
-        assert.equal(scroll.contains(select), false);
+        assert.equal(scroll.contains(trigger), false);
         await chooseGenre(mounted.container, "Рок");
         assert.ok(
             scroll.querySelectorAll('[aria-label="Исполнители"] button')
@@ -316,9 +306,12 @@ test("onboarding is a Russian accessible dialog and explains that it does not cr
     assert.equal(dialog.getAttribute("data-taste-stage"), "artists");
     assert.equal(dialog.getAttribute("aria-modal"), "true");
     assert.ok(dialog.getAttribute("aria-labelledby"));
-    assert.ok(dialog.getAttribute("aria-describedby"));
-    assert.match(dialog.textContent ?? "", /Выберите любимых исполнителей/);
-    assert.match(dialog.textContent ?? "", /не ставит лайки автоматически/i);
+    assert.equal(dialog.getAttribute("aria-describedby"), null);
+    assert.match(dialog.textContent ?? "", /Любимые исполнители/);
+    assert.doesNotMatch(
+        dialog.textContent ?? "",
+        /не ставит лайки автоматически/i,
+    );
     assert.doesNotMatch(dialog.textContent ?? "", /Шаг \d из/);
     assert.ok(findButton(mounted.container, "Сохранить вкусы"));
 
@@ -552,10 +545,7 @@ test("artist autocomplete exposes and selects the keyboard-active canonical opti
             );
         });
 
-        assert.match(
-            mounted.container.textContent ?? "",
-            /Рок · Метал · Massive Wagons/,
-        );
+        assert.match(mounted.container.textContent ?? "", /Massive Wagons/);
     } finally {
         api.searchMusicBrainzArtists = originalSearch;
         await mounted.cleanup();
@@ -736,17 +726,31 @@ test("focus wraps inside the editor and returns to its opener", async () => {
     opener.remove();
 });
 
-test("taste setup explains where the saved selection is used", async () => {
-    const mounted = await mountDialog();
+test("taste setup removes explanatory copy and genre palette closes with Escape", async () => {
+    const mounted = await mountDialog({ mode: "edit" });
     try {
-        assert.match(
+        assert.doesNotMatch(
             mounted.container.textContent ?? "",
-            /рекомендации на главной/i,
+            /рекомендации на главной|прослушивания и лайки|Количество —|Пока ничего не выбрано|Можно выбрать сколько/i,
         );
-        assert.match(
-            mounted.container.textContent ?? "",
-            /прослушивания и лайки/i,
+        const trigger = findButton(mounted.container, "Все жанры")!;
+        await React.act(async () => trigger.click());
+        const panel = mounted.container.querySelector(
+            '[aria-label="Все жанры"]',
+        )!;
+        assert.ok(panel);
+        assert.ok(findButton(panel, "Джаз"));
+        await React.act(async () =>
+            panel.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+            ),
         );
+        assert.equal(
+            mounted.container.querySelector('[aria-label="Все жанры"]'),
+            null,
+        );
+        assert.equal(mounted.closes, 0);
+        assert.equal(document.activeElement, trigger);
     } finally {
         await mounted.cleanup();
     }

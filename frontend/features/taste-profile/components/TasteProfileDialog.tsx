@@ -21,7 +21,8 @@ import {
     toggleTasteLabel,
     validateTasteProfileSelection,
 } from "../model";
-import { GENRE_GROUPS, suggestArtistsForGenres } from "../suggestions";
+import { TasteGenrePicker } from "./TasteGenrePicker";
+import { suggestArtistsForGenres } from "../suggestions";
 import {
     useCanonicalArtistSearch,
     type CanonicalArtistSearchResult,
@@ -42,14 +43,6 @@ export interface TasteProfileDialogProps {
 
 const FOCUSABLE_SELECTOR =
     'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
-
-function selectionSummary(selection: TasteProfileSelection): string {
-    const labels = [...selection.genres, ...selection.artists];
-    if (labels.length === 0) return "Пока ничего не выбрано";
-    const visible = labels.slice(0, 4).join(" · ");
-    const hiddenCount = labels.length - 4;
-    return hiddenCount > 0 ? `${visible} · ещё ${hiddenCount}` : visible;
-}
 
 function artistOptionId(mbid: string): string {
     return `taste-artist-option-${mbid}`;
@@ -79,7 +72,6 @@ export function TasteProfileDialog({
     const savingRef = useRef(isSaving);
     const submissionRef = useRef<"save" | "skip" | null>(null);
     const titleId = useId();
-    const descriptionId = useId();
     const validation = useMemo(
         () => validateTasteProfileSelection(selection),
         [selection],
@@ -264,7 +256,7 @@ export function TasteProfileDialog({
 
     return (
         <div
-            className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/80 sm:p-5"
+            className="fixed inset-0 z-[10020] bg-surface-raised"
             role="presentation"
             onMouseDown={(event) => {
                 if (
@@ -282,10 +274,9 @@ export function TasteProfileDialog({
                 data-taste-stage="artists"
                 aria-modal="true"
                 aria-labelledby={titleId}
-                aria-describedby={descriptionId}
                 aria-busy={isSaving}
                 tabIndex={-1}
-                className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-surface-raised text-content shadow-2xl focus:outline-none sm:max-h-[min(92dvh,58rem)] sm:max-w-7xl sm:rounded-3xl sm:border sm:border-white/10 lg:grid lg:grid-cols-[19rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)_auto]"
+                className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-surface-raised text-content focus:outline-none"
             >
                 {mode === "edit" && (
                     <button
@@ -298,76 +289,28 @@ export function TasteProfileDialog({
                         <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                 )}
-                <header className="shrink-0 px-5 pb-3 pr-16 pt-[max(1.5rem,var(--safe-area-top))] sm:px-7 sm:pr-16 lg:overflow-y-auto lg:pb-8 lg:pr-5 lg:pt-12">
+                <header className="shrink-0 px-5 pb-5 pr-20 pt-[max(1.5rem,var(--safe-area-top))] sm:px-10 sm:pr-20 sm:pt-8">
                     <h2
                         id={titleId}
-                        className="max-w-sm text-2xl font-black leading-tight tracking-tight sm:text-3xl lg:text-4xl"
+                        className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl"
                     >
-                        Выберите любимых исполнителей
+                        Любимые исполнители
                     </h2>
-                    <p
-                        id={descriptionId}
-                        className="mt-3 max-w-sm text-sm leading-6 text-content-secondary"
-                    >
-                        Это поможет получить более точные и интересные
-                        рекомендации.
-                    </p>
-                    <p className="mt-4 hidden text-xs leading-5 text-content-muted lg:block">
-                        Ваш выбор помогает настроить рекомендации на главной.
-                        Прослушивания и лайки уточняют их дальше. Настройка не
-                        ставит лайки автоматически.
-                    </p>
-                    <div
-                        className="mt-5 hidden lg:block"
-                        aria-label="Ваш выбор"
-                    >
-                        <p className="mb-2 text-xs font-semibold text-content-muted">
-                            Ваш выбор
-                        </p>
-                        <p className="text-sm leading-6 text-content-secondary">
-                            {selectionSummary(selection)}
-                        </p>
-                    </div>
                 </header>
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:row-span-2 lg:pt-16">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                     <div
                         data-testid="taste-profile-controls"
-                        className="shrink-0 border-b border-white/10 px-5 pb-4 sm:px-7"
+                        className="relative z-10 shrink-0 space-y-4 bg-surface-raised px-5 pb-5 sm:px-10"
                     >
-                        <label className="mb-3 block text-xs font-semibold text-content-secondary">
-                            Жанр исполнителей
-                            <select
-                                aria-label="Жанр исполнителей"
-                                value={artistGenre}
-                                disabled={isSaving}
-                                onChange={(event) =>
-                                    changeGenre(event.target.value)
-                                }
-                                className="mt-2 block min-h-11 w-full rounded-xl border border-white/15 bg-surface-raised px-3 text-sm text-content outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
-                            >
-                                <option value="all">Все исполнители</option>
-                                {selection.genres.length > 0 && (
-                                    <option value="selected">
-                                        По сохранённым жанрам
-                                    </option>
-                                )}
-                                {GENRE_GROUPS.map((group) => (
-                                    <optgroup
-                                        key={group.label}
-                                        label={group.label}
-                                    >
-                                        {group.genres.map((genre) => (
-                                            <option key={genre} value={genre}>
-                                                {genre}
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                ))}
-                            </select>
-                        </label>
+                        <TasteGenrePicker
+                            value={artistGenre}
+                            hasSavedGenres={selection.genres.length > 0}
+                            disabled={isSaving}
+                            onChange={changeGenre}
+                        />
                         <form
                             onSubmit={submitCustomArtist}
-                            className="relative"
+                            className="relative max-w-xl"
                         >
                             <Search
                                 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted"
@@ -438,20 +381,12 @@ export function TasteProfileDialog({
                     <div
                         ref={resultsRef}
                         data-testid="taste-profile-scroll-region"
-                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-4 sm:px-7"
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-8 pt-2 sm:px-10"
                     >
-                        <p
-                            className="mb-4 text-xs text-content-muted"
-                            aria-live="polite"
-                        >
-                            {canonicalArtistSearch.hasQuery
-                                ? "Результаты поиска по всему каталогу"
-                                : `${artistGenre === "all" ? "Разные направления" : artistGenre === "selected" ? "По вашим жанрам" : artistGenre} · ${visibleArtists.length} исполнителей${catalog.hasNextPage ? " · листайте дальше" : ""}`}
-                        </p>
                         {!canonicalArtistSearch.hasQuery ? (
                             <>
                                 <div
-                                    className="grid grid-cols-3 gap-x-4 gap-y-6 pt-2 sm:grid-cols-4 lg:grid-cols-5"
+                                    className="grid grid-cols-3 gap-x-4 gap-y-7 pt-2 sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:gap-x-8 sm:gap-y-10"
                                     aria-label="Исполнители"
                                 >
                                     {visibleArtists.map((artist) => {
@@ -476,7 +411,7 @@ export function TasteProfileDialog({
                                             >
                                                 <span
                                                     className={cn(
-                                                        "relative mx-auto block aspect-square w-full rounded-full border-[3px] p-1 transition-[border-color,transform] group-hover:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none",
+                                                        "relative mx-auto block aspect-square w-full max-w-40 rounded-full border-[3px] p-1 transition-[border-color,transform] group-hover:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none",
                                                         selected
                                                             ? "border-brand"
                                                             : "border-transparent",
@@ -547,8 +482,8 @@ export function TasteProfileDialog({
                                         className="mt-5 text-center text-sm text-content-secondary"
                                     >
                                         {catalog.artists
-                                            ? "Не удалось загрузить продолжение. Ваш выбор сохранён в этом окне."
-                                            : "Каталог временно недоступен. Пока показываем небольшую подборку."}
+                                            ? "Не удалось загрузить продолжение."
+                                            : "Каталог временно недоступен."}
                                     </p>
                                 )}
                                 {(catalog.hasNextPage || catalog.isError) && (
@@ -575,9 +510,7 @@ export function TasteProfileDialog({
                                     !catalog.isFetching &&
                                     !catalog.isError && (
                                         <p className="mt-5 text-center text-xs text-content-muted">
-                                            Все исполнители этой подборки
-                                            показаны. Других можно найти по
-                                            имени.
+                                            Больше исполнителей не найдено.
                                         </p>
                                     )}
                             </>
@@ -708,26 +641,17 @@ export function TasteProfileDialog({
                                 </div>
                             </section>
                         )}
-                        <p className="mt-6 text-xs leading-5 text-content-muted lg:hidden">
-                            Ваш выбор помогает настроить рекомендации на
-                            главной. Прослушивания и лайки уточняют их дальше.
-                            Настройка не ставит лайки автоматически.
-                        </p>
                     </div>
                 </div>
                 <footer
                     data-testid="taste-profile-footer"
-                    className="shrink-0 border-t border-white/10 px-5 pb-[max(1rem,var(--safe-area-bottom))] pt-3 sm:px-7 lg:col-start-1 lg:row-start-2 lg:border-t-0 lg:pb-8"
+                    className="shrink-0 border-t border-white/5 bg-surface-raised px-5 pb-[max(1rem,var(--safe-area-bottom))] pt-4 sm:px-10"
                 >
-                    <p
-                        aria-live="polite"
-                        className="mb-3 text-xs leading-5 text-content-secondary"
-                    >
-                        {validation.message ??
-                            (count
-                                ? `Выбрано: ${count}`
-                                : "Выберите тех, кого любите. Количество — на ваше усмотрение.")}
-                    </p>
+                    {validation.message && (
+                        <p role="alert" className="mb-3 text-sm text-red-200">
+                            {validation.message}
+                        </p>
+                    )}
                     {visibleError && (
                         <p role="alert" className="mb-3 text-sm text-red-200">
                             {visibleError}
@@ -735,14 +659,22 @@ export function TasteProfileDialog({
                     )}
                     <div
                         data-testid="taste-profile-actions"
-                        className="flex flex-col gap-2"
+                        className="flex flex-wrap items-center justify-end gap-3"
                     >
+                        {count > 0 && (
+                            <span
+                                aria-live="polite"
+                                className="mr-auto text-sm text-content-secondary"
+                            >
+                                Выбрано: {count}
+                            </span>
+                        )}
                         <button
                             type="button"
                             aria-label="Сохранить вкусы"
                             disabled={isSaving || validation.code !== "valid"}
                             onClick={() => void save()}
-                            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-45"
+                            className="inline-flex min-h-12 min-w-40 items-center justify-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-black transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-45"
                         >
                             {isSaving && (
                                 <LoaderCircle
@@ -750,7 +682,7 @@ export function TasteProfileDialog({
                                     aria-hidden="true"
                                 />
                             )}
-                            {isSaving ? "Сохраняем…" : "Настроить под меня"}
+                            {isSaving ? "Сохраняем…" : "Готово"}
                         </button>
                         {mode === "onboarding" && onSkip && (
                             <button
@@ -764,10 +696,6 @@ export function TasteProfileDialog({
                             </button>
                         )}
                     </div>
-                    <p className="mt-3 hidden text-xs leading-5 text-content-muted lg:block">
-                        Можно выбрать сколько угодно исполнителей. Свой выбор вы
-                        сможете изменить в любой момент.
-                    </p>
                 </footer>
             </div>
         </div>
