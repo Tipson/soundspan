@@ -1,6 +1,6 @@
 # Collection playback and artist radio
 
-Status: design phase
+Status: shipped
 
 ## Scope
 
@@ -13,11 +13,11 @@ Artist radio must work for external catalog artists with no local audio. Match s
 - [x] Reproduce empty artist radio on public production API with a test account.
 - [x] Observe failing regression tests before implementing UI and radio corrections.
 - [x] Finish targeted tests and independent adversarial review.
-- [ ] Run frontend/backend builds, tests and repository gates against the exact candidate.
-- [ ] Commit locally; do not push.
-- [ ] Back up and release only frontend/backend/worker, retain rollback images.
-- [ ] Verify production artist radio, media response and desktop/mobile button states.
-- [ ] Update the canonical Obsidian task list with evidence and remaining limitations.
+- [x] Run frontend/backend builds, tests and repository gates against the exact candidate.
+- [x] Commit locally; do not push.
+- [x] Back up and release only frontend/backend/worker, retain rollback images.
+- [x] Verify production artist radio, media response and desktop/mobile button states.
+- [x] Update the canonical Obsidian task list with evidence and remaining limitations.
 
 ## Implementation boundaries
 
@@ -26,3 +26,5 @@ Collection ownership is kept in the current browser runtime and follows committe
 Remote artist radio searches up to 20 songs, accepts exact normalized artist names, requests recommendations from at most three valid unique seeds, removes seeds and duplicates, and preserves provider identifiers. It does not substitute unrelated search results when no matching recording exists. Provider failures remain errors; successful empty results remain empty. Continued Wave behavior and other provider integrations are unchanged.
 
 The implementation does not modify playback transport, offline audio storage, downloads, recovery timing, existing queue-intent guards, or provider credentials.
+
+Artist-radio local seed and similar pools require a LOCAL track with a nonempty file path and an allowed album location. Catalog-only metadata cannot suppress external recommendations. This database predicate does not verify filesystem availability.
