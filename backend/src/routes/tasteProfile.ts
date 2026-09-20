@@ -108,10 +108,30 @@ router.use(requireAuthOrToken);
  *             type: string
  *         seedTracks:
  *           type: array
- *           minItems: 1
+ *           minItems: 0
  *           maxItems: 12
  *           items:
  *             $ref: '#/components/schemas/TasteSeedTrack'
+ *         resolution:
+ *           type: object
+ *           additionalProperties: false
+ *           description: Unresolved choices retried on profile reads after retryAfter, at most three attempts
+ *           required: [pendingQueries, attempts, retryAfter]
+ *           properties:
+ *             pendingQueries:
+ *               type: array
+ *               minItems: 1
+ *               maxItems: 16
+ *               items:
+ *                 type: string
+ *                 maxLength: 100
+ *             attempts:
+ *               type: integer
+ *               minimum: 1
+ *               maximum: 3
+ *             retryAfter:
+ *               type: string
+ *               format: date-time
  *     TasteProfileState:
  *       type: object
  *       additionalProperties: false

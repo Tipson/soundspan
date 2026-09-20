@@ -47,6 +47,7 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
         needsOnboarding: false,
     };
     api.request = (async (_path: string, options?: RequestInit) => {
+        if (_path.startsWith("/artists/discover/")) return { image: null };
         if (options?.method === "PUT") {
             if (failSave) throw new Error("offline");
             const selection = JSON.parse(String(options.body));
@@ -109,13 +110,8 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
             button(container, "Повторить загрузку").click(),
         );
         await flush();
-        await React.act(async () => button(container, "Джаз").click());
-        await React.act(async () =>
-            button(container, "Дальше: артисты").click(),
-        );
-        await React.act(async () =>
-            button(container, "Дальше: проверить выбор").click(),
-        );
+        await React.act(async () => button(container, "Рок").click());
+        await React.act(async () => button(container, "Queen").click());
         await React.act(async () =>
             button(container, "Сохранить вкусы").click(),
         );
@@ -125,7 +121,7 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
             container.querySelector('[role="alert"]')?.textContent ?? "",
             /Не удалось сохранить/,
         );
-        assert.ok(button(container, "Убрать жанр: Джаз"));
+        assert.ok(button(container, "Убрать артиста: Queen"));
         failSave = false;
         await React.act(async () =>
             button(container, "Сохранить вкусы").click(),
@@ -138,14 +134,8 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
         open = true;
         await React.act(async () => render());
         await flush();
-        assert.equal(
-            button(container, "Джаз").getAttribute("aria-pressed"),
-            "true",
-        );
-        assert.equal(
-            button(container, "Рок").getAttribute("aria-pressed"),
-            "true",
-        );
+        assert.ok(button(container, "Убрать артиста: Queen"));
+        assert.ok(button(container, "Убрать жанр: Рок"));
         await React.act(async () =>
             button(container, "Закрыть настройку вкусов").click(),
         );

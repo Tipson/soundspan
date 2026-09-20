@@ -104,6 +104,7 @@ export function createMusicSourceFallback(deps: Dependencies) {
                         recording,
                         input.signal,
                     );
+                    input.signal.throwIfAborted();
                     if (!playback) throw error;
                     bindings.set(key, {
                         redirect: playback.streamPath,

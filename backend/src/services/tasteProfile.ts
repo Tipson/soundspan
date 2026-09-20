@@ -42,9 +42,24 @@ const storedTasteProfileSchema = z
     .object({
         genres: z.array(tasteLabelSchema).max(MAX_GENRES),
         artists: z.array(tasteLabelSchema).max(MAX_ARTISTS),
-        seedTracks: z.array(tasteSeedTrackSchema).min(1).max(MAX_SEED_TRACKS),
+        seedTracks: z.array(tasteSeedTrackSchema).max(MAX_SEED_TRACKS),
+        resolution: z
+            .object({
+                pendingQueries: z
+                    .array(z.string().min(1).max(100))
+                    .min(1)
+                    .max(MAX_TOTAL_SIGNALS),
+                attempts: z.number().int().min(1).max(3),
+                retryAfter: z.string().datetime(),
+            })
+            .strict()
+            .optional(),
     })
-    .strict();
+    .strict()
+    .refine(
+        (profile) =>
+            profile.seedTracks.length > 0 || profile.resolution !== undefined,
+    );
 
 /** Account-scoped taste selections and resolved playable provider identities. */
 export type StoredTasteProfile = z.infer<typeof storedTasteProfileSchema>;
@@ -89,6 +104,12 @@ export interface TasteProfileSearchTrack {
 
 /** External dependencies isolated for deterministic profile-domain tests. */
 export interface TasteProfileDependencies {
+    /** Compare-and-set: a recovery must not replace a newer save or skip. */
+    updateRecoveredState?: (
+        userId: string,
+        expected: StoredTasteProfile,
+        profile: StoredTasteProfile,
+    ) => Promise<boolean>;
     loadState: (userId: string) => Promise<TasteProfilePersistenceState>;
     hasMeaningfulSignals: (userId: string) => Promise<boolean>;
     saveState: (
@@ -239,12 +260,33 @@ async function mapWithConcurrency<T, R>(
 
 /** Account-scoped onboarding profile orchestration and bounded seed resolution. */
 export class TasteProfileService {
+    private readonly recovering = new Map<
+        string,
+        Promise<TasteProfilePersistenceState>
+    >();
     constructor(private readonly dependencies: TasteProfileDependencies) {}
 
     /** Return the stored profile and whether this account still needs onboarding. */
     async getProfile(userId: string): Promise<TasteProfileResult> {
         if (!userId.trim()) throw new TypeError("A user id is required");
-        const state = await this.dependencies.loadState(userId);
+        let state = await this.dependencies.loadState(userId);
+        const pending = parseStoredTasteProfile(state.tasteProfile);
+        if (
+            pending?.resolution &&
+            pending.resolution.attempts < 3 &&
+            Date.parse(pending.resolution.retryAfter) <=
+                this.dependencies.now().getTime() &&
+            this.dependencies.updateRecoveredState
+        ) {
+            let recovery = this.recovering.get(userId);
+            if (!recovery && this.recovering.size < 16) {
+                recovery = this.recoverProfile(userId, pending).finally(() =>
+                    this.recovering.delete(userId),
+                );
+                this.recovering.set(userId, recovery);
+            }
+            if (recovery) state = await recovery;
+        }
         const profile = parseStoredTasteProfile(state.tasteProfile);
         const explicitlyFinished =
             (profile !== null && state.tasteProfileCompletedAt !== null) ||
@@ -266,6 +308,48 @@ export class TasteProfileService {
             ...normalized.genres.map((genre) => `${genre} music`),
             ...normalized.artists.map((artist) => `${artist} songs`),
         ];
+        const profile = await this.resolveSelection(
+            userId,
+            normalized,
+            queries,
+            [],
+            1,
+        );
+        const completedAt = this.dependencies.now();
+        const state = await this.dependencies.saveState(userId, {
+            tasteProfile: profile,
+            tasteProfileCompletedAt: completedAt,
+            tasteProfileSkippedAt: null,
+        });
+        return toResult(state, false);
+    }
+
+    private async recoverProfile(
+        userId: string,
+        expected: StoredTasteProfile,
+    ): Promise<TasteProfilePersistenceState> {
+        const profile = await this.resolveSelection(
+            userId,
+            expected,
+            expected.resolution!.pendingQueries,
+            expected.seedTracks,
+            expected.resolution!.attempts + 1,
+        );
+        await this.dependencies.updateRecoveredState!(
+            userId,
+            expected,
+            profile,
+        );
+        return this.dependencies.loadState(userId);
+    }
+
+    private async resolveSelection(
+        userId: string,
+        normalized: TasteProfileSelection,
+        queries: string[],
+        existing: TasteSeedTrack[],
+        attempts: number,
+    ): Promise<StoredTasteProfile> {
         const resolved = await mapWithConcurrency(
             queries,
             PROVIDER_CONCURRENCY,
@@ -290,29 +374,31 @@ export class TasteProfileService {
                 }
             },
         );
-        const seedTracks: TasteSeedTrack[] = [];
-        const seen = new Set<string>();
+        const seedTracks: TasteSeedTrack[] = [...existing];
+        const seen = new Set<string>(existing.map((track) => track.videoId));
         for (const track of resolved) {
             if (!track || seen.has(track.videoId)) continue;
             seen.add(track.videoId);
             seedTracks.push(track);
             if (seedTracks.length >= MAX_SEED_TRACKS) break;
         }
-        if (seedTracks.length === 0) {
-            throw new TasteProfileUnavailableError();
-        }
-
-        const completedAt = this.dependencies.now();
-        const state = await this.dependencies.saveState(userId, {
-            tasteProfile: {
-                genres: normalized.genres,
-                artists: normalized.artists,
-                seedTracks,
-            },
-            tasteProfileCompletedAt: completedAt,
-            tasteProfileSkippedAt: null,
-        });
-        return toResult(state, false);
+        const pendingQueries = queries.filter((_, index) => !resolved[index]);
+        return {
+            genres: normalized.genres,
+            artists: normalized.artists,
+            seedTracks: seedTracks.slice(0, MAX_SEED_TRACKS),
+            ...(pendingQueries.length
+                ? {
+                      resolution: {
+                          pendingQueries,
+                          attempts,
+                          retryAfter: new Date(
+                              this.dependencies.now().getTime() + 60_000,
+                          ).toISOString(),
+                      },
+                  }
+                : {}),
+        };
     }
 
     /** Persist an account-scoped skip while keeping later editing available. */
@@ -426,6 +512,16 @@ async function saveStateToPrisma(
 
 /** Process-wide taste profile service backed by Prisma and YouTube Music. */
 export const tasteProfileService = new TasteProfileService({
+    updateRecoveredState: async (userId, expected, profile) => {
+        const result = await prisma.userSettings.updateMany({
+            where: {
+                userId,
+                tasteProfile: { equals: expected as Prisma.InputJsonValue },
+            },
+            data: { tasteProfile: profile as Prisma.InputJsonValue },
+        });
+        return result.count === 1;
+    },
     loadState: loadStateFromPrisma,
     hasMeaningfulSignals: hasMeaningfulSignalsFromPrisma,
     saveState: saveStateToPrisma,

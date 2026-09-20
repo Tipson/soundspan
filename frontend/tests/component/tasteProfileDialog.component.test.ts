@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
-import { after, test } from "node:test";
+import { after, beforeEach, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -13,6 +13,10 @@ GlobalRegistrator.register({ url: "https://soundspan.test/" });
 (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeEach(() => {
+    api.request = (async () => ({ image: null })) as typeof api.request;
+});
 
 after(() => {
     GlobalRegistrator.unregister();
@@ -34,13 +38,6 @@ function typeInto(input: HTMLInputElement, value: string): void {
     assert.ok(setter, "expected the input value setter");
     setter.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
-async function reviewSelection(container: ParentNode) {
-    const review = findButton(container, "Дальше: проверить выбор");
-    assert.ok(review);
-    await React.act(async () => review.click());
-    assert.match(container.textContent ?? "", /Шаг 3 из 3/);
 }
 
 async function mountDialog(
@@ -138,113 +135,64 @@ test("onboarding is a Russian accessible dialog and explains that it does not cr
     const dialog = mounted.container.querySelector('[role="dialog"]');
 
     assert.ok(dialog);
-    assert.equal(dialog.getAttribute("data-taste-stage"), "spectral");
+    assert.equal(dialog.getAttribute("data-taste-stage"), "artists");
     assert.equal(dialog.getAttribute("aria-modal"), "true");
     assert.ok(dialog.getAttribute("aria-labelledby"));
     assert.ok(dialog.getAttribute("aria-describedby"));
-    assert.match(dialog.textContent ?? "", /Настроим музыку под вас/);
+    assert.match(dialog.textContent ?? "", /Выберите любимых исполнителей/);
     assert.match(dialog.textContent ?? "", /не ставит лайки автоматически/i);
-    assert.match(dialog.textContent ?? "", /Шаг 1 из 3/);
+    assert.doesNotMatch(dialog.textContent ?? "", /Шаг \d из/);
+    assert.ok(findButton(mounted.container, "Сохранить вкусы"));
 
     await mounted.cleanup();
 });
 
-test("onboarding exposes the 10-per-group and 16-total limits in a viewport-safe layout", async () => {
+test("artist-first setup preserves limits and saves directly without genre signals from filters", async () => {
     const mounted = await mountDialog();
-    const dialog = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="taste-profile-dialog"]',
-    );
-    const scrollRegion = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="taste-profile-scroll-region"]',
-    );
-    const footer = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="taste-profile-footer"]',
-    );
-    const actions = mounted.container.querySelector<HTMLElement>(
-        '[data-testid="taste-profile-actions"]',
-    );
-
-    assert.ok(dialog);
-    assert.ok(scrollRegion);
-    assert.ok(footer);
-    assert.ok(actions);
-    assert.match(
-        dialog.textContent ?? "",
-        /не больше 10 жанров и 10 артистов/i,
-    );
-    assert.match(dialog.textContent ?? "", /Жанры 0 из 10 · Всего 0 из 16/);
-    assert.match(dialog.className, /h-\[100dvh\]/);
-    assert.match(dialog.className, /sm:max-h-/);
-    assert.match(scrollRegion.className, /flex-1/);
-    assert.match(scrollRegion.className, /overscroll-contain/);
-    assert.match(actions.className, /grid-cols-2/);
-
-    const next = findButton(mounted.container, "Дальше: артисты");
-    const skip = findButton(mounted.container, "Пропустить настройку");
-    assert.ok(next);
-    assert.ok(skip);
-    assert.equal(next.textContent?.trim(), "К артистам");
-    assert.equal(skip.textContent?.trim(), "Пропустить");
-    assert.match(next.className, /whitespace-nowrap/);
-    assert.match(skip.className, /whitespace-nowrap/);
-
-    await mounted.cleanup();
-});
-
-test("a listener can choose genres, add an artist, and save 3 real taste signals", async () => {
-    const mounted = await mountDialog();
-    const rock = findButton(mounted.container, "Рок");
-    const metal = findButton(mounted.container, "Метал");
-    assert.ok(rock);
-    assert.ok(metal);
-
-    await React.act(async () => {
-        rock.click();
-        metal.click();
-    });
-    assert.equal(rock.getAttribute("aria-pressed"), "true");
-
-    const next = findButton(mounted.container, "Дальше: артисты");
-    assert.ok(next);
-    await React.act(async () => next.click());
-
-    const artist = findButton(mounted.container, "Linkin Park");
-    assert.ok(artist);
-    await React.act(async () => artist.click());
-
-    await reviewSelection(mounted.container);
-    const save = findButton(mounted.container, "Сохранить вкусы");
-    assert.ok(save);
-    assert.equal(save.disabled, false);
-    await React.act(async () => save.click());
-
-    assert.deepEqual(mounted.saves, [
-        { genres: ["Рок", "Метал"], artists: ["Linkin Park"] },
-    ]);
-    await mounted.cleanup();
-});
-
-test("the artist step is rebuilt from the listener's selected genres", async () => {
-    const mounted = await mountDialog();
-    for (const genre of ["Хип-хоп", "Поп", "Электроника"]) {
-        const choice = findButton(mounted.container, genre);
-        assert.ok(choice);
-        await React.act(async () => choice.click());
+    try {
+        const save = findButton(mounted.container, "Сохранить вкусы")!;
+        assert.equal(save.disabled, true);
+        await React.act(async () =>
+            findButton(mounted.container, "Рок")!.click(),
+        );
+        for (const name of ["Linkin Park", "Muse", "Queen"]) {
+            const artist = findButton(mounted.container, name);
+            assert.ok(artist);
+            await React.act(async () => artist.click());
+            assert.equal(artist.getAttribute("aria-pressed"), "true");
+        }
+        assert.equal(save.disabled, false);
+        await React.act(async () => save.click());
+        assert.deepEqual(mounted.saves, [
+            { genres: [], artists: ["Linkin Park", "Muse", "Queen"] },
+        ]);
+        assert.ok(
+            mounted.container.querySelector(
+                '[data-testid="taste-profile-scroll-region"]',
+            ),
+        );
+    } finally {
+        await mounted.cleanup();
     }
+});
 
-    const next = findButton(mounted.container, "Дальше: артисты");
-    assert.ok(next);
-    await React.act(async () => next.click());
-
-    assert.ok(findButton(mounted.container, "Kendrick Lamar"));
-    assert.ok(findButton(mounted.container, "Dua Lipa"));
-    assert.ok(findButton(mounted.container, "Daft Punk"));
-    assert.equal(findButton(mounted.container, "Rammstein"), undefined);
-    assert.equal(
-        findButton(mounted.container, "Bring Me The Horizon"),
-        undefined,
-    );
-    await mounted.cleanup();
+test("ten selected artists disable new choices but allow removal", async () => {
+    const artists = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+    const mounted = await mountDialog({
+        initialSelection: { genres: [], artists },
+    });
+    try {
+        await React.act(async () =>
+            findButton(mounted.container, "Рок")!.click(),
+        );
+        assert.equal(findButton(mounted.container, "Muse")!.disabled, true);
+        await React.act(async () =>
+            findButton(mounted.container, "Убрать артиста: A")!.click(),
+        );
+        assert.equal(findButton(mounted.container, "Muse")!.disabled, false);
+    } finally {
+        await mounted.cleanup();
+    }
 });
 
 test("artist search selects the provider's canonical artist instead of saving raw input", async () => {
@@ -270,10 +218,6 @@ test("artist search selects the provider's canonical artist instead of saving ra
         initialSelection: { genres: ["Хип-хоп", "Электроника"], artists: [] },
     });
     try {
-        const next = findButton(mounted.container, "Дальше: артисты");
-        assert.ok(next);
-        await React.act(async () => next.click());
-
         const input = mounted.container.querySelector<HTMLInputElement>(
             'input[aria-label="Найти или добавить артиста"]',
         );
@@ -295,8 +239,6 @@ test("artist search selects the provider's canonical artist instead of saving ra
             );
         assert.ok(canonicalResult);
         await React.act(async () => canonicalResult.click());
-
-        await reviewSelection(mounted.container);
         const save = findButton(mounted.container, "Сохранить вкусы");
         assert.ok(save);
         assert.equal(save.disabled, false);
@@ -340,9 +282,6 @@ test("pressing Enter during a changed query cannot select stale provider results
         initialSelection: { genres: ["Поп", "Электроника"], artists: [] },
     });
     try {
-        const next = findButton(mounted.container, "Дальше: артисты");
-        assert.ok(next);
-        await React.act(async () => next.click());
         const input = mounted.container.querySelector<HTMLInputElement>(
             'input[aria-label="Найти или добавить артиста"]',
         );
@@ -404,9 +343,6 @@ test("artist autocomplete exposes and selects the keyboard-active canonical opti
         initialSelection: { genres: ["Рок", "Метал"], artists: [] },
     });
     try {
-        const next = findButton(mounted.container, "Дальше: артисты");
-        assert.ok(next);
-        await React.act(async () => next.click());
         const input = mounted.container.querySelector<HTMLInputElement>(
             'input[aria-label="Найти или добавить артиста"]',
         );
@@ -490,9 +426,6 @@ test("Escape clears artist autocomplete before closing the taste editor", async 
         initialSelection: { genres: ["Рок", "Метал"], artists: [] },
     });
     try {
-        const next = findButton(editor.container, "Дальше: артисты");
-        assert.ok(next);
-        await React.act(async () => next.click());
         const input = editor.container.querySelector<HTMLInputElement>(
             'input[aria-label="Найти или добавить артиста"]',
         );
@@ -543,10 +476,6 @@ test("rapid repeated save clicks start only one provider-backed write", async ()
             await pendingSave;
         },
     });
-    const next = findButton(mounted.container, "Дальше: артисты");
-    assert.ok(next);
-    await React.act(async () => next.click());
-    await reviewSelection(mounted.container);
     const save = findButton(mounted.container, "Сохранить вкусы");
     assert.ok(save);
 
@@ -564,7 +493,7 @@ test("rapid repeated save clicks start only one provider-backed write", async ()
     await mounted.cleanup();
 });
 
-test("genre search, artist filters, and review preserve editable saved choices", async () => {
+test("genre filters preserve saved genres and artists and let the listener remove either", async () => {
     const mounted = await mountDialog({
         mode: "edit",
         initialSelection: {
@@ -573,35 +502,20 @@ test("genre search, artist filters, and review preserve editable saved choices",
         },
     });
     try {
-        const genreSearch = mounted.container.querySelector<HTMLInputElement>(
-            'input[aria-label="Найти жанр"]',
-        );
-        assert.ok(genreSearch);
-        await React.act(async () => typeInto(genreSearch, "русск"));
-        assert.ok(findButton(mounted.container, "Русский рок"));
-        assert.equal(findButton(mounted.container, "Техно"), undefined);
         await React.act(async () =>
-            findButton(mounted.container, "Дальше: артисты")!.click(),
+            findButton(mounted.container, "K-pop")!.click(),
         );
-        const filter = mounted.container.querySelector<HTMLSelectElement>(
-            'select[aria-label="Фильтр артистов по жанру"]',
-        );
-        assert.ok(filter);
-        await React.act(async () => {
-            filter.value = "K-pop";
-            filter.dispatchEvent(new Event("change", { bubbles: true }));
-        });
         assert.ok(findButton(mounted.container, "BTS"));
         assert.equal(findButton(mounted.container, "Linkin Park"), undefined);
         await React.act(async () =>
             findButton(mounted.container, "BTS")!.click(),
         );
-        await reviewSelection(mounted.container);
-        const remove = mounted.container.querySelector<HTMLButtonElement>(
-            'button[aria-label="Убрать жанр: Редкий сохранённый жанр"]',
+        await React.act(async () =>
+            findButton(
+                mounted.container,
+                "Убрать жанр: Редкий сохранённый жанр",
+            )!.click(),
         );
-        assert.ok(remove);
-        await React.act(async () => remove.click());
         await React.act(async () =>
             findButton(mounted.container, "Сохранить вкусы")!.click(),
         );
@@ -613,43 +527,22 @@ test("genre search, artist filters, and review preserve editable saved choices",
     }
 });
 
-test("saved genres stay removable while searching another genre", async () => {
-    const mounted = await mountDialog({
-        mode: "edit",
-        initialSelection: { genres: ["Редкий жанр", "Рок"], artists: ["Muse"] },
-    });
+test("focus wraps inside the editor and returns to its opener", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const mounted = await mountDialog({ mode: "edit" });
     try {
-        const input = mounted.container.querySelector<HTMLInputElement>(
-            'input[aria-label="Найти жанр"]',
-        )!;
-        await React.act(async () => typeInto(input, "джаз"));
-        const remove = findButton(
-            mounted.container,
-            "Убрать жанр: Редкий жанр",
+        const buttons = Array.from(
+            mounted.container.querySelectorAll<HTMLButtonElement>(
+                "button:not([disabled]), input:not([disabled])",
+            ),
         );
-        assert.ok(
-            remove,
-            "saved choices must remain editable outside the filtered catalog",
-        );
-        await React.act(async () => remove.click());
-        await React.act(async () =>
-            findButton(mounted.container, "Джаз")!.click(),
-        );
-        await React.act(async () =>
-            findButton(mounted.container, "Дальше: артисты")!.click(),
-        );
-        const filter = mounted.container.querySelector<HTMLSelectElement>(
-            'select[aria-label="Фильтр артистов по жанру"]',
-        )!;
-        const next = findButton(mounted.container, "Дальше: проверить выбор")!;
+        const first = buttons[0],
+            last = buttons[buttons.length - 1];
         await React.act(async () => {
-            // Shift+Tab from the search field must include the genre selector.
-            const search =
-                mounted.container.querySelector<HTMLInputElement>(
-                    '[role="combobox"]',
-                )!;
-            search.focus();
-            search.dispatchEvent(
+            first.focus();
+            first.dispatchEvent(
                 new KeyboardEvent("keydown", {
                     key: "Tab",
                     shiftKey: true,
@@ -657,17 +550,18 @@ test("saved genres stay removable while searching another genre", async () => {
                 }),
             );
         });
-        assert.equal(document.activeElement, filter);
-        await React.act(async () => next.click());
+        assert.equal(document.activeElement, last);
         await React.act(async () =>
-            findButton(mounted.container, "Сохранить вкусы")!.click(),
+            last.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
+            ),
         );
-        assert.deepEqual(mounted.saves, [
-            { genres: ["Рок", "Джаз"], artists: ["Muse"] },
-        ]);
+        assert.equal(document.activeElement, first);
     } finally {
         await mounted.cleanup();
     }
+    assert.equal(document.activeElement, opener);
+    opener.remove();
 });
 
 test("taste setup explains where the saved selection is used", async () => {
@@ -684,4 +578,40 @@ test("taste setup explains where the saved selection is used", async () => {
     } finally {
         await mounted.cleanup();
     }
+});
+
+test("portraits appear progressively, limit network concurrency and cancel on close", async (t) => {
+    const calls: {
+        resolve: (value: { image: string }) => void;
+        signal: AbortSignal;
+    }[] = [];
+    t.mock.method(
+        api,
+        "request",
+        (_path: string, options: { signal: AbortSignal }) =>
+            new Promise((resolve, reject) => {
+                calls.push({ resolve, signal: options.signal });
+                options.signal.addEventListener(
+                    "abort",
+                    () => reject(new Error("aborted")),
+                    { once: true },
+                );
+            }),
+    );
+    const mounted = await mountDialog();
+    try {
+        assert.equal(calls.length, 3);
+        await React.act(async () =>
+            calls[0].resolve({ image: "https://images.test/artist.jpg" }),
+        );
+        await waitFor(
+            () =>
+                mounted.container.querySelector('img[src*="artist.jpg"]') !==
+                null,
+        );
+        assert.equal(calls.length, 4);
+    } finally {
+        await mounted.cleanup();
+    }
+    assert.ok(calls.every((call) => call.signal.aborted));
 });

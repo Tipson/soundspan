@@ -10,6 +10,9 @@ GlobalRegistrator.register({ url: "https://soundspan.test/settings" });
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const accountCalls: string[] = [];
+let resolution:
+    | { pendingQueries: string[]; attempts: number; retryAfter: string }
+    | undefined;
 
 mock.module("@/features/taste-profile/hooks/useTasteProfile", {
     namedExports: {
@@ -21,6 +24,7 @@ mock.module("@/features/taste-profile/hooks/useTasteProfile", {
                         genres: ["Рок", "Метал"],
                         artists: ["Кино"],
                         seedTracks: [],
+                        resolution,
                     },
                     completedAt: "2026-08-30T00:00:00.000Z",
                     skippedAt: null,
@@ -37,6 +41,48 @@ mock.module("@/features/taste-profile/hooks/useTasteProfile", {
     },
 });
 
+test("settings distinguish pending recovery from exhausted retries without claiming choices were lost", async () => {
+    const { TasteProfileSettingsSection } =
+        await import("../../features/taste-profile/components/TasteProfileSettingsSection");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+        resolution = {
+            pendingQueries: ["Muse songs"],
+            attempts: 1,
+            retryAfter: new Date().toISOString(),
+        };
+        await React.act(async () =>
+            root.render(
+                React.createElement(TasteProfileSettingsSection, {
+                    accountId: "pending",
+                }),
+            ),
+        );
+        assert.match(
+            container.querySelector('[role="status"]')?.textContent ?? "",
+            /Предпочтения сохранены.*повторим подбор автоматически/,
+        );
+        resolution = { ...resolution, attempts: 3 };
+        await React.act(async () =>
+            root.render(
+                React.createElement(TasteProfileSettingsSection, {
+                    accountId: "pending",
+                }),
+            ),
+        );
+        assert.match(
+            container.querySelector('[role="status"]')?.textContent ?? "",
+            /сохраните выбор ещё раз/,
+        );
+    } finally {
+        resolution = undefined;
+        await React.act(async () => root.unmount());
+        container.remove();
+    }
+});
+
 mock.module("@/features/taste-profile/components/TasteProfileEditor", {
     namedExports: {
         TasteProfileEditor: ({ isOpen }: { isOpen: boolean }) =>
@@ -50,6 +96,7 @@ mock.module("@/features/taste-profile/components/TasteProfileEditor", {
 after(() => GlobalRegistrator.unregister());
 
 test("settings expose account-scoped taste editing in Russian", async () => {
+    accountCalls.length = 0;
     const { TasteProfileSettingsSection } =
         await import("../../features/taste-profile/components/TasteProfileSettingsSection");
     const container = document.createElement("div");
@@ -75,7 +122,7 @@ test("settings expose account-scoped taste editing in Russian", async () => {
     );
 
     const button = Array.from(container.querySelectorAll("button")).find(
-        (candidate) => candidate.textContent === "Изменить вкусы",
+        (candidate) => candidate.textContent === "Уточнить предпочтения",
     );
     assert.ok(button);
     await React.act(async () => button.click());

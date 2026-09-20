@@ -1,5 +1,12 @@
 # Changelog
 
+## Source recovery and taste settings
+
+- Preserve cancelled playback attempts when an alternate source resolves late; keep recording-version checks and session-bound audio representations.
+- Save taste selections during catalog outages and retry unresolved queries on later profile reads, with a durable three-attempt limit and protection against overwriting newer edits or skips.
+- Wait for the scheduler's Redis clients before registering named Bull processors, avoiding transient MaxListeners warnings without increasing listener limits.
+- Present taste settings as one artist-selection screen with circular portraits, genre filters, canonical artist search and a persistent save action. Preserve existing preferences and show incomplete catalog resolution in settings.
+
 ## Worker startup cleanup
 
 - Complete retired embedding-queue cleanup when its Redis stream is already absent. Preserve retries for permission, wrong-type and connection failures instead of marking an unsuccessful cleanup complete.

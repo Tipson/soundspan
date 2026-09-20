@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger";
+import { waitForRedisReady } from "../utils/redisReady";
 import { randomUUID } from "crypto";
 import pLimit from "p-limit";
 import { trackJobStart, trackJobEnd } from "../services/workerEventLoopMonitor";
@@ -736,6 +737,12 @@ async function processRemoteTrackMetadataRefreshJob(): Promise<boolean> {
 async function registerSchedulerJobs(): Promise<void> {
     await schedulerQueue.isReady();
     await schedulerMaintenanceQueue.isReady();
+    // Bull isReady initializes scripts, but does not await ioredis readiness.
+    // One readiness wait avoids one set of Redis listeners per named handler.
+    await Promise.all([
+        waitForRedisReady(schedulerQueue.client),
+        waitForRedisReady(schedulerMaintenanceQueue.client),
+    ]);
     registerSchedulerProcessors();
 
     const schedulerJobs = buildSchedulerJobs();

@@ -228,8 +228,8 @@ describe("TasteProfileService", () => {
         expect(result.needsOnboarding).toBe(false);
     });
 
-    it("does not mark onboarding complete when no playable seed can be resolved", async () => {
-        const saveState = jest.fn();
+    it("persists recoverable preferences when no seed can be resolved", async () => {
+        const saveState = createDependencies().saveState;
         const service = new TasteProfileService(
             createDependencies({
                 saveState,
@@ -244,8 +244,16 @@ describe("TasteProfileService", () => {
                 genres: ["Rock", "Metal"],
                 artists: ["Muse"],
             }),
-        ).rejects.toBeInstanceOf(TasteProfileUnavailableError);
-        expect(saveState).not.toHaveBeenCalled();
+        ).resolves.toMatchObject({
+            profile: {
+                genres: ["Rock", "Metal"],
+                artists: ["Muse"],
+                seedTracks: [],
+                resolution: { attempts: 1 },
+            },
+            needsOnboarding: false,
+        });
+        expect(saveState).toHaveBeenCalledTimes(1);
     });
 
     it("never runs more than three provider seed queries concurrently", async () => {
@@ -297,9 +305,9 @@ describe("TasteProfileService", () => {
                 genres: ["Rock", "Metal", "Pop"],
                 artists: [],
             });
-            const assertion = expect(result).rejects.toBeInstanceOf(
-                TasteProfileUnavailableError,
-            );
+            const assertion = expect(result).resolves.toMatchObject({
+                profile: { seedTracks: [], resolution: { attempts: 1 } },
+            });
             await jest.advanceTimersByTimeAsync(5_001);
             await assertion;
         } finally {
@@ -335,7 +343,9 @@ describe("TasteProfileService", () => {
                 genres: ["Rock", "Metal", "Pop"],
                 artists: [],
             }),
-        ).rejects.toBeInstanceOf(TasteProfileUnavailableError);
+        ).resolves.toMatchObject({
+            profile: { seedTracks: [], resolution: { attempts: 1 } },
+        });
     });
 
     it("stores skip per account and allows a later completed profile to replace it", async () => {

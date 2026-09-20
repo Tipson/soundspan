@@ -40,6 +40,10 @@ export function useTasteProfile(accountId: string, enabled: boolean = true) {
         queryFn: ({ signal }) => getTasteProfile(signal),
         enabled: enabled && normalizedAccountId.length > 0,
         staleTime: 60_000,
+        refetchInterval: (query) => {
+            const resolution = query.state.data?.profile?.resolution;
+            return resolution && resolution.attempts < 3 ? 60_000 : false;
+        },
         retry: 1,
     });
     const mutation = useMutation({
