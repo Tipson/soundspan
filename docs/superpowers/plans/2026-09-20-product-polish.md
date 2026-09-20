@@ -12,7 +12,7 @@ Architecture: keep the existing audio engine and API boundary; fix queue/radio p
 - [x] Remove New and Notable from home without replacing it with filler; update home tests.
 - [x] Record current and future tasks in the existing Obsidian project area.
 - [x] Review each change, then adversarial review queue/concurrency/API behavior; run builds and appropriate complete verification gates.
-- [ ] Release with backup and rollback, preserve runtime configuration, verify browser flows and public production endpoints; record verified limits.
+- [x] Release with backup and rollback, preserve runtime configuration, verify browser flows and public production endpoints; record verified limits.
 
 Constraints: Russian UI; owner-only git push; no fake listening history; no secret-bearing evidence; do not clear downloaded data; no forced audio playback on the user's existing session. Worktree: soundspan-playback-index, base 935c399f. Production release is explicitly authorized.
 
@@ -23,3 +23,5 @@ Implementation evidence: home 7 targeted tests, taste 26, queue 60 (follow-up gu
 Radio scope: local and YouTube recording seeds, remote-only liked and playlist queues. Unsupported provider seeds produce explicit feedback. Continuing radio uses the existing Wave path; dedicated cross-provider seed-preserving radio is future work, not a claim of this release.
 
 verify: frontend production build, 1,743 unit tests, 1,397 component tests, strict targeted coverage, complete typecheck, lint and enforcement gates passed. Historical TIDAL artist-radio navigation is preserved; full component verification caught and covered this regression.
+
+verify: production release a03496a7 completed with a verified 47,790,358-byte PostgreSQL backup and image/config rollback. Three services healthy, zero restarts, 12 neighbors preserved. Public radio returned 11 distinct YouTube tracks in 1,332 ms; invalid seed rejected; audio Range 206; test-account taste save/readback passed. Desktop/mobile-width browser acceptance passed; physical-phone playback was not retested. Obsidian Music-Server note 34 records current and future tasks.
