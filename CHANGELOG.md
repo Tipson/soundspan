@@ -1,5 +1,11 @@
 # Changelog
 
+## Taste browsing
+
+- Replace the horizontally scrolling genre strip with a labelled grouped selector outside the artist scroll area; keep search and save controls visible without overlapping portraits.
+- Offer at least twelve curated artists per genre and an explicit all-artists view, with catalog-wide artist search.
+- Remove minimum and maximum taste selection counts across the UI, API and persisted-profile validation. Preserve the complete selection, including an explicitly cleared profile; keep initial recommendation seed work bounded independently of selection size.
+
 ## Source recovery and taste settings
 
 - Load exact-matched taste portraits through a lightweight cached image lookup, independently of Wikidata biographies and full artist discovery.

@@ -111,7 +111,13 @@ test("editor shows load failures, retries, preserves a failed save and reopens p
             button(container, "Повторить загрузку").click(),
         );
         await flush();
-        await React.act(async () => button(container, "Рок").click());
+        await React.act(async () => {
+            const select = container.querySelector<HTMLSelectElement>(
+                'select[aria-label="Жанр исполнителей"]',
+            )!;
+            select.value = "Рок";
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
         await React.act(async () => button(container, "Queen").click());
         await React.act(async () =>
             button(container, "Сохранить вкусы").click(),

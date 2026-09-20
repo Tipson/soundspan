@@ -29,14 +29,9 @@ function distinctLabels(values: string[]): string[] {
 
 const tasteProfileRequestSchema = z
     .object({
-        genres: z
-            .array(tasteLabelSchema)
-            .max(10)
-            .default([])
-            .transform(distinctLabels),
+        genres: z.array(tasteLabelSchema).default([]).transform(distinctLabels),
         artists: z
             .array(tasteLabelSchema)
-            .max(10)
             .default([])
             .transform(distinctLabels),
         skip: z.boolean().default(false),
@@ -50,12 +45,6 @@ const tasteProfileRequestSchema = z
                 message: "Skip cannot include taste selections",
             });
             return;
-        }
-        if (!value.skip && (signalCount < 3 || signalCount > 16)) {
-            context.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Choose between 3 and 16 taste signals",
-            });
         }
     });
 
@@ -146,12 +135,10 @@ router.get(
  *       properties:
  *         genres:
  *           type: array
- *           maxItems: 10
  *           items:
  *             type: string
  *         artists:
  *           type: array
- *           maxItems: 10
  *           items:
  *             type: string
  *         seedTracks:
@@ -205,17 +192,15 @@ router.get(
  *       properties:
  *         genres:
  *           type: array
- *           maxItems: 10
  *           items:
  *             type: string
  *         artists:
  *           type: array
- *           maxItems: 10
  *           items:
  *             type: string
  *         skip:
  *           type: boolean
- *       description: Choose 3-16 distinct genres and artists, or send only skip=true
+ *       description: Save any number of distinct genres and artists, or send only skip=true
  */
 
 /**

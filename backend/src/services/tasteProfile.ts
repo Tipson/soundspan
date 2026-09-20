@@ -4,11 +4,8 @@ import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { ytMusicService } from "./youtubeMusic";
 
-const MAX_GENRES = 10;
-const MAX_ARTISTS = 10;
-const MAX_TOTAL_SIGNALS = 16;
-const MIN_TOTAL_SIGNALS = 3;
 const MAX_SEED_TRACKS = 12;
+const MAX_PROVIDER_QUERIES = 16;
 const PROVIDER_QUERY_LIMIT = 3;
 const PROVIDER_TIMEOUT_MS = 5_000;
 const PROVIDER_CONCURRENCY = 3;
@@ -40,15 +37,15 @@ export type TasteSeedTrack = z.infer<typeof tasteSeedTrackSchema>;
 
 const storedTasteProfileSchema = z
     .object({
-        genres: z.array(tasteLabelSchema).max(MAX_GENRES),
-        artists: z.array(tasteLabelSchema).max(MAX_ARTISTS),
+        genres: z.array(tasteLabelSchema),
+        artists: z.array(tasteLabelSchema),
         seedTracks: z.array(tasteSeedTrackSchema).max(MAX_SEED_TRACKS),
         resolution: z
             .object({
                 pendingQueries: z
                     .array(z.string().min(1).max(100))
                     .min(1)
-                    .max(MAX_TOTAL_SIGNALS),
+                    .max(MAX_PROVIDER_QUERIES),
                 attempts: z.number().int().min(1).max(3),
                 retryAfter: z.string().datetime(),
             })
@@ -58,7 +55,9 @@ const storedTasteProfileSchema = z
     .strict()
     .refine(
         (profile) =>
-            profile.seedTracks.length > 0 || profile.resolution !== undefined,
+            profile.seedTracks.length > 0 ||
+            profile.resolution !== undefined ||
+            (profile.genres.length === 0 && profile.artists.length === 0),
     );
 
 /** Account-scoped taste selections and resolved playable provider identities. */
@@ -153,14 +152,6 @@ function normalizeSelection(
 ): TasteProfileSelection {
     const genres = distinctLabels(selection.genres);
     const artists = distinctLabels(selection.artists);
-    if (
-        genres.length > MAX_GENRES ||
-        artists.length > MAX_ARTISTS ||
-        genres.length + artists.length > MAX_TOTAL_SIGNALS ||
-        genres.length + artists.length < MIN_TOTAL_SIGNALS
-    ) {
-        throw new TypeError("Invalid taste profile selection count");
-    }
     return { genres, artists };
 }
 
@@ -311,7 +302,19 @@ export class TasteProfileService {
         const profile = await this.resolveSelection(
             userId,
             normalized,
-            queries,
+            // Keep the full selection; sample the whole range for the finite seed shelf.
+            queries.length <= MAX_PROVIDER_QUERIES
+                ? queries
+                : Array.from(
+                      { length: MAX_PROVIDER_QUERIES },
+                      (_, index) =>
+                          queries[
+                              Math.floor(
+                                  (index * (queries.length - 1)) /
+                                      (MAX_PROVIDER_QUERIES - 1),
+                              )
+                          ],
+                  ),
             [],
             1,
         );

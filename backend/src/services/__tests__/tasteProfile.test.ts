@@ -95,6 +95,41 @@ function createDependencies(
 }
 
 describe("TasteProfileService", () => {
+    it("persists every selection without increasing the provider request budget", async () => {
+        const dependencies = createDependencies();
+        const service = new TasteProfileService(dependencies);
+        const selection = {
+            genres: Array.from({ length: 34 }, (_, i) => `Genre ${i}`),
+            artists: Array.from({ length: 120 }, (_, i) => `Artist ${i}`),
+        };
+        const result = await service.saveProfile("alice", selection);
+        expect(result.profile?.genres).toEqual(selection.genres);
+        expect(result.profile?.artists).toEqual(selection.artists);
+        expect(dependencies.searchSongs).toHaveBeenCalledTimes(16);
+        expect(result.profile?.seedTracks.length).toBeLessThanOrEqual(12);
+    });
+    it("accepts one choice and an explicitly cleared profile", async () => {
+        const dependencies = createDependencies();
+        const service = new TasteProfileService(dependencies);
+        expect(
+            (
+                await service.saveProfile("alice", {
+                    genres: [],
+                    artists: ["Muse"],
+                })
+            ).profile?.artists,
+        ).toEqual(["Muse"]);
+        const empty = await service.saveProfile("alice", {
+            genres: [],
+            artists: [],
+        });
+        expect(empty.profile).toEqual({
+            genres: [],
+            artists: [],
+            seedTracks: [],
+        });
+        expect(empty.needsOnboarding).toBe(false);
+    });
     it("keeps profile reads and signal checks scoped to the authenticated account", async () => {
         const states = new Map<string, TasteProfilePersistenceState>([
             [

@@ -145,9 +145,6 @@ describe("account taste profile routes", () => {
     );
 
     it.each([
-        {},
-        { genres: ["Rock"], artists: ["Muse"] },
-        { genres: Array.from({ length: 11 }, (_, index) => `Genre ${index}`) },
         { genres: ["Rock", "Metal", "Pop"], unexpected: true },
         { skip: true, genres: ["Rock"] },
         { genres: ["Rock\nMetal", "Pop"], artists: ["Muse"] },
@@ -165,6 +162,25 @@ describe("account taste profile routes", () => {
         expect(mockSaveProfile).not.toHaveBeenCalled();
         expect(mockSkipProfile).not.toHaveBeenCalled();
     });
+
+    it.each([0, 1, 120])(
+        "accepts %i choices without truncating the payload",
+        async (count) => {
+            const artists = Array.from(
+                { length: count },
+                (_, i) => `Artist ${i}`,
+            );
+            const response = await request(app)
+                .put("/api/taste-profile")
+                .set("x-test-user", "alice")
+                .send({ genres: [], artists });
+            expect(response.status).toBe(200);
+            expect(mockSaveProfile).toHaveBeenCalledWith("alice", {
+                genres: [],
+                artists,
+            });
+        },
+    );
 
     it("stores a skip against the authenticated account", async () => {
         const response = await request(app)

@@ -6,9 +6,6 @@ export {
     tasteProfileErrorMessage,
 } from "./api";
 export {
-    MAX_TASTE_LABELS_PER_KIND,
-    MAX_TASTE_SIGNALS,
-    MIN_TASTE_SIGNALS,
     addTasteLabel,
     isTasteLabelSelected,
     normalizeTasteProfileSelection,

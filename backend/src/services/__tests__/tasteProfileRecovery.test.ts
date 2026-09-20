@@ -48,6 +48,38 @@ function fixture() {
 }
 const selection = { genres: ["Rock"], artists: ["Muse", "Queen"] };
 describe("durable taste seed recovery", () => {
+    it("reopens and recovers a large selection without truncation or unbounded provider fan-out", async () => {
+        const f = fixture();
+        const large = {
+            genres: [],
+            artists: Array.from({ length: 120 }, (_, i) => `Artist ${i}`),
+        };
+        f.searchSongs.mockRejectedValue(new Error("offline"));
+        const saved = await f.service.saveProfile("alice", large);
+        expect(saved.profile?.artists).toEqual(large.artists);
+        expect(saved.profile?.resolution?.pendingQueries).toHaveLength(16);
+        expect(saved.profile?.resolution?.pendingQueries).toContain(
+            "Artist 119 songs",
+        );
+        f.advance();
+        f.searchSongs.mockImplementation(async (_user, query) => [
+            {
+                providerTrackId: query.replace(/\W/g, ""),
+                title: query,
+                artistName: "Artist",
+                albumTitle: null,
+                durationSec: 180,
+                thumbnailUrl: null,
+            },
+        ]);
+        const reopened = await new TasteProfileService(f.deps).getProfile(
+            "alice",
+        );
+        expect(reopened.profile?.artists).toEqual(large.artists);
+        expect(reopened.profile?.resolution).toBeUndefined();
+        expect(reopened.profile?.seedTracks).toHaveLength(12);
+        expect(f.searchSongs).toHaveBeenCalledTimes(32);
+    });
     it("coalesces concurrent reads and preserves newer choices during a retry", async () => {
         const f = fixture();
         f.searchSongs.mockRejectedValue(new Error("offline"));
