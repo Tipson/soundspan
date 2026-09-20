@@ -19,3 +19,11 @@ Behavioral checks cover temporary and explicit source errors, cancellation, reco
 Ordinary and adversarial review inspected persistence/API/UI contracts, cancellation, bounded fan-out, backward data compatibility and release/rollback scope. No P0/P1 findings remain in the reviewed changes. Provider and production evidence is recorded separately from deterministic simulations in the deployment report and the canonical Obsidian backlog. Successful probes are samples, not a guarantee of continuous external-provider availability.
 
 Portraits use the exact-name Deezer image lookup and Soundspan image proxy; they do not load biographies, discographies or Wikidata. This avoids a slow biography provider consuming the portrait-loading budget. Missing images retain labelled initials and never block selection. Existing saved genres remain editable; genre pills filter the artist catalog and do not implicitly modify preferences. Taste selection does not add likes or listening history.
+
+## Production acceptance — 2026-09-20
+
+API/frontend `28548715`, worker `66a7bfc8` are healthy with zero restarts. Backups and rollback scripts were verified; the portrait follow-up preserved all 13 neighboring containers. No git push was performed.
+
+Backend build and full coverage passed (8,798 tests); frontend build, lint, typecheck, 1,418 component tests, unit/strict coverage and repository gates passed. The portrait follow-up also passed its 16 focused component tests and repeated backend/build/gates. Public checks covered pages, authenticated profile, 11 unique radio results, a 65,536-byte audio Range response (206), and exact artist portraits. A dedicated test profile recovered pending seeds through the public API and was restored with a guarded update.
+
+The production dialog was checked on desktop and at 390×844: no horizontal overflow, visible 350×48 save button, no user preference mutation. 21/24 portraits loaded; three external CDN timeouts fell back to initials. This cosmetic external-image limitation remains tracked for the next audit. Physical phones and long background playback were not retested in this scope.
