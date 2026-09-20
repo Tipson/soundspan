@@ -1,3 +1,10 @@
+jest.mock("../../services/playlistRemoteRadio", () => ({
+    buildRemotePlaylistRadio: jest.fn(),
+    buildRemoteTrackRadio: jest.fn(),
+    buildRemoteLikedRadio: jest.fn(),
+    buildRemoteArtistRadio: jest.fn(),
+}));
+import { buildRemoteArtistRadio } from "../../services/playlistRemoteRadio";
 import {
     express,
     Request,
@@ -708,6 +715,58 @@ describe("library catalog list runtime coverage", () => {
         expectBoundedRandomQuery(mockPrismaQueryRaw.mock.calls[0], 12);
         expectBoundedRandomQuery(mockPrismaQueryRaw.mock.calls[1], 6);
         expectNoUnboundedIdPoolFetch();
+    });
+
+    it("builds artist radio for a catalog artist without local audio files", async () => {
+        mockTrackFindMany.mockResolvedValueOnce([]);
+        mockArtistFindUnique.mockResolvedValueOnce({ name: "2CELLOS" });
+        const tracks = [
+            {
+                id: "yt:next0000001",
+                youtubeVideoId: "next0000001",
+                streamSource: "youtube",
+            },
+        ];
+        (buildRemoteArtistRadio as jest.Mock).mockResolvedValueOnce(tracks);
+        const res = createRes();
+        await radioHandler(
+            {
+                query: { type: "artist", value: "catalog-artist", limit: "25" },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+        expect(res.body).toEqual({ tracks });
+        expect(buildRemoteArtistRadio).toHaveBeenCalledWith("2CELLOS", 25);
+    });
+
+    it("artist-name radio uses the external catalog when there is no local artist row", async () => {
+        mockArtistFindFirst.mockResolvedValueOnce(null);
+        const tracks = [
+            {
+                id: "yt:next0000001",
+                youtubeVideoId: "next0000001",
+                streamSource: "youtube",
+            },
+        ];
+        (buildRemoteArtistRadio as jest.Mock).mockResolvedValueOnce(tracks);
+        const res = createRes();
+        await radioHandler(
+            {
+                query: {
+                    type: "artist-name",
+                    value: "Папин Олимпос",
+                    limit: "25",
+                },
+                user: { id: "user-1" },
+            } as any,
+            res,
+        );
+        expect(res.body).toEqual({ tracks });
+        expect(buildRemoteArtistRadio).toHaveBeenCalledWith(
+            "Папин Олимпос",
+            25,
+        );
     });
 
     it("supports artist radio validation, empty artist libraries, and mixed artist+similar queues", async () => {

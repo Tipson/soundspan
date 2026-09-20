@@ -93,7 +93,7 @@ const baseProps = {
     isInListenTogetherGroup: false,
 };
 
-test("album's initial dock shows only shuffle and More", async () => {
+test("album's initial dock shows icon playback, shuffle and More", async () => {
     const { AlbumActionBar } =
         await import("../../features/album/components/AlbumActionBar");
     const html = renderToStaticMarkup(
@@ -111,7 +111,7 @@ test("album's initial dock shows only shuffle and More", async () => {
             ),
         }),
     );
-    assert.equal([...html.matchAll(/<button\b/g)].length, 2);
+    assert.equal([...html.matchAll(/<button\b/g)].length, 3);
     assert.doesNotMatch(html, /Сохранить в коллекцию/);
 });
 
@@ -342,7 +342,8 @@ test("AlbumActionBar separates listening intent from secondary collection action
         .querySelector('[data-detail-action-tier="secondary"]')?.innerHTML;
     assert.ok(primary);
     assert.ok(secondary);
-    assert.doesNotMatch(primary, /Воспроизвести всё/);
+    assert.match(primary, /aria-label="Воспроизвести всё"/);
+    assert.doesNotMatch(primary, />Воспроизвести всё</);
     assert.match(primary, /Перемешать/);
     assert.doesNotMatch(primary, /Добавить всё в очередь/);
     assert.match(secondary, /Сохранить в коллекцию/);

@@ -31,6 +31,7 @@ let explicitPauseSequence = 0;
 let explicitPauseGeneration = 0;
 let playbackIntentGeneration = 0;
 let queueReplacementGeneration = 0;
+let playbackReplacementGeneration = 0;
 
 /** Fence asynchronous queue work against newer playback commands. */
 export function getPlaybackIntentGeneration(): number {
@@ -46,6 +47,16 @@ export function reservePlaybackIntent(): number {
 export function getQueueReplacementGeneration(): number {
     return queueReplacementGeneration;
 }
+/** Counts media replacements without treating pending asynchronous requests as playback. */
+export function getPlaybackReplacementGeneration(): number {
+    return playbackReplacementGeneration;
+}
+
+/** Record a committed media or queue replacement without changing playback intent or pause state. */
+export function recordPlaybackReplacement(): void {
+    playbackReplacementGeneration += 1;
+}
+
 /** A user seek supersedes queue work even when track and index stay the same. */
 export function recordExplicitPlaybackSeek(): void {
     playbackIntentGeneration += 1;
@@ -86,6 +97,7 @@ export function writePlaybackAdvanceOrigin(
 export function writePlaybackReplacementIntent(
     originatingTrackId: string | null,
 ): void {
+    recordPlaybackReplacement();
     queueReplacementGeneration += 1;
     recordExplicitPlaybackResume();
     writePlaybackAdvanceOrigin("manual", originatingTrackId);

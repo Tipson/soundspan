@@ -2,10 +2,12 @@ import type { Request, Response } from "express";
 import fs from "node:fs";
 
 const mockYtMusicGetRadio = jest.fn();
+const mockYtMusicSearchCanonical = jest.fn();
 
 jest.mock("../../services/youtubeMusic", () => ({
     ytMusicService: {
         getRadio: mockYtMusicGetRadio,
+        searchCanonical: mockYtMusicSearchCanonical,
     },
 }));
 
@@ -528,6 +530,7 @@ describe("library branch coverage focus", () => {
         mockArtistFindMany.mockResolvedValue([]);
         mockPlaylistFindUnique.mockResolvedValue(null);
         mockPlaylistItemFindMany.mockResolvedValue([]);
+        mockYtMusicSearchCanonical.mockResolvedValue({ results: [] });
         mockYtMusicGetRadio.mockResolvedValue({
             playlistId: null,
             seedVideoId: "",
@@ -596,8 +599,9 @@ describe("library branch coverage focus", () => {
         });
     });
 
-    it("returns empty tracks when artist-name lookup has no match", async () => {
+    it("returns empty tracks only after unmatched artist-name falls back to an empty external catalog search", async () => {
         mockArtistFindFirst.mockResolvedValueOnce(null);
+        mockYtMusicSearchCanonical.mockResolvedValueOnce({ results: [] });
         const req = {
             query: {
                 type: "artist-name",
@@ -612,6 +616,14 @@ describe("library branch coverage focus", () => {
 
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ tracks: [] });
+        expect(mockYtMusicSearchCanonical).toHaveBeenCalledWith(
+            "__public__",
+            "No Such Artist",
+            "songs",
+            20,
+            { timeoutMs: 8_000, maxRetries: 0 },
+        );
+        expect(mockYtMusicGetRadio).not.toHaveBeenCalled();
     });
 
     it("requires auth for liked radio", async () => {

@@ -1,4 +1,5 @@
 "use client";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
 
 import type { ReactNode } from "react";
 import {
@@ -34,6 +35,9 @@ interface PlaylistDetailActionDockProps {
     isTogglingShare: boolean;
     isHiding: boolean;
     radioActions: ReactNode;
+    isThisPlaylistPlaying?: boolean;
+    isPlaying?: boolean;
+    onPlay: () => void;
     onShuffle: () => void;
     onAddAllToQueue: () => void;
     onToggleLikeAll: () => void;
@@ -91,6 +95,9 @@ export function PlaylistDetailActionDock({
     isTogglingShare,
     isHiding,
     radioActions,
+    isThisPlaylistPlaying = false,
+    isPlaying = false,
+    onPlay,
     onShuffle,
     onAddAllToQueue,
     onToggleLikeAll,
@@ -115,6 +122,12 @@ export function PlaylistDetailActionDock({
                 data-detail-action-tier="primary"
                 className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none"
             >
+                {playableTracks.length > 0 && (
+                    <CollectionPlaybackButton
+                        isPlaying={isThisPlaylistPlaying && isPlaying}
+                        onClick={onPlay}
+                    />
+                )}
                 {playableTracks.length > 1 && (
                     <button
                         type="button"

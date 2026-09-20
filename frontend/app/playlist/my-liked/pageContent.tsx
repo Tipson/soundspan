@@ -15,7 +15,17 @@ import {
     Shuffle,
 } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
-import { useAudioControls } from "@/lib/audio-context";
+import {
+    useAudioControls,
+    useAudioState,
+    usePlaybackStatus,
+} from "@/lib/audio-context";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import {
     api,
     type LikedPlaylistResponse,
@@ -190,7 +200,12 @@ function LikedTrackList({
 export default function MyLikedPlaylistPage() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
-    const { playTracks, addTracksToQueue } = useAudioControls();
+    const { playTracks, addTracksToQueue, pause, resume } = useAudioControls();
+    const { currentTrack } = useAudioState();
+    const { isPlaying } = usePlaybackStatus();
+    const isThisCollection = Boolean(
+        currentTrack && isCollectionPlayback("liked"),
+    );
     const { data, isLoading, isError } = useLikedPlaylistQuery();
     const [removingTrackId, setRemovingTrackId] = useState<string | null>(null);
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
@@ -326,18 +341,40 @@ export default function MyLikedPlaylistPage() {
         }
     };
 
+    const handlePlayAll = () => {
+        if (isThisCollection) {
+            if (isPlaying) pause();
+            else resume();
+        } else if (audioTracks.length > 0) {
+            const collectionGeneration = getCollectionPlaybackGeneration();
+            playTracks(audioTracks, 0, false, {
+                replaceQueue: true,
+                preserveOrder: true,
+            });
+            markCollectionPlayback("liked", collectionGeneration);
+        }
+    };
+
     const handleShuffle = () => {
         if (audioTracks.length < 2) return;
-        playTracks(shuffleArray(audioTracks), 0);
+        const collectionGeneration = getCollectionPlaybackGeneration();
+        playTracks(shuffleArray(audioTracks), 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback("liked", collectionGeneration);
     };
 
     const handlePlayTrack = (track: LikedPlaylistTrack) => {
         const index = actionableLikedTracks.indexOf(track);
-        if (index >= 0)
+        if (index >= 0) {
+            const collectionGeneration = getCollectionPlaybackGeneration();
             playTracks(audioTracks, index, false, {
                 replaceQueue: true,
                 preserveOrder: true,
             });
+            markCollectionPlayback("liked", collectionGeneration);
+        }
     };
 
     const handleStartRadio = async () => {
@@ -453,6 +490,14 @@ export default function MyLikedPlaylistPage() {
                                 data-detail-action-tier="primary"
                                 className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none"
                             >
+                                {audioTracks.length > 0 && (
+                                    <CollectionPlaybackButton
+                                        isPlaying={
+                                            isThisCollection && isPlaying
+                                        }
+                                        onClick={handlePlayAll}
+                                    />
+                                )}
                                 {audioTracks.length > 1 && (
                                     <button
                                         onClick={handleShuffle}

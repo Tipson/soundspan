@@ -68,6 +68,7 @@ import { resetPersistedTrackStartPosition } from "@/lib/persisted-playback-posit
 import { resolveListenTogetherNavigationIndex } from "@/lib/listen-together-navigation";
 import {
     getPlaybackIntentGeneration,
+    recordPlaybackReplacement,
     reservePlaybackIntent,
     recordExplicitPlaybackPause,
     recordExplicitPlaybackResume,
@@ -761,6 +762,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             }
 
             const playbackState = getPlaybackView();
+            recordPlaybackReplacement();
             state.setPlaybackType("audiobook");
             state.setCurrentAudiobook(audiobook);
             state.setCurrentTrack(null);
@@ -835,6 +837,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
             const playbackState = getPlaybackView();
             const episodeItem = episodeQueueItemFromPodcast(podcast);
+            recordPlaybackReplacement();
             state.setPlaybackType("podcast");
             state.setCurrentPodcast(podcast);
             state.setCurrentTrack(null);
@@ -1788,6 +1791,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 state.queue.length === 0 ||
                 state.playbackType === "audiobook"
             ) {
+                recordPlaybackReplacement();
                 resetPersistedTrackStartPosition(track.id);
                 state.setPlaybackType("track");
                 state.setCurrentTrack(track);
@@ -2124,6 +2128,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             return;
         }
 
+        recordPlaybackReplacement();
         state.setQueue([]);
         state.setCurrentIndex(0);
         state.setCurrentTrack(null);
@@ -2173,6 +2178,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                     if (!tracks[0]?.id) {
                         return;
                     }
+                    recordPlaybackReplacement();
                     resetPersistedTrackStartPosition(tracks[0].id);
                     state.setQueue(tracks);
                     state.setCurrentIndex(0);
@@ -2193,6 +2199,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             }
 
             // Keep current track, replace everything after it
+            recordPlaybackReplacement();
             state.setQueue((prev) => {
                 const currentTrack = prev[state.currentIndex];
                 if (!currentTrack) return tracks;

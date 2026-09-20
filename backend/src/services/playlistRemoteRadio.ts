@@ -18,8 +18,8 @@ function formatYtMusicRadioTrack(track: YtMusicRadioTrack) {
             album: track.album,
             duration: track.duration,
             thumbnailUrl: track.thumbnailUrl,
-            artistId: null,
-            albumId: null,
+            artistId: track.artistId ?? null,
+            albumId: track.albumId ?? null,
         }),
     );
 }
@@ -106,6 +106,58 @@ export async function buildRemoteTrackRadio(videoId: string, limit: number) {
         })
         .slice(0, limit)
         .map(formatYtMusicRadioTrack);
+}
+
+/** Build artist-relative provider radio from a bounded set of exact artist song matches. */
+export async function buildRemoteArtistRadio(
+    artistName: string,
+    limit: number,
+) {
+    const name = artistName.trim();
+    if (!name) return [];
+    const normalizeName = (value: string) =>
+        value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+    const search = await ytMusicService.searchCanonical(
+        "__public__",
+        name,
+        "songs",
+        20,
+        { timeoutMs: 8_000, maxRetries: 0 },
+    );
+    const seeds = [
+        ...new Set(
+            search.results
+                .filter(
+                    (track) =>
+                        track.provider === "ytmusic" &&
+                        normalizeName(track.artistName) ===
+                            normalizeName(name) &&
+                        /^[a-zA-Z0-9_-]{11}$/.test(track.providerTrackId),
+                )
+                .map((track) => track.providerTrackId),
+        ),
+    ].slice(0, PLAYLIST_REMOTE_RADIO_SEED_LIMIT);
+    if (seeds.length === 0) return [];
+    const results = await Promise.allSettled(
+        seeds.map((seed) => buildRemoteTrackRadio(seed, limit)),
+    );
+    const successful = results.filter(
+        (result) => result.status === "fulfilled",
+    );
+    if (successful.length === 0) {
+        const failure = results.find((result) => result.status === "rejected");
+        if (failure?.status === "rejected") throw failure.reason;
+    }
+    const seen = new Set(seeds);
+    return successful
+        .flatMap((result) => result.value)
+        .filter((track) => {
+            const id = String(track.youtubeVideoId);
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        })
+        .slice(0, limit);
 }
 
 /** Builds radio from the authenticated user's recent remote likes. */

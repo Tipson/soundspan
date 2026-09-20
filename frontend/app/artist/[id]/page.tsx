@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     useAudioState,
@@ -32,6 +32,12 @@ import { useArtistActions } from "@/features/artist/hooks/useArtistActions";
 import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import { useYtMusicTopTracks } from "@/features/artist/hooks/useYtMusicTopTracks";
 import { getPlaybackIntentGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { loadArtistRadio } from "@/lib/radio/loadArtistRadio";
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { extendArtistPlayback } from "@/features/artist/artistPlaybackContinuation";
 import { mergeProviderAlbumTracks } from "@/features/artist/providerArtistTracks";
 import { useArtistTracks } from "@/features/artist/hooks/useArtistTracks";
@@ -155,7 +161,7 @@ export default function ArtistPage() {
         };
     }, [pathname, activeView]);
     const { isPlaying } = usePlaybackStatus();
-    const { playTracks, pause, addTracksToQueue } = useAudioControls();
+    const { playTracks, pause, resume, addTracksToQueue } = useAudioControls();
     const { isPendingByMbid, downloadsEnabled } = useDownloadContext();
     const { isInGroup } = useListenTogether();
 
@@ -227,10 +233,23 @@ export default function ArtistPage() {
     const [isAddingToPlaylist, setIsAddingToPlaylist] = useState(false);
     const [isLikingAll, setIsLikingAll] = useState(false);
     const [radioConfirm, setRadioConfirm] = useState<{
-        tracks: Track[];
+        tracks: AudioTrack[];
         count: number;
+        generation: number;
+        artistName: string;
     } | null>(null);
     const radioConfirmedRef = useRef(false);
+    const radioRequestEpoch = useRef(0);
+    const groupStateRef = useRef(isInGroup);
+    useLayoutEffect(() => {
+        groupStateRef.current = isInGroup;
+    }, [isInGroup]);
+    useEffect(() => {
+        setRadioConfirm(null);
+        return () => {
+            radioRequestEpoch.current += 1;
+        };
+    }, [pathname]);
 
     // Enrich unowned top tracks with YouTube Music streaming.
     const artistWithTopTracks = artist?.topTracks?.length ? artist : null;
@@ -356,7 +375,12 @@ export default function ArtistPage() {
                         artist: albumData.artist,
                     }),
                 );
-                playTracks(tracksWithAlbum, 0);
+                const generation = getCollectionPlaybackGeneration();
+                playTracks(tracksWithAlbum, 0, false, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                });
+                markCollectionPlayback(`album:${albumId}`, generation);
                 toast.success(formatArtistAlbumPlaying(albumTitle));
             }
         } catch {
@@ -432,7 +456,12 @@ export default function ArtistPage() {
                     track !== null,
             );
         if (formattedTracks.length === 0) return;
-        playTracks(formattedTracks, 0);
+        const generation = getCollectionPlaybackGeneration();
+        playTracks(formattedTracks, 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(`artist:${artist.id}`, generation);
     }
 
     // A row click starts the artist's ordered popular-track context. This
@@ -467,10 +496,12 @@ export default function ArtistPage() {
         );
         if (selectedIndex < 0) return;
         const initialQueue = formattedTracks.map((entry) => entry.track);
+        const collectionGeneration = getCollectionPlaybackGeneration();
         playTracks(initialQueue, selectedIndex, false, {
             replaceQueue: true,
             preserveOrder: true,
         });
+        markCollectionPlayback(`artist:${artist.id}`, collectionGeneration);
         queueRef.current = initialQueue;
         const intent = {};
         orderedIntentRef.current = intent;
@@ -598,43 +629,60 @@ export default function ArtistPage() {
     // Start artist radio handler
     async function handleStartRadio() {
         if (!artist) return;
+        const epoch = ++radioRequestEpoch.current;
+        setRadioConfirm(null);
+        radioConfirmedRef.current = false;
 
         try {
             toast.success(artistRu.radioStarting);
-            const response = await api.getRadioTracks("artist", artist.id);
+            const tracks = await loadArtistRadio(
+                artist.id,
+                artist.name,
+                source ?? "discovery",
+            );
+            if (!tracks || epoch !== radioRequestEpoch.current) return;
 
-            if (response.tracks && response.tracks.length > 0) {
-                if (isInGroup) {
+            if (tracks.length > 0) {
+                if (groupStateRef.current) {
                     setRadioConfirm({
-                        tracks: response.tracks,
-                        count: response.tracks.length,
+                        tracks,
+                        count: tracks.length,
+                        generation: getPlaybackIntentGeneration(),
+                        artistName: artist.name,
                     });
                     return;
                 }
 
-                // Backend already returns properly formatted tracks - just pass them through
-                playTracks(response.tracks, 0);
+                playTracks(tracks, 0, false, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                });
                 toast.success(
-                    formatArtistRadioPlaying(
-                        artist.name,
-                        response.tracks.length,
-                    ),
+                    formatArtistRadioPlaying(artist.name, tracks.length),
                 );
             } else {
                 toast.error(artistRu.radioNotEnough);
             }
         } catch {
+            if (epoch !== radioRequestEpoch.current) return;
             toast.error(artistRu.radioStartFailed);
         }
     }
 
     const handleConfirmRadio = () => {
-        if (!radioConfirm) return;
+        if (
+            !radioConfirm ||
+            radioConfirm.generation !== getPlaybackIntentGeneration()
+        )
+            return;
         radioConfirmedRef.current = true;
-        playTracks(radioConfirm.tracks as Parameters<typeof playTracks>[0], 0);
+        playTracks(radioConfirm.tracks, 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
         toast.success(
             formatArtistRadioPlaying(
-                artist?.name ?? artistRu.fallbackName,
+                radioConfirm.artistName,
                 radioConfirm.count,
             ),
         );
@@ -699,11 +747,18 @@ export default function ArtistPage() {
                     albums={albums}
                     source={source || "discovery"}
                     colors={colors}
-                    onPlayAll={() =>
-                        hasProviderTrackContext
+                    onPlayAll={() => {
+                        if (
+                            currentTrack &&
+                            isCollectionPlayback(`artist:${artist.id}`)
+                        ) {
+                            resume();
+                            return;
+                        }
+                        return hasProviderTrackContext
                             ? handlePlayProviderArtist(false)
-                            : playAll(artist, albums)
-                    }
+                            : playAll(artist, albums);
+                    }}
                     onAddAllToQueue={() =>
                         hasProviderTrackContext
                             ? handleAddAllPopularToQueue(visibleArtistTracks)
@@ -725,10 +780,9 @@ export default function ArtistPage() {
                     isLikingAll={isLikingAll}
                     isPendingDownload={isPendingByMbid(artist.mbid || "")}
                     isPlaying={isPlaying}
-                    isPlayingThisArtist={
-                        currentTrack?.artist?.id === artist.id ||
-                        currentTrack?.artist?.name === artist.name
-                    }
+                    isPlayingThisArtist={isCollectionPlayback(
+                        `artist:${artist.id}`,
+                    )}
                     onPause={pause}
                     downloadsEnabled={
                         downloadsEnabled && !isDirectYtMusicArtist

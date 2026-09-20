@@ -1,3 +1,4 @@
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
 import { useState, type ReactNode } from "react";
 import {
     Shuffle,
@@ -53,11 +54,17 @@ interface AlbumActionBarProps {
 
 interface PlaybackControlsProps {
     onShuffle: () => void;
+    onPlay: () => void;
+    isPlaying: boolean;
 }
 
 function PlaybackControls(props: PlaybackControlsProps) {
     return (
         <>
+            <CollectionPlaybackButton
+                isPlaying={props.isPlaying}
+                onClick={props.onPlay}
+            />
             <button
                 type="button"
                 onClick={props.onShuffle}
@@ -74,6 +81,10 @@ function PlaybackControls(props: PlaybackControlsProps) {
 function LockedPlaybackControls() {
     return (
         <>
+            <CollectionPlaybackButton
+                onClick={() => toast.error(LOCK_MESSAGE)}
+                title={LOCK_MESSAGE}
+            />
             <button
                 type="button"
                 onClick={() => toast.error(LOCK_MESSAGE)}
@@ -255,7 +266,19 @@ function ActionControlRow(props: {
                     <LockedControls visibility={visibility} />
                 ) : (
                     visibility.isLibraryVisible && (
-                        <PlaybackControls onShuffle={actions.onShuffle} />
+                        <PlaybackControls
+                            onShuffle={actions.onShuffle}
+                            isPlaying={Boolean(
+                                actions.isPlaying && actions.isPlayingThisAlbum,
+                            )}
+                            onPlay={
+                                actions.isPlaying &&
+                                actions.isPlayingThisAlbum &&
+                                actions.onPause
+                                    ? actions.onPause
+                                    : actions.onPlayAll
+                            }
+                        />
                     )
                 )}
             </div>

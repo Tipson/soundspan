@@ -147,6 +147,13 @@ test("общая музыкальная ссылка использует editor
             /<header[^>]*data-music-detail="hero"[\s\S]*?<\/header>/,
         )?.[0];
         assert.ok(hero);
+        const playback = harness.container.querySelector(
+            'header button[aria-label="Воспроизвести"], header button[aria-label="Пауза"]',
+        );
+        assert.ok(playback);
+        assert.equal(playback.textContent, "");
+        assert.match(playback.className, /h-14 w-14/);
+
         assert.match(hero, /Общий альбом с очень длинным названием/);
         assert.match(hero, /data-music-detail="actions"/);
         assert.match(hero, /data-detail-action-tier="primary"/);

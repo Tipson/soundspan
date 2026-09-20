@@ -107,6 +107,8 @@ mock.module("lucide-react", {
         ListMusic: Icon,
         Network: Icon,
         Play: Icon,
+        Pause: Icon,
+        Loader2: Icon,
     },
 });
 
@@ -128,7 +130,11 @@ mock.module("@/lib/api", {
 
 mock.module("@/lib/audio-context", {
     namedExports: {
+        useAudioState: () => ({ currentTrack: null }),
+        usePlaybackStatus: () => ({ isPlaying: false }),
         useAudioControls: () => ({
+            pause: () => undefined,
+            resume: () => undefined,
             playNow: () => undefined,
             playTracks: () => undefined,
         }),
@@ -192,7 +198,8 @@ test("peer playlist uses the same editorial hierarchy without exposing federatio
     assert.match(hero, /data-music-detail="actions"/);
     assert.match(hero, /data-detail-action-tier="primary"/);
     assert.match(hero, /data-detail-action-tier="secondary"/);
-    assert.match(hero, /Слушать/);
+    assert.match(hero, /aria-label="Воспроизвести всё"/);
+    assert.doesNotMatch(hero, />Слушать</);
     assert.match(hero, /Отслеживать/);
     assert.match(hero, /Сохранить копию/);
     assert.match(html, /data-music-detail="tracks"/);
@@ -222,6 +229,6 @@ test("peer playlist uses the same editorial hierarchy without exposing federatio
     );
 
     for (const match of hero.matchAll(/<button[^>]*>/g)) {
-        assert.match(match[0], /min-h-11/);
+        assert.match(match[0], /(min-h-11|h-14 w-14)/);
     }
 });

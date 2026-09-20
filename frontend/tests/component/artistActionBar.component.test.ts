@@ -77,6 +77,26 @@ const baseProps = {
     downloadsEnabled: true,
 };
 
+test("ArtistActionBar exposes radio for an external artist when the handler exists", async () => {
+    const { ArtistActionBar } =
+        await import("../../features/artist/components/ArtistActionBar");
+    const html = await renderExpandedDetailActions(
+        React.createElement(ArtistActionBar, {
+            ...baseProps,
+            source: "discovery",
+            onStartRadio: noop,
+        }),
+    );
+    assert.match(html, /aria-label="Включить радио исполнителя"/);
+    const unavailable = await renderExpandedDetailActions(
+        React.createElement(ArtistActionBar, {
+            ...baseProps,
+            source: "discovery",
+        }),
+    );
+    assert.doesNotMatch(unavailable, /aria-label="Включить радио исполнителя"/);
+});
+
 test("ArtistActionBar renders personal controls without server acquisition", async () => {
     const { ArtistActionBar } =
         await import("../../features/artist/components/ArtistActionBar");
@@ -215,7 +235,8 @@ test("ArtistActionBar shows Pause when artist is currently playing", async () =>
         }),
     );
 
-    assert.match(html, /<span>Пауза<\/span>/);
+    assert.match(html, /aria-label="Пауза"/);
+    assert.doesNotMatch(html, />Пауза</);
     assert.match(html, /data-icon="pause"/);
     assert.doesNotMatch(html, /<span>Воспроизвести всё<\/span>/);
 });

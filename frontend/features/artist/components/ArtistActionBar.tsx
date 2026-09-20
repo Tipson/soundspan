@@ -1,14 +1,6 @@
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
 import type { ReactNode } from "react";
-import {
-    Play,
-    Pause,
-    Shuffle,
-    Radio,
-    ListMusic,
-    Loader2,
-    Plus,
-    Heart,
-} from "lucide-react";
+import { Shuffle, Radio, ListMusic, Loader2, Plus, Heart } from "lucide-react";
 import { cn } from "@/utils/cn";
 import type { Artist } from "../types";
 import type { Album } from "../types";
@@ -19,8 +11,6 @@ import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
 import { MusicDetailActionDock } from "@/components/music-detail";
 import { MusicDetailSecondaryActions } from "@/components/music-detail/MusicDetailSecondaryActions";
 import { ru } from "@/lib/i18n/ru";
-
-const BRAND_PLAY = "var(--color-brand-hover)";
 
 interface ArtistActionBarProps {
     artist: Artist;
@@ -49,7 +39,6 @@ interface ArtistActionBarProps {
  * Renders the ArtistActionBar component.
  */
 export function ArtistActionBar({
-    source,
     onPlayAll,
     onShuffle,
     onAddAllToQueue,
@@ -65,7 +54,7 @@ export function ArtistActionBar({
     deviceDownloadControl,
 }: ArtistActionBarProps) {
     const showPause = isPlaying && isPlayingThisArtist;
-    const showRadio = source === "library" && onStartRadio;
+    const showRadio = Boolean(onStartRadio);
     const lockMessage = ru.catalog.listenTogetherLock;
     const { showSpinner: showPlaySpinner, trigger: triggerPlayFeedback } =
         usePlayButtonFeedback();
@@ -91,31 +80,11 @@ export function ArtistActionBar({
             >
                 {isInListenTogetherGroup ? (
                     <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
-                        <button
+                        <CollectionPlaybackButton
+                            isPlaying={showPause}
                             onClick={handleLockedAction}
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-semibold text-content-muted shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light sm:flex-none"
                             title={lockMessage}
-                        >
-                            {showPause ? (
-                                <Pause className="w-5 h-5 fill-current" />
-                            ) : (
-                                <Play className="w-5 h-5 fill-current ml-0.5" />
-                            )}
-                            <span>
-                                {showPause ? (
-                                    ru.common.pause
-                                ) : (
-                                    <>
-                                        <span className="sm:hidden">
-                                            Слушать
-                                        </span>
-                                        <span className="hidden sm:inline">
-                                            {ru.common.playAll}
-                                        </span>
-                                    </>
-                                )}
-                            </span>
-                        </button>
+                        />
 
                         <button
                             onClick={handleLockedAction}
@@ -129,33 +98,11 @@ export function ArtistActionBar({
                 ) : (
                     <>
                         {/* Play Button */}
-                        <button
+                        <CollectionPlaybackButton
+                            isPlaying={showPause}
+                            isLoading={showPlaySpinner}
                             onClick={handlePlayPauseClick}
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none sm:flex-none"
-                            style={{ backgroundColor: BRAND_PLAY }}
-                        >
-                            {showPlaySpinner ? (
-                                <Loader2 className="w-5 h-5 animate-spin text-black" />
-                            ) : showPause ? (
-                                <Pause className="w-5 h-5 fill-current text-black" />
-                            ) : (
-                                <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                            )}
-                            <span>
-                                {showPause ? (
-                                    ru.common.pause
-                                ) : (
-                                    <>
-                                        <span className="sm:hidden">
-                                            Слушать
-                                        </span>
-                                        <span className="hidden sm:inline">
-                                            {ru.common.playAll}
-                                        </span>
-                                    </>
-                                )}
-                            </span>
-                        </button>
+                        />
 
                         {/* Shuffle Button */}
                         <button

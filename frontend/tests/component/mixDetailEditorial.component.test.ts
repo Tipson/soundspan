@@ -1,8 +1,26 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { after, mock, test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import {
+    writePlaybackReplacementIntent,
+    recordExplicitPlaybackPause,
+} from "../../lib/audio-engine/playbackAdvanceOrigin";
+GlobalRegistrator.register();
+(
+    globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+after(async () => {
+    await GlobalRegistrator.unregister();
+});
+const audio = {
+    currentTrack: null as { id: string } | null,
+    isPlaying: false,
+    starts: [] as unknown[][],
+    resumes: 0,
+};
 const tracks = [
     {
         id: "track-1",
@@ -69,13 +87,18 @@ mock.module("@/lib/api", {
 
 mock.module("@/lib/audio-context", {
     namedExports: {
-        useAudioState: () => ({ currentTrack: null }),
-        usePlaybackStatus: () => ({ isPlaying: false }),
+        useAudioState: () => ({ currentTrack: audio.currentTrack }),
+        usePlaybackStatus: () => ({ isPlaying: audio.isPlaying }),
         useAudioControls: () => ({
-            playTracks: () => undefined,
+            playTracks: (...args: unknown[]) => {
+                audio.starts.push(args);
+                writePlaybackReplacementIntent(audio.currentTrack?.id ?? null);
+            },
             addToQueue: () => undefined,
             pause: () => undefined,
-            resume: () => undefined,
+            resume: () => {
+                audio.resumes += 1;
+            },
         }),
     },
 });
@@ -164,6 +187,8 @@ test("generated mix follows the editorial hero, action dock, and canonical Track
     )?.[0];
 
     assert.ok(hero);
+    assert.match(hero, /aria-label="Воспроизвести всё"/);
+    assert.doesNotMatch(hero, />Слушать<|>Воспроизвести всё</);
     assert.match(hero, /data-music-detail="actions"/);
     assert.match(hero, /data-detail-action-tier="primary"/);
     assert.match(hero, /data-detail-action-tier="secondary"/);
@@ -172,6 +197,52 @@ test("generated mix follows the editorial hero, action dock, and canonical Track
     assert.match(html, /data-mix-track-list="true"/);
 
     for (const match of html.matchAll(/<button[^>]*>/g)) {
-        assert.match(match[0], /(h-11 w-11|min-h-11)/);
+        assert.match(match[0], /(h-11 w-11|h-14 w-14|min-h-11)/);
+    }
+});
+
+test("mix starts its own ordered queue over an identical foreign track and resumes after pause", async () => {
+    const { createRoot } = await import("react-dom/client");
+    const Page = (await import("../../app/mix/[id]/page")).default;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const render = () =>
+        React.act(async () => {
+            root.render(React.createElement(Page));
+        });
+    try {
+        audio.currentTrack = { id: "track-1" };
+        audio.isPlaying = true;
+        writePlaybackReplacementIntent(null);
+        await render();
+        await React.act(async () =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    'button[aria-label="Воспроизвести всё"]',
+                )!
+                .click(),
+        );
+        assert.deepEqual(audio.starts.at(-1)?.[3], {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        const count = audio.starts.length;
+        audio.currentTrack = { id: "track-2" };
+        audio.isPlaying = false;
+        recordExplicitPlaybackPause();
+        await render();
+        await React.act(async () =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    'button[aria-label="Воспроизвести всё"]',
+                )!
+                .click(),
+        );
+        assert.equal(audio.resumes, 1);
+        assert.equal(audio.starts.length, count);
+    } finally {
+        await React.act(async () => root.unmount());
+        host.remove();
     }
 });

@@ -1,3 +1,7 @@
+import {
+    writePlaybackReplacementIntent,
+    recordExplicitPlaybackPause,
+} from "../../lib/audio-engine/playbackAdvanceOrigin";
 import assert from "node:assert/strict";
 import { after, beforeEach, mock, test } from "node:test";
 import React from "react";
@@ -49,6 +53,8 @@ const state = {
     unlikePending: false,
     currentTrack: null as { id: string } | null,
 };
+let pauseCalls = 0;
+let resumeCalls = 0;
 const playedQueues: Array<{ tracks: Array<{ id: string }>; index: number }> =
     [];
 const playlistAdds: Array<{
@@ -145,11 +151,16 @@ mock.module("@/lib/audio-context", {
         }),
         useAudioControls: () => ({
             playTracks: (tracks: Array<{ id: string }>, index: number) => {
+                writePlaybackReplacementIntent(state.currentTrack?.id ?? null);
                 playedQueues.push({ tracks, index });
             },
             playNow: () => undefined,
-            pause: () => undefined,
-            resume: () => undefined,
+            pause: () => {
+                pauseCalls++;
+            },
+            resume: () => {
+                resumeCalls++;
+            },
             addTracksToQueue: () => undefined,
         }),
     },
@@ -386,6 +397,9 @@ function renderWithQueryClient(Component: React.ComponentType) {
 }
 
 beforeEach(() => {
+    writePlaybackReplacementIntent(null);
+    pauseCalls = 0;
+    resumeCalls = 0;
     playlistAdds.length = 0;
     playedQueues.length = 0;
     state.likedData = {
@@ -428,7 +442,7 @@ test("renders empty-state copy and hides action buttons when there are no tracks
     assert.doesNotMatch(html, /title="Добавить всё в очередь/);
 });
 
-test("keeps only shuffle and More in the liked toolbar", async () => {
+test("keeps icon playback, shuffle and More in the liked toolbar", async () => {
     state.likedData = {
         playlist: { id: "my-liked", name: "My Liked" },
         tracks: [makeTrack("track-1", "First"), makeTrack("track-2", "Second")],
@@ -438,7 +452,7 @@ test("keeps only shuffle and More in the liked toolbar", async () => {
     const rendered = document.createElement("div");
     rendered.innerHTML = renderWithQueryClient(mod.default);
     const dock = rendered.querySelector('[data-music-detail="actions"]');
-    assert.equal(dock?.querySelectorAll("button").length, 2);
+    assert.equal(dock?.querySelectorAll("button").length, 3);
     assert.ok(dock?.querySelector('[aria-label="Ещё действия"]'));
 });
 
@@ -470,7 +484,8 @@ test("renders consolidated action bar buttons when tracks exist", async () => {
     const primary = rendered.querySelector(
         'button[aria-label="Воспроизвести всё"]',
     );
-    assert.equal(primary, null);
+    assert.ok(primary);
+    assert.equal(primary.textContent, "");
     assert.match(html, /title="Воспроизвести вперемешку"/);
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить всё в плейлист"/);
@@ -787,3 +802,71 @@ for (const position of [1, 5]) {
         }
     });
 }
+
+test("liked primary resumes after global pause and remount, but starts its queue over unrelated playback", async () => {
+    state.likedData = {
+        playlist: { id: "my-liked", name: "My Liked" },
+        tracks: [makeTrack("track-1", "First"), makeTrack("track-2", "Second")],
+        total: 2,
+    };
+    const { default: Page } = await import("../../app/playlist/my-liked/page");
+    const host = document.createElement("div");
+    document.body.append(host);
+    let root = createRoot(host);
+    const client = new QueryClient();
+    const render = async () =>
+        React.act(async () =>
+            root.render(
+                React.createElement(
+                    QueryClientProvider,
+                    { client },
+                    React.createElement(Page),
+                ),
+            ),
+        );
+    try {
+        state.currentTrack = { id: "track-1" };
+        state.isPlaying = true;
+        await render();
+        const button = host.querySelector<HTMLButtonElement>(
+            '[aria-label="Воспроизвести всё"]',
+        );
+        assert.ok(button);
+        assert.equal(button.textContent, "");
+        await React.act(async () => button.click());
+        assert.equal(playedQueues.length, 1);
+        assert.equal(pauseCalls, 0);
+        await render();
+        assert.ok(host.querySelector('[aria-label="Пауза"]'));
+        recordExplicitPlaybackPause();
+        state.isPlaying = false;
+        await React.act(async () => root.unmount());
+        root = createRoot(host);
+        await render();
+        await React.act(async () =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    '[aria-label="Воспроизвести всё"]',
+                )!
+                .click(),
+        );
+        assert.equal(resumeCalls, 1);
+        assert.equal(playedQueues.length, 1);
+        writePlaybackReplacementIntent("track-1");
+        state.isPlaying = true;
+        await render();
+        await React.act(async () =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    '[aria-label="Воспроизвести всё"]',
+                )!
+                .click(),
+        );
+        assert.equal(playedQueues.length, 2);
+        assert.equal(pauseCalls, 0);
+    } finally {
+        await React.act(async () => root.unmount());
+        host.remove();
+        client.clear();
+    }
+});

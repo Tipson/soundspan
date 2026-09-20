@@ -1,16 +1,7 @@
 "use client";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
 
-import {
-    Play,
-    Pause,
-    RefreshCw,
-    Settings,
-    Loader2,
-    Plus,
-    Shuffle,
-    ListMusic,
-} from "lucide-react";
-import { cn } from "@/utils/cn";
+import { RefreshCw, Settings, Plus, Shuffle, ListMusic } from "lucide-react";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { Button } from "@/components/ui/Button";
 import { usePlayButtonFeedback } from "@/hooks/usePlayButtonFeedback";
@@ -88,30 +79,12 @@ export function DiscoverActionBar({
             <div className="flex flex-wrap items-center gap-2">
                 {/* Play Button */}
                 {playlist && playlist.tracks.length > 0 && (
-                    <Button
-                        variant="ai"
+                    <CollectionPlaybackButton
                         onClick={handlePlayToggle}
                         disabled={isGenerating}
-                        className={cn(
-                            "rounded-full px-5 text-sm",
-                            isGenerating
-                                ? "cursor-not-allowed"
-                                : "shadow-lg shadow-ai/5",
-                        )}
-                    >
-                        {showSpinner ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : isPlaylistPlaying && isPlaying ? (
-                            <Pause className="w-5 h-5 fill-current" />
-                        ) : (
-                            <Play className="w-5 h-5 fill-current ml-0.5" />
-                        )}
-                        <span>
-                            {isPlaylistPlaying && isPlaying
-                                ? discoverRu.action.pause
-                                : discoverRu.action.playAll}
-                        </span>
-                    </Button>
+                        isLoading={showSpinner}
+                        isPlaying={isPlaylistPlaying && isPlaying}
+                    />
                 )}
 
                 {/* Shuffle Button */}

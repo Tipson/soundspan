@@ -1,3 +1,5 @@
+import { writePlaybackReplacementIntent } from "../../lib/audio-engine/playbackAdvanceOrigin";
+import { isCollectionPlayback } from "../../lib/collectionPlayback";
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import React from "react";
@@ -11,8 +13,10 @@ const calls = {
 mock.module("@/lib/audio-context", {
     namedExports: {
         useAudioControls: () => ({
-            playTracks: (tracks: Array<{ id: string }>) =>
-                calls.played.push(tracks.map((track) => track.id)),
+            playTracks: (tracks: Array<{ id: string }>) => {
+                writePlaybackReplacementIntent(null);
+                calls.played.push(tracks.map((track) => track.id));
+            },
             playTrack: () => undefined,
             playNow: () => undefined,
             addToQueue: () => undefined,
@@ -66,6 +70,7 @@ test("album bulk playback and queue actions omit discovery preview rows", async 
     actions.playAlbum(album);
     actions.addAllToQueue(album);
 
+    assert.equal(isCollectionPlayback("album:discovery-album"), true);
     assert.deepEqual(calls.played, [["youtube:playable"]]);
     assert.deepEqual(calls.queued, [["youtube:playable"]]);
 });

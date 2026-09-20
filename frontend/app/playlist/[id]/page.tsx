@@ -12,7 +12,16 @@ import {
     type PlaylistDetailTrackItem,
     type PlaylistPendingTrackItem,
 } from "@/lib/api";
-import { useAudioState, useAudioControls } from "@/lib/audio-context";
+import {
+    useAudioState,
+    useAudioControls,
+    usePlaybackStatus,
+} from "@/lib/audio-context";
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { cn } from "@/utils/cn";
 import { shuffleArray } from "@/utils/shuffle";
 import { formatTime } from "@/utils/formatTime";
@@ -89,8 +98,13 @@ export default function PlaylistDetailPage() {
     const { toast } = useToast();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack, queue } = useAudioState();
-    const { playTracks, addTracksToQueue } = useAudioControls();
+    const { playTracks, addTracksToQueue, pause, resume } = useAudioControls();
+    const { isPlaying } = usePlaybackStatus();
     const playlistId = params.id as string;
+    const collectionId = `playlist:${playlistId}`;
+    const isThisPlaylistPlaying = Boolean(
+        currentTrack && isCollectionPlayback(collectionId),
+    );
 
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isHiding, setIsHiding] = useState(false);
@@ -532,10 +546,12 @@ export default function PlaylistDetailPage() {
                     ? playlistQueueEntryKey(playbackCurrentRef.current)
                     : null,
             playTracks: (tracks) => {
+                const collectionGeneration = getCollectionPlaybackGeneration();
                 playTracks(tracks, 0, false, {
                     replaceQueue: true,
                     preserveOrder: true,
                 });
+                markCollectionPlayback(collectionId, collectionGeneration);
                 generation = getPlaybackIntentGeneration();
                 playbackQueueRef.current = tracks;
             },
@@ -563,10 +579,24 @@ export default function PlaylistDetailPage() {
         });
     };
 
+    const handlePlayPlaylist = () => {
+        if (isThisPlaylistPlaying) {
+            if (isPlaying) pause();
+            else resume();
+        } else if (playableTrackItems[0]) {
+            startOrderedPlaylist(playableTrackItems[0].id);
+        }
+    };
+
     const handleShufflePlaylist = () => {
         if (playableTracks.length < 2) return;
         playAllIntentRef.current = null;
-        playTracks(shuffleArray(playableTracks), 0);
+        const collectionGeneration = getCollectionPlaybackGeneration();
+        playTracks(shuffleArray(playableTracks), 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(collectionId, collectionGeneration);
     };
 
     const handlePlayTrack = (itemId: string) => {
@@ -679,6 +709,9 @@ export default function PlaylistDetailPage() {
                                 playlistId={playlistId}
                             />
                         }
+                        isThisPlaylistPlaying={isThisPlaylistPlaying}
+                        isPlaying={isPlaying}
+                        onPlay={handlePlayPlaylist}
                         onShuffle={handleShufflePlaylist}
                         onAddAllToQueue={handleAddAllToQueue}
                         onToggleLikeAll={() => void toggleLikeAll()}

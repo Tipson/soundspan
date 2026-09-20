@@ -19,6 +19,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { formatTime } from "@/utils/formatTime";
+import { CollectionPlaybackButton } from "@/components/music-detail/CollectionPlaybackButton";
 import { api } from "@/lib/api";
 import {
     MusicDetailActionDock,
@@ -559,26 +560,14 @@ export default function SharePage() {
                                 >
                                     <SkipBack className="h-5 w-5" />
                                 </button>
-                                <button
-                                    type="button"
+                                <CollectionPlaybackButton
                                     onClick={handlePlayPause}
                                     disabled={!currentTrack}
-                                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-brand-hover px-5 py-2.5 text-sm font-semibold text-black shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none sm:flex-none"
-                                    aria-label={
+                                    isPlaying={isPlaying}
+                                    label={
                                         isPlaying ? shareRu.pause : shareRu.play
                                     }
-                                >
-                                    {isPlaying ? (
-                                        <Pause className="h-5 w-5 fill-current" />
-                                    ) : (
-                                        <Play className="ml-0.5 h-5 w-5 fill-current" />
-                                    )}
-                                    <span>
-                                        {isPlaying
-                                            ? shareRu.pause
-                                            : shareRu.play}
-                                    </span>
-                                </button>
+                                />
                                 <button
                                     type="button"
                                     onClick={handleNext}

@@ -1,5 +1,10 @@
 # Changelog
 
+## Collection playback and artist radio
+
+- Use a circular icon-only Play/Pause control across music collection pages, with accessible labels and consistent loading feedback. Pause and resume the active collection without restarting it or controlling an unrelated queue.
+- Build artist radio from matching external-catalog recordings when the artist has no local audio. Preserve provider identity, bounded requests, honest empty/error states, and current playback intent, including shared-listening confirmation.
+
 ## Personal listening and collection controls
 
 - Start an ordered collection queue from the clicked song, including subsequent playlist pages, while keeping downloaded playback device-only. Keep shuffle and collection management accessible without redundant play-all and pause panels.

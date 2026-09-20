@@ -35,6 +35,7 @@ import {
     buildRemotePlaylistRadio,
     buildRemoteTrackRadio,
     buildRemoteLikedRadio,
+    buildRemoteArtistRadio,
 } from "../../services/playlistRemoteRadio";
 import {
     buildMultiTrackRadio,
@@ -154,7 +155,7 @@ radioRouter.get("/decades", asyncHandler(handleGetDecades));
  * @openapi
  * /api/library/radio:
  *   get:
- *     summary: Get tracks for a library-based radio station
+ *     summary: Get radio tracks from the library or supported external catalog
  *     tags: [Library]
  *     security:
  *       - apiKeyAuth: []
@@ -246,7 +247,9 @@ export async function handleGetRadio(req: Request, res: Response) {
         });
 
         if (!matchedArtist) {
-            return res.json({ tracks: [] });
+            return res.json({
+                tracks: await buildRemoteArtistRadio(artistName, limitNum),
+            });
         }
 
         radioType = "artist";
@@ -325,7 +328,7 @@ export async function handleGetRadio(req: Request, res: Response) {
                 `[Radio:artist] Starting artist radio for: ${artistId}`,
             );
 
-            // 1. Get tracks from this artist (they're in library by definition)
+            // 1. Prefer local audio; catalog artist rows may have no local files.
             const artistTracks = await prisma.track.findMany({
                 where: {
                     ...TRACK_VISIBLE_WHERE,
@@ -345,7 +348,15 @@ export async function handleGetRadio(req: Request, res: Response) {
             );
 
             if (artistTracks.length === 0) {
-                return res.json({ tracks: [] });
+                const artist = await prisma.artist.findUnique({
+                    where: { id: artistId },
+                    select: { name: true },
+                });
+                return res.json({
+                    tracks: artist?.name
+                        ? await buildRemoteArtistRadio(artist.name, limitNum)
+                        : [],
+                });
             }
 
             // Calculate artist's average "vibe" for later matching

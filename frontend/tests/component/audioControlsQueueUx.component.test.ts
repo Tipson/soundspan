@@ -1,3 +1,8 @@
+import {
+    getCollectionPlaybackGeneration,
+    isCollectionPlayback,
+    markCollectionPlayback,
+} from "../../lib/collectionPlayback";
 import assert from "node:assert/strict";
 import { after, afterEach, mock, test } from "node:test";
 import React from "react";
@@ -1492,3 +1497,108 @@ for (const action of [
         assert.equal(state.queue, selectedQueue);
     });
 }
+
+for (const action of ["clear", "audiobook", "podcast", "upcoming"] as const) {
+    test(
+        "collection ownership ends after actual " +
+            action +
+            " playback replacement",
+        async () => {
+            const tracks = [
+                makeTrack("one", "artist"),
+                makeTrack("two", "artist"),
+            ];
+            const state = createDeferredAudioState({});
+            const playback = createPlaybackStub();
+            let controls = await renderControls({ state, playback });
+            const before = getCollectionPlaybackGeneration();
+            controls.playTracks(tracks, 0, false, {
+                replaceQueue: true,
+                preserveOrder: true,
+            });
+            markCollectionPlayback("playlist:one", before);
+            state.commit();
+            assert.equal(isCollectionPlayback("playlist:one"), true);
+            controls = await renderControls({ state, playback });
+            if (action === "clear") controls.clearQueue();
+            if (action === "audiobook")
+                controls.playAudiobook({
+                    id: "book",
+                    title: "Book",
+                    author: "Author",
+                    coverUrl: null,
+                    duration: 600,
+                });
+            if (action === "podcast")
+                controls.playPodcast({
+                    id: "podcast:episode",
+                    title: "Episode",
+                    podcastTitle: "Podcast",
+                    coverUrl: null,
+                    duration: 600,
+                });
+            if (action === "upcoming")
+                controls.setUpcoming(
+                    [makeTrack("radio", "artist")],
+                    true,
+                    true,
+                );
+            state.commit();
+            assert.equal(isCollectionPlayback("playlist:one"), false);
+            controls = await renderControls({ state, playback });
+            controls.playNow(makeTrack("other", "artist"));
+            state.commit();
+            assert.equal(isCollectionPlayback("playlist:one"), false);
+        },
+    );
+}
+
+test("collection ownership survives real next, pause, resume and rejected group starts", async () => {
+    const tracks = [makeTrack("one", "artist"), makeTrack("two", "artist")];
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub();
+    let controls = await renderControls({ state, playback });
+    const before = getCollectionPlaybackGeneration();
+    controls.playTracks(tracks, 0, false, {
+        replaceQueue: true,
+        preserveOrder: true,
+    });
+    markCollectionPlayback("playlist:one", before);
+    state.commit();
+    controls = await renderControls({ state, playback });
+    controls.next();
+    state.commit();
+    controls.pause();
+    controls.resume();
+    assert.equal(isCollectionPlayback("playlist:one"), true);
+    listenTogetherSocketMock.hasActiveGroup = true;
+    listenTogetherSocketMock.activeGroupId = "group";
+    listenTogetherSession.current = {
+        groupId: "group",
+        isHost: false,
+        playback: {
+            isPlaying: true,
+            positionMs: 0,
+            serverTime: Date.now(),
+            currentIndex: 0,
+        },
+    };
+    controls.playAudiobook({
+        id: "book",
+        title: "Book",
+        author: "Author",
+        coverUrl: null,
+        duration: 600,
+    });
+    assert.equal(isCollectionPlayback("playlist:one"), true);
+});
+
+test("fresh playNow records a replacement while queue navigation does not", async () => {
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub();
+    const controls = await renderControls({ state, playback });
+    const before = getCollectionPlaybackGeneration();
+    controls.playNow(makeTrack("fresh", "artist"));
+    state.commit();
+    assert.ok(getCollectionPlaybackGeneration() > before);
+});

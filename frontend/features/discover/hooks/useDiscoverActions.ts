@@ -1,3 +1,7 @@
+import {
+    getCollectionPlaybackGeneration,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { useCallback } from "react";
 import { useAudioControls, usePlaybackStatus } from "@/lib/audio-context";
 import { toast } from "sonner";
@@ -118,7 +122,15 @@ export function useDiscoverActions(
             mapDiscoverTrackToPlaybackTrack,
         );
 
-        playTracks(formattedTracks, 0);
+        const collectionGeneration = getCollectionPlaybackGeneration();
+        playTracks(formattedTracks, 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(
+            `discover:${playlist.weekStart}`,
+            collectionGeneration,
+        );
     }, [playlist, playTracks]);
 
     const handleShufflePlaylist = useCallback(() => {
@@ -128,7 +140,15 @@ export function useDiscoverActions(
             mapDiscoverTrackToPlaybackTrack,
         );
 
-        playTracks(shuffleArray(formattedTracks), 0);
+        const collectionGeneration = getCollectionPlaybackGeneration();
+        playTracks(shuffleArray(formattedTracks), 0, false, {
+            replaceQueue: true,
+            preserveOrder: true,
+        });
+        markCollectionPlayback(
+            `discover:${playlist.weekStart}`,
+            collectionGeneration,
+        );
     }, [playlist, playTracks]);
 
     const handlePlayTrack = useCallback(

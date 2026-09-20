@@ -1,3 +1,7 @@
+import {
+    getCollectionPlaybackGeneration,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { useAudioControls } from "@/lib/audio-context";
 import { shuffleArray } from "@/utils/shuffle";
 import { toast } from "sonner";
@@ -24,17 +28,26 @@ function playAlbum(
     if (!requireAlbum(album)) return;
     if (!album.tracks) return;
     const selection = selectAlbumPlaybackQueue(album, startIndex);
+    if (selection.tracks.length === 0) return;
+    const collectionGeneration = getCollectionPlaybackGeneration();
     controls.playTracks(selection.tracks, selection.startIndex, false, {
         replaceQueue: true,
         preserveOrder: true,
     });
+    markCollectionPlayback(`album:${album.id}`, collectionGeneration);
 }
 
 function shufflePlay(album: Album | null, controls: AudioControls): void {
     if (!requireAlbum(album)) return;
     if (!album.tracks) return;
     const selection = selectAlbumPlaybackQueue(album, 0);
-    controls.playTracks(shuffleArray(selection.tracks), 0);
+    if (selection.tracks.length === 0) return;
+    const collectionGeneration = getCollectionPlaybackGeneration();
+    controls.playTracks(shuffleArray(selection.tracks), 0, false, {
+        replaceQueue: true,
+        preserveOrder: true,
+    });
+    markCollectionPlayback(`album:${album.id}`, collectionGeneration);
 }
 
 function playTrack(

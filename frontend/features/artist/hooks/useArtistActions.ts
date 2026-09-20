@@ -1,6 +1,10 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAudioControls } from "@/lib/audio-context";
+import {
+    getCollectionPlaybackGeneration,
+    markCollectionPlayback,
+} from "@/lib/collectionPlayback";
 import { api } from "@/lib/api";
 import { Artist, Album, Track } from "../types";
 import { shuffleArray } from "@/utils/shuffle";
@@ -54,7 +58,12 @@ export function useArtistActions() {
                 }
 
                 // Play tracks in order (newest album first, track 1 to end, then next album)
-                playTracks(allTracks);
+                const generation = getCollectionPlaybackGeneration();
+                playTracks(allTracks, 0, false, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                });
+                markCollectionPlayback(`artist:${artist.id}`, generation);
             } catch (error) {
                 sharedFrontendLogger.error("Failed to play artist:", error);
             }
@@ -88,7 +97,12 @@ export function useArtistActions() {
                 // Shuffle all tracks randomly
                 const shuffledTracks = shuffleArray(allTracks);
 
-                playTracks(shuffledTracks);
+                const generation = getCollectionPlaybackGeneration();
+                playTracks(shuffledTracks, 0, false, {
+                    replaceQueue: true,
+                    preserveOrder: true,
+                });
+                markCollectionPlayback(`artist:${artist.id}`, generation);
             } catch (error) {
                 sharedFrontendLogger.error(
                     "Failed to shuffle play artist:",

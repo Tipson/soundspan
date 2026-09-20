@@ -1,5 +1,6 @@
 "use client";
 
+import { isCollectionPlayback } from "@/lib/collectionPlayback";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Music2, Sparkles } from "lucide-react";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
@@ -142,8 +143,10 @@ function DiscoverWeeklyPageContent() {
         (isGenerating || shouldRetryPlaylistHydration);
 
     // Check if we're playing from this playlist
-    const isPlaylistPlaying = displayPlaylist?.tracks.some(
-        (t) => t.id === currentTrack?.id,
+    const isPlaylistPlaying = Boolean(
+        currentTrack &&
+        displayPlaylist &&
+        isCollectionPlayback(`discover:${displayPlaylist.weekStart}`),
     );
 
     useEffect(() => {
@@ -226,7 +229,7 @@ function DiscoverWeeklyPageContent() {
                     isPlaylistPlaying={isPlaylistPlaying || false}
                     isPlaying={isPlaying}
                     onPlayToggle={
-                        isPlaylistPlaying && isPlaying
+                        isPlaylistPlaying
                             ? handleTogglePlay
                             : handlePlayPlaylist
                     }

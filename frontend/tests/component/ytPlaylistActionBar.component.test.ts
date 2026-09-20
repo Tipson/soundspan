@@ -333,6 +333,8 @@ test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonic
     )?.[0];
 
     assert.ok(hero);
+    assert.match(hero, /aria-label="Воспроизвести всё"/);
+    assert.doesNotMatch(hero, />Слушать<|>Воспроизвести всё</);
     assert.match(hero, /data-music-detail="actions"/);
     assert.match(hero, /data-detail-action-tier="primary"/);
     assert.doesNotMatch(hero, /data-detail-action-tier="secondary"/);
@@ -342,6 +344,6 @@ test("yt-playlist loaded view uses editorial hero, action hierarchy, and canonic
     assert.match(html, /track-list/);
 
     for (const match of hero.matchAll(/<button[^>]*>/g)) {
-        assert.match(match[0], /(h-11 w-11|min-h-11)/);
+        assert.match(match[0], /(h-11 w-11|h-14 w-14|min-h-11)/);
     }
 });

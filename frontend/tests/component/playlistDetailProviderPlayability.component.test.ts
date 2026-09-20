@@ -529,7 +529,7 @@ test("playlist detail renders consolidated action bar buttons", async () => {
 
     const html = await renderWithActions(PlaylistDetailPage);
 
-    assert.doesNotMatch(html, /aria-label="Воспроизвести всё"/);
+    assert.match(html, /aria-label="Воспроизвести всё"/);
     assert.match(html, /title="Воспроизвести вперемешку"/);
     assert.match(html, /title="Добавить всё в очередь"/);
     assert.match(html, /title="Добавить все треки в любимые"/);
