@@ -103,7 +103,7 @@ export function TasteGenrePicker({
     );
     return (
         <div
-            className="relative min-w-0"
+            className="relative min-w-0 text-sm font-medium"
             role="group"
             aria-label="Фильтр по жанру"
             onKeyDown={(event) => {
