@@ -148,6 +148,8 @@ export const queryKeys = {
               : (["home", "personalized", surface, limit, mode] as const),
     tasteProfile: (accountId: string) =>
         ["taste-profile", accountId.trim()] as const,
+    tasteArtistCatalog: (genres: readonly string[]) =>
+        ["taste-artist-catalog", genres] as const,
 
     // Browse (YT Music) — used by Explore page
     browseHomeShelves: () => ["browse", "ytmusic", "home"] as const,

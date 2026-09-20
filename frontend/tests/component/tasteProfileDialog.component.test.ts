@@ -13,6 +13,129 @@ import {
     suggestArtistsForGenres,
 } from "../../features/taste-profile/suggestions";
 
+test("catalog pages continue beyond curated suggestions and keep selections", async () => {
+    const pages: number[] = [];
+    api.request = (async (path: string) => {
+        if (!path.includes("/artists?")) return { image: null };
+        const page = Number(
+            new URL(path, "https://test").searchParams.get("page"),
+        );
+        pages.push(page);
+        return {
+            artists:
+                page === 1
+                    ? ["Catalog A", "Catalog B"]
+                    : ["Catalog B", "Catalog C"],
+            nextPage: page === 1 ? 2 : null,
+        };
+    }) as typeof api.request;
+    const mounted = await mountDialog();
+    try {
+        await waitFor(() =>
+            Boolean(findButton(mounted.container, "Catalog A")),
+        );
+        await React.act(async () =>
+            findButton(mounted.container, "Catalog A")!.click(),
+        );
+        await React.act(async () =>
+            findButton(mounted.container, "Ещё артисты")!.click(),
+        );
+        await waitFor(() =>
+            Boolean(findButton(mounted.container, "Catalog C")),
+        );
+        assert.deepEqual(pages, [1, 2]);
+        assert.equal(
+            mounted.container.querySelectorAll('[aria-label="Catalog B"]')
+                .length,
+            1,
+        );
+        assert.equal(
+            findButton(mounted.container, "Catalog A")!.getAttribute(
+                "aria-pressed",
+            ),
+            "true",
+        );
+        assert.equal(findButton(mounted.container, "Ещё артисты"), undefined);
+    } finally {
+        await mounted.cleanup();
+    }
+});
+
+test("catalog failure retries the same page without dropping artists or selection", async () => {
+    let fail = true;
+    api.request = (async (path: string) => {
+        if (!path.includes("/artists?")) return { image: null };
+        const page = Number(
+            new URL(path, "https://test").searchParams.get("page"),
+        );
+        if (page === 2 && fail) throw new Error("offline");
+        return {
+            artists: page === 1 ? ["Catalog A"] : ["Catalog B"],
+            nextPage: page === 1 ? 2 : null,
+        };
+    }) as typeof api.request;
+    const mounted = await mountDialog();
+    try {
+        await waitFor(() =>
+            Boolean(findButton(mounted.container, "Catalog A")),
+        );
+        await React.act(async () =>
+            findButton(mounted.container, "Catalog A")!.click(),
+        );
+        await React.act(async () =>
+            findButton(mounted.container, "Ещё артисты")!.click(),
+        );
+        await waitFor(() =>
+            Boolean(findButton(mounted.container, "Повторить загрузку")),
+        );
+        assert.equal(
+            findButton(mounted.container, "Catalog A")!.getAttribute(
+                "aria-pressed",
+            ),
+            "true",
+        );
+        fail = false;
+        await React.act(async () =>
+            findButton(mounted.container, "Повторить загрузку")!.click(),
+        );
+        await waitFor(() =>
+            Boolean(findButton(mounted.container, "Catalog B")),
+        );
+    } finally {
+        await mounted.cleanup();
+    }
+});
+
+test("changing genre aborts the old catalog and ignores its delayed response", async () => {
+    let finishOld!: (value: unknown) => void;
+    let oldSignal: AbortSignal | undefined;
+    api.request = (async (path: string, options?: { signal?: AbortSignal }) => {
+        if (!path.includes("/artists?")) return { image: null };
+        const genre = new URL(path, "https://test").searchParams.get("genre");
+        if (genre === "all") {
+            oldSignal = options?.signal;
+            return new Promise<unknown>((resolve) => {
+                finishOld = resolve;
+            });
+        }
+        return { artists: ["Rock Artist"], nextPage: null };
+    }) as typeof api.request;
+    const mounted = await mountDialog();
+    try {
+        await chooseGenre(mounted.container, "Рок");
+        await waitFor(() =>
+            Boolean(findButton(mounted.container, "Rock Artist")),
+        );
+        assert.equal(oldSignal?.aborted, true);
+        await React.act(async () =>
+            finishOld({ artists: ["Stale Artist"], nextPage: null }),
+        );
+        assert.equal(findButton(mounted.container, "Stale Artist"), undefined);
+    } finally {
+        await mounted.cleanup();
+    }
+});
+
 test("every genre offers a meaningful selection beyond the former five artists", () => {
     for (const genre of SUGGESTED_GENRES) {
         const artists = suggestArtistsForGenres([genre], 100);
@@ -638,14 +761,16 @@ test("portraits appear progressively, limit network concurrency and cancel on cl
         api,
         "request",
         (_path: string, options: { signal: AbortSignal }) =>
-            new Promise((resolve, reject) => {
-                calls.push({ resolve, signal: options.signal });
-                options.signal.addEventListener(
-                    "abort",
-                    () => reject(new Error("aborted")),
-                    { once: true },
-                );
-            }),
+            _path.includes("/artists?")
+                ? Promise.reject(new Error("offline"))
+                : new Promise((resolve, reject) => {
+                      calls.push({ resolve, signal: options.signal });
+                      options.signal.addEventListener(
+                          "abort",
+                          () => reject(new Error("aborted")),
+                          { once: true },
+                      );
+                  }),
     );
     const mounted = await mountDialog();
     try {

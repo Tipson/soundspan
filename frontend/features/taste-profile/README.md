@@ -20,9 +20,11 @@ dialog; failed saves keep the current choices available for another attempt.
 ## Selection flow
 
 The single artist-selection screen offers a labelled genre selector with 34
-genres in six groups. “Все исполнители” shows a balanced cross-genre shelf.
-Each genre has at least twelve curated artists; catalog-wide canonical artist
-search is also available. Genre filters do not implicitly add preferences.
+genres in six groups. “Все исполнители” browses Last.fm charts; individual genres
+map to community tags. Catalog pages contain 48 artists and load near the scroll
+boundary, with an accessible load/retry button. Names are deduplicated across
+pages. Saved-genre browsing interleaves those genres one request at a time.
+Catalog-wide canonical artist search is also available. Filters do not implicitly add preferences.
 Saved genres and selected artists remain removable across filters.
 
 Genre/search controls sit outside the scrolling results. The save action remains
@@ -41,8 +43,12 @@ selection, including a mixed shelf and Russian-language genre branches:
 [Yandex accessibility guide](https://inclusion.yandex.ru/tutorials/music-web),
 [preference settings](https://www.yandex.ru/support/music/ru/technical-issues/incorrect-recommendations).
 The labels and curated artist shelves are Soundspan's examples, not an exported
-Yandex taxonomy. The layout is a Soundspan adaptation. Preview playback and an infinite artist map are not
-implemented; no likes are created by this flow.
+Yandex taxonomy. The layout is a Soundspan adaptation. The curated shelf is only
+an initial/offline fallback, explicitly labelled on a catalog failure. Shared
+server pages are cached for six hours and concurrent identical requests coalesce.
+Upstream failures return 503 rather than pretending the catalog ended; retry keeps
+already loaded cards and selections. Preview playback is not implemented; no likes
+are created by this flow. Portrait homonyms remain a separate identity issue.
 
 ## Tests
 

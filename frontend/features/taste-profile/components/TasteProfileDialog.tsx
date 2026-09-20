@@ -11,6 +11,7 @@ import {
 import { Check, LoaderCircle, Search, X } from "lucide-react";
 import { nextFocusIndex } from "@/components/ui/focusTrapMath";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { useTasteArtistCatalog } from "../hooks/useTasteArtistCatalog";
 import { useTasteArtistArtwork } from "../hooks/useTasteArtistArtwork";
 import { cn } from "@/utils/cn";
 import {
@@ -69,7 +70,7 @@ export function TasteProfileDialog({
     );
     const [artistSearch, setArtistSearch] = useState("");
     const [artistGenre, setArtistGenre] = useState("all");
-    const [artistLimit, setArtistLimit] = useState(24);
+    const moreRef = useRef<HTMLButtonElement>(null);
     const [activeArtistIndex, setActiveArtistIndex] = useState(-1);
     const [localError, setLocalError] = useState<string | null>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
@@ -102,7 +103,43 @@ export function TasteProfileDialog({
         [selection.genres, artistGenre],
     );
     const canonicalArtistSearch = useCanonicalArtistSearch(artistSearch);
-    const visibleArtists = suggestedArtists.slice(0, artistLimit);
+    const catalog = useTasteArtistCatalog(
+        artistGenre === "selected"
+            ? selection.genres
+            : artistGenre === "all"
+              ? []
+              : [artistGenre],
+        !canonicalArtistSearch.hasQuery,
+    );
+    const visibleArtists = catalog.artists ?? suggestedArtists.slice(0, 24);
+    const { hasNextPage, isFetching, isError, fetchNextPage } = catalog;
+    useEffect(() => {
+        if (
+            !hasNextPage ||
+            isFetching ||
+            isError ||
+            canonicalArtistSearch.hasQuery ||
+            isSaving ||
+            typeof IntersectionObserver === "undefined"
+        )
+            return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting))
+                    void fetchNextPage();
+            },
+            { root: resultsRef.current, rootMargin: "200px" },
+        );
+        if (moreRef.current) observer.observe(moreRef.current);
+        return () => observer.disconnect();
+    }, [
+        hasNextPage,
+        isFetching,
+        isError,
+        fetchNextPage,
+        canonicalArtistSearch.hasQuery,
+        isSaving,
+    ]);
     const artwork = useTasteArtistArtwork(
         canonicalArtistSearch.hasQuery ? [] : visibleArtists,
     );
@@ -221,7 +258,6 @@ export function TasteProfileDialog({
     const visibleError = localError ?? error;
     const changeGenre = (genre: string) => {
         setArtistGenre(genre);
-        setArtistLimit(24);
         setArtistSearch("");
         if (resultsRef.current) resultsRef.current.scrollTop = 0;
     };
@@ -410,7 +446,7 @@ export function TasteProfileDialog({
                         >
                             {canonicalArtistSearch.hasQuery
                                 ? "Результаты поиска по всему каталогу"
-                                : `${artistGenre === "all" ? "Разные направления" : artistGenre === "selected" ? "По вашим жанрам" : artistGenre} · ${suggestedArtists.length} исполнителей`}
+                                : `${artistGenre === "all" ? "Разные направления" : artistGenre === "selected" ? "По вашим жанрам" : artistGenre} · ${visibleArtists.length} исполнителей${catalog.hasNextPage ? " · листайте дальше" : ""}`}
                         </p>
                         {!canonicalArtistSearch.hasQuery ? (
                             <>
@@ -497,20 +533,53 @@ export function TasteProfileDialog({
                                         );
                                     })}
                                 </div>
-                                {suggestedArtists.length > artistLimit && (
+                                {catalog.isFetching && (
+                                    <p
+                                        role="status"
+                                        className="mt-5 text-center text-sm text-content-secondary"
+                                    >
+                                        Загружаем исполнителей…
+                                    </p>
+                                )}
+                                {catalog.isError && (
+                                    <p
+                                        role="status"
+                                        className="mt-5 text-center text-sm text-content-secondary"
+                                    >
+                                        {catalog.artists
+                                            ? "Не удалось загрузить продолжение. Ваш выбор сохранён в этом окне."
+                                            : "Каталог временно недоступен. Пока показываем небольшую подборку."}
+                                    </p>
+                                )}
+                                {(catalog.hasNextPage || catalog.isError) && (
                                     <button
+                                        ref={moreRef}
                                         type="button"
-                                        disabled={isSaving}
+                                        disabled={
+                                            isSaving || catalog.isFetching
+                                        }
                                         onClick={() =>
-                                            setArtistLimit(
-                                                (current) => current + 24,
-                                            )
+                                            void (catalog.artists
+                                                ? catalog.fetchNextPage()
+                                                : catalog.refetch())
                                         }
                                         className="mx-auto mt-7 block min-h-11 rounded-full border border-white/15 px-6 text-sm text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light"
                                     >
-                                        Ещё артисты
+                                        {catalog.isError
+                                            ? "Повторить загрузку"
+                                            : "Ещё артисты"}
                                     </button>
                                 )}
+                                {catalog.artists &&
+                                    !catalog.hasNextPage &&
+                                    !catalog.isFetching &&
+                                    !catalog.isError && (
+                                        <p className="mt-5 text-center text-xs text-content-muted">
+                                            Все исполнители этой подборки
+                                            показаны. Других можно найти по
+                                            имени.
+                                        </p>
+                                    )}
                             </>
                         ) : (
                             <div

@@ -18,9 +18,13 @@ export function useTasteArtistArtwork(names: readonly string[]) {
             while (cursor < names.length && !signal.aborted) {
                 const name = names[cursor++];
                 const key = ["taste-artist-portrait", name];
-                const cached = queryClient.getQueryData<string>(key);
-                if (cached) {
-                    setPortraits((current) => ({ ...current, [name]: cached }));
+                const cached = queryClient.getQueryData<string | null>(key);
+                if (cached !== undefined) {
+                    if (cached)
+                        setPortraits((current) => ({
+                            ...current,
+                            [name]: cached,
+                        }));
                     continue;
                 }
                 try {
@@ -36,7 +40,7 @@ export function useTasteArtistArtwork(names: readonly string[]) {
                             [name]: image,
                         }));
                         queryClient.setQueryData(key, image);
-                    }
+                    } else queryClient.setQueryData(key, null);
                 } catch {
                     // Missing artwork must never prevent selecting an artist.
                 }

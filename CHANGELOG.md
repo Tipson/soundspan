@@ -1,5 +1,10 @@
 # Changelog
 
+## Artist catalog browsing
+
+- Browse genre-tagged Last.fm artists with automatic pagination, duplicate removal and retry without losing selection. The curated shelf is a labelled fallback during catalog outages.
+- Share cached catalog pages across listeners and coalesce concurrent requests; keep artist selection counts unrestricted.
+
 ## Taste browsing
 
 - Replace the horizontally scrolling genre strip with a labelled grouped selector outside the artist scroll area; keep search and save controls visible without overlapping portraits.

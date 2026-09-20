@@ -8,6 +8,8 @@ import {
 } from "../services/tasteProfile";
 import { sendRouteError } from "../utils/routeErrorResponse";
 import { deezerService } from "../services/deezer";
+import { lastFmService } from "../services/lastfm";
+import { tasteArtistTags } from "../services/tasteArtistGenres";
 
 const router = Router();
 const tasteLabelSchema = z
@@ -49,6 +51,75 @@ const tasteProfileRequestSchema = z
     });
 
 router.use(requireAuthOrToken);
+
+/**
+ * @openapi
+ * /api/taste-profile/artists:
+ *   get:
+ *     summary: Browse paginated artists by genre for taste setup
+ *     tags: [Taste profile]
+ *     security:
+ *       - bearerAuth: []
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: genre
+ *         schema: { type: string, default: all }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *     responses:
+ *       200:
+ *         description: Artist names and next page, or null at catalog end
+ *       400:
+ *         description: Invalid genre or page
+ *       401:
+ *         description: Not authenticated
+ *       503:
+ *         description: Catalog temporarily unavailable; retry the same page
+ */
+router.get(
+    "/artists",
+    asyncHandler(async (req, res) => {
+        const query = z
+            .object({
+                genre: z
+                    .string()
+                    .default("all")
+                    .refine(
+                        (value) =>
+                            value === "all" ||
+                            Object.hasOwn(tasteArtistTags, value),
+                    ),
+                page: z.coerce
+                    .number()
+                    .int()
+                    .min(1)
+                    .max(Number.MAX_SAFE_INTEGER)
+                    .default(1),
+            })
+            .safeParse(req.query);
+        if (!query.success)
+            return sendRouteError(res, 400, "Invalid artist catalog query", {
+                code: "INVALID_CATALOG_QUERY",
+            });
+        try {
+            return res.json(
+                await lastFmService.browseTasteArtists(
+                    query.data.genre,
+                    query.data.page,
+                ),
+            );
+        } catch {
+            return sendRouteError(
+                res,
+                503,
+                "Artist catalog temporarily unavailable",
+                { code: "ARTIST_CATALOG_UNAVAILABLE" },
+            );
+        }
+    }),
+);
 
 /**
  * @openapi
