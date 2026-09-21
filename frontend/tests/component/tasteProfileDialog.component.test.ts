@@ -94,6 +94,11 @@ test("taste action reacts to selections and permits saving one artist", async ()
         )!;
         assert.ok(preview);
         assert.equal(preview.querySelectorAll("[data-artist]").length, 0);
+        const ring = signature!.querySelector(
+            '[data-testid="taste-selection-ring"]',
+        )!;
+        assert.equal(ring.getAttribute("stroke-dashoffset"), "100");
+        assert.equal(ring.getAttribute("opacity"), "0");
         const empty = fill().style.transform;
         await React.act(async () =>
             findButton(mounted.container, "Linkin Park")!.click(),
@@ -105,6 +110,8 @@ test("taste action reacts to selections and permits saving one artist", async ()
         );
         assert.match(save.textContent ?? "", /Применить выбор/);
         assert.notEqual(fill().style.transform, empty);
+        assert.equal(ring.getAttribute("stroke-dashoffset"), "80");
+        assert.equal(ring.getAttribute("opacity"), "1");
         await React.act(async () => save.click());
         assert.deepEqual(mounted.saves[0].artists, ["Linkin Park"]);
         await React.act(async () =>
@@ -113,6 +120,41 @@ test("taste action reacts to selections and permits saving one artist", async ()
         assert.equal(fill().style.transform, empty);
         assert.equal(preview.querySelectorAll("[data-artist]").length, 0);
         assert.equal(save.disabled, false);
+    } finally {
+        await mounted.cleanup();
+    }
+});
+
+test("taste indicator fills completely at five without limiting further choices", async () => {
+    const artists = ["One", "Two", "Three", "Four", "Five"];
+    const mounted = await mountDialog({
+        initialSelection: { genres: [], artists },
+    });
+    try {
+        const ring = mounted.container.querySelector(
+            '[data-testid="taste-selection-ring"]',
+        )!;
+        const fill = mounted.container.querySelector<HTMLElement>(
+            '[data-testid="taste-action-fill"]',
+        )!;
+        assert.equal(ring.getAttribute("stroke-dashoffset"), "0");
+        assert.equal(fill.style.transform, "scaleX(1)");
+        await React.act(async () =>
+            findButton(mounted.container, "Linkin Park")!.click(),
+        );
+        assert.equal(ring.getAttribute("stroke-dashoffset"), "0");
+        await React.act(async () =>
+            findButton(mounted.container, "Сохранить вкусы")!.click(),
+        );
+        assert.equal(mounted.saves[0].artists.length, 6);
+        await React.act(async () =>
+            findButton(mounted.container, "Linkin Park")!.click(),
+        );
+        await React.act(async () =>
+            findButton(mounted.container, "Убрать артиста: Five")!.click(),
+        );
+        assert.equal(ring.getAttribute("stroke-dashoffset"), "20");
+        assert.equal(fill.style.transform, "scaleX(0.8)");
     } finally {
         await mounted.cleanup();
     }

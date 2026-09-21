@@ -78,6 +78,7 @@ export function TasteProfileDialog({
         [selection],
     );
     const count = validation.count;
+    const selectionProgress = Math.min(count / 5, 1);
     const suggestedArtists = useMemo(
         () =>
             normalizeTasteProfileSelection({
@@ -285,7 +286,7 @@ export function TasteProfileDialog({
                         disabled={isSaving}
                         onClick={onClose}
                         aria-label="Закрыть настройку вкусов"
-                        className="absolute right-3 top-[max(0.75rem,var(--safe-area-top))] z-10 grid h-11 w-11 place-items-center rounded-full bg-surface-raised text-content-secondary hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light sm:top-3"
+                        className="absolute right-3 top-[max(0.75rem,var(--safe-area-top))] z-30 grid h-11 w-11 place-items-center rounded-full bg-surface-raised text-content-secondary hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light sm:top-3 lg:top-10"
                     >
                         <X className="h-5 w-5" aria-hidden="true" />
                     </button>
@@ -652,6 +653,7 @@ export function TasteProfileDialog({
                         artists={selection.artists}
                         artwork={artwork}
                         count={count}
+                        progress={selectionProgress}
                     />
                     {validation.message && (
                         <p role="alert" className="mb-3 text-sm text-red-200">
@@ -687,7 +689,7 @@ export function TasteProfileDialog({
                                 data-testid="taste-action-fill"
                                 className="pointer-events-none absolute inset-0 -z-10 origin-left rounded-full bg-gradient-to-r from-white/35 to-white/10 transition-transform duration-500 ease-out motion-reduce:transition-none"
                                 style={{
-                                    transform: `scaleX(${count === 0 ? 0 : 0.25 + 0.75 * (1 - Math.exp(-count / 4))})`,
+                                    transform: `scaleX(${selectionProgress})`,
                                 }}
                             />
                             {isSaving && (

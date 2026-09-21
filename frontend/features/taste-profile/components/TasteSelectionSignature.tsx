@@ -5,6 +5,7 @@ interface TasteSelectionSignatureProps {
     artists: readonly string[];
     artwork: Readonly<Record<string, string>>;
     count: number;
+    progress: number;
 }
 
 /** Decorative feedback, not a required selection target or a quality score. */
@@ -12,9 +13,10 @@ export function TasteSelectionSignature({
     artists,
     artwork,
     count,
+    progress,
 }: TasteSelectionSignatureProps) {
     const gradientId = useId();
-    const energy = 1 - Math.exp(-count / 5);
+    const energy = progress;
     const recentArtists = artists.slice(-4);
 
     return (
@@ -76,7 +78,9 @@ export function TasteSelectionSignature({
                         strokeLinecap="round"
                         pathLength="100"
                         strokeDasharray="100"
-                        strokeDashoffset={82 - energy * 70}
+                        data-testid="taste-selection-ring"
+                        strokeDashoffset={100 - progress * 100}
+                        opacity={progress === 0 ? 0 : 1}
                         transform="rotate(-90 112 112)"
                         className="transition-[stroke-dashoffset] duration-700 ease-out motion-reduce:transition-none"
                     />
