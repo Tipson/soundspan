@@ -127,6 +127,39 @@ describe("YouTube image transport", () => {
         expect(body.destroyed).toBe(true);
     });
 
+    it.each([503, 404, 302, 200])(
+        "ignores late body data after cancelling HTTP %i",
+        async (status) => {
+            const body = new Readable({
+                read() {},
+                destroy(error, callback) {
+                    setImmediate(() => callback(error));
+                },
+            });
+            const headers: Record<string, string> =
+                status === 200
+                    ? { "content-length": "99" }
+                    : status === 302
+                      ? { location: "http://127.0.0.1/private" }
+                      : {};
+            get.mockResolvedValue(response(status, headers, body));
+            const result = await fetchExternalImage({
+                url,
+                maxRetries: 1,
+                maxBytes: 4,
+            });
+            expect(result.ok).toBe(false);
+            expect(body.destroyed).toBe(true);
+            expect(() =>
+                body.emit("data", Buffer.from("late proxy response")),
+            ).not.toThrow();
+            expect(() =>
+                body.emit("error", new Error("late socket error")),
+            ).not.toThrow();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+        },
+    );
+
     it("does not retry a missing CDN image", async () => {
         get.mockResolvedValue(response(404));
         expect(await fetchExternalImage({ url, maxRetries: 3 })).toMatchObject({
