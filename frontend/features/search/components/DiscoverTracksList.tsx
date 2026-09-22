@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Music, Play } from "lucide-react";
+import { ChevronsUpDown, Music, Play } from "lucide-react";
 import { DiscoverResult } from "../types";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
@@ -292,13 +292,28 @@ export function DiscoverTracksList({
                                 {track.artist}
                                 {track.album ? ` — ${track.album}` : ""}
                             </p>
-                            {track.versions && track.versions.length > 1 ? (
+                        </div>
+                        {track.versions && track.versions.length > 1 ? (
+                            <div
+                                data-source-switcher="true"
+                                className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/[0.08] hover:text-content focus-within:ring-2 focus-within:ring-brand-light motion-reduce:transition-none"
+                                title="Выбрать источник и версию"
+                                role="presentation"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                            >
+                                <Music
+                                    className="pointer-events-none h-4 w-4"
+                                    aria-hidden="true"
+                                />
+                                <ChevronsUpDown
+                                    className="pointer-events-none ml-0.5 h-3 w-3"
+                                    aria-hidden="true"
+                                />
                                 <select
                                     aria-label={`Источник и версия: ${track.name}`}
-                                    className="mt-1 min-h-11 max-w-full rounded-lg border border-line-strong bg-surface-elevated px-2 text-xs text-content-secondary"
+                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                                     value={versionKey(track)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => e.stopPropagation()}
                                     onChange={(e) => {
                                         const value = e.target.value;
                                         setSelections((previous) => ({
@@ -330,12 +345,12 @@ export function DiscoverTracksList({
                                                         ?.contentVersion ===
                                                     "clean"
                                                   ? " · С цензурой"
-                                                  : " · Версия не отмечена"}
+                                                  : ""}
                                         </option>
                                     ))}
                                 </select>
-                            ) : null}
-                        </div>
+                            </div>
+                        ) : null}
                         <div
                             className="flex items-center"
                             role="presentation"

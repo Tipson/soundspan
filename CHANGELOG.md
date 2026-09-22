@@ -1,5 +1,9 @@
 # Changelog
 
+## Compact source selection in search results
+
+- Move the source and recording-version selector to a compact control beside each track, preserving its 44-pixel touch target and accessible name. Omit the uninformative label for unknown recording versions.
+
 ## Taste setup carousel and selection action
 
 - Keep full-size genre labels in a stable scrollable strip with previous/next controls and touch scrolling. Move the desktop save action under the title and animate its fill as artists are selected; retain the mobile bottom action and unrestricted selection count.

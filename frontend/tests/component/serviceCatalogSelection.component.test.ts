@@ -87,6 +87,24 @@ test("changing catalog choice does not start audio and keeps the chosen identity
         await act(async () => play());
         assert.equal(calls.at(-1)?.[0].id, "vk:1_2");
         const select = host.querySelector("select")!;
+        assert.equal(
+            select.getAttribute("aria-label"),
+            "Источник и версия: Song",
+        );
+        assert.ok(select.closest('[data-source-switcher="true"]'));
+        assert.equal(
+            select
+                .closest('[data-source-switcher="true"]')
+                ?.getAttribute("role"),
+            "presentation",
+        );
+        assert.doesNotMatch(host.textContent!, /Версия не отмечена/);
+        await act(async () => select.click());
+        assert.equal(
+            calls.length,
+            1,
+            "opening the selector must not play the row",
+        );
         await act(async () => {
             select.value = select.options[0].value;
             select.dispatchEvent(new Event("change", { bubbles: true }));
