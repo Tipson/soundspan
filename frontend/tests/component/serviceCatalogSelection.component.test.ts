@@ -46,7 +46,7 @@ mock.module("@/components/ui/YouTubeBadge", {
     namedExports: { YouTubeBadge: () => null },
 });
 
-test("changing catalog choice does not start audio and keeps the chosen identity after refresh", async () => {
+test("catalog rows choose a source automatically without a selector, including in shared playback", async () => {
     const { DiscoverTracksList } =
         await import("../../features/search/components/DiscoverTracksList");
     const rows = mergeServiceCatalogResults(
@@ -84,32 +84,10 @@ test("changing catalog choice does not start audio and keeps the chosen identity
         );
         const play = () =>
             host.querySelector<HTMLElement>('[role="button"]')!.click();
+        assert.equal(host.querySelector("select"), null);
+        assert.equal(host.querySelector('[data-source-switcher="true"]'), null);
         await act(async () => play());
         assert.equal(calls.at(-1)?.[0].id, "vk:1_2");
-        const select = host.querySelector("select")!;
-        assert.equal(
-            select.getAttribute("aria-label"),
-            "Источник и версия: Song",
-        );
-        assert.ok(select.closest('[data-source-switcher="true"]'));
-        assert.equal(
-            select
-                .closest('[data-source-switcher="true"]')
-                ?.getAttribute("role"),
-            "presentation",
-        );
-        assert.doesNotMatch(host.textContent!, /Версия не отмечена/);
-        await act(async () => select.click());
-        assert.equal(
-            calls.length,
-            1,
-            "opening the selector must not play the row",
-        );
-        await act(async () => {
-            select.value = select.options[0].value;
-            select.dispatchEvent(new Event("change", { bubbles: true }));
-        });
-        assert.equal(calls.length, 1);
         await act(async () =>
             root.render(
                 React.createElement(DiscoverTracksList, {
@@ -123,22 +101,36 @@ test("changing catalog choice does not start audio and keeps the chosen identity
             ),
         );
         await act(async () => play());
-        assert.equal(calls.at(-1)?.[0].id, "yt:abcdefghijk");
+        assert.equal(calls.at(-1)?.[0].id, "vk:1_2");
         together = true;
-        const sourceSelect = host.querySelector("select")!;
-        await act(async () => {
-            sourceSelect.value = "vk:1_2";
-            sourceSelect.dispatchEvent(new Event("change", { bubbles: true }));
-        });
         const before = calls.length;
         await act(async () => play());
         assert.equal(
             calls.length,
-            before,
-            "personal service audio must not enter a shared queue",
+            before + 1,
+            "shared playback should use the available YouTube version",
         );
-        assert.match(host.textContent!, /личного прослушивания/);
+        assert.equal(calls.at(-1)?.[0].id, "yt:abcdefghijk");
+        await act(async () =>
+            root.render(
+                React.createElement(DiscoverTracksList, {
+                    tracks: [
+                        rows[0].versions!.find(
+                            (version) => version.musicSourceRecording,
+                        )!,
+                    ],
+                }),
+            ),
+        );
+        const sharedCallCount = calls.length;
+        await act(async () => play());
+        assert.equal(calls.length, sharedCallCount);
+        assert.match(
+            host.querySelector('[role="status"]')?.textContent ?? "",
+            /личного прослушивания/,
+        );
     } finally {
+        together = false;
         await act(async () => root.unmount());
         host.remove();
     }

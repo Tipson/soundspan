@@ -1,8 +1,8 @@
 # Changelog
 
-## Compact source selection in search results
+## Automatic source selection in search results
 
-- Move the source and recording-version selector to a compact control beside each track, preserving its 44-pixel touch target and accessible name. Omit the uninformative label for unknown recording versions.
+- Remove the manual source and recording-version selector from search results. Playback uses the automatically preferred version; shared listening selects an available YouTube version when the preferred service source is unavailable there.
 
 ## Taste setup carousel and selection action
 
