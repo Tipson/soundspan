@@ -62,10 +62,8 @@ interface TrackOverflowMenuProps {
     showVibeMap?: boolean;
     showStartRadio?: boolean;
     onMatchVibe?: () => void | Promise<void>;
-    onStartRadio?: () => void | Promise<void>;
     matchVibeLabel?: string;
     matchVibeDisabled?: boolean;
-    startRadioDisabled?: boolean;
     /** Extra menu items injected before/after the standard items */
     extraItemsBefore?: React.ReactNode;
     extraItemsAfter?: React.ReactNode;
@@ -89,10 +87,8 @@ export function TrackOverflowMenu({
     showVibeMap = true,
     showStartRadio = true,
     onMatchVibe,
-    onStartRadio,
     matchVibeLabel,
     matchVibeDisabled = false,
-    startRadioDisabled = false,
     extraItemsBefore,
     extraItemsAfter,
     className,
@@ -350,10 +346,6 @@ export function TrackOverflowMenu({
         async (e: React.MouseEvent) => {
             e.stopPropagation();
             closeMenu();
-            if (onStartRadio) {
-                await onStartRadio();
-                return;
-            }
             try {
                 const filtered = await requestRadioQueue(() =>
                     loadTrackRadio(actionTrack),
@@ -380,15 +372,7 @@ export function TrackOverflowMenu({
                 toast.error(ru.trackMenu.radioFailed);
             }
         },
-        [
-            actionTrack,
-            track,
-            controls,
-            closeMenu,
-            isActionable,
-            isRemote,
-            onStartRadio,
-        ],
+        [actionTrack, track, controls, closeMenu, isActionable, isRemote],
     );
 
     const handleDeviceDownload = useCallback(
@@ -591,7 +575,6 @@ export function TrackOverflowMenu({
                                 (!isRemote && track.artist?.id)) && (
                                 <MenuButton
                                     onClick={handleStartRadio}
-                                    disabled={startRadioDisabled}
                                     icon={<Radio className="h-4 w-4" />}
                                     label={ru.trackMenu.startRadio}
                                 />

@@ -2,7 +2,7 @@
 
 ## Focused mobile player actions
 
-- Keep track ratings and playback controls visible in the mobile player. Move playlist, radio, and Wave actions into the existing track menu without restarting the current song when starting radio or Wave from that menu.
+- Keep like, track radio, dislike, and playback controls visible in the mobile player. Place the radio button between the two ratings; keep playlist and Wave actions in the track menu without restarting the current song when starting Wave.
 
 ## Music controls on iPhone
 

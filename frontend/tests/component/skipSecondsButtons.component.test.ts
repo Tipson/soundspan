@@ -360,7 +360,24 @@ const overlayCalls = {
     previous: 0,
     next: 0,
     returnToPreviousMode: 0,
+    radioRequests: 0,
+    radioQueue: [] as unknown[],
 };
+
+mock.module("@/lib/radio/loadTrackRadio", {
+    namedExports: {
+        loadTrackRadio: async () => {
+            overlayCalls.radioRequests++;
+            return [{ id: "radio-next", title: "Radio next", duration: 200 }];
+        },
+        UnsupportedTrackRadioError: class extends Error {},
+    },
+});
+mock.module("@/lib/radio/radioRequestIntent", {
+    namedExports: {
+        requestRadioQueue: (load: () => Promise<unknown>) => load(),
+    },
+});
 
 mock.module("@/lib/audio-context", {
     namedExports: {
@@ -403,7 +420,9 @@ mock.module("@/lib/audio-context", {
             stopVibeMode: () => undefined,
             playTrack: () => undefined,
             playQueueIndex: () => undefined,
-            setUpcoming: () => undefined,
+            setUpcoming: (tracks: unknown[]) => {
+                overlayCalls.radioQueue = tracks;
+            },
             removeFromQueue: () => undefined,
             clearQueue: () => undefined,
             skipForward: (seconds: number = 30) => {
@@ -557,6 +576,8 @@ beforeEach(() => {
     overlayCalls.previous = 0;
     overlayCalls.next = 0;
     overlayCalls.returnToPreviousMode = 0;
+    overlayCalls.radioRequests = 0;
+    overlayCalls.radioQueue = [];
     overlayState.playbackType = "podcast";
     overlayState.currentTrack = null;
     overlayState.currentPodcast = {
@@ -1037,7 +1058,7 @@ test("OverlayPlayer exposes symmetric shuffle and repeat toggle state", async ()
     await unmount(inactive);
 });
 
-test("OverlayPlayer exposes both like and dislike controls for music", async () => {
+test("OverlayPlayer places track radio between like and dislike", async () => {
     overlayState.playbackType = "track";
     overlayState.currentTrack = {
         id: "yt:overlay-track",
@@ -1055,16 +1076,25 @@ test("OverlayPlayer exposes both like and dislike controls for music", async () 
         withQueryClient(React.createElement(OverlayPlayer)),
     );
 
-    assert.ok(mounted.container.querySelector('[aria-label="Нравится"]'));
-    assert.ok(mounted.container.querySelector('[aria-label="Не нравится"]'));
+    const actionLabels = [
+        ...mounted.container.querySelectorAll<HTMLButtonElement>(
+            '[data-player-surface="overlay"] [role="group"][aria-label="Действия с треком"] button',
+        ),
+    ].map((button) => button.getAttribute("aria-label"));
+    assert.deepEqual(actionLabels, [
+        "Нравится",
+        "Включить радио исполнителя",
+        "Не нравится",
+    ]);
+    const radioButton = mounted.container.querySelector<HTMLButtonElement>(
+        '[data-player-surface="overlay"] [aria-label="Включить радио исполнителя"]',
+    );
+    assert.ok(radioButton);
+    await React.act(async () => radioButton.click());
+    assert.equal(overlayCalls.radioRequests, 1);
+    assert.equal(overlayCalls.radioQueue.length, 1);
     assert.equal(
         mounted.container.querySelector('[aria-label="Добавить в плейлист"]'),
-        null,
-    );
-    assert.equal(
-        mounted.container.querySelector(
-            '[aria-label="Включить радио исполнителя"]',
-        ),
         null,
     );
     assert.equal(

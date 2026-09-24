@@ -22,6 +22,7 @@ import {
     Repeat,
     Repeat1,
     AudioWaveform,
+    Radio,
     Loader2,
     RefreshCw,
 } from "lucide-react";
@@ -52,6 +53,7 @@ import { OverlayQueueTab } from "./overlay-tabs/OverlayQueueTab";
 import { OverlayLyricsTab } from "./overlay-tabs/OverlayLyricsTab";
 import { OverlayRelatedTab } from "./overlay-tabs/OverlayRelatedTab";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import { isPlaybackOnlyTrack } from "@/lib/trackRef";
 
 import { pluralRu, ru } from "@/lib/i18n/ru";
 
@@ -152,6 +154,8 @@ export function OverlayPlayer() {
     const isLongForm =
         playbackType === "podcast" || playbackType === "audiobook";
     const preferenceTrackId = isTrackMode ? currentTrack?.id : undefined;
+    const isPlaybackOnlyCurrentTrack =
+        currentTrack && isPlaybackOnlyTrack(currentTrack);
     const isDesktopOverlayLayout = canSkip && !isMobileOrTablet;
     // The lyrics tab mounts only while shown, so it owns its own fetch.
     const lyricsLookupTrack = useMemo(
@@ -432,6 +436,23 @@ export function OverlayPlayer() {
         setIsDrawerOpen(true);
     };
 
+    const trackRadioAction = currentTrack?.artist?.id ? (
+        <button
+            type="button"
+            onClick={handleStartRadio}
+            disabled={isRadioLoading}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40"
+            title={ru.player.startArtistRadio}
+            aria-label={ru.player.startArtistRadio}
+        >
+            {isRadioLoading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+                <Radio className="h-6 w-6" />
+            )}
+        </button>
+    ) : null;
+
     if (!hasMedia) return null;
 
     return (
@@ -548,18 +569,14 @@ export function OverlayPlayer() {
                                 showMatchVibe={
                                     !featuresLoading && vibeEmbeddings
                                 }
-                                showStartRadio={Boolean(
-                                    currentTrack.artist?.id,
-                                )}
+                                showStartRadio={false}
                                 onMatchVibe={handleVibeToggle}
-                                onStartRadio={handleStartRadio}
                                 matchVibeLabel={
                                     vibeMode
                                         ? "Выключить похожую музыку"
                                         : ru.player.matchVibe
                                 }
                                 matchVibeDisabled={isVibeLoading}
-                                startRadioDisabled={isRadioLoading}
                                 menuClassName="max-h-[min(70dvh,560px)] overflow-y-auto"
                                 extraItemsAfter={
                                     <PlaybackReport
@@ -764,10 +781,15 @@ export function OverlayPlayer() {
                                                         mode="both"
                                                         buttonSizeClassName="h-11 w-11"
                                                         iconSizeClassName="h-6 w-6"
+                                                        betweenActions={
+                                                            trackRadioAction
+                                                        }
                                                         metadata={buildPreferenceMetadata(
                                                             currentTrack,
                                                         )}
                                                     />
+                                                    {isPlaybackOnlyCurrentTrack &&
+                                                        trackRadioAction}
                                                 </div>
                                             )}
 

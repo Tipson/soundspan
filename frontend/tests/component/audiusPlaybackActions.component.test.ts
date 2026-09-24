@@ -355,27 +355,36 @@ for (const name of [
     });
 }
 
-test("mobile overlay keeps track actions in the menu instead of duplicating them by playback controls", async () => {
+test("mobile overlay keeps radio beside ratings and secondary actions in the menu", async () => {
     const { OverlayPlayer } =
         await import("../../components/player/OverlayPlayer");
-    track = local;
+    track = { ...local, artist: { id: "artist-1", name: "Artist" } };
     const html = renderToStaticMarkup(React.createElement(OverlayPlayer));
     assert.match(html, /aria-label="Нравится"/);
     assert.match(html, /aria-label="Не нравится"/);
     assert.doesNotMatch(html, /aria-label="Добавить в плейлист"/);
-    assert.doesNotMatch(html, /aria-label="Включить радио исполнителя"/);
+    assert.match(html, /aria-label="Включить радио исполнителя"/);
     assert.doesNotMatch(html, /aria-label="Подобрать похожую музыку"/);
     assert.match(html, /aria-haspopup="menu"/);
 });
 
-test("current-track menu runs radio and Wave actions without restarting playback", async () => {
+test("playback-only tracks can show radio without unsupported rating controls", async () => {
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    track = { ...audius, artist: { ...audius.artist, id: "artist-1" } };
+    const html = renderToStaticMarkup(React.createElement(OverlayPlayer));
+    assert.match(html, /aria-label="Включить радио исполнителя"/);
+    assert.doesNotMatch(html, /aria-label="Нравится"/);
+    assert.doesNotMatch(html, /aria-label="Не нравится"/);
+});
+
+test("current-track menu runs Wave without restarting playback or duplicating radio", async () => {
     const { createRoot } = await import("react-dom/client");
     const { TrackOverflowMenu } =
         await import("../../components/ui/TrackOverflowMenu");
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
-    let radioStarts = 0;
     let vibeStarts = 0;
     let restarts = 0;
     const previousPlayTrack = controls.playTrack;
@@ -390,9 +399,7 @@ test("current-track menu runs radio and Wave actions without restarting playback
                         ...local,
                         artist: { id: "artist-1", name: "Artist" },
                     },
-                    onStartRadio: () => {
-                        radioStarts++;
-                    },
+                    showStartRadio: false,
                     onMatchVibe: () => {
                         vibeStarts++;
                     },
@@ -419,11 +426,16 @@ test("current-track menu runs radio and Wave actions without restarting playback
         };
 
         await open();
+        assert.equal(
+            [
+                ...container.querySelectorAll<HTMLButtonElement>(
+                    '[role="menuitem"]',
+                ),
+            ].some((button) => button.textContent === ru.trackMenu.startRadio),
+            false,
+        );
         await clickItem(ru.trackMenu.matchVibe);
         assert.equal(vibeStarts, 1);
-        await open();
-        await clickItem(ru.trackMenu.startRadio);
-        assert.equal(radioStarts, 1);
         assert.equal(restarts, 0);
     } finally {
         controls.playTrack = previousPlayTrack;
