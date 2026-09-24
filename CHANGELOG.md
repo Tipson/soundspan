@@ -1,5 +1,9 @@
 # Changelog
 
+## Mobile player navigation and actions
+
+- Keep the player actions menu above the artwork and provide a visible close control on iPhone and other mobile screens.
+
 ## Automatic source selection in search results
 
 - Remove the manual source and recording-version selector from search results. Playback uses the automatically preferred version; shared listening selects an available YouTube version when the preferred service source is unavailable there.

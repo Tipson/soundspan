@@ -514,7 +514,7 @@ export function OverlayPlayer() {
 
             {/* Header */}
             <div
-                className="overlay-player-chrome relative z-10 flex-shrink-0 px-4 pt-3 pb-2"
+                className="overlay-player-chrome relative z-30 flex-shrink-0 px-4 pt-3 pb-2"
                 style={{
                     paddingTop: "calc(12px + env(safe-area-inset-top))",
                     // Claim this drag before Chrome can start pull-to-refresh.
@@ -538,21 +538,20 @@ export function OverlayPlayer() {
                 }
             >
                 <div className="flex items-center justify-between">
-                    {isMobileOrTablet ? (
-                        <div className="w-11" />
-                    ) : (
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                returnToPreviousMode();
-                            }}
-                            className="text-gray-400 hover:text-white transition-colors p-2 -ml-2 rounded-full hover:bg-white/10"
-                            title={ru.common.close}
-                        >
-                            <ChevronDown className="w-7 h-7" />
-                        </button>
-                    )}
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            returnToPreviousMode();
+                        }}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        className="flex h-11 w-11 items-center justify-center rounded-full text-content-secondary transition-colors hover:bg-white/10 hover:text-content focus-visible:ring-2 focus-visible:ring-brand-light"
+                        aria-label="Свернуть плеер"
+                        title="Свернуть плеер"
+                    >
+                        <ChevronDown className="h-6 w-6" aria-hidden="true" />
+                    </button>
                     {/* Now Playing indicator */}
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-400 uppercase tracking-widest font-medium">

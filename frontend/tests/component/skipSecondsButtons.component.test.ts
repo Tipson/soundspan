@@ -359,6 +359,7 @@ const overlayCalls = {
     skipForward: [] as number[],
     previous: 0,
     next: 0,
+    returnToPreviousMode: 0,
 };
 
 mock.module("@/lib/audio-context", {
@@ -392,7 +393,9 @@ mock.module("@/lib/audio-context", {
             previous: () => {
                 overlayCalls.previous += 1;
             },
-            returnToPreviousMode: () => undefined,
+            returnToPreviousMode: () => {
+                overlayCalls.returnToPreviousMode += 1;
+            },
             seek: () => undefined,
             toggleShuffle: () => undefined,
             toggleRepeat: () => undefined,
@@ -553,6 +556,7 @@ beforeEach(() => {
     overlayCalls.skipForward.length = 0;
     overlayCalls.previous = 0;
     overlayCalls.next = 0;
+    overlayCalls.returnToPreviousMode = 0;
     overlayState.playbackType = "podcast";
     overlayState.currentTrack = null;
     overlayState.currentPodcast = {
@@ -820,6 +824,24 @@ test("FullPlayer: skip buttons are disabled and inert while canSeek is false; Pr
 // ---------------------------------------------------------------------------
 // OverlayPlayer
 // ---------------------------------------------------------------------------
+
+test("OverlayPlayer exposes a mobile return control that closes the overlay", async () => {
+    const { OverlayPlayer } =
+        await import("../../components/player/OverlayPlayer");
+    const mounted = await mount(
+        withQueryClient(React.createElement(OverlayPlayer)),
+    );
+    try {
+        const close = mounted.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="Свернуть плеер"]',
+        );
+        assert.ok(close, "mobile users need a visible way back");
+        await React.act(async () => close.click());
+        assert.equal(overlayCalls.returnToPreviousMode, 1);
+    } finally {
+        await unmount(mounted);
+    }
+});
 
 test("OverlayPlayer reserves only its mobile drag header from browser scrolling", async () => {
     const { OverlayPlayer } =
