@@ -1057,6 +1057,22 @@ test("OverlayPlayer exposes both like and dislike controls for music", async () 
 
     assert.ok(mounted.container.querySelector('[aria-label="Нравится"]'));
     assert.ok(mounted.container.querySelector('[aria-label="Не нравится"]'));
+    assert.equal(
+        mounted.container.querySelector('[aria-label="Добавить в плейлист"]'),
+        null,
+    );
+    assert.equal(
+        mounted.container.querySelector(
+            '[aria-label="Включить радио исполнителя"]',
+        ),
+        null,
+    );
+    assert.equal(
+        mounted.container.querySelector(
+            '[aria-label="Подобрать похожую музыку"]',
+        ),
+        null,
+    );
 
     await unmount(mounted);
 });

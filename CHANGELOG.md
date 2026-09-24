@@ -1,5 +1,9 @@
 # Changelog
 
+## Focused mobile player actions
+
+- Keep track ratings and playback controls visible in the mobile player. Move playlist, radio, and Wave actions into the existing track menu without restarting the current song when starting radio or Wave from that menu.
+
 ## Music controls on iPhone
 
 - Offer previous and next track actions to the system player for music, while keeping short skips for podcasts and audiobooks. The playback position slider remains available for seeking within a song.

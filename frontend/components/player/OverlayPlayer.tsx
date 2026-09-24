@@ -22,10 +22,8 @@ import {
     Repeat,
     Repeat1,
     AudioWaveform,
-    Radio,
     Loader2,
     RefreshCw,
-    Plus,
 } from "lucide-react";
 import { formatTime, clampTime, formatTimeRemaining } from "@/utils/formatTime";
 import { cn } from "@/utils/cn";
@@ -33,7 +31,6 @@ import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { toast } from "sonner";
 import { SeekSlider } from "./SeekSlider";
 import { useFeatures } from "@/lib/features-context";
-import { api } from "@/lib/api";
 import {
     loadTrackRadio,
     UnsupportedTrackRadioError,
@@ -49,14 +46,12 @@ import {
 } from "@/lib/storage-migration";
 import { CurrentTrackPreferenceButtons } from "./CurrentTrackPreferenceButtons";
 import { buildPreferenceMetadata } from "@/hooks/useTrackPreference";
-import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { TrackOverflowMenu } from "@/components/ui/TrackOverflowMenu";
 import { PlaybackReport } from "./PlaybackReport";
 import { OverlayQueueTab } from "./overlay-tabs/OverlayQueueTab";
 import { OverlayLyricsTab } from "./overlay-tabs/OverlayLyricsTab";
 import { OverlayRelatedTab } from "./overlay-tabs/OverlayRelatedTab";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { isPlaybackOnlyTrack, toAddToPlaylistRef } from "@/lib/trackRef";
 
 import { pluralRu, ru } from "@/lib/i18n/ru";
 
@@ -113,7 +108,6 @@ export function OverlayPlayer() {
     const overlayRef = useRef<HTMLDivElement | null>(null);
     const [isVibeLoading, setIsVibeLoading] = useState(false);
     const [isRadioLoading, setIsRadioLoading] = useState(false);
-    const [isPlaylistSelectorOpen, setIsPlaylistSelectorOpen] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     useDismissibleLayer(
         isDrawerOpen && isMobileOrTablet,
@@ -158,9 +152,6 @@ export function OverlayPlayer() {
     const isLongForm =
         playbackType === "podcast" || playbackType === "audiobook";
     const preferenceTrackId = isTrackMode ? currentTrack?.id : undefined;
-    const canPersistCurrentTrack = Boolean(
-        currentTrack && !isPlaybackOnlyTrack(currentTrack),
-    );
     const isDesktopOverlayLayout = canSkip && !isMobileOrTablet;
     // The lyrics tab mounts only while shown, so it owns its own fetch.
     const lyricsLookupTrack = useMemo(
@@ -428,20 +419,6 @@ export function OverlayPlayer() {
         }
     };
 
-    const handleAddToPlaylist = useCallback(
-        async (playlistId: string) => {
-            if (!currentTrack?.id || !canPersistCurrentTrack) return;
-            await api.addTrackToPlaylist(
-                playlistId,
-                toAddToPlaylistRef(currentTrack),
-            );
-            toast.success(
-                `«${currentTrack.displayTitle || currentTrack.title}» добавлен в плейлист`,
-            );
-        },
-        [currentTrack, canPersistCurrentTrack],
-    );
-
     const handleDrawerTabToggle = (tab: "queue" | "lyrics" | "related") => {
         if (!isMobileOrTablet) {
             setActiveTab(tab);
@@ -568,6 +545,22 @@ export function OverlayPlayer() {
                                 track={currentTrack}
                                 showPlayNext={false}
                                 showAddToQueue={false}
+                                showMatchVibe={
+                                    !featuresLoading && vibeEmbeddings
+                                }
+                                showStartRadio={Boolean(
+                                    currentTrack.artist?.id,
+                                )}
+                                onMatchVibe={handleVibeToggle}
+                                onStartRadio={handleStartRadio}
+                                matchVibeLabel={
+                                    vibeMode
+                                        ? "Выключить похожую музыку"
+                                        : ru.player.matchVibe
+                                }
+                                matchVibeDisabled={isVibeLoading}
+                                startRadioDisabled={isRadioLoading}
+                                menuClassName="max-h-[min(70dvh,560px)] overflow-y-auto"
                                 extraItemsAfter={
                                     <PlaybackReport
                                         key={currentTrack.id}
@@ -775,92 +768,6 @@ export function OverlayPlayer() {
                                                             currentTrack,
                                                         )}
                                                     />
-
-                                                    {canPersistCurrentTrack && (
-                                                        <button
-                                                            onClick={() =>
-                                                                setIsPlaylistSelectorOpen(
-                                                                    true,
-                                                                )
-                                                            }
-                                                            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                                            title={
-                                                                ru.player
-                                                                    .addToPlaylist
-                                                            }
-                                                            aria-label={
-                                                                ru.player
-                                                                    .addToPlaylist
-                                                            }
-                                                        >
-                                                            <Plus className="h-6 w-6" />
-                                                        </button>
-                                                    )}
-
-                                                    {currentTrack?.artist?.id &&
-                                                        playbackType ===
-                                                            "track" && (
-                                                            <button
-                                                                onClick={
-                                                                    handleStartRadio
-                                                                }
-                                                                disabled={
-                                                                    isRadioLoading
-                                                                }
-                                                                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                                                title={
-                                                                    ru.player
-                                                                        .startArtistRadio
-                                                                }
-                                                                aria-label={
-                                                                    ru.player
-                                                                        .startArtistRadio
-                                                                }
-                                                            >
-                                                                {isRadioLoading ? (
-                                                                    <Loader2 className="h-6 w-6 animate-spin" />
-                                                                ) : (
-                                                                    <Radio className="h-6 w-6" />
-                                                                )}
-                                                            </button>
-                                                        )}
-
-                                                    {!featuresLoading &&
-                                                        vibeEmbeddings && (
-                                                            <button
-                                                                onClick={
-                                                                    handleVibeToggle
-                                                                }
-                                                                disabled={
-                                                                    isVibeLoading
-                                                                }
-                                                                className={cn(
-                                                                    "flex h-11 w-11 items-center justify-center rounded-full transition-colors",
-                                                                    vibeMode
-                                                                        ? "text-brand-hover bg-white/[0.05]"
-                                                                        : "text-gray-400 hover:text-white hover:bg-white/10",
-                                                                )}
-                                                                title={
-                                                                    vibeMode
-                                                                        ? ru
-                                                                              .player
-                                                                              .vibeOff
-                                                                        : ru
-                                                                              .player
-                                                                              .matchVibe
-                                                                }
-                                                                aria-label={
-                                                                    ru.player
-                                                                        .matchVibe
-                                                                }
-                                                            >
-                                                                {isVibeLoading ? (
-                                                                    <Loader2 className="h-6 w-6 animate-spin" />
-                                                                ) : (
-                                                                    <AudioWaveform className="h-6 w-6" />
-                                                                )}
-                                                            </button>
-                                                        )}
                                                 </div>
                                             )}
 
@@ -1438,12 +1345,6 @@ export function OverlayPlayer() {
 
             {/* Safe area padding at bottom */}
             <div style={{ height: "env(safe-area-inset-bottom)" }} />
-
-            <PlaylistSelector
-                isOpen={canPersistCurrentTrack && isPlaylistSelectorOpen}
-                onClose={() => setIsPlaylistSelectorOpen(false)}
-                onSelectPlaylist={handleAddToPlaylist}
-            />
         </motion.div>
     );
 }

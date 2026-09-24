@@ -61,6 +61,11 @@ interface TrackOverflowMenuProps {
     showMatchVibe?: boolean;
     showVibeMap?: boolean;
     showStartRadio?: boolean;
+    onMatchVibe?: () => void | Promise<void>;
+    onStartRadio?: () => void | Promise<void>;
+    matchVibeLabel?: string;
+    matchVibeDisabled?: boolean;
+    startRadioDisabled?: boolean;
     /** Extra menu items injected before/after the standard items */
     extraItemsBefore?: React.ReactNode;
     extraItemsAfter?: React.ReactNode;
@@ -83,6 +88,11 @@ export function TrackOverflowMenu({
     showMatchVibe = true,
     showVibeMap = true,
     showStartRadio = true,
+    onMatchVibe,
+    onStartRadio,
+    matchVibeLabel,
+    matchVibeDisabled = false,
+    startRadioDisabled = false,
     extraItemsBefore,
     extraItemsAfter,
     className,
@@ -155,7 +165,8 @@ export function TrackOverflowMenu({
             : ru.trackMenu.download;
     })();
 
-    const effectiveShowMatchVibe = showMatchVibe && !isRemote;
+    const effectiveShowMatchVibe =
+        showMatchVibe && (!isRemote || Boolean(onMatchVibe));
     const effectiveShowVibeMap = showVibeMap && !isRemote;
     const showShare = canShareTrack(track);
 
@@ -304,6 +315,11 @@ export function TrackOverflowMenu({
     const handleMatchVibe = useCallback(
         async (e: React.MouseEvent) => {
             e.stopPropagation();
+            if (onMatchVibe) {
+                closeMenu();
+                void onMatchVibe();
+                return;
+            }
             if (!isActionable) return;
             closeMenu();
             // Play the track first, then start vibe mode
@@ -318,7 +334,7 @@ export function TrackOverflowMenu({
                 }
             }, 500);
         },
-        [actionTrack, controls, closeMenu, isActionable],
+        [actionTrack, controls, closeMenu, isActionable, onMatchVibe],
     );
 
     const handleShowVibeMap = useCallback(
@@ -334,6 +350,10 @@ export function TrackOverflowMenu({
         async (e: React.MouseEvent) => {
             e.stopPropagation();
             closeMenu();
+            if (onStartRadio) {
+                await onStartRadio();
+                return;
+            }
             try {
                 const filtered = await requestRadioQueue(() =>
                     loadTrackRadio(actionTrack),
@@ -360,7 +380,15 @@ export function TrackOverflowMenu({
                 toast.error(ru.trackMenu.radioFailed);
             }
         },
-        [actionTrack, track, controls, closeMenu, isActionable, isRemote],
+        [
+            actionTrack,
+            track,
+            controls,
+            closeMenu,
+            isActionable,
+            isRemote,
+            onStartRadio,
+        ],
     );
 
     const handleDeviceDownload = useCallback(
@@ -544,8 +572,9 @@ export function TrackOverflowMenu({
                         {effectiveShowMatchVibe && track.id && (
                             <MenuButton
                                 onClick={handleMatchVibe}
+                                disabled={matchVibeDisabled}
                                 icon={<AudioWaveform className="h-4 w-4" />}
-                                label={ru.trackMenu.matchVibe}
+                                label={matchVibeLabel ?? ru.trackMenu.matchVibe}
                             />
                         )}
 
@@ -562,6 +591,7 @@ export function TrackOverflowMenu({
                                 (!isRemote && track.artist?.id)) && (
                                 <MenuButton
                                     onClick={handleStartRadio}
+                                    disabled={startRadioDisabled}
                                     icon={<Radio className="h-4 w-4" />}
                                     label={ru.trackMenu.startRadio}
                                 />
