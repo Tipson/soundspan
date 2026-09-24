@@ -39,8 +39,9 @@ Start-here guide for `frontend/features/home`.
 
 ## Playback Behavior
 
-- Home opens with a compact balanced My Wave action built from Quick picks, discovery,
-  and Listen again, resets its direction to For you, then marks the queue for
+- Home opens with a compact discovery-led My Wave action that adds a saved track
+  after four discoveries and a recent track after fifteen queued tracks,
+  resets its direction to For you, then marks the queue for
   automatic provider continuation. The launch surface describes the continuous
   flow without exposing the finite seed-window size as a track limit. Its
   artwork fan comes from that account's current feed rather than decorative or

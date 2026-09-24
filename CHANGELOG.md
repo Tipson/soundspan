@@ -1,5 +1,9 @@
 # Changelog
 
+## Wave discovery balance
+
+- Give discoveries more room in the default For You queue: place one saved track after four discoveries and a recently played track after fifteen selections. Keep Familiar focused on known music and retain a saved-track fallback when discovery is unavailable.
+
 ## Focused mobile player actions
 
 - Keep like, track radio, dislike, and playback controls visible in the mobile player. Place the radio button between the two ratings; keep playlist and Wave actions in the track menu without restarting the current song when starting Wave.
