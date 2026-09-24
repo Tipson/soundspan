@@ -1,5 +1,9 @@
 # Changelog
 
+## Music controls on iPhone
+
+- Offer previous and next track actions to the system player for music, while keeping short skips for podcasts and audiobooks. The playback position slider remains available for seeking within a song.
+
 ## Mobile player navigation and actions
 
 - Keep the player actions menu above the artwork and provide a visible close control on iPhone and other mobile screens.
