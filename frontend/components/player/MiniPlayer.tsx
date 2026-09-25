@@ -88,7 +88,7 @@ export function MiniPlayer() {
         >
             <div
                 className="mobile-player-surface pointer-events-auto overflow-hidden rounded-[14px]"
-                data-player-layout="identity-like-play"
+                data-player-layout="identity-ratings-play"
             >
                 <div className="relative h-[2px] w-full bg-white/[0.08]">
                     <div
@@ -165,7 +165,7 @@ export function MiniPlayer() {
                         currentTrack?.id &&
                         !isPlaybackOnlyTrack(currentTrack) && (
                             <div
-                                className="hidden flex-shrink-0 items-center min-[360px]:flex"
+                                className="flex flex-shrink-0 items-center"
                                 onClick={(e) => e.stopPropagation()}
                                 onKeyDown={(e) => e.stopPropagation()}
                                 role="group"
@@ -173,7 +173,7 @@ export function MiniPlayer() {
                             >
                                 <CurrentTrackPreferenceButtons
                                     trackId={currentTrack.id}
-                                    mode="up-only"
+                                    mode="both"
                                     buttonSizeClassName="h-11 w-11"
                                     iconSizeClassName="h-4 w-4"
                                     metadata={buildPreferenceMetadata(

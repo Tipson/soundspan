@@ -347,10 +347,13 @@ for (const name of [
         );
         for (const ordinary of [local, youtube]) {
             track = ordinary;
-            assert.match(
-                renderToStaticMarkup(React.createElement(Component)),
-                /Нравится/,
+            const ordinaryHtml = renderToStaticMarkup(
+                React.createElement(Component),
             );
+            assert.match(ordinaryHtml, /Нравится/);
+            if (name === "MiniPlayer") {
+                assert.match(ordinaryHtml, /aria-label="Не нравится"/);
+            }
         }
     });
 }
