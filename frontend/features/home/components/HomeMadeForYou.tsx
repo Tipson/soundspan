@@ -16,7 +16,7 @@ import { StaticPlaylistCard } from "./StaticPlaylistCard";
 import { pluralRu, ru } from "@/lib/i18n/ru";
 import { recommendationTrackKey } from "../recommendationIdentity";
 
-const MAX_PERSONAL_MIX_TRACKS = 12;
+const MAX_PERSONAL_MIX_TRACKS = 40;
 const MAX_HOME_MADE_CARDS = 5;
 
 interface HomePersonalMix {
@@ -90,9 +90,15 @@ export function buildHomePersonalMixes(
     const quickPicks = uniqueTracks(feed?.shelves.quickPicks ?? []);
     const discovery = uniqueTracks(feed?.shelves.discovery ?? []);
     const listenAgain = uniqueTracks(feed?.shelves.listenAgain ?? []);
-    const timeCandidates = timeOfDayMix
-        ? uniqueTracks(timeOfDayFeed?.shelves.discovery ?? [])
-        : [];
+    const timeDiscovery = uniqueTracks(timeOfDayFeed?.shelves.discovery ?? []);
+    const timeCandidates =
+        timeOfDayMix && timeDiscovery.length > 0
+            ? uniqueTracks([
+                  ...timeDiscovery,
+                  ...(timeOfDayFeed?.shelves.quickPicks ?? []),
+                  ...(timeOfDayFeed?.shelves.listenAgain ?? []),
+              ])
+            : [];
     const recipes: Array<
         Omit<HomePersonalMix, "tracks"> & {
             candidates: PersonalizedTrack[];
@@ -113,7 +119,14 @@ export function buildHomePersonalMixes(
             key: "fresh-finds",
             title: ru.home.dailyMixTwo,
             description: ru.home.freshFindsDescription,
-            candidates: discovery,
+            candidates:
+                discovery.length > 0
+                    ? uniqueTracks([
+                          ...discovery,
+                          ...quickPicks,
+                          ...listenAgain,
+                      ])
+                    : [],
             tone: "blue",
             generationId: feed?.generationId,
         },
@@ -121,10 +134,14 @@ export function buildHomePersonalMixes(
             key: "back-in-rotation",
             title: ru.home.dailyMixThree,
             description: ru.home.backInRotationDescription,
-            candidates: roundRobinTracks(
-                [listenAgain, quickPicks],
-                listenAgain.length + quickPicks.length,
-            ),
+            candidates:
+                listenAgain.length + quickPicks.length > 0
+                    ? uniqueTracks([
+                          ...listenAgain,
+                          ...quickPicks,
+                          ...discovery,
+                      ])
+                    : [],
             tone: "amber",
             generationId: feed?.generationId,
         },
@@ -140,63 +157,18 @@ export function buildHomePersonalMixes(
         });
     }
 
-    const uniqueAvailableTracks = uniqueTracks([
-        ...quickPicks,
-        ...discovery,
-        ...listenAgain,
-        ...timeCandidates,
-    ]);
-    if (uniqueAvailableTracks.length === 0) return [];
-
-    // Every visible collection must earn its place with at least roughly two
-    // unique tracks. When the account has fewer signals, showing fewer useful
-    // cards is more honest than repeating the same artwork and songs.
-    const visibleRecipeCount = Math.max(
-        1,
-        Math.min(recipes.length, Math.floor(uniqueAvailableTracks.length / 2)),
-    );
-    const availableRecipes = recipes.filter(
-        (recipe) => recipe.candidates.length > 0,
-    );
-    const visibleRecipes = availableRecipes.slice(0, visibleRecipeCount);
-    const timeRecipe = availableRecipes.find((recipe) =>
-        recipe.key.startsWith("time-"),
-    );
-    if (timeRecipe && !visibleRecipes.includes(timeRecipe)) {
-        visibleRecipes[visibleRecipes.length - 1] = timeRecipe;
-    }
-    const positions = visibleRecipes.map(() => 0);
-    const assigned = new Set<string>();
-    const allocated: HomePersonalMix[] = visibleRecipes.map((recipe) => ({
-        key: recipe.key,
-        title: recipe.title,
-        description: recipe.description,
-        tone: recipe.tone,
-        generationId: recipe.generationId,
-        tracks: [],
-    }));
-
-    let assignedInRound = true;
-    while (assignedInRound) {
-        assignedInRound = false;
-        visibleRecipes.forEach((recipe, recipeIndex) => {
-            const target = allocated[recipeIndex];
-            if (target.tracks.length >= MAX_PERSONAL_MIX_TRACKS) return;
-
-            while (positions[recipeIndex] < recipe.candidates.length) {
-                const candidate = recipe.candidates[positions[recipeIndex]];
-                positions[recipeIndex] += 1;
-                const identity = recommendationTrackKey(candidate);
-                if (assigned.has(identity)) continue;
-                assigned.add(identity);
-                target.tracks.push(candidate);
-                assignedInRound = true;
-                break;
-            }
-        });
-    }
-
-    return allocated.filter((recipe) => recipe.tracks.length > 0);
+    // A song may belong to several playlists, as it does in other music apps.
+    // Deduplicate within each queue, while keeping its own leading theme.
+    return recipes
+        .filter((recipe) => recipe.candidates.length > 0)
+        .map((recipe) => ({
+            key: recipe.key,
+            title: recipe.title,
+            description: recipe.description,
+            tone: recipe.tone,
+            generationId: recipe.generationId,
+            tracks: recipe.candidates.slice(0, MAX_PERSONAL_MIX_TRACKS),
+        }));
 }
 
 function GeneratedMixCard({ mix }: { mix: Mix }) {

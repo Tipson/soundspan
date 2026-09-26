@@ -54,9 +54,12 @@ Start-here guide for `frontend/features/home`.
   Three daily mixes draw separately from balanced, discovery, and familiar
   account signals. One additional mix uses the listener's local hour and a
   separate energetic, focus, or calm server-ranked discovery feed; it changes
-  as the day moves from morning to daytime to evening or night. Tracks are
-  assigned to at most one visible personal mix, and empty mixes are omitted.
-  Generated mixes fill any remaining initial slots.
+  as the day moves from morning to daytime to evening or night. The mixes use
+  separate 25-song shelves so the Home Wave seed remains unchanged. Each mix
+  forms its own queue of up to 40 songs,
+  leading with the relevant signals and filling from familiar or new music.
+  A song can appear in different mixes but not twice within one mix. Empty
+  mixes are omitted. Generated mixes fill any remaining initial slots.
   The shelf owns one opaque surface so the artwork atmosphere never creates a
   horizontal color seam through cards or metadata.
 - Home folds online discovery into at most one station row and one discovery

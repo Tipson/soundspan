@@ -106,11 +106,11 @@ const feed: PersonalizedHomeFeed = {
 const richFeed: PersonalizedHomeFeed = {
     ...feed,
     shelves: {
-        quickPicks: Array.from({ length: 12 }, (_, index) =>
+        quickPicks: Array.from({ length: 25 }, (_, index) =>
             track(`q${index}`),
         ),
-        discovery: Array.from({ length: 12 }, (_, index) => track(`d${index}`)),
-        listenAgain: Array.from({ length: 12 }, (_, index) =>
+        discovery: Array.from({ length: 25 }, (_, index) => track(`d${index}`)),
+        listenAgain: Array.from({ length: 25 }, (_, index) =>
             track(`l${index}`),
         ),
     },
@@ -119,8 +119,12 @@ const richFeed: PersonalizedHomeFeed = {
 const timeFeed: PersonalizedHomeFeed = {
     ...feed,
     shelves: {
-        quickPicks: [],
-        discovery: Array.from({ length: 8 }, (_, index) => track(`t${index}`)),
+        quickPicks: Array.from({ length: 25 }, (_, index) =>
+            track(`tq${index}`),
+        ),
+        discovery: Array.from({ length: 25 }, (_, index) =>
+            track(`td${index}`),
+        ),
         listenAgain: [],
     },
 };
@@ -138,7 +142,7 @@ test("time-of-day mix changes at local boundaries", async () => {
     assert.equal(timeOfDayMixForHour(23).mood, "calm");
 });
 
-test("three daily mixes and current time mix have separate playable queues", async () => {
+test("three daily mixes and current time mix offer long, differently led queues", async () => {
     const { buildHomePersonalMixes, timeOfDayMixForHour } =
         await import("../../features/home/components/HomeMadeForYou");
 
@@ -151,13 +155,20 @@ test("three daily mixes and current time mix have separate playable queues", asy
         mixes.map((mix) => mix.title),
         ["Микс дня 1", "Микс дня 2", "Микс дня 3", "Утренний ритм"],
     );
+    assert.ok(mixes.every((mix) => mix.tracks.length === 40));
+    assert.deepEqual(
+        mixes.map((mix) => mix.tracks[0].youtubeVideoId),
+        ["q0", "d0", "l0", "td0"],
+    );
+    assert.ok(mixes[0].tracks.some((item) => item.youtubeVideoId === "q0"));
+    assert.ok(mixes[2].tracks.some((item) => item.youtubeVideoId === "q0"));
     assert.ok(
-        mixes.every((mix) => mix.tracks.length >= 2 && mix.tracks.length <= 12),
+        mixes.every(
+            (mix) =>
+                new Set(mix.tracks.map((item) => item.youtubeVideoId)).size ===
+                mix.tracks.length,
+        ),
     );
-    const ids = mixes.flatMap((mix) =>
-        mix.tracks.map((item) => item.youtubeVideoId),
-    );
-    assert.equal(new Set(ids).size, ids.length);
 });
 
 test("current time mix remains visible when the account has fewer signals", async () => {
@@ -185,12 +196,12 @@ test("current time mix remains visible when the account has fewer signals", asyn
         sparseTimeFeed,
         timeOfDayMixForHour(20),
     );
-    assert.equal(mixes.length, 3);
+    assert.equal(mixes.length, 4);
     assert.ok(mixes.some((mix) => mix.title === "Тихий вечер"));
     assert.ok(mixes.every((mix) => mix.tracks.length >= 2));
 });
 
-test("personal Home mixes are distinct, playable, and bounded", async () => {
+test("personal Home mixes can reuse a song across different playlists, never inside one", async () => {
     const { buildHomePersonalMixes } =
         await import("../../features/home/components/HomeMadeForYou");
 
@@ -201,8 +212,7 @@ test("personal Home mixes are distinct, playable, and bounded", async () => {
         mixes.map((mix) => mix.title),
         ["Микс дня 1", "Микс дня 2", "Микс дня 3"],
     );
-    assert.ok(mixes.every((mix) => mix.tracks.length > 0));
-    assert.ok(mixes.every((mix) => mix.tracks.length <= 12));
+    assert.ok(mixes.every((mix) => mix.tracks.length === 7));
     assert.ok(
         mixes.every(
             (mix) =>
@@ -211,16 +221,11 @@ test("personal Home mixes are distinct, playable, and bounded", async () => {
         ),
     );
     const identities = mixes.map((mix) =>
-        mix.tracks
-            .map((item) => item.youtubeVideoId)
-            .sort()
-            .join("|"),
+        mix.tracks.map((item) => item.youtubeVideoId).join("|"),
     );
     assert.equal(new Set(identities).size, identities.length);
-    const visibleTrackIds = mixes.flatMap((mix) =>
-        mix.tracks.map((item) => item.youtubeVideoId),
-    );
-    assert.equal(new Set(visibleTrackIds).size, visibleTrackIds.length);
+    assert.ok(mixes[0].tracks.some((item) => item.youtubeVideoId === "shared"));
+    assert.ok(mixes[1].tracks.some((item) => item.youtubeVideoId === "shared"));
 });
 
 test("Home Made For You renders at most five distinct real collections", async () => {

@@ -23,6 +23,7 @@ export interface UseHomeDataReturn {
     mixes: Mix[];
     discoverWeekly: DiscoverWeeklySummary | null;
     personalizedFeed: PersonalizedHomeFeed | null;
+    dailyMixFeed: PersonalizedHomeFeed | null;
     timeOfDayFeed: PersonalizedHomeFeed | null;
     timeOfDayMix: TimeOfDayMix | null;
     isLoading: boolean;
@@ -59,8 +60,15 @@ export function useHomeData(): UseHomeDataReturn {
         waveMode,
         waveMood,
     );
+    const dailyMixQuery = usePersonalizedHomeFeed(
+        25,
+        isAuthenticated,
+        "for-you",
+        null,
+        "made-for-you",
+    );
     const timeOfDayQuery = usePersonalizedHomeFeed(
-        12,
+        25,
         isAuthenticated && timeOfDayMix !== null,
         "for-you",
         timeOfDayMix?.mood ?? null,
@@ -122,6 +130,7 @@ export function useHomeData(): UseHomeDataReturn {
         mixes,
         discoverWeekly,
         personalizedFeed: personalizedQuery.data ?? null,
+        dailyMixFeed: dailyMixQuery.data ?? null,
         timeOfDayFeed: timeOfDayQuery.data ?? null,
         timeOfDayMix,
         isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),

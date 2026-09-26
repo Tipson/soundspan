@@ -71,6 +71,7 @@ function OnlineHomePage() {
         mixes,
         discoverWeekly,
         personalizedFeed,
+        dailyMixFeed,
         timeOfDayFeed,
         timeOfDayMix,
         isLoading,
@@ -138,7 +139,7 @@ function OnlineHomePage() {
                             <HomeMadeForYou
                                 discoverWeekly={discoverWeekly}
                                 mixes={mixes}
-                                personalizedFeed={personalizedFeed}
+                                personalizedFeed={dailyMixFeed}
                                 timeOfDayFeed={timeOfDayFeed}
                                 timeOfDayMix={timeOfDayMix}
                                 isRefreshingMixes={isRefreshingMixes}

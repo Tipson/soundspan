@@ -149,10 +149,9 @@ export const ru = {
         dailyMixOne: "Микс дня 1",
         dailyMixTwo: "Микс дня 2",
         dailyMixThree: "Микс дня 3",
-        dailyBlendDescription: "Сбалансированный микс на сейчас",
-        freshFindsDescription: "Новая музыка рядом с тем, что вам уже нравится",
-        backInRotationDescription:
-            "Недавние любимые треки, которые стоит включить снова",
+        dailyBlendDescription: "Знакомое и новые находки",
+        freshFindsDescription: "Больше новой музыки",
+        backInRotationDescription: "Больше знакомых треков",
         quickPicksDescription: "Быстрый путь к музыке в вашем вкусе",
         playWave: "Включить мою волну",
         openWave: "Открыть мою волну",

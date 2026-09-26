@@ -1,5 +1,10 @@
 # Changelog
 
+## Longer personal mixes
+
+- Request up to 25 recommendations per mix shelf and build independent queues of up to 40 songs for each daily and time-of-day mix, without changing the Home Wave seed.
+- Reuse a fitting song across different mixes when needed, while keeping each queue free of duplicate recordings. Make the balanced, discovery-led, and familiar emphasis clear in their descriptions.
+
 ## Personal mixes by day and listening time
 
 - Put playable Discover Weekly first on Home, followed by three distinct daily mixes built from the listener's balanced, discovery, and familiar recommendations.

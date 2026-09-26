@@ -25,6 +25,7 @@ const state = {
         reason: null,
         seedCount: 3,
     } as unknown,
+    dailyMixFeed: null as unknown,
     isPersonalizedLoading: false,
     isPersonalizedUnavailable: false,
     showYtMusicExplore: true,
@@ -164,6 +165,13 @@ beforeEach(() => {
         reason: null,
         seedCount: 3,
     };
+    state.dailyMixFeed = {
+        shelves: {
+            quickPicks: [],
+            listenAgain: [],
+            discovery: [{ id: "mix-fresh-1" }, { id: "mix-fresh-2" }],
+        },
+    };
     state.isPersonalizedLoading = false;
     state.isPersonalizedUnavailable = false;
     state.showYtMusicExplore = true;
@@ -198,7 +206,7 @@ test("Home keeps personal playback without the generic online discovery shelf", 
     assert.match(html, /compact-wave-hero/);
     assert.match(html, /listening-dashboard:Again One,Quick One,Fresh One/);
     assert.match(html, /data-home-region="mixes"/);
-    assert.match(html, /made-for-you:weekly:1:1/);
+    assert.match(html, /made-for-you:weekly:1:2/);
     assert.doesNotMatch(html, /online-discovery/);
     assert.ok(
         html.indexOf("compact-wave-hero") < html.indexOf("listening-dashboard"),
@@ -224,6 +232,6 @@ test("Home keeps real personal shelves when generated mixes are unavailable", as
     const html = renderToStaticMarkup(React.createElement(HomePage));
 
     assert.match(html, /listening-dashboard:Again One,Quick One,Fresh One/);
-    assert.match(html, /made-for-you:none:0:1/);
+    assert.match(html, /made-for-you:none:0:2/);
     assert.doesNotMatch(html, /Daily Mix|Discover Weekly/);
 });
