@@ -199,5 +199,8 @@ test("Home loads the personal online feed without legacy local-media queries", a
     });
     assert.equal("recentPodcasts" in result, false);
     assert.equal("recentAudiobooks" in result, false);
-    assert.deepEqual(personalizedFeedCalls, [[12, true, "new", "focus"]]);
+    assert.deepEqual(personalizedFeedCalls, [
+        [12, true, "new", "focus"],
+        [12, false, "for-you", null, "made-for-you"],
+    ]);
 });

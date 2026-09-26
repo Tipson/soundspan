@@ -1,6 +1,6 @@
 /** Home feed data: personal listening signals and mixes. */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -10,6 +10,7 @@ import { frontendLogger as log } from "@/lib/logger";
 import { useAudioState } from "@/lib/audio-state-context";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
 import type { Mix, PersonalizedHomeFeed } from "../types";
+import { timeOfDayMixForHour, type TimeOfDayMix } from "../timeOfDayMix";
 import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
 import {
     queryKeys,
@@ -22,6 +23,8 @@ export interface UseHomeDataReturn {
     mixes: Mix[];
     discoverWeekly: DiscoverWeeklySummary | null;
     personalizedFeed: PersonalizedHomeFeed | null;
+    timeOfDayFeed: PersonalizedHomeFeed | null;
+    timeOfDayMix: TimeOfDayMix | null;
     isLoading: boolean;
     isRefreshingMixes: boolean;
     isPersonalizedLoading: boolean;
@@ -35,11 +38,33 @@ export function useHomeData(): UseHomeDataReturn {
     const { discovery, autoPlaylists } = useFeatures();
     const { waveMode, waveMood } = useAudioState();
     const queryClient = useQueryClient();
+    const [localHour, setLocalHour] = useState<number | null>(null);
+    useEffect(() => {
+        const updateHour = () => setLocalHour(new Date().getHours());
+        updateHour();
+        const interval = window.setInterval(updateHour, 60_000);
+        window.addEventListener("focus", updateHour);
+        document.addEventListener("visibilitychange", updateHour);
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener("focus", updateHour);
+            document.removeEventListener("visibilitychange", updateHour);
+        };
+    }, []);
+    const timeOfDayMix =
+        localHour === null ? null : timeOfDayMixForHour(localHour);
     const personalizedQuery = usePersonalizedHomeFeed(
         12,
         isAuthenticated,
         waveMode,
         waveMood,
+    );
+    const timeOfDayQuery = usePersonalizedHomeFeed(
+        12,
+        isAuthenticated && timeOfDayMix !== null,
+        "for-you",
+        timeOfDayMix?.mood ?? null,
+        "made-for-you",
     );
 
     useEffect(() => {
@@ -97,6 +122,8 @@ export function useHomeData(): UseHomeDataReturn {
         mixes,
         discoverWeekly,
         personalizedFeed: personalizedQuery.data ?? null,
+        timeOfDayFeed: timeOfDayQuery.data ?? null,
+        timeOfDayMix,
         isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),
         isRefreshingMixes,
         isPersonalizedLoading: personalizedQuery.isLoading,

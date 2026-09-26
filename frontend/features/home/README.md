@@ -22,6 +22,7 @@ Start-here guide for `frontend/features/home`.
 | `components/HomeQuickActions.tsx` | legacy utility links; intentionally not rendered on Home |
 | `components/HomeWaveHero.tsx` | personalized My Wave launch surface |
 | `components/HomeMadeForYou.tsx` | bounded set of distinct account-backed and generated mixes |
+| `timeOfDayMix.ts` | local-hour listening contexts for the current personal mix |
 | `components/LibraryRadioStations.tsx` | components |
 | `components/libraryRadioStationsGenreSelection.ts` | components |
 | `components/PopularArtistsGrid.tsx` | components |
@@ -49,10 +50,13 @@ Start-here guide for `frontend/features/home`.
 - Continue listening is one resumable track row and disappears when the account
   has no recent provider history.
 - Made For You exposes five playable collections initially and expands all
-  remaining collections in place. It derives distinct
-  Daily blend, Fresh finds, Back in rotation, and Quick picks recipes from
-  independent account signals, deduplicates identical recipes, then fills any
-  remaining initial slots with non-empty Discover Weekly and generated mixes.
+  remaining collections in place. A non-empty Discover Weekly leads the row.
+  Three daily mixes draw separately from balanced, discovery, and familiar
+  account signals. One additional mix uses the listener's local hour and a
+  separate energetic, focus, or calm server-ranked discovery feed; it changes
+  as the day moves from morning to daytime to evening or night. Tracks are
+  assigned to at most one visible personal mix, and empty mixes are omitted.
+  Generated mixes fill any remaining initial slots.
   The shelf owns one opaque surface so the artwork atmosphere never creates a
   horizontal color seam through cards or metadata.
 - Home folds online discovery into at most one station row and one discovery

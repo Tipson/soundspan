@@ -146,6 +146,9 @@ export const ru = {
         freshFinds: "Новые находки",
         backInRotation: "Снова в ротации",
         dailyBlend: "Микс дня",
+        dailyMixOne: "Микс дня 1",
+        dailyMixTwo: "Микс дня 2",
+        dailyMixThree: "Микс дня 3",
         dailyBlendDescription: "Сбалансированный микс на сейчас",
         freshFindsDescription: "Новая музыка рядом с тем, что вам уже нравится",
         backInRotationDescription:

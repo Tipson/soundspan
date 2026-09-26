@@ -1,5 +1,10 @@
 # Changelog
 
+## Personal mixes by day and listening time
+
+- Put playable Discover Weekly first on Home, followed by three distinct daily mixes built from the listener's balanced, discovery, and familiar recommendations.
+- Add a local-time morning, daytime, evening, or night mix ranked for the matching listening context; keep its queue separate from the daily mixes and hide it when no contextual discovery tracks are available.
+
 ## Compact player ratings
 
 - Keep both like and dislike visible in the mobile mini player, including narrow screens, while preserving the full-size tap targets and play control.

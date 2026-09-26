@@ -8,6 +8,8 @@ import { api } from "@/lib/api";
 import { useFeatures } from "@/lib/features-context";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
 import type { Mix, PersonalizedHomeFeed, PersonalizedTrack } from "../types";
+import type { TimeOfDayMix } from "../timeOfDayMix";
+export { timeOfDayMixForHour } from "../timeOfDayMix";
 import { PersonalizedMixCard } from "./PersonalizedMixCard";
 import { SectionHeader } from "./SectionHeader";
 import { StaticPlaylistCard } from "./StaticPlaylistCard";
@@ -23,12 +25,15 @@ interface HomePersonalMix {
     description: string;
     tracks: PersonalizedTrack[];
     tone: "violet" | "blue" | "amber";
+    generationId?: string;
 }
 
 interface HomeMadeForYouProps {
     discoverWeekly: DiscoverWeeklySummary | null;
     mixes: Mix[];
     personalizedFeed: PersonalizedHomeFeed | null;
+    timeOfDayFeed?: PersonalizedHomeFeed | null;
+    timeOfDayMix?: TimeOfDayMix | null;
     isRefreshingMixes: boolean;
     handleRefreshMixes: () => Promise<void>;
 }
@@ -77,12 +82,17 @@ function roundRobinTracks(
 /** Builds different playable mixes from independent account signals. */
 export function buildHomePersonalMixes(
     feed: PersonalizedHomeFeed | null,
+    timeOfDayFeed: PersonalizedHomeFeed | null = null,
+    timeOfDayMix: TimeOfDayMix | null = null,
 ): HomePersonalMix[] {
-    if (!feed) return [];
+    if (!feed && !timeOfDayFeed) return [];
 
-    const quickPicks = uniqueTracks(feed.shelves.quickPicks);
-    const discovery = uniqueTracks(feed.shelves.discovery);
-    const listenAgain = uniqueTracks(feed.shelves.listenAgain);
+    const quickPicks = uniqueTracks(feed?.shelves.quickPicks ?? []);
+    const discovery = uniqueTracks(feed?.shelves.discovery ?? []);
+    const listenAgain = uniqueTracks(feed?.shelves.listenAgain ?? []);
+    const timeCandidates = timeOfDayMix
+        ? uniqueTracks(timeOfDayFeed?.shelves.discovery ?? [])
+        : [];
     const recipes: Array<
         Omit<HomePersonalMix, "tracks"> & {
             candidates: PersonalizedTrack[];
@@ -90,41 +100,51 @@ export function buildHomePersonalMixes(
     > = [
         {
             key: "daily-blend",
-            title: ru.home.dailyBlend,
+            title: ru.home.dailyMixOne,
             description: ru.home.dailyBlendDescription,
             candidates: roundRobinTracks(
                 [quickPicks, discovery, listenAgain],
                 quickPicks.length + discovery.length + listenAgain.length,
             ),
             tone: "violet",
+            generationId: feed?.generationId,
         },
         {
             key: "fresh-finds",
-            title: ru.home.freshFinds,
+            title: ru.home.dailyMixTwo,
             description: ru.home.freshFindsDescription,
             candidates: discovery,
             tone: "blue",
+            generationId: feed?.generationId,
         },
         {
             key: "back-in-rotation",
-            title: ru.home.backInRotation,
+            title: ru.home.dailyMixThree,
             description: ru.home.backInRotationDescription,
-            candidates: listenAgain,
+            candidates: roundRobinTracks(
+                [listenAgain, quickPicks],
+                listenAgain.length + quickPicks.length,
+            ),
             tone: "amber",
-        },
-        {
-            key: "quick-picks",
-            title: ru.home.quickPicks,
-            description: ru.home.quickPicksDescription,
-            candidates: quickPicks,
-            tone: "violet",
+            generationId: feed?.generationId,
         },
     ];
+    if (timeOfDayMix && timeCandidates.length > 0) {
+        recipes.push({
+            key: `time-${timeOfDayMix.key}`,
+            title: timeOfDayMix.title,
+            description: timeOfDayMix.description,
+            candidates: timeCandidates,
+            tone: timeOfDayMix.key === "morning" ? "amber" : "blue",
+            generationId: timeOfDayFeed?.generationId,
+        });
+    }
 
     const uniqueAvailableTracks = uniqueTracks([
         ...quickPicks,
         ...discovery,
         ...listenAgain,
+        ...timeCandidates,
     ]);
     if (uniqueAvailableTracks.length === 0) return [];
 
@@ -135,7 +155,16 @@ export function buildHomePersonalMixes(
         1,
         Math.min(recipes.length, Math.floor(uniqueAvailableTracks.length / 2)),
     );
-    const visibleRecipes = recipes.slice(0, visibleRecipeCount);
+    const availableRecipes = recipes.filter(
+        (recipe) => recipe.candidates.length > 0,
+    );
+    const visibleRecipes = availableRecipes.slice(0, visibleRecipeCount);
+    const timeRecipe = availableRecipes.find((recipe) =>
+        recipe.key.startsWith("time-"),
+    );
+    if (timeRecipe && !visibleRecipes.includes(timeRecipe)) {
+        visibleRecipes[visibleRecipes.length - 1] = timeRecipe;
+    }
     const positions = visibleRecipes.map(() => 0);
     const assigned = new Set<string>();
     const allocated: HomePersonalMix[] = visibleRecipes.map((recipe) => ({
@@ -143,6 +172,7 @@ export function buildHomePersonalMixes(
         title: recipe.title,
         description: recipe.description,
         tone: recipe.tone,
+        generationId: recipe.generationId,
         tracks: [],
     }));
 
@@ -207,12 +237,18 @@ export function HomeMadeForYou({
     discoverWeekly,
     mixes,
     personalizedFeed,
+    timeOfDayFeed = null,
+    timeOfDayMix = null,
     isRefreshingMixes,
     handleRefreshMixes,
 }: HomeMadeForYouProps) {
     const { autoPlaylists } = useFeatures();
     const [showAllMixes, setShowAllMixes] = useState(false);
-    const personalMixes = buildHomePersonalMixes(personalizedFeed);
+    const personalMixes = buildHomePersonalMixes(
+        personalizedFeed,
+        timeOfDayFeed,
+        timeOfDayMix,
+    );
     const playableDiscoverWeekly =
         discoverWeekly && discoverWeekly.totalCount > 0 ? discoverWeekly : null;
     const playableMixes = mixes.filter((mix) => mix.trackCount > 0);
@@ -289,23 +325,6 @@ export function HomeMadeForYou({
                 id="home-all-mixes"
                 className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible"
             >
-                {visiblePersonalMixes.map((mix, index) => (
-                    <div
-                        key={mix.key}
-                        data-home-made-card={mix.key}
-                        className="min-w-0 snap-start"
-                    >
-                        <PersonalizedMixCard
-                            title={mix.title}
-                            description={mix.description}
-                            tracks={mix.tracks}
-                            tone={mix.tone}
-                            index={index}
-                            generationId={personalizedFeed?.generationId}
-                        />
-                    </div>
-                ))}
-
                 {showDiscoverWeekly && playableDiscoverWeekly && (
                     <div
                         data-home-made-card="discover-weekly"
@@ -325,6 +344,23 @@ export function HomeMadeForYou({
                         />
                     </div>
                 )}
+
+                {visiblePersonalMixes.map((mix, index) => (
+                    <div
+                        key={mix.key}
+                        data-home-made-card={mix.key}
+                        className="min-w-0 snap-start"
+                    >
+                        <PersonalizedMixCard
+                            title={mix.title}
+                            description={mix.description}
+                            tracks={mix.tracks}
+                            tone={mix.tone}
+                            index={index + (showDiscoverWeekly ? 1 : 0)}
+                            generationId={mix.generationId}
+                        />
+                    </div>
+                ))}
 
                 {visibleGeneratedMixes.map((mix) => (
                     <div
