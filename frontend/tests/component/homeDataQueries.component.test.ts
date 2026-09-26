@@ -135,7 +135,10 @@ mock.module("@/hooks/useQueries", {
             mutateAsync: async () => undefined,
             isPending: false,
         }),
-        queryKeys: { mixes: () => ["mixes"] },
+        queryKeys: {
+            mixes: () => ["mixes"],
+            personalDailyMixes: () => ["home", "personalized", "daily-mixes"],
+        },
     },
 });
 

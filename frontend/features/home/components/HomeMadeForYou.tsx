@@ -7,7 +7,12 @@ import { CoverMosaic } from "@/components/ui/CoverMosaic";
 import { api } from "@/lib/api";
 import { useFeatures } from "@/lib/features-context";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
-import type { Mix, PersonalizedHomeFeed, PersonalizedTrack } from "../types";
+import type {
+    Mix,
+    PersonalDailyMix,
+    PersonalizedHomeFeed,
+    PersonalizedTrack,
+} from "../types";
 import type { TimeOfDayMix } from "../timeOfDayMix";
 export { timeOfDayMixForHour } from "../timeOfDayMix";
 import { PersonalizedMixCard } from "./PersonalizedMixCard";
@@ -34,6 +39,7 @@ interface HomeMadeForYouProps {
     personalizedFeed: PersonalizedHomeFeed | null;
     timeOfDayFeed?: PersonalizedHomeFeed | null;
     timeOfDayMix?: TimeOfDayMix | null;
+    dailyStyleMixes?: PersonalDailyMix[] | null;
     isRefreshingMixes: boolean;
     handleRefreshMixes: () => Promise<void>;
 }
@@ -84,29 +90,29 @@ export function buildHomePersonalMixes(
     feed: PersonalizedHomeFeed | null,
     timeOfDayFeed: PersonalizedHomeFeed | null = null,
     timeOfDayMix: TimeOfDayMix | null = null,
+    dailyStyleMixes: PersonalDailyMix[] | null = [],
 ): HomePersonalMix[] {
-    if (!feed && !timeOfDayFeed) return [];
+    if (!feed && !timeOfDayFeed && !dailyStyleMixes?.length) return [];
 
     const quickPicks = uniqueTracks(feed?.shelves.quickPicks ?? []);
     const discovery = uniqueTracks(feed?.shelves.discovery ?? []);
     const listenAgain = uniqueTracks(feed?.shelves.listenAgain ?? []);
     const timeDiscovery = uniqueTracks(timeOfDayFeed?.shelves.discovery ?? []);
-    const timeCandidates =
-        timeOfDayMix
-            ? uniqueTracks([
-                  ...timeDiscovery,
-                  ...(timeOfDayFeed?.shelves.quickPicks ?? []),
-                  ...(timeOfDayFeed?.shelves.listenAgain ?? []),
-              ])
-            : [];
-    const recipes: Array<
+    const timeCandidates = timeOfDayMix
+        ? uniqueTracks([
+              ...timeDiscovery,
+              ...(timeOfDayFeed?.shelves.quickPicks ?? []),
+              ...(timeOfDayFeed?.shelves.listenAgain ?? []),
+          ])
+        : [];
+    const fallbackRecipes: Array<
         Omit<HomePersonalMix, "tracks"> & {
             candidates: PersonalizedTrack[];
         }
     > = [
         {
             key: "daily-blend",
-            title: ru.home.dailyMixOne,
+            title: ru.home.dailyBlend,
             description: ru.home.dailyBlendDescription,
             candidates: roundRobinTracks(
                 [quickPicks, discovery, listenAgain],
@@ -115,37 +121,19 @@ export function buildHomePersonalMixes(
             tone: "violet",
             generationId: feed?.generationId,
         },
-        {
-            key: "fresh-finds",
-            title: ru.home.dailyMixTwo,
-            description: ru.home.freshFindsDescription,
-            candidates:
-                discovery.length > 0
-                    ? uniqueTracks([
-                          ...discovery,
-                          ...quickPicks,
-                          ...listenAgain,
-                      ])
-                    : [],
-            tone: "blue",
-            generationId: feed?.generationId,
-        },
-        {
-            key: "back-in-rotation",
-            title: ru.home.dailyMixThree,
-            description: ru.home.backInRotationDescription,
-            candidates:
-                listenAgain.length + quickPicks.length > 0
-                    ? uniqueTracks([
-                          ...listenAgain,
-                          ...quickPicks,
-                          ...discovery,
-                      ])
-                    : [],
-            tone: "amber",
-            generationId: feed?.generationId,
-        },
     ];
+    const recipes: typeof fallbackRecipes =
+        dailyStyleMixes === null
+            ? []
+            : dailyStyleMixes.length > 0
+              ? dailyStyleMixes.map((mix, index) => ({
+                    key: mix.key,
+                    title: mix.title,
+                    description: mix.description,
+                    candidates: uniqueTracks(mix.tracks),
+                    tone: (["violet", "blue", "amber"] as const)[index % 3],
+                }))
+              : fallbackRecipes;
     if (timeOfDayMix && timeCandidates.length > 0) {
         recipes.push({
             key: `time-${timeOfDayMix.key}`,
@@ -211,6 +199,7 @@ export function HomeMadeForYou({
     personalizedFeed,
     timeOfDayFeed = null,
     timeOfDayMix = null,
+    dailyStyleMixes = [],
     isRefreshingMixes,
     handleRefreshMixes,
 }: HomeMadeForYouProps) {
@@ -220,6 +209,7 @@ export function HomeMadeForYou({
         personalizedFeed,
         timeOfDayFeed,
         timeOfDayMix,
+        dailyStyleMixes,
     );
     const playableDiscoverWeekly =
         discoverWeekly && discoverWeekly.totalCount > 0 ? discoverWeekly : null;

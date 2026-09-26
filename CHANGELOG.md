@@ -1,5 +1,10 @@
 # Changelog
 
+## Daily mixes by personal style
+
+- Build up to three long mixes from the listener's selected genres or artists, or from familiar artists when no tastes were selected. Use catalog artists as style anchors and familiar songs alongside related discoveries. Refresh the artist anchors across days and exclude disliked or repeated tracks.
+- Show one balanced mix when there is not enough music for separate directions; keep the local-time mix and Discover Weekly independent.
+
 ## Listening-time personal mix
 
 - Let the morning, daytime, evening, and night mix follow the listener's actual habits at those local times. Refresh its separate recommendation cache at period boundaries and use neutral titles instead of prescribing an energetic morning or quiet evening.

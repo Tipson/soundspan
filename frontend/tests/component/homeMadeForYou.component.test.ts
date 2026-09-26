@@ -129,6 +129,50 @@ const timeFeed: PersonalizedHomeFeed = {
     },
 };
 
+test("real style mixes replace reordered daily copies and keep the time mix", async () => {
+    const { buildHomePersonalMixes, timeOfDayMixForHour } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const styleMixes = [
+        {
+            key: "genre:Рок",
+            title: "Рок для вас",
+            description: "Знакомое и новые находки",
+            tracks: Array.from({ length: 40 }, (_, index) =>
+                track(`rock-${index}`),
+            ),
+        },
+        {
+            key: "genre:Джаз",
+            title: "Джаз для вас",
+            description: "Знакомое и новые находки",
+            tracks: Array.from({ length: 40 }, (_, index) =>
+                track(`jazz-${index}`),
+            ),
+        },
+    ];
+
+    const result = buildHomePersonalMixes(
+        richFeed,
+        timeFeed,
+        timeOfDayMixForHour(8),
+        styleMixes,
+    );
+
+    assert.deepEqual(
+        result.map((mix) => mix.title),
+        ["Рок для вас", "Джаз для вас", "Ваше утро"],
+    );
+    assert.equal(result[0].tracks.length, 40);
+    assert.equal(result[1].tracks.length, 40);
+    assert.ok(result.every((mix) => !mix.title.startsWith("Микс дня")));
+});
+
+test("does not briefly show a generic mix while style mixes are loading", async () => {
+    const { buildHomePersonalMixes } =
+        await import("../../features/home/components/HomeMadeForYou");
+    assert.deepEqual(buildHomePersonalMixes(richFeed, null, null, null), []);
+});
+
 test("time-of-day mix changes at local boundaries", async () => {
     const { timeOfDayMixForHour } =
         await import("../../features/home/components/HomeMadeForYou");
@@ -144,7 +188,7 @@ test("time-of-day mix changes at local boundaries", async () => {
     assert.equal(timeOfDayMixForHour(0).title, "Ваша ночь");
 });
 
-test("three daily mixes and current time mix offer long, differently led queues", async () => {
+test("one honest fallback and the current time mix offer long queues", async () => {
     const { buildHomePersonalMixes, timeOfDayMixForHour } =
         await import("../../features/home/components/HomeMadeForYou");
 
@@ -155,15 +199,14 @@ test("three daily mixes and current time mix offer long, differently led queues"
     );
     assert.deepEqual(
         mixes.map((mix) => mix.title),
-        ["Микс дня 1", "Микс дня 2", "Микс дня 3", "Ваше утро"],
+        ["Микс дня", "Ваше утро"],
     );
     assert.ok(mixes.every((mix) => mix.tracks.length === 40));
     assert.deepEqual(
         mixes.map((mix) => mix.tracks[0].youtubeVideoId),
-        ["q0", "d0", "l0", "td0"],
+        ["q0", "td0"],
     );
     assert.ok(mixes[0].tracks.some((item) => item.youtubeVideoId === "q0"));
-    assert.ok(mixes[2].tracks.some((item) => item.youtubeVideoId === "q0"));
     assert.ok(
         mixes.every(
             (mix) =>
@@ -198,7 +241,7 @@ test("current time mix remains visible when the account has fewer signals", asyn
         sparseTimeFeed,
         timeOfDayMixForHour(20),
     );
-    assert.equal(mixes.length, 4);
+    assert.equal(mixes.length, 2);
     assert.ok(mixes.some((mix) => mix.title === "Ваш вечер"));
     assert.ok(mixes.every((mix) => mix.tracks.length >= 2));
 });
@@ -224,16 +267,16 @@ test("time-of-day mix can use familiar recommendations when discovery is empty",
     assert.equal(mixes.at(-1)?.tracks[0].youtubeVideoId, "morning-known");
 });
 
-test("personal Home mixes can reuse a song across different playlists, never inside one", async () => {
+test("fallback does not invent three styles from the same seven songs", async () => {
     const { buildHomePersonalMixes } =
         await import("../../features/home/components/HomeMadeForYou");
 
     const mixes = buildHomePersonalMixes(feed);
 
-    assert.equal(mixes.length, 3);
+    assert.equal(mixes.length, 1);
     assert.deepEqual(
         mixes.map((mix) => mix.title),
-        ["Микс дня 1", "Микс дня 2", "Микс дня 3"],
+        ["Микс дня"],
     );
     assert.ok(mixes.every((mix) => mix.tracks.length === 7));
     assert.ok(
@@ -243,12 +286,7 @@ test("personal Home mixes can reuse a song across different playlists, never ins
                 mix.tracks.length,
         ),
     );
-    const identities = mixes.map((mix) =>
-        mix.tracks.map((item) => item.youtubeVideoId).join("|"),
-    );
-    assert.equal(new Set(identities).size, identities.length);
     assert.ok(mixes[0].tracks.some((item) => item.youtubeVideoId === "shared"));
-    assert.ok(mixes[1].tracks.some((item) => item.youtubeVideoId === "shared"));
 });
 
 test("Home Made For You renders at most five distinct real collections", async () => {
@@ -281,14 +319,12 @@ test("Home Made For You renders at most five distinct real collections", async (
     assert.match(html, /data-home-rail="mixes"/);
     assert.match(html, /data-home-mixes-surface="unified"/);
     assert.equal((html.match(/data-home-made-card=/g) ?? []).length, 5);
-    assert.match(html, /Микс дня 1/);
-    assert.match(html, /Микс дня 2/);
-    assert.match(html, /Микс дня 3/);
+    assert.match(html, /Микс дня/);
+    assert.doesNotMatch(html, /Микс дня 2/);
     assert.match(html, /Ваше утро/);
     assert.match(html, /Открытия недели/);
-    assert.doesNotMatch(html, /Mix 0/);
-    assert.ok(html.indexOf("Открытия недели") < html.indexOf("Микс дня 1"));
-    assert.doesNotMatch(html, /Mix 1/);
+    assert.match(html, /Mix 0/);
+    assert.ok(html.indexOf("Открытия недели") < html.indexOf("Микс дня"));
     assert.match(html, /aria-controls="home-all-mixes"/);
     assert.match(html, /aria-expanded="false"/);
     assert.doesNotMatch(html, /href="\/playlists"/);
@@ -345,7 +381,7 @@ test("Home Made For You expands and collapses every collection inline on one sur
     await React.act(async () => toggle.click());
     assert.equal(toggle.getAttribute("aria-expanded"), "true");
     assert.equal(toggle.textContent?.trim(), "Свернуть");
-    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 13);
+    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 11);
     assert.match(surface.textContent ?? "", /Mix 7/);
     assert.equal(surface.querySelector('a[href="/playlists"]'), null);
 
@@ -353,7 +389,7 @@ test("Home Made For You expands and collapses every collection inline on one sur
     assert.equal(toggle.getAttribute("aria-expanded"), "false");
     assert.equal(toggle.textContent?.trim(), "Показать все");
     assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 5);
-    assert.doesNotMatch(surface.textContent ?? "", /Mix 1/);
+    assert.doesNotMatch(surface.textContent ?? "", /Mix 2/);
 
     await React.act(async () => root.unmount());
     container.remove();

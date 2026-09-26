@@ -26,6 +26,17 @@ describe("resolveProxyTimeoutMs", () => {
         assert.equal(timeoutMs, 150_000);
     });
 
+    test("allows cold personal mixes to finish bounded catalog and radio probes", () => {
+        assert.equal(
+            resolveProxyTimeoutMs("api/personalized/daily-mixes", {}),
+            65_000,
+        );
+        assert.equal(
+            resolveProxyTimeoutMs("api/personalized/daily-mixes-extra", {}),
+            20_000,
+        );
+    });
+
     test("keeps media streams alive beyond the backend 120-second budget", () => {
         assert.equal(
             resolveProxyTimeoutMs("api/ytmusic/stream-public/kXYiU_JCYtU", {}),

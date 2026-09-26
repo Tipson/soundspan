@@ -1,7 +1,7 @@
 /** Home feed data: personal listening signals and mixes. */
 
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -9,7 +9,7 @@ import { useFeatures } from "@/lib/features-context";
 import { frontendLogger as log } from "@/lib/logger";
 import { useAudioState } from "@/lib/audio-state-context";
 import type { DiscoverWeeklySummary } from "@/features/explore/hooks/useExploreData";
-import type { Mix, PersonalizedHomeFeed } from "../types";
+import type { Mix, PersonalDailyMix, PersonalizedHomeFeed } from "../types";
 import { timeOfDayMixForHour, type TimeOfDayMix } from "../timeOfDayMix";
 import { usePersonalizedHomeFeed } from "./usePersonalizedHomeFeed";
 import {
@@ -24,6 +24,7 @@ export interface UseHomeDataReturn {
     discoverWeekly: DiscoverWeeklySummary | null;
     personalizedFeed: PersonalizedHomeFeed | null;
     dailyMixFeed: PersonalizedHomeFeed | null;
+    dailyStyleMixes: PersonalDailyMix[] | null;
     timeOfDayFeed: PersonalizedHomeFeed | null;
     timeOfDayMix: TimeOfDayMix | null;
     isLoading: boolean;
@@ -67,6 +68,17 @@ export function useHomeData(): UseHomeDataReturn {
         null,
         "made-for-you",
     );
+    const dailyStyleMixQuery = useQuery({
+        queryKey: queryKeys.personalDailyMixes(),
+        queryFn: ({ signal }) =>
+            api.request<{ mixes: PersonalDailyMix[] }>(
+                "/personalized/daily-mixes",
+                { method: "GET", signal, timeoutMs: 60_000 },
+            ),
+        enabled: isAuthenticated,
+        staleTime: 60 * 60 * 1000,
+        retry: 1,
+    });
     const timeOfDayQuery = usePersonalizedHomeFeed(
         25,
         isAuthenticated && timeOfDayMix !== null,
@@ -95,6 +107,9 @@ export function useHomeData(): UseHomeDataReturn {
     const handleRefreshMixes = async () => {
         try {
             await refreshMixes();
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.personalDailyMixes(),
+            });
             toast.success("Миксы обновлены — новые подборки уже готовы");
         } catch (error) {
             log.error("Failed to refresh mixes:", error);
@@ -133,6 +148,9 @@ export function useHomeData(): UseHomeDataReturn {
         discoverWeekly,
         personalizedFeed: personalizedQuery.data ?? null,
         dailyMixFeed: dailyMixQuery.data ?? null,
+        dailyStyleMixes: dailyStyleMixQuery.isPending
+            ? null
+            : (dailyStyleMixQuery.data?.mixes ?? []),
         timeOfDayFeed: timeOfDayQuery.data ?? null,
         timeOfDayMix,
         isLoading: !isAuthenticated || (!hasPrimaryData && allPrimaryLoading),

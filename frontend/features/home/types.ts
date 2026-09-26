@@ -137,3 +137,11 @@ export interface PersonalizedHomeFeed {
     generationId?: string;
     degradedSources?: string[];
 }
+
+/** One playable account-specific style mix from the daily-mixes endpoint. */
+export interface PersonalDailyMix {
+    key: string;
+    title: string;
+    description: string;
+    tracks: PersonalizedTrack[];
+}

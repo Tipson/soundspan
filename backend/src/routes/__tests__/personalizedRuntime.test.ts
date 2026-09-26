@@ -3,6 +3,7 @@ import request from "supertest";
 
 const mockGetPersonalizedFeed = jest.fn();
 const mockMarkViewed = jest.fn();
+const mockGetDailyMixes = jest.fn();
 
 jest.mock("../../middleware/auth", () => ({
     requireAuthOrToken: (req: Request, res: Response, next: NextFunction) => {
@@ -27,6 +28,12 @@ jest.mock("../../services/recommendations/exposureStore", () => ({
     },
 }));
 
+jest.mock("../../services/personalDailyMixes", () => ({
+    personalDailyMixService: {
+        getMixes: (...args: unknown[]) => mockGetDailyMixes(...args),
+    },
+}));
+
 jest.mock("../../utils/logger", () => {
     const logger = {
         debug: jest.fn(),
@@ -43,6 +50,30 @@ import router from "../personalized";
 import { createRouteTestApp } from "./helpers/createRouteTestApp";
 
 const app = createRouteTestApp("/api/personalized", router);
+
+describe("GET /api/personalized/daily-mixes", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockGetDailyMixes.mockResolvedValue({ mixes: [] });
+    });
+
+    it("requires an account", async () => {
+        const response = await request(app).get(
+            "/api/personalized/daily-mixes",
+        );
+        expect(response.status).toBe(401);
+        expect(mockGetDailyMixes).not.toHaveBeenCalled();
+    });
+
+    it("returns that account's mixes without altering listening history", async () => {
+        const response = await request(app)
+            .get("/api/personalized/daily-mixes")
+            .set("x-test-auth", "ok");
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ mixes: [] });
+        expect(mockGetDailyMixes).toHaveBeenCalledWith("user-1");
+    });
+});
 
 describe("GET /api/personalized/home", () => {
     beforeEach(() => {

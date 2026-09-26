@@ -22,8 +22,10 @@ const DEFAULT_PROXY_TIMEOUT_MS = 20_000;
 const DEFAULT_IMPORT_PREVIEW_PROXY_TIMEOUT_MS = 150_000;
 const DEFAULT_MEDIA_STREAM_PROXY_TIMEOUT_MS = 125_000;
 const DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS = 90_000;
+const DEFAULT_PERSONAL_DAILY_MIX_PROXY_TIMEOUT_MS = 65_000;
 const IMPORT_PREVIEW_PROXY_PATH = "api/import/preview";
 const UNAVAILABLE_RECOVERY_PROXY_PATH = "api/ytmusic/recover-unavailable";
+const PERSONAL_DAILY_MIX_PROXY_PATH = "api/personalized/daily-mixes";
 const MEDIA_STREAM_PATH_PATTERNS = [
     /^(?:api\/)?music-sources\/leases\/[^/]+\/stream$/,
     /^(?:api\/)?ytmusic\/(?:stream|stream-public)\/[^/]+$/,
@@ -65,6 +67,13 @@ export const resolveProxyTimeoutMs = (
         return Math.max(
             globalTimeout,
             DEFAULT_UNAVAILABLE_RECOVERY_PROXY_TIMEOUT_MS,
+        );
+    }
+
+    if (normalizedPath === PERSONAL_DAILY_MIX_PROXY_PATH) {
+        return Math.max(
+            globalTimeout,
+            DEFAULT_PERSONAL_DAILY_MIX_PROXY_TIMEOUT_MS,
         );
     }
 

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuthOrToken } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { unifiedRecommendationService } from "../services/recommendations/recommendationRuntime";
+import { personalDailyMixService } from "../services/personalDailyMixes";
 import { recommendationExposureStore } from "../services/recommendations/exposureStore";
 import { logger } from "../utils/logger";
 import { sendRouteError } from "../utils/routeErrorResponse";
@@ -225,6 +226,28 @@ router.use(requireAuthOrToken);
  *           type: integer
  *           minimum: 0
  *           description: Cursor for a fresh provider-radio seed page
+ *     PersonalDailyMixes:
+ *       type: object
+ *       required: [mixes]
+ *       properties:
+ *         mixes:
+ *           type: array
+ *           maxItems: 3
+ *           items:
+ *             type: object
+ *             required: [key, title, description, tracks]
+ *             properties:
+ *               key:
+ *                 type: string
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               tracks:
+ *                 type: array
+ *                 maxItems: 40
+ *                 items:
+ *                   $ref: '#/components/schemas/PersonalizedTrack'
  */
 
 /**
@@ -386,6 +409,37 @@ async function handlePersonalizedHome(req: Request, res: Response) {
 }
 
 router.get("/home", asyncHandler(handlePersonalizedHome));
+
+/**
+ * @openapi
+ * /api/personalized/daily-mixes:
+ *   get:
+ *     summary: Playable daily mixes for the account's selected styles
+ *     tags: [Personalized]
+ *     security:
+ *       - apiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Up to three distinct personal mixes with playable tracks
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PersonalDailyMixes'
+ *       401:
+ *         description: Authentication required
+ */
+router.get(
+    "/daily-mixes",
+    asyncHandler(async (req: Request, res: Response) => {
+        const userId = req.user?.id;
+        if (!userId) {
+            return sendRouteError(res, 401, "Authentication required", {
+                code: "AUTH_REQUIRED",
+            });
+        }
+        return res.json(await personalDailyMixService.getMixes(userId));
+    }),
+);
 
 /**
  * @openapi
