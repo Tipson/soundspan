@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Favor songs the listener has not played in the last seven days in personal style mixes; use older recent plays to fill a mix only when necessary.
 - Let listeners swipe through every available mix on mobile and scroll the Home page vertically from the artwork area; keep the five-card desktop preview with its expand control.
 - Offer up to six distinct, playable daily style mixes from selected genres, selected artists, and familiar artists when listening supports them, while retaining the 20-track minimum and filtering disliked or repeated songs.
 
