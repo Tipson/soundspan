@@ -117,6 +117,46 @@ function createService(
 }
 
 describe("PersonalizedCatalogService", () => {
+    it("favors actual listening in the matching local part of the day", async () => {
+        const evening = storedTrack("evening-song");
+        const morning = storedTrack("morning-song");
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [evening, morning],
+                playbackSignals: [
+                    playbackSignal("evening-song", "completed", {
+                        track: evening,
+                        playedAt: new Date("2026-09-01T17:00:00Z"),
+                    }),
+                    playbackSignal("morning-song", "completed", {
+                        track: morning,
+                        playedAt: new Date("2026-09-02T05:00:00Z"),
+                    }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [],
+            }),
+        });
+
+        const morningMix = await service.getHomeFeed("user-1", 2, {
+            surface: "made-for-you",
+            listeningContext: { localHour: 8, timezoneOffsetMinutes: 180 },
+        });
+        const eveningMix = await service.getHomeFeed("user-1", 2, {
+            surface: "made-for-you",
+            listeningContext: { localHour: 20, timezoneOffsetMinutes: 180 },
+        });
+        expect(morningMix.shelves.quickPicks[0].youtubeVideoId).toBe(
+            "morning-song",
+        );
+        expect(eveningMix.shelves.quickPicks[0].youtubeVideoId).toBe(
+            "evening-song",
+        );
+    });
     it("does not amplify taste when the same song is copied into multiple playlists", async () => {
         const playlistTrack = storedTrack("playlist-song");
         const build = (copies: number) =>

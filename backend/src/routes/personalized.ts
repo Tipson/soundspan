@@ -42,6 +42,7 @@ const personalizedHomeQuerySchema = z
             ])
             .optional(),
         surface: z.enum(["home", "wave", "made-for-you"]).optional(),
+        timeOfDay: z.literal("1").optional(),
         sessionId: z.string().trim().min(1).max(128).optional(),
         localHour: z.coerce.number().int().min(0).max(23).optional(),
         timezoneOffsetMinutes: z.coerce
@@ -56,7 +57,18 @@ const personalizedHomeQuerySchema = z
     .refine((value) => !value.language || value.surface === "wave", {
         message: "Language selection requires Wave",
         path: ["language"],
-    });
+    })
+    .refine(
+        (value) =>
+            !value.timeOfDay ||
+            (value.surface === "made-for-you" &&
+                value.localHour !== undefined &&
+                value.timezoneOffsetMinutes !== undefined),
+        {
+            message: "Time-of-day mix requires local listening context",
+            path: ["timeOfDay"],
+        },
+    );
 const recommendationImpressionsSchema = z
     .object({
         generationId: z.string().trim().min(1).max(128),
@@ -269,6 +281,12 @@ router.use(requireAuthOrToken);
  *           type: string
  *         description: Up to 80 comma-separated YouTube video IDs already present in the queue
  *       - in: query
+ *         name: timeOfDay
+ *         schema:
+ *           type: string
+ *           enum: ['1']
+ *         description: Rank a made-for-you mix using listening at the same local time of day; requires localHour and timezoneOffsetMinutes.
+ *       - in: query
  *         name: localHour
  *         schema:
  *           type: integer
@@ -341,6 +359,7 @@ async function handlePersonalizedHome(req: Request, res: Response) {
         cursor: parsedQuery.data.cursor ?? 0,
         direction: parsedQuery.data.mode ?? "for-you",
         mood: parsedQuery.data.mood ?? null,
+        ...(parsedQuery.data.timeOfDay ? { timeOfDay: true } : {}),
         ...(parsedQuery.data.language
             ? { language: parsedQuery.data.language }
             : {}),

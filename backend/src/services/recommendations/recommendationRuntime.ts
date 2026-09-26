@@ -146,6 +146,7 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
                 sessionId: request.sessionId,
                 surface: request.intent.surface,
                 context: request.context,
+                crossSurfaceContext: request.timeOfDay,
             }),
             recommendationMoodEmbeddingStore.load(request.intent.mood ?? null),
         ]);

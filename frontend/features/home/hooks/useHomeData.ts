@@ -71,8 +71,10 @@ export function useHomeData(): UseHomeDataReturn {
         25,
         isAuthenticated && timeOfDayMix !== null,
         "for-you",
-        timeOfDayMix?.mood ?? null,
+        null,
         "made-for-you",
+        "any",
+        timeOfDayMix?.key ?? null,
     );
 
     useEffect(() => {

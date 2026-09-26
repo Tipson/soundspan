@@ -259,6 +259,23 @@ describe("GET /api/personalized/home", () => {
         );
     });
 
+    it("requests time-aware selection only for a made-for-you mix", async () => {
+        const response = await request(app)
+            .get(
+                "/api/personalized/home?surface=made-for-you&timeOfDay=1&localHour=9&timezoneOffsetMinutes=180",
+            )
+            .set("x-test-auth", "ok");
+
+        expect(response.status).toBe(200);
+        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect.objectContaining({ timeOfDay: true }),
+        );
+        const invalid = await request(app)
+            .get("/api/personalized/home?surface=wave&timeOfDay=1")
+            .set("x-test-auth", "ok");
+        expect(invalid.status).toBe(400);
+    });
+
     it.each([
         "cursor=-1",
         "cursor=1.5",

@@ -76,6 +76,13 @@ The authenticated endpoints are:
 - `GET /api/player/related` for online-first similar tracks and related
   artist/album rows.
 
+The Made For You time-of-day mix requests `timeOfDay=1` with a bounded local
+hour and timezone offset. Its source ranking favors completed or meaningful
+listening from the same local period across the account's plays; missing
+period-specific history falls back to general taste. Hybrid ranking also
+learns same-period recommendations from Home, Wave, and Made For You across
+devices. Daily mixes omit `timeOfDay=1` and retain their own candidate ranking.
+
 Similar Tracks always attempts the playable YouTube Music radio fallback. A
 canonical DCLAP seed augments ranking when available, but it is not required
 for a non-empty response.

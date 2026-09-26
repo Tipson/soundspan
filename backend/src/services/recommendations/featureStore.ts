@@ -131,6 +131,7 @@ export class RecommendationFeatureStore {
             sessionId?: string;
             surface?: RecommendationSurface;
             context?: RecommendationRequestContext;
+            crossSurfaceContext?: boolean;
         },
     ): Promise<{
         positiveCentroids: number[][];
@@ -144,7 +145,19 @@ export class RecommendationFeatureStore {
             this.dependencies.now().getTime() -
                 TASTE_LOOKBACK_DAYS * 24 * 60 * 60 * 1_000,
         );
-        const [rows, sessionRows, contextRows, likedEmbeddings] =
+        const contextSurfaces: RecommendationSurface[] =
+            options?.crossSurfaceContext &&
+            options.surface === "made-for-you" &&
+            options.context?.localHour !== undefined
+                ? ["wave", "home", "made-for-you"]
+                : options?.surface
+                  ? [options.surface]
+                  : [];
+        const context =
+            options?.context && options.crossSurfaceContext
+                ? { ...options.context, deviceClass: undefined }
+                : options?.context;
+        const [rows, sessionRows, contextRowsBySurface, likedEmbeddings] =
             await Promise.all([
                 this.dependencies.loadTasteRows(userId, since),
                 options?.sessionId
@@ -154,12 +167,16 @@ export class RecommendationFeatureStore {
                           30,
                       )
                     : Promise.resolve([]),
-                options?.surface && options.context
-                    ? this.dependencies.loadContextRows(
-                          userId,
-                          options.surface,
-                          options.context,
-                          since,
+                context
+                    ? Promise.all(
+                          contextSurfaces.map((surface) =>
+                              this.dependencies.loadContextRows(
+                                  userId,
+                                  surface,
+                                  context,
+                                  since,
+                              ),
+                          ),
                       )
                     : Promise.resolve([]),
                 this.dependencies.loadLikedEmbeddings?.(userId) ??
@@ -194,7 +211,8 @@ export class RecommendationFeatureStore {
                 (row) => tasteDelta(row) !== 0,
             ).length,
             contextCentroids: buildTasteCentroids(
-                contextRows
+                contextRowsBySurface
+                    .flat()
                     .filter((row) => tasteDelta(row) > 0)
                     .map((row) => row.embedding),
                 3,

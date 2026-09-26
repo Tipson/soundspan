@@ -134,12 +134,14 @@ test("time-of-day mix changes at local boundaries", async () => {
         await import("../../features/home/components/HomeMadeForYou");
 
     assert.equal(timeOfDayMixForHour(4).key, "night");
-    assert.equal(timeOfDayMixForHour(5).key, "morning");
-    assert.equal(timeOfDayMixForHour(11).mood, "energetic");
+    assert.equal(timeOfDayMixForHour(5).key, "night");
+    assert.equal(timeOfDayMixForHour(6).key, "morning");
+    assert.equal(timeOfDayMixForHour(11).title, "Ваше утро");
     assert.equal(timeOfDayMixForHour(12).key, "daytime");
-    assert.equal(timeOfDayMixForHour(17).mood, "focus");
+    assert.equal(timeOfDayMixForHour(17).title, "Ваш день");
     assert.equal(timeOfDayMixForHour(18).key, "evening");
-    assert.equal(timeOfDayMixForHour(23).mood, "calm");
+    assert.equal(timeOfDayMixForHour(23).title, "Ваш вечер");
+    assert.equal(timeOfDayMixForHour(0).title, "Ваша ночь");
 });
 
 test("three daily mixes and current time mix offer long, differently led queues", async () => {
@@ -153,7 +155,7 @@ test("three daily mixes and current time mix offer long, differently led queues"
     );
     assert.deepEqual(
         mixes.map((mix) => mix.title),
-        ["Микс дня 1", "Микс дня 2", "Микс дня 3", "Утренний ритм"],
+        ["Микс дня 1", "Микс дня 2", "Микс дня 3", "Ваше утро"],
     );
     assert.ok(mixes.every((mix) => mix.tracks.length === 40));
     assert.deepEqual(
@@ -197,8 +199,29 @@ test("current time mix remains visible when the account has fewer signals", asyn
         timeOfDayMixForHour(20),
     );
     assert.equal(mixes.length, 4);
-    assert.ok(mixes.some((mix) => mix.title === "Тихий вечер"));
+    assert.ok(mixes.some((mix) => mix.title === "Ваш вечер"));
     assert.ok(mixes.every((mix) => mix.tracks.length >= 2));
+});
+
+test("time-of-day mix can use familiar recommendations when discovery is empty", async () => {
+    const { buildHomePersonalMixes, timeOfDayMixForHour } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const familiarTimeFeed: PersonalizedHomeFeed = {
+        ...timeFeed,
+        shelves: {
+            quickPicks: [track("morning-known")],
+            discovery: [],
+            listenAgain: [],
+        },
+    };
+
+    const mixes = buildHomePersonalMixes(
+        feed,
+        familiarTimeFeed,
+        timeOfDayMixForHour(9),
+    );
+    assert.equal(mixes.at(-1)?.title, "Ваше утро");
+    assert.equal(mixes.at(-1)?.tracks[0].youtubeVideoId, "morning-known");
 });
 
 test("personal Home mixes can reuse a song across different playlists, never inside one", async () => {
@@ -261,7 +284,7 @@ test("Home Made For You renders at most five distinct real collections", async (
     assert.match(html, /Микс дня 1/);
     assert.match(html, /Микс дня 2/);
     assert.match(html, /Микс дня 3/);
-    assert.match(html, /Утренний ритм/);
+    assert.match(html, /Ваше утро/);
     assert.match(html, /Открытия недели/);
     assert.doesNotMatch(html, /Mix 0/);
     assert.ok(html.indexOf("Открытия недели") < html.indexOf("Микс дня 1"));

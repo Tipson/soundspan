@@ -202,6 +202,6 @@ test("Home loads the personal online feed without legacy local-media queries", a
     assert.deepEqual(personalizedFeedCalls, [
         [12, true, "new", "focus"],
         [25, true, "for-you", null, "made-for-you"],
-        [25, false, "for-you", null, "made-for-you"],
+        [25, false, "for-you", null, "made-for-you", "any", null],
     ]);
 });

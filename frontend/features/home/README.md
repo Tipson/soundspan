@@ -52,9 +52,11 @@ Start-here guide for `frontend/features/home`.
 - Made For You exposes five playable collections initially and expands all
   remaining collections in place. A non-empty Discover Weekly leads the row.
   Three daily mixes draw separately from balanced, discovery, and familiar
-  account signals. One additional mix uses the listener's local hour and a
-  separate energetic, focus, or calm server-ranked discovery feed; it changes
-  as the day moves from morning to daytime to evening or night. The mixes use
+  account signals. One additional mix changes at the listener's local morning,
+  daytime, evening, and night boundaries. Its server-ranked feed favors positive
+  listening from the matching local period across recommendation surfaces and
+  falls back to general account taste when period history is sparse. It does
+  not assume that a particular hour implies a fixed mood. The mixes use
   separate 25-song shelves so the Home Wave seed remains unchanged. Each mix
   forms its own queue of up to 40 songs,
   leading with the relevant signals and filling from familiar or new music.

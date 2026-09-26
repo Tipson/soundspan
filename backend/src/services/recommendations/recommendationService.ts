@@ -59,6 +59,7 @@ export interface PersonalizedRecommendationInput {
     cursor: number;
     direction: "for-you" | "new" | "familiar";
     mood: RecommendationMood | null;
+    timeOfDay?: boolean;
     language?: WaveLanguage;
     excludeVideoIds: string[];
     context?: RecommendationRequestContext;
@@ -202,6 +203,17 @@ export class UnifiedRecommendationService {
                     mode: input.direction,
                     surface: input.surface,
                     ...(input.mood ? { mood: input.mood } : {}),
+                    ...(input.timeOfDay &&
+                    input.context?.localHour !== undefined &&
+                    input.context.timezoneOffsetMinutes !== undefined
+                        ? {
+                              listeningContext: {
+                                  localHour: input.context.localHour,
+                                  timezoneOffsetMinutes:
+                                      input.context.timezoneOffsetMinutes,
+                              },
+                          }
+                        : {}),
                     ...(input.excludeVideoIds.length > 0
                         ? { excludeVideoIds: input.excludeVideoIds }
                         : {}),
@@ -273,6 +285,7 @@ export class UnifiedRecommendationService {
         }, input.diagnostic);
         const result = await engine.recommend({
             userId: input.userId,
+            ...(input.timeOfDay ? { timeOfDay: true } : {}),
             intent: {
                 surface: input.surface,
                 direction: input.direction,

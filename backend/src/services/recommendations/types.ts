@@ -72,6 +72,8 @@ export interface RecommendationRequestContext {
 
 export interface RecommendRequest {
     userId: string;
+    /** Use same-period listening across surfaces for a time-of-day mix. */
+    timeOfDay?: boolean;
     intent: {
         surface: RecommendationSurface;
         direction: RecommendationDirection;

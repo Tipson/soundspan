@@ -92,7 +92,7 @@ export function buildHomePersonalMixes(
     const listenAgain = uniqueTracks(feed?.shelves.listenAgain ?? []);
     const timeDiscovery = uniqueTracks(timeOfDayFeed?.shelves.discovery ?? []);
     const timeCandidates =
-        timeOfDayMix && timeDiscovery.length > 0
+        timeOfDayMix
             ? uniqueTracks([
                   ...timeDiscovery,
                   ...(timeOfDayFeed?.shelves.quickPicks ?? []),

@@ -1,5 +1,10 @@
 # Changelog
 
+## Listening-time personal mix
+
+- Let the morning, daytime, evening, and night mix follow the listener's actual habits at those local times. Refresh its separate recommendation cache at period boundaries and use neutral titles instead of prescribing an energetic morning or quiet evening.
+- Include positive listening signals from Home and Wave when ranking the time-of-day mix, while keeping the three daily mixes and Wave seed independent.
+
 ## Longer personal mixes
 
 - Request up to 25 recommendations per mix shelf and build independent queues of up to 40 songs for each daily and time-of-day mix, without changing the Home Wave seed.

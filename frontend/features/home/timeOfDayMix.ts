@@ -1,42 +1,35 @@
-import type { PersonalizedHomeMood } from "./types";
-
 export interface TimeOfDayMix {
     key: "night" | "morning" | "daytime" | "evening";
     title: string;
     description: string;
-    mood: PersonalizedHomeMood;
 }
 
 /** Selects a listening context from the listener's local hour. */
 export function timeOfDayMixForHour(hour: number): TimeOfDayMix {
-    if (hour < 5) {
+    if (hour < 6) {
         return {
             key: "night",
-            title: "Тихая ночь",
-            description: "Спокойная музыка после полуночи",
-            mood: "calm",
+            title: "Ваша ночь",
+            description: "Музыка для вашего времени после полуночи",
         };
     }
     if (hour < 12) {
         return {
             key: "morning",
-            title: "Утренний ритм",
-            description: "Музыка, с которой приятно начать день",
-            mood: "energetic",
+            title: "Ваше утро",
+            description: "Музыка для вашего утра",
         };
     }
     if (hour < 18) {
         return {
             key: "daytime",
-            title: "Дневной фокус",
-            description: "Музыка для дел и сосредоточенности",
-            mood: "focus",
+            title: "Ваш день",
+            description: "Музыка для вашего дня",
         };
     }
     return {
         key: "evening",
-        title: "Тихий вечер",
-        description: "Спокойная музыка к концу дня",
-        mood: "calm",
+        title: "Ваш вечер",
+        description: "Музыка для вашего вечера",
     };
 }

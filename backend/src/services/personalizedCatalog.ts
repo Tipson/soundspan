@@ -112,6 +112,11 @@ export interface PersonalizedCatalogOptions {
     mood?: PersonalizedWaveMood;
     /** Wave suppresses recent actual listening; Home keeps its Listen Again shelf. */
     surface?: "home" | "wave" | "made-for-you";
+    /** Explicit local listening period for the daylist-style mix only. */
+    listeningContext?: {
+        localHour: number;
+        timezoneOffsetMinutes: number;
+    };
 }
 
 /** Playable YouTube response contract shared by all personalized shelves. */
@@ -451,6 +456,45 @@ function buildPreferenceProfile(
     }
 
     return { trackScores, artistScores, knownVideoIds, knownArtists };
+}
+
+function listeningPeriod(hour: number): number {
+    return hour < 6 ? 0 : hour < 12 ? 1 : hour < 18 ? 2 : 3;
+}
+
+/** Boosts observed listening in the same local period without assuming a mood. */
+function buildTimeOfDayProfile(
+    profile: PersonalizedPreferenceProfile,
+    signals: PersonalizedCatalogSignals,
+    context: NonNullable<PersonalizedCatalogOptions["listeningContext"]>,
+): PersonalizedPreferenceProfile {
+    const trackScores = new Map(profile.trackScores);
+    const artistScores = new Map(profile.artistScores);
+    const period = listeningPeriod(context.localHour);
+    const boostedTracks = new Set<string>();
+    const boostedArtists = new Set<string>();
+    for (const signal of signals.playbackSignals ?? []) {
+        const playedAt = signal.playedAt?.getTime();
+        if (playedAt === undefined || !Number.isFinite(playedAt)) continue;
+        const localHour = new Date(
+            playedAt + context.timezoneOffsetMinutes * 60_000,
+        ).getUTCHours();
+        if (listeningPeriod(localHour) !== period) continue;
+        const score = playbackSignalScore(signal);
+        if (score <= 0) continue;
+        const track = toPersonalizedTrack(signal.track);
+        if (!track) continue;
+        if (!boostedTracks.has(track.youtubeVideoId)) {
+            addScore(trackScores, track.youtubeVideoId, Math.min(5, score));
+            boostedTracks.add(track.youtubeVideoId);
+        }
+        const artist = normalizedArtistKey(track.artist.name);
+        if (!boostedArtists.has(artist)) {
+            addScore(artistScores, artist, Math.min(3, score / 2));
+            boostedArtists.add(artist);
+        }
+    }
+    return { ...profile, trackScores, artistScores };
 }
 
 function rankSignalTracks(
@@ -885,7 +929,14 @@ export class PersonalizedCatalogService {
             options.surface === "wave"
                 ? `${userId}:${signals.playbackSignals?.[0]?.playedAt?.getTime() ?? "initial"}:${cursor}`
                 : undefined;
-        const preferenceProfile = buildPreferenceProfile(signals);
+        const baseProfile = buildPreferenceProfile(signals);
+        const preferenceProfile = options.listeningContext
+            ? buildTimeOfDayProfile(
+                  baseProfile,
+                  signals,
+                  options.listeningContext,
+              )
+            : baseProfile;
         const signalCandidates = [
             ...signals.recentPlays,
             ...signals.likedTracks,

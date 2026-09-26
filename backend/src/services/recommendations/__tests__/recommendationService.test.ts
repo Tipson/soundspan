@@ -2,6 +2,68 @@ import { UnifiedRecommendationService } from "../recommendationService";
 import type { RecordEngineGenerationInput } from "../engine";
 
 describe("unified recommendation compatibility facade", () => {
+    it("passes local listening context to the source only for the time-of-day mix", async () => {
+        const loadPersonalizedFeed = jest.fn().mockResolvedValue({
+            shelves: { listenAgain: [], quickPicks: [], discovery: [] },
+            degraded: false,
+            reason: null,
+            seedCount: 0,
+            nextCursor: 1,
+        });
+        const service = new UnifiedRecommendationService({
+            mode: "baseline",
+            hybridRolloutPercent: 0,
+            explorationRate: 0,
+            loadPersonalizedFeed,
+            resolveCanonical: async (candidate) => ({
+                id: candidate.id,
+                canonicalKey: candidate.canonicalKey,
+            }),
+            loadRecentExposures: async () => [],
+            loadDislikedCanonicalKeys: async () => new Set(),
+            loadTasteContext: async () => ({
+                positiveCentroids: [],
+                negativeCentroids: [],
+            }),
+            recordGeneration: async () => "generation-1",
+            scheduleHotSet: async () => undefined,
+            loadSimilarCandidates: async () => ({
+                candidates: [],
+                nextCursor: 0,
+                degradedSources: [],
+            }),
+            now: () => new Date("2026-09-01T12:00:00Z"),
+        });
+        const input = {
+            userId: "alice",
+            sessionId: "tab-1",
+            surface: "made-for-you" as const,
+            limit: 12,
+            cursor: 0,
+            direction: "for-you" as const,
+            mood: null,
+            excludeVideoIds: [],
+            context: { localHour: 9, timezoneOffsetMinutes: 180 },
+        };
+
+        await service.getPersonalizedFeed({ ...input, timeOfDay: true });
+        expect(loadPersonalizedFeed).toHaveBeenLastCalledWith(
+            "alice",
+            expect.any(Number),
+            expect.objectContaining({
+                listeningContext: {
+                    localHour: 9,
+                    timezoneOffsetMinutes: 180,
+                },
+            }),
+        );
+        await service.getPersonalizedFeed(input);
+        expect(loadPersonalizedFeed).toHaveBeenLastCalledWith(
+            "alice",
+            expect.any(Number),
+            expect.not.objectContaining({ listeningContext: expect.anything() }),
+        );
+    });
     it.each(["baseline", "shadow", "active"] as const)(
         "isolates diagnostic Wave generations in %s mode",
         async (mode) => {
