@@ -192,7 +192,7 @@ function GeneratedMixCard({ mix }: { mix: Mix }) {
     );
 }
 
-/** A bounded, account-specific row of playable personal collections. */
+/** An account-specific row of playable personal collections. */
 export function HomeMadeForYou({
     discoverWeekly,
     mixes,
@@ -221,21 +221,7 @@ export function HomeMadeForYou({
 
     if (availableCount === 0) return null;
 
-    const visiblePersonalMixes = showAllMixes
-        ? personalMixes
-        : personalMixes.slice(0, MAX_HOME_MADE_CARDS);
-    const showDiscoverWeekly =
-        Boolean(playableDiscoverWeekly) &&
-        (showAllMixes || visiblePersonalMixes.length < MAX_HOME_MADE_CARDS);
-    const collapsedGeneratedLimit = Math.max(
-        0,
-        MAX_HOME_MADE_CARDS -
-            visiblePersonalMixes.length -
-            (showDiscoverWeekly ? 1 : 0),
-    );
-    const visibleGeneratedMixes = showAllMixes
-        ? playableMixes
-        : playableMixes.slice(0, collapsedGeneratedLimit);
+    const weeklyOffset = playableDiscoverWeekly ? 1 : 0;
     const hasHiddenMixes = availableCount > MAX_HOME_MADE_CARDS;
 
     return (
@@ -257,7 +243,7 @@ export function HomeMadeForYou({
                                 onClick={() =>
                                     setShowAllMixes((current) => !current)
                                 }
-                                className="inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
+                                className="hidden lg:inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-light motion-reduce:transition-none"
                             >
                                 {showAllMixes ? "Свернуть" : "Показать все"}
                             </button>
@@ -285,9 +271,9 @@ export function HomeMadeForYou({
             />
             <div
                 id="home-all-mixes"
-                className="scrollbar-hide grid touch-pan-x snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible"
+                className="scrollbar-hide grid touch-auto snap-x snap-proximity grid-flow-col auto-cols-[minmax(9.5rem,58vw)] gap-3 overflow-x-auto overscroll-x-contain pb-1 sm:auto-cols-[10.75rem] sm:gap-4 lg:grid-flow-row lg:grid-cols-5 lg:overflow-visible"
             >
-                {showDiscoverWeekly && playableDiscoverWeekly && (
+                {playableDiscoverWeekly && (
                     <div
                         data-home-made-card="discover-weekly"
                         className="min-w-0 snap-start"
@@ -307,28 +293,28 @@ export function HomeMadeForYou({
                     </div>
                 )}
 
-                {visiblePersonalMixes.map((mix, index) => (
+                {personalMixes.map((mix, index) => (
                     <div
                         key={mix.key}
                         data-home-made-card={mix.key}
-                        className="min-w-0 snap-start"
+                        className={`min-w-0 snap-start ${!showAllMixes && index + weeklyOffset >= MAX_HOME_MADE_CARDS ? "lg:hidden" : ""}`}
                     >
                         <PersonalizedMixCard
                             title={mix.title}
                             description={mix.description}
                             tracks={mix.tracks}
                             tone={mix.tone}
-                            index={index + (showDiscoverWeekly ? 1 : 0)}
+                            index={index + weeklyOffset}
                             generationId={mix.generationId}
                         />
                     </div>
                 ))}
 
-                {visibleGeneratedMixes.map((mix) => (
+                {playableMixes.map((mix, index) => (
                     <div
                         key={mix.id}
                         data-home-made-card={mix.id}
-                        className="min-w-0 snap-start"
+                        className={`min-w-0 snap-start ${!showAllMixes && index + personalMixes.length + weeklyOffset >= MAX_HOME_MADE_CARDS ? "lg:hidden" : ""}`}
                     >
                         <GeneratedMixCard mix={mix} />
                     </div>

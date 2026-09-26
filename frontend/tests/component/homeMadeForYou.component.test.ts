@@ -289,7 +289,7 @@ test("fallback does not invent three styles from the same seven songs", async ()
     assert.ok(mixes[0].tracks.some((item) => item.youtubeVideoId === "shared"));
 });
 
-test("Home Made For You renders at most five distinct real collections", async () => {
+test("Home Made For You keeps all collections swipeable on mobile and five visible on desktop", async () => {
     const { HomeMadeForYou, timeOfDayMixForHour } =
         await import("../../features/home/components/HomeMadeForYou");
     const html = renderToStaticMarkup(
@@ -318,7 +318,13 @@ test("Home Made For You renders at most five distinct real collections", async (
     assert.match(html, /Миксы для вас/);
     assert.match(html, /data-home-rail="mixes"/);
     assert.match(html, /data-home-mixes-surface="unified"/);
-    assert.equal((html.match(/data-home-made-card=/g) ?? []).length, 5);
+    assert.equal((html.match(/data-home-made-card=/g) ?? []).length, 11);
+    assert.equal(
+        (html.match(/data-home-made-card=[^>]*class="[^"]*lg:hidden/g) ?? [])
+            .length,
+        6,
+    );
+    assert.doesNotMatch(html, /touch-pan-x/);
     assert.match(html, /Микс дня/);
     assert.doesNotMatch(html, /Микс дня 2/);
     assert.match(html, /Ваше утро/);
@@ -327,6 +333,7 @@ test("Home Made For You renders at most five distinct real collections", async (
     assert.ok(html.indexOf("Открытия недели") < html.indexOf("Микс дня"));
     assert.match(html, /aria-controls="home-all-mixes"/);
     assert.match(html, /aria-expanded="false"/);
+    assert.match(html, /class="hidden lg:inline-flex[^"]*"[^>]*>Показать все</);
     assert.doesNotMatch(html, /href="\/playlists"/);
 });
 
@@ -368,7 +375,11 @@ test("Home Made For You expands and collapses every collection inline on one sur
     );
     assert.ok(surface);
     assert.ok(surface.classList.contains("bg-surface"));
-    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 5);
+    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 11);
+    assert.equal(
+        surface.querySelectorAll("[data-home-made-card].lg\\:hidden").length,
+        6,
+    );
     assert.equal(surface.querySelector('a[href="/playlists"]'), null);
 
     const toggle = surface.querySelector<HTMLButtonElement>(
@@ -382,14 +393,21 @@ test("Home Made For You expands and collapses every collection inline on one sur
     assert.equal(toggle.getAttribute("aria-expanded"), "true");
     assert.equal(toggle.textContent?.trim(), "Свернуть");
     assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 11);
+    assert.equal(
+        surface.querySelectorAll("[data-home-made-card].lg\\:hidden").length,
+        0,
+    );
     assert.match(surface.textContent ?? "", /Mix 7/);
     assert.equal(surface.querySelector('a[href="/playlists"]'), null);
 
     await React.act(async () => toggle.click());
     assert.equal(toggle.getAttribute("aria-expanded"), "false");
     assert.equal(toggle.textContent?.trim(), "Показать все");
-    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 5);
-    assert.doesNotMatch(surface.textContent ?? "", /Mix 2/);
+    assert.equal(surface.querySelectorAll("[data-home-made-card]").length, 11);
+    assert.equal(
+        surface.querySelectorAll("[data-home-made-card].lg\\:hidden").length,
+        6,
+    );
 
     await React.act(async () => root.unmount());
     container.remove();

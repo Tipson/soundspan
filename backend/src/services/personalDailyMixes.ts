@@ -6,7 +6,8 @@ import { lastFmService } from "./lastfm";
 import { ytMusicService } from "./youtubeMusic";
 import type { PersonalizedTrack } from "./personalizedCatalog";
 
-const MAX_DIRECTIONS = 3;
+const MAX_DIRECTIONS = 6;
+const DIRECTION_CONCURRENCY = 3;
 const MAX_TRACKS = 40;
 const MIN_TRACKS = 20;
 const RADIO_LIMIT = 50;
@@ -117,7 +118,7 @@ function mergeFamiliarAndNew(
     return distinct(songs).slice(0, MAX_TRACKS);
 }
 
-/** Builds a few distinct, playable daily mixes from explicit account tastes. */
+/** Builds distinct, playable daily mixes from account tastes and listening. */
 export class PersonalDailyMixService {
     private readonly cache = new Map<
         string,
@@ -150,9 +151,15 @@ export class PersonalDailyMixService {
                 ];
             },
         );
-        const chosen = (
-            directions.length > 0 ? directions : familiarDirections
-        ).slice(0, MAX_DIRECTIONS);
+        const seenDirections = new Set<string>();
+        const chosen = [...directions, ...familiarDirections]
+            .filter((direction) => {
+                const key = `${direction.kind ?? "genre"}:${artistKey(direction.label)}`;
+                if (seenDirections.has(key)) return false;
+                seenDirections.add(key);
+                return true;
+            })
+            .slice(0, MAX_DIRECTIONS);
         if (chosen.length === 0) return { mixes: [] };
         const now = this.dependencies.now().getTime();
         const key = [
@@ -179,77 +186,103 @@ export class PersonalDailyMixService {
         chosen: DailyMixDirection[],
         familiar: DailyMixSong[],
     ): Promise<{ mixes: PersonalDailyMix[] }> {
-        const pools = await Promise.all(
-            chosen.map(async (direction) => {
-                try {
-                    const genreArtists =
-                        direction.kind === "genre"
-                            ? await this.dependencies
-                                  .loadGenreArtists(direction.label)
-                                  .catch(() => [])
-                            : [];
-                    const familiarArtists = new Set(
-                        familiar.map((song) => artistKey(song.artist)),
-                    );
-                    const matched = genreArtists.filter((artist) =>
-                        familiarArtists.has(artistKey(artist)),
-                    );
-                    const rotating = genreArtists.slice(0, 12);
-                    const day = Math.floor(
-                        this.dependencies.now().getTime() / 86_400_000,
-                    );
-                    const offset =
-                        rotating.length > 0 ? day % rotating.length : 0;
-                    const artistQueries = [
-                        ...matched,
-                        ...rotating.slice(offset),
-                        ...rotating.slice(0, offset),
-                    ]
-                        .filter(
-                            (artist, index, all) =>
-                                all.findIndex(
-                                    (candidate) =>
-                                        artistKey(candidate) ===
-                                        artistKey(artist),
-                                ) === index,
-                        )
-                        .slice(0, 2);
-                    const queries = [
-                        ...artistQueries.map((artist) => `${artist} songs`),
-                        direction.query,
-                    ].slice(0, 2);
-                    const songs: DailyMixSong[] = [];
-                    for (const query of queries) {
+        const pools: DailyMixSong[][] = [];
+        for (
+            let start = 0;
+            start < chosen.length;
+            start += DIRECTION_CONCURRENCY
+        ) {
+            const batch = await Promise.all(
+                chosen
+                    .slice(start, start + DIRECTION_CONCURRENCY)
+                    .map(async (direction) => {
                         try {
-                            const searched = distinct(
-                                await this.dependencies.searchSongs(
-                                    userId,
-                                    query,
+                            const genreArtists =
+                                direction.kind === "genre"
+                                    ? await this.dependencies
+                                          .loadGenreArtists(direction.label)
+                                          .catch(() => [])
+                                    : [];
+                            const familiarArtists = new Set(
+                                familiar.map((song) => artistKey(song.artist)),
+                            );
+                            const matched = genreArtists.filter((artist) =>
+                                familiarArtists.has(artistKey(artist)),
+                            );
+                            const rotating = genreArtists.slice(0, 12);
+                            const day = Math.floor(
+                                this.dependencies.now().getTime() / 86_400_000,
+                            );
+                            const offset =
+                                rotating.length > 0 ? day % rotating.length : 0;
+                            const artistQueries = [
+                                ...matched,
+                                ...rotating.slice(offset),
+                                ...rotating.slice(0, offset),
+                            ]
+                                .filter(
+                                    (artist, index, all) =>
+                                        all.findIndex(
+                                            (candidate) =>
+                                                artistKey(candidate) ===
+                                                artistKey(artist),
+                                        ) === index,
+                                )
+                                .slice(0, 2);
+                            const queries = [
+                                ...artistQueries.map(
+                                    (artist) => `${artist} songs`,
                                 ),
-                            );
-                            const artist = query.endsWith(" songs")
-                                ? query.slice(0, -" songs".length)
-                                : null;
-                            const matchedSongs = artist
-                                ? searched.filter(
-                                      (song) =>
-                                          artistKey(song.artist) ===
-                                          artistKey(artist),
-                                  )
-                                : searched;
-                            if (matchedSongs.length === 0) continue;
-                            songs.push(...matchedSongs);
-                            const seeds = matchedSongs.slice(
-                                0,
-                                direction.kind === "artist" ? 3 : 1,
-                            );
-                            for (const seed of seeds) {
+                                direction.query,
+                            ].slice(0, 2);
+                            const songs: DailyMixSong[] = [];
+                            for (const query of queries) {
                                 try {
-                                    const radio =
-                                        await this.dependencies.getRadio(
-                                            seed.videoId,
-                                        );
-                                    songs.push(...radio);
+                                    const searched = distinct(
+                                        await this.dependencies.searchSongs(
+                                            userId,
+                                            query,
+                                        ),
+                                    );
+                                    const artist = query.endsWith(" songs")
+                                        ? query.slice(0, -" songs".length)
+                                        : null;
+                                    const matchedSongs = artist
+                                        ? searched.filter(
+                                              (song) =>
+                                                  artistKey(song.artist) ===
+                                                  artistKey(artist),
+                                          )
+                                        : searched;
+                                    if (matchedSongs.length === 0) continue;
+                                    songs.push(...matchedSongs);
+                                    const seeds = matchedSongs.slice(
+                                        0,
+                                        direction.kind === "artist" ? 3 : 1,
+                                    );
+                                    for (const seed of seeds) {
+                                        try {
+                                            const radio =
+                                                await this.dependencies.getRadio(
+                                                    seed.videoId,
+                                                );
+                                            songs.push(...radio);
+                                            if (
+                                                distinct(songs).length >=
+                                                MAX_TRACKS
+                                            )
+                                                break;
+                                        } catch (error) {
+                                            log.warn(
+                                                "Daily mix seed unavailable",
+                                                {
+                                                    userId,
+                                                    direction: direction.key,
+                                                },
+                                                error,
+                                            );
+                                        }
+                                    }
                                     if (distinct(songs).length >= MAX_TRACKS)
                                         break;
                                 } catch (error) {
@@ -263,32 +296,22 @@ export class PersonalDailyMixService {
                                     );
                                 }
                             }
-                            if (distinct(songs).length >= MAX_TRACKS) break;
+                            return distinct(songs);
                         } catch (error) {
                             log.warn(
-                                "Daily mix seed unavailable",
+                                "Daily mix direction unavailable",
                                 {
                                     userId,
                                     direction: direction.key,
                                 },
                                 error,
                             );
+                            return [];
                         }
-                    }
-                    return distinct(songs);
-                } catch (error) {
-                    log.warn(
-                        "Daily mix direction unavailable",
-                        {
-                            userId,
-                            direction: direction.key,
-                        },
-                        error,
-                    );
-                    return [];
-                }
-            }),
-        );
+                    }),
+            );
+            pools.push(...batch);
+        }
         const allIds = [
             ...new Set(
                 [...pools.flat(), ...familiar].map((song) => song.videoId),
@@ -360,20 +383,20 @@ export const personalDailyMixService = new PersonalDailyMixService({
         const profile = parseStoredTasteProfile(settings?.tasteProfile);
         const genres =
             profile?.genres.filter((genre) => tasteArtistTags[genre]) ?? [];
-        if (genres.length > 0) {
-            return genres.map((label) => ({
+        return [
+            ...genres.map((label) => ({
                 key: `genre:${label}`,
                 label,
                 query: `${tasteArtistTags[label]} music`,
                 kind: "genre" as const,
-            }));
-        }
-        return (profile?.artists ?? []).map((label) => ({
-            key: `artist:${label}`,
-            label,
-            query: `${label} songs`,
-            kind: "artist" as const,
-        }));
+            })),
+            ...(profile?.artists ?? []).map((label) => ({
+                key: `artist:${label}`,
+                label,
+                query: `${label} songs`,
+                kind: "artist" as const,
+            })),
+        ];
     },
     loadFamiliar: async (userId) => {
         const [liked, recent] = await Promise.all([

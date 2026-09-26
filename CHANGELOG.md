@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Let listeners swipe through every available mix on mobile and scroll the Home page vertically from the artwork area; keep the five-card desktop preview with its expand control.
+- Offer up to six distinct, playable daily style mixes from selected genres, selected artists, and familiar artists when listening supports them, while retaining the 20-track minimum and filtering disliked or repeated songs.
+
 ## Daily mixes by personal style
 
 - Build up to three long mixes from the listener's selected genres or artists, or from familiar artists when no tastes were selected. Use catalog artists as style anchors and familiar songs alongside related discoveries. Refresh the artist anchors across days and exclude disliked or repeated tracks.
@@ -114,7 +119,6 @@
 ## Production playback pacing
 
 - Reduce the retained YouTube extraction pause from 10–15 seconds to 1–2 seconds on the deployed service, preserving bounded concurrency and provider cooldown. See the Wave desktop startup release note for measured scope and rollback.
-
 
 ## Unreleased server music connections
 

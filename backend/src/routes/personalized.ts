@@ -232,7 +232,7 @@ router.use(requireAuthOrToken);
  *       properties:
  *         mixes:
  *           type: array
- *           maxItems: 3
+ *           maxItems: 6
  *           items:
  *             type: object
  *             required: [key, title, description, tracks]
@@ -420,7 +420,7 @@ router.get("/home", asyncHandler(handlePersonalizedHome));
  *       - apiKeyAuth: []
  *     responses:
  *       200:
- *         description: Up to three distinct personal mixes with playable tracks
+ *         description: Up to six distinct personal mixes with playable tracks
  *         content:
  *           application/json:
  *             schema:

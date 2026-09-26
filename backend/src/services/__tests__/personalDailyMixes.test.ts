@@ -1,7 +1,9 @@
 jest.mock("../youtubeMusic", () => ({ ytMusicService: {} }));
 jest.mock("../lastfm", () => ({ lastFmService: {} }));
 jest.mock("../tasteProfile", () => ({ parseStoredTasteProfile: jest.fn() }));
-jest.mock("../../utils/db", () => ({ prisma: {} }));
+jest.mock("../../utils/db", () => ({
+    prisma: { userSettings: { findUnique: jest.fn() } },
+}));
 jest.mock("../../utils/logger", () => {
     const logger = { warn: jest.fn(), child: jest.fn() };
     logger.child.mockReturnValue(logger);
@@ -10,8 +12,11 @@ jest.mock("../../utils/logger", () => {
 
 import {
     PersonalDailyMixService,
+    personalDailyMixService,
     type PersonalDailyMixDependencies,
 } from "../personalDailyMixes";
+import { prisma } from "../../utils/db";
+import { parseStoredTasteProfile } from "../tasteProfile";
 
 const song = (id: string, artist: string) => ({
     videoId: id,
@@ -50,6 +55,177 @@ function dependencies(
 }
 
 describe("PersonalDailyMixService", () => {
+    it("includes explicitly selected artists alongside selected genres", async () => {
+        jest.mocked(prisma.userSettings.findUnique).mockResolvedValueOnce({
+            tasteProfile: {},
+        } as never);
+        jest.mocked(parseStoredTasteProfile).mockReturnValueOnce({
+            genres: ["Рок"],
+            artists: ["Muse"],
+            seedTracks: [],
+        });
+        const liveDependencies = (
+            personalDailyMixService as unknown as {
+                dependencies: PersonalDailyMixDependencies;
+            }
+        ).dependencies;
+
+        expect(await liveDependencies.loadDirections("user-1")).toEqual([
+            {
+                key: "genre:Рок",
+                label: "Рок",
+                query: expect.stringContaining("music"),
+                kind: "genre",
+            },
+            {
+                key: "artist:Muse",
+                label: "Muse",
+                query: "Muse songs",
+                kind: "artist",
+            },
+        ]);
+    });
+
+    it("offers up to six distinct directions when the account has varied tastes", async () => {
+        const labels = ["Рок", "Джаз", "Соул", "Хаус", "Фолк", "Метал", "Поп"];
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () =>
+                    labels.map((label, index) => ({
+                        key: `genre:${index}`,
+                        label,
+                        query: `style${index} music`,
+                        kind: "genre" as const,
+                    })),
+                loadFamiliar: async () => [],
+                getRadio: async (videoId) =>
+                    radio(videoId.split("-")[0], videoId.split("-")[0]),
+            }),
+        );
+
+        const result = await service.getMixes("user-1");
+
+        expect(result.mixes.map((mix) => mix.title)).toEqual(
+            labels.slice(0, 6).map((label) => `${label} для вас`),
+        );
+        expect(result.mixes.every((mix) => mix.tracks.length >= 20)).toBe(true);
+    });
+
+    it("keeps provider searches at the former three-direction concurrency", async () => {
+        let activeSearches = 0;
+        let peakSearches = 0;
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () =>
+                    Array.from({ length: 6 }, (_, index) => ({
+                        key: `genre:${index}`,
+                        label: `Style ${index}`,
+                        query: `style${index} music`,
+                        kind: "genre" as const,
+                    })),
+                loadFamiliar: async () => [],
+                searchSongs: async (_userId, query) => {
+                    activeSearches += 1;
+                    peakSearches = Math.max(peakSearches, activeSearches);
+                    await new Promise((resolve) => setTimeout(resolve, 2));
+                    activeSearches -= 1;
+                    return [
+                        song(`${query.split(" ")[0]}-seed`, "Style Artist"),
+                    ];
+                },
+                getRadio: async (videoId) =>
+                    radio(videoId.split("-")[0], videoId.split("-")[0]),
+            }),
+        );
+
+        const result = await service.getMixes("user-1");
+
+        expect(result.mixes).toHaveLength(6);
+        expect(peakSearches).toBeLessThanOrEqual(3);
+    });
+
+    it("adds distinct familiar-artist directions when selected tastes are few", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    {
+                        key: "genre:rock",
+                        label: "Рок",
+                        query: "rock music",
+                        kind: "genre",
+                    },
+                    {
+                        key: "genre:jazz",
+                        label: "Джаз",
+                        query: "jazz music",
+                        kind: "genre",
+                    },
+                ],
+                loadFamiliar: async () => [
+                    song("liked-muse", "Muse"),
+                    song("liked-radiohead", "Radiohead"),
+                    song("heard-daft", "Daft Punk"),
+                ],
+                searchSongs: async (_userId, query) => [
+                    song(
+                        `${query.split(" ")[0]}-seed`,
+                        query.endsWith(" songs")
+                            ? query.slice(0, -" songs".length)
+                            : `${query} Artist`,
+                    ),
+                ],
+                getRadio: async (videoId) =>
+                    radio(videoId.split("-")[0], videoId.split("-")[0]),
+            }),
+        );
+
+        const result = await service.getMixes("user-1");
+
+        expect(result.mixes.map((mix) => mix.title)).toEqual([
+            "Рок для вас",
+            "Джаз для вас",
+            "Muse и похожее",
+            "Radiohead и похожее",
+            "Daft Punk и похожее",
+        ]);
+    });
+
+    it("does not spend two direction slots on the same selected and familiar artist", async () => {
+        const searchSongs = jest.fn(async (_userId: string, query: string) => [
+            song(
+                `${query.split(" ")[0]}-seed`,
+                query.slice(0, -" songs".length),
+            ),
+        ]);
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    {
+                        key: "artist:Muse",
+                        label: "Muse",
+                        query: "Muse songs",
+                        kind: "artist",
+                    },
+                ],
+                loadFamiliar: async () => [
+                    song("liked-muse", "muse"),
+                    song("liked-radiohead", "Radiohead"),
+                ],
+                searchSongs,
+                getRadio: async (videoId) =>
+                    radio(videoId.split("-")[0], videoId.split("-")[0]),
+            }),
+        );
+
+        const result = await service.getMixes("user-1");
+
+        expect(result.mixes.map((mix) => mix.title)).toEqual([
+            "Muse и похожее",
+            "Radiohead и похожее",
+        ]);
+        expect(searchSongs).toHaveBeenCalledTimes(2);
+    });
+
     it("builds separate long genre queues from different provider seeds", async () => {
         const service = new PersonalDailyMixService(dependencies());
 
