@@ -2,7 +2,10 @@ jest.mock("../youtubeMusic", () => ({ ytMusicService: {} }));
 jest.mock("../lastfm", () => ({ lastFmService: {} }));
 jest.mock("../tasteProfile", () => ({ parseStoredTasteProfile: jest.fn() }));
 jest.mock("../../utils/db", () => ({
-    prisma: { userSettings: { findUnique: jest.fn() } },
+    prisma: {
+        userSettings: { findUnique: jest.fn() },
+        play: { findMany: jest.fn() },
+    },
 }));
 jest.mock("../../utils/logger", () => {
     const logger = { warn: jest.fn(), child: jest.fn() };
@@ -41,6 +44,7 @@ function dependencies(
             { key: "jazz", label: "Джаз", query: "jazz music" },
         ],
         loadFamiliar: async () => [song("favorite-rock", "Rock Artist 1")],
+        loadRecentlyPlayed: async () => [],
         loadGenreArtists: async () => [],
         searchSongs: async (_userId, query) => [
             song(`${query.split(" ")[0]}-seed`, `${query} Artist`),
@@ -55,6 +59,30 @@ function dependencies(
 }
 
 describe("PersonalDailyMixService", () => {
+    it("loads only this account's playable recent history and ignores failed streams", async () => {
+        const playedAt = new Date("2026-09-26T07:00:00Z");
+        jest.mocked(prisma.play.findMany).mockResolvedValueOnce([
+            { playedAt, outcome: "completed", trackYtMusic: { videoId: "played" } },
+            { playedAt, outcome: "failed", trackYtMusic: { videoId: "failed" } },
+            { playedAt, outcome: "skipped", trackYtMusic: null },
+        ] as never);
+        const liveDependencies = (
+            personalDailyMixService as unknown as {
+                dependencies: PersonalDailyMixDependencies;
+            }
+        ).dependencies;
+
+        expect(await liveDependencies.loadRecentlyPlayed("user-1")).toEqual([
+            { videoId: "played", playedAt },
+        ]);
+        expect(prisma.play.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({ userId: "user-1" }),
+                take: 250,
+            }),
+        );
+    });
+
     it("includes explicitly selected artists alongside selected genres", async () => {
         jest.mocked(prisma.userSettings.findUnique).mockResolvedValueOnce({
             tasteProfile: {},
@@ -243,6 +271,69 @@ describe("PersonalDailyMixService", () => {
                 (track) => track.youtubeVideoId === "jazz-0",
             ),
         ).toBe(false);
+    });
+
+    it("puts recently played songs after fresh candidates without shortening a mix", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadRecentlyPlayed: async () => [
+                    { videoId: "rock-seed", playedAt: new Date("2026-09-26T07:00:00Z") },
+                    { videoId: "rock-0", playedAt: new Date("2026-09-26T06:00:00Z") },
+                ],
+            }),
+        );
+
+        const result = await service.getMixes("user-1");
+        const ids = result.mixes[0].tracks.map((track) => track.youtubeVideoId);
+
+        expect(ids).toHaveLength(40);
+        expect(ids).not.toContain("rock-seed");
+        expect(ids).not.toContain("rock-0");
+    });
+
+    it("backfills with older recent plays when there is too little fresh music", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                getRadio: async () => radio("rock", "rock").slice(0, 24),
+                loadRecentlyPlayed: async () => [
+                    { videoId: "rock-0", playedAt: new Date("2026-09-26T07:00:00Z") },
+                    { videoId: "rock-1", playedAt: new Date("2026-09-25T07:00:00Z") },
+                ],
+            }),
+        );
+
+        const result = await service.getMixes("user-1");
+        const ids = result.mixes[0].tracks.map((track) => track.youtubeVideoId);
+
+        expect(ids).toHaveLength(25);
+        expect(ids.slice(-2)).toEqual(["rock-1", "rock-0"]);
+    });
+
+    it("orders fallback plays by age even when one is a liked song", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [song("liked", "rock 1")],
+                getRadio: async () => radio("rock", "rock").slice(0, 24),
+                loadRecentlyPlayed: async () => [
+                    { videoId: "liked", playedAt: new Date("2026-09-26T07:00:00Z") },
+                    { videoId: "rock-1", playedAt: new Date("2026-09-25T07:00:00Z") },
+                ],
+            }),
+        );
+
+        const result = await service.getMixes("user-1");
+        const ids = result.mixes[0].tracks.map((track) => track.youtubeVideoId);
+
+        expect(ids.slice(-2)).toEqual(["rock-1", "liked"]);
     });
 
     it("uses familiar artists when the account has no selected tastes", async () => {
@@ -440,5 +531,47 @@ describe("PersonalDailyMixService", () => {
         await service.getMixes("user-1");
 
         expect(getRadio).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps a cached mix stable when only playback history changes and refreshes after expiry", async () => {
+        let currentTime = new Date("2026-09-26T08:00:00Z");
+        let recentPlays: { videoId: string; playedAt: Date }[] = [];
+        const getRadio = jest.fn(async () => radio("rock", "rock"));
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadRecentlyPlayed: async () => recentPlays,
+                getRadio,
+                now: () => currentTime,
+            }),
+        );
+
+        await service.getMixes("user-1");
+        recentPlays = [
+            { videoId: "rock-seed", playedAt: new Date("2026-09-26T08:01:00Z") },
+        ];
+        await service.getMixes("user-1");
+        expect(getRadio).toHaveBeenCalledTimes(1);
+
+        currentTime = new Date("2026-09-26T08:11:00Z");
+        const refreshed = await service.getMixes("user-1");
+        expect(getRadio).toHaveBeenCalledTimes(2);
+        expect(refreshed.mixes[0].tracks.map((track) => track.youtubeVideoId)).not.toContain("rock-seed");
+    });
+
+    it("still builds mixes when playback history is unavailable", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadRecentlyPlayed: async () => {
+                    throw new Error("history unavailable");
+                },
+            }),
+        );
+
+        const result = await service.getMixes("user-1");
+
+        expect(result.mixes).toHaveLength(2);
     });
 });

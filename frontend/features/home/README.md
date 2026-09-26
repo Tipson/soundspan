@@ -56,6 +56,8 @@ Start-here guide for `frontend/features/home`.
   when fewer directions are available.
   Their server-built queues include familiar songs and related discoveries,
   omit disliked tracks, and do not repeat songs across the visible directions.
+  The server favors songs not played in the last seven days and uses older
+  recent plays only when needed to keep a direction's queue long enough.
   When the account lacks enough distinct style music, one balanced mix remains
   instead of reordered copies. One additional mix changes at the listener's local morning,
   daytime, evening, and night boundaries. Its server-ranked feed favors positive

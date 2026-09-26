@@ -31,9 +31,15 @@ export interface DailyMixSong {
     thumbnailUrl: string | null;
 }
 
+interface RecentlyPlayedSong {
+    videoId: string;
+    playedAt: Date;
+}
+
 export interface PersonalDailyMixDependencies {
     loadDirections: (userId: string) => Promise<DailyMixDirection[]>;
     loadFamiliar: (userId: string) => Promise<DailyMixSong[]>;
+    loadRecentlyPlayed: (userId: string) => Promise<RecentlyPlayedSong[]>;
     loadGenreArtists: (genre: string) => Promise<string[]>;
     searchSongs: (userId: string, query: string) => Promise<DailyMixSong[]>;
     getRadio: (seedVideoId: string) => Promise<DailyMixSong[]>;
@@ -172,7 +178,15 @@ export class PersonalDailyMixService {
         const cached = this.cache.get(key);
         if (cached && cached.expiresAt > now) return cached.result;
         if (cached) this.cache.delete(key);
-        const result = this.buildMixes(userId, chosen, familiar);
+        const result = this.dependencies
+            .loadRecentlyPlayed(userId)
+            .catch((error: unknown) => {
+                log.warn("Daily mix playback history unavailable", { userId }, error);
+                return [];
+            })
+            .then((recentlyPlayed) =>
+                this.buildMixes(userId, chosen, familiar, recentlyPlayed),
+            );
         this.cache.set(key, { expiresAt: now + CACHE_TTL_MS, result });
         if (this.cache.size > MAX_CACHED_ACCOUNTS) {
             this.cache.delete(this.cache.keys().next().value!);
@@ -185,6 +199,7 @@ export class PersonalDailyMixService {
         userId: string,
         chosen: DailyMixDirection[],
         familiar: DailyMixSong[],
+        recentlyPlayed: RecentlyPlayedSong[],
     ): Promise<{ mixes: PersonalDailyMix[] }> {
         const pools: DailyMixSong[][] = [];
         for (
@@ -321,6 +336,18 @@ export class PersonalDailyMixService {
             userId,
             allIds,
         );
+        const recentTimes = new Map<string, number>();
+        for (const play of recentlyPlayed) {
+            const time = play.playedAt.getTime();
+            if (!Number.isFinite(time)) continue;
+            recentTimes.set(
+                play.videoId,
+                Math.max(recentTimes.get(play.videoId) ?? -Infinity, time),
+            );
+        }
+        const oldestPlayFirst = (left: DailyMixSong, right: DailyMixSong) =>
+            (recentTimes.get(left.videoId) ?? 0) -
+            (recentTimes.get(right.videoId) ?? 0);
         const usedAcrossMixes = new Set<string>();
         const mixes = chosen.flatMap((direction, index) => {
             const pool = pools[index].filter(
@@ -341,10 +368,17 @@ export class PersonalDailyMixService {
             const familiarIds = new Set(
                 familiarSongs.map((song) => song.videoId),
             );
-            const tracks = mergeFamiliarAndNew(
-                familiarSongs,
-                pool.filter((song) => !familiarIds.has(song.videoId)),
+            const newSongs = pool.filter(
+                (song) => !familiarIds.has(song.videoId),
             );
+            const fresh = mergeFamiliarAndNew(
+                familiarSongs.filter((song) => !recentTimes.has(song.videoId)),
+                newSongs.filter((song) => !recentTimes.has(song.videoId)),
+            );
+            const older = distinct([...familiarSongs, ...newSongs])
+                .filter((song) => recentTimes.has(song.videoId))
+                .sort(oldestPlayFirst);
+            const tracks = [...fresh, ...older].slice(0, MAX_TRACKS);
             if (tracks.length < MIN_TRACKS) return [];
             for (const track of tracks) usedAcrossMixes.add(track.videoId);
             return [
@@ -447,6 +481,32 @@ export const personalDailyMixService = new PersonalDailyMixService({
             [...liked, ...recent].flatMap((row) =>
                 row.trackYtMusic ? [fromStoredTrack(row.trackYtMusic)] : [],
             ),
+        );
+    },
+    loadRecentlyPlayed: async (userId) => {
+        const rows = await prisma.play.findMany({
+            where: {
+                userId,
+                trackYtMusicId: { not: null },
+                playedAt: { gte: new Date(Date.now() - 7 * 86_400_000) },
+            },
+            orderBy: { playedAt: "desc" },
+            take: 250,
+            select: {
+                playedAt: true,
+                outcome: true,
+                trackYtMusic: { select: { videoId: true } },
+            },
+        });
+        return rows.flatMap((row) =>
+            row.outcome !== "failed" && row.trackYtMusic
+                ? [
+                      {
+                          videoId: row.trackYtMusic.videoId,
+                          playedAt: row.playedAt,
+                      },
+                  ]
+                : [],
         );
     },
     loadGenreArtists: async (genre) =>
