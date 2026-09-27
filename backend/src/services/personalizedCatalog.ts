@@ -24,6 +24,7 @@ const MAX_RADIO_RESULT_LIMIT = 50;
 const MAX_CONTINUATION_CURSOR = 1_000_000;
 const MAX_CONTINUATION_EXCLUSIONS = 80;
 const MAX_DISCOVERY_CANDIDATES = 100;
+const MAX_DISCOVERY_TRACKS_PER_ARTIST = 2;
 const log = logger.child("PersonalizedCatalog");
 
 /** Wave policies exposed by the personalized catalog endpoint. */
@@ -65,6 +66,7 @@ export interface PersonalizedCatalogSignals {
     playlistTracks: UnifiedTrackYtMusicRecord[];
     tasteSeedTracks?: UnifiedTrackYtMusicRecord[];
     dislikedEntityIds: string[];
+    dislikedTracks?: UnifiedTrackYtMusicRecord[];
     playbackSignals?: PersonalizedPlaybackSignal[];
 }
 
@@ -340,6 +342,7 @@ interface PersonalizedPreferenceProfile {
     artistScores: Map<string, number>;
     knownVideoIds: Set<string>;
     knownArtists: Set<string>;
+    suppressedArtists: Set<string>;
 }
 
 function normalizedArtistKey(value: string): string {
@@ -379,6 +382,20 @@ function buildPreferenceProfile(
     const knownVideoIds = new Set<string>();
     const knownArtists = new Set<string>();
     const positivePlayCounts = new Map<string, number>();
+    const dislikedArtistVideos = new Map<string, Set<string>>();
+    for (const candidate of signals.dislikedTracks ?? []) {
+        const track = toPersonalizedTrack(candidate);
+        if (!track || track.artist.name === "Unknown Artist") continue;
+        const artist = normalizedArtistKey(track.artist.name);
+        const videos = dislikedArtistVideos.get(artist) ?? new Set<string>();
+        videos.add(track.youtubeVideoId);
+        dislikedArtistVideos.set(artist, videos);
+    }
+    const suppressedArtists = new Set(
+        [...dislikedArtistVideos].flatMap(([artist, videos]) =>
+            videos.size >= 2 ? [artist] : [],
+        ),
+    );
     const playbackSignals = (signals.playbackSignals ?? []).slice(
         0,
         TASTE_PLAY_SIGNAL_LIMIT,
@@ -455,7 +472,13 @@ function buildPreferenceProfile(
         artistScores.set(artistKey, Math.max(-20, Math.min(24, score)));
     }
 
-    return { trackScores, artistScores, knownVideoIds, knownArtists };
+    return {
+        trackScores,
+        artistScores,
+        knownVideoIds,
+        knownArtists,
+        suppressedArtists,
+    };
 }
 
 function listeningPeriod(hour: number): number {
@@ -509,6 +532,12 @@ function rankSignalTracks(
         excludedVideoIds,
         candidates.length,
     )
+        .filter(
+            (track) =>
+                !profile.suppressedArtists.has(
+                    normalizedArtistKey(track.artist.name),
+                ),
+        )
         .map((track, originalIndex) => ({
             track,
             score: profile.trackScores.get(track.youtubeVideoId) ?? 0,
@@ -573,14 +602,18 @@ function rankDiscoveryTracks(
     profile: PersonalizedPreferenceProfile,
     mode: PersonalizedWaveMode,
     limit: number,
+    capArtists: boolean,
 ): PersonalizedTrack[] {
     const remaining = candidates
         // A lower score still backfills known songs when the provider pool is
         // short. Discoveries excludes known recordings, not familiar artists.
         .filter(
             (track) =>
-                mode !== "new" ||
-                !profile.knownVideoIds.has(track.youtubeVideoId),
+                !profile.suppressedArtists.has(
+                    normalizedArtistKey(track.artist.name),
+                ) &&
+                (mode !== "new" ||
+                    !profile.knownVideoIds.has(track.youtubeVideoId)),
         )
         .map((track, originalIndex) => ({
             track,
@@ -596,19 +629,39 @@ function rankDiscoveryTracks(
                 ),
         );
     const selected: PersonalizedTrack[] = [];
+    const artistCounts = new Map<string, number>();
+    const artistLimit = capArtists
+        ? MAX_DISCOVERY_TRACKS_PER_ARTIST
+        : Number.POSITIVE_INFINITY;
     let previousArtist: string | null = null;
 
     while (remaining.length > 0 && selected.length < limit) {
-        const diverseIndex = remaining.findIndex(
-            (entry) =>
-                normalizedArtistKey(entry.track.artist.name) !== previousArtist,
-        );
-        const [next] = remaining.splice(
-            diverseIndex >= 0 ? diverseIndex : 0,
-            1,
-        );
+        const diverseIndex = remaining.findIndex((entry) => {
+            const artist = normalizedArtistKey(entry.track.artist.name);
+            return (
+                artist !== previousArtist &&
+                (artist === "unknown artist" ||
+                    (artistCounts.get(artist) ?? 0) < artistLimit)
+            );
+        });
+        const eligibleIndex =
+            diverseIndex >= 0
+                ? diverseIndex
+                : remaining.findIndex((entry) => {
+                      const artist = normalizedArtistKey(
+                          entry.track.artist.name,
+                      );
+                      return (
+                          artist === "unknown artist" ||
+                          (artistCounts.get(artist) ?? 0) < artistLimit
+                      );
+                  });
+        if (eligibleIndex < 0) break;
+        const [next] = remaining.splice(eligibleIndex, 1);
+        const artist = normalizedArtistKey(next.track.artist.name);
+        artistCounts.set(artist, (artistCounts.get(artist) ?? 0) + 1);
         selected.push(next.track);
-        previousArtist = normalizedArtistKey(next.track.artist.name);
+        previousArtist = artist;
     }
     return selected;
 }
@@ -733,44 +786,58 @@ async function loadDislikedEntityIdsFromPrisma(
 async function loadSignalsFromPrisma(
     userId: string,
 ): Promise<PersonalizedCatalogSignals> {
-    const [recentRows, likedRows, playlistRows, settings] = await Promise.all([
-        prisma.play.findMany({
-            where: { userId, trackYtMusicId: { not: null } },
-            orderBy: { playedAt: "desc" },
-            take: PLAY_SIGNAL_READ_LIMIT,
-            select: {
-                listenedSeconds: true,
-                completionRatio: true,
-                outcome: true,
-                playedAt: true,
-                waveMode: true,
-                trackYtMusicId: true,
-            },
-        }),
-        prisma.likedRemoteTrack.findMany({
-            where: { userId, trackYtMusicId: { not: null } },
-            orderBy: [{ likedAt: "desc" }, { id: "asc" }],
-            take: COLLECTION_SIGNAL_READ_LIMIT,
-            select: {
-                trackYtMusicId: true,
-            },
-        }),
-        prisma.playlistItem.findMany({
-            where: {
-                trackYtMusicId: { not: null },
-                playlist: { is: { userId } },
-            },
-            orderBy: [{ playlistId: "asc" }, { sort: "asc" }],
-            take: COLLECTION_SIGNAL_READ_LIMIT,
-            select: {
-                trackYtMusicId: true,
-            },
-        }),
-        prisma.userSettings.findUnique({
-            where: { userId },
-            select: { tasteProfile: true },
-        }),
-    ]);
+    const [recentRows, likedRows, playlistRows, settings, recentDislikes] =
+        await Promise.all([
+            prisma.play.findMany({
+                where: { userId, trackYtMusicId: { not: null } },
+                orderBy: { playedAt: "desc" },
+                take: PLAY_SIGNAL_READ_LIMIT,
+                select: {
+                    listenedSeconds: true,
+                    completionRatio: true,
+                    outcome: true,
+                    playedAt: true,
+                    waveMode: true,
+                    trackYtMusicId: true,
+                },
+            }),
+            prisma.likedRemoteTrack.findMany({
+                where: { userId, trackYtMusicId: { not: null } },
+                orderBy: [{ likedAt: "desc" }, { id: "asc" }],
+                take: COLLECTION_SIGNAL_READ_LIMIT,
+                select: {
+                    trackYtMusicId: true,
+                },
+            }),
+            prisma.playlistItem.findMany({
+                where: {
+                    trackYtMusicId: { not: null },
+                    playlist: { is: { userId } },
+                },
+                orderBy: [{ playlistId: "asc" }, { sort: "asc" }],
+                take: COLLECTION_SIGNAL_READ_LIMIT,
+                select: {
+                    trackYtMusicId: true,
+                },
+            }),
+            prisma.userSettings.findUnique({
+                where: { userId },
+                select: { tasteProfile: true },
+            }),
+            prisma.dislikedEntity.findMany({
+                where: {
+                    userId,
+                    entityType: "track",
+                    entityId: { startsWith: "yt:" },
+                    dislikedAt: {
+                        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                    },
+                },
+                orderBy: { dislikedAt: "desc" },
+                take: 100,
+                select: { entityId: true },
+            }),
+        ]);
 
     // The three bounded signal sets frequently share tracks. Fetch their
     // distinct metadata once, retaining parent ordering and limits even when
@@ -786,6 +853,20 @@ async function loadSignalsFromPrisma(
         trackIds.length > 0
             ? await prisma.trackYtMusic.findMany({
                   where: { id: { in: trackIds } },
+                  select: YOUTUBE_TRACK_SELECT,
+              })
+            : [];
+    const dislikedVideoIds = [
+        ...new Set(
+            (recentDislikes ?? [])
+                .map((row) => row.entityId.slice("yt:".length))
+                .filter(Boolean),
+        ),
+    ];
+    const dislikedTracks =
+        dislikedVideoIds.length >= 2
+            ? await prisma.trackYtMusic.findMany({
+                  where: { videoId: { in: dislikedVideoIds } },
                   select: YOUTUBE_TRACK_SELECT,
               })
             : [];
@@ -809,6 +890,7 @@ async function loadSignalsFromPrisma(
         playlistTracks: playlistRows.flatMap(trackFor),
         tasteSeedTracks,
         dislikedEntityIds: [],
+        dislikedTracks,
         playbackSignals: recentRows.flatMap((row) => {
             const [track] = trackFor(row);
             if (!track) return [];
@@ -1061,6 +1143,7 @@ export class PersonalizedCatalogService {
                 preferenceProfile,
                 mode,
                 limit,
+                options.surface === "made-for-you",
             );
             return {
                 shelves: { listenAgain, quickPicks, discovery },
@@ -1190,6 +1273,7 @@ export class PersonalizedCatalogService {
             preferenceProfile,
             mode,
             limit,
+            options.surface === "made-for-you",
         );
 
         const degradedSources = [

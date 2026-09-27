@@ -54,6 +54,20 @@ function uniqueTracks(tracks: PersonalizedTrack[]): PersonalizedTrack[] {
     });
 }
 
+function limitArtistRepetition(
+    tracks: PersonalizedTrack[],
+): PersonalizedTrack[] {
+    const counts = new Map<string, number>();
+    return tracks.filter((track) => {
+        const artist = track.artist?.name.trim().toLocaleLowerCase() ?? "";
+        if (!artist || artist === "unknown artist") return true;
+        const count = counts.get(artist) ?? 0;
+        if (count >= 2) return false;
+        counts.set(artist, count + 1);
+        return true;
+    });
+}
+
 function roundRobinTracks(
     sources: PersonalizedTrack[][],
     limit: number,
@@ -99,11 +113,13 @@ export function buildHomePersonalMixes(
     const listenAgain = uniqueTracks(feed?.shelves.listenAgain ?? []);
     const timeDiscovery = uniqueTracks(timeOfDayFeed?.shelves.discovery ?? []);
     const timeCandidates = timeOfDayMix
-        ? uniqueTracks([
-              ...timeDiscovery,
-              ...(timeOfDayFeed?.shelves.quickPicks ?? []),
-              ...(timeOfDayFeed?.shelves.listenAgain ?? []),
-          ])
+        ? limitArtistRepetition(
+              uniqueTracks([
+                  ...timeDiscovery,
+                  ...(timeOfDayFeed?.shelves.quickPicks ?? []),
+                  ...(timeOfDayFeed?.shelves.listenAgain ?? []),
+              ]),
+          )
         : [];
     const fallbackRecipes: Array<
         Omit<HomePersonalMix, "tracks"> & {
@@ -114,9 +130,11 @@ export function buildHomePersonalMixes(
             key: "daily-blend",
             title: ru.home.dailyBlend,
             description: ru.home.dailyBlendDescription,
-            candidates: roundRobinTracks(
-                [quickPicks, discovery, listenAgain],
-                quickPicks.length + discovery.length + listenAgain.length,
+            candidates: limitArtistRepetition(
+                roundRobinTracks(
+                    [quickPicks, discovery, listenAgain],
+                    quickPicks.length + discovery.length + listenAgain.length,
+                ),
             ),
             tone: "violet",
             generationId: feed?.generationId,

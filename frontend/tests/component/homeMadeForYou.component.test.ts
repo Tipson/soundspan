@@ -216,6 +216,39 @@ test("one honest fallback and the current time mix offer long queues", async () 
     );
 });
 
+test("time-of-day mix keeps diverse songs instead of four alternating songs by one artist", async () => {
+    const { buildHomePersonalMixes, timeOfDayMixForHour } =
+        await import("../../features/home/components/HomeMadeForYou");
+    const crowdedTimeFeed: PersonalizedHomeFeed = {
+        ...timeFeed,
+        shelves: {
+            quickPicks: [],
+            listenAgain: [],
+            discovery: Array.from({ length: 12 }, (_, index) => [
+                {
+                    ...track(`flood-${index}`),
+                    artist: { id: null, name: "Flood Artist" },
+                },
+                track(`other-${index}`),
+            ]).flat(),
+        },
+    };
+
+    const mixes = buildHomePersonalMixes(
+        null,
+        crowdedTimeFeed,
+        timeOfDayMixForHour(8),
+    );
+    const morning = mixes.find((mix) => mix.key === "time-morning");
+    assert.ok(morning);
+    assert.equal(
+        morning.tracks.filter((item) => item.artist.name === "Flood Artist")
+            .length,
+        2,
+    );
+    assert.equal(morning.tracks.length, 14);
+});
+
 test("current time mix remains visible when the account has fewer signals", async () => {
     const { buildHomePersonalMixes, timeOfDayMixForHour } =
         await import("../../features/home/components/HomeMadeForYou");

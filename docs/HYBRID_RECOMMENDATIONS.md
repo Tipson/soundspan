@@ -55,7 +55,7 @@ numbers are not interchangeable.
 | Late or unmeasured skip                                  | Neutral unless near-completion qualifies           | Neutral unless sufficient measured listening qualifies                                                         |
 | Playback/network failure                                 | Neutral                                            | Neutral; retained only as availability telemetry                                                               |
 | Repeated positive listens                                | Logarithmic bonus, capped at +4                    | Listening history plus a time-decayed session profile                                                          |
-| Explicit dislike                                         | Hard exclusion                                     | Hard canonical exclusion; no automatic artist-wide ban                                                         |
+| Explicit dislike                                         | Hard exclusion of the song; after two different disliked songs by one artist, avoid that artist in automatic catalog recommendations for 30 days | Hard canonical exclusion; no automatic artist-wide ban |
 | Pause, seek, navigation, opening a card, download        | No independent taste reward/penalty                | Not reinterpreted as a like or dislike                                                                         |
 | Diagnostic playback                                      | No recorded taste event                            | No recorded generation/impression/outcome when the diagnostic request header is used                           |
 
@@ -82,6 +82,13 @@ listening from the same local period across the account's plays; missing
 period-specific history falls back to general taste. Hybrid ranking also
 learns same-period recommendations from Home, Wave, and Made For You across
 devices. Daily mixes omit `timeOfDay=1` and retain their own candidate ranking.
+Made For You catalog discovery uses at most two songs per identified artist in
+one shelf; Wave retains its artist-focused candidate depth.
+The balanced fallback and time-of-day queues also use at most two songs per
+artist across their combined shelves. Artist-specific daily style mixes retain
+their own emphasis. Disliking a recommendation removes later songs by that
+artist from the active recommendation queue; manually selected album queues
+keep their order.
 
 Similar Tracks always attempts the playable YouTube Music radio fallback. A
 canonical DCLAP seed augments ranking when available, but it is not required

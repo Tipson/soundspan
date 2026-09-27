@@ -458,6 +458,84 @@ describe("PersonalizedCatalogService", () => {
         expect(allIds).not.toContain("yt:disliked");
     });
 
+    it("does not fill a made-for-you discovery queue with four songs by one artist", async () => {
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [storedTrack("seed", { artist: "Seed Artist" })],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: Array.from({ length: 8 }, (_, index) => [
+                    radioTrack(`flood-${index}`, { artist: "Flood Artist" }),
+                    radioTrack(`other-${index}`, { artist: `Other ${index}` }),
+                ]).flat(),
+            }),
+        });
+
+        const result = await service.getHomeFeed("user-1", 12, {
+            surface: "made-for-you",
+        });
+        expect(
+            result.shelves.discovery.filter(
+                (track) => track.artist.name === "Flood Artist",
+            ),
+        ).toHaveLength(2);
+        expect(result.shelves.discovery.length).toBeGreaterThanOrEqual(10);
+    });
+
+    it("keeps an artist-focused Wave playable when only that artist is available", async () => {
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [storedTrack("seed", { artist: "Seed Artist" })],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: Array.from({ length: 5 }, (_, index) =>
+                    radioTrack(`artist-${index}`, { artist: "One Artist" }),
+                ),
+            }),
+        });
+
+        const result = await service.getHomeFeed("user-1", 12, {
+            surface: "wave",
+        });
+        expect(result.shelves.discovery).toHaveLength(5);
+    });
+
+    it("stops recommending an artist after dislikes of two different recordings", async () => {
+        const service = createService({
+            loadSignals: async () => ({
+                ...emptySignals(),
+                likedTracks: [storedTrack("seed", { artist: "Seed Artist" })],
+                dislikedTracks: [
+                    storedTrack("disliked-1", { artist: "Flood Artist" }),
+                    storedTrack("disliked-2", { artist: "Flood Artist" }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [
+                    radioTrack("another-by-flood", {
+                        artist: "Flood Artist",
+                    }),
+                    radioTrack("other", { artist: "Other Artist" }),
+                ],
+            }),
+        });
+
+        const result = await service.getHomeFeed("user-1", 12, {
+            surface: "made-for-you",
+        });
+        expect(
+            result.shelves.discovery.map((track) => track.youtubeVideoId),
+        ).toEqual(["other"]);
+    });
+
     it("keeps fulfilled radio results and reports a partial provider failure", async () => {
         const loadSignals = jest.fn(async () => ({
             ...emptySignals(),
@@ -1352,5 +1430,53 @@ describe("PersonalizedCatalogService", () => {
             "yt:taste-discovery",
         ]);
         expect(getRadio).toHaveBeenCalledWith("taste-seed", 36);
+    });
+
+    it("loads recent persisted dislikes so another song by that artist is excluded", async () => {
+        const seed = storedTrack("seed", { artist: "Seed Artist" });
+        const disliked = [
+            storedTrack("disliked-1", { artist: "Flood Artist" }),
+            storedTrack("disliked-2", { artist: "Flood Artist" }),
+        ];
+        mockPrisma.play.findMany.mockReset().mockResolvedValue([]);
+        mockPrisma.likedRemoteTrack.findMany
+            .mockReset()
+            .mockResolvedValue([{ trackYtMusicId: seed.id }]);
+        mockPrisma.playlistItem.findMany.mockReset().mockResolvedValue([]);
+        mockPrisma.userSettings.findUnique.mockReset().mockResolvedValue(null);
+        mockPrisma.trackYtMusic.findMany
+            .mockReset()
+            .mockImplementation(
+                async ({ where }: { where: Record<string, unknown> }) =>
+                    where.videoId ? disliked : [seed],
+            );
+        mockPrisma.dislikedEntity.findMany
+            .mockReset()
+            .mockImplementation(
+                async ({ where }: { where: Record<string, unknown> }) =>
+                    where.dislikedAt
+                        ? disliked.map((track) => ({
+                              entityId: `yt:${track.videoId}`,
+                          }))
+                        : [],
+            );
+        mockPrisma.scrobbleConnection.findUnique.mockResolvedValue(null);
+        mockDefaultGetRadio.mockReset().mockResolvedValue({
+            playlistId: null,
+            seedVideoId: "seed",
+            tracks: [
+                radioTrack("another-by-flood", { artist: "Flood Artist" }),
+                radioTrack("other", { artist: "Other Artist" }),
+            ],
+        });
+
+        const result = await personalizedCatalogService.getHomeFeed(
+            "listener-with-dislikes",
+            12,
+            { surface: "made-for-you" },
+        );
+        expect(
+            result.shelves.discovery.map((track) => track.youtubeVideoId),
+        ).toEqual(["other"]);
     });
 });

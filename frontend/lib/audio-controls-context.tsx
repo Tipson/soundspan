@@ -57,6 +57,7 @@ import {
     type QueueItem,
 } from "./queue-item";
 import { resolveQueueAdvance } from "./audio/queue-advance-policy";
+import { pruneRecommendedArtistAfterDislike } from "./audio/feedback-queue-policy";
 import type { Episode } from "@/features/podcast/types";
 import { separateArtists } from "./separate-artists";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
@@ -1148,26 +1149,55 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
             state.setRepeatOneCount(0);
 
+            const feedbackQueue =
+                origin === "feedback" &&
+                (state.currentTrack?.recommendationGenerationId ||
+                    state.currentTrack?.recommendationSessionId)
+                    ? pruneRecommendedArtistAfterDislike({
+                          queue: state.queue,
+                          currentIndex: state.currentIndex,
+                          isShuffle: state.isShuffle,
+                          shuffleIndices: state.shuffleIndices,
+                          artistName: state.currentTrack.artist.name,
+                      })
+                    : {
+                          queue: state.queue,
+                          currentIndex: state.currentIndex,
+                          shuffleIndices: state.shuffleIndices,
+                      };
+            if (feedbackQueue.queue !== state.queue) {
+                state.setQueue(feedbackQueue.queue);
+                state.setShuffleIndices(feedbackQueue.shuffleIndices);
+                if (feedbackQueue.currentIndex !== state.currentIndex) {
+                    state.setCurrentIndex(feedbackQueue.currentIndex);
+                }
+            }
+
             if (state.isShuffle) {
-                const currentShufflePos = state.shuffleIndices.indexOf(
-                    state.currentIndex,
+                const currentShufflePos = feedbackQueue.shuffleIndices.indexOf(
+                    feedbackQueue.currentIndex,
                 );
                 queueDebugLog("next() shuffle", {
                     currentIndex: state.currentIndex,
                     currentShufflePos,
-                    shuffleIndicesLen: state.shuffleIndices.length,
+                    shuffleIndicesLen: feedbackQueue.shuffleIndices.length,
                 });
             }
             const advance = resolveQueueAdvance({
                 action: "next",
-                queue: state.queue,
-                currentIndex: state.currentIndex,
+                queue: feedbackQueue.queue,
+                currentIndex: feedbackQueue.currentIndex,
                 isShuffle: state.isShuffle,
-                shuffleIndices: state.shuffleIndices,
+                shuffleIndices: feedbackQueue.shuffleIndices,
                 repeatMode:
-                    origin === "error" && state.repeatMode === "one"
-                        ? "off"
-                        : state.repeatMode,
+                    origin === "feedback"
+                        ? state.repeatMode === "all" &&
+                          feedbackQueue.queue.length > 1
+                            ? "all"
+                            : "off"
+                        : origin === "error" && state.repeatMode === "one"
+                          ? "off"
+                          : state.repeatMode,
             });
             if (advance.kind === "stop") {
                 if (
@@ -1224,7 +1254,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 // A natural end can arrive here after online auto-match finishes
                 // without extending the queue. Retire its play intent so the
                 // watchdog cannot recover an already completed media element.
-                if (origin === null) {
+                if (origin === null || origin === "feedback") {
                     playbackState.setIsPlaying(false);
                 }
                 return;
@@ -1234,10 +1264,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 isShuffle: state.isShuffle,
                 nextIndex: advance.index,
                 nextItemKind: advance.kind,
-                nextItemId: state.queue[advance.index]?.id,
-                queueLen: state.queue.length,
+                nextItemId: feedbackQueue.queue[advance.index]?.id,
+                queueLen: feedbackQueue.queue.length,
             });
-            const nextItem = state.queue[advance.index];
+            const nextItem = feedbackQueue.queue[advance.index];
             if (!nextItem) {
                 return;
             }
