@@ -235,7 +235,7 @@ describe("PersonalizedCatalogService", () => {
         ).toContain("heard");
     });
 
-    it("allows yesterday's liked song and a failed start, but excludes today's skip across Wave lanes", async () => {
+    it("allows an older liked song and a failed start, but excludes a recent skip across Wave lanes", async () => {
         const now = new Date("2026-09-07T22:00:00Z");
         const service = createService({
             now: () => now,
@@ -253,7 +253,7 @@ describe("PersonalizedCatalogService", () => {
                 ],
                 playbackSignals: [
                     playbackSignal("yesterday", "completed", {
-                        playedAt: new Date("2026-09-06T21:00:00Z"),
+                        playedAt: new Date("2026-08-30T21:00:00Z"),
                     }),
                     playbackSignal("failed", "failed", { playedAt: now }),
                     playbackSignal("skipped", "skipped", { playedAt: now }),
@@ -275,6 +275,98 @@ describe("PersonalizedCatalogService", () => {
         expect(ids).toContain("failed");
         expect(ids).not.toContain("skipped");
         expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it("keeps recently heard songs out of automatic feeds across video versions", async () => {
+        const now = new Date("2026-09-27T12:00:00Z");
+        const heard = storedTrack("heard-video", {
+            title: "Sleepwalking",
+            artist: "Bring Me The Horizon",
+            duration: 237,
+        });
+        const alternate = storedTrack("alternate-video", {
+            title: "Sleepwalking",
+            artist: "Bring Me The Horizon",
+            duration: 231,
+        });
+        const service = createService({
+            now: () => now,
+            loadSignals: async () => ({
+                ...emptySignals(),
+                recentPlays: [heard],
+                likedTracks: [alternate, storedTrack("fresh-like")],
+                playbackSignals: [
+                    playbackSignal("heard-video", "completed", {
+                        track: heard,
+                        playedAt: new Date("2026-09-26T01:26:14Z"),
+                    }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [
+                    radioTrack("third-video", {
+                        title: "Sleepwalking",
+                        artist: "Bring Me The Horizon",
+                    }),
+                    radioTrack("fresh-radio"),
+                ],
+            }),
+        });
+        for (const surface of ["wave", "made-for-you"] as const) {
+            const feed = await service.getHomeFeed("user-1", 12, { surface });
+            const tracks = Object.values(feed.shelves).flat();
+            expect(
+                tracks.some(
+                    (track) =>
+                        track.artist.name === "Bring Me The Horizon" &&
+                        track.title === "Sleepwalking",
+                ),
+            ).toBe(false);
+            expect(
+                tracks.some((track) => track.youtubeVideoId === "fresh-radio"),
+            ).toBe(true);
+        }
+        const home = await service.getHomeFeed("user-1", 12);
+        expect(
+            home.shelves.listenAgain.map((track) => track.youtubeVideoId),
+        ).toContain("heard-video");
+    });
+
+    it("uses an older familiar song only when a Wave has no fresh alternatives", async () => {
+        const now = new Date("2026-09-27T12:00:00Z");
+        const recentlyHeard = storedTrack("recently-heard");
+        const justHeard = storedTrack("just-heard");
+        const service = createService({
+            now: () => now,
+            loadSignals: async () => ({
+                ...emptySignals(),
+                recentPlays: [justHeard, recentlyHeard],
+                likedTracks: [justHeard, recentlyHeard],
+                playbackSignals: [
+                    playbackSignal("just-heard", "completed", {
+                        playedAt: new Date("2026-09-27T11:00:00Z"),
+                    }),
+                    playbackSignal("recently-heard", "completed", {
+                        playedAt: new Date("2026-09-24T11:00:00Z"),
+                    }),
+                ],
+            }),
+            getRadio: async (seedVideoId) => ({
+                seedVideoId,
+                playlistId: null,
+                tracks: [],
+            }),
+        });
+        const feed = await service.getHomeFeed("user-1", 12, {
+            surface: "wave",
+        });
+        expect(
+            Object.values(feed.shelves)
+                .flat()
+                .map((track) => track.youtubeVideoId),
+        ).toEqual(["recently-heard"]);
     });
 
     it("uses at most three different seed artists even when all four signal sources exist", async () => {

@@ -17,6 +17,7 @@ const PLAY_SIGNAL_READ_LIMIT = 1_000;
 const TASTE_PLAY_SIGNAL_LIMIT = 100;
 const COLLECTION_SIGNAL_READ_LIMIT = 2_000;
 const WAVE_REPEAT_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const LISTENED_SONG_REPEAT_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
 const MAX_RADIO_SEEDS = 3;
 const MAX_HOME_SHELF_LIMIT = 25;
 const MIN_RADIO_RESULT_LIMIT = 12;
@@ -198,6 +199,36 @@ function normalizeVideoId(value: unknown): string | null {
         : normalized;
 }
 
+function songRepeatKey(artist: string, title: string): string | null {
+    const normalize = (value: string) =>
+        value
+            .normalize("NFKC")
+            .toLocaleLowerCase("en-US")
+            .replace(/[^\p{L}\p{N}]+/gu, " ")
+            .trim()
+            .replace(/\s+/g, " ");
+    const artistKey = normalize(artist);
+    const titleKey = normalize(title);
+    if (
+        !artistKey ||
+        !titleKey ||
+        artistKey === "unknown artist" ||
+        titleKey === "unknown track"
+    ) {
+        return null;
+    }
+    return JSON.stringify([artistKey, titleKey]);
+}
+
+function isExcludedSong(
+    track: PersonalizedTrack,
+    excludedSongKeys: ReadonlySet<string>,
+): boolean {
+    if (excludedSongKeys.size === 0) return false;
+    const key = songRepeatKey(track.artist.name, track.title);
+    return key !== null && excludedSongKeys.has(key);
+}
+
 function resolveArtist(track: TrackLike): string {
     const direct = nonBlank(track.artist);
     if (direct) return direct;
@@ -273,6 +304,7 @@ function collectDistinctTracks(
     candidates: readonly unknown[],
     excludedVideoIds: Set<string>,
     limit: number,
+    excludedSongKeys: ReadonlySet<string> = new Set(),
 ): PersonalizedTrack[] {
     const tracks: PersonalizedTrack[] = [];
     const seen = new Set<string>();
@@ -282,6 +314,7 @@ function collectDistinctTracks(
         if (
             !track ||
             excludedVideoIds.has(track.youtubeVideoId) ||
+            isExcludedSong(track, excludedSongKeys) ||
             seen.has(track.youtubeVideoId)
         ) {
             continue;
@@ -298,6 +331,7 @@ function collectInterleavedDistinctTracks(
     queues: readonly (readonly unknown[])[],
     excludedVideoIds: Set<string>,
     limit: number,
+    excludedSongKeys: ReadonlySet<string> = new Set(),
 ): PersonalizedTrack[] {
     const tracks: PersonalizedTrack[] = [];
     const seen = new Set<string>();
@@ -316,6 +350,7 @@ function collectInterleavedDistinctTracks(
                 if (
                     !track ||
                     excludedVideoIds.has(track.youtubeVideoId) ||
+                    isExcludedSong(track, excludedSongKeys) ||
                     seen.has(track.youtubeVideoId)
                 ) {
                     continue;
@@ -526,11 +561,13 @@ function rankSignalTracks(
     profile: PersonalizedPreferenceProfile,
     limit: number,
     rotationKey?: string,
+    excludedSongKeys: ReadonlySet<string> = new Set(),
 ): PersonalizedTrack[] {
     return collectDistinctTracks(
         candidates,
         excludedVideoIds,
         candidates.length,
+        excludedSongKeys,
     )
         .filter(
             (track) =>
@@ -1037,21 +1074,63 @@ export class PersonalizedCatalogService {
         const requestedExclusions = normalizeRequestedExclusions(
             options.excludeVideoIds,
         );
-        if (options.surface === "wave") {
+        const recentlyHeardSongKeys = new Set<string>();
+        const recentAttemptSongKeys = new Set<string>();
+        const hardExclusions = new Set(requestedExclusions);
+        if (options.surface === "wave" || options.surface === "made-for-you") {
             const now = (this.dependencies.now?.() ?? new Date()).getTime();
             for (const signal of signals.playbackSignals ?? []) {
                 const playedAt = signal.playedAt?.getTime();
+                const age = playedAt === undefined ? NaN : now - playedAt;
+                const recentAttempt = age >= 0 && age < WAVE_REPEAT_WINDOW_MS;
+                const recentListen =
+                    age >= 0 &&
+                    age < LISTENED_SONG_REPEAT_WINDOW_MS &&
+                    (signal.listenedSeconds ?? 0) >= 30;
                 if (
-                    playedAt !== undefined &&
-                    Number.isFinite(playedAt) &&
-                    now - playedAt < WAVE_REPEAT_WINDOW_MS &&
+                    (recentAttempt || recentListen) &&
                     signal.outcome !== "failed"
                 ) {
                     const videoId = normalizeVideoId(signal.track.videoId);
                     if (videoId) requestedExclusions.add(videoId);
+                    const songKey = songRepeatKey(
+                        signal.track.artist,
+                        signal.track.title,
+                    );
+                    if (songKey) recentlyHeardSongKeys.add(songKey);
+                    if (recentAttempt) {
+                        if (videoId) hardExclusions.add(videoId);
+                        if (songKey) recentAttemptSongKeys.add(songKey);
+                    }
                 }
             }
         }
+        const withFallback = (
+            shelves: PersonalizedHomeFeed["shelves"],
+        ): PersonalizedHomeFeed["shelves"] => {
+            if (
+                (options.surface !== "wave" &&
+                    options.surface !== "made-for-you") ||
+                mode === "new" ||
+                Object.values(shelves).some((tracks) => tracks.length > 0)
+            ) {
+                return shelves;
+            }
+            const fallback = rankSignalTracks(
+                [
+                    ...signals.recentPlays,
+                    ...signals.likedTracks,
+                    ...signals.playlistTracks,
+                    ...(signals.tasteSeedTracks ?? []),
+                ],
+                new Set([...dislikedVideoIds, ...hardExclusions]),
+                preferenceProfile,
+                limit,
+                rotationKey,
+                recentAttemptSongKeys,
+            );
+            return { ...shelves, listenAgain: fallback };
+        };
         const shelfExclusions = new Set([
             ...dislikedVideoIds,
             ...requestedExclusions,
@@ -1062,6 +1141,8 @@ export class PersonalizedCatalogService {
             shelfExclusions,
             preferenceProfile,
             limit,
+            undefined,
+            recentlyHeardSongKeys,
         );
         const recentVideoIds =
             options.surface === "wave"
@@ -1088,6 +1169,7 @@ export class PersonalizedCatalogService {
             preferenceProfile,
             limit,
             rotationKey,
+            recentlyHeardSongKeys,
         );
 
         const seedTracks = selectDiverseSeedTracks(
@@ -1139,6 +1221,7 @@ export class PersonalizedCatalogService {
                     listenBrainzCandidates,
                     externalExclusions,
                     MAX_DISCOVERY_CANDIDATES,
+                    recentlyHeardSongKeys,
                 ),
                 preferenceProfile,
                 mode,
@@ -1146,7 +1229,7 @@ export class PersonalizedCatalogService {
                 options.surface === "made-for-you",
             );
             return {
-                shelves: { listenAgain, quickPicks, discovery },
+                shelves: withFallback({ listenAgain, quickPicks, discovery }),
                 degraded: degradedSources.length > 0,
                 reason:
                     degradedSources.length > 0
@@ -1230,6 +1313,8 @@ export class PersonalizedCatalogService {
             new Set([...dislikedVideoIds, ...requestedExclusions]),
             preferenceProfile,
             limit,
+            undefined,
+            recentlyHeardSongKeys,
         );
         const finalQuickPicks = rankSignalTracks(
             [
@@ -1246,6 +1331,7 @@ export class PersonalizedCatalogService {
             preferenceProfile,
             limit,
             rotationKey,
+            recentlyHeardSongKeys,
         );
         const discoveryExclusions = new Set([
             ...dislikedVideoIds,
@@ -1260,6 +1346,7 @@ export class PersonalizedCatalogService {
             successfulRadioQueues,
             providerExclusions,
             MAX_DISCOVERY_CANDIDATES,
+            recentlyHeardSongKeys,
         );
         const externalExclusions = new Set(providerExclusions);
         addTrackIds(externalExclusions, providerDiscovery);
@@ -1267,6 +1354,7 @@ export class PersonalizedCatalogService {
             listenBrainzCandidates,
             externalExclusions,
             MAX_DISCOVERY_CANDIDATES - providerDiscovery.length,
+            recentlyHeardSongKeys,
         );
         const discovery = rankDiscoveryTracks(
             [...providerDiscovery, ...externalDiscovery],
@@ -1290,11 +1378,11 @@ export class PersonalizedCatalogService {
                   : "provider_unavailable";
 
         return {
-            shelves: {
+            shelves: withFallback({
                 listenAgain: finalListenAgain,
                 quickPicks: finalQuickPicks,
                 discovery,
-            },
+            }),
             degraded: degradedSources.length > 0,
             reason,
             seedCount: seedVideoIds.length,
