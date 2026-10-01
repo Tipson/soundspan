@@ -17,7 +17,6 @@ import {
     getExplicitPlaybackPauseGeneration,
     getPlaybackIntentGeneration,
     isPlaybackAutoRestartSuppressed,
-    recordExplicitPlaybackPause,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
 import {
     getTrackProviderFailureKey,
@@ -721,24 +720,6 @@ export const AudioPlaybackOrchestrator = memo(
                 const isListenTogetherFollower = Boolean(
                     ltSession?.groupId && !ltSession.isHost,
                 );
-
-                // Android may pause the media element when another app takes
-                // audio focus. The page cannot distinguish that pause from an
-                // interruption, so leave playback paused until the user plays.
-                if (
-                    isNonUserPause &&
-                    hasPlayIntent &&
-                    !nearTrackEnd &&
-                    audioEngine.getActiveEngineDescriptor() === "native" &&
-                    typeof navigator !== "undefined" &&
-                    /Android/i.test(navigator.userAgent)
-                ) {
-                    recordExplicitPlaybackPause();
-                    playbackStateMachine.forceTransition("READY");
-                    setIsPlaying(false);
-                    isUserInitiatedRef.current = false;
-                    return;
-                }
 
                 const shouldAttemptUnexpectedPauseRecovery =
                     playbackType === "track" &&

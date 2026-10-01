@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-- Keep Android playback paused when another app interrupts audio focus, so Soundspan does not resume over video or voice messages.
 - Prefer songs not heard in the last seven days in automatic Wave and Made For You queues, including alternate YouTube uploads with the same artist and title. Keep the last 24 hours blocked and use older familiar songs only if no fresh alternatives remain; Home's Listen Again shelf still offers intentional replays.
 - Keep Made For You discovery and time-of-day queues diverse by limiting repeated artists; after two different disliked songs by one artist, exclude that artist from automatic catalog recommendations for 30 days. A dislike also removes that artist's upcoming songs from the active recommendation queue without changing an explicitly selected album queue.
 - Favor songs the listener has not played in the last seven days in personal style mixes; use older recent plays to fill a mix only when necessary.

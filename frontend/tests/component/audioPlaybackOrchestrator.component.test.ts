@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import * as realPlaybackRecoveryPolicy from "../../lib/audio-engine/playbackRecoveryPolicy";
 import {
-    getExplicitPlaybackPauseGeneration,
     recordExplicitPlaybackPause,
     recordExplicitPlaybackResume,
     recordExplicitPlaybackSeek,
@@ -5844,118 +5843,6 @@ test("native empty-buffer pause recovers without a DOM media element", async (t)
     engine.emit("load", { durationSec: 240 });
     await flushAsync();
     assert.ok(engine.seekCalls.includes(83));
-});
-
-for (const bufferedAheadSec of [0, 150]) {
-    test(`Android audio-focus pause stays paused with ${bufferedAheadSec}s buffered`, async (t) => {
-        t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
-        const navigatorDescriptor = Object.getOwnPropertyDescriptor(
-            globalThis,
-            "navigator",
-        );
-        Object.defineProperty(globalThis, "navigator", {
-            configurable: true,
-            value: {
-                userAgent: "Mozilla/5.0 (Linux; Android 15) Chrome/140",
-                onLine: true,
-            },
-        });
-        t.after(() => {
-            if (navigatorDescriptor) {
-                Object.defineProperty(
-                    globalThis,
-                    "navigator",
-                    navigatorDescriptor,
-                );
-            } else {
-                Reflect.deleteProperty(globalThis, "navigator");
-            }
-        });
-        runtimeEngineMode = "native";
-        const visibility = installVisibilityDocument();
-        playbackState.isPlaying = true;
-        audioState.currentTrack = makeTrack("android-audio-focus-pause");
-        audioState.queue = [audioState.currentTrack];
-        renderOrchestrator();
-        await flushAsync();
-        engine.emit("load", { durationSec: 240 });
-        engine.playing = true;
-        engine.emit("play");
-        engine.currentTime = engine.actualCurrentTime = 83;
-        engine.emit("timeupdate", { timeSec: 83 });
-        await flushAsync();
-
-        visibility.dispatchVisibility("hidden");
-        engine.bufferedAheadSec = bufferedAheadSec;
-        engine.playing = false;
-        engine.emit("pause");
-        await flushAsync();
-        t.mock.timers.tick(1_200);
-        await flushAsync();
-        t.mock.timers.tick(450);
-        await flushAsync();
-        assert.equal(engine.reloadCalls, 0);
-        assert.equal(engine.playing, false);
-        assert.ok(playbackCalls.setIsPlaying.includes(false));
-
-        visibility.dispatchVisibility("visible");
-        t.mock.timers.tick(500);
-        await flushAsync();
-        assert.equal(engine.playing, false);
-        assert.equal(engine.playCalls, 1);
-
-        recordExplicitPlaybackResume();
-        playbackState.isPlaying = true;
-        rerenderOrchestrator();
-        await flushAsync();
-        assert.equal(engine.playing, true);
-    });
-}
-
-test("Android WebView Howler pause does not acquire the native interruption marker", async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 100_000 });
-    const navigatorDescriptor = Object.getOwnPropertyDescriptor(
-        globalThis,
-        "navigator",
-    );
-    Object.defineProperty(globalThis, "navigator", {
-        configurable: true,
-        value: {
-            userAgent: "Mozilla/5.0 (Linux; Android 15; wv)",
-            onLine: true,
-        },
-    });
-    t.after(() => {
-        if (navigatorDescriptor) {
-            Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
-        } else {
-            Reflect.deleteProperty(globalThis, "navigator");
-        }
-    });
-    runtimeEngineMode = "howler";
-    playbackState.isPlaying = true;
-    audioState.currentTrack = makeTrack("android-webview-buffer-pause");
-    audioState.queue = [audioState.currentTrack];
-    renderOrchestrator();
-    await flushAsync();
-    engine.emit("load", { durationSec: 240 });
-    engine.playing = true;
-    engine.emit("play");
-    engine.currentTime = engine.actualCurrentTime = 83;
-    engine.emit("timeupdate", { timeSec: 83 });
-    await flushAsync();
-    t.mock.timers.tick(30_000);
-    await flushAsync();
-
-    engine.bufferedAheadSec = 0;
-    engine.playing = false;
-    engine.emit("pause");
-    await flushAsync();
-    t.mock.timers.tick(1_200);
-    await flushAsync();
-    t.mock.timers.tick(450);
-    await flushAsync();
-    assert.equal(getExplicitPlaybackPauseGeneration(), 0);
 });
 
 for (const [position, buffer] of [
