@@ -90,6 +90,7 @@ For deployment variants, release channels, compose files, and updates, see [`doc
 - Usage guide (navigation, playback, admin): [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md)
 - Deployment modes and updates: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Configuration and security: [`docs/CONFIGURATION_AND_SECURITY.md`](docs/CONFIGURATION_AND_SECURITY.md)
+- Playback diagnostic report: [`docs/observability/playback-diagnostic-summary.md`](docs/observability/playback-diagnostic-summary.md)
 - OIDC and SSO setup: [`docs/OIDC_SSO.md`](docs/OIDC_SSO.md)
 - Environment variables reference: [`docs/ENVIRONMENT_VARIABLES.md`](docs/ENVIRONMENT_VARIABLES.md)
 - Integration setup (Lidarr, Soulseek, YouTube Music, Last.fm, OpenSubsonic): [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md)

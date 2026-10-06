@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a read-only playback diagnostic report that deduplicates delivered events, separates recovered, failed and unresolved audio loads, and emits private aggregate source/platform/hourly counts with explicit input-quality limits.
+
 - Add an operator timer that checks public radio and consecutive audio ranges without recording listening history. Persist repeated-failure incidents and deliver deduplicated outage/recovery notifications to administrators.
 
 - Prefer songs not heard in the last seven days in automatic Wave and Made For You queues, including alternate YouTube uploads with the same artist and title. Keep the last 24 hours blocked and use older familiar songs only if no fresh alternatives remain; Home's Listen Again shelf still offers intentional replays.

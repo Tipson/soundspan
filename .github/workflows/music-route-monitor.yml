@@ -1,4 +1,4 @@
-name: Music Route Monitor
+name: Music Operator Checks
 
 on:
   pull_request:
@@ -7,6 +7,8 @@ on:
       - "scripts/music-route-runtime.cjs"
       - "scripts/tests/test_music_route_monitor.py"
       - "scripts/tests/music-route-runtime.test.cjs"
+      - "scripts/playback_diagnostic_summary.py"
+      - "scripts/tests/test_playback_diagnostic_summary.py"
       - ".github/workflows/music-route-monitor.yml"
   push:
     branches: [main, develop]
@@ -15,6 +17,8 @@ on:
       - "scripts/music-route-runtime.cjs"
       - "scripts/tests/test_music_route_monitor.py"
       - "scripts/tests/music-route-runtime.test.cjs"
+      - "scripts/playback_diagnostic_summary.py"
+      - "scripts/tests/test_playback_diagnostic_summary.py"
       - ".github/workflows/music-route-monitor.yml"
   workflow_dispatch:
 
@@ -41,3 +45,5 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p test_music_route_monitor.py
       - name: Test auth scope and administrator notification retries
         run: node --test scripts/tests/music-route-runtime.test.cjs
+      - name: Test private playback diagnostic aggregation
+        run: python3 -m unittest discover -s scripts/tests -p test_playback_diagnostic_summary.py
