@@ -12,6 +12,26 @@ GlobalRegistrator.register({ url: "https://soundspan.test/" });
 
 let needsOnboarding = false;
 const accountCalls: string[] = [];
+const catalogCalls: string[] = [];
+
+// The gate tests account visibility, not catalog networking. Keep its real
+// dialog while isolating nested artwork/catalog queries from real services.
+mock.module("@/lib/api", {
+    namedExports: {
+        api: {
+            request: async (path: string) => {
+                catalogCalls.push(path);
+                if (path.startsWith("/taste-profile/artists?")) {
+                    return { artists: [], nextPage: null };
+                }
+                if (path.startsWith("/taste-profile/artist-image?")) {
+                    return { image: null };
+                }
+                throw new Error(`Unexpected gate request: ${path}`);
+            },
+        },
+    },
+});
 
 mock.module("@/features/taste-profile/hooks/useTasteProfile", {
     namedExports: {
@@ -39,6 +59,7 @@ after(() => GlobalRegistrator.unregister());
 beforeEach(() => {
     needsOnboarding = false;
     accountCalls.length = 0;
+    catalogCalls.length = 0;
 });
 
 test("the gate opens only when the authenticated account explicitly needs onboarding", async () => {
@@ -73,4 +94,9 @@ test("the gate opens only when the authenticated account explicitly needs onboar
     await React.act(async () => root.unmount());
     container.remove();
     queryClient.clear();
+    assert.ok(
+        catalogCalls.every((path) =>
+            /^\/taste-profile\/(artists|artist-image)\?/.test(path),
+        ),
+    );
 });

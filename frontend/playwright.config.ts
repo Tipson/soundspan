@@ -4,6 +4,7 @@ const baseURL = process.env.SOUNDSPAN_UI_BASE_URL || "http://127.0.0.1:3030";
 
 export default defineConfig({
     testDir: "./tests/e2e",
+    testIgnore: "**/core/**",
     timeout: 60_000,
     expect: { timeout: 15_000 },
     retries: process.env.CI ? 2 : 0,

@@ -60,7 +60,37 @@ These scripts intentionally run outside Jest because they are operator diagnosti
 | `frontend/tests/component/*.test.ts`     | server-rendered component regressions for targeted UI surfaces   |
 | `frontend/tests/e2e/*.spec.ts`           | high-level smoke and user-flow tests                             |
 | `frontend/tests/e2e/predeploy/*.spec.ts` | release-readiness/predeploy flows                                |
+| `frontend/tests/e2e/core/*.spec.ts` | isolated, mandatory synthetic core user journeys |
 | `frontend/tests/e2e/fixtures/`           | Playwright helper fixtures                                       |
+
+## Isolated core user journeys
+
+`npm --prefix frontend run test:core-journeys` runs the compiled frontend against
+per-browser synthetic API state and real generated WAV audio. Build the shared
+contract and frontend first, and install Chromium with
+`npx playwright install chromium` from `frontend/`. The dedicated
+`frontend/playwright.core.config.ts` starts its own loopback server on port 3137
+and refuses to reuse an existing server. It never reads predeploy credentials or
+`SOUNDSPAN_UI_BASE_URL`; no backend, real catalog or owner account is contacted.
+
+The scenarios cover rejected login, login persistence, logout, first-run taste
+skip, taste save/reload and failed-save retry, persistent Wave tuning, two
+independent 20-track mix queues, pause/resume/previous/next, and a UI download
+that plays from an OPFS file after an online page reload with the network disabled.
+Playback checks inspect native audio time and require exactly one playing element.
+Unknown API calls and external HTTP/WebSocket requests fail the test.
+
+The Core User Journeys workflow fails on missing scenarios, skipped tests,
+retries, expected failures or runner errors. Reports and failure traces/screenshots
+are written to `frontend/output/playwright/core/`. For focused diagnosis, run
+`npx playwright test --config playwright.core.config.ts --grep '<scenario>'`
+from `frontend/`; the mandatory npm command always runs the full suite.
+
+These tests use a Chromium Android viewport and synthetic responses. They verify
+frontend contracts and device-file playback; they do not establish real provider
+availability, ranking quality, service-worker cold offline startup, or physical
+Android/iPhone background, Bluetooth or audio-focus behavior. Keep the live
+predeploy suite and physical-device acceptance as separate release gates.
 
 ## Naming Conventions
 

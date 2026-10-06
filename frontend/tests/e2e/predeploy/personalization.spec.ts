@@ -27,11 +27,11 @@ test.describe("Personalization candidate", () => {
             .getByRole("radio", { name: "Больше нового", exact: true })
             .click();
         await tuneSheet
-            .getByRole("radio", { name: "Спокойное", exact: true })
+            .getByRole("radio", { name: "Спокойно", exact: true })
             .click();
         await tuneSheet
             .getByRole("button", {
-                name: /^(?:Сохранить настройку|Обновить волну): Больше нового, Спокойное$/,
+                name: /^(?:Сохранить настройку|Обновить волну): Больше нового, Спокойно$/,
             })
             .click();
 
@@ -43,7 +43,7 @@ test.describe("Personalization candidate", () => {
             .toBe("calm");
         const currentTuning = page.getByTestId("wave-current-tuning");
         await expect(currentTuning).toContainText("Открытия");
-        await expect(currentTuning).toContainText("Спокойное");
+        await expect(currentTuning).toContainText("Спокойно");
 
         await page.goto("/");
         await expect(
@@ -59,7 +59,7 @@ test.describe("Personalization candidate", () => {
             "Открытия",
         );
         await expect(page.getByTestId("wave-current-tuning")).toContainText(
-            "Спокойное",
+            "Спокойно",
         );
 
         await page
@@ -74,7 +74,7 @@ test.describe("Personalization candidate", () => {
         ).toHaveAttribute("aria-checked", "true");
         await expect(
             reopenedSheet.getByRole("radio", {
-                name: "Спокойное",
+                name: "Спокойно",
                 exact: true,
             }),
         ).toHaveAttribute("aria-checked", "true");

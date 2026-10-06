@@ -1,0 +1,52 @@
+name: Core User Journeys
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop, "feature/**", "codex/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-user-journeys-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-user-journeys:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            packages/media-metadata-contract/package-lock.json
+      - name: Install and build shared contract
+        run: |
+          npm --prefix packages/media-metadata-contract ci
+          npm --prefix packages/media-metadata-contract run build
+      - name: Install frontend and browser
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Run mandatory journeys
+        working-directory: frontend
+        run: npm run test:core-journeys
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: core-user-journeys
+          path: frontend/output/playwright/core
+          retention-days: 7
