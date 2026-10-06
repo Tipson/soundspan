@@ -1,0 +1,25 @@
+[Unit]
+Description=Soundspan public radio and audio continuation check
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/music-stack/music-route-monitor/music_route_monitor.py --config /root/.config/music-stack/music-route-monitor.json --state /var/lib/soundspan-music-route-monitor/state.json
+TimeoutStartSec=120
+StateDirectory=soundspan-music-route-monitor
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/soundspan-music-route-monitor
+StandardOutput=journal
+StandardError=journal
