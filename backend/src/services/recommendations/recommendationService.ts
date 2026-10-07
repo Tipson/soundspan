@@ -10,6 +10,7 @@ import {
     type WaveLanguage,
 } from "./recordingLanguage";
 import type { PreparedRecordingLanguages } from "./recordingLanguageStore";
+import type { SavedMoodCandidateOptions } from "./featureStore";
 import {
     RecommendationEngine,
     type RecommendationCandidateBatch,
@@ -37,6 +38,7 @@ export interface UnifiedRecommendationDependencies extends CommonEngineDependenc
     loadSavedMoodCandidates?: (
         userId: string,
         mood: RecommendationMood,
+        options?: SavedMoodCandidateOptions,
     ) => Promise<RecommendationCandidate[]>;
     prepareLanguages?: (
         tracks: LanguageRecording[],
@@ -236,6 +238,12 @@ export class UnifiedRecommendationService {
                         await this.dependencies.loadSavedMoodCandidates(
                             input.userId,
                             input.mood,
+                            {
+                                allowRecentListeningFallback: Object.values(
+                                    sourceFeed.shelves,
+                                ).every((tracks) => tracks.length === 0),
+                                now: this.dependencies.now(),
+                            },
                         );
                     candidates.push(
                         ...saved.map((candidate) => ({

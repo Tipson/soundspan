@@ -1,5 +1,9 @@
 import { UnifiedRecommendationService } from "../recommendationService";
 import type { RecommendationCandidate } from "../types";
+import type {
+    PersonalizedHomeFeed,
+    PersonalizedTrack,
+} from "../../personalizedCatalog";
 
 const saved: RecommendationCandidate = {
     id: "yt:calm",
@@ -27,18 +31,21 @@ const saved: RecommendationCandidate = {
 function setup() {
     const loadSavedMoodCandidates = jest.fn().mockResolvedValue([saved]);
     const loadDislikedCanonicalKeys = jest.fn().mockResolvedValue(new Set());
-    const deps = {
-        mode: "active" as const,
-        hybridRolloutPercent: 100,
-        explorationRate: 0,
-        loadSavedMoodCandidates,
-        loadPersonalizedFeed: async () => ({
+    const loadPersonalizedFeed = jest.fn(
+        async (): Promise<PersonalizedHomeFeed> => ({
             shelves: { listenAgain: [], quickPicks: [], discovery: [] },
             degraded: false,
             reason: null,
             seedCount: 1,
             nextCursor: 1,
         }),
+    );
+    const deps = {
+        mode: "active" as const,
+        hybridRolloutPercent: 100,
+        explorationRate: 0,
+        loadSavedMoodCandidates,
+        loadPersonalizedFeed,
         resolveCanonical: async (c: RecommendationCandidate) => ({
             id: c.canonicalRecordingId!,
             canonicalKey: c.canonicalKey,
@@ -58,6 +65,7 @@ function setup() {
         service: new UnifiedRecommendationService(deps),
         loadSavedMoodCandidates,
         loadDislikedCanonicalKeys,
+        loadPersonalizedFeed,
     };
 }
 const request = {
@@ -73,7 +81,14 @@ const request = {
 test("mood can reach saved songs outside the pre-truncated provider shelves", async () => {
     const { service, loadSavedMoodCandidates } = setup();
     const feed = await service.getPersonalizedFeed(request);
-    expect(loadSavedMoodCandidates).toHaveBeenCalledWith("alice", "calm");
+    expect(loadSavedMoodCandidates).toHaveBeenCalledWith(
+        "alice",
+        "calm",
+        expect.objectContaining({
+            allowRecentListeningFallback: true,
+            now: expect.any(Date),
+        }),
+    );
     expect(feed.shelves.quickPicks.map((x) => x.youtubeVideoId)).toEqual([
         "calm",
     ]);
@@ -113,3 +128,45 @@ test("a failed optional reserve keeps normal recommendation delivery available",
     const feed = await service.getPersonalizedFeed(request);
     expect(feed.degradedSources).toContain("saved-mood-candidates");
 });
+
+test.each(["listenAgain", "quickPicks", "discovery"] as const)(
+    "does not relax recent-listening exclusions when the catalog has a %s candidate",
+    async (lane) => {
+        const { service, loadSavedMoodCandidates, loadPersonalizedFeed } =
+            setup();
+        const track: PersonalizedTrack = {
+            id: saved.id,
+            title: saved.title,
+            duration: saved.duration,
+            trackNo: null,
+            source: "youtube",
+            streamSource: "youtube",
+            youtubeVideoId: "calm",
+            provider: { tidalTrackId: null, youtubeVideoId: "calm" },
+            artist: saved.artist,
+            album: {
+                ...saved.album,
+                coverArt: "https://example.com/cover.jpg",
+                artist: saved.artist,
+            },
+        };
+        loadPersonalizedFeed.mockResolvedValue({
+            shelves: {
+                listenAgain: [],
+                quickPicks: [],
+                discovery: [],
+                [lane]: [track],
+            },
+            degraded: false,
+            reason: null,
+            seedCount: 1,
+            nextCursor: 1,
+        });
+        await service.getPersonalizedFeed(request);
+        expect(loadSavedMoodCandidates).toHaveBeenCalledWith(
+            "alice",
+            "calm",
+            expect.objectContaining({ allowRecentListeningFallback: false }),
+        );
+    },
+);

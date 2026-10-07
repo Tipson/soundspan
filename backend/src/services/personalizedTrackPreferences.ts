@@ -1,4 +1,53 @@
 import { prisma } from "../utils/db";
+import {
+    buildPersonalizedRepeatExclusions,
+    PERSONALIZED_LISTENING_LOOKBACK_MS,
+    type PersonalizedRepeatExclusions,
+} from "./personalizedRepeatPolicy";
+
+/** Bounded, account-scoped actual listening, including manual plays without an exposure. */
+export async function loadYouTubeRepeatExclusions(
+    userId: string,
+    now: Date,
+): Promise<PersonalizedRepeatExclusions> {
+    const rows = await prisma.play.findMany({
+        where: {
+            userId,
+            trackYtMusicId: { not: null },
+            playedAt: {
+                gte: new Date(
+                    now.getTime() - PERSONALIZED_LISTENING_LOOKBACK_MS,
+                ),
+                lte: now,
+            },
+        },
+        orderBy: [{ playedAt: "desc" }, { id: "asc" }],
+        take: 1_000,
+        select: {
+            playedAt: true,
+            listenedSeconds: true,
+            outcome: true,
+            trackYtMusic: {
+                select: { videoId: true, artist: true, title: true },
+            },
+        },
+    });
+    return buildPersonalizedRepeatExclusions(
+        rows.flatMap((row) =>
+            row.trackYtMusic
+                ? [
+                      {
+                          track: row.trackYtMusic,
+                          playedAt: row.playedAt,
+                          listenedSeconds: row.listenedSeconds,
+                          outcome: row.outcome,
+                      },
+                  ]
+                : [],
+        ),
+        now,
+    );
+}
 
 /** Exact active YouTube track dislikes for one account's candidate batch. */
 export async function loadDislikedYouTubeIds(
@@ -20,13 +69,14 @@ export async function loadDislikedYouTubeIds(
 /** Two distinct active dislikes suppress an artist for 30 days, like the Wave. */
 export async function loadSuppressedYouTubeArtists(
     userId: string,
+    now: Date = new Date(),
 ): Promise<Set<string>> {
     const rows = await prisma.dislikedEntity.findMany({
         where: {
             userId,
             entityType: "track",
             entityId: { startsWith: "yt:" },
-            dislikedAt: { gte: new Date(Date.now() - 30 * 86_400_000) },
+            dislikedAt: { gte: new Date(now.getTime() - 30 * 86_400_000) },
         },
         orderBy: { dislikedAt: "desc" },
         take: 100,

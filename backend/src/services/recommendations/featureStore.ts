@@ -3,8 +3,14 @@ import { prisma } from "../../utils/db";
 import { parseEmbedding } from "../../utils/embedding";
 import { buildTasteCentroids, moodFeatureScore } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
-import { isWaveMusicCandidate } from "./wavePolicy";
+import { isWaveMusicCandidate, matchesWaveMood } from "./wavePolicy";
 import { isEarlyRecommendationSkip } from "./playbackEvidence";
+import {
+    loadDislikedYouTubeIds,
+    loadSuppressedYouTubeArtists,
+    loadYouTubeRepeatExclusions,
+} from "../personalizedTrackPreferences";
+import { songRepeatKey } from "../personalizedRepeatPolicy";
 import type { RecommendationCandidate } from "./types";
 import type {
     RecommendationRequestContext,
@@ -403,10 +409,17 @@ export async function loadLikedTasteEmbeddings(
     return rows.flatMap((row) => (row.embedding ? [row.embedding] : []));
 }
 
-/** Rank a bounded saved-music reserve before the provider shelf truncation. */
+/** Catalog emptiness permits only the existing older-listening fallback, after fresh reserve is exhausted. */
+export interface SavedMoodCandidateOptions {
+    allowRecentListeningFallback?: boolean;
+    now?: Date;
+}
+
+/** Rank an eligible saved-music reserve before artist and total quotas. */
 export async function loadSavedMoodCandidates(
     userId: string,
     mood: RecommendationMood,
+    options: SavedMoodCandidateOptions = {},
 ): Promise<RecommendationCandidate[]> {
     if (!["calm", "energetic", "focus", "workout"].includes(mood)) return [];
     const mappingWhere = {
@@ -486,15 +499,48 @@ export async function loadSavedMoodCandidates(
             },
         ];
     });
-    candidates.sort(
+    if (candidates.length === 0) return [];
+    const now = options.now ?? new Date();
+    const [repeat, disliked, suppressed] = await Promise.all([
+        loadYouTubeRepeatExclusions(userId, now),
+        loadDislikedYouTubeIds(
+            userId,
+            candidates.map((track) => track.youtubeVideoId!),
+        ),
+        loadSuppressedYouTubeArtists(userId, now),
+    ]);
+    const eligible = candidates.filter((track) => {
+        const key = songRepeatKey(track.artist.name, track.title);
+        return (
+            isWaveMusicCandidate(track) &&
+            matchesWaveMood(track, mood) &&
+            !disliked.has(track.youtubeVideoId!) &&
+            !suppressed.has(
+                track.artist.name.trim().toLocaleLowerCase("en-US"),
+            ) &&
+            !repeat.hardVideoIds.has(track.youtubeVideoId!) &&
+            !(key && repeat.hardSongKeys.has(key))
+        );
+    });
+    const fresh = eligible.filter((track) => {
+        const key = songRepeatKey(track.artist.name, track.title);
+        return (
+            !repeat.videoIds.has(track.youtubeVideoId!) &&
+            !(key && repeat.songKeys.has(key))
+        );
+    });
+    const pool =
+        fresh.length > 0 || !options.allowRecentListeningFallback
+            ? fresh
+            : eligible;
+    pool.sort(
         (a, b) =>
             moodFeatureScore(b, mood) - moodFeatureScore(a, mood) ||
             a.canonicalKey.localeCompare(b.canonicalKey),
     );
     const artists = new Map<string, number>();
     const selected: RecommendationCandidate[] = [];
-    for (const candidate of candidates) {
-        if (!isWaveMusicCandidate(candidate)) continue;
+    for (const candidate of pool) {
         const artist = normalizeRecommendationArtistKey(candidate.artist.name);
         if ((artists.get(artist) ?? 0) >= 4) continue;
         artists.set(artist, (artists.get(artist) ?? 0) + 1);

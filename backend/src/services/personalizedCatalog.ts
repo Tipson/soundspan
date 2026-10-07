@@ -12,12 +12,15 @@ import { parseStoredTasteProfile } from "./tasteProfile";
 import { listenBrainzRecommendationAdapter } from "./recommendations/listenBrainzAdapter";
 import { isWaveMusicCandidate } from "./recommendations/wavePolicy";
 import { isEarlyRecommendationSkip } from "./recommendations/playbackEvidence";
+import {
+    buildPersonalizedRepeatExclusions,
+    songRepeatKey,
+} from "./personalizedRepeatPolicy";
+export { songRepeatKey } from "./personalizedRepeatPolicy";
 
 const PLAY_SIGNAL_READ_LIMIT = 1_000;
 const TASTE_PLAY_SIGNAL_LIMIT = 100;
 const COLLECTION_SIGNAL_READ_LIMIT = 2_000;
-const WAVE_REPEAT_WINDOW_MS = 24 * 60 * 60 * 1_000;
-const LISTENED_SONG_REPEAT_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
 const MAX_RADIO_SEEDS = 3;
 const MAX_HOME_SHELF_LIMIT = 25;
 const MIN_RADIO_RESULT_LIMIT = 12;
@@ -197,28 +200,6 @@ function normalizeVideoId(value: unknown): string | null {
     return normalized.startsWith("yt:")
         ? nonBlank(normalized.slice(3))
         : normalized;
-}
-
-/** Normalize recording metadata to exclude alternate provider IDs of a known song. */
-export function songRepeatKey(artist: string, title: string): string | null {
-    const normalize = (value: string) =>
-        value
-            .normalize("NFKC")
-            .toLocaleLowerCase("en-US")
-            .replace(/[^\p{L}\p{N}]+/gu, " ")
-            .trim()
-            .replace(/\s+/g, " ");
-    const artistKey = normalize(artist);
-    const titleKey = normalize(title);
-    if (
-        !artistKey ||
-        !titleKey ||
-        artistKey === "unknown artist" ||
-        titleKey === "unknown track"
-    ) {
-        return null;
-    }
-    return JSON.stringify([artistKey, titleKey]);
 }
 
 function isExcludedSong(
@@ -1084,32 +1065,15 @@ export class PersonalizedCatalogService {
             options.surface === "made-for-you" ||
             options.surface === "weekly"
         ) {
-            const now = (this.dependencies.now?.() ?? new Date()).getTime();
-            for (const signal of signals.playbackSignals ?? []) {
-                const playedAt = signal.playedAt?.getTime();
-                const age = playedAt === undefined ? NaN : now - playedAt;
-                const recentAttempt = age >= 0 && age < WAVE_REPEAT_WINDOW_MS;
-                const recentListen =
-                    age >= 0 &&
-                    age < LISTENED_SONG_REPEAT_WINDOW_MS &&
-                    (signal.listenedSeconds ?? 0) >= 30;
-                if (
-                    (recentAttempt || recentListen) &&
-                    signal.outcome !== "failed"
-                ) {
-                    const videoId = normalizeVideoId(signal.track.videoId);
-                    if (videoId) requestedExclusions.add(videoId);
-                    const songKey = songRepeatKey(
-                        signal.track.artist,
-                        signal.track.title,
-                    );
-                    if (songKey) recentlyHeardSongKeys.add(songKey);
-                    if (recentAttempt) {
-                        if (videoId) hardExclusions.add(videoId);
-                        if (songKey) recentAttemptSongKeys.add(songKey);
-                    }
-                }
-            }
+            const repeat = buildPersonalizedRepeatExclusions(
+                signals.playbackSignals ?? [],
+                this.dependencies.now?.() ?? new Date(),
+            );
+            for (const id of repeat.videoIds) requestedExclusions.add(id);
+            for (const key of repeat.songKeys) recentlyHeardSongKeys.add(key);
+            for (const id of repeat.hardVideoIds) hardExclusions.add(id);
+            for (const key of repeat.hardSongKeys)
+                recentAttemptSongKeys.add(key);
         }
         const withFallback = (
             shelves: PersonalizedHomeFeed["shelves"],
