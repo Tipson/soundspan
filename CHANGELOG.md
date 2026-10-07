@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Apply current queue exclusions, recently viewed served recordings and canonical dislikes before saved mood reserve quotas, so excluded songs cannot crowd out available fresh candidates. Use the engine's request timestamp across the reserve and final filtering; preserve the existing cooldown, account isolation and older-listening fallback rules.
+
 - Apply the catalog's actual-listening cooldown, exact dislikes, artist suppression and existing mood eligibility to saved mood reserves before their quotas. Exclude recently heard metadata-matched alternate uploads, and permit older familiar fallback only when the catalog and fitting fresh reserve are empty; failed starts remain neutral.
 
 - Attribute daily style mixes to their exact account-owned compositions throughout card impressions, playback queues and listening progress. Persist each final mix atomically with its ordered exposure records, reuse attribution on cache hits, and keep mixes playable if recording fails.

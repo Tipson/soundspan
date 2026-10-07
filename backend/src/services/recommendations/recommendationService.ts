@@ -196,7 +196,7 @@ export class UnifiedRecommendationService {
     ): Promise<PersonalizedRecommendationFeed> {
         const sourceState: { feed?: PersonalizedHomeFeed } = {};
         let languageStatus: PersonalizedRecommendationFeed["languageStatus"];
-        const engine = this.engine(async () => {
+        const engine = this.engine(async (_request, policyTime) => {
             const sourceFeed = await this.dependencies.loadPersonalizedFeed(
                 input.userId,
                 personalizedSourceShelfLimit(input.limit),
@@ -242,7 +242,8 @@ export class UnifiedRecommendationService {
                                 allowRecentListeningFallback: Object.values(
                                     sourceFeed.shelves,
                                 ).every((tracks) => tracks.length === 0),
-                                now: this.dependencies.now(),
+                                now: policyTime,
+                                excludeVideoIds: input.excludeVideoIds,
                             },
                         );
                     candidates.push(

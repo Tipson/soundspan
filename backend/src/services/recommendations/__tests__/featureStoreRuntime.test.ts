@@ -5,6 +5,7 @@ const mockMappingFindFirst = jest.fn();
 const mockPlayFindMany = jest.fn();
 const mockCanonicalFindMany = jest.fn();
 const mockYoutubeFindMany = jest.fn();
+const mockExposureGroupBy = jest.fn();
 
 jest.mock("../../../utils/db", () => ({
     prisma: {
@@ -17,6 +18,7 @@ jest.mock("../../../utils/db", () => ({
         play: { findMany: mockPlayFindMany },
         canonicalRecording: { findMany: mockCanonicalFindMany },
         trackYtMusic: { findMany: mockYoutubeFindMany },
+        recommendationExposure: { groupBy: mockExposureGroupBy },
     },
 }));
 
@@ -64,11 +66,12 @@ describe("default recommendation feature-store persistence", () => {
     beforeEach(() => {
         mockQueryRaw.mockReset();
         mockDislikedFindMany.mockReset().mockResolvedValue([]);
-        mockMappingFindMany.mockReset();
+        mockMappingFindMany.mockReset().mockResolvedValue([]);
         mockMappingFindFirst.mockReset();
         mockPlayFindMany.mockReset().mockResolvedValue([]);
         mockCanonicalFindMany.mockReset().mockResolvedValue([]);
         mockYoutubeFindMany.mockReset().mockResolvedValue([]);
+        mockExposureGroupBy.mockReset().mockResolvedValue([]);
     });
 
     afterEach(() => {
@@ -270,7 +273,7 @@ describe("default recommendation feature-store persistence", () => {
             moodRow("fresh"),
         ]);
         mockDislikedFindMany.mockImplementation(async (query) =>
-            query.where.entityId.in
+            query.where.entityId?.in
                 ? [{ entityId: "yt:exact" }]
                 : [{ entityId: "yt:one" }, { entityId: "yt:two" }],
         );
@@ -330,6 +333,76 @@ describe("default recommendation feature-store persistence", () => {
             allowRecentListeningFallback: true,
         });
         expect(result.map((x) => x.youtubeVideoId)).toEqual(["week"]);
+    });
+
+    it("keeps a full fresh mood reserve when early candidates were viewed today", async () => {
+        const now = new Date("2026-10-08T00:00:00Z");
+        const ids = Array.from(
+            { length: 56 },
+            (_, index) => `viewed-${String(index).padStart(2, "0")}`,
+        );
+        mockCanonicalFindMany.mockResolvedValue(ids.map((id) => moodRow(id)));
+        mockExposureGroupBy.mockResolvedValue(
+            ids.slice(0, 8).map((id) => ({ canonicalKey: `canonical:${id}` })),
+        );
+        const result = await loadSavedMoodCandidates("alice", "calm", { now });
+        expect(result.map((track) => track.youtubeVideoId)).toEqual(
+            ids.slice(8),
+        );
+        expect(mockExposureGroupBy).toHaveBeenCalledWith({
+            by: ["canonicalKey"],
+            where: {
+                userId: "alice",
+                canonicalKey: { in: ids.map((id) => `canonical:${id}`) },
+                viewedAt: { gt: new Date(now.getTime() - 86_400_000) },
+                generation: { served: true, userId: "alice" },
+            },
+            orderBy: { canonicalKey: "asc" },
+            take: ids.length,
+        });
+    });
+
+    it("does not let current queue exclusions consume saved mood slots or enable fallback", async () => {
+        const ids = Array.from(
+            { length: 56 },
+            (_, index) => `queued-${String(index).padStart(2, "0")}`,
+        );
+        mockCanonicalFindMany.mockResolvedValue(ids.map((id) => moodRow(id)));
+        const options = {
+            now: new Date("2026-10-08T00:00:00Z"),
+            excludeVideoIds: ids.slice(0, 8).map((id) => ` yt:${id} `),
+        };
+        const result = await loadSavedMoodCandidates("alice", "calm", options);
+        expect(result.map((track) => track.youtubeVideoId)).toEqual(
+            ids.slice(8),
+        );
+        mockCanonicalFindMany.mockResolvedValue([moodRow(ids[0])]);
+        expect(
+            await loadSavedMoodCandidates("alice", "calm", {
+                ...options,
+                allowRecentListeningFallback: true,
+            }),
+        ).toEqual([]);
+    });
+
+    it("does not let another provider's canonical dislikes consume the fresh mood reserve", async () => {
+        const ids = Array.from(
+            { length: 56 },
+            (_, index) => `alias-${String(index).padStart(2, "0")}`,
+        );
+        mockCanonicalFindMany.mockResolvedValue(ids.map((id) => moodRow(id)));
+        mockDislikedFindMany.mockImplementation(async (query) =>
+            query.where.entityId ? [] : [{ entityId: "tidal:42" }],
+        );
+        mockMappingFindMany.mockResolvedValue(
+            ids.slice(0, 8).map((id) => ({
+                canonicalRecording: { canonicalKey: `canonical:${id}` },
+            })),
+        );
+        const result = await loadSavedMoodCandidates("alice", "calm");
+        expect(result.map((track) => track.youtubeVideoId)).toEqual(
+            ids.slice(8),
+        );
     });
 
     it("returns untouched candidates when canonical identities are absent", async () => {

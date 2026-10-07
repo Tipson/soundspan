@@ -68,6 +68,7 @@ export interface RecommendationEngineDependencies {
     explorationRate: number;
     loadCandidates: (
         request: RecommendRequest,
+        policyTime: Date,
     ) => Promise<RecommendationCandidateBatch>;
     resolveCanonical: (
         candidate: RecommendationCandidate,
@@ -273,7 +274,10 @@ export class RecommendationEngine {
         const startedAt = this.dependencies.now();
         const cursor = request.cursor ?? 0;
         const limit = Math.max(0, Math.floor(request.limit));
-        const loaded = await this.dependencies.loadCandidates(request);
+        const loaded = await this.dependencies.loadCandidates(
+            request,
+            startedAt,
+        );
         const isWave = request.intent.surface === "wave";
         const degradedSources = [...new Set(loaded.degradedSources)];
         let candidates = await this.resolveCanonicalCandidates(

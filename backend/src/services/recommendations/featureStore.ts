@@ -7,6 +7,7 @@ import { isWaveMusicCandidate, matchesWaveMood } from "./wavePolicy";
 import { isEarlyRecommendationSkip } from "./playbackEvidence";
 import {
     loadDislikedYouTubeIds,
+    loadRecentlyViewedCanonicalKeys,
     loadSuppressedYouTubeArtists,
     loadYouTubeRepeatExclusions,
 } from "../personalizedTrackPreferences";
@@ -412,6 +413,7 @@ export async function loadLikedTasteEmbeddings(
 /** Catalog emptiness permits only the existing older-listening fallback, after fresh reserve is exhausted. */
 export interface SavedMoodCandidateOptions {
     allowRecentListeningFallback?: boolean;
+    excludeVideoIds?: readonly string[];
     now?: Date;
 }
 
@@ -501,19 +503,35 @@ export async function loadSavedMoodCandidates(
     });
     if (candidates.length === 0) return [];
     const now = options.now ?? new Date();
-    const [repeat, disliked, suppressed] = await Promise.all([
-        loadYouTubeRepeatExclusions(userId, now),
-        loadDislikedYouTubeIds(
-            userId,
-            candidates.map((track) => track.youtubeVideoId!),
+    const excluded = new Set(
+        (options.excludeVideoIds ?? []).map((id) =>
+            id.trim().replace(/^yt:/, "").trim(),
         ),
-        loadSuppressedYouTubeArtists(userId, now),
-    ]);
+    );
+    const [repeat, disliked, suppressed, viewed, dislikedCanonicalKeys] =
+        await Promise.all([
+            loadYouTubeRepeatExclusions(userId, now),
+            loadDislikedYouTubeIds(
+                userId,
+                candidates.map((track) => track.youtubeVideoId!),
+            ),
+            loadSuppressedYouTubeArtists(userId, now),
+            loadRecentlyViewedCanonicalKeys(
+                userId,
+                candidates.map((track) => track.canonicalKey),
+                now,
+            ),
+            loadDislikedCanonicalKeys(userId),
+        ]);
+    const dislikedCanonical = new Set(dislikedCanonicalKeys);
     const eligible = candidates.filter((track) => {
         const key = songRepeatKey(track.artist.name, track.title);
         return (
             isWaveMusicCandidate(track) &&
             matchesWaveMood(track, mood) &&
+            !excluded.has(track.youtubeVideoId!) &&
+            !viewed.has(track.canonicalKey) &&
+            !dislikedCanonical.has(track.canonicalKey) &&
             !disliked.has(track.youtubeVideoId!) &&
             !suppressed.has(
                 track.artist.name.trim().toLocaleLowerCase("en-US"),

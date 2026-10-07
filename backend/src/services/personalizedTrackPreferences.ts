@@ -49,6 +49,28 @@ export async function loadYouTubeRepeatExclusions(
     );
 }
 
+/** Already viewed, served identities must not consume a fresh reserve's slots. */
+export async function loadRecentlyViewedCanonicalKeys(
+    userId: string,
+    canonicalKeys: readonly string[],
+    now: Date,
+): Promise<Set<string>> {
+    const keys = [...new Set(canonicalKeys.filter(Boolean))];
+    if (keys.length === 0) return new Set();
+    const rows = await prisma.recommendationExposure.groupBy({
+        by: ["canonicalKey"],
+        where: {
+            userId,
+            canonicalKey: { in: keys },
+            viewedAt: { gt: new Date(now.getTime() - 86_400_000) },
+            generation: { served: true, userId },
+        },
+        orderBy: { canonicalKey: "asc" },
+        take: keys.length,
+    });
+    return new Set(rows.map((row) => row.canonicalKey));
+}
+
 /** Exact active YouTube track dislikes for one account's candidate batch. */
 export async function loadDislikedYouTubeIds(
     userId: string,
