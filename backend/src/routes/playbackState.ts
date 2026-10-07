@@ -93,6 +93,14 @@ function sanitizeEpisodeQueueItem(item: any): Record<string, unknown> | null {
  * (legacy clients) and tagged with `itemType: "track"`.
  */
 function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
+    const recommendationGenerationId = sanitizeOptionalString(
+        item.recommendationGenerationId,
+        128,
+    );
+    const recommendationSessionId = sanitizeOptionalString(
+        item.recommendationSessionId,
+        128,
+    );
     const provider = normalizeCanonicalMediaProviderIdentity({
         mediaSource: item.mediaSource,
         streamSource: item.streamSource,
@@ -132,6 +140,11 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
 
     return {
         itemType: "track",
+        ...(recommendationGenerationId ? { recommendationGenerationId } : {}),
+        ...(recommendationSessionId ? { recommendationSessionId } : {}),
+        ...(item.recommendationQueueMode === "finite"
+            ? { recommendationQueueMode: "finite" }
+            : {}),
         ...(item.playbackSourcePolicy === "device-only"
             ? { playbackSourcePolicy: "device-only" }
             : {}),
@@ -290,6 +303,17 @@ router.get("/", playbackStateLimiter, requireAuth, async (req, res) => {
  *                     itemType:
  *                       type: string
  *                       enum: [track, episode]
+ *                     recommendationGenerationId:
+ *                       type: string
+ *                       maxLength: 128
+ *                       description: Track attribution; ownership is checked when recording engagement.
+ *                     recommendationSessionId:
+ *                       type: string
+ *                       maxLength: 128
+ *                     recommendationQueueMode:
+ *                       type: string
+ *                       enum: [finite]
+ *                       description: Track belongs to a finite recommendation playlist rather than Wave.
  *               currentIndex:
  *                 type: integer
  *               isShuffle:

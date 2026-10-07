@@ -82,7 +82,13 @@ export function buildProviderRadioContinuationPath(
 /** Converts one personalized provider row to the canonical playback shape. */
 export function toProviderPlaybackTrack(
     track: PersonalizedTrack,
-    lineageOrIndex?: { generationId?: string; sessionId?: string } | number,
+    lineageOrIndex?:
+        | {
+              generationId?: string;
+              sessionId?: string;
+              queueMode?: "finite";
+          }
+        | number,
 ): Track {
     const lineage =
         typeof lineageOrIndex === "object" ? lineageOrIndex : undefined;
@@ -104,6 +110,9 @@ export function toProviderPlaybackTrack(
             : {}),
         ...(lineage?.sessionId
             ? { recommendationSessionId: lineage.sessionId }
+            : {}),
+        ...(lineage?.queueMode
+            ? { recommendationQueueMode: lineage.queueMode }
             : {}),
     };
 

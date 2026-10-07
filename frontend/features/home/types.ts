@@ -144,4 +144,5 @@ export interface PersonalDailyMix {
     title: string;
     description: string;
     tracks: PersonalizedTrack[];
+    generationId?: string;
 }

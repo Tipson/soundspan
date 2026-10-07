@@ -117,6 +117,92 @@ describe("playbackState routes runtime", () => {
         mockDeleteMany.mockReset();
     });
 
+    it("round-trips attribution and finite mode on every daily mix queue entry", async () => {
+        let stored: unknown = null;
+        mockUpsert.mockImplementation(async ({ create }) => {
+            stored = structuredClone(create);
+            return stored;
+        });
+        mockFindUnique.mockImplementation(async () => stored);
+        const app = createRuntimeApp();
+        const queue = Array.from({ length: 40 }, (_, i) => ({
+            id: `yt:daily-${i}`,
+            youtubeVideoId: `daily-${i}`,
+            streamSource: "youtube",
+            title: `Song ${i}`,
+            duration: 180,
+            recommendationGenerationId: " daily-generation ",
+            recommendationSessionId: " client-session ",
+            recommendationQueueMode: "finite",
+            arbitraryExtra: "strip me",
+        }));
+        await request(app)
+            .post("/")
+            .set("X-Forwarded-For", "198.51.100.30")
+            .set("X-Playback-Device-Id", "daily-device")
+            .send({ playbackType: "track", trackId: queue[0].id, queue })
+            .expect(200);
+        const restored = await request(app)
+            .get("/")
+            .set("X-Forwarded-For", "198.51.100.30")
+            .set("X-Playback-Device-Id", "daily-device")
+            .expect(200);
+        expect(restored.body.userId).toBe("u1");
+        expect(restored.body.queue).toHaveLength(40);
+        expect(
+            restored.body.queue.map(
+                (t: { youtubeVideoId: string }) => t.youtubeVideoId,
+            ),
+        ).toEqual(queue.map((t) => t.youtubeVideoId));
+        for (const track of restored.body.queue) {
+            expect(track.recommendationGenerationId).toBe("daily-generation");
+            expect(track.recommendationSessionId).toBe("client-session");
+            expect(track.recommendationQueueMode).toBe("finite");
+            expect(track).not.toHaveProperty("arbitraryExtra");
+        }
+    });
+
+    it("bounds queue attribution strings and rejects malformed lineage and queue modes", async () => {
+        mockUpsert.mockImplementation(async ({ create }) => create);
+        const response = await request(createRuntimeApp())
+            .post("/")
+            .set("X-Forwarded-For", "198.51.100.31")
+            .send({
+                playbackType: "track",
+                queue: [
+                    {
+                        id: "valid",
+                        recommendationGenerationId: "g".repeat(200),
+                        recommendationSessionId: "s".repeat(200),
+                    },
+                    {
+                        id: "invalid",
+                        recommendationGenerationId: { arbitrary: true },
+                        recommendationSessionId: ["session"],
+                        recommendationQueueMode: "wave",
+                    },
+                    {
+                        id: "empty",
+                        recommendationGenerationId: "  ",
+                        recommendationSessionId: 1,
+                        recommendationQueueMode: { finite: true },
+                    },
+                ],
+            })
+            .expect(200);
+        expect(response.body.queue[0].recommendationGenerationId).toHaveLength(
+            128,
+        );
+        expect(response.body.queue[0].recommendationSessionId).toHaveLength(
+            128,
+        );
+        for (const track of response.body.queue.slice(1)) {
+            expect(track).not.toHaveProperty("recommendationGenerationId");
+            expect(track).not.toHaveProperty("recommendationSessionId");
+            expect(track).not.toHaveProperty("recommendationQueueMode");
+        }
+    });
+
     it("attaches the playback-state limiter before auth on every route", () => {
         for (const method of ["get", "post", "delete"] as const) {
             const handlers = getRouteHandlers(method, "/");

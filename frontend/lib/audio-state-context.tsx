@@ -147,6 +147,8 @@ export interface Track {
     recommendationGenerationId?: string;
     /** Browser-tab recommendation session used for fast session adaptation. */
     recommendationSessionId?: string;
+    /** Finite recommendation playlist; lineage alone must not enable Wave on restore. */
+    recommendationQueueMode?: "finite";
     /** Owning playlist item used for compare-and-swap provider recovery. */
     playlistItemId?: string;
     /** Materialized YouTube Music row currently attached to that item. */
@@ -328,6 +330,7 @@ function resolvePersistedVibeState(
         : null;
     const hasRecommendationLineage = trackQueue.some(
         (track) =>
+            track.recommendationQueueMode !== "finite" &&
             Boolean(track.recommendationGenerationId) &&
             Boolean(track.recommendationSessionId),
     );

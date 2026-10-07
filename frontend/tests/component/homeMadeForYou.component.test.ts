@@ -137,6 +137,7 @@ test("real style mixes replace reordered daily copies and keep the time mix", as
             key: "genre:Рок",
             title: "Рок для вас",
             description: "Знакомое и новые находки",
+            generationId: "style-rock-generation",
             tracks: Array.from({ length: 40 }, (_, index) =>
                 track(`rock-${index}`),
             ),
@@ -145,6 +146,7 @@ test("real style mixes replace reordered daily copies and keep the time mix", as
             key: "genre:Джаз",
             title: "Джаз для вас",
             description: "Знакомое и новые находки",
+            generationId: "style-jazz-generation",
             tracks: Array.from({ length: 40 }, (_, index) =>
                 track(`jazz-${index}`),
             ),
@@ -164,6 +166,8 @@ test("real style mixes replace reordered daily copies and keep the time mix", as
     );
     assert.equal(result[0].tracks.length, 40);
     assert.equal(result[1].tracks.length, 40);
+    assert.equal(result[0].generationId, "style-rock-generation");
+    assert.equal(result[1].generationId, "style-jazz-generation");
     assert.ok(result.every((mix) => !mix.title.startsWith("Микс дня")));
 });
 

@@ -88,7 +88,10 @@ test("listening dashboard splits one unique queue into continuation cards and re
         makeTrack("a"),
     ];
     const mounted = await mount(
-        React.createElement(HomeListeningDashboard, { tracks }),
+        React.createElement(HomeListeningDashboard, {
+            tracks,
+            generationId: "listening-generation",
+        }),
     );
 
     assert.equal(
@@ -116,6 +119,16 @@ test("listening dashboard splits one unique queue into continuation cards and re
     assert.equal(state.played.length, 1);
     assert.equal(state.played[0].index, 4);
     assert.equal(state.played[0].tracks.length, 6);
+    const queue = state.played[0].tracks as Array<{
+        recommendationQueueMode?: string;
+        recommendationGenerationId?: string;
+    }>;
+    assert.ok(queue.every((t) => t.recommendationQueueMode === "finite"));
+    assert.ok(
+        queue.every(
+            (t) => t.recommendationGenerationId === "listening-generation",
+        ),
+    );
     assert.ok(
         recentTrack.classList.contains("min-w-0") &&
             recentTrack.classList.contains("max-w-full") &&

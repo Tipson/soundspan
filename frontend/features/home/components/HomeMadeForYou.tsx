@@ -150,6 +150,7 @@ export function buildHomePersonalMixes(
                     description: mix.description,
                     candidates: uniqueTracks(mix.tracks),
                     tone: (["violet", "blue", "amber"] as const)[index % 3],
+                    generationId: mix.generationId,
                 }))
               : fallbackRecipes;
     if (timeOfDayMix && timeCandidates.length > 0) {

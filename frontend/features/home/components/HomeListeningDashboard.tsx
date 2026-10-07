@@ -65,6 +65,7 @@ export function HomeListeningDashboard({
                 toProviderPlaybackTrack(track, {
                     generationId,
                     sessionId: getRecommendationSessionId(),
+                    queueMode: "finite",
                 }),
             ),
         [generationId, uniqueTracks],

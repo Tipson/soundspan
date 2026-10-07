@@ -5,6 +5,10 @@ import { tasteArtistTags } from "./tasteArtistGenres";
 import { lastFmService } from "./lastfm";
 import { ytMusicService } from "./youtubeMusic";
 import type { PersonalizedTrack } from "./personalizedCatalog";
+import {
+    buildRecommendationAlbumKey,
+    normalizeRecommendationArtistKey,
+} from "./recommendations/identityKeys";
 
 const MAX_DIRECTIONS = 6;
 const DIRECTION_CONCURRENCY = 3;
@@ -36,6 +40,14 @@ interface RecentlyPlayedSong {
     playedAt: Date;
 }
 
+/** Exact served composition and account used to attribute later engagement. */
+export interface RecordDailyMixGenerationInput {
+    userId: string;
+    mix: PersonalDailyMix;
+    generatedAt: Date;
+    latencyMs: number;
+}
+
 export interface PersonalDailyMixDependencies {
     loadDirections: (userId: string) => Promise<DailyMixDirection[]>;
     loadFamiliar: (userId: string) => Promise<DailyMixSong[]>;
@@ -50,6 +62,9 @@ export interface PersonalDailyMixDependencies {
     loadDislikeState: (userId: string) => Promise<string>;
     /** Artist keys with two distinct active track dislikes in the last 30 days. */
     loadSuppressedArtistKeys: (userId: string) => Promise<Set<string>>;
+    recordMixGeneration: (
+        input: RecordDailyMixGenerationInput,
+    ) => Promise<string>;
     now: () => Date;
 }
 
@@ -58,6 +73,7 @@ export interface PersonalDailyMix {
     title: string;
     description: string;
     tracks: PersonalizedTrack[];
+    generationId?: string;
 }
 
 function artistKey(value: string): string {
@@ -137,6 +153,7 @@ export class PersonalDailyMixService {
 
     async getMixes(userId: string): Promise<{ mixes: PersonalDailyMix[] }> {
         if (!userId.trim()) throw new TypeError("A user id is required");
+        const startedAt = Date.now();
         const [directions, familiarSongs, dislikeState, suppressedArtists] =
             await Promise.all([
                 this.dependencies.loadDirections(userId),
@@ -209,12 +226,40 @@ export class PersonalDailyMixService {
                     recentlyPlayed,
                     suppressedArtists,
                 ),
-            );
+            )
+            .then(async ({ mixes }) => ({
+                mixes: await Promise.all(
+                    mixes.map(async (mix) => {
+                        try {
+                            const generationId =
+                                await this.dependencies.recordMixGeneration({
+                                    userId,
+                                    mix,
+                                    generatedAt: new Date(now),
+                                    latencyMs: Math.max(
+                                        0,
+                                        Date.now() - startedAt,
+                                    ),
+                                });
+                            return { ...mix, generationId };
+                        } catch (error: unknown) {
+                            log.warn(
+                                "Daily mix attribution unavailable",
+                                { userId, mixKey: mix.key },
+                                error,
+                            );
+                            return mix;
+                        }
+                    }),
+                ),
+            }));
         this.cache.set(key, { expiresAt: now + CACHE_TTL_MS, result });
         if (this.cache.size > MAX_CACHED_ACCOUNTS) {
             this.cache.delete(this.cache.keys().next().value!);
         }
-        result.catch(() => this.cache.delete(key));
+        result.catch(() => {
+            if (this.cache.get(key)?.result === result) this.cache.delete(key);
+        });
         return result;
     }
 
@@ -439,6 +484,41 @@ function fromStoredTrack(track: {
 }
 
 export const personalDailyMixService = new PersonalDailyMixService({
+    recordMixGeneration: async ({ userId, mix, generatedAt, latencyMs }) => {
+        const day = generatedAt.toISOString().slice(0, 10);
+        const generation = await prisma.recommendationGeneration.create({
+            data: {
+                userId,
+                sessionId: `personal-daily:${day}:${mix.key}`,
+                surface: "made-for-you",
+                direction: "for-you",
+                algorithm: "personal-daily-mix-v1",
+                served: true,
+                degradedSources: [],
+                latencyMs,
+                context: { dailyMix: { version: 1, key: mix.key, day } },
+                exposures: {
+                    create: mix.tracks.map((track, position) => ({
+                        userId,
+                        canonicalKey: `yt:${track.youtubeVideoId}`,
+                        artistKey: normalizeRecommendationArtistKey(
+                            track.artist.name,
+                        ),
+                        albumKey: buildRecommendationAlbumKey(
+                            track.artist.name,
+                            track.album.title,
+                        ),
+                        provider: "youtube",
+                        providerTrackId: track.youtubeVideoId,
+                        source: "personal-daily-mix",
+                        position,
+                    })),
+                },
+            },
+            select: { id: true },
+        });
+        return generation.id;
+    },
     loadDirections: async (userId) => {
         const settings = await prisma.userSettings.findUnique({
             where: { userId },

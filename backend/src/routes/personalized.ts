@@ -237,6 +237,9 @@ router.use(requireAuthOrToken);
  *             type: object
  *             required: [key, title, description, tracks]
  *             properties:
+ *               generationId:
+ *                 type: string
+ *                 description: Account-owned composition for playback attribution; absent when recording is unavailable.
  *               key:
  *                 type: string
  *               title:

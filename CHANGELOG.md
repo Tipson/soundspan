@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Attribute daily style mixes to their exact account-owned compositions throughout card impressions, playback queues and listening progress. Persist each final mix atomically with its ordered exposure records, reuse attribution on cache hits, and keep mixes playable if recording fails.
+- Preserve finite personal-mix queues during local or server playback restoration instead of inferring Wave mode from their recommendation attribution.
+
 - Fill online Discover Weekly with up to 40 new songs when no local discovery playlist exists. Save one account-scoped composition until the following UTC Monday, retain generation attribution, recheck current dislikes, and keep explicit clears empty for the rest of the week. Preserve resolved online tracks in playback and hide local download controls for online weeks.
 - Continue the bounded daily-mix candidate search until it has enough songs not heard in the last seven days, instead of stopping at 40 candidates that include recent repeats.
 

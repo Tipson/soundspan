@@ -19,6 +19,7 @@ import {
     PersonalDailyMixService,
     personalDailyMixService,
     type PersonalDailyMixDependencies,
+    type RecordDailyMixGenerationInput,
 } from "../personalDailyMixes";
 import { prisma } from "../../utils/db";
 import { parseStoredTasteProfile } from "../tasteProfile";
@@ -56,12 +57,128 @@ function dependencies(
         loadDislikedIds: async () => new Set<string>(),
         loadDislikeState: async () => "none",
         loadSuppressedArtistKeys: async () => new Set<string>(),
+        recordMixGeneration: async ({ userId, mix }) =>
+            `test:${userId}:${mix.key}`,
         now: () => new Date("2026-09-26T08:00:00Z"),
         ...overrides,
     };
 }
 
 describe("PersonalDailyMixService", () => {
+    it("retains newer cached attribution when an expired pending request fails", async () => {
+        let now = new Date("2026-10-07T08:00:00Z");
+        let rejectOld!: (error: Error) => void;
+        let entered!: () => void;
+        const oldPending = new Promise<Set<string>>((_resolve, reject) => {
+            rejectOld = reject;
+        });
+        const oldEntered = new Promise<void>((resolve) => {
+            entered = resolve;
+        });
+        let reads = 0;
+        let writes = 0;
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                loadDislikedIds: async () => {
+                    if (++reads === 1) {
+                        entered();
+                        return oldPending;
+                    }
+                    return new Set();
+                },
+                recordMixGeneration: async () => `generation-${++writes}`,
+                now: () => now,
+            }),
+        );
+        const oldFailure = expect(service.getMixes("listener")).rejects.toThrow(
+            "old request failed",
+        );
+        await oldEntered;
+        now = new Date("2026-10-07T08:11:00Z");
+        const replacement = await service.getMixes("listener");
+        rejectOld(new Error("old request failed"));
+        await oldFailure;
+        const cached = await service.getMixes("listener");
+        expect(cached.mixes[0].generationId).toBe(
+            replacement.mixes[0].generationId,
+        );
+        expect(writes).toBe(1);
+    });
+
+    it("keeps one owned generation for concurrent reads of the same cached mix", async () => {
+        const saved: RecordDailyMixGenerationInput[] = [];
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                recordMixGeneration: async (input) => {
+                    saved.push(input);
+                    return `owned-${input.userId}-${saved.length}`;
+                },
+            }),
+        );
+        const results = await Promise.all(
+            Array.from({ length: 5 }, () => service.getMixes("listener")),
+        );
+        expect(results.map((r) => r.mixes[0].generationId)).toEqual(
+            Array(5).fill("owned-listener-1"),
+        );
+        expect(saved).toHaveLength(1);
+        expect(saved[0].userId).toBe("listener");
+        expect(saved[0].mix.key).toBe("rock");
+        expect(saved[0].mix.tracks).toEqual(results[0].mixes[0].tracks);
+        const other = await service.getMixes("another");
+        expect(other.mixes[0].generationId).toBe("owned-another-2");
+    });
+
+    it("replaces attribution after dislikes change the cached composition", async () => {
+        let dislikeState = "none";
+        let writes = 0;
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                loadDislikeState: async () => dislikeState,
+                loadDislikedIds: async () =>
+                    new Set(dislikeState === "none" ? [] : ["rock-seed"]),
+                recordMixGeneration: async () => `generation-${++writes}`,
+            }),
+        );
+        const first = await service.getMixes("listener");
+        dislikeState = "changed";
+        const second = await service.getMixes("listener");
+        expect(first.mixes[0].generationId).toBe("generation-1");
+        expect(second.mixes[0].generationId).toBe("generation-2");
+        expect(
+            second.mixes[0].tracks.map((t) => t.youtubeVideoId),
+        ).not.toContain("rock-seed");
+    });
+
+    it("keeps playback available without invented lineage when recording fails", async () => {
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                recordMixGeneration: async () => {
+                    throw new Error("DB unavailable");
+                },
+            }),
+        );
+        const result = await service.getMixes("listener");
+        expect(result.mixes[0].tracks).toHaveLength(40);
+        expect(result.mixes[0].generationId).toBeUndefined();
+    });
+
     it("continues the bounded seed search when the first pool contains many recent plays", async () => {
         const getRadio = jest.fn(async (id: string) =>
             Array.from({ length: 40 }, (_, i) =>
