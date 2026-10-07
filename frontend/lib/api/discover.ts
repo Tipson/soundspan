@@ -35,6 +35,8 @@ export function WithDiscover<TBase extends ApiClientConstructor>(Base: TBase) {
 
         async getCurrentDiscoverWeekly() {
             return this.request<{
+                kind?: "online-weekly";
+                generationId?: string;
                 weekStart: string;
                 weekEnd: string;
                 tracks: ApiData[];

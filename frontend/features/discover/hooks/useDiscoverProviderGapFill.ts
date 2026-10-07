@@ -24,11 +24,26 @@ interface ProviderMatchState {
 
 function getTracksKey(tracks: DiscoverTrack[]): string {
     return tracks
-        .map((track) => `${track.id}:${track.similarity}:${track.duration}`)
+        .map((track) =>
+            JSON.stringify([
+                track.id,
+                track.similarity,
+                track.duration,
+                track.streamSource,
+                track.youtubeVideoId,
+                track.tidalTrackId,
+                track.recommendationGenerationId,
+            ]),
+        )
         .join("|");
 }
 
-function toLocalTrack(track: DiscoverTrack): DiscoverTrack {
+function hasResolvedProvider(track: DiscoverTrack): boolean {
+    return !!(track.streamSource === "youtube" && track.youtubeVideoId);
+}
+
+function toResolvedTrack(track: DiscoverTrack): DiscoverTrack {
+    if (hasResolvedProvider(track)) return track;
     return {
         ...track,
         sourceType: "local",
@@ -52,7 +67,7 @@ export function applyDiscoverProviderGapFill(
     return sourceTracks.map((track, index) => {
         // Already available locally — keep as-is
         if (!gapSet.has(index)) {
-            return toLocalTrack(track);
+            return toResolvedTrack(track);
         }
 
         const ytMatch = ytMatches[matchIdx];
@@ -68,7 +83,7 @@ export function applyDiscoverProviderGapFill(
             };
         }
 
-        return toLocalTrack(track);
+        return toResolvedTrack(track);
     });
 }
 
@@ -95,6 +110,17 @@ export function useDiscoverProviderGapFill(
         let cancelled = false;
 
         const matchProviders = async () => {
+            const gapIndices = sourceTracks.flatMap((track, index) =>
+                !track.available && !hasResolvedProvider(track) ? [index] : [],
+            );
+            if (gapIndices.length === 0) {
+                setMatchState({
+                    key: tracksKey,
+                    tracks: sourceTracks.map(toResolvedTrack),
+                    isMatching: false,
+                });
+                return;
+            }
             setMatchState({
                 key: tracksKey,
                 tracks: sourceTracks,
@@ -108,18 +134,10 @@ export function useDiscoverProviderGapFill(
             // Match/search uses public sidecar client — no user OAuth required
             const ytAvailable = !!ytStatus?.enabled && !!ytStatus?.available;
 
-            // Only gap-fill tracks that aren't locally available
-            const gapIndices: number[] = [];
-            for (let i = 0; i < sourceTracks.length; i++) {
-                if (!sourceTracks[i].available) {
-                    gapIndices.push(i);
-                }
-            }
-
-            if (!ytAvailable || gapIndices.length === 0) {
+            if (!ytAvailable) {
                 setMatchState({
                     key: tracksKey,
-                    tracks: sourceTracks.map(toLocalTrack),
+                    tracks: sourceTracks.map(toResolvedTrack),
                     isMatching: false,
                 });
                 return;

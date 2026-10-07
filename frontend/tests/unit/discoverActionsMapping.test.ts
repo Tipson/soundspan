@@ -54,3 +54,14 @@ test("preserves YouTube remote metadata", () => {
     assert.equal(mapped.youtubeVideoId, "abc123");
     assert.equal(mapped.tidalTrackId, undefined);
 });
+
+test("carries owned weekly generation attribution into playback", () => {
+    const mapped = mapDiscoverTrackToPlaybackTrack({
+        ...makeBaseTrack("yt:weekly"),
+        sourceType: "youtube",
+        streamSource: "youtube",
+        youtubeVideoId: "weekly",
+        recommendationGenerationId: "weekly-generation",
+    });
+    assert.equal(mapped.recommendationGenerationId, "weekly-generation");
+});

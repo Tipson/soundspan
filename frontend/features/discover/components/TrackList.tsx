@@ -195,6 +195,7 @@ export function TrackList({
                 duration: track.duration,
                 streamSource: track.streamSource,
                 youtubeVideoId: track.youtubeVideoId,
+                recommendationGenerationId: track.recommendationGenerationId,
             },
             showGoToAlbum: !!track.albumId,
         }),

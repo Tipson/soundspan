@@ -114,7 +114,7 @@ export interface PersonalizedCatalogOptions {
     mode?: PersonalizedWaveMode;
     mood?: PersonalizedWaveMood;
     /** Wave suppresses recent actual listening; Home keeps its Listen Again shelf. */
-    surface?: "home" | "wave" | "made-for-you";
+    surface?: "home" | "wave" | "made-for-you" | "weekly";
     /** Explicit local listening period for the daylist-style mix only. */
     listeningContext?: {
         localHour: number;
@@ -199,7 +199,8 @@ function normalizeVideoId(value: unknown): string | null {
         : normalized;
 }
 
-function songRepeatKey(artist: string, title: string): string | null {
+/** Normalize recording metadata to exclude alternate provider IDs of a known song. */
+export function songRepeatKey(artist: string, title: string): string | null {
     const normalize = (value: string) =>
         value
             .normalize("NFKC")
@@ -966,9 +967,10 @@ function validateRequest(
     if (userId.trim().length === 0) {
         throw new TypeError("A user id is required");
     }
-    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_HOME_SHELF_LIMIT) {
+    const maxLimit = options.surface === "weekly" ? 40 : MAX_HOME_SHELF_LIMIT;
+    if (!Number.isInteger(limit) || limit < 1 || limit > maxLimit) {
         throw new RangeError(
-            "Personalized shelf limit must be between 1 and 25",
+            `Personalized shelf limit must be between 1 and ${maxLimit}`,
         );
     }
     const cursor = options.cursor ?? 0;
@@ -1077,7 +1079,11 @@ export class PersonalizedCatalogService {
         const recentlyHeardSongKeys = new Set<string>();
         const recentAttemptSongKeys = new Set<string>();
         const hardExclusions = new Set(requestedExclusions);
-        if (options.surface === "wave" || options.surface === "made-for-you") {
+        if (
+            options.surface === "wave" ||
+            options.surface === "made-for-you" ||
+            options.surface === "weekly"
+        ) {
             const now = (this.dependencies.now?.() ?? new Date()).getTime();
             for (const signal of signals.playbackSignals ?? []) {
                 const playedAt = signal.playedAt?.getTime();
@@ -1226,7 +1232,8 @@ export class PersonalizedCatalogService {
                 preferenceProfile,
                 mode,
                 limit,
-                options.surface === "made-for-you",
+                options.surface === "made-for-you" ||
+                    options.surface === "weekly",
             );
             return {
                 shelves: withFallback({ listenAgain, quickPicks, discovery }),
@@ -1361,7 +1368,7 @@ export class PersonalizedCatalogService {
             preferenceProfile,
             mode,
             limit,
-            options.surface === "made-for-you",
+            options.surface === "made-for-you" || options.surface === "weekly",
         );
 
         const degradedSources = [

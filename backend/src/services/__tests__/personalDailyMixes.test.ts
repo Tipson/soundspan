@@ -62,6 +62,44 @@ function dependencies(
 }
 
 describe("PersonalDailyMixService", () => {
+    it("continues the bounded seed search when the first pool contains many recent plays", async () => {
+        const getRadio = jest.fn(async (id: string) =>
+            Array.from({ length: 40 }, (_, i) =>
+                song(`${id}-${i}`, `Artist ${i % 10}`),
+            ),
+        );
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    {
+                        key: "artist",
+                        label: "Artist",
+                        query: "artist music",
+                        kind: "artist",
+                    },
+                ],
+                loadFamiliar: async () => [],
+                loadRecentlyPlayed: async () =>
+                    Array.from({ length: 21 }, (_, i) => ({
+                        videoId: `first-${i}`,
+                        playedAt: new Date("2026-09-25T08:00:00Z"),
+                    })),
+                searchSongs: async () => [
+                    song("first", "Artist"),
+                    song("second", "Artist"),
+                ],
+                getRadio,
+            }),
+        );
+        const result = await service.getMixes("listener");
+        expect(result.mixes[0].tracks).toHaveLength(40);
+        expect(getRadio).toHaveBeenCalledTimes(2);
+        expect(
+            result.mixes[0].tracks.some((t) =>
+                /^first-(?:[0-9]|1[0-9]|20)$/.test(t.youtubeVideoId),
+            ),
+        ).toBe(false);
+    });
     it("does not confuse one artist containing a separator with two suppressed artists", async () => {
         let suppressed = new Set(["alpha|beta"]);
         const service = new PersonalDailyMixService(

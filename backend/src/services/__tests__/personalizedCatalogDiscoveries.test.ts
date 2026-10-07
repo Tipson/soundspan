@@ -47,6 +47,40 @@ function service(includeFresh: boolean) {
 }
 
 describe("Discoveries never backfills with a known recording", () => {
+    it("supports 40 internal weekly discoveries while keeping the home limit at 25", async () => {
+        const catalog = new PersonalizedCatalogService({
+            loadSignals: async () => ({
+                recentPlays: [],
+                likedTracks: [track("seed")],
+                playlistTracks: [],
+                dislikedEntityIds: [],
+            }),
+            loadDislikedEntityIds: async () => [],
+            getRadio: async () => ({
+                playlistId: null,
+                seedVideoId: "seed",
+                tracks: Array.from({ length: 50 }, (_, i) => ({
+                    ...track(`fresh-${i}`, `Artist ${Math.floor(i / 2)}`),
+                    artists: [],
+                })),
+            }),
+            getListenBrainzCandidates: async () => [],
+        });
+        expect(
+            (
+                await catalog.getHomeFeed("listener", 40, {
+                    mode: "new",
+                    surface: "weekly",
+                })
+            ).shelves.discovery,
+        ).toHaveLength(40);
+        await expect(
+            catalog.getHomeFeed("listener", 40, {
+                mode: "new",
+                surface: "home",
+            }),
+        ).rejects.toThrow(RangeError);
+    });
     it("allows an unheard song by a saved artist, but not another saved song", async () => {
         const result = await service(true).getHomeFeed("listener", 2, {
             mode: "new",

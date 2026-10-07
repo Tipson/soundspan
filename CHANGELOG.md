@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fill online Discover Weekly with up to 40 new songs when no local discovery playlist exists. Save one account-scoped composition until the following UTC Monday, retain generation attribution, recheck current dislikes, and keep explicit clears empty for the rest of the week. Preserve resolved online tracks in playback and hide local download controls for online weeks.
+- Continue the bounded daily-mix candidate search until it has enough songs not heard in the last seven days, instead of stopping at 40 candidates that include recent repeats.
+
 - Apply the existing two-song artist-dislike suppression to daily mixes, including selected/familiar artist directions, genre anchors, returned songs and cached requests. Preserve long distinct queues and allow artists again when the active suppression expires.
 
 - Preserve the confirmed playback position when a listener pauses source replacement and explicitly resumes, including repeated pause/resume, intervening seeks, rejected starts, invalid replacement durations, and a bounded metadata wait. Keep queue and recording identity unchanged.

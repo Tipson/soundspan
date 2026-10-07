@@ -1,4 +1,10 @@
 import { Request, Response } from "express";
+jest.mock("../../services/personalWeeklyDiscovery", () => ({
+    personalWeeklyDiscoveryService: {
+        getCurrent: jest.fn(),
+        clearCurrent: jest.fn(async () => 0),
+    },
+}));
 
 jest.mock("../../middleware/auth", () => ({
     requireAuthOrToken: (_req: Request, _res: Response, next: () => void) =>

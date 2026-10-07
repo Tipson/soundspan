@@ -102,6 +102,7 @@ function DiscoverWeeklyPageContent() {
     const displayPlaylist = playlist
         ? { ...playlist, tracks: providerEnrichedTracks }
         : null;
+    const onlineWeekly = displayPlaylist?.kind === "online-weekly";
     const {
         handleGenerate,
         handlePlayPlaylist,
@@ -133,11 +134,13 @@ function DiscoverWeeklyPageContent() {
     }, [config?.lastGeneratedAt]);
     const shouldRetryPlaylistHydration =
         !loading &&
+        !onlineWeekly &&
         !hasPlaylistContent &&
         !isGenerating &&
         generatedRecently &&
         playlistRecoveryAttempts < DISCOVER_RECOVERY_MAX_ATTEMPTS;
     const shouldShowResolvingState =
+        !onlineWeekly &&
         !loading &&
         !hasPlaylistContent &&
         (isGenerating || shouldRetryPlaylistHydration);
@@ -238,11 +241,11 @@ function DiscoverWeeklyPageContent() {
                     onAddToPlaylist={handleAddAllToPlaylist}
                     onShuffle={handleShufflePlaylist}
                     onAddAllToQueue={handleAddAllToQueue}
-                    isGenerating={isGenerating}
+                    isGenerating={onlineWeekly ? false : isGenerating}
                     batchStatus={batchStatus}
                 />
 
-                {showSettings && (
+                {showSettings && !onlineWeekly && (
                     <div className="mt-4">
                         <DiscoverSettings
                             config={config}
@@ -258,14 +261,16 @@ function DiscoverWeeklyPageContent() {
                         <div className="space-y-6">
                             {hasDiscoverTracks ? (
                                 <>
-                                    <p className="rounded-xl border border-line bg-surface-elevated px-4 py-3 text-xs leading-5 text-content-muted">
-                                        {discoverRu.sourceMix}:{" "}
-                                        {providerCounts.local}{" "}
-                                        {discoverRu.local}
-                                        {providerCounts.youtube > 0
-                                            ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
-                                            : ""}
-                                    </p>
+                                    {!onlineWeekly && (
+                                        <p className="rounded-xl border border-line bg-surface-elevated px-4 py-3 text-xs leading-5 text-content-muted">
+                                            {discoverRu.sourceMix}:{" "}
+                                            {providerCounts.local}{" "}
+                                            {discoverRu.local}
+                                            {providerCounts.youtube > 0
+                                                ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
+                                                : ""}
+                                        </p>
+                                    )}
                                     <TrackList
                                         tracks={displayPlaylist?.tracks || []}
                                         isMatching={isMatching}
@@ -287,7 +292,7 @@ function DiscoverWeeklyPageContent() {
                                 onTogglePreview={handleTogglePreview}
                             />
 
-                            <HowItWorks />
+                            {!onlineWeekly && <HowItWorks />}
                         </div>
                     ) : shouldShowResolvingState ? (
                         <div
@@ -313,33 +318,42 @@ function DiscoverWeeklyPageContent() {
                                     />
                                 }
                                 title={discoverRu.status.emptyTitle}
-                                description={discoverRu.status.emptyHint}
+                                description={
+                                    onlineWeekly
+                                        ? "Пока не удалось собрать открытия недели. Попробуйте позже."
+                                        : discoverRu.status.emptyHint
+                                }
                             >
-                                <Button
-                                    variant="ai"
-                                    onClick={handleGenerate}
-                                    disabled={isGenerating}
-                                >
-                                    {isGenerating ? (
-                                        <>
-                                            <GradientSpinner size="sm" />
-                                            {batchStatus?.status === "scanning"
-                                                ? discoverRu.status.finalizing
-                                                : batchStatus?.status ===
-                                                    "generating"
-                                                  ? discoverRu.status.refreshing
-                                                  : `${discoverRu.status.working} ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <RefreshCw
-                                                className="size-5"
-                                                aria-hidden="true"
-                                            />
-                                            {discoverRu.action.generateNow}
-                                        </>
-                                    )}
-                                </Button>
+                                {!onlineWeekly && (
+                                    <Button
+                                        variant="ai"
+                                        onClick={handleGenerate}
+                                        disabled={isGenerating}
+                                    >
+                                        {isGenerating ? (
+                                            <>
+                                                <GradientSpinner size="sm" />
+                                                {batchStatus?.status ===
+                                                "scanning"
+                                                    ? discoverRu.status
+                                                          .finalizing
+                                                    : batchStatus?.status ===
+                                                        "generating"
+                                                      ? discoverRu.status
+                                                            .refreshing
+                                                      : `${discoverRu.status.working} ${batchStatus?.completed || 0}/${batchStatus?.total || 0}`}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <RefreshCw
+                                                    className="size-5"
+                                                    aria-hidden="true"
+                                                />
+                                                {discoverRu.action.generateNow}
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
                             </EmptyState>
                         </div>
                     )}

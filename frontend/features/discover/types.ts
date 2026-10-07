@@ -13,6 +13,7 @@ export interface DiscoverTrack {
     streamSource?: "tidal" | "youtube";
     tidalTrackId?: number;
     youtubeVideoId?: string;
+    recommendationGenerationId?: string;
     isLiked: boolean;
     likedAt: string | null;
     similarity: number;
@@ -38,6 +39,8 @@ export interface UnavailableAlbum {
 }
 
 export interface DiscoverPlaylist {
+    kind?: "online-weekly";
+    generationId?: string;
     weekStart: string;
     weekEnd: string;
     tracks: DiscoverTrack[];

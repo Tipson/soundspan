@@ -227,6 +227,18 @@ export class PersonalDailyMixService {
     ): Promise<{ mixes: PersonalDailyMix[] }> {
         const allowedArtist = (song: DailyMixSong) =>
             !suppressedArtists.has(artistKey(song.artist));
+        const recentTimes = new Map<string, number>();
+        for (const play of recentlyPlayed) {
+            const time = play.playedAt.getTime();
+            if (!Number.isFinite(time)) continue;
+            recentTimes.set(
+                play.videoId,
+                Math.max(recentTimes.get(play.videoId) ?? -Infinity, time),
+            );
+        }
+        const hasFreshPool = (songs: DailyMixSong[]) =>
+            distinct(songs).filter((song) => !recentTimes.has(song.videoId))
+                .length >= MAX_TRACKS;
         const pools: DailyMixSong[][] = [];
         for (
             let start = 0;
@@ -314,11 +326,7 @@ export class PersonalDailyMixService {
                                             songs.push(
                                                 ...radio.filter(allowedArtist),
                                             );
-                                            if (
-                                                distinct(songs).length >=
-                                                MAX_TRACKS
-                                            )
-                                                break;
+                                            if (hasFreshPool(songs)) break;
                                         } catch (error) {
                                             log.warn(
                                                 "Daily mix seed unavailable",
@@ -330,8 +338,7 @@ export class PersonalDailyMixService {
                                             );
                                         }
                                     }
-                                    if (distinct(songs).length >= MAX_TRACKS)
-                                        break;
+                                    if (hasFreshPool(songs)) break;
                                 } catch (error) {
                                     log.warn(
                                         "Daily mix seed unavailable",
@@ -368,15 +375,6 @@ export class PersonalDailyMixService {
             userId,
             allIds,
         );
-        const recentTimes = new Map<string, number>();
-        for (const play of recentlyPlayed) {
-            const time = play.playedAt.getTime();
-            if (!Number.isFinite(time)) continue;
-            recentTimes.set(
-                play.videoId,
-                Math.max(recentTimes.get(play.videoId) ?? -Infinity, time),
-            );
-        }
         const oldestPlayFirst = (left: DailyMixSong, right: DailyMixSong) =>
             (recentTimes.get(left.videoId) ?? 0) -
             (recentTimes.get(right.videoId) ?? 0);

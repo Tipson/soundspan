@@ -50,6 +50,7 @@ export function DiscoverActionBar({
     batchStatus,
 }: DiscoverActionBarProps) {
     const { showSpinner, triggerPlayFeedback } = usePlayButtonFeedback();
+    const onlineWeekly = playlist?.kind === "online-weekly";
 
     const getStatusText = () => {
         if (!isGenerating) return null;
@@ -126,33 +127,37 @@ export function DiscoverActionBar({
                 )}
 
                 {/* Regenerate Button (icon only) */}
-                <Button
-                    variant="icon"
-                    onClick={onGenerate}
-                    disabled={isGenerating || !config?.enabled}
-                    title={
-                        isGenerating
-                            ? getStatusText() || discoverRu.action.generating
-                            : playlist
-                              ? discoverRu.action.regenerate
-                              : discoverRu.action.generate
-                    }
-                    aria-label={
-                        isGenerating
-                            ? getStatusText() || discoverRu.action.generating
-                            : playlist
-                              ? discoverRu.action.regenerate
-                              : discoverRu.action.generate
-                    }
-                >
-                    {isGenerating ? (
-                        <GradientSpinner size="sm" />
-                    ) : (
-                        <RefreshCw className="size-5" />
-                    )}
-                </Button>
+                {!onlineWeekly && (
+                    <Button
+                        variant="icon"
+                        onClick={onGenerate}
+                        disabled={isGenerating || !config?.enabled}
+                        title={
+                            isGenerating
+                                ? getStatusText() ||
+                                  discoverRu.action.generating
+                                : playlist
+                                  ? discoverRu.action.regenerate
+                                  : discoverRu.action.generate
+                        }
+                        aria-label={
+                            isGenerating
+                                ? getStatusText() ||
+                                  discoverRu.action.generating
+                                : playlist
+                                  ? discoverRu.action.regenerate
+                                  : discoverRu.action.generate
+                        }
+                    >
+                        {isGenerating ? (
+                            <GradientSpinner size="sm" />
+                        ) : (
+                            <RefreshCw className="size-5" />
+                        )}
+                    </Button>
+                )}
 
-                {isGenerating && (
+                {isGenerating && !onlineWeekly && (
                     <span
                         aria-live="polite"
                         className="min-w-0 flex-1 truncate px-1 text-xs font-medium text-content-muted"
@@ -162,16 +167,18 @@ export function DiscoverActionBar({
                 )}
 
                 {/* Settings Button (far right) */}
-                <Button
-                    variant="icon"
-                    onClick={onToggleSettings}
-                    disabled={isGenerating}
-                    className="ml-auto"
-                    title={discoverRu.action.settings}
-                    aria-label={discoverRu.action.settings}
-                >
-                    <Settings className="size-5" />
-                </Button>
+                {!onlineWeekly && (
+                    <Button
+                        variant="icon"
+                        onClick={onToggleSettings}
+                        disabled={isGenerating}
+                        className="ml-auto"
+                        title={discoverRu.action.settings}
+                        aria-label={discoverRu.action.settings}
+                    >
+                        <Settings className="size-5" />
+                    </Button>
+                )}
             </div>
         </div>
     );

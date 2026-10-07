@@ -32,6 +32,23 @@ test("marks fully local playlists as local without provider metadata", () => {
     assert.ok(result.every((track) => track.streamSource === undefined));
 });
 
+test("keeps a resolved weekly YouTube track during mixed local gap filling", () => {
+    const resolved = {
+        ...makeTrack("yt:known", 0),
+        sourceType: "youtube" as const,
+        streamSource: "youtube" as const,
+        youtubeVideoId: "known",
+        recommendationGenerationId: "weekly-generation",
+    };
+    const result = applyDiscoverProviderGapFill(
+        [resolved, makeTrack("missing", 0, false)],
+        [1],
+        [{ videoId: "found" }],
+    );
+    assert.deepEqual(result[0], resolved);
+    assert.equal(result[1].youtubeVideoId, "found");
+});
+
 test("keeps unmatched unavailable tracks local", () => {
     const tracks = [makeTrack("1", 0.9, false), makeTrack("2", 0.8, false)];
     const result = applyDiscoverProviderGapFill(tracks, [0, 1], [null, null]);

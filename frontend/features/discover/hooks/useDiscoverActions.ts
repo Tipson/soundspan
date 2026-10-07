@@ -28,6 +28,7 @@ interface PlaybackQueueTrack {
     streamSource?: "tidal" | "youtube";
     tidalTrackId?: number;
     youtubeVideoId?: string;
+    recommendationGenerationId?: string;
 }
 
 /**
@@ -50,6 +51,9 @@ export function mapDiscoverTrackToPlaybackTrack(
         duration: track.duration || 0,
         loudnessLufs: track.loudnessLufs ?? null,
         truePeakDb: track.truePeakDb ?? null,
+        ...(track.recommendationGenerationId && {
+            recommendationGenerationId: track.recommendationGenerationId,
+        }),
         ...(track.streamSource === "tidal" &&
             track.tidalTrackId && {
                 streamSource: "tidal" as const,
