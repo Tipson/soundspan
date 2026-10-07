@@ -48,6 +48,8 @@ export interface PersonalDailyMixDependencies {
         videoIds: string[],
     ) => Promise<Set<string>>;
     loadDislikeState: (userId: string) => Promise<string>;
+    /** Artist keys with two distinct active track dislikes in the last 30 days. */
+    loadSuppressedArtistKeys: (userId: string) => Promise<Set<string>>;
     now: () => Date;
 }
 
@@ -135,11 +137,16 @@ export class PersonalDailyMixService {
 
     async getMixes(userId: string): Promise<{ mixes: PersonalDailyMix[] }> {
         if (!userId.trim()) throw new TypeError("A user id is required");
-        const [directions, familiar, dislikeState] = await Promise.all([
-            this.dependencies.loadDirections(userId),
-            this.dependencies.loadFamiliar(userId),
-            this.dependencies.loadDislikeState(userId),
-        ]);
+        const [directions, familiarSongs, dislikeState, suppressedArtists] =
+            await Promise.all([
+                this.dependencies.loadDirections(userId),
+                this.dependencies.loadFamiliar(userId),
+                this.dependencies.loadDislikeState(userId),
+                this.dependencies.loadSuppressedArtistKeys(userId),
+            ]);
+        const familiar = familiarSongs.filter(
+            (song) => !suppressedArtists.has(artistKey(song.artist)),
+        );
         const seenArtists = new Set<string>();
         const familiarDirections: DailyMixDirection[] = familiar.flatMap(
             (song) => {
@@ -160,6 +167,11 @@ export class PersonalDailyMixService {
         const seenDirections = new Set<string>();
         const chosen = [...directions, ...familiarDirections]
             .filter((direction) => {
+                if (
+                    direction.kind === "artist" &&
+                    suppressedArtists.has(artistKey(direction.label))
+                )
+                    return false;
                 const key = `${direction.kind ?? "genre"}:${artistKey(direction.label)}`;
                 if (seenDirections.has(key)) return false;
                 seenDirections.add(key);
@@ -168,24 +180,35 @@ export class PersonalDailyMixService {
             .slice(0, MAX_DIRECTIONS);
         if (chosen.length === 0) return { mixes: [] };
         const now = this.dependencies.now().getTime();
-        const key = [
+        const key = JSON.stringify([
             userId,
             Math.floor(now / 86_400_000),
             dislikeState,
-            ...chosen.map((direction) => direction.key),
-            ...familiar.map((song) => song.videoId),
-        ].join("|");
+            [...suppressedArtists].sort(),
+            chosen.map((direction) => direction.key),
+            familiar.map((song) => song.videoId),
+        ]);
         const cached = this.cache.get(key);
         if (cached && cached.expiresAt > now) return cached.result;
         if (cached) this.cache.delete(key);
         const result = this.dependencies
             .loadRecentlyPlayed(userId)
             .catch((error: unknown) => {
-                log.warn("Daily mix playback history unavailable", { userId }, error);
+                log.warn(
+                    "Daily mix playback history unavailable",
+                    { userId },
+                    error,
+                );
                 return [];
             })
             .then((recentlyPlayed) =>
-                this.buildMixes(userId, chosen, familiar, recentlyPlayed),
+                this.buildMixes(
+                    userId,
+                    chosen,
+                    familiar,
+                    recentlyPlayed,
+                    suppressedArtists,
+                ),
             );
         this.cache.set(key, { expiresAt: now + CACHE_TTL_MS, result });
         if (this.cache.size > MAX_CACHED_ACCOUNTS) {
@@ -200,7 +223,10 @@ export class PersonalDailyMixService {
         chosen: DailyMixDirection[],
         familiar: DailyMixSong[],
         recentlyPlayed: RecentlyPlayedSong[],
+        suppressedArtists: ReadonlySet<string>,
     ): Promise<{ mixes: PersonalDailyMix[] }> {
+        const allowedArtist = (song: DailyMixSong) =>
+            !suppressedArtists.has(artistKey(song.artist));
         const pools: DailyMixSong[][] = [];
         for (
             let start = 0;
@@ -212,12 +238,16 @@ export class PersonalDailyMixService {
                     .slice(start, start + DIRECTION_CONCURRENCY)
                     .map(async (direction) => {
                         try {
-                            const genreArtists =
+                            const catalogArtists =
                                 direction.kind === "genre"
                                     ? await this.dependencies
                                           .loadGenreArtists(direction.label)
                                           .catch(() => [])
                                     : [];
+                            const genreArtists = catalogArtists.filter(
+                                (artist) =>
+                                    !suppressedArtists.has(artistKey(artist)),
+                            );
                             const familiarArtists = new Set(
                                 familiar.map((song) => artistKey(song.artist)),
                             );
@@ -258,7 +288,7 @@ export class PersonalDailyMixService {
                                             userId,
                                             query,
                                         ),
-                                    );
+                                    ).filter(allowedArtist);
                                     const artist = query.endsWith(" songs")
                                         ? query.slice(0, -" songs".length)
                                         : null;
@@ -281,7 +311,9 @@ export class PersonalDailyMixService {
                                                 await this.dependencies.getRadio(
                                                     seed.videoId,
                                                 );
-                                            songs.push(...radio);
+                                            songs.push(
+                                                ...radio.filter(allowedArtist),
+                                            );
                                             if (
                                                 distinct(songs).length >=
                                                 MAX_TRACKS
@@ -568,6 +600,40 @@ export const personalDailyMixService = new PersonalDailyMixService({
             }),
         ]);
         return `${count}:${latest?.id ?? "none"}`;
+    },
+    loadSuppressedArtistKeys: async (userId) => {
+        // Match the catalog's bounded, active-dislike window. A single song
+        // dislike is not an artist ban, and failed streams do not create one.
+        const rows = await prisma.dislikedEntity.findMany({
+            where: {
+                userId,
+                entityType: "track",
+                entityId: { startsWith: "yt:" },
+                dislikedAt: { gte: new Date(Date.now() - 30 * 86_400_000) },
+            },
+            orderBy: { dislikedAt: "desc" },
+            take: 100,
+            select: { entityId: true },
+        });
+        const videoIds = [...new Set(rows.map((row) => row.entityId.slice(3)))];
+        if (videoIds.length < 2) return new Set();
+        const tracks = await prisma.trackYtMusic.findMany({
+            where: { videoId: { in: videoIds } },
+            select: { videoId: true, artist: true },
+        });
+        const dislikedVideosByArtist = new Map<string, Set<string>>();
+        for (const track of tracks) {
+            const key = artistKey(track.artist);
+            if (!key || key === "unknown" || key === "unknown artist") continue;
+            const videos = dislikedVideosByArtist.get(key) ?? new Set<string>();
+            videos.add(track.videoId);
+            dislikedVideosByArtist.set(key, videos);
+        }
+        return new Set(
+            [...dislikedVideosByArtist].flatMap(([key, videos]) =>
+                videos.size >= 2 ? [key] : [],
+            ),
+        );
     },
     now: () => new Date(),
 });

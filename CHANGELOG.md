@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Apply the existing two-song artist-dislike suppression to daily mixes, including selected/familiar artist directions, genre anchors, returned songs and cached requests. Preserve long distinct queues and allow artists again when the active suppression expires.
+
 - Preserve the confirmed playback position when a listener pauses source replacement and explicitly resumes, including repeated pause/resume, intervening seeks, rejected starts, invalid replacement durations, and a bounded metadata wait. Keep queue and recording identity unchanged.
 - Retain a closed source-recovery outcome and bounded resume position through offline diagnostic delivery and API sanitization, without storing arbitrary strings or source URLs.
 

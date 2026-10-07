@@ -5,6 +5,8 @@ jest.mock("../../utils/db", () => ({
     prisma: {
         userSettings: { findUnique: jest.fn() },
         play: { findMany: jest.fn() },
+        dislikedEntity: { findMany: jest.fn() },
+        trackYtMusic: { findMany: jest.fn() },
     },
 }));
 jest.mock("../../utils/logger", () => {
@@ -53,17 +55,237 @@ function dependencies(
             radio(videoId.split("-")[0], videoId.split("-")[0]),
         loadDislikedIds: async () => new Set<string>(),
         loadDislikeState: async () => "none",
+        loadSuppressedArtistKeys: async () => new Set<string>(),
         now: () => new Date("2026-09-26T08:00:00Z"),
         ...overrides,
     };
 }
 
 describe("PersonalDailyMixService", () => {
+    it("does not confuse one artist containing a separator with two suppressed artists", async () => {
+        let suppressed = new Set(["alpha|beta"]);
+        const service = new PersonalDailyMixService(
+            dependencies({
+                loadDirections: async () => [
+                    { key: "rock", label: "Рок", query: "rock music" },
+                ],
+                loadFamiliar: async () => [],
+                loadSuppressedArtistKeys: async () => suppressed,
+                getRadio: async () => [
+                    song("alpha", "Alpha"),
+                    song("beta", "Beta"),
+                    ...radio("safe", "Safe"),
+                ],
+            }),
+        );
+        const first = await service.getMixes("user-1");
+        expect(
+            first.mixes[0].tracks.some(
+                (track) => track.artist.name === "Alpha",
+            ),
+        ).toBe(true);
+        suppressed = new Set(["alpha", "beta"]);
+
+        const second = await service.getMixes("user-1");
+
+        expect(second.mixes[0].tracks).toHaveLength(40);
+        expect(
+            second.mixes[0].tracks.some((track) =>
+                ["Alpha", "Beta"].includes(track.artist.name),
+            ),
+        ).toBe(false);
+    });
+
+    it("suppresses only artists with two distinct current dislikes from this account", async () => {
+        jest.mocked(prisma.dislikedEntity.findMany).mockResolvedValueOnce([
+            { entityId: "yt:first" },
+            { entityId: "yt:second" },
+            { entityId: "yt:single" },
+            { entityId: "yt:duplicate" },
+        ] as never);
+        jest.mocked(prisma.trackYtMusic.findMany).mockResolvedValueOnce([
+            { videoId: "first", artist: " Ibrahim Maalouf " },
+            { videoId: "second", artist: "IBRAHIM MAALOUF" },
+            { videoId: "single", artist: "Single Artist" },
+            { videoId: "duplicate", artist: "Single Artist" },
+            { videoId: "duplicate", artist: "Single Artist" },
+        ] as never);
+        const liveDependencies = (
+            personalDailyMixService as unknown as {
+                dependencies: PersonalDailyMixDependencies;
+            }
+        ).dependencies;
+
+        const result =
+            await liveDependencies.loadSuppressedArtistKeys("user-1");
+
+        expect(result).toEqual(new Set(["ibrahim maalouf", "single artist"]));
+        expect(prisma.dislikedEntity.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    userId: "user-1",
+                    entityType: "track",
+                    entityId: { startsWith: "yt:" },
+                    dislikedAt: { gte: expect.any(Date) },
+                }),
+                take: 100,
+            }),
+        );
+    });
+
+    it("does not suppress one disliked song, missing metadata, or unknown artists", async () => {
+        jest.mocked(prisma.dislikedEntity.findMany).mockResolvedValueOnce([
+            { entityId: "yt:single" },
+            { entityId: "yt:missing" },
+            { entityId: "yt:unknown1" },
+            { entityId: "yt:unknown2" },
+        ] as never);
+        jest.mocked(prisma.trackYtMusic.findMany).mockResolvedValueOnce([
+            { videoId: "single", artist: "Single Artist" },
+            { videoId: "single", artist: "Single Artist" },
+            { videoId: "unknown1", artist: "Unknown Artist" },
+            { videoId: "unknown2", artist: "Unknown Artist" },
+        ] as never);
+        const liveDependencies = (
+            personalDailyMixService as unknown as {
+                dependencies: PersonalDailyMixDependencies;
+            }
+        ).dependencies;
+        expect(
+            await liveDependencies.loadSuppressedArtistKeys("user-1"),
+        ).toEqual(new Set());
+    });
+
+    it("excludes a suppressed artist from daily radio and familiar songs", async () => {
+        const service = new PersonalDailyMixService(
+            Object.assign(
+                dependencies({
+                    loadDirections: async () => [
+                        { key: "jazz", label: "Джаз", query: "jazz music" },
+                    ],
+                    loadFamiliar: async () => [
+                        song("known-blocked", "Ibrahim Maalouf"),
+                    ],
+                    getRadio: async () => [
+                        ...radio("blocked", "Ibrahim Maalouf").map((track) => ({
+                            ...track,
+                            artist: "Ibrahim Maalouf",
+                        })),
+                        ...radio("fresh", "Jazz Artist"),
+                    ],
+                }),
+                {
+                    loadSuppressedArtistKeys: async () =>
+                        new Set(["ibrahim maalouf"]),
+                },
+            ),
+        );
+
+        const result = await service.getMixes("user-1");
+
+        expect(result.mixes).toHaveLength(1);
+        expect(result.mixes[0].tracks).toHaveLength(40);
+        expect(
+            result.mixes[0].tracks.some(
+                (track) =>
+                    track.artist.name.toLowerCase() === "ibrahim maalouf",
+            ),
+        ).toBe(false);
+    });
+
+    it("does not use a suppressed selected or familiar artist as a direction or genre seed", async () => {
+        const searchSongs = jest.fn(async (_userId: string, query: string) => [
+            song(`${query.split(" ")[0]}-seed`, query.split(" songs")[0]),
+        ]);
+        const service = new PersonalDailyMixService(
+            Object.assign(
+                dependencies({
+                    loadDirections: async () => [
+                        {
+                            key: "artist:Muse",
+                            label: "Muse",
+                            query: "Muse songs",
+                            kind: "artist",
+                        },
+                        {
+                            key: "rock",
+                            label: "Рок",
+                            query: "rock music",
+                            kind: "genre",
+                        },
+                    ],
+                    loadFamiliar: async () => [song("liked-muse", "muse")],
+                    loadGenreArtists: async () => ["Muse", "Radiohead"],
+                    searchSongs,
+                    getRadio: async () => radio("rock", "Radiohead"),
+                }),
+                { loadSuppressedArtistKeys: async () => new Set(["muse"]) },
+            ),
+        );
+
+        const result = await service.getMixes("user-1");
+
+        expect(result.mixes.map((mix) => mix.title)).toEqual(["Рок для вас"]);
+        expect(searchSongs).not.toHaveBeenCalledWith("user-1", "Muse songs");
+        expect(searchSongs).toHaveBeenCalledWith("user-1", "Radiohead songs");
+    });
+
+    it("rechecks artist suppression on cache hits and when the suppression expires", async () => {
+        let suppressed = new Set<string>();
+        const getRadio = jest.fn(async () => [
+            ...Array.from({ length: 5 }, (_, i) =>
+                song(`blocked-${i}`, "Blocked Artist"),
+            ),
+            ...radio("safe", "Safe Artist"),
+        ]);
+        const service = new PersonalDailyMixService(
+            Object.assign(
+                dependencies({
+                    loadDirections: async () => [
+                        { key: "rock", label: "Рок", query: "rock music" },
+                    ],
+                    loadFamiliar: async () => [],
+                    getRadio,
+                }),
+                { loadSuppressedArtistKeys: async () => suppressed },
+            ),
+        );
+
+        const original = await service.getMixes("user-1");
+        expect(
+            original.mixes[0].tracks.some(
+                (track) => track.artist.name === "Blocked Artist",
+            ),
+        ).toBe(true);
+        suppressed = new Set(["blocked artist"]);
+        const blocked = await service.getMixes("user-1");
+        expect(
+            blocked.mixes[0].tracks.some(
+                (track) => track.artist.name === "Blocked Artist",
+            ),
+        ).toBe(false);
+        suppressed = new Set();
+        const expired = await service.getMixes("user-1");
+        expect(
+            expired.mixes[0].tracks.some(
+                (track) => track.artist.name === "Blocked Artist",
+            ),
+        ).toBe(true);
+    });
+
     it("loads only this account's playable recent history and ignores failed streams", async () => {
         const playedAt = new Date("2026-09-26T07:00:00Z");
         jest.mocked(prisma.play.findMany).mockResolvedValueOnce([
-            { playedAt, outcome: "completed", trackYtMusic: { videoId: "played" } },
-            { playedAt, outcome: "failed", trackYtMusic: { videoId: "failed" } },
+            {
+                playedAt,
+                outcome: "completed",
+                trackYtMusic: { videoId: "played" },
+            },
+            {
+                playedAt,
+                outcome: "failed",
+                trackYtMusic: { videoId: "failed" },
+            },
             { playedAt, outcome: "skipped", trackYtMusic: null },
         ] as never);
         const liveDependencies = (
@@ -280,8 +502,14 @@ describe("PersonalDailyMixService", () => {
                     { key: "rock", label: "Рок", query: "rock music" },
                 ],
                 loadRecentlyPlayed: async () => [
-                    { videoId: "rock-seed", playedAt: new Date("2026-09-26T07:00:00Z") },
-                    { videoId: "rock-0", playedAt: new Date("2026-09-26T06:00:00Z") },
+                    {
+                        videoId: "rock-seed",
+                        playedAt: new Date("2026-09-26T07:00:00Z"),
+                    },
+                    {
+                        videoId: "rock-0",
+                        playedAt: new Date("2026-09-26T06:00:00Z"),
+                    },
                 ],
             }),
         );
@@ -302,8 +530,14 @@ describe("PersonalDailyMixService", () => {
                 ],
                 getRadio: async () => radio("rock", "rock").slice(0, 24),
                 loadRecentlyPlayed: async () => [
-                    { videoId: "rock-0", playedAt: new Date("2026-09-26T07:00:00Z") },
-                    { videoId: "rock-1", playedAt: new Date("2026-09-25T07:00:00Z") },
+                    {
+                        videoId: "rock-0",
+                        playedAt: new Date("2026-09-26T07:00:00Z"),
+                    },
+                    {
+                        videoId: "rock-1",
+                        playedAt: new Date("2026-09-25T07:00:00Z"),
+                    },
                 ],
             }),
         );
@@ -324,8 +558,14 @@ describe("PersonalDailyMixService", () => {
                 loadFamiliar: async () => [song("liked", "rock 1")],
                 getRadio: async () => radio("rock", "rock").slice(0, 24),
                 loadRecentlyPlayed: async () => [
-                    { videoId: "liked", playedAt: new Date("2026-09-26T07:00:00Z") },
-                    { videoId: "rock-1", playedAt: new Date("2026-09-25T07:00:00Z") },
+                    {
+                        videoId: "liked",
+                        playedAt: new Date("2026-09-26T07:00:00Z"),
+                    },
+                    {
+                        videoId: "rock-1",
+                        playedAt: new Date("2026-09-25T07:00:00Z"),
+                    },
                 ],
             }),
         );
@@ -550,7 +790,10 @@ describe("PersonalDailyMixService", () => {
 
         await service.getMixes("user-1");
         recentPlays = [
-            { videoId: "rock-seed", playedAt: new Date("2026-09-26T08:01:00Z") },
+            {
+                videoId: "rock-seed",
+                playedAt: new Date("2026-09-26T08:01:00Z"),
+            },
         ];
         await service.getMixes("user-1");
         expect(getRadio).toHaveBeenCalledTimes(1);
@@ -558,7 +801,9 @@ describe("PersonalDailyMixService", () => {
         currentTime = new Date("2026-09-26T08:11:00Z");
         const refreshed = await service.getMixes("user-1");
         expect(getRadio).toHaveBeenCalledTimes(2);
-        expect(refreshed.mixes[0].tracks.map((track) => track.youtubeVideoId)).not.toContain("rock-seed");
+        expect(
+            refreshed.mixes[0].tracks.map((track) => track.youtubeVideoId),
+        ).not.toContain("rock-seed");
     });
 
     it("still builds mixes when playback history is unavailable", async () => {
