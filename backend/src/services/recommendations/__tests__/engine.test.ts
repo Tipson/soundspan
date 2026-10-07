@@ -73,6 +73,303 @@ describe("unified recommendation engine", () => {
     };
 
     it.each(["baseline", "active", "shadow"] as const)(
+        "prepares unseen mood discoveries without presenting unmeasured songs in %s",
+        async (mode) => {
+            for (const mood of [
+                "calm",
+                "focus",
+                "energetic",
+                "workout",
+            ] as const) {
+                const deps = dependencies(mode);
+                deps.loadDislikedCanonicalKeys.mockResolvedValue(
+                    new Set([candidate("disliked").canonicalKey]),
+                );
+                deps.loadCandidates.mockResolvedValue({
+                    candidates: [
+                        candidate("pending", { lane: "discovery" }),
+                        candidate("queued", { lane: "discovery" }),
+                        candidate("recent", { lane: "discovery" }),
+                        candidate("disliked", { lane: "discovery" }),
+                        candidate("album", {
+                            lane: "discovery",
+                            duration: 3600,
+                        }),
+                        candidate("known-opposite", {
+                            lane: "discovery",
+                            audioFeatures: {
+                                arousal:
+                                    mood === "calm" || mood === "focus"
+                                        ? 0.9
+                                        : 0.1,
+                            },
+                        }),
+                    ],
+                    nextCursor: 1,
+                    degradedSources: [],
+                });
+                const result = await new RecommendationEngine(deps).recommend({
+                    ...request,
+                    intent: { ...request.intent, mood },
+                    exclude: ["yt:queued"],
+                });
+                expect(result.tracks).toEqual([]);
+                expect(
+                    deps.recordGeneration.mock.calls.every(
+                        ([generation]) =>
+                            generation.recommendations.length === 0,
+                    ),
+                ).toBe(true);
+                expect(deps.scheduleHotSet).toHaveBeenCalledTimes(1);
+                expect(
+                    deps.scheduleHotSet.mock.calls[0][0].candidates.map(
+                        (track: RecommendationCandidate) => track.id,
+                    ),
+                ).toEqual(["yt:pending"]);
+            }
+        },
+    );
+
+    it("lets an analyzed discovery enter the next mood queue after background preparation", async () => {
+        const deps = dependencies("baseline");
+        const pending = candidate("pending", { lane: "discovery" });
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [pending],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        let analyzed = false;
+        const enrichCandidates = jest.fn(
+            async (tracks: RecommendationCandidate[]) =>
+                tracks.map((track) =>
+                    analyzed
+                        ? { ...track, audioFeatures: { arousal: 0.2 } }
+                        : track,
+                ),
+        );
+        const engine = new RecommendationEngine({ ...deps, enrichCandidates });
+        const calmRequest = {
+            ...request,
+            intent: { ...request.intent, mood: "calm" as const },
+        };
+        expect((await engine.recommend(calmRequest)).tracks).toEqual([]);
+        expect(deps.scheduleHotSet).toHaveBeenCalledTimes(1);
+        analyzed = true;
+        expect(
+            (await engine.recommend(calmRequest)).tracks.map(
+                (track) => track.id,
+            ),
+        ).toEqual(["yt:pending"]);
+        expect(deps.recordGeneration.mock.calls[0][0].recommendations).toEqual(
+            [],
+        );
+        expect(
+            deps.recordGeneration.mock.calls[1][0].recommendations[0].track
+                .audioFeatures?.arousal,
+        ).toBe(0.2);
+    });
+
+    it("retains same-artist discoveries for background coverage before admission variety", async () => {
+        const deps = dependencies("baseline");
+        const discoveries = Array.from({ length: 3 }, (_, index) =>
+            candidate(`unknown-${index}`, {
+                lane: "discovery",
+                artist: { id: null, name: "Unknown artist" },
+            }),
+        );
+        deps.loadCandidates.mockResolvedValue({
+            candidates: discoveries,
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            intent: { ...request.intent, mood: "calm" },
+        });
+        expect(result.tracks).toEqual([]);
+        expect(deps.scheduleHotSet.mock.calls[0][0].candidates).toHaveLength(3);
+    });
+
+    it("bounds unknown discovery preparation by distinct recordings", async () => {
+        const deps = dependencies("baseline");
+        const candidates = Array.from({ length: 150 }, (_, index) =>
+            candidate(`pending-${index}`, {
+                lane: "discovery",
+                artist: { id: null, name: `Artist ${Math.floor(index / 5)}` },
+            }),
+        );
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [...candidates, ...candidates],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            intent: { ...request.intent, mood: "calm" },
+        });
+        expect(result.tracks).toEqual([]);
+        expect(deps.scheduleHotSet).toHaveBeenCalledTimes(1);
+        const admitted: RecommendationCandidate[] =
+            deps.scheduleHotSet.mock.calls[0][0].candidates;
+        expect(admitted).toHaveLength(48);
+        expect(new Set(admitted.map((track) => track.canonicalKey)).size).toBe(
+            48,
+        );
+    });
+
+    it("prepares only unsaved discoveries in the new direction", async () => {
+        const deps = dependencies("baseline");
+        const saved = candidate("saved", { lane: "discovery" });
+        const fresh = candidate("pending", { lane: "discovery" });
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [saved, fresh],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const loadSavedCanonicalKeys = jest
+            .fn()
+            .mockResolvedValue(new Set([saved.canonicalKey]));
+        const result = await new RecommendationEngine({
+            ...deps,
+            loadSavedCanonicalKeys,
+        }).recommend({
+            ...request,
+            intent: { ...request.intent, direction: "new", mood: "calm" },
+        });
+        expect(result.tracks).toEqual([]);
+        expect(
+            deps.scheduleHotSet.mock.calls[0][0].candidates.map(
+                (track: RecommendationCandidate) => track.id,
+            ),
+        ).toEqual(["yt:pending"]);
+    });
+
+    it.each([
+        "exposures",
+        "dislikes",
+        "features",
+        "identity",
+        "saved",
+    ] as const)(
+        "does not prepare unchecked discoveries when the %s lookup fails",
+        async (failure) => {
+            const deps = dependencies("baseline");
+            deps.loadCandidates.mockResolvedValue({
+                candidates: [candidate("pending", { lane: "discovery" })],
+                nextCursor: 1,
+                degradedSources: [],
+            });
+            const unavailable = new Error("Unavailable");
+            if (failure === "exposures")
+                deps.loadRecentExposures.mockRejectedValue(unavailable);
+            if (failure === "dislikes")
+                deps.loadDislikedCanonicalKeys.mockRejectedValue(unavailable);
+            if (failure === "identity")
+                deps.resolveCanonical.mockRejectedValue(unavailable);
+            const enrichCandidates = async (
+                tracks: RecommendationCandidate[],
+            ) => {
+                if (failure === "features") throw unavailable;
+                return tracks;
+            };
+            const loadSavedCanonicalKeys = async () => {
+                throw unavailable;
+            };
+            const result = await new RecommendationEngine({
+                ...deps,
+                enrichCandidates,
+                ...(failure === "saved" ? { loadSavedCanonicalKeys } : {}),
+            }).recommend({
+                ...request,
+                intent: {
+                    ...request.intent,
+                    mood: "calm",
+                    direction: failure === "saved" ? "new" : "for-you",
+                },
+            });
+            expect(result.tracks).toEqual([]);
+            expect(deps.scheduleHotSet).not.toHaveBeenCalled();
+        },
+    );
+
+    it("keeps unavailable collection analysis in its existing account path", async () => {
+        const deps = dependencies("baseline");
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [candidate("pending", { lane: "quickPicks" })],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            intent: { ...request.intent, mood: "calm" },
+        });
+        expect(result.tracks).toEqual([]);
+        expect(deps.scheduleHotSet).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        { surface: "home" as const, mood: "calm" as const },
+        { surface: "wave" as const, mood: null },
+        { surface: "wave" as const, mood: "favorites" as const },
+        { surface: "wave" as const, mood: "forgotten" as const },
+    ])(
+        "retains ordinary admission outside intensity moods: %j",
+        async (intent) => {
+            const deps = dependencies("baseline");
+            deps.loadCandidates.mockResolvedValue({
+                candidates: [candidate("pending", { lane: "discovery" })],
+                nextCursor: 1,
+                degradedSources: [],
+            });
+            const result = await new RecommendationEngine(deps).recommend({
+                ...request,
+                intent: { ...request.intent, ...intent },
+            });
+            expect(result.tracks.map((track) => track.id)).toEqual([
+                "yt:pending",
+            ]);
+            expect(
+                deps.scheduleHotSet.mock.calls[0][0].candidates.map(
+                    (track: RecommendationCandidate) => track.id,
+                ),
+            ).toEqual(["yt:pending"]);
+        },
+    );
+
+    it("returns a measured queue without waiting for pending mood analysis", async () => {
+        const deps = dependencies("baseline");
+        deps.loadCandidates.mockResolvedValue({
+            candidates: [
+                candidate("pending", { lane: "discovery" }),
+                candidate("measured", {
+                    lane: "discovery",
+                    audioFeatures: { arousal: 0.2 },
+                }),
+            ],
+            nextCursor: 1,
+            degradedSources: [],
+        });
+        let finishAnalysis!: () => void;
+        deps.scheduleHotSet.mockImplementation(
+            () =>
+                new Promise<void>((resolve) => {
+                    finishAnalysis = resolve;
+                }),
+        );
+        const result = await new RecommendationEngine(deps).recommend({
+            ...request,
+            intent: { ...request.intent, mood: "calm" },
+        });
+        expect(result.tracks.map((track) => track.id)).toEqual(["yt:measured"]);
+        expect(
+            deps.scheduleHotSet.mock.calls[0][0].candidates.map(
+                (track: RecommendationCandidate) => track.id,
+            ),
+        ).toEqual(["yt:pending", "yt:measured"]);
+        finishAnalysis();
+    });
+
+    it.each(["baseline", "active", "shadow"] as const)(
         "keeps every explicit mood lane eligible in %s, even with a high provider score",
         async (mode) => {
             const deps = dependencies(mode);

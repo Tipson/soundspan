@@ -4,7 +4,11 @@ import { recordRecommendationGenerationMetrics } from "../../metrics";
 import type { RecommendationGenerationMetricInput } from "../../metrics/recommendationMetrics";
 import { moodRankingScore, rankRecommendationCandidates } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
-import { isWaveMusicCandidate, matchesWaveMood } from "./wavePolicy";
+import {
+    isWaveMusicCandidate,
+    matchesWaveMood,
+    needsWaveMoodAnalysis,
+} from "./wavePolicy";
 import type {
     RecommendRequest,
     RecommendResult,
@@ -14,6 +18,8 @@ import type {
 } from "./types";
 
 const CANONICAL_RESOLUTION_BATCH_SIZE = 8;
+// Matches the existing scheduler's total admission capacity, not a queue quota.
+const MOOD_ANALYSIS_RESERVE_LIMIT = 48;
 const recommendationLogger = logger.child("RecommendationEngine");
 
 export type RecommendationEngineMode = "baseline" | "shadow" | "active";
@@ -60,6 +66,7 @@ export interface ScheduleRecommendationHotSetInput {
     sessionId: string;
     surface: RecommendRequest["intent"]["surface"];
     candidates: RecommendationCandidate[];
+    unmeasuredCanonicalIds?: readonly string[];
 }
 
 export interface RecommendationEngineDependencies {
@@ -299,6 +306,15 @@ export class RecommendationEngine {
                 );
             }
         }
+        const pendingMoodCandidates = isWave
+            ? candidates.filter(
+                  (candidate) =>
+                      candidate.lane === "discovery" &&
+                      candidate.canonicalRecordingId &&
+                      candidate.provider.youtubeVideoId &&
+                      needsWaveMoodAnalysis(candidate, request.intent.mood),
+              )
+            : [];
         // Apply eligibility before lane quotas and either ranker, so discovery
         // and familiar insertions cannot reintroduce an incompatible recording.
         if (isWave)
@@ -337,7 +353,7 @@ export class RecommendationEngine {
                 const savedKeys =
                     await this.dependencies.loadSavedCanonicalKeys(
                         request.userId,
-                        candidates,
+                        [...candidates, ...pendingMoodCandidates],
                     );
                 for (const key of savedKeys) excludes.add(key);
             } catch (error) {
@@ -348,6 +364,21 @@ export class RecommendationEngine {
                 candidates = [];
             }
         }
+        const analysisReserve =
+            limit > 0 &&
+            ![
+                "canonical-identity",
+                "canonical-features",
+                "exposure-history",
+                "taste-dislikes",
+                "saved-recordings",
+            ].some((source) => degradedSources.includes(source))
+                ? baselineRank(
+                      pendingMoodCandidates,
+                      excludes,
+                      MOOD_ANALYSIS_RESERVE_LIMIT,
+                  )
+                : [];
         const baseline = baselineRank(
             candidates,
             excludes,
@@ -367,7 +398,7 @@ export class RecommendationEngine {
                 recommendations: baseline,
                 startedAt,
             });
-            this.scheduleHotSet(request, baseline);
+            this.scheduleHotSet(request, baseline, analysisReserve);
             return {
                 tracks: baseline.map(({ track }) => track),
                 nextCursor: loaded.nextCursor,
@@ -428,7 +459,7 @@ export class RecommendationEngine {
                         startedAt,
                     }),
             );
-            this.scheduleHotSet(request, hybrid);
+            this.scheduleHotSet(request, hybrid, analysisReserve);
             return {
                 tracks: baseline.map(({ track }) => track),
                 nextCursor: loaded.nextCursor,
@@ -473,7 +504,7 @@ export class RecommendationEngine {
                     }),
             );
         }
-        this.scheduleHotSet(request, hybrid);
+        this.scheduleHotSet(request, hybrid, analysisReserve);
         return {
             tracks: servedRecommendations.map(({ track }) => track),
             nextCursor: loaded.nextCursor,
@@ -630,8 +661,10 @@ export class RecommendationEngine {
     private scheduleHotSet(
         request: RecommendRequest,
         recommendations: readonly ScoredRecommendation[],
+        analysisReserve: readonly ScoredRecommendation[] = [],
     ): void {
-        if (recommendations.length === 0) return;
+        if (recommendations.length === 0 && analysisReserve.length === 0)
+            return;
         superviseBackground(
             "hot-set scheduling",
             { userId: request.userId, sessionId: request.sessionId },
@@ -640,7 +673,18 @@ export class RecommendationEngine {
                     userId: request.userId,
                     sessionId: request.sessionId,
                     surface: request.intent.surface,
-                    candidates: recommendations.map(({ track }) => track),
+                    // Completed returned songs must not consume the fair input
+                    // lane before its unknown, explicitly requested discoveries.
+                    candidates: [...analysisReserve, ...recommendations].map(
+                        ({ track }) => track,
+                    ),
+                    ...(analysisReserve.length > 0
+                        ? {
+                              unmeasuredCanonicalIds: analysisReserve.map(
+                                  ({ track }) => track.canonicalRecordingId!,
+                              ),
+                          }
+                        : {}),
                 }),
         );
     }

@@ -741,6 +741,119 @@ describe("remote recommendation hot set", () => {
         expect(new Set(ids).size).toBe(48);
     });
 
+    it("removes covered unmeasured discoveries before fair admission so pending discoveries retain capacity", async () => {
+        const batch = (prefix: string, source: string, count: number) =>
+            Array.from({ length: count }, (_, index) => ({
+                ...candidate(`${prefix}-${index}`),
+                artist: { id: null, name: `Artist ${prefix}-${index}` },
+                candidateSources: [source],
+            }));
+        const covered = batch("covered-null", "youtube-radio", 16);
+        const fresh = batch("pending", "youtube-radio", 9);
+        const discoveries = [...covered, ...fresh];
+        const loadCoveredCanonicalIds = jest
+            .fn()
+            .mockResolvedValue(
+                new Set(covered.map((item) => item.canonicalRecordingId!)),
+            );
+        const enqueue = jest.fn().mockResolvedValue(undefined);
+        await new RemoteAnalysisHotSetScheduler({
+            enabled: true,
+            loadAccountCandidates: async () => [
+                ...batch("liked", "hot-liked", 32),
+                ...batch("history", "hot-wave-seed", 32),
+            ],
+            loadCoveredCanonicalIds,
+            enqueue,
+        }).schedule({
+            userId: "alice",
+            sessionId: "mood-capacity",
+            surface: "wave",
+            candidates: discoveries,
+            ...{
+                unmeasuredCanonicalIds: discoveries.map(
+                    (item) => item.canonicalRecordingId!,
+                ),
+            },
+        });
+        const ids = enqueue.mock.calls.map(
+            ([job]) => job.providerTrackId as string,
+        );
+        expect(ids.filter((id) => id.startsWith("pending-"))).toHaveLength(9);
+        expect(ids.filter((id) => id.startsWith("covered-null-"))).toHaveLength(
+            0,
+        );
+        expect(ids).toHaveLength(48);
+        expect(ids.some((id) => id.startsWith("liked-"))).toBe(true);
+        expect(ids.some((id) => id.startsWith("history-"))).toBe(true);
+        expect(loadCoveredCanonicalIds).toHaveBeenCalledTimes(2);
+        expect(loadCoveredCanonicalIds.mock.calls[0][0]).toHaveLength(25);
+    });
+
+    it("applies discovery artist variety after coverage so completed siblings cannot starve pending songs", async () => {
+        const discoveries = Array.from({ length: 5 }, (_, index) => ({
+            ...candidate(`same-artist-${index}`),
+            artist: { id: null, name: "Unknown artist" },
+        }));
+        const enqueue = jest.fn().mockResolvedValue(undefined);
+        await new RemoteAnalysisHotSetScheduler({
+            enabled: true,
+            loadCoveredCanonicalIds: async () =>
+                new Set(
+                    discoveries
+                        .slice(0, 2)
+                        .map((item) => item.canonicalRecordingId!),
+                ),
+            enqueue,
+        }).schedule({
+            userId: "alice",
+            sessionId: "mood-artist-capacity",
+            surface: "wave",
+            candidates: discoveries,
+            unmeasuredCanonicalIds: discoveries.map(
+                (item) => item.canonicalRecordingId!,
+            ),
+        });
+        expect(enqueue.mock.calls.map(([job]) => job.providerTrackId)).toEqual([
+            "same-artist-2",
+            "same-artist-3",
+        ]);
+    });
+
+    it("skips the new reserve when its coverage preflight fails while retaining returned and account work", async () => {
+        const pending = candidate("pending");
+        const returned = candidate("returned");
+        const account = {
+            ...candidate("liked"),
+            candidateSources: ["hot-liked"],
+        };
+        const enqueue = jest.fn().mockResolvedValue(undefined);
+        const loadCoveredCanonicalIds = jest
+            .fn()
+            .mockRejectedValueOnce(new Error("coverage unavailable"))
+            .mockResolvedValue(new Set<string>());
+        await new RemoteAnalysisHotSetScheduler({
+            enabled: true,
+            loadAccountCandidates: async () => [account],
+            loadCoveredCanonicalIds,
+            enqueue,
+        }).schedule({
+            userId: "alice",
+            sessionId: "degraded-mood-coverage",
+            surface: "wave",
+            candidates: [pending, returned],
+            ...{ unmeasuredCanonicalIds: [pending.canonicalRecordingId!] },
+        });
+        expect(enqueue.mock.calls.map(([job]) => job.providerTrackId)).toEqual([
+            "returned",
+            "liked",
+        ]);
+        expect(loadCoveredCanonicalIds.mock.calls[1][0]).toEqual([
+            returned.canonicalRecordingId,
+            account.canonicalRecordingId,
+        ]);
+    });
+
     it("prioritizes current seeds while retaining durable account signals and canonical refresh", async () => {
         const callOrder: string[] = [];
         const dependencies = {
