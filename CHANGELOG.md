@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve the confirmed playback position when a listener pauses source replacement and explicitly resumes, including repeated pause/resume, intervening seeks, rejected starts, invalid replacement durations, and a bounded metadata wait. Keep queue and recording identity unchanged.
+- Retain a closed source-recovery outcome and bounded resume position through offline diagnostic delivery and API sanitization, without storing arbitrary strings or source URLs.
+
 - Add isolated, mandatory browser checks for authentication, taste saving and retry, Wave tuning, distinct long mix queues, real audio controls, and downloaded-file playback without a network. Reject skipped or retried successes and preserve browser failure evidence in CI.
 
 - Add a read-only playback diagnostic report that deduplicates delivered events, separates recovered, failed and unresolved audio loads, and emits private aggregate source/platform/hourly counts with explicit input-quality limits.

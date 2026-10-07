@@ -10,7 +10,10 @@ import {
     shouldPreemptInFlightAudioLoad,
 } from "@/lib/audio-load-preemption";
 import { api } from "@/lib/api";
+import { getAuthRuntimeGeneration } from "@/lib/auth-runtime-generation";
+import type { PlaybackOrchestratorRefs } from "./hooks/usePlaybackOrchestratorRefs";
 import { resolveNextTrackPreloadDecision } from "@/lib/audio-engine/nextTrackPreloadPolicy";
+
 import { restartPlaybackProgressConfirmation } from "@/lib/audio-engine/playbackProgressConfirmation";
 import {
     consumePlaybackAdvanceOrigin,
@@ -73,6 +76,24 @@ import {
 import type { DesiredLoadPlayIntent } from "./hooks";
 import * as H from "./hooks";
 import { useServerMusicSourceRecovery } from "./hooks/useServerMusicSourceRecovery";
+
+// Native stop resets the clock. Only the explicit retry owns playback until
+// it restores the retained position for this exact occurrence and identity.
+function hasPendingSourceRecoveryPosition(
+    refs: PlaybackOrchestratorRefs,
+): boolean {
+    const track = refs.currentTrackRef.current;
+    return (
+        refs.serverSourceRecoveryPositionRef.current?.key ===
+        JSON.stringify([
+            track?.id,
+            track?.playlistItemId,
+            track?.youtubeVideoId,
+            refs.loadIdRef.current,
+            getAuthRuntimeGeneration(),
+        ])
+    );
+}
 /**
  * AudioPlaybackOrchestrator - Unified audio playback using runtime audio engines
  * Handles: web playback, progress saving for audiobooks/podcasts
@@ -316,7 +337,8 @@ export const AudioPlaybackOrchestrator = memo(
             }) => {
                 if (
                     orchestratorRefs.serverSourceRecoveryLoadIdRef.current ===
-                    loadIdRef.current
+                        loadIdRef.current ||
+                    hasPendingSourceRecoveryPosition(orchestratorRefs)
                 )
                     return;
                 const currentTimeValue =
@@ -415,7 +437,8 @@ export const AudioPlaybackOrchestrator = memo(
             }) => {
                 if (
                     orchestratorRefs.serverSourceRecoveryLoadIdRef.current ===
-                    loadIdRef.current
+                        loadIdRef.current ||
+                    hasPendingSourceRecoveryPosition(orchestratorRefs)
                 )
                     return;
                 trackEndWatchdogRef.current?.clear();
@@ -1016,7 +1039,10 @@ export const AudioPlaybackOrchestrator = memo(
 
                 // The load-complete handler starts playback; a second play click
                 // here could race it and produce overlapping streams.
-                if (isLoadingRef.current) {
+                if (
+                    isLoadingRef.current ||
+                    hasPendingSourceRecoveryPosition(orchestratorRefs)
+                ) {
                     return;
                 }
 

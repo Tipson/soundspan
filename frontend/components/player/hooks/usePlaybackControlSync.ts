@@ -2,7 +2,10 @@ import { useEffect, useLayoutEffect } from "react";
 import { api } from "@/lib/api";
 import { playbackStateMachine } from "@/lib/audio";
 import type { Podcast, Track } from "@/lib/audio-state-context";
-import { AUTOPLAY_INTENT_CONFLICT_WINDOW_MS } from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
+import {
+    AUTOPLAY_INTENT_CONFLICT_WINDOW_MS,
+    PROVIDER_AUDIO_LOAD_TIMEOUT_MS,
+} from "@/lib/audio-engine/audioPlaybackOrchestratorConstants";
 import {
     audioEngine,
     logPlaybackClientMetric,
@@ -15,6 +18,8 @@ import {
     isPlaybackAutoRestartSuppressed,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
 import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
+import { getAuthRuntimeGeneration } from "@/lib/auth-runtime-generation";
+import type { AudioEngineLoadPayload } from "@/lib/audio-engine/types";
 
 interface UsePlaybackControlSyncOptions {
     refs: PlaybackOrchestratorRefs;
@@ -62,6 +67,8 @@ export function usePlaybackControlSync({
         consecutiveErrorBreakerRef,
         trackEndWatchdogRef,
         outputStateRef,
+        providerFailedLoadIdRef,
+        serverSourceRecoveryPositionRef,
     } = refs;
 
     // Volume leveling (#526): keeps the gain factor applied by
@@ -210,40 +217,133 @@ export function usePlaybackControlSync({
             }
             if (isPlaybackAutoRestartSuppressed()) return;
             applyCurrentOutputState();
+            const recoveryKey = JSON.stringify([
+                currentTrack?.id,
+                currentTrack?.playlistItemId,
+                currentTrack?.youtubeVideoId,
+                loadIdRef.current,
+                getAuthRuntimeGeneration(),
+            ]);
             if (
                 playbackType === "track" &&
                 currentTrack?.streamSource === "youtube" &&
                 (playbackStateMachine.getState() === "ERROR" ||
-                    refs.providerFailedLoadIdRef.current === loadIdRef.current)
+                    providerFailedLoadIdRef.current === loadIdRef.current ||
+                    serverSourceRecoveryPositionRef.current?.key ===
+                        recoveryKey)
             ) {
                 // play() cannot revive a media element with a terminal source
                 // error. Reload on explicit retry, without advancing the queue.
                 const expectedLoadId = loadIdRef.current;
-                refs.providerFailedLoadIdRef.current = null;
+                providerFailedLoadIdRef.current = null;
                 const expectedTrack = currentTrack;
-                const onRetryLoaded = () => {
-                    audioEngine.off("load", onRetryLoaded);
+                const expectedAuth = getAuthRuntimeGeneration();
+                let cancelled = false;
+                let restoreDeadline: ReturnType<typeof setTimeout> | undefined;
+                const isCurrent = () => {
                     const activeTrack = refs.currentTrackRef.current;
                     const session = getListenTogetherSessionSnapshot();
-                    if (
-                        !lastPlayingStateRef.current ||
-                        loadIdRef.current !== expectedLoadId ||
-                        activeTrack?.id !== expectedTrack.id ||
-                        activeTrack?.playlistItemId !==
-                            expectedTrack.playlistItemId ||
-                        (session?.groupId && !session.isHost) ||
-                        isPlaybackAutoRestartSuppressed()
-                    )
-                        return;
-                    refs.activeEngineTrackIdRef.current = expectedTrack.id;
-                    refs.activeEngineLoadIdRef.current = expectedLoadId;
-                    if (!audioEngine.isPlaying()) audioEngine.play();
+                    return (
+                        !cancelled &&
+                        lastPlayingStateRef.current &&
+                        loadIdRef.current === expectedLoadId &&
+                        getAuthRuntimeGeneration() === expectedAuth &&
+                        activeTrack?.id === expectedTrack.id &&
+                        activeTrack?.playlistItemId ===
+                            expectedTrack.playlistItemId &&
+                        activeTrack?.youtubeVideoId ===
+                            expectedTrack.youtubeVideoId &&
+                        !(session?.groupId && !session.isHost) &&
+                        !isPlaybackAutoRestartSuppressed()
+                    );
+                };
+                const failRestore = () => {
+                    if (!isCurrent()) return;
+                    providerFailedLoadIdRef.current = expectedLoadId;
+                    cancelled = true;
+                    clearTimeout(restoreDeadline);
+                    audioEngine.off("load", onRetryLoaded);
+                    clearStartupPlaybackRecovery();
+                    try {
+                        const stopping = audioEngine.stop();
+                        if (stopping) void stopping.catch(() => undefined);
+                    } catch {
+                        // Retain the target and surface ERROR even if stopping fails.
+                    }
+                    playbackStateMachine.forceTransition("ERROR", {
+                        error: "Unable to resume source recovery",
+                    });
+                };
+                const onRetryLoaded = (payload: AudioEngineLoadPayload) => {
+                    audioEngine.off("load", onRetryLoaded);
+                    const resume = async () => {
+                        if (!isCurrent()) return;
+                        const position =
+                            serverSourceRecoveryPositionRef.current;
+                        if (position?.key === recoveryKey) {
+                            const duration = payload.durationSec;
+                            if (
+                                !Number.isFinite(duration) ||
+                                Math.abs(duration - expectedTrack.duration) >
+                                    Math.min(
+                                        5,
+                                        Math.max(
+                                            2,
+                                            expectedTrack.duration * 0.015,
+                                        ),
+                                    )
+                            )
+                                throw new Error(
+                                    "Replacement duration mismatch",
+                                );
+                            let target: number;
+                            do {
+                                target = position.value;
+                                if (
+                                    !Number.isFinite(target) ||
+                                    target < 0 ||
+                                    target >= duration
+                                )
+                                    throw new Error(
+                                        "Invalid source recovery position",
+                                    );
+                                await audioEngine.seek(target);
+                                if (!isCurrent()) return;
+                            } while (target !== position.value);
+                        }
+                        refs.activeEngineTrackIdRef.current = expectedTrack.id;
+                        refs.activeEngineLoadIdRef.current = expectedLoadId;
+                        if (!audioEngine.isPlaying()) await audioEngine.play();
+                        if (!isCurrent()) return;
+                        if (
+                            position?.key === recoveryKey &&
+                            serverSourceRecoveryPositionRef.current === position
+                        )
+                            serverSourceRecoveryPositionRef.current = null;
+                        clearTimeout(restoreDeadline);
+                        scheduleStartupPlaybackRecovery(expectedTrack.id);
+                    };
+                    void resume().catch(failRestore);
                 };
                 playbackStateMachine.forceTransition("LOADING");
                 audioEngine.on("load", onRetryLoaded);
-                scheduleStartupPlaybackRecovery(currentTrack.id);
+                if (
+                    serverSourceRecoveryPositionRef.current?.key === recoveryKey
+                )
+                    restoreDeadline = setTimeout(
+                        failRestore,
+                        PROVIDER_AUDIO_LOAD_TIMEOUT_MS,
+                    );
+                if (
+                    serverSourceRecoveryPositionRef.current?.key !== recoveryKey
+                )
+                    scheduleStartupPlaybackRecovery(currentTrack.id);
                 audioEngine.reload();
-                return () => audioEngine.off("load", onRetryLoaded);
+                return () => {
+                    cancelled = true;
+                    clearTimeout(restoreDeadline);
+                    audioEngine.off("load", onRetryLoaded);
+                };
             }
             audioEngine.play();
             if (playbackType === "track" && currentTrack?.id) {

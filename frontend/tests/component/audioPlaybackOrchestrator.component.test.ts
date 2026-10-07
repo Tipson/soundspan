@@ -6604,6 +6604,196 @@ test("late native metadata and progress cannot pause or rewrite a pending source
     assert.equal(playbackState.isPlaying, true);
 });
 
+for (const retry of [
+    "single resume",
+    "pause and resume before load",
+    "seek during restore",
+    "metadata timeout",
+    "duration mismatch",
+    "play rejection",
+    "native play rejection event",
+] as const) {
+    test(`manual resume after cancelling a source replacement restores native position: ${retry}`, async (t) => {
+        if (retry === "metadata timeout")
+            t.mock.timers.enable({ apis: ["setTimeout"] });
+        runtimeEngineMode = "native";
+        playbackState.isPlaying = true;
+        const original = makeTrack("yt:paused-recovery", {
+            streamSource: "youtube",
+            youtubeVideoId: "paused-recovery",
+            duration: 240,
+            artist: { name: "Artist" },
+        });
+        audioState.currentTrack = original;
+        const queue = [original, makeTrack("next-song")];
+        audioState.queue = queue;
+        t.mock.method(engine, "stop", () => {
+            engine.playing = false;
+            engine.stopCalls += 1;
+            engine.currentTime = engine.actualCurrentTime = 0;
+        });
+        t.mock.method(engine, "reload", () => {
+            engine.reloadCalls += 1;
+            engine.currentTime = engine.actualCurrentTime = 0;
+        });
+        renderOrchestrator();
+        await flushAsync();
+        engine.emit("load", { durationSec: 240 });
+        engine.playing = true;
+        engine.emit("play");
+        engine.currentTime = engine.actualCurrentTime = 4.96;
+        engine.emit("timeupdate", { timeSec: 4.96 });
+        await flushAsync();
+        let resolve!: (url: string) => void;
+        musicRecoveryResponse = new Promise((r) => {
+            resolve = r;
+        });
+        engine.emit("playerror", {
+            error: new Error("MEDIA_ERR_NETWORK"),
+            code: "2",
+            recoverable: false,
+        });
+        await flushAsync(30);
+        assert.equal(apiCalls.resolveMusicSourceForRecovery.length, 1);
+        assert.equal(engine.actualCurrentTime, 0);
+        recordExplicitPlaybackPause();
+        playbackState.isPlaying = false;
+        renderOrchestrator();
+        await flushAsync(30);
+        assert.equal(engine.playing, false);
+        recordExplicitPlaybackResume();
+        writePlaybackAdvanceOrigin("manual", original.id);
+        playbackState.isPlaying = true;
+        renderOrchestrator();
+        await flushAsync(30);
+        assert.equal(engine.reloadCalls, 1);
+        if (retry === "metadata timeout") {
+            t.mock.timers.tick(135_000);
+            await flushAsync(30);
+            assert.equal(
+                playbackMachine.state,
+                "ERROR",
+                "metadata wait must end at the provider load deadline",
+            );
+            engine.emit("load", { durationSec: 240 });
+            await flushAsync(30);
+            assert.equal(
+                engine.playing,
+                false,
+                "late metadata after timeout cannot resume",
+            );
+            recordExplicitPlaybackPause();
+            playbackState.isPlaying = false;
+            renderOrchestrator();
+            await flushAsync(30);
+            recordExplicitPlaybackResume();
+            writePlaybackAdvanceOrigin("manual", original.id);
+            playbackState.isPlaying = true;
+            renderOrchestrator();
+            await flushAsync(30);
+        }
+        if (retry === "pause and resume before load") {
+            recordExplicitPlaybackPause();
+            playbackState.isPlaying = false;
+            renderOrchestrator();
+            await flushAsync(30);
+            assert.equal(engine.playing, false);
+            recordExplicitPlaybackResume();
+            writePlaybackAdvanceOrigin("manual", original.id);
+            playbackState.isPlaying = true;
+            renderOrchestrator();
+            await flushAsync(30);
+            assert.equal(
+                engine.playing,
+                false,
+                "resume must await metadata and restore before playing",
+            );
+        }
+        let completeSeek: (() => void) | undefined;
+        if (
+            retry === "duration mismatch" ||
+            retry === "play rejection" ||
+            retry === "native play rejection event"
+        ) {
+            const failedPlay =
+                retry === "native play rejection event"
+                    ? t.mock.method(engine, "play", () => undefined)
+                    : retry === "play rejection"
+                      ? t.mock.method(engine, "play", () =>
+                            Promise.reject(
+                                new Error("Synthetic play rejection"),
+                            ),
+                        )
+                      : undefined;
+            engine.emit("load", {
+                durationSec: retry === "duration mismatch" ? 30 : 240,
+            });
+            await flushAsync(30);
+            assert.equal(
+                engine.playing,
+                false,
+                "invalid media or rejected play must stay paused",
+            );
+            if (retry === "native play rejection event")
+                engine.emit("playerror", {
+                    error: new Error("NotAllowedError"),
+                    recoverable: true,
+                });
+            else assert.equal(playbackMachine.state, "ERROR");
+            await flushAsync(30);
+            failedPlay?.mock.restore();
+            recordExplicitPlaybackPause();
+            playbackState.isPlaying = false;
+            renderOrchestrator();
+            await flushAsync(30);
+            recordExplicitPlaybackResume();
+            writePlaybackAdvanceOrigin("manual", original.id);
+            playbackState.isPlaying = true;
+            renderOrchestrator();
+            await flushAsync(30);
+        }
+        if (retry === "seek during restore") {
+            const seek = engine.seek.bind(engine);
+            t.mock.method(engine, "seek", (time: number) => {
+                seek(time);
+                if (time === 4.96)
+                    return new Promise<void>((r) => {
+                        completeSeek = r;
+                    });
+            });
+        }
+        engine.emit("load", { durationSec: 240 });
+        await flushAsync(30);
+        if (retry === "seek during restore") {
+            assert.equal(engine.playing, false);
+            assert.ok(completeSeek);
+            for (const seek of seekSubscribers) await seek(43);
+            completeSeek();
+            await flushAsync(30);
+        }
+        assert.equal(
+            engine.seekCalls.at(-1),
+            retry === "seek during restore" ? 43 : 4.96,
+        );
+        assert.equal(
+            engine.actualCurrentTime,
+            retry === "seek during restore" ? 43 : 4.96,
+        );
+        assert.equal(engine.playing, true);
+        const played = engine.playCalls;
+        resolve(`/api/music-sources/leases/${"a".repeat(48)}/stream`);
+        await flushAsync(30);
+        assert.equal(
+            engine.playCalls,
+            played,
+            "cancelled recovery cannot restart after manual resume",
+        );
+        assert.equal(audioState.currentTrack, original);
+        assert.equal(audioState.queue, queue);
+        assert.equal(controlCalls.next, 0);
+    });
+}
+
 for (const trigger of ["terminal network error", "buffer timeout"] as const) {
     test(`mid-track ${trigger} replaces the server source at the confirmed position and preserves queue identity`, async (t) => {
         t.mock.timers.enable({ apis: ["setTimeout"] });

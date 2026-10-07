@@ -22,6 +22,15 @@ const MAX_ITEMS = 96;
 const MAX_BYTES = 65_536;
 const MAX_FAILURES = 6;
 const IDENTIFIER = /^[a-zA-Z0-9_:-]{1,128}$/;
+const SOURCE_RECOVERY_OUTCOMES = new Set([
+    "not_applicable",
+    "in_progress",
+    "recovered",
+    "stale",
+    "no_candidate",
+    "failed",
+    "exhausted",
+]);
 const NUMBER_FIELDS = [
     "diagnosticsVersion",
     "currentTimeSec",
@@ -105,6 +114,13 @@ export function sanitizePlaybackDiagnosticFields(
     for (const key of CODE_FIELDS)
         if (typeof input[key] === "string" && IDENTIFIER.test(input[key]))
             result[key] = input[key];
+    // Match the API allowlist: arbitrary outcome text must never reach storage.
+    if (
+        input.reason === "server_source_recovery" &&
+        typeof input.outcome === "string" &&
+        SOURCE_RECOVERY_OUTCOMES.has(input.outcome)
+    )
+        result.outcome = input.outcome;
     return result;
 }
 

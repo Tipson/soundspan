@@ -6,12 +6,75 @@ jest.mock("../../utils/logger", () => ({
 jest.mock("../playbackDiagnosticJournal", () => ({
     playbackDiagnosticJournal: { append: mockAppend },
 }));
-import { createPlaybackDiagnosticRecorder } from "../playbackDiagnostics";
+import {
+    createPlaybackDiagnosticRecorder,
+    sanitizePlaybackDiagnosticFields,
+} from "../playbackDiagnostics";
 
 describe("playback diagnostic records", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockAppend.mockResolvedValue(undefined);
+    });
+    it.each([
+        "not_applicable",
+        "in_progress",
+        "recovered",
+        "stale",
+        "no_candidate",
+        "failed",
+        "exhausted",
+    ])("journals bounded source recovery outcome %s", async (outcome) => {
+        const record = createPlaybackDiagnosticRecorder(() => 100_000);
+        await record(
+            "user-a",
+            "player.rebuffer_timeout",
+            {
+                reason: "server_source_recovery",
+                outcome,
+                resumeAtSec: 4.96,
+                token: "secret",
+                url: "https://media/?token=secret",
+            },
+            { id: "event-1", ownerId: "user-a", observedAtMs: 100_000 },
+        );
+        expect(mockAppend).toHaveBeenCalledWith(
+            expect.objectContaining({
+                fields: {
+                    reason: "server_source_recovery",
+                    outcome,
+                    resumeAtSec: 4.96,
+                },
+            }),
+        );
+        expect(JSON.stringify(mockAppend.mock.calls)).not.toContain("secret");
+    });
+    it("rejects unknown or unrelated outcomes without admitting raw errors", () => {
+        for (const outcome of [
+            "secret",
+            "https://media/?token=secret",
+            "failed\nsecret",
+            "FAILED",
+            1,
+            {},
+            null,
+        ]) {
+            expect(
+                sanitizePlaybackDiagnosticFields({
+                    reason: "server_source_recovery",
+                    outcome,
+                }),
+            ).toEqual({ reason: "server_source_recovery" });
+        }
+        expect(sanitizePlaybackDiagnosticFields({ outcome: "failed" })).toEqual(
+            {},
+        );
+        expect(
+            sanitizePlaybackDiagnosticFields({
+                reason: "heartbeat_buffer_timeout",
+                outcome: "failed",
+            }),
+        ).toEqual({ reason: "heartbeat_buffer_timeout" });
     });
     it("records bounded useful fields at warn level without raw client input", async () => {
         const record = createPlaybackDiagnosticRecorder(() => 100_000);
