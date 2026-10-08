@@ -13,6 +13,12 @@ import {
 } from "../personalizedTrackPreferences";
 import { songRepeatKey } from "../personalizedRepeatPolicy";
 import type { RecommendationCandidate } from "./types";
+import {
+    isMusicSourceFeedbackReference,
+    loadVerifiedLikedCanonicalIds,
+    loadVerifiedDislikedCanonicalKeys,
+    loadVerifiedSeedCanonicalId,
+} from "./verifiedSourceFeedback";
 import type {
     RecommendationRequestContext,
     RecommendationSurface,
@@ -394,8 +400,15 @@ export async function loadLikedTasteEmbeddings(
             }),
         ),
     );
+    const directIds = await loadVerifiedLikedCanonicalIds(
+        userId,
+        MAX_TASTE_ROWS,
+    );
     const canonicalIds = [
-        ...new Set(providerRows.flatMap((rows) => rows.map((row) => row.id))),
+        ...new Set([
+            ...providerRows.flatMap((rows) => rows.map((row) => row.id)),
+            ...directIds,
+        ]),
     ];
     if (canonicalIds.length === 0) return [];
     // The global top 500 is contained in the union of each provider's top 500.
@@ -719,17 +732,29 @@ async function loadContextRows(
 }
 
 async function loadDislikedCanonicalKeys(userId: string): Promise<string[]> {
+    const directKeys = await loadVerifiedDislikedCanonicalKeys(
+        userId,
+        MAX_DISLIKES,
+    );
     const dislikes = await prisma.dislikedEntity.findMany({
-        where: { userId, entityType: "track" },
+        where: {
+            userId,
+            entityType: "track",
+            NOT: [
+                { entityId: { startsWith: "vk:" } },
+                { entityId: { startsWith: "yandex:" } },
+            ],
+        },
         orderBy: { dislikedAt: "desc" },
         take: MAX_DISLIKES,
         select: { entityId: true },
     });
-    if (dislikes.length === 0) return [];
+    if (dislikes.length === 0) return directKeys;
     const localIds: string[] = [];
     const youtubeVideoIds: string[] = [];
     const tidalIds: number[] = [];
     for (const { entityId } of dislikes) {
+        if (isMusicSourceFeedbackReference(entityId)) continue;
         if (entityId.startsWith("yt:")) {
             youtubeVideoIds.push(entityId.slice(3));
         } else if (entityId.startsWith("tidal:")) {
@@ -742,6 +767,8 @@ async function loadDislikedCanonicalKeys(userId: string): Promise<string[]> {
             youtubeVideoIds.push(entityId);
         }
     }
+    if (localIds.length + youtubeVideoIds.length + tidalIds.length === 0)
+        return directKeys;
     const mappings = await prisma.trackMapping.findMany({
         where: {
             stale: false,
@@ -772,11 +799,14 @@ async function loadDislikedCanonicalKeys(userId: string): Promise<string[]> {
             canonicalRecording: { select: { canonicalKey: true } },
         },
     });
-    return mappings.flatMap((mapping) =>
-        mapping.canonicalRecording?.canonicalKey
-            ? [mapping.canonicalRecording.canonicalKey]
-            : [],
-    );
+    return [
+        ...directKeys,
+        ...mappings.flatMap((mapping) =>
+            mapping.canonicalRecording?.canonicalKey
+                ? [mapping.canonicalRecording.canonicalKey]
+                : [],
+        ),
+    ];
 }
 
 function providerSeedIdentity(seedId: string): {
@@ -813,6 +843,8 @@ function providerSeedIdentity(seedId: string): {
 async function loadSeedCanonicalRecordingId(
     seedId: string,
 ): Promise<string | null> {
+    if (isMusicSourceFeedbackReference(seedId))
+        return loadVerifiedSeedCanonicalId(seedId);
     const identity = providerSeedIdentity(seedId);
     const mapping = await prisma.trackMapping.findFirst({
         where: {

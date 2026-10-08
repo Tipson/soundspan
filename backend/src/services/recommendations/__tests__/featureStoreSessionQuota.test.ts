@@ -78,10 +78,10 @@ function useCorpus(plays: SessionPlay[], mappings: SessionMapping[]) {
     );
     mockSessionMappingFindMany.mockImplementation(
         async (query: {
-            where: { OR: Partial<Record<MappingField, { in: string[] }>>[] };
+            where: { OR?: Partial<Record<MappingField, { in: string[] }>>[] };
         }) =>
             mappings.filter((row) =>
-                query.where.OR.some((identity) =>
+                (query.where.OR ?? []).some((identity) =>
                     (Object.keys(identity) as MappingField[]).some(
                         (field) =>
                             row[field] !== null &&

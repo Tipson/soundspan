@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Read server-confirmed VK and Yandex saved taste and exact canonical feedback without borrowing private playback metadata. Keep malformed direct seeds neutral, preserve legacy provider reserves and the global vector quota, and exclude exact disliked recordings without requiring audio analysis.
+
 - Keep exact VK and Yandex likes and dislikes private to each listener, preserve newer choices during concurrent requests, and replay confirmed recordings from the liked playlist. Show the existing player feedback controls for supported direct recordings while retaining playlist and download restrictions. Ignore late feedback playback callbacks after the player controls unmount or the queue changes, preserving a newly selected podcast, audiobook, or same-song replacement queue.
 
 - Prepare exact canonical mappings from stored server-confirmed VK and Yandex recordings. Preserve legacy linkage uniqueness, shared audio features and private listening history; keep direct identities separate from unverified cross-source version matches and legacy staleness-check quotas.
