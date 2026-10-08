@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Preserve exact VK and Yandex candidates through both recommendation rankers, radio responses and generation attribution. Read only confirmed stored canonical mappings; keep misses neutral, strip upstream identity and analysis claims, and reject conflicting native source tuples before exploration can reinsert them. Native provider radio producers and client launch integration are a separate follow-up.
+
 - Attach exact VK and Yandex canonical identity automatically after a confirmed playable lookup. Reuse the optional metadata transaction and its existing 500 ms allowance, skip superseded observations, and preserve playback when the optional shared write fails.
 
 - Read exact, server-confirmed VK and Yandex listening history for automatic repeat protection without requiring session attribution or audio analysis. Preserve the last-day attempt cooldown and the personal empty-pool older-listening fallback, filter known canonical repeats before radio selector quotas and final generation membership, and stop subsequent history pages after request cancellation. Keep native recording identity separate from unverified artist/title cross-source matches.

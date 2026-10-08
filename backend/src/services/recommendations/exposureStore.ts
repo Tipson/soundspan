@@ -7,6 +7,10 @@ import {
 import type { RecommendationExposureMetricInput } from "../../metrics/recommendationMetrics";
 import { logger } from "../../utils/logger";
 import type { RadioRequestExecution } from "./radioRequestExecution";
+import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+} from "./nativeCandidates";
 import type {
     RecommendationDirection,
     RecommendationExposureSignal,
@@ -136,6 +140,12 @@ function providerIdentity(recommendation: ScoredRecommendation): {
     providerTrackId: string;
 } | null {
     const { track } = recommendation;
+    if (hasNativeRecommendationIdentity(track)) {
+        const recording = readNativeRecommendationRecording(track);
+        return recording
+            ? { provider: recording.provider, providerTrackId: recording.id }
+            : null;
+    }
     if (track.provider.youtubeVideoId) {
         return {
             provider: "youtube",

@@ -30,12 +30,16 @@ export interface RecommendationCandidate {
         title: string;
         coverArt: string | null;
     };
-    source: "youtube" | "tidal" | "library";
+    source: "youtube" | "tidal" | "library" | "vk" | "yandex";
     provider: {
         tidalTrackId: number | null;
         youtubeVideoId: string | null;
+        source?: "vk" | "yandex";
+        providerTrackId?: string;
     };
-    streamSource: "youtube" | "tidal" | "library";
+    streamSource: "youtube" | "tidal" | "library" | "vk" | "yandex";
+    /** Sanitized native metadata; exact playback revalidates authorization independently. */
+    musicSourceRecording?: import("../musicSources/types").MusicSourceTrack;
     youtubeVideoId?: string;
     tidalTrackId?: number;
     candidateSources: string[];

@@ -7,6 +7,11 @@ import { normalizeRecommendationArtistKey } from "./identityKeys";
 import type { RadioRequestExecution } from "./radioRequestExecution";
 import type { VerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
 import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+    toNativeRecommendationCandidate,
+} from "./nativeCandidates";
+import {
     isWaveMusicCandidate,
     matchesWaveMood,
     needsWaveMoodAnalysis,
@@ -83,7 +88,7 @@ export interface RecommendationEngineDependencies {
     ) => Promise<RecommendationCandidateBatch>;
     resolveCanonical: (
         candidate: RecommendationCandidate,
-    ) => Promise<CanonicalRecommendationIdentity>;
+    ) => Promise<CanonicalRecommendationIdentity | null>;
     /** Request-local prefetch; null slots retain ordinary canonical resolution. */
     loadCanonicalMappings?: (
         candidates: readonly RecommendationCandidate[],
@@ -164,6 +169,8 @@ function appendDegradedSource(target: string[], source: string): void {
 }
 
 function hasPlayableIdentity(candidate: RecommendationCandidate): boolean {
+    if (candidate.source === "vk" || candidate.source === "yandex")
+        return readNativeRecommendationRecording(candidate) !== null;
     return Boolean(
         candidate.provider.youtubeVideoId ||
         candidate.provider.tidalTrackId !== null ||
@@ -297,10 +304,22 @@ export class RecommendationEngine {
         );
         const isWave = request.intent.surface === "wave";
         const degradedSources = [...new Set(loaded.degradedSources)];
+        const sourceCandidates = loaded.candidates.flatMap((candidate) => {
+            if (!hasNativeRecommendationIdentity(candidate)) return [candidate];
+            const recording = readNativeRecommendationRecording(candidate);
+            if (!recording) return [];
+            // Provider metadata cannot assert an existing canonical FK or measured features.
+            // Both may be added only by the request's strict mapping/feature-store reads.
+            const fresh = toNativeRecommendationCandidate(
+                recording,
+                candidate.candidateSources.join("+"),
+            )!;
+            return [{ ...fresh, lane: candidate.lane ?? fresh.lane }];
+        });
         let candidates = await this.resolveCanonicalCandidates(
             isWave
-                ? loaded.candidates.filter(isWaveMusicCandidate)
-                : loaded.candidates,
+                ? sourceCandidates.filter(isWaveMusicCandidate)
+                : sourceCandidates,
             degradedSources,
         );
         if (this.dependencies.enrichCandidates && candidates.length > 0) {
@@ -597,12 +616,16 @@ export class RecommendationEngine {
             );
             identities.forEach((identity, index) => {
                 const candidate = batch[index];
-                if (identity.status === "fulfilled") {
+                if (identity.status === "fulfilled" && identity.value) {
                     resolved.push({
                         ...candidate,
                         canonicalRecordingId: identity.value.id,
                         canonicalKey: identity.value.canonicalKey,
                     });
+                    return;
+                }
+                if (identity.status === "fulfilled") {
+                    resolved.push(candidate);
                     return;
                 }
                 appendDegradedSource(degradedSources, "canonical-identity");

@@ -2,6 +2,7 @@ const mockGetHomeFeed = jest.fn();
 const mockFindMatchForTrack = jest.fn();
 const mockGetRadio = jest.fn();
 const mockResolveCanonical = jest.fn();
+const mockFindMapped = jest.fn();
 const mockEnrichCandidates = jest.fn();
 const mockLoadRecent = jest.fn();
 const mockLoadDislikedCanonicalKeys = jest.fn();
@@ -42,6 +43,8 @@ jest.mock("../canonicalIdentity", () => ({
         (candidate: { title: string }) => `canonical:${candidate.title}`,
     ),
     canonicalIdentityResolver: { resolve: mockResolveCanonical },
+    findMappedCanonicalCandidates: (...args: unknown[]) =>
+        mockFindMapped(...args),
 }));
 jest.mock("../exposureStore", () => ({
     recommendationExposureStore: {
@@ -103,6 +106,7 @@ describe("recommendation runtime adapters", () => {
         mockFindMatchForTrack.mockReset();
         mockGetRadio.mockReset();
         mockResolveCanonical.mockReset();
+        mockFindMapped.mockReset();
         mockEnrichCandidates.mockReset();
         mockLoadRecent.mockReset();
         mockLoadDislikedCanonicalKeys.mockReset();
@@ -161,6 +165,29 @@ describe("recommendation runtime adapters", () => {
         expect(capturedDependencies.now()).toBeInstanceOf(Date);
     });
 
+    it.each(["vk", "yandex"])(
+        "binds %s recommendation identity only to read-only mapping",
+        async (source) => {
+            const candidate = { id: `${source}:1`, source };
+            mockFindMapped.mockResolvedValue([null]);
+            expect(
+                await capturedDependencies.resolveCanonical(candidate),
+            ).toBeNull();
+            expect(mockFindMapped).toHaveBeenCalledWith([candidate]);
+            expect(mockResolveCanonical).not.toHaveBeenCalled();
+            mockFindMapped.mockResolvedValue([
+                { id: "known", canonicalKey: "exact" },
+            ]);
+            expect(
+                await capturedDependencies.resolveCanonical(candidate),
+            ).toEqual({ id: "known", canonicalKey: "exact" });
+            mockFindMapped.mockRejectedValue(new Error("database unavailable"));
+            await expect(
+                capturedDependencies.resolveCanonical(candidate),
+            ).rejects.toThrow("database unavailable");
+            expect(mockResolveCanonical).not.toHaveBeenCalled();
+        },
+    );
     it("connects original-station continuation without replacing its owner or policy time", async () => {
         const origin = { kind: "track", source: "youtube", id: "seedVideo01" };
         const input = {

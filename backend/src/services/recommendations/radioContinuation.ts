@@ -4,6 +4,10 @@ import type { RecommendationCandidateBatch } from "./engine";
 import { songRepeatKey } from "../personalizedRepeatPolicy";
 import type { RecommendationCandidate } from "./types";
 import type { RadioRequestExecution } from "./radioRequestExecution";
+import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+} from "./nativeCandidates";
 
 /** Account-owned continuation of the original station, independently of its current song. */
 export interface RadioContinuationInput {
@@ -64,7 +68,8 @@ export type RadioContinuationTrack = Pick<
     | "provider"
 > & {
     youtubeVideoId?: string;
-    streamSource?: "youtube";
+    streamSource?: "youtube" | "vk" | "yandex";
+    musicSourceRecording?: RecommendationCandidate["musicSourceRecording"];
 };
 
 /** Ordered membership exactly matching the served generation. */
@@ -264,6 +269,27 @@ export function createRadioContinuationLoader(
 export function toRadioContinuationTrack(
     candidate: RecommendationCandidate,
 ): RadioContinuationTrack {
+    if (hasNativeRecommendationIdentity(candidate)) {
+        const recording = readNativeRecommendationRecording(candidate);
+        if (!recording) throw new Error("Invalid ranked native recording");
+        return {
+            id: `${recording.provider}:${recording.id}`,
+            title: recording.title,
+            duration: recording.duration,
+            trackNo: null,
+            artist: { id: null, name: recording.artists.join(", ") },
+            album: { id: null, title: "", coverArt: null },
+            source: recording.provider,
+            streamSource: recording.provider,
+            provider: {
+                source: recording.provider,
+                providerTrackId: recording.id,
+                youtubeVideoId: null,
+                tidalTrackId: null,
+            },
+            musicSourceRecording: recording,
+        };
+    }
     return {
         id: candidate.id,
         title: candidate.title,

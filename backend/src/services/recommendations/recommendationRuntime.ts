@@ -22,6 +22,7 @@ import { loadSavedCanonicalKeys } from "./savedRecordings";
 import { UnifiedRecommendationService } from "./recommendationService";
 import { loadRadioContinuationCandidates } from "./radioContinuationRuntime";
 import { loadVerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
+import { hasNativeRecommendationIdentity } from "./nativeCandidates";
 import type { RecommendRequest, RecommendationCandidate } from "./types";
 
 const log = logger.child("RecommendationRuntime");
@@ -134,8 +135,10 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
     ): Promise<PersonalizedHomeFeed> =>
         personalizedCatalogService.getHomeFeed(userId, limit, options),
     loadSimilarCandidates,
-    resolveCanonical: (candidate) =>
-        canonicalIdentityResolver.resolve(candidate),
+    resolveCanonical: async (candidate) =>
+        hasNativeRecommendationIdentity(candidate)
+            ? ((await findMappedCanonicalCandidates([candidate]))[0] ?? null)
+            : canonicalIdentityResolver.resolve(candidate),
     loadCanonicalMappings: findMappedCanonicalCandidates,
     enrichCandidates: (candidates) =>
         recommendationFeatureStore.enrichCandidates(candidates),
