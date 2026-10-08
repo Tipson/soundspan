@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Restore direct VK and Yandex queue recordings from their validated public metadata, retaining the selected occurrence and paused position. Keep credentials and signed URLs out of snapshots, reject conflicting identities, and avoid clearing incomplete provider snapshots through a library lookup. Reject held startup snapshots after newer local selections or group membership changes, including before local storage finishes writing.
 - Refresh settled public radio pools for subsequent original-station requests, so recently heard or queued songs cannot repeatedly exhaust the same cached recommendations. Share in-flight provider requests, retain exact artist seeds and partial successes, and apply each listener's exclusions independently before generation.
 - Reconcile a newer radio station on the same selected song without adopting server source, position, shuffle or pause state. Reject divergent queues and superseded local commands, accounts and group sessions; retain the loaded codec and bitrate during station-only updates.
 - Keep automatic and manual radio continuation attached to the original song or artist, including mixed local and YouTube queues. Retain ordered response membership and playback position; reject superseded station, account, pause, seek and group-session responses. Keep artist-radio continuation available without enabling Wave mode.

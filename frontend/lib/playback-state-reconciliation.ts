@@ -1,3 +1,5 @@
+import { musicSourceCandidateSchema } from "./audio/musicSourcePlayback";
+
 export type PlaybackSnapshotType = "track" | "audiobook" | "podcast" | null;
 
 export interface QueueTrackIdentity {
@@ -12,12 +14,21 @@ export interface RestorableQueueTrack extends QueueTrackIdentity {
     streamSource?: string | null;
     youtubeVideoId?: string | null;
     tidalTrackId?: number | string | null;
+    mediaSource?: string | null;
+    provider?: { source?: string; providerTrackId?: string } | null;
+    musicSourceRecording?: unknown;
 }
 
 // Track-id shapes that the library track lookup can never resolve:
-// "yt:<videoId>" / "tidal:<id>" provider composites and the synthetic
+// "yt:<videoId>" / "tidal:<id>" / "vk:<id>" / "yandex:<id>" provider composites and the synthetic
 // "yt-<videoId>" ids of pasted youtube-direct tracks.
-const NON_LIBRARY_TRACK_ID_PREFIXES = ["yt:", "yt-", "tidal:"];
+const NON_LIBRARY_TRACK_ID_PREFIXES = [
+    "yt:",
+    "yt-",
+    "tidal:",
+    "vk:",
+    "yandex:",
+];
 
 /**
  * Returns whether a persisted current-track id refers to a non-library
@@ -48,6 +59,25 @@ export function findRemoteQueueTrackForRestore<T extends RestorableQueueTrack>(
     const item = findQueueTrackForRestore(trackId, serverQueue, currentIndex);
     if (!item) return null;
     const streamSource = item.streamSource;
+    if (
+        streamSource === "vk" ||
+        streamSource === "yandex" ||
+        /^(vk|yandex):/.test(String(item.id))
+    ) {
+        const parsed = musicSourceCandidateSchema.safeParse(
+            item.musicSourceRecording,
+        );
+        if (!parsed.success) return null;
+        const recording = parsed.data;
+        return item.id === `${recording.provider}:${recording.id}` &&
+            item.provider?.providerTrackId === recording.id &&
+            [item.mediaSource, streamSource, item.provider?.source].every(
+                (source) =>
+                    source === undefined || source === recording.provider,
+            )
+            ? item
+            : null;
+    }
     const isRemote =
         isNonLibraryTrackId(String(item.id).trim()) ||
         streamSource === "tidal" ||

@@ -507,6 +507,13 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         const canApplyPlaybackState = () =>
             active &&
             isUserPlaybackStorageGenerationCurrent(playbackStorageGeneration);
+        const startupContextRevision = radioContextRevisionRef.current;
+        const startupIntent = getPlaybackIntentGeneration();
+        const startupQueueReplacement = getQueueReplacementGeneration();
+        const startupMembership = radioPollMembershipGenerationRef.current;
+        const startupGroupActive =
+            isListenTogetherActiveOrPending() ||
+            listenTogetherSocket.hasActiveGroup;
 
         // Fetch fresh audiobook progress
         const savedAudiobook = readStorage(STORAGE_KEYS.CURRENT_AUDIOBOOK);
@@ -585,7 +592,22 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         // Load playback state from server
         api.getPlaybackState()
             .then((serverState) => {
-                if (!canApplyPlaybackState()) return;
+                // Local commands can commit before their debounced storage write.
+                // A held startup response must not replace that newer authority.
+                if (
+                    !canApplyPlaybackState() ||
+                    radioContextRevisionRef.current !==
+                        startupContextRevision ||
+                    getPlaybackIntentGeneration() !== startupIntent ||
+                    getQueueReplacementGeneration() !==
+                        startupQueueReplacement ||
+                    radioPollMembershipGenerationRef.current !==
+                        startupMembership ||
+                    startupGroupActive ||
+                    isListenTogetherActiveOrPending() ||
+                    listenTogetherSocket.hasActiveGroup
+                )
+                    return;
                 if (!serverState) return;
 
                 const serverPlaybackType: PlaybackSnapshotType =

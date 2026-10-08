@@ -8,6 +8,53 @@ import {
     queuesMatchByTrackId,
     resolveServerPlaybackPollDecision,
 } from "../../lib/playback-state-reconciliation";
+import { toMusicSourcePlaybackTrack } from "../../lib/audio/musicSourcePlayback";
+
+for (const provider of ["vk", "yandex"] as const) {
+    test(`${provider} restore recognizes the selected direct provider occurrence without library lookup`, () => {
+        const track = toMusicSourcePlaybackTrack({
+            provider,
+            id: provider === "vk" ? "-12_34" : "123",
+            title: "Song",
+            artists: ["Artist"],
+            duration: 180,
+            contentVersion: "unknown",
+            preview: false,
+        });
+        const current = {
+            ...track,
+            recommendationSessionId: "selected-occurrence",
+        };
+        assert.equal(isNonLibraryTrackId(track.id), true);
+        assert.equal(
+            findRemoteQueueTrackForRestore(track.id, [track, current], 1),
+            current,
+        );
+        assert.equal(findRemoteQueueTrackForRestore(track.id, [], 0), null);
+        assert.equal(
+            findRemoteQueueTrackForRestore(track.id, [track], -1),
+            track,
+        );
+        for (const invalid of [
+            { ...track, musicSourceRecording: undefined },
+            {
+                ...track,
+                musicSourceRecording: {
+                    ...track.musicSourceRecording!,
+                    preview: true,
+                },
+            },
+            {
+                ...track,
+                provider: { source: provider, providerTrackId: "other" },
+            },
+        ])
+            assert.equal(
+                findRemoteQueueTrackForRestore(track.id, [invalid], 0),
+                null,
+            );
+    });
+}
 
 function queue(ids: string[]) {
     return ids.map((id) => ({ id }));
