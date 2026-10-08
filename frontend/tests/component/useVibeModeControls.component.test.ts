@@ -4,6 +4,7 @@ import ReactDefault from "react";
 import {
     recordExplicitPlaybackPause,
     recordExplicitPlaybackResume,
+    reservePlaybackIntent,
     writePlaybackAdvanceOrigin,
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
 import { audioSeekEmitter } from "../../lib/audio-seek-emitter";
@@ -11,14 +12,17 @@ import { audioSeekEmitter } from "../../lib/audio-seek-emitter";
 interface Deferred<T> {
     promise: Promise<T>;
     resolve: (value: T) => void;
+    reject: (error: unknown) => void;
 }
 
 function deferred<T>(): Deferred<T> {
     let resolve!: (value: T) => void;
-    const promise = new Promise<T>((done) => {
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<T>((done, fail) => {
         resolve = done;
+        reject = fail;
     });
-    return { promise, resolve };
+    return { promise, resolve, reject };
 }
 
 type Effect = () => void | (() => void);
@@ -96,10 +100,52 @@ const feedRequestPaths: string[] = [];
 const feedRequestOptions: Array<
     { timeoutMs?: number; retryOnTimeout?: boolean } | undefined
 > = [];
+let sessionGeneration = 0;
+
+function captureRequest(
+    path: string,
+    options?: { timeoutMs?: number; retryOnTimeout?: boolean },
+) {
+    const request = deferred<Record<string, unknown>>();
+    feedRequests.push(request);
+    feedRequestPaths.push(path);
+    feedRequestOptions.push(options);
+    return request.promise;
+}
 
 mock.module("@/lib/api", {
     namedExports: {
         api: {
+            getSessionGeneration: () => sessionGeneration,
+            getRadioContinuation: (input: {
+                origin: {
+                    kind: string;
+                    source: string;
+                    id?: string;
+                    name?: string;
+                };
+                cursor: number;
+                sessionId: string;
+            }) => {
+                const type =
+                    input.origin.kind === "artist"
+                        ? input.origin.source === "library"
+                            ? "artist"
+                            : "artist-name"
+                        : input.origin.source === "youtube"
+                          ? "youtube"
+                          : "vibe";
+                const params = new URLSearchParams({
+                    type,
+                    value: input.origin.id ?? input.origin.name ?? "",
+                    cursor: String(input.cursor),
+                    sessionId: input.sessionId,
+                });
+                return captureRequest(`/personalized/radio?${params}`, {
+                    timeoutMs: 17000,
+                    retryOnTimeout: false,
+                });
+            },
             request: (
                 path: string,
                 options?: { timeoutMs?: number; retryOnTimeout?: boolean },
@@ -149,8 +195,126 @@ beforeEach(() => {
     feedRequestPaths.length = 0;
     feedRequestOptions.length = 0;
     activeHarness = null;
+    sessionGeneration = 0;
     recordExplicitPlaybackResume();
 });
+
+test("explicit station continuation uses the original seed rather than the current provider track", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const harness = new HookLifecycleHarness();
+    const origin = {
+        kind: "track",
+        source: "youtube",
+        id: "AAAAAAAAAAA",
+    } as const;
+    const seed = { ...makeProviderTrack("BBBBBBBBBBB"), radioOrigin: origin };
+    const audio = makeAudioState(seed);
+    let committed: unknown[] = [];
+    audio.state.setQueue = ((
+        value:
+            | typeof audio.state.queue
+            | ((queue: typeof audio.state.queue) => typeof audio.state.queue),
+    ) => {
+        committed =
+            typeof value === "function" ? value(audio.state.queue) : value;
+    }) as typeof audio.state.setQueue;
+    harness.beginRender();
+    activeHarness = harness;
+    const controls = useVibeModeControls({
+        state: audio.state as never,
+        getActiveListenTogetherSession: () => null,
+        showQueueMutationToasts: () => undefined,
+    });
+    harness.commitRender();
+    const pending = controls.startVibeMode();
+    assert.equal(
+        new URL(feedRequestPaths[0], "https://fixture.test").pathname,
+        "/personalized/radio",
+    );
+    assert.equal(
+        new URL(feedRequestPaths[0], "https://fixture.test").searchParams.get(
+            "value",
+        ),
+        origin.id,
+    );
+    feedRequests[0].resolve({
+        tracks: [{ ...makeProviderTrack("CCCCCCCCCCC"), source: "youtube" }],
+        radioOrigin: origin,
+        generationId: "generation-1",
+        nextCursor: 1,
+    });
+    assert.deepEqual(await pending, { success: true, trackCount: 1 });
+    assert.equal(
+        (committed[1] as { radioOrigin: { id: string } }).radioOrigin.id,
+        origin.id,
+    );
+});
+
+for (const initialOrigin of [
+    undefined,
+    { kind: "track", source: "youtube", id: "AAAAAAAAAAA" },
+] as const) {
+    test(`late ${initialOrigin ? "station" : "Wave"} response cannot commit after same-ID station metadata changes`, async () => {
+        const { useVibeModeControls } =
+            await import("../../lib/audio/useVibeModeControls");
+        const harness = new HookLifecycleHarness();
+        const seed = {
+            ...makeProviderTrack("BBBBBBBBBBB"),
+            radioOrigin: initialOrigin,
+        };
+        const audio = makeAudioState(seed);
+        const origin = {
+            kind: "artist",
+            source: "discovery",
+            name: "Other Artist",
+        } as const;
+        const commits: unknown[] = [];
+        function RenderControls(state: typeof audio.state) {
+            harness.beginRender();
+            activeHarness = harness;
+            const controls = useVibeModeControls({
+                state: state as never,
+                getActiveListenTogetherSession: () => null,
+                showQueueMutationToasts: () => undefined,
+            });
+            harness.commitRender();
+            return controls;
+        }
+        const pending = RenderControls(audio.state).startVibeMode({
+            queueCommitToken: {},
+            onLocalQueueCommit: (commit) => commits.push(commit),
+        });
+        RenderControls({
+            ...audio.state,
+            currentTrack: { ...seed, radioOrigin: origin },
+        } as typeof audio.state);
+        feedRequests[0].resolve(
+            initialOrigin
+                ? {
+                      tracks: [
+                          {
+                              ...makeProviderTrack("CCCCCCCCCCC"),
+                              source: "youtube",
+                          },
+                      ],
+                      radioOrigin: initialOrigin,
+                      generationId: "generation-1",
+                      nextCursor: 1,
+                  }
+                : {
+                      shelves: {
+                          discovery: [makeProviderTrack("CCCCCCCCCCC")],
+                          quickPicks: [],
+                          listenAgain: [],
+                      },
+                  },
+        );
+        assert.deepEqual(await pending, { success: false, trackCount: 0 });
+        assert.deepEqual(audio.mutations, []);
+        assert.deepEqual(commits, []);
+    });
+}
 
 function makeProviderTrack(videoId: string) {
     return {
@@ -193,6 +357,7 @@ function makeAudioState(
             setIsShuffle: () => mutations.push("shuffle"),
             setShuffleIndices: () => mutations.push("shuffle-indices"),
             setVibeMode: () => mutations.push("vibe-mode"),
+            setWaveMood: () => mutations.push("wave-mood"),
             setVibeSourceFeatures: () => mutations.push("vibe-features"),
             setVibeQueueIds: () => mutations.push("vibe-ids"),
             setQueue: () => mutations.push("queue"),
@@ -201,6 +366,242 @@ function makeAudioState(
         mutations,
     };
 }
+
+for (const station of [
+    { kind: "track", source: "library", id: "original-local" },
+    { kind: "artist", source: "library", id: "original-artist" },
+    { kind: "artist", source: "discovery", name: "Original Artist" },
+] as const) {
+    test(`${station.kind}/${station.source} continuation appends without changing selection or enabling Vibe`, async () => {
+        const { useVibeModeControls } =
+            await import("../../lib/audio/useVibeModeControls");
+        const harness = new HookLifecycleHarness();
+        const playing = {
+            id: "current-local",
+            title: "Current",
+            duration: 180,
+            artist: { id: "current-artist", name: "Current Artist" },
+            album: { id: "album-1", title: "Album" },
+            radioOrigin: station,
+        };
+        const audio = makeAudioState(makeProviderTrack("AAAAAAAAAAA"));
+        const committed: { queue: unknown[] } = { queue: [] };
+        const state = {
+            ...audio.state,
+            currentTrack: playing,
+            queue: [playing],
+            setQueue: (queue: unknown[]) => {
+                committed.queue = queue;
+            },
+        };
+        harness.beginRender();
+        activeHarness = harness;
+        const controls = useVibeModeControls({
+            state: state as never,
+            getActiveListenTogetherSession: () => null,
+            showQueueMutationToasts: () => undefined,
+        });
+        harness.commitRender();
+        const pending = controls.startVibeMode();
+        assert.equal(vibeRequests.length, 0);
+        assert.equal(
+            new URL(feedRequestPaths[0], "https://fixture.test").pathname,
+            "/personalized/radio",
+        );
+        feedRequests[0].resolve({
+            radioOrigin: station,
+            tracks: [
+                {
+                    id: "fresh-local",
+                    title: "Fresh",
+                    duration: 180,
+                    source: "library",
+                    provider: { youtubeVideoId: null, tidalTrackId: null },
+                    artist: { name: "Fresh Artist" },
+                    album: { title: "Fresh Album" },
+                },
+            ],
+            generationId: "generation-1",
+            nextCursor: 1,
+        });
+        assert.deepEqual(await pending, { success: true, trackCount: 1 });
+        assert.equal(committed.queue[0], playing);
+        assert.deepEqual(
+            (committed.queue[1] as { radioOrigin: unknown }).radioOrigin,
+            station,
+        );
+        assert.deepEqual(audio.mutations, []);
+    });
+}
+
+test("artist continuation keeps its cursor while Vibe stays disabled and resets on a new station", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const harness = new HookLifecycleHarness();
+    const first = {
+        kind: "artist",
+        source: "library",
+        id: "artist-1",
+    } as const;
+    const second = {
+        kind: "artist",
+        source: "library",
+        id: "artist-2",
+    } as const;
+    const base = makeProviderTrack("AAAAAAAAAAA");
+    const audio = makeAudioState(base);
+    function RenderControls(origin: typeof first | typeof second) {
+        const track = { ...base, radioOrigin: origin };
+        harness.beginRender();
+        activeHarness = harness;
+        const controls = useVibeModeControls({
+            state: {
+                ...audio.state,
+                currentTrack: track,
+                queue: [track],
+            } as never,
+            getActiveListenTogetherSession: () => null,
+            showQueueMutationToasts: () => undefined,
+        });
+        harness.commitRender();
+        return controls;
+    }
+    for (const [index, origin, cursor, next] of [
+        [0, first, 0, 7],
+        [1, first, 7, 8],
+        [2, second, 0, 1],
+    ] as const) {
+        const pending = RenderControls(origin).startVibeMode();
+        assert.equal(
+            new URL(
+                feedRequestPaths[index],
+                "https://fixture.test",
+            ).searchParams.get("cursor"),
+            String(cursor),
+        );
+        feedRequests[index].resolve({
+            radioOrigin: origin,
+            tracks: [
+                { ...makeProviderTrack("BBBBBBBBBBB"), source: "youtube" },
+            ],
+            generationId: "generation-1",
+            nextCursor: next,
+        });
+        assert.deepEqual(await pending, { success: true, trackCount: 1 });
+    }
+    assert.equal(audio.mutations.includes("vibe-mode"), false);
+});
+
+for (const action of [
+    "pause",
+    "seek",
+    "replacement",
+    "auth",
+    "group",
+    "shuffle",
+    "stop",
+    "clear origin",
+] as const) {
+    test(`original station response cannot commit after ${action}`, async () => {
+        const { useVibeModeControls } =
+            await import("../../lib/audio/useVibeModeControls");
+        const harness = new HookLifecycleHarness();
+        const origin = {
+            kind: "track",
+            source: "youtube",
+            id: "AAAAAAAAAAA",
+        } as const;
+        const seed = {
+            ...makeProviderTrack("BBBBBBBBBBB"),
+            radioOrigin: origin,
+        };
+        const audio = makeAudioState(seed);
+        const initial = { ...audio.state, isShuffle: false };
+        let groupId: string | null = null;
+        function RenderControls(state: typeof initial) {
+            harness.beginRender();
+            activeHarness = harness;
+            const controls = useVibeModeControls({
+                state: state as never,
+                getActiveListenTogetherSession: () =>
+                    groupId ? ({ groupId } as never) : null,
+                showQueueMutationToasts: () => undefined,
+            });
+            harness.commitRender();
+            return controls;
+        }
+        const controls = RenderControls(initial);
+        const commits: unknown[] = [];
+        const pending = controls.startVibeMode({
+            queueCommitToken: {},
+            onLocalQueueCommit: (commit) => commits.push(commit),
+        });
+        if (action === "pause") recordExplicitPlaybackPause();
+        if (action === "seek") audioSeekEmitter.emit(20);
+        if (action === "replacement") reservePlaybackIntent();
+        if (action === "auth") sessionGeneration++;
+        if (action === "group") groupId = "new-group";
+        if (action === "shuffle")
+            RenderControls({ ...initial, isShuffle: true });
+        if (action === "stop") {
+            controls.stopVibeMode();
+            audio.mutations.length = 0;
+        }
+        if (action === "clear origin")
+            RenderControls({
+                ...initial,
+                currentTrack: { ...seed, radioOrigin: undefined },
+            } as typeof initial);
+        feedRequests[0].resolve({
+            radioOrigin: origin,
+            tracks: [
+                { ...makeProviderTrack("CCCCCCCCCCC"), source: "youtube" },
+            ],
+            generationId: "generation-1",
+            nextCursor: 1,
+        });
+        assert.deepEqual(await pending, { success: false, trackCount: 0 });
+        assert.deepEqual(commits, []);
+        assert.deepEqual(audio.mutations, []);
+        assert.equal(feedRequests.length, 1);
+    });
+}
+
+test("an exhausted original station finishes after two pages without Home or DNA fallback", async () => {
+    const { useVibeModeControls } =
+        await import("../../lib/audio/useVibeModeControls");
+    const harness = new HookLifecycleHarness();
+    const origin = {
+        kind: "track",
+        source: "youtube",
+        id: "AAAAAAAAAAA",
+    } as const;
+    const seed = { ...makeProviderTrack("BBBBBBBBBBB"), radioOrigin: origin };
+    const audio = makeAudioState(seed);
+    harness.beginRender();
+    activeHarness = harness;
+    const controls = useVibeModeControls({
+        state: audio.state as never,
+        getActiveListenTogetherSession: () => null,
+        showQueueMutationToasts: () => undefined,
+    });
+    harness.commitRender();
+    const pending = controls.startVibeMode();
+    feedRequests[0].resolve({ radioOrigin: origin, tracks: [], nextCursor: 1 });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(feedRequests.length, 2);
+    feedRequests[1].resolve({ radioOrigin: origin, tracks: [], nextCursor: 2 });
+    assert.deepEqual(await pending, { success: false, trackCount: 0 });
+    assert.ok(
+        feedRequestPaths.every(
+            (path) =>
+                new URL(path, "https://fixture.test").pathname ===
+                "/personalized/radio",
+        ),
+    );
+    assert.equal(vibeRequests.length, 0);
+    assert.deepEqual(audio.mutations, []);
+});
 
 test("provider continuation keeps the active Wave mood outside the Vibe route", async () => {
     const { useVibeModeControls } =

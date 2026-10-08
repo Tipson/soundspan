@@ -92,6 +92,10 @@ import { resolveAdaptiveWaveSkip } from "@/lib/audio/adaptiveWaveQueue";
 import { isProviderRadioTrack } from "@/lib/audio/providerRadioContinuation";
 import { applyTrackClick } from "@/lib/audio-engine/playbackOccurrence";
 import { withPlaybackRadioOrigin } from "@/lib/radio/playbackRadioOrigin";
+import {
+    normalizePlaybackRadioOrigin,
+    playbackRadioOriginsMatch,
+} from "@soundspan/media-metadata-contract";
 import { userFacingError } from "@/lib/i18n/ru";
 import {
     formatListenTogetherQueueAccepted,
@@ -351,6 +355,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     const pendingManualTailAdvanceRef = useRef<{
         token: object;
         trackId: string;
+        radioOrigin: Track["radioOrigin"] | null;
         currentIndex: number;
         intentGeneration: number;
         mutation: VibeQueueMutationKind | null;
@@ -1105,7 +1110,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 origin === "manual" &&
                 pendingTailAdvance !== null &&
                 pendingTailAdvance.trackId === state.currentTrack?.id &&
-                pendingTailAdvance.currentIndex === state.currentIndex
+                pendingTailAdvance.currentIndex === state.currentIndex &&
+                playbackRadioOriginsMatch(
+                    pendingTailAdvance.radioOrigin,
+                    state.currentTrack?.radioOrigin,
+                )
             ) {
                 return;
             }
@@ -1210,13 +1219,19 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             if (advance.kind === "stop") {
                 if (
                     origin === "manual" &&
-                    state.vibeMode &&
+                    (state.vibeMode ||
+                        normalizePlaybackRadioOrigin(
+                            state.currentTrack?.radioOrigin,
+                        )) &&
                     state.currentTrack?.id
                 ) {
                     const token = {};
                     const pending = {
                         token,
                         trackId: state.currentTrack.id,
+                        radioOrigin: normalizePlaybackRadioOrigin(
+                            state.currentTrack.radioOrigin,
+                        ),
                         currentIndex: state.currentIndex,
                         intentGeneration: getPlaybackIntentGeneration(),
                         mutation: null as VibeQueueMutationKind | null,
@@ -1335,8 +1350,16 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         const pending = pendingManualTailAdvanceRef.current;
         if (!pending) return;
         if (
-            !state.vibeMode ||
+            (!state.vibeMode &&
+                !normalizePlaybackRadioOrigin(
+                    state.currentTrack?.radioOrigin,
+                )) ||
             state.currentTrack?.id !== pending.trackId ||
+            !playbackRadioOriginsMatch(
+                state.currentTrack?.radioOrigin,
+                pending.radioOrigin,
+            ) ||
+            getActiveListenTogetherSession() ||
             getPlaybackIntentGeneration() !== pending.intentGeneration ||
             (state.currentIndex !== pending.currentIndex &&
                 pending.mutation !== "replace")
@@ -1374,6 +1397,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         state.shuffleIndices,
         state.vibeMode,
         startQueueItemAtIndex,
+        getActiveListenTogetherSession,
     ]);
 
     const previous = useCallback(() => {

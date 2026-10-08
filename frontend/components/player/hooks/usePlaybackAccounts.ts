@@ -11,6 +11,8 @@ import type {
 import type { AutoMatchVibeRequestResult } from "../autoMatchVibePlayback";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
 import { getPlaybackIntentGeneration } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { normalizePlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
+import type { Track } from "@/lib/audio-state-context";
 
 /** Keeps the YouTube Music authentication snapshot current. */
 export function useYtMusicAuth(
@@ -47,6 +49,7 @@ export function useYtMusicAuth(
 
 interface UseAutoMatchVibeOptions {
     refs: PlaybackOrchestratorRefs;
+    radioOrigin?: Track["radioOrigin"];
     startVibeMode: (
         options?: VibeModeStartOptions,
     ) => Promise<VibeModeStartResult>;
@@ -57,12 +60,17 @@ const NO_AUTO_MATCH_VIBE_RESULT: AutoMatchVibeRequestResult = {
     queueMutation: null,
 };
 
-/** Returns the existing deduplicated automatic Vibe request callback. */
+/** Deduplicates automatic tail requests for one playback intent and station. */
 export function useAutoMatchVibe({
     refs,
     startVibeMode,
+    radioOrigin,
 }: UseAutoMatchVibeOptions) {
     const requestIntentGenerationRef = useRef<number | null>(null);
+    const requestRadioOriginKeyRef = useRef<string | null>(null);
+    const radioOriginKey = JSON.stringify(
+        normalizePlaybackRadioOrigin(radioOrigin),
+    );
     const {
         autoMatchVibePromiseRef,
         autoMatchVibeTrackIdRef,
@@ -87,15 +95,17 @@ export function useAutoMatchVibe({
                 requestIntentGenerationRef.current === intentGeneration
             ) {
                 if (autoMatchVibeTrackIdRef.current === seedTrackId) {
-                    return autoMatchVibePromiseRef.current;
-                }
-                return Promise.resolve(NO_AUTO_MATCH_VIBE_RESULT);
+                    if (requestRadioOriginKeyRef.current === radioOriginKey) {
+                        return autoMatchVibePromiseRef.current;
+                    }
+                } else return Promise.resolve(NO_AUTO_MATCH_VIBE_RESULT);
             }
 
             const now = Date.now();
             if (
                 !options?.force &&
                 autoMatchVibeTrackIdRef.current === seedTrackId &&
+                requestRadioOriginKeyRef.current === radioOriginKey &&
                 now - autoMatchVibeLastAttemptAtRef.current <
                     AUTO_MATCH_VIBE_RETRY_COOLDOWN_MS
             ) {
@@ -105,6 +115,7 @@ export function useAutoMatchVibe({
             autoMatchVibeTrackIdRef.current = seedTrackId;
             autoMatchVibeLastAttemptAtRef.current = now;
             requestIntentGenerationRef.current = intentGeneration;
+            requestRadioOriginKeyRef.current = radioOriginKey;
 
             const queueCommitToken = {};
             let committedQueueMutation: VibeQueueMutationKind | null = null;
@@ -146,7 +157,7 @@ export function useAutoMatchVibe({
             return request;
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.
-        [startVibeMode],
+        [startVibeMode, radioOriginKey],
     );
 
     return requestAutoMatchVibe;

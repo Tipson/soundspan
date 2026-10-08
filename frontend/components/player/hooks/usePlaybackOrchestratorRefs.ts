@@ -136,6 +136,7 @@ export function usePlaybackOrchestratorRefs({
     const autoMatchVibeLastAttemptAtRef = useRef<number>(0);
     const pendingAutoMatchAdvanceRef = useRef<{
         trackId: string;
+        radioOrigin: Track["radioOrigin"] | null;
         loadId: number;
         seekOperationId: number;
         playbackIntentGeneration: number;

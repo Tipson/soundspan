@@ -252,6 +252,7 @@ export const AudioPlaybackOrchestrator = memo(
         const requestAutoMatchVibe = H.useAutoMatchVibe({
             refs: orchestratorRefs,
             startVibeMode,
+            radioOrigin: currentTrack?.radioOrigin,
         });
         const playEngagement = H.usePlayEngagementTracking({
             currentTrack,

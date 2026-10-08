@@ -11,6 +11,10 @@ import {
     type AutoMatchVibeRequestResult,
 } from "../autoMatchVibePlayback";
 import type { PlaybackOrchestratorRefs } from "./usePlaybackOrchestratorRefs";
+import {
+    normalizePlaybackRadioOrigin,
+    playbackRadioOriginsMatch,
+} from "@soundspan/media-metadata-contract";
 
 interface UseQueueRecoveryEffectsOptions {
     refs: PlaybackOrchestratorRefs;
@@ -55,6 +59,11 @@ export function useQueueRecoveryEffects({
         pendingTrackErrorTrackIdRef,
     } = refs;
     const latestAdvanceQueueRef = useRef(advanceQueue);
+    // The shared currentTrackRef is synchronized later in a passive effect.
+    // Retire old station work as soon as its replacement is committed.
+    const committedRadioOriginRef = useRef(
+        normalizePlaybackRadioOrigin(currentTrack?.radioOrigin),
+    );
     // Track the selected queue occurrence, not only its track ID: duplicate
     // entries may share an ID while representing different playback positions.
     const playbackPositionRef = useRef({
@@ -66,6 +75,12 @@ export function useQueueRecoveryEffects({
     useEffect(() => {
         latestAdvanceQueueRef.current = advanceQueue;
     }, [advanceQueue]);
+
+    useLayoutEffect(() => {
+        committedRadioOriginRef.current = normalizePlaybackRadioOrigin(
+            currentTrack?.radioOrigin,
+        );
+    }, [currentTrack?.radioOrigin]);
 
     useEffect(
         () => () => {
@@ -103,7 +118,14 @@ export function useQueueRecoveryEffects({
                 pendingAutoMatchAdvanceRef.current = null;
                 return;
             }
-            if (refs.currentTrackRef.current?.id !== pending.trackId) {
+            if (
+                refs.currentTrackRef.current?.id !== pending.trackId ||
+                !playbackRadioOriginsMatch(
+                    committedRadioOriginRef.current,
+                    pending.radioOrigin,
+                ) ||
+                getListenTogetherSessionSnapshot()?.groupId
+            ) {
                 pendingAutoMatchAdvanceRef.current = null;
                 return;
             }
@@ -214,6 +236,9 @@ export function useQueueRecoveryEffects({
 
             const pendingAdvance = {
                 trackId,
+                radioOrigin: normalizePlaybackRadioOrigin(
+                    currentTrack?.radioOrigin,
+                ),
                 loadId: refs.loadIdRef.current,
                 seekOperationId: refs.seekOperationIdRef.current,
                 playbackIntentGeneration: getPlaybackIntentGeneration(),
@@ -271,6 +296,7 @@ export function useQueueRecoveryEffects({
         [
             currentTrack?.id,
             advancePendingAutoMatch,
+            currentTrack?.radioOrigin,
             advancePendingQueue,
             pendingAutoMatchAdvanceRef,
             queue,
