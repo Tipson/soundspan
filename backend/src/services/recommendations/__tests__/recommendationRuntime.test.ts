@@ -12,6 +12,7 @@ const mockLoadMood = jest.fn();
 const mockRecordGeneration = jest.fn();
 const mockScheduleHotSet = jest.fn();
 const mockLoadRadioCandidates = jest.fn();
+const mockLoadVerifiedRepeats = jest.fn();
 const mockWarn = jest.fn();
 let capturedDependencies: Record<string, any>;
 
@@ -69,6 +70,10 @@ jest.mock("../radioContinuationRuntime", () => ({
     loadRadioContinuationCandidates: (...args: unknown[]) =>
         mockLoadRadioCandidates(...args),
 }));
+jest.mock("../verifiedSourceRepeats", () => ({
+    loadVerifiedSourceRepeatExclusions: (...args: unknown[]) =>
+        mockLoadVerifiedRepeats(...args),
+}));
 jest.mock("../recommendationService", () => ({
     UnifiedRecommendationService: class {
         constructor(dependencies: Record<string, any>) {
@@ -108,6 +113,7 @@ describe("recommendation runtime adapters", () => {
         mockRecordGeneration.mockReset();
         mockScheduleHotSet.mockReset();
         mockLoadRadioCandidates.mockReset();
+        mockLoadVerifiedRepeats.mockReset();
         mockWarn.mockReset();
     });
 
@@ -125,6 +131,12 @@ describe("recommendation runtime adapters", () => {
         await capturedDependencies.enrichCandidates([candidate]);
         const now = new Date("2026-09-01T12:00:00Z");
         await capturedDependencies.loadRecentExposures("user-1", now);
+        const check = jest.fn();
+        await capturedDependencies.loadVerifiedRepeatExclusions(
+            "user-1",
+            now,
+            check,
+        );
         await capturedDependencies.loadDislikedCanonicalKeys("user-1");
         await capturedDependencies.loadSavedCanonicalKeys("user-1", [
             candidate,
@@ -135,6 +147,11 @@ describe("recommendation runtime adapters", () => {
         expect(mockResolveCanonical).toHaveBeenCalledWith(candidate);
         expect(mockEnrichCandidates).toHaveBeenCalledWith([candidate]);
         expect(mockLoadRecent).toHaveBeenCalledWith("user-1", now);
+        expect(mockLoadVerifiedRepeats).toHaveBeenCalledWith(
+            "user-1",
+            now,
+            check,
+        );
         expect(mockLoadDislikedCanonicalKeys).toHaveBeenCalledWith("user-1");
         expect(mockLoadSavedCanonicalKeys).toHaveBeenCalledWith("user-1", [
             candidate,

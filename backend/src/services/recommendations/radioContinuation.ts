@@ -35,6 +35,7 @@ export interface RadioContinuationLoaderDependencies {
     loadPreferences: (
         userId: string,
         policyTime: Date,
+        execution?: RadioRequestExecution,
     ) => Promise<RadioContinuationPreferences>;
     loadLibraryTracks: (ids: readonly string[]) => Promise<unknown[]>;
     admitCandidates: (
@@ -42,6 +43,8 @@ export interface RadioContinuationLoaderDependencies {
         candidates: RecommendationCandidate[],
         policyTime: Date,
         exclude: readonly string[],
+        /** Actual listening identities captured once before seed/local-selection quotas. */
+        repeatIds?: ReadonlySet<string>,
     ) => Promise<{
         candidates: RecommendationCandidate[];
         degradedSources: string[];
@@ -178,6 +181,7 @@ export function createRadioContinuationLoader(
         const preferences = await dependencies.loadPreferences(
             input.userId,
             policyTime,
+            ...(input.execution ? [input.execution] : []),
         );
         input.execution?.check();
         const degradedSources = new Set(preferences.degradedSources);
@@ -228,6 +232,7 @@ export function createRadioContinuationLoader(
                 candidates,
                 policyTime,
                 [...exclusions],
+                preferences.ids,
             );
             input.execution?.check();
             admitted.degradedSources.forEach((source) =>

@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Read exact, server-confirmed VK and Yandex listening history for automatic repeat protection without requiring session attribution or audio analysis. Preserve the last-day attempt cooldown and the personal empty-pool older-listening fallback, filter known canonical repeats before radio selector quotas and final generation membership, and stop subsequent history pages after request cancellation. Keep native recording identity separate from unverified artist/title cross-source matches.
+
 - Use real session-tagged VK and Yandex listens in the fast taste profile through confirmed current canonical mappings and active audio vectors. Keep failed, unconfirmed and malformed signals neutral, preserve legacy session reserves, and apply the shared recent-signal quota after validation without reading private display snapshots.
 
 - Read server-confirmed VK and Yandex saved taste and exact canonical feedback without borrowing private playback metadata. Keep malformed direct seeds neutral, preserve legacy provider reserves and the global vector quota, and exclude exact disliked recordings without requiring audio analysis.

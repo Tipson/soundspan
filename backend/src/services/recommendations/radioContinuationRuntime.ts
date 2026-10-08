@@ -30,6 +30,7 @@ import {
 } from "./radioContinuation";
 import type { RecommendationCandidate } from "./types";
 import { RadioRequestError } from "./radioRequestExecution";
+import { loadVerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
 
 const log = logger.child("RadioContinuation");
 
@@ -130,7 +131,7 @@ function excludedIdentityCandidates(
 }
 
 const admitCandidates: RadioContinuationLoaderDependencies["admitCandidates"] =
-    async (userId, candidates, policyTime, exclude) => {
+    async (userId, candidates, policyTime, exclude, repeatIds) => {
         if (candidates.length === 0) return { candidates, degradedSources: [] };
         const degraded = new Set<string>();
         const videos = candidates.flatMap((c) =>
@@ -226,6 +227,7 @@ const admitCandidates: RadioContinuationLoaderDependencies["admitCandidates"] =
                         dislikedLocalIds.has(candidate.id)
                     ) &&
                     !canonicalDislikes.has(candidate.canonicalKey) &&
+                    !repeatIds?.has(candidate.canonicalKey) &&
                     !viewed.has(candidate.canonicalKey) &&
                     !queuedKeys.has(candidate.canonicalKey),
             ),
@@ -237,7 +239,7 @@ const admitCandidates: RadioContinuationLoaderDependencies["admitCandidates"] =
 export const loadRadioContinuationCandidates = createRadioContinuationLoader({
     loadLibraryTracks,
     admitCandidates,
-    loadPreferences: async (userId, policyTime) => {
+    loadPreferences: async (userId, policyTime, execution) => {
         const degraded = new Set<string>();
         const emptyRepeat = () => ({
             videoIds: new Set<string>(),
@@ -245,7 +247,7 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
             hardVideoIds: new Set<string>(),
             hardSongKeys: new Set<string>(),
         });
-        const [youtube, library, artists] = await Promise.all([
+        const [youtube, library, artists, direct] = await Promise.all([
             readOr("radio-youtube-history", degraded, emptyRepeat(), () =>
                 loadYouTubeRepeatExclusions(userId, policyTime),
             ),
@@ -258,9 +260,29 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
                 new Set<string>(),
                 () => loadSuppressedYouTubeArtists(userId, policyTime),
             ),
+            readOr(
+                "radio-source-history",
+                degraded,
+                { ids: new Set<string>(), hardIds: new Set<string>() },
+                () =>
+                    execution
+                        ? loadVerifiedSourceRepeatExclusions(
+                              userId,
+                              policyTime,
+                              execution.check,
+                          )
+                        : loadVerifiedSourceRepeatExclusions(
+                              userId,
+                              policyTime,
+                          ),
+            ),
         ]);
         return {
-            ids: new Set([...youtube.videoIds, ...library.videoIds]),
+            ids: new Set([
+                ...youtube.videoIds,
+                ...library.videoIds,
+                ...direct.ids,
+            ]),
             songKeys: new Set([...youtube.songKeys, ...library.songKeys]),
             suppressedArtists: artists,
             degradedSources: [...degraded],

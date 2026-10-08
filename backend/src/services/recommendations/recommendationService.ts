@@ -226,6 +226,21 @@ export class UnifiedRecommendationService {
                   loadDislikedCanonicalKeys: guard(
                       sourceDependencies.loadDislikedCanonicalKeys,
                   ),
+                  ...(sourceDependencies.loadVerifiedRepeatExclusions
+                      ? {
+                            loadVerifiedRepeatExclusions: (
+                                userId: string,
+                                now: Date,
+                            ) =>
+                                execution.run(() =>
+                                    sourceDependencies.loadVerifiedRepeatExclusions!(
+                                        userId,
+                                        now,
+                                        execution.check,
+                                    ),
+                                ),
+                        }
+                      : {}),
                   ...(sourceDependencies.loadSavedCanonicalKeys
                       ? {
                             loadSavedCanonicalKeys: guard(

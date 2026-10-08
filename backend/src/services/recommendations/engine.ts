@@ -5,6 +5,7 @@ import type { RecommendationGenerationMetricInput } from "../../metrics/recommen
 import { moodRankingScore, rankRecommendationCandidates } from "./rankerV2";
 import { normalizeRecommendationArtistKey } from "./identityKeys";
 import type { RadioRequestExecution } from "./radioRequestExecution";
+import type { VerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
 import {
     isWaveMusicCandidate,
     matchesWaveMood,
@@ -95,6 +96,12 @@ export interface RecommendationEngineDependencies {
         now: Date,
     ) => Promise<RecommendationExposureSignal[]>;
     loadDislikedCanonicalKeys: (userId: string) => Promise<ReadonlySet<string>>;
+    /** Exact owned native history, without requiring embeddings or a matching session. */
+    loadVerifiedRepeatExclusions?: (
+        userId: string,
+        now: Date,
+        check?: () => void,
+    ) => Promise<VerifiedSourceRepeatExclusions>;
     /** Saved originals for Discoveries, including another upload of the same recording. */
     loadSavedCanonicalKeys?: (
         userId: string,
@@ -367,6 +374,44 @@ export class RecommendationEngine {
                 candidates = [];
             }
         }
+        if (
+            request.intent.surface !== "home" &&
+            this.dependencies.loadVerifiedRepeatExclusions
+        ) {
+            try {
+                const repeat =
+                    await this.dependencies.loadVerifiedRepeatExclusions(
+                        request.userId,
+                        startedAt,
+                    );
+                for (const id of repeat.hardIds) excludes.add(id);
+                const eligible = candidates.filter(
+                    (candidate) =>
+                        hasPlayableIdentity(candidate) &&
+                        !isExcluded(candidate, excludes),
+                );
+                const fresh = eligible.filter(
+                    (candidate) => !isExcluded(candidate, repeat.ids),
+                );
+                // Preserve the catalog's empty-pool personal fallback, never last-day attempts.
+                if (
+                    fresh.length > 0 ||
+                    eligible.length === 0 ||
+                    request.intent.direction === "new" ||
+                    request.intent.surface === "similar-tracks"
+                ) {
+                    for (const id of repeat.ids) excludes.add(id);
+                }
+            } catch {
+                appendDegradedSource(
+                    degradedSources,
+                    "source-listening-history",
+                );
+                recommendationLogger.warn(
+                    "Verified source listening history unavailable",
+                );
+            }
+        }
         const analysisReserve =
             limit > 0 &&
             ![
@@ -375,6 +420,7 @@ export class RecommendationEngine {
                 "exposure-history",
                 "taste-dislikes",
                 "saved-recordings",
+                "source-listening-history",
             ].some((source) => degradedSources.includes(source))
                 ? baselineRank(
                       pendingMoodCandidates,

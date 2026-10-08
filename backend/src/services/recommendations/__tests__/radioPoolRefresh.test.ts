@@ -36,6 +36,7 @@ jest.mock("../../librarySeedRadio", () => ({
     LibrarySeedRadioError: class extends Error {},
 }));
 const mockRepeat = jest.fn();
+const mockNativeRepeat = jest.fn();
 const mockDisliked = jest.fn();
 jest.mock("../../personalizedTrackPreferences", () => ({
     loadYouTubeRepeatExclusions: (...args: unknown[]) => mockRepeat(...args),
@@ -51,6 +52,10 @@ jest.mock("../featureStore", () => ({
     recommendationFeatureStore: {
         loadDislikedCanonicalKeys: async () => new Set(),
     },
+}));
+jest.mock("../verifiedSourceRepeats", () => ({
+    loadVerifiedSourceRepeatExclusions: (...args: unknown[]) =>
+        mockNativeRepeat(...args),
 }));
 jest.mock("../canonicalIdentity", () => ({
     ...jest.requireActual("../canonicalIdentity"),
@@ -93,6 +98,7 @@ beforeEach(() => {
         songKeys: new Set(),
     });
     mockDisliked.mockResolvedValue(new Set());
+    mockNativeRepeat.mockResolvedValue({ ids: new Set(), hardIds: new Set() });
 });
 
 test("an exhausted cached pool refreshes before TTL through the actual runtime, provider cache, formatter and admission", async () => {
@@ -121,6 +127,9 @@ test("an exhausted cached pool refreshes before TTL through the actual runtime, 
     );
     expect(mockRepeat.mock.calls).toEqual(
         Array.from({ length: 3 }, () => ["alice", policyTime]),
+    );
+    expect(mockNativeRepeat.mock.calls).toEqual(
+        Array.from({ length: 3 }, () => ["alice", policyTime, undefined]),
     );
 });
 

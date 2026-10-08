@@ -11,29 +11,27 @@ const mockCanonicalDislikes = jest.fn();
 const mockMappings = jest.fn();
 const mockTrackRadio = jest.fn();
 const mockArtistRadio = jest.fn();
+const mockDirectHistoryRows = jest.fn();
 
 jest.mock("../../../utils/db", () => ({
     prisma: {
         track: { findMany: mockLibraryRows },
         artist: { findFirst: mockArtistLookup, findUnique: mockArtistLookup },
         dislikedEntity: { findMany: mockLocalDislikes },
+        play: { findMany: mockDirectHistoryRows },
     },
 }));
-jest.mock(
-    "../../librarySeedRadio",
-    () => ({
-        selectLibrarySeedRadio: (...args: unknown[]) => mockSelectSeed(...args),
-        LibrarySeedRadioError: class extends Error {
-            constructor(
-                public status: number,
-                message: string,
-            ) {
-                super(message);
-            }
-        },
-    }),
-    { virtual: true },
-);
+jest.mock("../../librarySeedRadio", () => ({
+    selectLibrarySeedRadio: (...args: unknown[]) => mockSelectSeed(...args),
+    LibrarySeedRadioError: class extends Error {
+        constructor(
+            public status: number,
+            message: string,
+        ) {
+            super(message);
+        }
+    },
+}));
 jest.mock("../../playlistRemoteRadio", () => ({
     buildRemoteTrackRadio: (...args: unknown[]) => mockTrackRadio(...args),
     buildRemoteArtistRadio: (...args: unknown[]) => mockArtistRadio(...args),
@@ -115,6 +113,7 @@ beforeEach(() => {
         name: "Original",
     });
     mockLocalDislikes.mockResolvedValue([]);
+    mockDirectHistoryRows.mockResolvedValue([]);
     mockLocalRepeat.mockResolvedValue(repeats());
     mockYouTubeRepeat.mockResolvedValue(repeats());
     mockSuppressed.mockResolvedValue(new Set());

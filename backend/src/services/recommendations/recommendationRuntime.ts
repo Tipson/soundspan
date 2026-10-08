@@ -21,6 +21,7 @@ import { remoteAnalysisHotSetScheduler } from "./remoteAnalysisHotSet";
 import { loadSavedCanonicalKeys } from "./savedRecordings";
 import { UnifiedRecommendationService } from "./recommendationService";
 import { loadRadioContinuationCandidates } from "./radioContinuationRuntime";
+import { loadVerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
 import type { RecommendRequest, RecommendationCandidate } from "./types";
 
 const log = logger.child("RecommendationRuntime");
@@ -142,6 +143,7 @@ export const unifiedRecommendationService = new UnifiedRecommendationService({
         recommendationExposureStore.loadRecent(userId, now),
     loadDislikedCanonicalKeys: (userId) =>
         recommendationFeatureStore.loadDislikedCanonicalKeys(userId),
+    loadVerifiedRepeatExclusions: loadVerifiedSourceRepeatExclusions,
     loadTasteContext: async (userId, request) => {
         const [taste, mood] = await Promise.all([
             recommendationFeatureStore.loadTasteContext(userId, {
