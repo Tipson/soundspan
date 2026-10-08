@@ -20,6 +20,9 @@ import type {
     OverflowConfig,
 } from "@/components/track";
 import { pluralRu, ru } from "@/lib/i18n/ru";
+import type { MusicSourceCandidate } from "@/lib/api/musicSources";
+import { toMusicSourcePlaybackTrack } from "@/lib/audio/musicSourcePlayback";
+import { toPlayTrackRef } from "@/lib/playTrackRef";
 
 interface PlayHistoryTrack {
     id: string;
@@ -27,12 +30,16 @@ interface PlayHistoryTrack {
     displayTitle?: string | null;
     duration: number;
     filePath?: string;
-    source?: "local" | "tidal" | "youtube";
+    source?: "local" | "tidal" | "youtube" | "vk" | "yandex";
+    mediaSource?: "vk" | "yandex";
+    musicSourceRecording?: MusicSourceCandidate;
     provider?: {
+        source?: "vk" | "yandex";
+        providerTrackId?: string;
         tidalTrackId: number | null;
         youtubeVideoId: string | null;
     };
-    streamSource?: "peer" | "tidal" | "youtube";
+    streamSource?: "peer" | "tidal" | "youtube" | "vk" | "yandex";
     tidalTrackId?: number;
     youtubeVideoId?: string;
     artist?: {
@@ -60,6 +67,40 @@ interface PlayHistoryEntry {
 }
 
 function toAudioTrack(track: PlayHistoryTrack) {
+    if (
+        track.source === "vk" ||
+        track.source === "yandex" ||
+        track.streamSource === "vk" ||
+        track.streamSource === "yandex" ||
+        /^(vk|yandex):/.test(track.id)
+    ) {
+        const direct = toMusicSourcePlaybackTrack(track.musicSourceRecording);
+        toPlayTrackRef({
+            ...direct,
+            id: track.id,
+            source: track.source ?? direct.source,
+            mediaSource: track.mediaSource ?? direct.mediaSource,
+            ...(track.filePath ? { filePath: track.filePath } : {}),
+            ...(track.provider
+                ? {
+                      provider: {
+                          ...direct.provider!,
+                          ...(track.provider.source
+                              ? { source: track.provider.source }
+                              : {}),
+                          ...(track.provider.providerTrackId
+                              ? {
+                                    providerTrackId:
+                                        track.provider.providerTrackId,
+                                }
+                              : {}),
+                      },
+                  }
+                : {}),
+            ...(track.streamSource ? { streamSource: track.streamSource } : {}),
+        });
+        return direct;
+    }
     const artist = track.artist ?? track.album?.artist;
     const streamSource =
         track.streamSource ??
@@ -168,7 +209,15 @@ export default function MyHistoryPage() {
                     await api.get<PlayHistoryEntry[]>("/plays?limit=250");
                 setHistory(
                     Array.isArray(data)
-                        ? data.filter((entry) => Boolean(entry.track?.id))
+                        ? data.filter((entry) => {
+                              if (!entry.track?.id) return false;
+                              try {
+                                  toAudioTrack(entry.track);
+                                  return true;
+                              } catch {
+                                  return false;
+                              }
+                          })
                         : [],
                 );
             } catch (err) {

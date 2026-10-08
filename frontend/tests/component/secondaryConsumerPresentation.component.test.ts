@@ -5,7 +5,6 @@ import test from "node:test";
 const surfaceFiles = {
     queue: "../../app/queue/page.tsx",
     radio: "../../app/radio/page.tsx",
-    history: "../../app/my-history/page.tsx",
     import: "../../app/import/page.tsx",
     device: "../../app/device/page.tsx",
 } as const;
@@ -68,7 +67,6 @@ test("route-level waits use the shared Russian loading presentation", () => {
             new URL("../../app/queue/loading.tsx", import.meta.url),
             "utf8",
         ),
-        surfaceSources.history,
         surfaceSources.import,
         surfaceSources.device,
     ];

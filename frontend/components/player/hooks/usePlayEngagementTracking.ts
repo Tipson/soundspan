@@ -2,11 +2,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import type { Track, WaveMode } from "@/lib/audio-state-context";
 import { frontendLogger } from "@/lib/logger";
-import {
-    isRemoteTrack,
-    toAddToPlaylistRef,
-    type AddToPlaylistRef,
-} from "@/lib/trackRef";
+import { isRemoteTrack } from "@/lib/trackRef";
+import { toPlayTrackRef, type PlayTrackRef } from "@/lib/playTrackRef";
 import type { PlayLogInput, PlayRecommendationContext } from "@/lib/api/plays";
 import {
     createPlayEngagementTracker,
@@ -28,7 +25,7 @@ interface UsePlayEngagementTrackingOptions {
 }
 
 function splitPlayInput(input: PlayLogInput): {
-    trackRef: AddToPlaylistRef;
+    trackRef: PlayTrackRef;
     context: PlayRecommendationContext;
 } {
     const {
@@ -39,7 +36,7 @@ function splitPlayInput(input: PlayLogInput): {
         ...trackRef
     } = input;
     return {
-        trackRef: trackRef as AddToPlaylistRef,
+        trackRef: trackRef as PlayTrackRef,
         context: {
             ...(playContext ? { playContext } : {}),
             ...(waveMode ? { waveMode } : {}),
@@ -54,7 +51,7 @@ function splitPlayInput(input: PlayLogInput): {
 function remotePlayKey(track: Track | null): string | null {
     if (!track || !isRemoteTrack(track)) return null;
     try {
-        return JSON.stringify(toAddToPlaylistRef(track));
+        return JSON.stringify(toPlayTrackRef(track));
     } catch {
         return null;
     }
@@ -110,7 +107,7 @@ export function usePlayEngagementTracking({
             getTracker().start({
                 key: playKey,
                 play: {
-                    ...toAddToPlaylistRef(currentTrack),
+                    ...toPlayTrackRef(currentTrack),
                     ...context,
                     recommendationSessionId:
                         resolvePlaybackRecommendationSessionId(

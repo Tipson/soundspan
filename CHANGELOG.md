@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Record private listening history and engagement for direct VK and Yandex recordings. Keep shared identities free of client-supplied display metadata, preserve exact recordings for history replay, and retain playlist-write restrictions.
+
 - Restore direct VK and Yandex queue recordings from their validated public metadata, retaining the selected occurrence and paused position. Keep credentials and signed URLs out of snapshots, reject conflicting identities, and avoid clearing incomplete provider snapshots through a library lookup. Reject held startup snapshots after newer local selections or group membership changes, including before local storage finishes writing.
 - Refresh settled public radio pools for subsequent original-station requests, so recently heard or queued songs cannot repeatedly exhaust the same cached recommendations. Share in-flight provider requests, retain exact artist seeds and partial successes, and apply each listener's exclusions independently before generation.
 - Reconcile a newer radio station on the same selected song without adopting server source, position, shuffle or pause state. Reject divergent queues and superseded local commands, accounts and group sessions; retain the loaded codec and bitrate during station-only updates.

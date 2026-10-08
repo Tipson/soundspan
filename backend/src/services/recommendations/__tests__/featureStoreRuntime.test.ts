@@ -552,6 +552,7 @@ describe("default recommendation feature-store persistence", () => {
                 where: {
                     userId: "alice",
                     recommendationSessionId: "session-a",
+                    source: { notIn: ["VK", "YANDEX"] },
                 },
                 take: 30,
             }),

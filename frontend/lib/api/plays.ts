@@ -1,4 +1,4 @@
-import type { AddToPlaylistRef } from "../trackRef";
+import type { PlayTrackRef } from "../playTrackRef";
 import { type ApiClientConstructor, type ApiData } from "./core";
 
 /** Product surface that started a tracked play. */
@@ -23,7 +23,7 @@ export interface PlayRecommendationContext {
 }
 
 /** Typed payload accepted by the play-history endpoint. */
-export type PlayLogInput = AddToPlaylistRef & PlayRecommendationContext;
+export type PlayLogInput = PlayTrackRef & PlayRecommendationContext;
 
 /** Minimum play record returned to the playback tracker. */
 export interface PlayLogResponse {
@@ -48,7 +48,7 @@ export function WithPlays<TBase extends ApiClientConstructor>(Base: TBase) {
     abstract class PlaysApi extends Base {
         // Play tracking
         async logPlay(
-            trackRef: AddToPlaylistRef,
+            trackRef: PlayTrackRef,
             context: PlayRecommendationContext = {},
         ): Promise<PlayLogResponse> {
             return this.request<PlayLogResponse>("/plays", {

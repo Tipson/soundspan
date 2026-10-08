@@ -575,7 +575,11 @@ async function loadSessionRows(
 ): Promise<RecommendationSessionRow[]> {
     const boundedLimit = Math.max(1, Math.min(30, limit));
     const plays = await prisma.play.findMany({
-        where: { userId, recommendationSessionId: sessionId },
+        where: {
+            userId,
+            recommendationSessionId: sessionId,
+            source: { notIn: ["VK", "YANDEX"] },
+        },
         orderBy: { playedAt: "desc" },
         take: boundedLimit,
         select: {

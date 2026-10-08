@@ -690,6 +690,9 @@ model Play {
   trackId                    String?
   trackTidalId               String?
   trackYtMusicId             String?
+  trackMusicSourceId         String?
+  /// Owner-only display/replay snapshot; never shared canonical metadata.
+  musicSourceRecording       Json?
   playedAt                   DateTime                  @default(now())
   source                     ListenSource              @default(LIBRARY)
   listenedSeconds            Float?
@@ -703,6 +706,7 @@ model Play {
   track                      Track?                    @relation(fields: [trackId], references: [id], onDelete: SetNull)
   trackTidal                 TrackTidal?               @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
   trackYtMusic               TrackYtMusic?             @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  trackMusicSource           TrackMusicSource?         @relation(fields: [trackMusicSourceId], references: [id], onDelete: SetNull)
   user                       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   recommendationGeneration   RecommendationGeneration? @relation(fields: [recommendationGenerationId], references: [id], onDelete: SetNull)
 
@@ -710,6 +714,7 @@ model Play {
   @@index([trackId])
   @@index([trackTidalId])
   @@index([trackYtMusicId])
+  @@index([trackMusicSourceId])
   @@index([source])
   @@index([recommendationGenerationId])
   @@index([userId, recommendationSessionId, playedAt])
@@ -1483,6 +1488,8 @@ enum ListenSource {
   DISCOVERY_KEPT
   TIDAL
   YOUTUBE_MUSIC
+  VK
+  YANDEX
 }
 
 enum AlbumLocation {
@@ -1608,6 +1615,17 @@ model TrackYtMusic {
 
   @@index([artistId])
   @@index([albumId])
+}
+
+/// Public provider namespace only; client-claimed display metadata lives in each owner's Play.
+model TrackMusicSource {
+  id              String   @id @default(cuid())
+  provider        String
+  providerTrackId String
+  createdAt       DateTime @default(now())
+  plays           Play[]
+
+  @@unique([provider, providerTrackId])
 }
 
 model TrackMapping {
