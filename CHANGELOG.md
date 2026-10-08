@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Prepare exact canonical mappings from stored server-confirmed VK and Yandex recordings. Preserve legacy linkage uniqueness, shared audio features and private listening history; keep direct identities separate from unverified cross-source version matches and legacy staleness-check quotas.
+
 - Preserve bounded server-confirmed metadata for exact playable VK and Yandex recordings. Keep it separate from private listening snapshots, fence outdated credential generations and observations, and retain playback when the optional metadata write fails.
 
 - Bound original-station radio to one thirteen-second server request budget. Stop following owner phases on timeout or browser cancellation, retain shared provider pools for other callers, and check generation/exposure transactions before completion. Preserve the current queue and return a static timeout response when a connected request exceeds its budget.

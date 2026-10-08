@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { prisma } from "../../utils/db";
-import { MusicSourceError, type VerifiedMusicSourceRecording } from "./types";
+import {
+    MusicSourceError,
+    type MusicSourceTrack,
+    type VerifiedMusicSourceRecording,
+} from "./types";
 
 const recordingSchema = z.object({
     provider: z.enum(["vk", "yandex"]),
@@ -15,6 +19,39 @@ const recordingSchema = z.object({
         .regex(/^[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}$/)
         .optional(),
 });
+
+const namespaceSchema = z.object({
+    provider: z.enum(["vk", "yandex"]),
+    providerTrackId: z.string().min(1).max(42),
+    verifiedMetadata: recordingSchema,
+    metadataObservedAt: z.date(),
+    metadataConnectionVersion: z
+        .number()
+        .int()
+        .positive()
+        .refine(Number.isSafeInteger),
+});
+
+/**
+ * Validate the complete stored attestation before using it as shared recording facts.
+ * Historical confirmation is independent of current playback entitlement; private Play is never a fallback.
+ */
+export function readVerifiedMusicSourceRecording(
+    namespace: unknown,
+): MusicSourceTrack | null {
+    const result = namespaceSchema.safeParse(namespace);
+    if (!result.success) return null;
+    const value = result.data;
+    if (
+        value.verifiedMetadata.provider !== value.provider ||
+        value.verifiedMetadata.id !== value.providerTrackId ||
+        !(
+            value.provider === "vk" ? /^-?\d{1,20}_\d{1,20}$/ : /^\d{1,20}$/
+        ).test(value.providerTrackId)
+    )
+        return null;
+    return value.verifiedMetadata;
+}
 
 /**
  * Write only an exact server lookup result, never client display metadata or a Play snapshot.

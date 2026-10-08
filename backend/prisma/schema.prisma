@@ -1619,15 +1619,16 @@ model TrackYtMusic {
 
 /// Exact provider identity; server-confirmed metadata is separate from each owner's private Play claims.
 model TrackMusicSource {
-  id                        String    @id @default(cuid())
+  id                        String         @id @default(cuid())
   provider                  String
   providerTrackId           String
-  createdAt                 DateTime  @default(now())
+  createdAt                 DateTime       @default(now())
   /// Exact server adapter lookup after a successful bounded audio probe; never client metadata.
   verifiedMetadata          Json?
   metadataObservedAt        DateTime?
   metadataConnectionVersion Int?
   plays                     Play[]
+  mappings                  TrackMapping[]
 
   @@unique([provider, providerTrackId])
 }
@@ -1635,11 +1636,12 @@ model TrackMusicSource {
 model TrackMapping {
   id                   String              @id @default(cuid())
   /// Active-row linkage uniqueness is enforced in SQL migrations:
-  /// - stale=false rows are unique by (trackId, trackTidalId, trackYtMusicId)
-  /// - at least one linkage key must be present
+  /// - legacy tuples remain unique by (trackId, trackTidalId, trackYtMusicId)
+  /// - direct-only rows are unique by trackMusicSourceId; mixed/empty tuples are forbidden
   trackId              String?
   trackTidalId         String?
   trackYtMusicId       String?
+  trackMusicSourceId   String?
   canonicalRecordingId String?
   confidence           Float
   source               String // "gap-fill" | "isrc" | "import-match" | "manual" | "federation"
@@ -1649,11 +1651,13 @@ model TrackMapping {
   track                Track?              @relation(fields: [trackId], references: [id], onDelete: SetNull)
   trackTidal           TrackTidal?         @relation(fields: [trackTidalId], references: [id], onDelete: SetNull)
   trackYtMusic         TrackYtMusic?       @relation(fields: [trackYtMusicId], references: [id], onDelete: SetNull)
+  trackMusicSource     TrackMusicSource?   @relation(fields: [trackMusicSourceId], references: [id], onDelete: Cascade)
   canonicalRecording   CanonicalRecording? @relation(fields: [canonicalRecordingId], references: [id], onDelete: SetNull)
 
   @@index([trackId])
   @@index([trackTidalId])
   @@index([trackYtMusicId])
+  @@index([trackMusicSourceId])
   @@index([canonicalRecordingId])
   @@index([stale])
   @@index([stale, staleAt])
