@@ -119,7 +119,9 @@ test.each(["baseline", "active", "shadow"] as const)(
         expect(feed.shelves.quickPicks).toHaveLength(12);
         expect(
             feed.shelves.quickPicks.every(
-                (track) => Number(track.youtubeVideoId.split("-")[1]) >= 40,
+                (track) =>
+                    track.source === "youtube" &&
+                    Number(track.youtubeVideoId.split("-")[1]) >= 40,
             ),
         ).toBe(true);
     },

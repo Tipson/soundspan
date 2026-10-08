@@ -6,6 +6,11 @@
 
 ## Unreleased
 
+- Build personal Home, Wave and listening-time recommendations from confirmed account-owned VK and Yandex listening and likes alongside YouTube. Share the three-seed request budget, admit current feedback and repeat exclusions before quotas, and preserve exact source identities through ordered recommendation attribution.
+- Include exact native recordings in daily style mixes and account-scoped Discover Weekly. Retain long distinct compositions, current dislikes, compatible weekly snapshots and atomic ordered exposure records.
+- Keep native personal recommendations attached to personal Wave continuation and finite Discover queues. Show their actual sources, preserve download identities and avoid reclassifying direct recordings as local or YouTube tracks.
+- Fill explicit Wave mood reserves from saved native recordings only when current confirmed canonical mappings have completed measured audio features. Apply owner feedback and eligibility before the shared reserve capacity.
+
 - Start and continue radio from exact VK and Yandex recordings through the authenticated original-station API. Apply active owner dislikes and confirmed whole-credit artist suppression before selection, preserve station and selected queue occurrence during restore, and retain native playback and exposure identities without substituting library or YouTube tracks when the source fails.
 
 - Add exact-recording VK and Yandex neighbour requests with up to 100 candidates. Share search concurrency and provider backoff, reject rounded or coerced recording IDs, fence obsolete credential generations before caching or delivery, and distinguish an unavailable source from an exhausted pool.

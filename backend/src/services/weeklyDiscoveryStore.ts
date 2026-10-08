@@ -1,12 +1,14 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
+import { readNativeRecommendationRecording } from "./recommendations/nativeCandidates";
+import type { RecommendationCandidate } from "./recommendations/types";
 import {
     buildRecommendationAlbumKey,
     normalizeRecommendationArtistKey,
 } from "./recommendations/identityKeys";
 
 /** Directly playable, metadata-only discovery saved for one account/week. */
-export const weeklyDiscoveryTrackSchema = z
+const youtubeWeeklyTrackSchema = z
     .object({
         id: z.string().min(1).max(96),
         youtubeVideoId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
@@ -26,6 +28,75 @@ export const weeklyDiscoveryTrackSchema = z
     })
     .strict();
 
+const nativeWeeklyTrackSchema = z
+    .object({
+        id: z.string().min(1).max(96),
+        youtubeVideoId: z.never().optional(),
+        title: z.string().trim().min(1).max(200),
+        artist: z.string().trim().min(1).max(1100),
+        album: z.string().max(400),
+        albumId: z.string().max(256),
+        duration: z.number().finite().min(45).max(900),
+        coverUrl: z.string().url().max(2048).nullable(),
+        sourceType: z.enum(["vk", "yandex"]),
+        streamSource: z.enum(["vk", "yandex"]),
+        musicSourceRecording: z
+            .object({
+                provider: z.enum(["vk", "yandex"]),
+                id: z.string().min(1).max(42),
+                title: z.string().trim().min(1).max(200),
+                artists: z
+                    .array(z.string().trim().min(1).max(100))
+                    .min(1)
+                    .max(10),
+                duration: z.number().positive().max(3600),
+                contentVersion: z.enum(["explicit", "clean", "unknown"]),
+                preview: z.literal(false),
+                isrc: z
+                    .string()
+                    .regex(/^[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}$/)
+                    .optional(),
+            })
+            .strict(),
+        provider: z
+            .object({
+                source: z.enum(["vk", "yandex"]),
+                providerTrackId: z.string().min(1).max(42),
+                youtubeVideoId: z.null(),
+                tidalTrackId: z.null(),
+            })
+            .strict(),
+        available: z.literal(true),
+        isLiked: z.literal(false),
+        likedAt: z.null(),
+        similarity: z.literal(0),
+        tier: z.literal("explore"),
+    })
+    .strict()
+    .refine(
+        (track) =>
+            !!readNativeRecommendationRecording({
+                ...track,
+                source: track.sourceType,
+                artist: { id: null, name: track.artist },
+            } as unknown as RecommendationCandidate),
+    );
+
+/** Source-coherent finite metadata, preserving old YouTube snapshots and exact native identity. */
+export const weeklyDiscoveryTrackSchema = z
+    .union([youtubeWeeklyTrackSchema, nativeWeeklyTrackSchema])
+    .refine(
+        (track) =>
+            track.sourceType !== "youtube" || !/^(vk|yandex):/.test(track.id),
+    );
+
+/** Exact repeat/feedback identity; legacy IDs stay compatible with the existing YouTube readers. */
+export function weeklyDiscoveryTrackIdentity(
+    track: WeeklyDiscoveryTrack,
+): string {
+    return track.sourceType === "youtube" ? track.youtubeVideoId : track.id;
+}
+
 /** Persisted weekly discovery track, without client attribution fields. */
 export type WeeklyDiscoveryTrack = z.infer<typeof weeklyDiscoveryTrackSchema>;
 
@@ -33,7 +104,7 @@ const snapshotSchema = z
     .object({
         weeklyDiscovery: z
             .object({
-                version: z.literal(1),
+                version: z.union([z.literal(1), z.literal(2)]),
                 weekStart: z.string().datetime(),
                 cleared: z.boolean(),
                 tracks: z.array(weeklyDiscoveryTrackSchema).max(40),
@@ -74,7 +145,9 @@ function decode(
     const value = snapshotSchema.parse(row.context).weeklyDiscovery;
     if (
         value.weekStart !== weekStart ||
-        (value.cleared && value.tracks.length > 0)
+        (value.cleared && value.tracks.length > 0) ||
+        (value.version === 1 &&
+            value.tracks.some((track) => track.sourceType !== "youtube"))
     ) {
         throw new Error("Invalid weekly discovery snapshot");
     }
@@ -97,7 +170,14 @@ function context(
     cleared: boolean,
 ): Prisma.InputJsonObject {
     const snapshot = snapshotSchema.parse({
-        weeklyDiscovery: { version: 1, weekStart, cleared, tracks },
+        weeklyDiscovery: {
+            version: tracks.some((track) => track.sourceType !== "youtube")
+                ? 2
+                : 1,
+            weekStart,
+            cleared,
+            tracks,
+        },
     });
     return {
         weeklyDiscovery: {
@@ -224,9 +304,15 @@ export class PrismaWeeklyDiscoveryStore implements WeeklyDiscoveryStorage {
                     exposures: {
                         create: tracks.map((track, position) => ({
                             userId,
-                            provider: "youtube",
-                            providerTrackId: track.youtubeVideoId,
-                            canonicalKey: `yt:${track.youtubeVideoId}`,
+                            provider: track.sourceType,
+                            providerTrackId:
+                                track.sourceType === "youtube"
+                                    ? track.youtubeVideoId
+                                    : track.provider.providerTrackId,
+                            canonicalKey:
+                                track.sourceType === "youtube"
+                                    ? `yt:${track.youtubeVideoId}`
+                                    : `provider:${track.id}`,
                             artistKey: normalizeRecommendationArtistKey(
                                 track.artist,
                             ),

@@ -10,7 +10,9 @@ import type {
     StoredWeeklyDiscovery,
 } from "../weeklyDiscoveryStore";
 
-function track(n: number): WeeklyDiscoveryTrack {
+function track(
+    n: number,
+): Extract<WeeklyDiscoveryTrack, { sourceType: "youtube" }> {
     return {
         id: `yt:video-${n}`,
         youtubeVideoId: `video-${n}`,
@@ -227,7 +229,12 @@ describe("online weekly discoveries", () => {
         jest.useFakeTimers();
         try {
             const f = fixture();
-            let resolve!: (tracks: WeeklyDiscoveryTrack[]) => void;
+            let resolve!: (
+                tracks: Extract<
+                    WeeklyDiscoveryTrack,
+                    { sourceType: "youtube" }
+                >[],
+            ) => void;
             f.dependencies.getCandidates.mockImplementation(
                 () =>
                     new Promise((r) => {

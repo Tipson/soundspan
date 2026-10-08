@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { DiscoverTrack } from "../types";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
+import {
+    hasNativeDiscoverIdentity,
+    mapDiscoverTrackToPlaybackTrack,
+} from "../playback";
 
 interface YtMatch {
     videoId: string;
@@ -13,6 +17,8 @@ interface GapFillResult {
     providerCounts: {
         local: number;
         youtube: number;
+        vk: number;
+        yandex: number;
     };
 }
 
@@ -33,16 +39,29 @@ function getTracksKey(tracks: DiscoverTrack[]): string {
                 track.youtubeVideoId,
                 track.tidalTrackId,
                 track.recommendationGenerationId,
+                track.sourceType,
+                track.source,
+                track.mediaSource,
+                track.provider,
+                track.musicSourceRecording,
             ]),
         )
         .join("|");
 }
 
 function hasResolvedProvider(track: DiscoverTrack): boolean {
-    return !!(track.streamSource === "youtube" && track.youtubeVideoId);
+    return hasNativeDiscoverIdentity(track)
+        ? mapDiscoverTrackToPlaybackTrack(track) !== null
+        : !!(track.streamSource === "youtube" && track.youtubeVideoId);
 }
 
-function toResolvedTrack(track: DiscoverTrack): DiscoverTrack {
+function toResolvedTrack(track: DiscoverTrack): DiscoverTrack | null {
+    if (hasNativeDiscoverIdentity(track)) {
+        const native = mapDiscoverTrackToPlaybackTrack(track);
+        return native
+            ? { ...track, musicSourceRecording: native.musicSourceRecording }
+            : null;
+    }
     if (hasResolvedProvider(track)) return track;
     return {
         ...track,
@@ -64,26 +83,30 @@ export function applyDiscoverProviderGapFill(
     const gapSet = new Set(gapIndices);
     let matchIdx = 0;
 
-    return sourceTracks.map((track, index) => {
+    return sourceTracks.flatMap((track, index) => {
+        const ytMatch = gapSet.has(index) ? ytMatches[matchIdx++] : null;
+        if (hasNativeDiscoverIdentity(track)) {
+            const native = toResolvedTrack(track);
+            return native ? [native] : [];
+        }
         // Already available locally — keep as-is
         if (!gapSet.has(index)) {
-            return toResolvedTrack(track);
+            return [toResolvedTrack(track)!];
         }
-
-        const ytMatch = ytMatches[matchIdx];
-        matchIdx++;
 
         if (ytMatch) {
-            return {
-                ...track,
-                sourceType: "youtube",
-                streamSource: "youtube",
-                youtubeVideoId: ytMatch.videoId,
-                tidalTrackId: undefined,
-            };
+            return [
+                {
+                    ...track,
+                    sourceType: "youtube",
+                    streamSource: "youtube",
+                    youtubeVideoId: ytMatch.videoId,
+                    tidalTrackId: undefined,
+                },
+            ];
         }
 
-        return toResolvedTrack(track);
+        return [toResolvedTrack(track)!];
     });
 }
 
@@ -93,7 +116,15 @@ export function applyDiscoverProviderGapFill(
 export function useDiscoverProviderGapFill(
     tracks: DiscoverTrack[] | undefined,
 ): GapFillResult {
-    const sourceTracks = useMemo(() => tracks || [], [tracks]);
+    const sourceTracks = useMemo(
+        () =>
+            (tracks || []).flatMap((track) => {
+                if (!hasNativeDiscoverIdentity(track)) return [track];
+                const native = toResolvedTrack(track);
+                return native ? [native] : [];
+            }),
+        [tracks],
+    );
     const tracksKey = useMemo(() => getTracksKey(sourceTracks), [sourceTracks]);
 
     const [matchState, setMatchState] = useState<ProviderMatchState>({
@@ -116,7 +147,11 @@ export function useDiscoverProviderGapFill(
             if (gapIndices.length === 0) {
                 setMatchState({
                     key: tracksKey,
-                    tracks: sourceTracks.map(toResolvedTrack),
+                    tracks: sourceTracks
+                        .map(toResolvedTrack)
+                        .filter(
+                            (track): track is DiscoverTrack => track !== null,
+                        ),
                     isMatching: false,
                 });
                 return;
@@ -137,7 +172,11 @@ export function useDiscoverProviderGapFill(
             if (!ytAvailable) {
                 setMatchState({
                     key: tracksKey,
-                    tracks: sourceTracks.map(toResolvedTrack),
+                    tracks: sourceTracks
+                        .map(toResolvedTrack)
+                        .filter(
+                            (track): track is DiscoverTrack => track !== null,
+                        ),
                     isMatching: false,
                 });
                 return;
@@ -213,11 +252,17 @@ export function useDiscoverProviderGapFill(
         const counts = {
             local: 0,
             youtube: 0,
+            vk: 0,
+            yandex: 0,
         };
 
         for (const track of effectiveTracks) {
             if (track.sourceType === "youtube") {
                 counts.youtube += 1;
+            } else if (track.sourceType === "vk") {
+                counts.vk += 1;
+            } else if (track.sourceType === "yandex") {
+                counts.yandex += 1;
             } else {
                 counts.local += 1;
             }

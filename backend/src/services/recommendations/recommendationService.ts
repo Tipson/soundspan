@@ -5,6 +5,11 @@ import type {
 } from "../personalizedCatalog";
 import { buildCanonicalRecordingKey } from "./canonicalIdentity";
 import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+    toNativeRecommendationCandidate,
+} from "./nativeCandidates";
+import {
     matchesWaveLanguage,
     type LanguageRecording,
     type WaveLanguage,
@@ -97,7 +102,7 @@ export type PersonalizedRecommendationFeed = PersonalizedHomeFeed & {
 function personalizedCandidate(
     track: PersonalizedTrack,
     lane: NonNullable<RecommendationCandidate["lane"]>,
-): RecommendationCandidate {
+): RecommendationCandidate | null {
     const providerPrior =
         lane === "listenAgain" ? 1.3 : lane === "quickPicks" ? 1.15 : 1;
     const accountAffinity =
@@ -114,15 +119,31 @@ function personalizedCandidate(
             title: track.album.title,
             coverArt: track.album.coverArt,
         },
-        source: "youtube",
+        source: track.source,
         provider: track.provider,
-        streamSource: "youtube",
+        streamSource: track.streamSource,
         youtubeVideoId: track.youtubeVideoId,
+        ...(track.source === "vk" || track.source === "yandex"
+            ? { musicSourceRecording: track.musicSourceRecording }
+            : {}),
         candidateSources: [`personalized-${lane}`],
         providerPrior,
         accountAffinity,
         lane,
     };
+    if (hasNativeRecommendationIdentity(candidate)) {
+        const recording = readNativeRecommendationRecording(candidate);
+        if (!recording) return null;
+        return {
+            ...toNativeRecommendationCandidate(
+                recording,
+                `personalized-${lane}`,
+            )!,
+            lane,
+            providerPrior,
+            accountAffinity,
+        };
+    }
     candidate.canonicalKey = buildCanonicalRecordingKey(candidate);
     return candidate;
 }
@@ -131,14 +152,14 @@ function flattenPersonalizedFeed(
     feed: PersonalizedHomeFeed,
 ): RecommendationCandidate[] {
     return [
-        ...feed.shelves.listenAgain.map((track) =>
-            personalizedCandidate(track, "listenAgain"),
+        ...feed.shelves.listenAgain.flatMap(
+            (track) => personalizedCandidate(track, "listenAgain") ?? [],
         ),
-        ...feed.shelves.quickPicks.map((track) =>
-            personalizedCandidate(track, "quickPicks"),
+        ...feed.shelves.quickPicks.flatMap(
+            (track) => personalizedCandidate(track, "quickPicks") ?? [],
         ),
-        ...feed.shelves.discovery.map((track) =>
-            personalizedCandidate(track, "discovery"),
+        ...feed.shelves.discovery.flatMap(
+            (track) => personalizedCandidate(track, "discovery") ?? [],
         ),
     ];
 }
@@ -156,6 +177,31 @@ function personalizedSourceShelfLimit(visibleShelfLimit: number): number {
 function toPersonalizedTrack(
     candidate: RecommendationCandidate,
 ): PersonalizedTrack | null {
+    if (hasNativeRecommendationIdentity(candidate)) {
+        const recording = readNativeRecommendationRecording(candidate);
+        if (!recording) return null;
+        const safe = toNativeRecommendationCandidate(
+            recording,
+            "personalized-public",
+        )!;
+        return {
+            id: safe.id,
+            title: safe.title,
+            duration: safe.duration,
+            trackNo: null,
+            artist: safe.artist,
+            album: { id: null, title: "", coverArt: "", artist: safe.artist },
+            source: recording.provider,
+            streamSource: recording.provider,
+            musicSourceRecording: recording,
+            provider: {
+                source: recording.provider,
+                providerTrackId: recording.id,
+                tidalTrackId: null,
+                youtubeVideoId: null,
+            },
+        };
+    }
     const videoId = candidate.provider.youtubeVideoId;
     if (!videoId) return null;
     const coverArt =
@@ -276,151 +322,186 @@ export class UnifiedRecommendationService {
 
     async getPersonalizedFeed(
         input: PersonalizedRecommendationInput,
+        options?: { signal?: AbortSignal },
     ): Promise<PersonalizedRecommendationFeed> {
-        const sourceState: { feed?: PersonalizedHomeFeed } = {};
-        let languageStatus: PersonalizedRecommendationFeed["languageStatus"];
-        const engine = this.engine(async (_request, policyTime) => {
-            const sourceFeed = await this.dependencies.loadPersonalizedFeed(
-                input.userId,
-                personalizedSourceShelfLimit(input.limit),
-                {
-                    cursor: input.cursor,
-                    mode: input.direction,
-                    surface: input.surface,
-                    ...(input.mood ? { mood: input.mood } : {}),
-                    ...(input.timeOfDay &&
-                    input.context?.localHour !== undefined &&
-                    input.context.timezoneOffsetMinutes !== undefined
-                        ? {
-                              listeningContext: {
-                                  localHour: input.context.localHour,
-                                  timezoneOffsetMinutes:
-                                      input.context.timezoneOffsetMinutes,
-                              },
-                          }
-                        : {}),
-                    ...(input.excludeVideoIds.length > 0
-                        ? { excludeVideoIds: input.excludeVideoIds }
-                        : {}),
-                },
-            );
-            sourceState.feed = sourceFeed;
-            let candidates = flattenPersonalizedFeed(sourceFeed);
-            const reserveDegraded: string[] = [];
-            if (
-                input.surface === "wave" &&
-                input.direction !== "new" &&
-                input.mood &&
-                ["calm", "energetic", "focus", "workout"].includes(
-                    input.mood,
-                ) &&
-                this.dependencies.loadSavedMoodCandidates
-            ) {
-                try {
-                    const saved =
-                        await this.dependencies.loadSavedMoodCandidates(
+        const execution = createRadioRequestExecution(options?.signal);
+        try {
+            const sourceState: { feed?: PersonalizedHomeFeed } = {};
+            let languageStatus: PersonalizedRecommendationFeed["languageStatus"];
+            const engine = this.engine(
+                async (_request, policyTime) => {
+                    const sourceFeed =
+                        await this.dependencies.loadPersonalizedFeed(
                             input.userId,
-                            input.mood,
+                            personalizedSourceShelfLimit(input.limit),
                             {
-                                allowRecentListeningFallback: Object.values(
-                                    sourceFeed.shelves,
-                                ).every((tracks) => tracks.length === 0),
-                                now: policyTime,
-                                excludeVideoIds: input.excludeVideoIds,
+                                execution,
+                                ...(options?.signal
+                                    ? { sourceSignal: options.signal }
+                                    : {}),
+                                cursor: input.cursor,
+                                mode: input.direction,
+                                surface: input.surface,
+                                ...(input.mood ? { mood: input.mood } : {}),
+                                ...(input.timeOfDay &&
+                                input.context?.localHour !== undefined &&
+                                input.context.timezoneOffsetMinutes !==
+                                    undefined
+                                    ? {
+                                          listeningContext: {
+                                              localHour:
+                                                  input.context.localHour,
+                                              timezoneOffsetMinutes:
+                                                  input.context
+                                                      .timezoneOffsetMinutes,
+                                          },
+                                      }
+                                    : {}),
+                                ...(input.excludeVideoIds.length > 0
+                                    ? { excludeVideoIds: input.excludeVideoIds }
+                                    : {}),
                             },
                         );
-                    candidates.push(
-                        ...saved.map((candidate) => ({
-                            ...candidate,
-                            lane:
-                                input.direction === "familiar"
-                                    ? ("listenAgain" as const)
-                                    : ("quickPicks" as const),
-                        })),
-                    );
-                } catch {
-                    reserveDegraded.push("saved-mood-candidates");
+                    sourceState.feed = sourceFeed;
+                    let candidates = flattenPersonalizedFeed(sourceFeed);
+                    const reserveDegraded: string[] = [];
+                    if (
+                        input.surface === "wave" &&
+                        input.direction !== "new" &&
+                        input.mood &&
+                        ["calm", "energetic", "focus", "workout"].includes(
+                            input.mood,
+                        ) &&
+                        this.dependencies.loadSavedMoodCandidates
+                    ) {
+                        try {
+                            const saved = await execution.run(() =>
+                                this.dependencies.loadSavedMoodCandidates!(
+                                    input.userId,
+                                    input.mood!,
+                                    {
+                                        allowRecentListeningFallback:
+                                            Object.values(
+                                                sourceFeed.shelves,
+                                            ).every(
+                                                (tracks) => tracks.length === 0,
+                                            ),
+                                        now: policyTime,
+                                        execution,
+                                        excludeVideoIds: input.excludeVideoIds,
+                                    },
+                                ),
+                            );
+                            candidates.push(
+                                ...saved.map((candidate) => ({
+                                    ...candidate,
+                                    lane:
+                                        input.direction === "familiar"
+                                            ? ("listenAgain" as const)
+                                            : ("quickPicks" as const),
+                                })),
+                            );
+                        } catch {
+                            execution.check();
+                            reserveDegraded.push("saved-mood-candidates");
+                        }
+                    }
+                    if (input.surface === "wave") {
+                        const selection = input.language ?? "any";
+                        const prepared = this.dependencies.prepareLanguages
+                            ? await execution.run(() =>
+                                  this.dependencies.prepareLanguages!(
+                                      candidates,
+                                  ),
+                              )
+                            : {
+                                  languages: candidates.map(() => null),
+                                  pending: false,
+                              };
+                        languageStatus = {
+                            selection,
+                            pending: prepared.pending,
+                            classified: prepared.languages.filter(
+                                (value) =>
+                                    value === "ru" || value === "foreign",
+                            ).length,
+                            total: candidates.length,
+                        };
+                        candidates = candidates.filter((_candidate, index) =>
+                            matchesWaveLanguage(
+                                prepared.languages[index] ?? null,
+                                selection,
+                            ),
+                        );
+                    }
+                    return {
+                        candidates,
+                        nextCursor: sourceFeed.nextCursor,
+                        degradedSources: [
+                            ...reserveDegraded,
+                            ...((sourceFeed.degradedSources?.length ?? 0) > 0
+                                ? (sourceFeed.degradedSources ?? [])
+                                : sourceFeed.degraded && sourceFeed.reason
+                                  ? [sourceFeed.reason]
+                                  : []),
+                        ],
+                    };
+                },
+                input.diagnostic,
+                execution,
+            );
+            const result = await execution.run(() =>
+                engine.recommend({
+                    userId: input.userId,
+                    ...(input.timeOfDay ? { timeOfDay: true } : {}),
+                    intent: {
+                        surface: input.surface,
+                        direction: input.direction,
+                        mood: input.mood,
+                        language: input.language,
+                    },
+                    sessionId: input.sessionId,
+                    cursor: input.cursor,
+                    limit: input.limit * 3,
+                    perLaneLimit: input.limit,
+                    exclude: input.excludeVideoIds,
+                    context: input.context,
+                }),
+            );
+            const shelves: PersonalizedHomeFeed["shelves"] = {
+                listenAgain: [],
+                quickPicks: [],
+                discovery: [],
+            };
+            for (const candidate of result.tracks) {
+                const track = toPersonalizedTrack(candidate);
+                if (!track) continue;
+                const lane = candidate.lane ?? "discovery";
+                if (shelves[lane].length < input.limit) {
+                    shelves[lane].push(track);
                 }
             }
-            if (input.surface === "wave") {
-                const selection = input.language ?? "any";
-                const prepared = this.dependencies.prepareLanguages
-                    ? await this.dependencies.prepareLanguages(candidates)
-                    : { languages: candidates.map(() => null), pending: false };
-                languageStatus = {
-                    selection,
-                    pending: prepared.pending,
-                    classified: prepared.languages.filter(
-                        (value) => value === "ru" || value === "foreign",
-                    ).length,
-                    total: candidates.length,
-                };
-                candidates = candidates.filter((_candidate, index) =>
-                    matchesWaveLanguage(
-                        prepared.languages[index] ?? null,
-                        selection,
-                    ),
-                );
-            }
+            const baseline = sourceState.feed;
+            execution.check();
             return {
-                candidates,
-                nextCursor: sourceFeed.nextCursor,
-                degradedSources: [
-                    ...reserveDegraded,
-                    ...((sourceFeed.degradedSources?.length ?? 0) > 0
-                        ? (sourceFeed.degradedSources ?? [])
-                        : sourceFeed.degraded && sourceFeed.reason
-                          ? [sourceFeed.reason]
-                          : []),
-                ],
+                shelves,
+                degraded:
+                    Boolean(baseline?.degraded) ||
+                    result.degradedSources.length > 0,
+                reason:
+                    baseline?.reason ??
+                    (result.degradedSources.length > 0
+                        ? "provider_partial_failure"
+                        : null),
+                seedCount: baseline?.seedCount ?? 0,
+                nextCursor: result.nextCursor,
+                generationId: result.generationId,
+                degradedSources: result.degradedSources,
+                ...(languageStatus ? { languageStatus } : {}),
             };
-        }, input.diagnostic);
-        const result = await engine.recommend({
-            userId: input.userId,
-            ...(input.timeOfDay ? { timeOfDay: true } : {}),
-            intent: {
-                surface: input.surface,
-                direction: input.direction,
-                mood: input.mood,
-                language: input.language,
-            },
-            sessionId: input.sessionId,
-            cursor: input.cursor,
-            limit: input.limit * 3,
-            perLaneLimit: input.limit,
-            exclude: input.excludeVideoIds,
-            context: input.context,
-        });
-        const shelves: PersonalizedHomeFeed["shelves"] = {
-            listenAgain: [],
-            quickPicks: [],
-            discovery: [],
-        };
-        for (const candidate of result.tracks) {
-            const track = toPersonalizedTrack(candidate);
-            if (!track) continue;
-            const lane = candidate.lane ?? "discovery";
-            if (shelves[lane].length < input.limit) {
-                shelves[lane].push(track);
-            }
+        } finally {
+            execution.dispose();
         }
-        const baseline = sourceState.feed;
-        return {
-            shelves,
-            degraded:
-                Boolean(baseline?.degraded) ||
-                result.degradedSources.length > 0,
-            reason:
-                baseline?.reason ??
-                (result.degradedSources.length > 0
-                    ? "provider_partial_failure"
-                    : null),
-            seedCount: baseline?.seedCount ?? 0,
-            nextCursor: result.nextCursor,
-            generationId: result.generationId,
-            degradedSources: result.degradedSources,
-            ...(languageStatus ? { languageStatus } : {}),
-        };
     }
 
     recommendSimilar(request: RecommendRequest): Promise<RecommendResult> {

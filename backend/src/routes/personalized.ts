@@ -45,7 +45,8 @@ const personalizedRadioQuerySchema = z
         token: z.string().optional(),
     })
     .strict();
-const PROVIDER_VIDEO_ID_PATTERN = /^(?:yt:)?[A-Za-z0-9_-]{1,64}$/;
+const PERSONAL_QUEUE_ID_PATTERN =
+    /^(?:[A-Za-z0-9_-]{1,64}|vk:-?\d{1,20}_\d{1,20}|yandex:\d{1,20})$/;
 const personalizedHomeQuerySchema = z
     .object({
         limit: z
@@ -153,7 +154,10 @@ function parseContinuationExclusions(value: string | undefined): string[] {
     );
     if (
         videoIds.length > MAX_CONTINUATION_EXCLUSIONS ||
-        videoIds.some((videoId) => !PROVIDER_VIDEO_ID_PATTERN.test(videoId))
+        videoIds.some((videoId) => !PERSONAL_QUEUE_ID_PATTERN.test(videoId)) ||
+        value
+            .split(",")
+            .some((entry) => /^yt:(?:vk|yandex):/.test(entry.trim()))
     ) {
         throw new TypeError("Invalid personalized continuation exclusions");
     }
@@ -328,7 +332,7 @@ router.get(
  *   schemas:
  *     PersonalizedTrack:
  *       type: object
- *       required: [id, title, duration, trackNo, artist, album, source, streamSource, youtubeVideoId, provider]
+ *       required: [id, title, duration, trackNo, artist, album, source, streamSource, provider]
  *       properties:
  *         id:
  *           type: string
@@ -372,12 +376,16 @@ router.get(
  *                   type: string
  *         source:
  *           type: string
- *           enum: [youtube]
+ *           enum: [youtube, vk, yandex]
  *         streamSource:
  *           type: string
- *           enum: [youtube]
+ *           enum: [youtube, vk, yandex]
  *         youtubeVideoId:
  *           type: string
+ *           description: Present only for YouTube; native tracks retain their exact provider recording.
+ *         musicSourceRecording:
+ *           type: object
+ *           description: Sanitized exact VK/Yandex recording with provider, id, title, ordered artists, duration, contentVersion and preview=false. No credentials or media URLs.
  *         provider:
  *           type: object
  *           required: [tidalTrackId, youtubeVideoId]
@@ -386,6 +394,12 @@ router.get(
  *               type: integer
  *               nullable: true
  *             youtubeVideoId:
+ *               type: string
+ *               nullable: true
+ *             source:
+ *               type: string
+ *               enum: [vk, yandex]
+ *             providerTrackId:
  *               type: string
  *     PersonalizedHomeFeed:
  *       type: object
@@ -468,7 +482,7 @@ router.get(
  * @openapi
  * /api/personalized/home:
  *   get:
- *     summary: Get personalized, directly playable YouTube Music shelves
+ *     summary: Get personalized, directly playable source-coherent shelves
  *     tags: [Personalized]
  *     security:
  *       - apiKeyAuth: []
@@ -516,7 +530,7 @@ router.get(
  *         name: exclude
  *         schema:
  *           type: string
- *         description: Up to 80 comma-separated YouTube video IDs already present in the queue
+ *         description: Up to 80 comma-separated YouTube video IDs or exact vk/yandex-prefixed IDs already present in the queue
  *       - in: query
  *         name: timeOfDay
  *         schema:
@@ -554,6 +568,8 @@ router.get(
  *         description: Invalid query
  *       401:
  *         description: Not authenticated
+ *       504:
+ *         description: Personal request exceeded its thirteen-second server budget (RADIO_REQUEST_TIMEOUT).
  */
 async function handlePersonalizedHome(req: Request, res: Response) {
     const parsedQuery = personalizedHomeQuerySchema.safeParse(req.query);
@@ -585,41 +601,64 @@ async function handlePersonalizedHome(req: Request, res: Response) {
         );
     }
     const limit = parsedQuery.data.limit ?? DEFAULT_SHELF_LIMIT;
-    const feed = await unifiedRecommendationService.getPersonalizedFeed({
-        userId,
-        ...(req.headers["x-soundspan-diagnostic"] === "playback"
-            ? { diagnostic: true }
-            : {}),
-        sessionId: parsedQuery.data.sessionId ?? randomUUID(),
-        surface: parsedQuery.data.surface ?? "home",
-        limit,
-        cursor: parsedQuery.data.cursor ?? 0,
-        direction: parsedQuery.data.mode ?? "for-you",
-        mood: parsedQuery.data.mood ?? null,
-        ...(parsedQuery.data.timeOfDay ? { timeOfDay: true } : {}),
-        ...(parsedQuery.data.language
-            ? { language: parsedQuery.data.language }
-            : {}),
-        excludeVideoIds,
-        context:
-            parsedQuery.data.localHour === undefined &&
-            parsedQuery.data.timezoneOffsetMinutes === undefined &&
-            parsedQuery.data.deviceClass === undefined
-                ? undefined
-                : {
-                      localHour: parsedQuery.data.localHour,
-                      timezoneOffsetMinutes:
-                          parsedQuery.data.timezoneOffsetMinutes,
-                      deviceClass: parsedQuery.data.deviceClass,
-                  },
-    });
-    if (feed.degraded) {
-        log.warn("Personalized home feed returned degraded provider results", {
-            reason: feed.reason,
-            seedCount: feed.seedCount,
-        });
+    const requestAbort = createStreamProxyRequestAbort(req, res);
+    try {
+        if (requestAbort.wasClientAborted()) return;
+        const feed = await unifiedRecommendationService.getPersonalizedFeed(
+            {
+                userId,
+                ...(req.headers["x-soundspan-diagnostic"] === "playback"
+                    ? { diagnostic: true }
+                    : {}),
+                sessionId: parsedQuery.data.sessionId ?? randomUUID(),
+                surface: parsedQuery.data.surface ?? "home",
+                limit,
+                cursor: parsedQuery.data.cursor ?? 0,
+                direction: parsedQuery.data.mode ?? "for-you",
+                mood: parsedQuery.data.mood ?? null,
+                ...(parsedQuery.data.timeOfDay ? { timeOfDay: true } : {}),
+                ...(parsedQuery.data.language
+                    ? { language: parsedQuery.data.language }
+                    : {}),
+                excludeVideoIds,
+                context:
+                    parsedQuery.data.localHour === undefined &&
+                    parsedQuery.data.timezoneOffsetMinutes === undefined &&
+                    parsedQuery.data.deviceClass === undefined
+                        ? undefined
+                        : {
+                              localHour: parsedQuery.data.localHour,
+                              timezoneOffsetMinutes:
+                                  parsedQuery.data.timezoneOffsetMinutes,
+                              deviceClass: parsedQuery.data.deviceClass,
+                          },
+            },
+            { signal: requestAbort.signal },
+        );
+        if (requestAbort.wasClientAborted()) return;
+        if (feed.degraded) {
+            log.warn(
+                "Personalized home feed returned degraded provider results",
+                {
+                    reason: feed.reason,
+                    seedCount: feed.seedCount,
+                },
+            );
+        }
+        return res.json(feed);
+    } catch (error) {
+        if (requestAbort.wasClientAborted()) return;
+        if (
+            error instanceof RadioRequestError &&
+            error.code === "RADIO_REQUEST_TIMEOUT"
+        )
+            return sendRouteError(res, 504, "Personalized request timed out", {
+                code: error.code,
+            });
+        throw error;
+    } finally {
+        requestAbort.dispose();
     }
-    return res.json(feed);
 }
 
 router.get("/home", asyncHandler(handlePersonalizedHome));

@@ -23,6 +23,7 @@ function makeBaseTrack(id: string): DiscoverTrack {
 
 test("maps local discover tracks into playback tracks", () => {
     const mapped = mapDiscoverTrackToPlaybackTrack(makeBaseTrack("local-1"));
+    assert.ok(mapped);
 
     assert.equal(mapped.id, "local-1");
     assert.equal(mapped.duration, 245);
@@ -36,7 +37,7 @@ test("preserves TIDAL remote metadata", () => {
         sourceType: "tidal",
         tidalTrackId: 123456,
     });
-
+    assert.ok(mapped);
     assert.equal(mapped.streamSource, "tidal");
     assert.equal(mapped.tidalTrackId, 123456);
     assert.equal(mapped.youtubeVideoId, undefined);
@@ -49,7 +50,7 @@ test("preserves YouTube remote metadata", () => {
         sourceType: "youtube",
         youtubeVideoId: "abc123",
     });
-
+    assert.ok(mapped);
     assert.equal(mapped.streamSource, "youtube");
     assert.equal(mapped.youtubeVideoId, "abc123");
     assert.equal(mapped.tidalTrackId, undefined);
@@ -63,5 +64,6 @@ test("carries owned weekly generation attribution into playback", () => {
         youtubeVideoId: "weekly",
         recommendationGenerationId: "weekly-generation",
     });
+    assert.ok(mapped);
     assert.equal(mapped.recommendationGenerationId, "weekly-generation");
 });

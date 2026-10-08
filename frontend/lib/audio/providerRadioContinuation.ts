@@ -21,6 +21,7 @@ interface ProviderQueueEntry {
     id: string;
     provider?: {
         source?: string;
+        providerTrackId?: string;
         tidalTrackId?: number | null;
         youtubeVideoId?: string | null;
     };
@@ -39,6 +40,21 @@ function providerVideoId(track: ProviderQueueEntry): string | null {
 }
 
 function providerQueueIdentity(track: ProviderQueueEntry): string {
+    if (hasNativeMusicSourceIdentity(track)) {
+        const source = track.provider?.source,
+            id = track.provider?.providerTrackId;
+        return (source === "vk" || source === "yandex") &&
+            typeof id === "string" &&
+            (source === "vk" ? /^-?\d{1,20}_\d{1,20}$/ : /^\d{1,20}$/).test(
+                id,
+            ) &&
+            track.id === `${source}:${id}` &&
+            track.youtubeVideoId == null &&
+            track.provider?.youtubeVideoId == null &&
+            track.provider?.tidalTrackId == null
+            ? track.id
+            : "";
+    }
     const videoId = providerVideoId(track);
     if (videoId) return videoId;
     return track.id;
@@ -46,6 +62,8 @@ function providerQueueIdentity(track: ProviderQueueEntry): string {
 
 /** Identifies a directly playable remote track that can seed provider radio. */
 export function isProviderRadioTrack(track: Track): boolean {
+    if (hasNativeMusicSourceIdentity(track))
+        return readMusicSourcePlaybackTrack(track) !== null;
     const youtubeTrack =
         (track.streamSource === "youtube" ||
             track.streamSource === "youtube-direct" ||
@@ -171,7 +189,9 @@ export function collectProviderRadioContinuation(
     const candidates = selectWaveTracks(feed.shelves, mode);
 
     for (const candidate of candidates) {
-        if (
+        if (hasNativeMusicSourceIdentity(candidate)) {
+            if (!readMusicSourcePlaybackTrack(candidate)) continue;
+        } else if (
             candidate.source !== "library" &&
             providerVideoId(candidate) === null
         ) {

@@ -24,7 +24,8 @@ import { UnavailableAlbums } from "@/features/discover/components/UnavailableAlb
 import { HowItWorks } from "@/features/discover/components/HowItWorks";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { useFeatures } from "@/lib/features-context";
-import { toAddToPlaylistRef } from "@/lib/trackRef";
+import { isPlaybackOnlyTrack, toAddToPlaylistRef } from "@/lib/trackRef";
+import { mapDiscoverTrackToPlaybackTrack } from "@/features/discover/playback";
 import { discoverAddedCount, discoverRu } from "@/lib/i18n/discoverRu";
 
 const DISCOVER_RECENT_GENERATION_WINDOW_MS = 45 * 60 * 1000;
@@ -103,6 +104,14 @@ function DiscoverWeeklyPageContent() {
         ? { ...playlist, tracks: providerEnrichedTracks }
         : null;
     const onlineWeekly = displayPlaylist?.kind === "online-weekly";
+    const playlistSupportedTracks = (displayPlaylist?.tracks || []).filter(
+        (track) => {
+            const playbackTrack = mapDiscoverTrackToPlaybackTrack(track);
+            return (
+                playbackTrack !== null && !isPlaybackOnlyTrack(playbackTrack)
+            );
+        },
+    );
     const {
         handleGenerate,
         handlePlayPlaylist,
@@ -169,20 +178,21 @@ function DiscoverWeeklyPageContent() {
     }, [hasPlaylistContent, generatedRecently]);
 
     const handleAddAllToPlaylist = () => {
+        if (!playlistSupportedTracks.length) return;
         setShowPlaylistSelector(true);
     };
 
     const handlePlaylistSelected = async (playlistId: string) => {
-        if (!displayPlaylist?.tracks.length) return;
+        if (!playlistSupportedTracks.length) return;
         setIsAddingToPlaylist(true);
         try {
-            for (const track of displayPlaylist.tracks) {
+            for (const track of playlistSupportedTracks) {
                 await api.addTrackToPlaylist(
                     playlistId,
                     toAddToPlaylistRef(track),
                 );
             }
-            toast.success(discoverAddedCount(displayPlaylist.tracks.length));
+            toast.success(discoverAddedCount(playlistSupportedTracks.length));
         } catch (error) {
             sharedFrontendLogger.error(
                 "Failed to add tracks to playlist:",
@@ -238,7 +248,11 @@ function DiscoverWeeklyPageContent() {
                     }
                     onGenerate={handleGenerate}
                     onToggleSettings={() => setShowSettings(!showSettings)}
-                    onAddToPlaylist={handleAddAllToPlaylist}
+                    onAddToPlaylist={
+                        playlistSupportedTracks.length
+                            ? handleAddAllToPlaylist
+                            : undefined
+                    }
                     onShuffle={handleShufflePlaylist}
                     onAddAllToQueue={handleAddAllToQueue}
                     isGenerating={onlineWeekly ? false : isGenerating}
@@ -268,6 +282,12 @@ function DiscoverWeeklyPageContent() {
                                             {discoverRu.local}
                                             {providerCounts.youtube > 0
                                                 ? ` • ${providerCounts.youtube} YouTube Music — ${discoverRu.gapFill}`
+                                                : ""}
+                                            {providerCounts.vk > 0
+                                                ? ` • ${providerCounts.vk} VK Музыка`
+                                                : ""}
+                                            {providerCounts.yandex > 0
+                                                ? ` • ${providerCounts.yandex} Яндекс Музыка`
                                                 : ""}
                                         </p>
                                     )}

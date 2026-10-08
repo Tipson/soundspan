@@ -105,7 +105,7 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok")
             .set("x-soundspan-diagnostic", "playback");
         expect(response.status).toBe(200);
-        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
             expect.objectContaining({ diagnostic: true }),
         );
     });
@@ -119,7 +119,7 @@ describe("GET /api/personalized/home", () => {
                 )
                 .set("x-test-auth", "ok");
             expect(response.status).toBe(200);
-            expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
                 expect.objectContaining({
                     language,
                     mood: "focus",
@@ -179,7 +179,7 @@ describe("GET /api/personalized/home", () => {
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual(payload);
-        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith({
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual({
             userId: "user-1",
             sessionId: expect.any(String),
             surface: "home",
@@ -197,7 +197,7 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(200);
-        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
             expect.objectContaining({ userId: "user-1", limit: 25 }),
         );
     });
@@ -210,7 +210,7 @@ describe("GET /api/personalized/home", () => {
                 .set("x-test-auth", "ok");
 
             expect(response.status).toBe(200);
-            expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
                 expect.objectContaining({ direction: mode }),
             );
         },
@@ -229,7 +229,7 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(200);
-        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
             expect.objectContaining({ direction: "new", mood }),
         );
     });
@@ -242,7 +242,7 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(200);
-        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 userId: "user-1",
                 limit: 25,
@@ -262,7 +262,7 @@ describe("GET /api/personalized/home", () => {
                 .set("x-test-auth", "ok");
 
             expect(response.status).toBe(200);
-            expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+            expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
                 expect.objectContaining({
                     surface,
                     sessionId: "tab-session-1",
@@ -279,7 +279,7 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(200);
-        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
             expect.objectContaining({
                 context: {
                     localHour: 23,
@@ -298,7 +298,7 @@ describe("GET /api/personalized/home", () => {
             .set("x-test-auth", "ok");
 
         expect(response.status).toBe(200);
-        expect(mockGetPersonalizedFeed).toHaveBeenCalledWith(
+        expect(mockGetPersonalizedFeed.mock.calls[0][0]).toEqual(
             expect.objectContaining({ timeOfDay: true }),
         );
         const invalid = await request(app)

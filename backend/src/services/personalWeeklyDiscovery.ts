@@ -15,7 +15,14 @@ import {
     type WeeklyDiscoveryStorage,
     type WeeklyDiscoveryTrack,
     type StoredWeeklyDiscovery,
+    weeklyDiscoveryTrackIdentity,
 } from "./weeklyDiscoveryStore";
+import {
+    personalNativeCandidateService,
+    loadKnownNativePersonalIds,
+} from "./recommendations/personalNativeCandidates";
+import { toNativeRecommendationCandidate } from "./recommendations/nativeCandidates";
+import { nativeArtistCreditKey } from "./recommendations/nativeSourceAdmission";
 
 const log = logger.child("PersonalWeeklyDiscovery");
 const TARGET_TRACKS = 40;
@@ -37,6 +44,11 @@ export interface PersonalWeeklyDiscoveryDependencies {
     loadDislikedIds(userId: string, videoIds: string[]): Promise<Set<string>>;
     loadSuppressedArtistKeys(userId: string): Promise<Set<string>>;
     now(): Date;
+    /** Fresh exact native feedback on finite candidates; saved week reads retain their stable listening order. */
+    filterNativeCandidates?(
+        userId: string,
+        tracks: WeeklyDiscoveryTrack[],
+    ): Promise<WeeklyDiscoveryTrack[]>;
 }
 
 /** Current-week online playlist with owned generation attribution. */
@@ -100,15 +112,24 @@ export class PersonalWeeklyDiscoveryService {
             const [disliked, suppressed] = await Promise.all([
                 this.dependencies.loadDislikedIds(
                     userId,
-                    saved.tracks.map((t) => t.youtubeVideoId),
+                    saved.tracks
+                        .filter((t) => t.sourceType === "youtube")
+                        .map(weeklyDiscoveryTrackIdentity),
                 ),
                 this.dependencies.loadSuppressedArtistKeys(userId),
             ]);
-            tracks = saved.tracks
+            const current = this.dependencies.filterNativeCandidates
+                ? await this.dependencies.filterNativeCandidates(
+                      userId,
+                      saved.tracks,
+                  )
+                : saved.tracks;
+            tracks = current
                 .filter(
                     (t) =>
-                        !disliked.has(t.youtubeVideoId) &&
-                        !suppressed.has(artistKey(t.artist)),
+                        t.sourceType !== "youtube" ||
+                        (!disliked.has(t.youtubeVideoId) &&
+                            !suppressed.has(artistKey(t.artist))),
                 )
                 .map((t) => ({ ...t, recommendationGenerationId: saved.id }));
         }
@@ -183,7 +204,7 @@ export class PersonalWeeklyDiscoveryService {
             const candidates = await this.dependencies.getCandidates(
                 userId,
                 cursor,
-                pool.map((t) => t.youtubeVideoId),
+                pool.map(weeklyDiscoveryTrackIdentity),
             );
             if (expired()) return [];
             for (const candidate of candidates.slice(0, TARGET_TRACKS)) {
@@ -198,29 +219,45 @@ export class PersonalWeeklyDiscoveryService {
                 this.dependencies.loadNoveltyExclusions(userId, pool),
                 this.dependencies.loadDislikedIds(
                     userId,
-                    pool.map((t) => t.youtubeVideoId),
+                    pool
+                        .filter((t) => t.sourceType === "youtube")
+                        .map(weeklyDiscoveryTrackIdentity),
                 ),
                 this.dependencies.loadSuppressedArtistKeys(userId),
             ]);
             if (expired()) return [];
+            const current = this.dependencies.filterNativeCandidates
+                ? await this.dependencies.filterNativeCandidates(userId, pool)
+                : pool;
+            if (expired()) return [];
             const ids = new Set<string>();
             const recordings = new Set<string>();
             const artists = new Map<string, number>();
-            selected = pool
+            selected = current
                 .filter((track) => {
-                    const key = songRepeatKey(track.artist, track.title);
-                    const artist = artistKey(track.artist);
+                    const identity = weeklyDiscoveryTrackIdentity(track);
+                    const key =
+                        track.sourceType === "youtube"
+                            ? songRepeatKey(track.artist, track.title)
+                            : track.id;
+                    const artist =
+                        track.sourceType === "youtube"
+                            ? artistKey(track.artist)
+                            : nativeArtistCreditKey(
+                                  track.musicSourceRecording,
+                              )!;
                     if (
                         !key ||
-                        known.has(track.youtubeVideoId) ||
-                        disliked.has(track.youtubeVideoId) ||
-                        suppressed.has(artist) ||
-                        ids.has(track.youtubeVideoId) ||
+                        known.has(identity) ||
+                        (track.sourceType === "youtube" &&
+                            (disliked.has(identity) ||
+                                suppressed.has(artist))) ||
+                        ids.has(identity) ||
                         recordings.has(key) ||
                         (artists.get(artist) ?? 0) >= 2
                     )
                         return false;
-                    ids.add(track.youtubeVideoId);
+                    ids.add(identity);
                     recordings.add(key);
                     artists.set(artist, (artists.get(artist) ?? 0) + 1);
                     return true;
@@ -238,6 +275,27 @@ export async function loadWeeklyNoveltyExclusions(
     candidates: WeeklyDiscoveryTrack[],
 ): Promise<Set<string>> {
     if (candidates.length === 0) return new Set();
+    const native = candidates.flatMap((track) =>
+        track.sourceType === "youtube"
+            ? []
+            : (toNativeRecommendationCandidate(
+                  track.musicSourceRecording,
+                  "weekly-novelty",
+              ) ?? []),
+    );
+    const nativeKnown = await loadKnownNativePersonalIds(
+        userId,
+        native,
+        new Date(),
+        () => {},
+    );
+    const youtube = candidates.filter(
+        (
+            track,
+        ): track is Extract<WeeklyDiscoveryTrack, { sourceType: "youtube" }> =>
+            track.sourceType === "youtube",
+    );
+    if (!youtube.length) return nativeKnown;
     // Query a bounded set of metadata tokens, then compare the full normalized
     // recording key. Exact SQL equality misses punctuation variants with new IDs.
     const tokens = (value: string) =>
@@ -253,8 +311,8 @@ export async function loadWeeklyNoveltyExclusions(
             .slice(0, 3);
     const identity = {
         OR: [
-            { videoId: { in: candidates.map((t) => t.youtubeVideoId) } },
-            ...candidates.flatMap((t) => {
+            { videoId: { in: youtube.map((t) => t.youtubeVideoId) } },
+            ...youtube.flatMap((t) => {
                 const titleTokens = tokens(t.title);
                 const artistTokens = tokens(t.artist);
                 return titleTokens.length && artistTokens.length
@@ -313,15 +371,16 @@ export async function loadWeeklyNoveltyExclusions(
             .map((t) => songRepeatKey(t.artist, t.title))
             .filter((key): key is string => key !== null),
     );
-    return new Set(
-        candidates
+    return new Set([
+        ...nativeKnown,
+        ...youtube
             .filter(
                 (t) =>
                     ids.has(t.youtubeVideoId) ||
                     keys.has(songRepeatKey(t.artist, t.title) ?? ""),
             )
             .map((t) => t.youtubeVideoId),
-    );
+    ]);
 }
 
 /** Production DI for online weekly discovery metadata; no audio is downloaded. */
@@ -334,26 +393,64 @@ export const personalWeeklyDiscoveryService =
                 TARGET_TRACKS,
                 { surface: "weekly", mode: "new", cursor, excludeVideoIds },
             );
-            return feed.shelves.discovery.map((t) => ({
-                id: t.id,
-                youtubeVideoId: t.youtubeVideoId,
-                title: t.title,
-                artist: t.artist.name,
-                album: t.album.title,
-                albumId: t.album.id ?? t.id,
-                duration: t.duration,
-                coverUrl: t.album.coverArt || null,
-                sourceType: "youtube",
-                streamSource: "youtube",
-                available: true,
-                isLiked: false,
-                likedAt: null,
-                similarity: 0,
-                tier: "explore",
-            }));
+            return feed.shelves.discovery.flatMap((t) => {
+                const parsed = weeklyDiscoveryTrackSchema.safeParse({
+                    id: t.id,
+                    ...(t.source === "youtube"
+                        ? { youtubeVideoId: t.youtubeVideoId }
+                        : {
+                              musicSourceRecording: t.musicSourceRecording,
+                              provider: t.provider,
+                          }),
+                    title: t.title,
+                    artist: t.artist.name,
+                    album: t.album.title,
+                    albumId: t.album.id ?? t.id,
+                    duration: t.duration,
+                    coverUrl: t.album.coverArt || null,
+                    sourceType: t.source,
+                    streamSource: t.streamSource,
+                    available: true,
+                    isLiked: false,
+                    likedAt: null,
+                    similarity: 0,
+                    tier: "explore",
+                });
+                return parsed.success ? [parsed.data] : [];
+            });
         },
         loadNoveltyExclusions: loadWeeklyNoveltyExclusions,
         loadDislikedIds: loadDislikedYouTubeIds,
         loadSuppressedArtistKeys: loadSuppressedYouTubeArtists,
+        filterNativeCandidates: async (userId, tracks) => {
+            const candidates = tracks.flatMap((track) =>
+                track.sourceType === "youtube"
+                    ? []
+                    : (toNativeRecommendationCandidate(
+                          track.musicSourceRecording,
+                          "weekly-feedback",
+                      ) ?? []),
+            );
+            if (!candidates.length) return tracks;
+            const batch = await personalNativeCandidateService.admit(
+                {
+                    userId,
+                    policyTime: new Date(),
+                    options: { surface: "home" },
+                    recent: [],
+                    liked: [],
+                    plays: [],
+                    knownIds: new Set(),
+                    seeds: [],
+                    degradedSources: [],
+                },
+                candidates,
+            );
+            const allowed = new Set(batch.fresh.map((track) => track.id));
+            return tracks.filter(
+                (track) =>
+                    track.sourceType === "youtube" || allowed.has(track.id),
+            );
+        },
         now: () => new Date(),
     });

@@ -212,8 +212,10 @@ describe("PersonalDailyMixService", () => {
         expect(result.mixes[0].tracks).toHaveLength(40);
         expect(getRadio).toHaveBeenCalledTimes(2);
         expect(
-            result.mixes[0].tracks.some((t) =>
-                /^first-(?:[0-9]|1[0-9]|20)$/.test(t.youtubeVideoId),
+            result.mixes[0].tracks.some(
+                (t) =>
+                    typeof t.youtubeVideoId === "string" &&
+                    /^first-(?:[0-9]|1[0-9]|20)$/.test(t.youtubeVideoId),
             ),
         ).toBe(false);
     });

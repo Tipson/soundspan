@@ -4,7 +4,22 @@ import { parseStoredTasteProfile } from "./tasteProfile";
 import { tasteArtistTags } from "./tasteArtistGenres";
 import { lastFmService } from "./lastfm";
 import { ytMusicService } from "./youtubeMusic";
-import type { PersonalizedTrack } from "./personalizedCatalog";
+import type {
+    PersonalizedTrack,
+    PersonalizedNativeTrack,
+} from "./personalizedCatalog";
+import {
+    personalNativeCandidateService,
+    toNativePersonalizedTrack,
+    type PersonalNativeCandidateService,
+    type NativePersonalProfile,
+} from "./recommendations/personalNativeCandidates";
+import {
+    hasNativeRecommendationIdentity,
+    readNativeRecommendationRecording,
+} from "./recommendations/nativeCandidates";
+import { nativeArtistCreditKey } from "./recommendations/nativeSourceAdmission";
+import type { RecommendationCandidate } from "./recommendations/types";
 import {
     buildRecommendationAlbumKey,
     normalizeRecommendationArtistKey,
@@ -24,6 +39,8 @@ export interface DailyMixDirection {
     label: string;
     query: string;
     kind?: "genre" | "artist";
+    /** Server-owned exact prepared native seed, never a provider artist API query. */
+    nativeSeedId?: string;
 }
 
 export interface DailyMixSong {
@@ -66,6 +83,11 @@ export interface PersonalDailyMixDependencies {
         input: RecordDailyMixGenerationInput,
     ) => Promise<string>;
     now: () => Date;
+    /** Native directions share the existing six composition slots. */
+    nativeCandidates?: Pick<
+        PersonalNativeCandidateService,
+        "prepare" | "getBatch" | "admit"
+    >;
 }
 
 export interface PersonalDailyMix {
@@ -80,7 +102,22 @@ function artistKey(value: string): string {
     return value.trim().toLocaleLowerCase("en-US");
 }
 
-function playable(song: DailyMixSong): boolean {
+type DailyMixCandidate = DailyMixSong | PersonalizedNativeTrack;
+function songIdentity(song: DailyMixCandidate): string {
+    return "source" in song ? song.id : song.videoId;
+}
+function songArtist(song: DailyMixCandidate): string {
+    return typeof song.artist === "string" ? song.artist : song.artist.name;
+}
+function playable(song: DailyMixCandidate): boolean {
+    if ("source" in song)
+        return (
+            !!readNativeRecommendationRecording(
+                song as unknown as RecommendationCandidate,
+            ) &&
+            song.duration >= 45 &&
+            song.duration <= 900
+        );
     return (
         /^[A-Za-z0-9_-]{1,64}$/.test(song.videoId) &&
         song.title.trim().length > 0 &&
@@ -91,16 +128,17 @@ function playable(song: DailyMixSong): boolean {
     );
 }
 
-function distinct(songs: readonly DailyMixSong[]): DailyMixSong[] {
+function distinct<T extends DailyMixCandidate>(songs: readonly T[]): T[] {
     const seen = new Set<string>();
     return songs.filter((song) => {
-        if (!playable(song) || seen.has(song.videoId)) return false;
-        seen.add(song.videoId);
+        if (!playable(song) || seen.has(songIdentity(song))) return false;
+        seen.add(songIdentity(song));
         return true;
     });
 }
 
-function toTrack(song: DailyMixSong): PersonalizedTrack {
+function toTrack(song: DailyMixCandidate): PersonalizedTrack {
+    if ("source" in song) return song;
     const coverArt =
         song.thumbnailUrl ||
         `https://i.ytimg.com/vi/${encodeURIComponent(song.videoId)}/hqdefault.jpg`;
@@ -125,10 +163,10 @@ function toTrack(song: DailyMixSong): PersonalizedTrack {
 }
 
 function mergeFamiliarAndNew(
-    familiar: DailyMixSong[],
-    newSongs: DailyMixSong[],
-): DailyMixSong[] {
-    const songs: DailyMixSong[] = [];
+    familiar: DailyMixCandidate[],
+    newSongs: DailyMixCandidate[],
+): DailyMixCandidate[] {
+    const songs: DailyMixCandidate[] = [];
     let familiarIndex = 0;
     let newIndex = 0;
     while (songs.length < MAX_TRACKS) {
@@ -154,18 +192,35 @@ export class PersonalDailyMixService {
     async getMixes(userId: string): Promise<{ mixes: PersonalDailyMix[] }> {
         if (!userId.trim()) throw new TypeError("A user id is required");
         const startedAt = Date.now();
-        const [directions, familiarSongs, dislikeState, suppressedArtists] =
-            await Promise.all([
-                this.dependencies.loadDirections(userId),
-                this.dependencies.loadFamiliar(userId),
-                this.dependencies.loadDislikeState(userId),
-                this.dependencies.loadSuppressedArtistKeys(userId),
-            ]);
-        const familiar = familiarSongs.filter(
-            (song) => !suppressedArtists.has(artistKey(song.artist)),
-        );
+        const [
+            directions,
+            familiarSongs,
+            dislikeState,
+            suppressedArtists,
+            nativeProfile,
+        ] = await Promise.all([
+            this.dependencies.loadDirections(userId),
+            this.dependencies.loadFamiliar(userId),
+            this.dependencies.loadDislikeState(userId),
+            this.dependencies.loadSuppressedArtistKeys(userId),
+            this.dependencies.nativeCandidates?.prepare(
+                userId,
+                this.dependencies.now(),
+                { surface: "made-for-you" },
+            ),
+        ]);
+        const familiar: DailyMixCandidate[] = [
+            ...familiarSongs.filter(
+                (song) => !suppressedArtists.has(artistKey(song.artist)),
+            ),
+            ...(nativeProfile
+                ? [...nativeProfile.recent, ...nativeProfile.liked].flatMap(
+                      (track) => toNativePersonalizedTrack(track) ?? [],
+                  )
+                : []),
+        ];
         const seenArtists = new Set<string>();
-        const familiarDirections: DailyMixDirection[] = familiar.flatMap(
+        const familiarDirections: DailyMixDirection[] = familiarSongs.flatMap(
             (song) => {
                 const key = artistKey(song.artist);
                 if (!key || key === "unknown" || seenArtists.has(key))
@@ -182,14 +237,38 @@ export class PersonalDailyMixService {
             },
         );
         const seenDirections = new Set<string>();
-        const chosen = [...directions, ...familiarDirections]
+        const legacyDirections = [...directions, ...familiarDirections];
+        const nativeDirections: DailyMixDirection[] = (
+            nativeProfile?.seeds ?? []
+        ).map((seed) => ({
+            key: `native:${seed.id}`,
+            label: seed.artist.name,
+            query: "",
+            kind: "artist",
+            nativeSeedId: seed.id,
+        }));
+        const combinedDirections: DailyMixDirection[] = [];
+        for (
+            let i = 0;
+            i < Math.max(legacyDirections.length, nativeDirections.length);
+            i++
+        ) {
+            if (legacyDirections[i])
+                combinedDirections.push(legacyDirections[i]);
+            if (nativeDirections[i])
+                combinedDirections.push(nativeDirections[i]);
+        }
+        const chosen = combinedDirections
             .filter((direction) => {
                 if (
+                    !direction.nativeSeedId &&
                     direction.kind === "artist" &&
                     suppressedArtists.has(artistKey(direction.label))
                 )
                     return false;
-                const key = `${direction.kind ?? "genre"}:${artistKey(direction.label)}`;
+                const key =
+                    direction.nativeSeedId ??
+                    `${direction.kind ?? "genre"}:${artistKey(direction.label)}`;
                 if (seenDirections.has(key)) return false;
                 seenDirections.add(key);
                 return true;
@@ -203,11 +282,43 @@ export class PersonalDailyMixService {
             dislikeState,
             [...suppressedArtists].sort(),
             chosen.map((direction) => direction.key),
-            familiar.map((song) => song.videoId),
+            familiar.map(songIdentity),
+            ...(nativeProfile
+                ? [
+                      nativeProfile.plays.map((play) => [
+                          play.track.id,
+                          play.playedAt.getTime(),
+                          play.outcome,
+                      ]),
+                  ]
+                : []),
         ]);
         const cached = this.cache.get(key);
-        if (cached && cached.expiresAt > now) return cached.result;
-        if (cached) this.cache.delete(key);
+        if (cached && cached.expiresAt > now) {
+            const composition = await cached.result;
+            const nativeTracks = composition.mixes.flatMap((mix) =>
+                mix.tracks.filter((track) => track.source !== "youtube"),
+            );
+            if (
+                nativeTracks.length &&
+                nativeProfile &&
+                this.dependencies.nativeCandidates
+            ) {
+                const current = await this.dependencies.nativeCandidates.admit(
+                    nativeProfile,
+                    nativeTracks as unknown as RecommendationCandidate[],
+                    false,
+                );
+                if (this.cache.get(key) !== cached)
+                    return this.getMixes(userId);
+                if (
+                    current.fresh.length + current.fallback.length ===
+                    nativeTracks.length
+                )
+                    return composition;
+            } else return composition;
+        }
+        if (cached && this.cache.get(key) === cached) this.cache.delete(key);
         const result = this.dependencies
             .loadRecentlyPlayed(userId)
             .catch((error: unknown) => {
@@ -225,10 +336,11 @@ export class PersonalDailyMixService {
                     familiar,
                     recentlyPlayed,
                     suppressedArtists,
+                    nativeProfile,
                 ),
             )
-            .then(async ({ mixes }) => ({
-                mixes: await Promise.all(
+            .then(async ({ mixes, cacheable }) => {
+                const served = await Promise.all(
                     mixes.map(async (mix) => {
                         try {
                             const generationId =
@@ -251,8 +363,11 @@ export class PersonalDailyMixService {
                             return mix;
                         }
                     }),
-                ),
-            }));
+                );
+                if (!cacheable && this.cache.get(key)?.result === result)
+                    this.cache.delete(key);
+                return { mixes: served };
+            });
         this.cache.set(key, { expiresAt: now + CACHE_TTL_MS, result });
         if (this.cache.size > MAX_CACHED_ACCOUNTS) {
             this.cache.delete(this.cache.keys().next().value!);
@@ -266,12 +381,14 @@ export class PersonalDailyMixService {
     private async buildMixes(
         userId: string,
         chosen: DailyMixDirection[],
-        familiar: DailyMixSong[],
+        familiar: DailyMixCandidate[],
         recentlyPlayed: RecentlyPlayedSong[],
         suppressedArtists: ReadonlySet<string>,
-    ): Promise<{ mixes: PersonalDailyMix[] }> {
-        const allowedArtist = (song: DailyMixSong) =>
-            !suppressedArtists.has(artistKey(song.artist));
+        nativeProfile?: NativePersonalProfile,
+    ): Promise<{ mixes: PersonalDailyMix[]; cacheable: boolean }> {
+        let nativeDegraded = (nativeProfile?.degradedSources.length ?? 0) > 0;
+        const allowedArtist = (song: DailyMixCandidate) =>
+            "source" in song || !suppressedArtists.has(artistKey(song.artist));
         const recentTimes = new Map<string, number>();
         for (const play of recentlyPlayed) {
             const time = play.playedAt.getTime();
@@ -281,10 +398,30 @@ export class PersonalDailyMixService {
                 Math.max(recentTimes.get(play.videoId) ?? -Infinity, time),
             );
         }
-        const hasFreshPool = (songs: DailyMixSong[]) =>
-            distinct(songs).filter((song) => !recentTimes.has(song.videoId))
-                .length >= MAX_TRACKS;
-        const pools: DailyMixSong[][] = [];
+        for (const play of nativeProfile?.plays ?? []) {
+            if (
+                play.outcome === "failed" ||
+                play.playedAt.getTime() <
+                    this.dependencies.now().getTime() - 7 * 86_400_000
+            )
+                continue;
+            recentTimes.set(
+                play.track.id,
+                Math.max(
+                    recentTimes.get(play.track.id) ?? -Infinity,
+                    play.playedAt.getTime(),
+                ),
+            );
+        }
+        const nativeAllowed = new Set<string>(),
+            nativeIdentities = new Map<string, string>();
+        const compositionIdentity = (song: DailyMixCandidate) =>
+            nativeIdentities.get(songIdentity(song)) ?? songIdentity(song);
+        const hasFreshPool = (songs: DailyMixCandidate[]) =>
+            distinct(songs).filter(
+                (song) => !recentTimes.has(songIdentity(song)),
+            ).length >= MAX_TRACKS;
+        const pools: DailyMixCandidate[][] = [];
         for (
             let start = 0;
             start < chosen.length;
@@ -295,6 +432,50 @@ export class PersonalDailyMixService {
                     .slice(start, start + DIRECTION_CONCURRENCY)
                     .map(async (direction) => {
                         try {
+                            if (
+                                direction.nativeSeedId &&
+                                nativeProfile &&
+                                this.dependencies.nativeCandidates
+                            ) {
+                                const seed = nativeProfile.seeds.find(
+                                    (track) =>
+                                        track.id === direction.nativeSeedId,
+                                );
+                                if (!seed) return [];
+                                const batch =
+                                    await this.dependencies.nativeCandidates.getBatch(
+                                        nativeProfile,
+                                        [seed],
+                                    );
+                                if (batch.degradedSources.length)
+                                    nativeDegraded = true;
+                                const rows = [
+                                    ...batch.fresh,
+                                    ...batch.fallback,
+                                ].filter(
+                                    (track) =>
+                                        track.lane === "discovery" ||
+                                        nativeArtistCreditKey(
+                                            track.musicSourceRecording,
+                                        ) ===
+                                            nativeArtistCreditKey(
+                                                seed.musicSourceRecording,
+                                            ),
+                                );
+                                for (const track of rows) {
+                                    nativeAllowed.add(track.id);
+                                    nativeIdentities.set(
+                                        track.id,
+                                        track.canonicalRecordingId
+                                            ? `canonical:${track.canonicalRecordingId}`
+                                            : track.id,
+                                    );
+                                }
+                                return rows.flatMap(
+                                    (track) =>
+                                        toNativePersonalizedTrack(track) ?? [],
+                                );
+                            }
                             const catalogArtists =
                                 direction.kind === "genre"
                                     ? await this.dependencies
@@ -306,7 +487,9 @@ export class PersonalDailyMixService {
                                     !suppressedArtists.has(artistKey(artist)),
                             );
                             const familiarArtists = new Set(
-                                familiar.map((song) => artistKey(song.artist)),
+                                familiar.map((song) =>
+                                    artistKey(songArtist(song)),
+                                ),
                             );
                             const matched = genreArtists.filter((artist) =>
                                 familiarArtists.has(artistKey(artist)),
@@ -337,7 +520,7 @@ export class PersonalDailyMixService {
                                 ),
                                 direction.query,
                             ].slice(0, 2);
-                            const songs: DailyMixSong[] = [];
+                            const songs: DailyMixCandidate[] = [];
                             for (const query of queries) {
                                 try {
                                     const searched = distinct(
@@ -352,8 +535,9 @@ export class PersonalDailyMixService {
                                     const matchedSongs = artist
                                         ? searched.filter(
                                               (song) =>
-                                                  artistKey(song.artist) ===
-                                                  artistKey(artist),
+                                                  artistKey(
+                                                      songArtist(song),
+                                                  ) === artistKey(artist),
                                           )
                                         : searched;
                                     if (matchedSongs.length === 0) continue;
@@ -366,7 +550,7 @@ export class PersonalDailyMixService {
                                         try {
                                             const radio =
                                                 await this.dependencies.getRadio(
-                                                    seed.videoId,
+                                                    songIdentity(seed),
                                                 );
                                             songs.push(
                                                 ...radio.filter(allowedArtist),
@@ -397,6 +581,7 @@ export class PersonalDailyMixService {
                             }
                             return distinct(songs);
                         } catch (error) {
+                            if (direction.nativeSeedId) nativeDegraded = true;
                             log.warn(
                                 "Daily mix direction unavailable",
                                 {
@@ -413,49 +598,58 @@ export class PersonalDailyMixService {
         }
         const allIds = [
             ...new Set(
-                [...pools.flat(), ...familiar].map((song) => song.videoId),
+                [...pools.flat(), ...familiar]
+                    .filter((song) => !("source" in song))
+                    .map(songIdentity),
             ),
         ];
         const disliked = await this.dependencies.loadDislikedIds(
             userId,
             allIds,
         );
-        const oldestPlayFirst = (left: DailyMixSong, right: DailyMixSong) =>
-            (recentTimes.get(left.videoId) ?? 0) -
-            (recentTimes.get(right.videoId) ?? 0);
+        const oldestPlayFirst = (
+            left: DailyMixCandidate,
+            right: DailyMixCandidate,
+        ) =>
+            (recentTimes.get(songIdentity(left)) ?? 0) -
+            (recentTimes.get(songIdentity(right)) ?? 0);
         const usedAcrossMixes = new Set<string>();
         const mixes = chosen.flatMap((direction, index) => {
             const pool = pools[index].filter(
                 (song) =>
-                    !disliked.has(song.videoId) &&
-                    !usedAcrossMixes.has(song.videoId),
+                    !disliked.has(songIdentity(song)) &&
+                    !usedAcrossMixes.has(compositionIdentity(song)),
             );
             if (pool.length < MIN_TRACKS) return [];
             const artistNames = new Set(
-                pool.map((song) => artistKey(song.artist)),
+                pool.map((song) => artistKey(songArtist(song))),
             );
             const familiarSongs = distinct(familiar).filter(
                 (song) =>
-                    artistNames.has(artistKey(song.artist)) &&
-                    !disliked.has(song.videoId) &&
-                    !usedAcrossMixes.has(song.videoId),
+                    artistNames.has(artistKey(songArtist(song))) &&
+                    (!("source" in song) ||
+                        (!!direction.nativeSeedId &&
+                            nativeAllowed.has(song.id))) &&
+                    !disliked.has(songIdentity(song)) &&
+                    !usedAcrossMixes.has(compositionIdentity(song)),
             );
-            const familiarIds = new Set(
-                familiarSongs.map((song) => song.videoId),
-            );
+            const familiarIds = new Set(familiarSongs.map(songIdentity));
             const newSongs = pool.filter(
-                (song) => !familiarIds.has(song.videoId),
+                (song) => !familiarIds.has(songIdentity(song)),
             );
             const fresh = mergeFamiliarAndNew(
-                familiarSongs.filter((song) => !recentTimes.has(song.videoId)),
-                newSongs.filter((song) => !recentTimes.has(song.videoId)),
+                familiarSongs.filter(
+                    (song) => !recentTimes.has(songIdentity(song)),
+                ),
+                newSongs.filter((song) => !recentTimes.has(songIdentity(song))),
             );
             const older = distinct([...familiarSongs, ...newSongs])
-                .filter((song) => recentTimes.has(song.videoId))
+                .filter((song) => recentTimes.has(songIdentity(song)))
                 .sort(oldestPlayFirst);
             const tracks = [...fresh, ...older].slice(0, MAX_TRACKS);
             if (tracks.length < MIN_TRACKS) return [];
-            for (const track of tracks) usedAcrossMixes.add(track.videoId);
+            for (const track of tracks)
+                usedAcrossMixes.add(compositionIdentity(track));
             return [
                 {
                     key: direction.key,
@@ -468,7 +662,7 @@ export class PersonalDailyMixService {
                 },
             ];
         });
-        return { mixes };
+        return { mixes, cacheable: !nativeDegraded };
     }
 }
 
@@ -484,7 +678,16 @@ function fromStoredTrack(track: {
 }
 
 export const personalDailyMixService = new PersonalDailyMixService({
+    nativeCandidates: personalNativeCandidateService,
     recordMixGeneration: async ({ userId, mix, generatedAt, latencyMs }) => {
+        for (const track of mix.tracks) {
+            const candidate = track as unknown as RecommendationCandidate;
+            if (
+                hasNativeRecommendationIdentity(candidate) &&
+                !readNativeRecommendationRecording(candidate)
+            )
+                throw new TypeError("Invalid native daily mix identity");
+        }
         const day = generatedAt.toISOString().slice(0, 10);
         const generation = await prisma.recommendationGeneration.create({
             data: {
@@ -500,7 +703,10 @@ export const personalDailyMixService = new PersonalDailyMixService({
                 exposures: {
                     create: mix.tracks.map((track, position) => ({
                         userId,
-                        canonicalKey: `yt:${track.youtubeVideoId}`,
+                        canonicalKey:
+                            track.source === "youtube"
+                                ? `yt:${track.youtubeVideoId}`
+                                : `provider:${track.id}`,
                         artistKey: normalizeRecommendationArtistKey(
                             track.artist.name,
                         ),
@@ -508,8 +714,11 @@ export const personalDailyMixService = new PersonalDailyMixService({
                             track.artist.name,
                             track.album.title,
                         ),
-                        provider: "youtube",
-                        providerTrackId: track.youtubeVideoId,
+                        provider: track.source,
+                        providerTrackId:
+                            track.source === "youtube"
+                                ? track.youtubeVideoId
+                                : track.provider.providerTrackId,
                         source: "personal-daily-mix",
                         position,
                     })),
