@@ -10,7 +10,34 @@ import {
     buildRemoteTrackRadio,
     buildRemoteLikedRadio,
 } from "../playlistRemoteRadio";
+beforeEach(() => jest.resetAllMocks());
 describe("track-seeded remote radio", () => {
+    it("forwards an explicit pool refresh without replaying the seed", async () => {
+        mockGetRadio.mockResolvedValue({
+            tracks: [
+                {
+                    videoId: "seed",
+                    title: "Seed",
+                    artist: "Artist",
+                    duration: 180,
+                },
+                {
+                    videoId: "next",
+                    title: "Next",
+                    artist: "Artist",
+                    duration: 180,
+                },
+            ],
+        });
+        const tracks = await buildRemoteTrackRadio("seed", 100, {
+            refresh: true,
+        });
+        expect(mockGetRadio).toHaveBeenCalledTimes(1);
+        expect(mockGetRadio).toHaveBeenCalledWith("seed", 100, {
+            refresh: true,
+        });
+        expect(tracks.map((track) => track.youtubeVideoId)).toEqual(["next"]);
+    });
     it("keeps playable provider metadata and excludes seed and duplicate videos", async () => {
         const row = (videoId: string) => ({
             videoId,

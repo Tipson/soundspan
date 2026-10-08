@@ -447,6 +447,45 @@ test("catalog-only legacy artist retains the two-argument remote call", async ()
     expect(res.body).toEqual({ tracks });
 });
 
+test("catalog-only artist forwards explicit refresh and its partial observer", async () => {
+    const tracks = [{ id: "radio:abcdefghijk" }];
+    const onPartialFailure = jest.fn();
+    mockBuildRemoteArtistRadio.mockImplementation(
+        async (_name, _limit, reportPartialFailure) => {
+            reportPartialFailure?.();
+            return tracks;
+        },
+    );
+    const request = {
+        type: "artist" as const,
+        value: "seed-artist",
+        limit: 100,
+        refreshRemotePool: true,
+        onRemotePartialFailure: onPartialFailure,
+    };
+    expect(await select(request)).toEqual({ tracks });
+    expect(mockBuildRemoteArtistRadio).toHaveBeenCalledWith(
+        "Seed Artist",
+        100,
+        onPartialFailure,
+        { refresh: true },
+    );
+    expect(onPartialFailure).toHaveBeenCalledTimes(1);
+});
+
+test("refresh flag does not replace a playable local artist pool with remote radio", async () => {
+    original = [track("local-song")];
+    const request = {
+        type: "artist" as const,
+        value: "seed-artist",
+        limit: 1,
+        allowRandomFallback: false,
+        refreshRemotePool: true,
+    };
+    expect(ids(await select(request))).toEqual(["local-song"]);
+    expect(mockBuildRemoteArtistRadio).not.toHaveBeenCalled();
+});
+
 test.each([
     ["artist", undefined, 400, "Artist ID required for artist radio"],
     ["vibe", undefined, 400, "Track ID required for vibe matching"],

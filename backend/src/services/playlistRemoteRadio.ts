@@ -94,9 +94,15 @@ export async function buildRemotePlaylistRadio(
         );
 }
 
-/** Loads provider recommendations for one video without replaying its seed. */
-export async function buildRemoteTrackRadio(videoId: string, limit: number) {
-    const result = await ytMusicService.getRadio(videoId, limit);
+/** Loads provider recommendations without replaying its seed; refresh bypasses only settled public cache. */
+export async function buildRemoteTrackRadio(
+    videoId: string,
+    limit: number,
+    options?: { refresh?: boolean },
+) {
+    const result = options
+        ? await ytMusicService.getRadio(videoId, limit, options)
+        : await ytMusicService.getRadio(videoId, limit);
     const seen = new Set([videoId]);
     return result.tracks
         .filter((track) => {
@@ -108,11 +114,12 @@ export async function buildRemoteTrackRadio(videoId: string, limit: number) {
         .map(formatYtMusicRadioTrack);
 }
 
-/** Build exact-artist seed radio; optional continuation observer receives no provider error details. */
+/** Builds exact-artist radio with optional pool refresh; partial observers receive no provider error details. */
 export async function buildRemoteArtistRadio(
     artistName: string,
     limit: number,
     onPartialFailure?: () => void,
+    options?: { refresh?: boolean },
 ) {
     const name = artistName.trim();
     if (!name) return [];
@@ -140,7 +147,11 @@ export async function buildRemoteArtistRadio(
     ].slice(0, PLAYLIST_REMOTE_RADIO_SEED_LIMIT);
     if (seeds.length === 0) return [];
     const results = await Promise.allSettled(
-        seeds.map((seed) => buildRemoteTrackRadio(seed, limit)),
+        seeds.map((seed) =>
+            options
+                ? buildRemoteTrackRadio(seed, limit, options)
+                : buildRemoteTrackRadio(seed, limit),
+        ),
     );
     const successful = results.filter(
         (result) => result.status === "fulfilled",

@@ -267,6 +267,7 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
     },
     loadSeedTracks: async (input, admitTrackIds) => {
         const origin = input.radioOrigin;
+        const refreshRemotePool = input.cursor > 0;
         const degraded = new Set<string>();
         let source: "youtube-radio" | "artist-radio" | "library-radio" =
             "library-radio";
@@ -274,7 +275,11 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
             if (origin.kind === "track" && origin.source === "youtube") {
                 source = "youtube-radio";
                 return {
-                    tracks: await buildRemoteTrackRadio(origin.id, input.limit),
+                    tracks: refreshRemotePool
+                        ? await buildRemoteTrackRadio(origin.id, input.limit, {
+                              refresh: true,
+                          })
+                        : await buildRemoteTrackRadio(origin.id, input.limit),
                     degradedSources: [],
                 };
             }
@@ -291,11 +296,21 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
                     select: { id: true },
                 });
                 if (!matched) {
-                    const tracks = await buildRemoteArtistRadio(
-                        origin.name,
-                        input.limit,
-                        () => degraded.add("artist-radio"),
-                    );
+                    const onPartialFailure = () => {
+                        degraded.add("artist-radio");
+                    };
+                    const tracks = refreshRemotePool
+                        ? await buildRemoteArtistRadio(
+                              origin.name,
+                              input.limit,
+                              onPartialFailure,
+                              { refresh: true },
+                          )
+                        : await buildRemoteArtistRadio(
+                              origin.name,
+                              input.limit,
+                              onPartialFailure,
+                          );
                     return { tracks, degradedSources: [...degraded] };
                 }
                 artistId = matched.id;
@@ -317,6 +332,9 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
                 admitTrackIds,
                 allowRandomFallback: false,
                 onRemotePartialFailure: () => degraded.add("artist-radio"),
+                ...(refreshRemotePool && artistId
+                    ? { refreshRemotePool: true }
+                    : {}),
             });
             return {
                 tracks:

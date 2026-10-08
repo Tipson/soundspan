@@ -63,6 +63,8 @@ export interface LibrarySeedRadioInput {
     admitTrackIds?: (ids: readonly string[]) => Promise<ReadonlySet<string>>;
     /** Reports provider seed failures while retaining usable remote-artist results. */
     onRemotePartialFailure?: () => void;
+    /** Refreshes settled provider cache for catalog-only artists; local seed selection is unchanged. */
+    refreshRemotePool?: boolean;
     /** Defaults to the legacy random refill; automatic continuation can opt out. */
     allowRandomFallback?: boolean;
 }
@@ -135,16 +137,23 @@ export async function selectLibrarySeedRadio(
                 });
                 return {
                     tracks: artist?.name
-                        ? input.onRemotePartialFailure
+                        ? input.refreshRemotePool
                             ? await buildRemoteArtistRadio(
                                   artist.name,
                                   limitNum,
                                   input.onRemotePartialFailure,
+                                  { refresh: true },
                               )
-                            : await buildRemoteArtistRadio(
-                                  artist.name,
-                                  limitNum,
-                              )
+                            : input.onRemotePartialFailure
+                              ? await buildRemoteArtistRadio(
+                                    artist.name,
+                                    limitNum,
+                                    input.onRemotePartialFailure,
+                                )
+                              : await buildRemoteArtistRadio(
+                                    artist.name,
+                                    limitNum,
+                                )
                         : [],
                 };
             }

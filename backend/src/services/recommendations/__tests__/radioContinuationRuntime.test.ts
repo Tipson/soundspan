@@ -132,9 +132,69 @@ beforeEach(() => {
 });
 
 describe("actual original-radio runtime adapters", () => {
+    it.each([0, 1, 1_000_000])(
+        "refreshes YouTube pools only for a positive continuation cursor %s",
+        async (cursor) => {
+            await loadRadioContinuationCandidates({ ...input, cursor }, now);
+            expect(mockTrackRadio.mock.calls).toEqual([
+                cursor > 0
+                    ? ["seedVideo01", 100, { refresh: true }]
+                    : ["seedVideo01", 100],
+            ]);
+        },
+    );
+    it.each([0, 1])(
+        "forwards cursor %s to unmatched discovery artist radio",
+        async (cursor) => {
+            mockArtistLookup.mockResolvedValue(null);
+            await loadRadioContinuationCandidates(
+                {
+                    ...input,
+                    cursor,
+                    radioOrigin: {
+                        kind: "artist",
+                        source: "discovery",
+                        name: "Original",
+                    },
+                },
+                now,
+            );
+            expect(mockArtistRadio).toHaveBeenCalledTimes(1);
+            const args: unknown[] = ["Original", 100, expect.any(Function)];
+            if (cursor > 0) args.push({ refresh: true });
+            expect(mockArtistRadio).toHaveBeenCalledWith(...args);
+            expect(mockSelectSeed).not.toHaveBeenCalled();
+        },
+    );
+    it.each(["library", "discovery"] as const)(
+        "delivers pool refresh to catalog-only %s artists through the local selector",
+        async (source) => {
+            const radioOrigin =
+                source === "library"
+                    ? { kind: "artist" as const, source, id: "catalog-artist" }
+                    : { kind: "artist" as const, source, name: "Original" };
+            for (const cursor of [0, 1]) {
+                mockSelectSeed.mockClear();
+                await loadRadioContinuationCandidates(
+                    { ...input, cursor, radioOrigin },
+                    now,
+                );
+                const request = mockSelectSeed.mock.calls[0][0];
+                expect(request.type).toBe("artist");
+                expect(request.value).toBe(
+                    source === "library" ? "catalog-artist" : "original-artist",
+                );
+                if (cursor > 0) expect(request.refreshRemotePool).toBe(true);
+                else expect(request).not.toHaveProperty("refreshRemotePool");
+                expect(mockArtistRadio).not.toHaveBeenCalled();
+            }
+        },
+    );
     it("uses the original YouTube seed, bounded reserve and one captured preference time", async () => {
         const batch = await loadRadioContinuationCandidates(input, now);
-        expect(mockTrackRadio).toHaveBeenCalledWith("seedVideo01", 100);
+        expect(mockTrackRadio).toHaveBeenCalledWith("seedVideo01", 100, {
+            refresh: true,
+        });
         expect(batch.candidates.map((c) => c.id)).toEqual(["yt:freshVid001"]);
         expect(mockLocalRepeat).toHaveBeenCalledWith("alice", now);
         expect(mockYouTubeRepeat).toHaveBeenCalledWith("alice", now);

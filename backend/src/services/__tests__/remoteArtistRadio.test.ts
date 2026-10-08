@@ -27,6 +27,35 @@ beforeEach(() => {
     jest.resetAllMocks();
 });
 
+test("refreshes only the three exact artist seed pools while preserving partial successes", async () => {
+    mockSearch.mockResolvedValue({
+        results: [
+            song("wrong000001", "Other Artist"),
+            ...[1, 2, 3, 4].map((n) => song(`seed000000${n}`)),
+        ],
+    });
+    mockGetRadio.mockImplementation(async (seed: string) => {
+        if (seed === "seed0000002") throw new Error("private-provider-error");
+        return { tracks: [recommendation(seed.replace("seed", "next"))] };
+    });
+    const onPartialFailure = jest.fn();
+    const result = await buildRemoteArtistRadio(
+        "Artist",
+        100,
+        onPartialFailure,
+        { refresh: true },
+    );
+    expect(mockGetRadio.mock.calls).toEqual(
+        [1, 2, 3].map((n) => [`seed000000${n}`, 100, { refresh: true }]),
+    );
+    expect(result.map((track) => track.youtubeVideoId)).toEqual([
+        "next0000001",
+        "next0000003",
+    ]);
+    expect(onPartialFailure).toHaveBeenCalledTimes(1);
+    expect(onPartialFailure).toHaveBeenCalledWith();
+});
+
 test("artist radio seeds only exact artist matches and retains provider metadata without local files", async () => {
     mockSearch.mockResolvedValue({
         results: [
