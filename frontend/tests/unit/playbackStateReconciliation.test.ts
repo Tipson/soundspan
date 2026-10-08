@@ -37,6 +37,28 @@ test("queuesMatchByTrackId compares only deterministic track-id order", () => {
     assert.equal(queuesMatchByTrackId(localQueue, serverQueue), true);
 });
 
+test("remote restore uses the selected occurrence when a recording repeats in the queue", () => {
+    const first = {
+        id: "yt:nextVideo01",
+        streamSource: "youtube",
+        youtubeVideoId: "nextVideo01",
+        radioOrigin: { kind: "track", source: "youtube", id: "seedVideo01" },
+    };
+    const current = { ...first, radioOrigin: undefined };
+    const queue = [first, { id: "bridge" }, current];
+    assert.equal(findRemoteQueueTrackForRestore(first.id, queue, 2), current);
+    assert.equal(findRemoteQueueTrackForRestore(first.id, queue, 1), first);
+    assert.equal(findRemoteQueueTrackForRestore(first.id, queue, -1), first);
+});
+
+test("indexed restore retains legacy trimming when provider fields are absent", () => {
+    const current = { id: " yt:nextVideo01 " };
+    assert.equal(
+        findRemoteQueueTrackForRestore(" yt:nextVideo01 ", [current], 0),
+        current,
+    );
+});
+
 test("queuesMatchByTrackId ignores null/blank IDs and trims identifier text", () => {
     const localQueue = [
         { id: " track-1 " },

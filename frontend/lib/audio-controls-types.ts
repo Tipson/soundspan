@@ -7,6 +7,14 @@ import type {
 import type { PlaybackAdvanceOrigin } from "./audio-engine/playbackAdvanceOrigin";
 import type { EpisodeQueueItem } from "./queue-item";
 import type { Episode } from "@/features/podcast/types";
+import type { PlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
+
+/** Explicit collection/station start options; omitted radio intent clears prior context. */
+export interface PlayTracksOptions {
+    replaceQueue?: boolean;
+    preserveOrder?: boolean;
+    radioOrigin?: PlaybackRadioOrigin;
+}
 
 /** Queue mutation committed by a local Match Vibe request. */
 export type VibeQueueMutationKind = "append" | "replace" | "replace-upcoming";
@@ -39,7 +47,7 @@ export interface AudioControlsContextType {
         startIndex?: number,
         isVibeQueue?: boolean,
         /** Explicit collection start replaces the queue even for the current track. */
-        options?: { replaceQueue?: boolean; preserveOrder?: boolean },
+        options?: PlayTracksOptions,
     ) => void;
     playAudiobook: (audiobook: Audiobook) => void;
     playPodcast: (
@@ -84,6 +92,7 @@ export interface AudioControlsContextType {
         tracks: Track[],
         preserveOrder?: boolean,
         isVibeQueue?: boolean,
+        options?: { radioOrigin?: PlaybackRadioOrigin },
     ) => void;
     toggleShuffle: () => void;
     toggleRepeat: () => void;

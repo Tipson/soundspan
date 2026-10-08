@@ -408,7 +408,9 @@ export function OverlayPlayer() {
                 toast.error("Недостаточно похожей музыки для радио");
                 return;
             }
-            setUpcoming(filtered, true, true);
+            setUpcoming(filtered, true, true, {
+                radioOrigin: filtered[0]?.radioOrigin,
+            });
             toast.success(
                 `Радио ${currentTrack.title}: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,
             );

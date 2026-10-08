@@ -1,5 +1,9 @@
 # Changelog
 
+## Radio queue identity
+
+- Preserve the selected song or artist on each radio queue occurrence and in playback snapshots. Starting another collection clears the prior station intent; replacing only the upcoming radio tail preserves the current playback position and pause state.
+
 ## Unreleased
 
 - Prepare unmeasured personal discovery songs through the existing bounded background analyzer when an explicit Wave mood excludes them. Check existing coverage before artist and fair admission quotas so completed recordings cannot starve pending discoveries. Keep unverified songs out of the queue and recommendation exposures, honor existing hard exclusions, and retain the scheduler's budget, account fairness and duplicate-work guards.

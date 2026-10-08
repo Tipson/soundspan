@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import type { Track } from "@/lib/audio-state-context";
+import { withPlaybackRadioOrigin } from "./playbackRadioOrigin";
 import {
     isRemoteTrack,
     isRetiredRemoteOnlyTrack,
@@ -25,7 +26,14 @@ export async function loadTrackRadio(seed: Track): Promise<Track[]> {
             "artist-name",
             seed.artist.name,
         );
-        return normalizeRadioTracks(response.tracks ?? [], [seed]);
+        return normalizeRadioTracks(response.tracks ?? [], [seed]).map(
+            (track) =>
+                withPlaybackRadioOrigin(track, {
+                    kind: "artist",
+                    source: "discovery",
+                    name: seed.artist.name,
+                }),
+        );
     }
     if (!normalizedSeed) return [];
     const videoId = normalizedSeed.youtubeVideoId;
@@ -35,7 +43,14 @@ export async function loadTrackRadio(seed: Track): Promise<Track[]> {
         videoId ? "youtube" : "vibe",
         videoId || seed.id,
     );
-    return normalizeRadioTracks(response.tracks ?? [], [normalizedSeed]);
+    return normalizeRadioTracks(response.tracks ?? [], [normalizedSeed]).map(
+        (track) =>
+            withPlaybackRadioOrigin(track, {
+                kind: "track",
+                source: videoId ? "youtube" : "library",
+                id: videoId || seed.id,
+            }),
+    );
 }
 
 /** Preserves provider identities while rejecting malformed or duplicate radio rows. */

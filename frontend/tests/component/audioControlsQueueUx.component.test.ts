@@ -1522,6 +1522,72 @@ test("radio queue startup enables continuation even when no previous Wave was ac
     state.commit();
     assert.equal(state.vibeMode, true);
 });
+test("radio origin is explicit on every queued occurrence and clears when a collection replaces it", async () => {
+    const origin = {
+        kind: "track" as const,
+        source: "library" as const,
+        id: "original",
+    };
+    const tracks = [makeTrack("seed", "a"), makeTrack("next", "b")];
+    const state = createDeferredAudioState({});
+    const playback = createPlaybackStub();
+    let controls = await renderControls({ state, playback });
+    controls.playTracks(tracks, 0, true, {
+        replaceQueue: true,
+        radioOrigin: origin,
+    });
+    state.commit();
+    for (const track of state.queue as Array<{ radioOrigin?: unknown }>)
+        assert.deepEqual(track.radioOrigin, origin);
+    assert.deepEqual(
+        (state.currentTrack as { radioOrigin?: unknown }).radioOrigin,
+        origin,
+    );
+    controls = await renderControls({ state, playback });
+    controls.playTracks(state.queue as typeof tracks, 0, false, {
+        replaceQueue: true,
+    });
+    state.commit();
+    for (const track of state.queue as Array<{ radioOrigin?: unknown }>)
+        assert.equal(track.radioOrigin, undefined);
+    assert.equal(
+        (state.currentTrack as { radioOrigin?: unknown }).radioOrigin,
+        undefined,
+    );
+});
+
+test("upcoming radio stamps the retained song and tail without changing pause or position", async () => {
+    const origin = {
+        kind: "track" as const,
+        source: "library" as const,
+        id: "seed",
+    };
+    const seed = makeTrack("seed", "a");
+    const state = createDeferredAudioState({
+        currentTrack: seed,
+        playbackType: "track",
+        queue: [seed],
+    });
+    const playback = createPlaybackStub({ currentTime: 73 });
+    const controls = await renderControls({ state, playback });
+    controls.setUpcoming([makeTrack("next", "b")], true, true, {
+        radioOrigin: origin,
+    });
+    state.commit();
+    assert.deepEqual(
+        (state.queue as Array<{ radioOrigin?: unknown }>).map(
+            (t) => t.radioOrigin,
+        ),
+        [origin, origin],
+    );
+    assert.deepEqual(
+        (state.currentTrack as { radioOrigin?: unknown }).radioOrigin,
+        origin,
+    );
+    assert.equal(playback.currentTime, 73);
+    assert.equal(playback.isPlaying, false);
+});
+
 test("radio upcoming replacement enables continuation without restarting the current song", async () => {
     const seed = makeTrack("seed", "artist");
     const next = makeTrack("next", "other");

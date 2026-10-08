@@ -71,3 +71,20 @@ test("empty and unavailable artist radio remain distinct", async () => {
     };
     await assert.rejects(loadArtistRadio("artist-id"), /provider unavailable/);
 });
+
+test("artist radio retains its requested artist even when a candidate has another artist", async () => {
+    const { loadArtistRadio } = await import("../../lib/radio/loadArtistRadio");
+    load = async () => ({ tracks: [track] });
+    const library = await loadArtistRadio("artist-id", "Original", "library");
+    assert.deepEqual(library?.[0].radioOrigin, {
+        kind: "artist",
+        source: "library",
+        id: "artist-id",
+    });
+    const discovery = await loadArtistRadio("mb-id", " Original ", "discovery");
+    assert.deepEqual(discovery?.[0].radioOrigin, {
+        kind: "artist",
+        source: "discovery",
+        name: "Original",
+    });
+});

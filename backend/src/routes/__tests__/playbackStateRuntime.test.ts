@@ -117,6 +117,77 @@ describe("playbackState routes runtime", () => {
         mockDeleteMany.mockReset();
     });
 
+    it("round-trips original radio intent without storing credentials or arbitrary fields", async () => {
+        let stored: unknown = null;
+        mockUpsert.mockImplementation(async ({ create }) => {
+            stored = structuredClone(create);
+            return stored;
+        });
+        mockFindUnique.mockImplementation(async () => stored);
+        const origins = [
+            { kind: "track", source: "youtube", id: "seedVideo01" },
+            { kind: "track", source: "library", id: "local-seed" },
+            { kind: "artist", source: "library", id: "artist-seed" },
+            { kind: "artist", source: "discovery", name: "Original Artist" },
+        ];
+        const app = createRuntimeApp();
+        await request(app)
+            .post("/")
+            .set("X-Forwarded-For", "198.51.100.70")
+            .send({
+                playbackType: "track",
+                trackId: "next",
+                currentIndex: 1,
+                currentTime: 73,
+                isPlaying: false,
+                queue: origins.map((origin, i) => ({
+                    id: `next-${i}`,
+                    radioOrigin: {
+                        ...origin,
+                        credential: "never persist",
+                        signedUrl: "https://invalid/signed",
+                    },
+                })),
+            })
+            .expect(200);
+        const restored = await request(app)
+            .get("/")
+            .set("X-Forwarded-For", "198.51.100.70")
+            .expect(200);
+        expect(
+            restored.body.queue.map(
+                (t: { radioOrigin: unknown }) => t.radioOrigin,
+            ),
+        ).toEqual(origins);
+        expect(restored.body.currentTime).toBe(73);
+        expect(restored.body.isPlaying).toBe(false);
+    });
+
+    it("discards malformed radio origin while preserving the playable queue item", async () => {
+        mockUpsert.mockImplementation(async ({ create }) => create);
+        const invalid = [
+            null,
+            "radio",
+            { kind: "track", source: "youtube", id: "https://invalid/seed" },
+            { kind: "artist", source: "discovery", name: "x".repeat(201) },
+            { kind: "artist", source: "library", id: "x".repeat(129) },
+        ];
+        const response = await request(createRuntimeApp())
+            .post("/")
+            .set("X-Forwarded-For", "198.51.100.71")
+            .send({
+                playbackType: "track",
+                queue: invalid.map((radioOrigin, i) => ({
+                    id: `t-${i}`,
+                    radioOrigin,
+                })),
+            })
+            .expect(200);
+        expect(response.body.queue).toHaveLength(invalid.length);
+        for (const track of response.body.queue)
+            expect(track).not.toHaveProperty("radioOrigin");
+    });
+
     it("round-trips attribution and finite mode on every daily mix queue entry", async () => {
         let stored: unknown = null;
         mockUpsert.mockImplementation(async ({ create }) => {

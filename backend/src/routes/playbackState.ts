@@ -6,6 +6,7 @@ import { playbackStateLimiter } from "../middleware/rateLimiter";
 import { publishSocialPresenceUpdate } from "../services/socialPresenceEvents";
 import {
     normalizeCanonicalMediaProviderIdentity,
+    normalizePlaybackRadioOrigin,
     toLegacyStreamFields,
 } from "@soundspan/media-metadata-contract";
 import { isForeignKeyViolationOn } from "../utils/prismaErrors";
@@ -93,6 +94,7 @@ function sanitizeEpisodeQueueItem(item: any): Record<string, unknown> | null {
  * (legacy clients) and tagged with `itemType: "track"`.
  */
 function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
+    const radioOrigin = normalizePlaybackRadioOrigin(item.radioOrigin);
     const recommendationGenerationId = sanitizeOptionalString(
         item.recommendationGenerationId,
         128,
@@ -140,6 +142,7 @@ function sanitizeTrackQueueItem(item: any): Record<string, unknown> {
 
     return {
         itemType: "track",
+        ...(radioOrigin ? { radioOrigin } : {}),
         ...(recommendationGenerationId ? { recommendationGenerationId } : {}),
         ...(recommendationSessionId ? { recommendationSessionId } : {}),
         ...(item.recommendationQueueMode === "finite"
@@ -314,6 +317,22 @@ router.get("/", playbackStateLimiter, requireAuth, async (req, res) => {
  *                       type: string
  *                       enum: [finite]
  *                       description: Track belongs to a finite recommendation playlist rather than Wave.
+ *                     radioOrigin:
+ *                       type: object
+ *                       description: Original radio station identity, sanitized independently of the playing song. IDs are bounded to 128 characters and discovery artist names to 200. Unsupported origins and extra fields are discarded.
+ *                       properties:
+ *                         kind:
+ *                           type: string
+ *                           enum: [track, artist]
+ *                         source:
+ *                           type: string
+ *                           enum: [youtube, library, discovery]
+ *                         id:
+ *                           type: string
+ *                           maxLength: 128
+ *                         name:
+ *                           type: string
+ *                           maxLength: 200
  *               currentIndex:
  *                 type: integer
  *               isShuffle:

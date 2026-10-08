@@ -54,6 +54,25 @@ test("seed-only radio stays empty", async () => {
     assert.deepEqual(await loadTrackRadio(track("yt:seed", "seed")), []);
 });
 
+test("track radio keeps the original recording on every returned candidate", async () => {
+    candidates = [track("first", "next"), track("second", "another")];
+    const result = await loadTrackRadio(track("yt:seedVideo01", "seedVideo01"));
+    for (const candidate of result) {
+        assert.deepEqual(candidate.radioOrigin, {
+            kind: "track",
+            source: "youtube",
+            id: "seedVideo01",
+        });
+    }
+    candidates = [track("local-next")];
+    const local = await loadTrackRadio(track("local-seed"));
+    assert.deepEqual(local[0].radioOrigin, {
+        kind: "track",
+        source: "library",
+        id: "local-seed",
+    });
+});
+
 test("playlist radio normalization keeps provider playback identity", async () => {
     const { normalizeRadioTracks } =
         await import("../../lib/radio/loadTrackRadio");

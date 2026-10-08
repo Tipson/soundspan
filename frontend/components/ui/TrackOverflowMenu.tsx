@@ -359,7 +359,10 @@ export function TrackOverflowMenu({
                     isActionable ? [actionTrack, ...filtered] : filtered,
                     0,
                     true,
-                    { replaceQueue: true },
+                    {
+                        replaceQueue: true,
+                        radioOrigin: filtered[0]?.radioOrigin,
+                    },
                 );
                 toast.success(
                     `Радио «${track.title}»: ${filtered.length} ${pluralRu(filtered.length, ["трек", "трека", "треков"])}`,

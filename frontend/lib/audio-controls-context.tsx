@@ -18,6 +18,7 @@ import {
 } from "./audio-state-context";
 import type {
     AudioControlsContextType,
+    PlayTracksOptions,
     VibeQueueMutationKind,
 } from "./audio-controls-types";
 import { usePlaybackStatus } from "./audio-playback-context";
@@ -90,6 +91,7 @@ import { useVibeModeControls } from "@/lib/audio/useVibeModeControls";
 import { resolveAdaptiveWaveSkip } from "@/lib/audio/adaptiveWaveQueue";
 import { isProviderRadioTrack } from "@/lib/audio/providerRadioContinuation";
 import { applyTrackClick } from "@/lib/audio-engine/playbackOccurrence";
+import { withPlaybackRadioOrigin } from "@/lib/radio/playbackRadioOrigin";
 import { userFacingError } from "@/lib/i18n/ru";
 import {
     formatListenTogetherQueueAccepted,
@@ -623,12 +625,18 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             tracks: Track[],
             startIndex = 0,
             isVibeQueue = false,
-            options?: { replaceQueue?: boolean; preserveOrder?: boolean },
+            options?: PlayTracksOptions,
         ) => {
             const playbackState = getPlaybackView();
             if (tracks.length === 0) {
                 return;
             }
+
+            // Station context belongs to this explicit queue command, never to
+            // a song reused later in an unrelated collection.
+            tracks = tracks.map((track) =>
+                withPlaybackRadioOrigin(track, options?.radioOrigin),
+            );
 
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
@@ -2180,7 +2188,12 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     // Set upcoming tracks without interrupting current playback
     // preserveOrder=true will skip shuffle index generation (used for vibe mode)
     const setUpcoming = useCallback(
-        (tracks: Track[], preserveOrder = false, isVibeQueue = false) => {
+        (
+            tracks: Track[],
+            preserveOrder = false,
+            isVibeQueue = false,
+            options?: Pick<PlayTracksOptions, "radioOrigin">,
+        ) => {
             const playbackState = getPlaybackView();
             const ltSession = getActiveListenTogetherSession();
             if (ltSession) {
@@ -2188,6 +2201,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 // Listen Together queue should be edited through explicit queue actions.
                 return;
             }
+
+            tracks = tracks.map((track) =>
+                withPlaybackRadioOrigin(track, options?.radioOrigin),
+            );
 
             if (
                 tracks.length > 0 ||
@@ -2235,8 +2252,22 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 if (!currentTrack) return tracks;
 
                 // New queue: current track + new tracks
-                return [currentTrack, ...tracks];
+                return [
+                    isEpisodeQueueItem(currentTrack)
+                        ? currentTrack
+                        : withPlaybackRadioOrigin(
+                              currentTrack,
+                              options?.radioOrigin,
+                          ),
+                    ...tracks,
+                ];
             });
+
+            state.setCurrentTrack((current) =>
+                current
+                    ? withPlaybackRadioOrigin(current, options?.radioOrigin)
+                    : current,
+            );
 
             // Reset index to 0 (current track is now at index 0)
             state.setCurrentIndex(0);

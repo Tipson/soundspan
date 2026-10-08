@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import type {
     CanonicalMediaProviderIdentity,
     CanonicalMediaSource,
+    PlaybackRadioOrigin,
     FederatedTrackPeer,
     RemoteMediaSource,
     UnifiedTrackSource,
@@ -38,6 +39,7 @@ import { resolveInitialAudioVolume } from "@/lib/audio-volume";
 import { AudioVolumeModeContext } from "@/lib/audio-volume-mode-context";
 import {
     findRemoteQueueTrackForRestore,
+    findQueueTrackForRestore,
     isNonLibraryTrackId,
     normalizeQueueIndex,
     queuesMatchByTrackId,
@@ -51,6 +53,7 @@ import {
 } from "@/lib/queue-item";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
 import { markRemoteTrackChange } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import { withPlaybackRadioOrigin } from "@/lib/radio/playbackRadioOrigin";
 import {
     getUserPlaybackStorageGeneration,
     isUserPlaybackStorageGenerationCurrent,
@@ -117,6 +120,8 @@ export interface AudioFeatures {
 }
 
 export interface Track {
+    /** Station selected by the user; does not change as the current song advances. */
+    radioOrigin?: PlaybackRadioOrigin;
     /** Exact service-catalog recording retained independently of temporary playback leases. */
     musicSourceRecording?: import("./api/musicSources").MusicSourceCandidate;
     id: string;
@@ -317,6 +322,14 @@ function parseStorageJson<T>(key: MigratingStorageKey, fallback: T): T {
     }
 }
 
+function readPersistedTrack(): Track | null {
+    const track = parseStorageJson<Track | null>(
+        STORAGE_KEYS.CURRENT_TRACK,
+        null,
+    );
+    return track ? withPlaybackRadioOrigin(track, track.radioOrigin) : null;
+}
+
 function resolvePersistedVibeState(
     queue: QueueItem[],
     honorPersistedMode = true,
@@ -352,8 +365,8 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     const [playbackStorageGeneration] = useState(
         getUserPlaybackStorageGeneration,
     );
-    const [currentTrack, setCurrentTrack] = useState<Track | null>(() =>
-        parseStorageJson(STORAGE_KEYS.CURRENT_TRACK, null),
+    const [currentTrack, setCurrentTrack] = useState<Track | null>(
+        readPersistedTrack,
     );
     const [currentAudiobook, setCurrentAudiobook] = useState<Audiobook | null>(
         () => parseStorageJson(STORAGE_KEYS.CURRENT_AUDIOBOOK, null),
@@ -530,10 +543,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     hydratedLocalPlaybackTypeRaw === "podcast"
                         ? hydratedLocalPlaybackTypeRaw
                         : null;
-                const hydratedLocalTrack = parseStorageJson<Track | null>(
-                    STORAGE_KEYS.CURRENT_TRACK,
-                    null,
-                );
+                const hydratedLocalTrack = readPersistedTrack();
                 const hydratedLocalAudiobook =
                     parseStorageJson<Audiobook | null>(
                         STORAGE_KEYS.CURRENT_AUDIOBOOK,
@@ -588,6 +598,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     const remoteQueueTrack = findRemoteQueueTrackForRestore(
                         serverState.trackId,
                         serverQueue,
+                        serverState.currentIndex,
                     );
                     if (
                         remoteQueueTrack &&
@@ -617,7 +628,20 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                     hydratedLocalTrack?.id ?? null,
                                     track.id,
                                 );
-                                setCurrentTrack(track);
+                                const savedTrack = findQueueTrackForRestore(
+                                    track.id,
+                                    serverQueue,
+                                    serverState.currentIndex,
+                                );
+                                setCurrentTrack(
+                                    withPlaybackRadioOrigin(
+                                        track,
+                                        savedTrack &&
+                                            !isEpisodeQueueItem(savedTrack)
+                                            ? savedTrack.radioOrigin
+                                            : undefined,
+                                    ),
+                                );
                                 setPlaybackType("track");
                                 setCurrentAudiobook(null);
                                 setCurrentPodcast(null);
@@ -1045,6 +1069,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                         const remoteQueueTrack = findRemoteQueueTrackForRestore(
                             serverState.trackId,
                             serverQueue,
+                            serverState.currentIndex,
                         );
                         if (
                             remoteQueueTrack &&
@@ -1105,7 +1130,20 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                     localCurrentTrackId ?? null,
                                     track.id,
                                 );
-                                setCurrentTrack(track);
+                                const savedTrack = findQueueTrackForRestore(
+                                    track.id,
+                                    serverQueue,
+                                    serverState.currentIndex,
+                                );
+                                setCurrentTrack(
+                                    withPlaybackRadioOrigin(
+                                        track,
+                                        savedTrack &&
+                                            !isEpisodeQueueItem(savedTrack)
+                                            ? savedTrack.radioOrigin
+                                            : undefined,
+                                    ),
+                                );
                                 setPlaybackType("track");
                                 setCurrentAudiobook(null);
                                 setCurrentPodcast(null);

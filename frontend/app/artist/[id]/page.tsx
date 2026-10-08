@@ -656,6 +656,7 @@ export default function ArtistPage() {
                 playTracks(tracks, 0, false, {
                     replaceQueue: true,
                     preserveOrder: true,
+                    radioOrigin: tracks[0]?.radioOrigin,
                 });
                 toast.success(
                     formatArtistRadioPlaying(artist.name, tracks.length),
@@ -679,6 +680,7 @@ export default function ArtistPage() {
         playTracks(radioConfirm.tracks, 0, false, {
             replaceQueue: true,
             preserveOrder: true,
+            radioOrigin: radioConfirm.tracks[0]?.radioOrigin,
         });
         toast.success(
             formatArtistRadioPlaying(
