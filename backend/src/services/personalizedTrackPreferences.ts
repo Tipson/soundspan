@@ -5,6 +5,58 @@ import {
     type PersonalizedRepeatExclusions,
 } from "./personalizedRepeatPolicy";
 
+/** Bounded local manual/automatic Play evidence, using the same automatic repeat policy as YouTube. */
+export async function loadLibraryRepeatExclusions(
+    userId: string,
+    now: Date,
+): Promise<PersonalizedRepeatExclusions> {
+    const rows = await prisma.play.findMany({
+        where: {
+            userId,
+            trackId: { not: null },
+            playedAt: {
+                gte: new Date(
+                    now.getTime() - PERSONALIZED_LISTENING_LOOKBACK_MS,
+                ),
+                lte: now,
+            },
+        },
+        orderBy: [{ playedAt: "desc" }, { id: "asc" }],
+        take: 1_000,
+        select: {
+            playedAt: true,
+            listenedSeconds: true,
+            outcome: true,
+            track: {
+                select: {
+                    id: true,
+                    title: true,
+                    album: { select: { artist: { select: { name: true } } } },
+                },
+            },
+        },
+    });
+    return buildPersonalizedRepeatExclusions(
+        rows.flatMap((row) =>
+            row.track
+                ? [
+                      {
+                          track: {
+                              videoId: `library:${row.track.id}`,
+                              title: row.track.title,
+                              artist: row.track.album.artist.name,
+                          },
+                          playedAt: row.playedAt,
+                          listenedSeconds: row.listenedSeconds,
+                          outcome: row.outcome,
+                      },
+                  ]
+                : [],
+        ),
+        now,
+    );
+}
+
 /** Bounded, account-scoped actual listening, including manual plays without an exposure. */
 export async function loadYouTubeRepeatExclusions(
     userId: string,

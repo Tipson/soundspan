@@ -100,3 +100,30 @@ test("partial seed failures preserve successful genuine recommendations", async 
         .mockResolvedValueOnce({ tracks: [recommendation("next0000001")] });
     expect(await buildRemoteArtistRadio("Artist", 25)).toHaveLength(1);
 });
+
+test("continuation observes a partial source failure without receiving provider errors", async () => {
+    mockSearch.mockResolvedValue({
+        results: [song("seed0000001"), song("seed0000002")],
+    });
+    mockGetRadio
+        .mockRejectedValueOnce(new Error("private-token-in-provider-url"))
+        .mockResolvedValueOnce({ tracks: [recommendation("next0000001")] });
+    const onPartialFailure = jest.fn();
+    expect(
+        await buildRemoteArtistRadio("Artist", 25, onPartialFailure),
+    ).toHaveLength(1);
+    expect(onPartialFailure).toHaveBeenCalledTimes(1);
+    expect(onPartialFailure).toHaveBeenCalledWith();
+});
+
+test("successful empty artist seeds do not report a provider failure", async () => {
+    mockSearch.mockResolvedValue({
+        results: [song("seed0000001"), song("seed0000002")],
+    });
+    mockGetRadio.mockResolvedValue({ tracks: [] });
+    const onPartialFailure = jest.fn();
+    expect(
+        await buildRemoteArtistRadio("Artist", 25, onPartialFailure),
+    ).toEqual([]);
+    expect(onPartialFailure).not.toHaveBeenCalled();
+});

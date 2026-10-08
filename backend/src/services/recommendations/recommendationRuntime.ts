@@ -20,6 +20,7 @@ import { recordingLanguageStore } from "./recordingLanguageRuntime";
 import { remoteAnalysisHotSetScheduler } from "./remoteAnalysisHotSet";
 import { loadSavedCanonicalKeys } from "./savedRecordings";
 import { UnifiedRecommendationService } from "./recommendationService";
+import { loadRadioContinuationCandidates } from "./radioContinuationRuntime";
 import type { RecommendRequest, RecommendationCandidate } from "./types";
 
 const log = logger.child("RecommendationRuntime");
@@ -118,6 +119,7 @@ async function loadSimilarCandidates(request: RecommendRequest) {
 }
 
 export const unifiedRecommendationService = new UnifiedRecommendationService({
+    loadRadioCandidates: loadRadioContinuationCandidates,
     loadSavedCanonicalKeys,
     loadSavedMoodCandidates,
     prepareLanguages: (tracks) => recordingLanguageStore.prepare(tracks),

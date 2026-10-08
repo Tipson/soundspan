@@ -108,10 +108,11 @@ export async function buildRemoteTrackRadio(videoId: string, limit: number) {
         .map(formatYtMusicRadioTrack);
 }
 
-/** Build artist-relative provider radio from a bounded set of exact artist song matches. */
+/** Build exact-artist seed radio; optional continuation observer receives no provider error details. */
 export async function buildRemoteArtistRadio(
     artistName: string,
     limit: number,
+    onPartialFailure?: () => void,
 ) {
     const name = artistName.trim();
     if (!name) return [];
@@ -144,6 +145,8 @@ export async function buildRemoteArtistRadio(
     const successful = results.filter(
         (result) => result.status === "fulfilled",
     );
+    if (successful.length > 0 && successful.length < results.length)
+        onPartialFailure?.();
     if (successful.length === 0) {
         const failure = results.find((result) => result.status === "rejected");
         if (failure?.status === "rejected") throw failure.reason;

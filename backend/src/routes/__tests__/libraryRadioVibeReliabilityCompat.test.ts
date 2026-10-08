@@ -35,6 +35,7 @@ jest.mock("../../utils/db", () => ({
         track: {
             findUnique: jest.fn(),
             findMany: jest.fn(),
+            count: jest.fn(),
         },
         ownedAlbum: {
             findMany: jest.fn(),
@@ -218,6 +219,7 @@ import { prisma } from "../../utils/db";
 
 const mockTrackFindUnique = prisma.track.findUnique as jest.Mock;
 const mockTrackFindMany = prisma.track.findMany as jest.Mock;
+const mockTrackCount = prisma.track.count as jest.Mock;
 const mockOwnedAlbumFindMany = prisma.ownedAlbum.findMany as jest.Mock;
 const mockSimilarArtistFindMany = prisma.similarArtist.findMany as jest.Mock;
 const mockLikedTrackFindMany = prisma.likedTrack.findMany as jest.Mock;
@@ -272,6 +274,8 @@ describe("library vibe radio reliability compatibility", () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockTrackCount.mockReset().mockResolvedValue(0);
+        mockQueryRaw.mockReset();
         mockLikedTrackFindMany.mockResolvedValue([]);
         mockDislikedEntityFindMany.mockResolvedValue([]);
         mockLoadVibeRadioCandidateIds.mockResolvedValue(["candidate-track"]);

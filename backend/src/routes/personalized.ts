@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import { normalizePlaybackRadioOrigin } from "@soundspan/media-metadata-contract";
 import { requireAuthOrToken } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { unifiedRecommendationService } from "../services/recommendations/recommendationRuntime";
@@ -8,11 +9,33 @@ import { personalDailyMixService } from "../services/personalDailyMixes";
 import { recommendationExposureStore } from "../services/recommendations/exposureStore";
 import { logger } from "../utils/logger";
 import { sendRouteError } from "../utils/routeErrorResponse";
+import { LibrarySeedRadioError } from "../services/librarySeedRadioError";
 
 const router = Router();
 const log = logger.child("PersonalizedHome");
 const DEFAULT_SHELF_LIMIT = 12;
 const MAX_CONTINUATION_EXCLUSIONS = 80;
+const personalizedRadioQuerySchema = z
+    .object({
+        type: z.enum(["youtube", "vibe", "artist", "artist-name"]),
+        value: z.string().trim().min(1).max(200),
+        limit: z
+            .string()
+            .regex(/^[1-9]\d*$/)
+            .transform(Number)
+            .pipe(z.number().int().min(1).max(25))
+            .optional(),
+        cursor: z
+            .string()
+            .regex(/^(?:0|[1-9]\d*)$/)
+            .transform(Number)
+            .pipe(z.number().int().min(0).max(1_000_000))
+            .optional(),
+        exclude: z.string().max(11_000).optional(),
+        sessionId: z.string().trim().min(1).max(128).optional(),
+        token: z.string().optional(),
+    })
+    .strict();
 const PROVIDER_VIDEO_ID_PATTERN = /^(?:yt:)?[A-Za-z0-9_-]{1,64}$/;
 const personalizedHomeQuerySchema = z
     .object({
@@ -110,6 +133,143 @@ function parseContinuationExclusions(value: string | undefined): string[] {
 }
 
 router.use(requireAuthOrToken);
+
+/**
+ * @openapi
+ * /api/personalized/radio:
+ *   get:
+ *     summary: Continue the original station with account exclusions and ordered served membership
+ *     tags: [Personalized]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [youtube, vibe, artist, artist-name]
+ *       - in: query
+ *         name: value
+ *         required: true
+ *         description: Original video ID, local track/artist ID, or discovery artist name
+ *         schema:
+ *           type: string
+ *           maxLength: 200
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 25
+ *           default: 25
+ *       - in: query
+ *         name: cursor
+ *         description: Bounded request counter; not a provider pagination token
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 1000000
+ *       - in: query
+ *         name: exclude
+ *         description: Up to 80 comma-separated queue IDs (local, library-prefixed, or yt-prefixed)
+ *         schema:
+ *           type: string
+ *           maxLength: 11000
+ *       - in: query
+ *         name: sessionId
+ *         schema:
+ *           type: string
+ *           maxLength: 128
+ *       - in: header
+ *         name: X-Soundspan-Diagnostic
+ *         schema:
+ *           type: string
+ *           enum: [playback]
+ *         description: Compute without persisting recommendation signals or generations
+ *     responses:
+ *       200:
+ *         description: Ordered mixed YouTube/library tracks, original radioOrigin, generationId, nextCursor and degradation labels; exhaustion can return an empty list
+ *       400:
+ *         description: Invalid original station or continuation query
+ *       401:
+ *         description: Authentication required
+ *       404:
+ *         description: Original local track or artist was not found
+ */
+router.get(
+    "/radio",
+    asyncHandler(async (req, res) => {
+        const parsed = personalizedRadioQuerySchema.safeParse(req.query);
+        if (!parsed.success)
+            return sendRouteError(
+                res,
+                400,
+                "Invalid radio continuation query",
+                { code: "INVALID_QUERY" },
+            );
+        const userId = req.user?.id;
+        if (!userId)
+            return sendRouteError(res, 401, "Authentication required", {
+                code: "AUTH_REQUIRED",
+            });
+        const { type, value } = parsed.data;
+        const radioOrigin = normalizePlaybackRadioOrigin(
+            type === "artist-name"
+                ? { kind: "artist", source: "discovery", name: value }
+                : {
+                      kind: type === "artist" ? "artist" : "track",
+                      source: type === "youtube" ? "youtube" : "library",
+                      id: value,
+                  },
+        );
+        const exclude = parsed.data.exclude
+            ? parsed.data.exclude.split(",").map((id) => id.trim())
+            : [];
+        if (
+            !radioOrigin ||
+            exclude.length > MAX_CONTINUATION_EXCLUSIONS ||
+            exclude.some(
+                (id) =>
+                    !/^(?:[A-Za-z0-9_-]{1,128}|library:[A-Za-z0-9_-]{1,128}|yt:[A-Za-z0-9_-]{11})$/.test(
+                        id,
+                    ),
+            )
+        ) {
+            return sendRouteError(
+                res,
+                400,
+                "Invalid radio continuation query",
+                { code: "INVALID_QUERY" },
+            );
+        }
+        try {
+            return res.json(
+                await unifiedRecommendationService.recommendRadio({
+                    userId,
+                    radioOrigin,
+                    sessionId: parsed.data.sessionId ?? randomUUID(),
+                    limit: parsed.data.limit ?? 25,
+                    cursor: parsed.data.cursor ?? 0,
+                    exclude: [...new Set(exclude)],
+                    ...(req.headers["x-soundspan-diagnostic"] === "playback"
+                        ? { diagnostic: true }
+                        : {}),
+                }),
+            );
+        } catch (error) {
+            if (error instanceof LibrarySeedRadioError) {
+                return sendRouteError(res, error.status, error.message, {
+                    code:
+                        error.status === 404
+                            ? "RADIO_SEED_NOT_FOUND"
+                            : "INVALID_QUERY",
+                });
+            }
+            throw error;
+        }
+    }),
+);
 
 /**
  * @openapi

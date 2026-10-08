@@ -11,6 +11,7 @@ const mockLoadSeedEmbedding = jest.fn();
 const mockLoadMood = jest.fn();
 const mockRecordGeneration = jest.fn();
 const mockScheduleHotSet = jest.fn();
+const mockLoadRadioCandidates = jest.fn();
 const mockWarn = jest.fn();
 let capturedDependencies: Record<string, any>;
 
@@ -64,6 +65,10 @@ jest.mock("../savedRecordings", () => ({
 jest.mock("../remoteAnalysisHotSet", () => ({
     remoteAnalysisHotSetScheduler: { schedule: mockScheduleHotSet },
 }));
+jest.mock("../radioContinuationRuntime", () => ({
+    loadRadioContinuationCandidates: (...args: unknown[]) =>
+        mockLoadRadioCandidates(...args),
+}));
 jest.mock("../recommendationService", () => ({
     UnifiedRecommendationService: class {
         constructor(dependencies: Record<string, any>) {
@@ -102,6 +107,7 @@ describe("recommendation runtime adapters", () => {
         mockLoadMood.mockReset();
         mockRecordGeneration.mockReset();
         mockScheduleHotSet.mockReset();
+        mockLoadRadioCandidates.mockReset();
         mockWarn.mockReset();
     });
 
@@ -136,6 +142,28 @@ describe("recommendation runtime adapters", () => {
         expect(mockRecordGeneration).toHaveBeenCalledWith({ id: "generation" });
         expect(mockScheduleHotSet).toHaveBeenCalledWith({ id: "candidate" });
         expect(capturedDependencies.now()).toBeInstanceOf(Date);
+    });
+
+    it("connects original-station continuation without replacing its owner or policy time", async () => {
+        const origin = { kind: "track", source: "youtube", id: "seedVideo01" };
+        const input = {
+            userId: "alice",
+            sessionId: "station",
+            radioOrigin: origin,
+            cursor: 3,
+            limit: 25,
+            exclude: [],
+        };
+        const now = new Date("2026-10-08T00:20:00Z");
+        mockLoadRadioCandidates.mockResolvedValue({
+            candidates: [],
+            nextCursor: 4,
+            degradedSources: [],
+        });
+        expect(
+            await capturedDependencies.loadRadioCandidates(input, now),
+        ).toEqual({ candidates: [], nextCursor: 4, degradedSources: [] });
+        expect(mockLoadRadioCandidates).toHaveBeenCalledWith(input, now);
     });
 
     it.each(["yt:seed", "related-yt-seed", "youtube:seed"])(

@@ -6,6 +6,9 @@
 
 ## Unreleased
 
+- Continue track and artist radio through a bounded original-station API. Apply queue exclusions, actual listening, current dislikes and viewed recordings before seed-selection quotas; retain ordered generation membership and report partial provider failures without substituting unrelated music.
+- Apply an already suppressed artist to both online and local copies in automatic radio continuation. Keep the existing dislike threshold and expiry, and preserve explicitly selected collection playback and the legacy radio endpoint.
+
 - Prepare unmeasured personal discovery songs through the existing bounded background analyzer when an explicit Wave mood excludes them. Check existing coverage before artist and fair admission quotas so completed recordings cannot starve pending discoveries. Keep unverified songs out of the queue and recommendation exposures, honor existing hard exclusions, and retain the scheduler's budget, account fairness and duplicate-work guards.
 
 - Apply current queue exclusions, recently viewed served recordings and canonical dislikes before saved mood reserve quotas, so excluded songs cannot crowd out available fresh candidates. Use the engine's request timestamp across the reserve and final filtering; preserve the existing cooldown, account isolation and older-listening fallback rules.

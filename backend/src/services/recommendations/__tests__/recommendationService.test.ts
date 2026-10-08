@@ -61,7 +61,9 @@ describe("unified recommendation compatibility facade", () => {
         expect(loadPersonalizedFeed).toHaveBeenLastCalledWith(
             "alice",
             expect.any(Number),
-            expect.not.objectContaining({ listeningContext: expect.anything() }),
+            expect.not.objectContaining({
+                listeningContext: expect.anything(),
+            }),
         );
     });
     it.each(["baseline", "shadow", "active"] as const)(

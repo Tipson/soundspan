@@ -12,6 +12,11 @@ import {
 import type { PreparedRecordingLanguages } from "./recordingLanguageStore";
 import type { SavedMoodCandidateOptions } from "./featureStore";
 import {
+    toRadioContinuationTrack,
+    type RadioContinuationInput,
+    type RadioContinuationResponse,
+} from "./radioContinuation";
+import {
     RecommendationEngine,
     type RecommendationCandidateBatch,
     type RecommendationEngineDependencies,
@@ -34,6 +39,11 @@ type CommonEngineDependencies = Omit<
 >;
 
 export interface UnifiedRecommendationDependencies extends CommonEngineDependencies {
+    /** Original-station candidate selection with account exclusions before local quotas. */
+    loadRadioCandidates?: (
+        input: RadioContinuationInput,
+        policyTime: Date,
+    ) => Promise<RecommendationCandidateBatch>;
     /** Bounded personal, already-analyzed reserve for explicit listening moods. */
     loadSavedMoodCandidates?: (
         userId: string,
@@ -344,5 +354,38 @@ export class UnifiedRecommendationService {
         return this.engine(this.dependencies.loadSimilarCandidates).recommend(
             request,
         );
+    }
+
+    /** Continue the original station through the same ranking and served-membership boundary. */
+    async recommendRadio(
+        input: RadioContinuationInput,
+    ): Promise<RadioContinuationResponse> {
+        const loader = this.dependencies.loadRadioCandidates;
+        if (!loader)
+            throw new Error("Radio continuation loader is unavailable");
+        const result = await this.engine(
+            (_request, policyTime) => loader(input, policyTime),
+            input.diagnostic,
+        ).recommend({
+            userId: input.userId,
+            sessionId: input.sessionId,
+            intent: {
+                surface: "wave",
+                direction: "for-you",
+                mood: null,
+                language: "any",
+            },
+            cursor: input.cursor,
+            limit: input.limit,
+            exclude: input.exclude,
+        });
+        return {
+            tracks: result.tracks.map(toRadioContinuationTrack),
+            radioOrigin: input.radioOrigin,
+            generationId: result.generationId,
+            nextCursor: result.nextCursor,
+            degraded: result.degradedSources.length > 0,
+            degradedSources: result.degradedSources,
+        };
     }
 }

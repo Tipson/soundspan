@@ -1253,6 +1253,18 @@ describe("library catalog list runtime coverage", () => {
             if (Array.isArray(args.where?.album?.artistId?.in)) {
                 return [{ id: "sim-b1" }];
             }
+            if (args.where?.trackGenres?.some) {
+                return [{ id: "genre-c1" }];
+            }
+            if (
+                args.select?.id &&
+                args.orderBy?.id === "asc" &&
+                args.skip !== undefined
+            ) {
+                return Array.from({ length: 50 }, (_unused, index) => ({
+                    id: `rnd-d${index + 1}`,
+                }));
+            }
             if (Array.isArray(args.where?.id?.in) && args.include?.album) {
                 return (args.where.id.in as string[]).map(
                     (id: string, index: number) =>
@@ -1274,13 +1286,7 @@ describe("library catalog list runtime coverage", () => {
             { toArtistId: "artist-sim-1", weight: 0.9 },
         ]);
         mockLoadVibeRadioCandidateIds.mockResolvedValueOnce(["an-1", "an-2"]);
-        mockPrismaQueryRaw
-            .mockResolvedValueOnce([{ id: "genre-c1" }])
-            .mockResolvedValueOnce(
-                Array.from({ length: 50 }, (_unused, index) => ({
-                    id: `rnd-d${index + 1}`,
-                })),
-            );
+        mockTrackCount.mockResolvedValueOnce(1).mockResolvedValueOnce(50);
 
         const missingSourceReq = {
             query: { type: "vibe" },
@@ -1350,8 +1356,27 @@ describe("library catalog list runtime coverage", () => {
                 take: 400,
             }),
         );
-        expectBoundedRandomQuery(mockPrismaQueryRaw.mock.calls[0], 55);
-        expectBoundedRandomQuery(mockPrismaQueryRaw.mock.calls[1], 50);
+        expect(mockPrismaQueryRaw).not.toHaveBeenCalled();
+        expect(mockTrackCount).toHaveBeenCalledTimes(2);
+        expect(mockTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    trackGenres: expect.any(Object),
+                }),
+                select: { id: true },
+                orderBy: { id: "asc" },
+                skip: 0,
+                take: 1,
+            }),
+        );
+        expect(mockTrackFindMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                select: { id: true },
+                orderBy: { id: "asc" },
+                skip: 0,
+                take: 50,
+            }),
+        );
     });
 
     it("covers favorites, decade, genre, mood, and all radio branches", async () => {
