@@ -44,6 +44,12 @@ export interface MusicSourceAdapter {
     version: number;
     enabled: boolean;
     search(query: string, signal: AbortSignal): Promise<MusicSourceTrack[]>;
+    /** Exact recording neighbours, without account stations or playback side effects. */
+    recommendations?(
+        id: string,
+        limit: number,
+        signal: AbortSignal,
+    ): Promise<MusicSourceTrack[]>;
     lookup(id: string, signal: AbortSignal): Promise<MusicSourceTrack | null>;
     open(
         id: string,
