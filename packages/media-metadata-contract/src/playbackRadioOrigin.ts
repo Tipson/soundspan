@@ -1,6 +1,10 @@
 /** Original musical intent of a radio queue, independent of the playing song. */
 export type PlaybackRadioOrigin =
-    | { kind: "track"; source: "youtube" | "library"; id: string }
+    | {
+          kind: "track";
+          source: "youtube" | "library" | "vk" | "yandex";
+          id: string;
+      }
     | { kind: "artist"; source: "library"; id: string }
     | { kind: "artist"; source: "discovery"; name: string };
 
@@ -11,6 +15,22 @@ export function normalizePlaybackRadioOrigin(
     if (!value || typeof value !== "object" || Array.isArray(value))
         return null;
     const candidate = value as Record<string, unknown>;
+    if (
+        candidate.kind === "track" &&
+        (candidate.source === "vk" || candidate.source === "yandex")
+    ) {
+        if (typeof candidate.id !== "string") return null;
+        const id = candidate.id.trim();
+        if (
+            !(
+                candidate.source === "vk"
+                    ? /^-?\d{1,20}_\d{1,20}$/
+                    : /^\d{1,20}$/
+            ).test(id)
+        )
+            return null;
+        return { kind: "track", source: candidate.source, id };
+    }
     if (candidate.kind === "artist" && candidate.source === "discovery") {
         if (typeof candidate.name !== "string") return null;
         const name = candidate.name.trim();

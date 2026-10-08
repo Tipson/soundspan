@@ -7,7 +7,9 @@ import type { RadioRequestExecution } from "./radioRequestExecution";
 import {
     hasNativeRecommendationIdentity,
     readNativeRecommendationRecording,
+    toNativeRecommendationCandidate,
 } from "./nativeCandidates";
+import { nativeArtistCreditKey } from "./nativeSourceAdmission";
 
 /** Account-owned continuation of the original station, independently of its current song. */
 export interface RadioContinuationInput {
@@ -20,6 +22,8 @@ export interface RadioContinuationInput {
     diagnostic?: boolean;
     /** Server-owned execution scope; never accepted from continuation query parameters. */
     execution?: RadioRequestExecution;
+    /** Owner cancellation for native source work; not a client-supplied query field. */
+    sourceSignal?: AbortSignal;
 }
 
 /** Existing actual-listening rules captured once at the engine policy clock. */
@@ -27,6 +31,7 @@ export interface RadioContinuationPreferences {
     ids: ReadonlySet<string>;
     songKeys: ReadonlySet<string>;
     suppressedArtists: ReadonlySet<string>;
+    suppressedNativeCredits?: ReadonlySet<string>;
     degradedSources: string[];
 }
 
@@ -40,6 +45,7 @@ export interface RadioContinuationLoaderDependencies {
         userId: string,
         policyTime: Date,
         execution?: RadioRequestExecution,
+        nativeSource?: "vk" | "yandex",
     ) => Promise<RadioContinuationPreferences>;
     loadLibraryTracks: (ids: readonly string[]) => Promise<unknown[]>;
     admitCandidates: (
@@ -49,6 +55,7 @@ export interface RadioContinuationLoaderDependencies {
         exclude: readonly string[],
         /** Actual listening identities captured once before seed/local-selection quotas. */
         repeatIds?: ReadonlySet<string>,
+        execution?: RadioRequestExecution,
     ) => Promise<{
         candidates: RecommendationCandidate[];
         degradedSources: string[];
@@ -90,6 +97,19 @@ function object(value: unknown): Record<string, unknown> | null {
 
 function normalizeCandidate(value: unknown): RecommendationCandidate | null {
     const row = object(value);
+    if (!row || typeof row.id !== "string") return null;
+    if (
+        hasNativeRecommendationIdentity(
+            row as unknown as RecommendationCandidate,
+        )
+    ) {
+        const recording = readNativeRecommendationRecording(
+            row as unknown as RecommendationCandidate,
+        );
+        return recording
+            ? toNativeRecommendationCandidate(recording, "original-radio")
+            : null;
+    }
     const artist = object(row?.artist);
     const album = object(row?.album);
     const provider = object(row?.provider);
@@ -183,21 +203,48 @@ export function createRadioContinuationLoader(
         policyTime: Date,
     ): Promise<RecommendationCandidateBatch> => {
         input.execution?.check();
-        const preferences = await dependencies.loadPreferences(
-            input.userId,
-            policyTime,
-            ...(input.execution ? [input.execution] : []),
-        );
+        const nativeSource =
+            input.radioOrigin.source === "vk" ||
+            input.radioOrigin.source === "yandex"
+                ? input.radioOrigin.source
+                : undefined;
+        const preferences = nativeSource
+            ? await dependencies.loadPreferences(
+                  input.userId,
+                  policyTime,
+                  input.execution,
+                  nativeSource,
+              )
+            : await dependencies.loadPreferences(
+                  input.userId,
+                  policyTime,
+                  ...(input.execution ? [input.execution] : []),
+              );
         input.execution?.check();
         const degradedSources = new Set(preferences.degradedSources);
         const exclusions = new Set(input.exclude);
         if (input.radioOrigin.kind === "track") {
-            exclusions.add(input.radioOrigin.id);
+            if (!nativeSource) exclusions.add(input.radioOrigin.id);
             exclusions.add(
-                `${input.radioOrigin.source === "youtube" ? "yt" : "library"}:${input.radioOrigin.id}`,
+                `${input.radioOrigin.source === "youtube" ? "yt" : input.radioOrigin.source}:${input.radioOrigin.id}`,
             );
         }
         const eligible = (candidate: RecommendationCandidate) => {
+            const recording = readNativeRecommendationRecording(candidate);
+            if (recording) {
+                const credit = nativeArtistCreditKey(recording);
+                return (
+                    !preferences.degradedSources.includes(
+                        "radio-native-artist-preferences",
+                    ) &&
+                    !exclusions.has(candidate.id) &&
+                    !preferences.ids.has(candidate.id) &&
+                    !(
+                        credit &&
+                        preferences.suppressedNativeCredits?.has(credit)
+                    )
+                );
+            }
             const identity =
                 candidate.source === "youtube"
                     ? candidate.provider.youtubeVideoId!
@@ -238,6 +285,7 @@ export function createRadioContinuationLoader(
                 policyTime,
                 [...exclusions],
                 preferences.ids,
+                ...(input.execution ? [input.execution] : []),
             );
             input.execution?.check();
             admitted.degradedSources.forEach((source) =>

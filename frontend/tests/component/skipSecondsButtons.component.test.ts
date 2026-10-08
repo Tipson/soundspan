@@ -4,6 +4,7 @@ import React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as realTrackRef from "../../lib/trackRef";
+import * as realTrackRadio from "../../lib/radio/loadTrackRadio";
 
 /**
  * Component tests for issue #20: wire the existing 15-second skip
@@ -366,6 +367,7 @@ const overlayCalls = {
 
 mock.module("@/lib/radio/loadTrackRadio", {
     namedExports: {
+        canLoadTrackRadio: realTrackRadio.canLoadTrackRadio,
         loadTrackRadio: async () => {
             overlayCalls.radioRequests++;
             return [{ id: "radio-next", title: "Radio next", duration: 200 }];

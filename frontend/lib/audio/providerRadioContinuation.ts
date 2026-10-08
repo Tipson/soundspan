@@ -7,6 +7,10 @@ import type {
 import type { Track, WaveMode } from "@/lib/audio-state-context";
 import { selectWaveTracks } from "@/features/home/selectWaveTracks";
 import {
+    hasNativeMusicSourceIdentity,
+    readMusicSourcePlaybackTrack,
+} from "./musicSourcePlayback";
+import {
     appendRecommendationClientContext,
     getRecommendationClientContext,
     getRecommendationSessionId,
@@ -92,6 +96,22 @@ export function toProviderPlaybackTrack(
 ): Track {
     const lineage =
         typeof lineageOrIndex === "object" ? lineageOrIndex : undefined;
+    if (hasNativeMusicSourceIdentity(track)) {
+        const native = readMusicSourcePlaybackTrack(track);
+        if (!native) throw new Error("Invalid native recommendation recording");
+        return {
+            ...native,
+            ...(lineage?.generationId
+                ? { recommendationGenerationId: lineage.generationId }
+                : {}),
+            ...(lineage?.sessionId
+                ? { recommendationSessionId: lineage.sessionId }
+                : {}),
+            ...(lineage?.queueMode
+                ? { recommendationQueueMode: lineage.queueMode }
+                : {}),
+        };
+    }
     const baseTrack: Track = {
         id: track.id,
         title: track.title,

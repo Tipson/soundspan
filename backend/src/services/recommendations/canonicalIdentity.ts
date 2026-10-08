@@ -425,9 +425,12 @@ async function findProviderMapping(
  */
 export async function findMappedCanonicalCandidates(
     candidates: readonly RecommendationCandidate[],
+    check?: () => void,
 ): Promise<Array<ResolvedCanonicalRecording | null>> {
+    check?.();
     const result: Array<ResolvedCanonicalRecording | null> = [];
     for (let offset = 0; offset < candidates.length; offset += 250) {
+        check?.();
         const batch = candidates.slice(offset, offset + 250);
         const ids = (source: RecommendationCandidate["source"]) => [
             ...new Set(
@@ -502,6 +505,7 @@ export async function findMappedCanonicalCandidates(
                 canonicalRecording: { select: canonicalAliasSelect },
             },
         });
+        check?.();
         // A truncated duplicate set cannot prove an unambiguous identity.
         if (rows.length === bound) {
             result.push(...batch.map(() => null));
@@ -533,6 +537,7 @@ export async function findMappedCanonicalCandidates(
         }
         const survivors = new Map<string, ResolvedCanonicalRecording | null>();
         for (const candidate of batch) {
+            check?.();
             const row = mapped.get(
                 `${candidate.source}:${providerTrackId(candidate)}`,
             );
@@ -544,15 +549,18 @@ export async function findMappedCanonicalCandidates(
                 try {
                     survivors.set(
                         row.id,
-                        await resolveCanonicalSurvivor(prisma, row),
+                        await resolveCanonicalSurvivor(prisma, row, check),
                     );
                 } catch {
+                    check?.();
                     survivors.set(row.id, null);
                 }
             }
+            check?.();
             result.push(survivors.get(row.id) ?? null);
         }
     }
+    check?.();
     return result;
 }
 

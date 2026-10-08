@@ -31,6 +31,16 @@ import {
 import type { RecommendationCandidate } from "./types";
 import { RadioRequestError } from "./radioRequestExecution";
 import { loadVerifiedSourceRepeatExclusions } from "./verifiedSourceRepeats";
+import { musicSourceCatalog } from "../musicSources/runtime";
+import {
+    toNativeRecommendationCandidate,
+    hasNativeRecommendationIdentity,
+} from "./nativeCandidates";
+import {
+    loadDislikedNativeRecordingIds,
+    loadSuppressedNativeArtistCredits,
+    loadVerifiedNativeCandidates,
+} from "./nativeSourceAdmission";
 
 const log = logger.child("RadioContinuation");
 
@@ -131,7 +141,8 @@ function excludedIdentityCandidates(
 }
 
 const admitCandidates: RadioContinuationLoaderDependencies["admitCandidates"] =
-    async (userId, candidates, policyTime, exclude, repeatIds) => {
+    async (userId, candidates, policyTime, exclude, repeatIds, execution) => {
+        execution?.check();
         if (candidates.length === 0) return { candidates, degradedSources: [] };
         const degraded = new Set<string>();
         const videos = candidates.flatMap((c) =>
@@ -140,53 +151,86 @@ const admitCandidates: RadioContinuationLoaderDependencies["admitCandidates"] =
         const localIds = candidates
             .filter((c) => c.source === "library")
             .map((c) => c.id);
-        const excluded = excludedIdentityCandidates(exclude);
-        const [youtubeDislikes, localDislikes, canonicalDislikes, mappings] =
-            await Promise.all([
-                readOr(
-                    "radio-youtube-dislikes",
-                    degraded,
-                    new Set<string>(),
-                    () => loadDislikedYouTubeIds(userId, videos),
-                ),
-                readOr(
-                    "radio-library-dislikes",
-                    degraded,
-                    [] as { entityId: string }[],
-                    () =>
-                        localIds.length
-                            ? prisma.dislikedEntity.findMany({
-                                  where: {
-                                      userId,
-                                      entityType: "track",
-                                      entityId: { in: localIds },
-                                  },
-                                  select: { entityId: true },
-                              })
-                            : Promise.resolve([]),
-                ),
-                readOr<ReadonlySet<string>>(
-                    "radio-canonical-dislikes",
-                    degraded,
-                    new Set(),
-                    () =>
-                        recommendationFeatureStore.loadDislikedCanonicalKeys(
-                            userId,
-                        ),
-                ),
-                readOr(
-                    "radio-canonical-mappings",
-                    degraded,
-                    [] as Awaited<
-                        ReturnType<typeof findMappedCanonicalCandidates>
-                    >,
-                    () =>
-                        findMappedCanonicalCandidates([
-                            ...candidates,
-                            ...excluded,
-                        ]),
-                ),
-            ]);
+        const excluded = [
+            ...excludedIdentityCandidates(exclude),
+            ...(exclude.some((id) => /^(vk|yandex):/.test(id))
+                ? await readOr(
+                      "radio-native-queue-identities",
+                      degraded,
+                      [],
+                      () =>
+                          loadVerifiedNativeCandidates(
+                              exclude,
+                              execution?.check,
+                          ),
+                  )
+                : []),
+        ];
+        execution?.check();
+        const nativeIds = candidates
+            .filter(hasNativeRecommendationIdentity)
+            .map((candidate) => candidate.id);
+        const [
+            youtubeDislikes,
+            localDislikes,
+            canonicalDislikes,
+            mappings,
+            nativeDislikes,
+        ] = await Promise.all([
+            readOr("radio-youtube-dislikes", degraded, new Set<string>(), () =>
+                loadDislikedYouTubeIds(userId, videos),
+            ),
+            readOr(
+                "radio-library-dislikes",
+                degraded,
+                [] as { entityId: string }[],
+                () =>
+                    localIds.length
+                        ? prisma.dislikedEntity.findMany({
+                              where: {
+                                  userId,
+                                  entityType: "track",
+                                  entityId: { in: localIds },
+                              },
+                              select: { entityId: true },
+                          })
+                        : Promise.resolve([]),
+            ),
+            readOr<ReadonlySet<string>>(
+                "radio-canonical-dislikes",
+                degraded,
+                new Set(),
+                () =>
+                    recommendationFeatureStore.loadDislikedCanonicalKeys(
+                        userId,
+                    ),
+            ),
+            readOr(
+                "radio-canonical-mappings",
+                degraded,
+                [] as Awaited<ReturnType<typeof findMappedCanonicalCandidates>>,
+                () =>
+                    findMappedCanonicalCandidates(
+                        [...candidates, ...excluded],
+                        ...(execution ? [execution.check] : []),
+                    ),
+            ),
+            nativeIds.length
+                ? readOr(
+                      "radio-native-dislikes",
+                      degraded,
+                      new Set<string>(),
+                      () =>
+                          loadDislikedNativeRecordingIds(
+                              userId,
+                              nativeIds,
+                              policyTime,
+                              execution?.check,
+                          ),
+                  )
+                : Promise.resolve(new Set<string>()),
+        ]);
+        execution?.check();
         const mapped = candidates.map((candidate, index) =>
             mappings[index]
                 ? {
@@ -215,9 +259,15 @@ const admitCandidates: RadioContinuationLoaderDependencies["admitCandidates"] =
         const dislikedLocalIds = new Set(
             localDislikes.map((row) => row.entityId),
         );
+        execution?.check();
         return {
             candidates: mapped.filter(
                 (candidate) =>
+                    !(
+                        hasNativeRecommendationIdentity(candidate) &&
+                        (nativeDislikes.has(candidate.id) ||
+                            degraded.has("radio-native-dislikes"))
+                    ) &&
                     !(
                         candidate.provider.youtubeVideoId &&
                         youtubeDislikes.has(candidate.provider.youtubeVideoId)
@@ -239,7 +289,7 @@ const admitCandidates: RadioContinuationLoaderDependencies["admitCandidates"] =
 export const loadRadioContinuationCandidates = createRadioContinuationLoader({
     loadLibraryTracks,
     admitCandidates,
-    loadPreferences: async (userId, policyTime, execution) => {
+    loadPreferences: async (userId, policyTime, execution, nativeSource) => {
         const degraded = new Set<string>();
         const emptyRepeat = () => ({
             videoIds: new Set<string>(),
@@ -247,36 +297,51 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
             hardVideoIds: new Set<string>(),
             hardSongKeys: new Set<string>(),
         });
-        const [youtube, library, artists, direct] = await Promise.all([
-            readOr("radio-youtube-history", degraded, emptyRepeat(), () =>
-                loadYouTubeRepeatExclusions(userId, policyTime),
-            ),
-            readOr("radio-library-history", degraded, emptyRepeat(), () =>
-                loadLibraryRepeatExclusions(userId, policyTime),
-            ),
-            readOr(
-                "radio-artist-preferences",
-                degraded,
-                new Set<string>(),
-                () => loadSuppressedYouTubeArtists(userId, policyTime),
-            ),
-            readOr(
-                "radio-source-history",
-                degraded,
-                { ids: new Set<string>(), hardIds: new Set<string>() },
-                () =>
-                    execution
-                        ? loadVerifiedSourceRepeatExclusions(
-                              userId,
-                              policyTime,
-                              execution.check,
-                          )
-                        : loadVerifiedSourceRepeatExclusions(
-                              userId,
-                              policyTime,
-                          ),
-            ),
-        ]);
+        const [youtube, library, artists, direct, nativeCredits] =
+            await Promise.all([
+                readOr("radio-youtube-history", degraded, emptyRepeat(), () =>
+                    loadYouTubeRepeatExclusions(userId, policyTime),
+                ),
+                readOr("radio-library-history", degraded, emptyRepeat(), () =>
+                    loadLibraryRepeatExclusions(userId, policyTime),
+                ),
+                readOr(
+                    "radio-artist-preferences",
+                    degraded,
+                    new Set<string>(),
+                    () => loadSuppressedYouTubeArtists(userId, policyTime),
+                ),
+                readOr(
+                    "radio-source-history",
+                    degraded,
+                    { ids: new Set<string>(), hardIds: new Set<string>() },
+                    () =>
+                        execution
+                            ? loadVerifiedSourceRepeatExclusions(
+                                  userId,
+                                  policyTime,
+                                  execution.check,
+                              )
+                            : loadVerifiedSourceRepeatExclusions(
+                                  userId,
+                                  policyTime,
+                              ),
+                ),
+                nativeSource
+                    ? readOr(
+                          "radio-native-artist-preferences",
+                          degraded,
+                          new Set<string>(),
+                          () =>
+                              loadSuppressedNativeArtistCredits(
+                                  userId,
+                                  policyTime,
+                                  execution?.check,
+                              ),
+                      )
+                    : Promise.resolve(new Set<string>()),
+            ]);
+        execution?.check();
         return {
             ids: new Set([
                 ...youtube.videoIds,
@@ -285,6 +350,7 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
             ]),
             songKeys: new Set([...youtube.songKeys, ...library.songKeys]),
             suppressedArtists: artists,
+            ...(nativeSource ? { suppressedNativeCredits: nativeCredits } : {}),
             degradedSources: [...degraded],
         };
     },
@@ -293,9 +359,47 @@ export const loadRadioContinuationCandidates = createRadioContinuationLoader({
         const origin = input.radioOrigin;
         const refreshRemotePool = input.cursor > 0;
         const degraded = new Set<string>();
-        let source: "youtube-radio" | "artist-radio" | "library-radio" =
-            "library-radio";
+        let source:
+            | "youtube-radio"
+            | "artist-radio"
+            | "library-radio"
+            | "vk-radio"
+            | "yandex-radio" = "library-radio";
         try {
+            if (
+                origin.kind === "track" &&
+                (origin.source === "vk" || origin.source === "yandex")
+            ) {
+                source = origin.source === "vk" ? "vk-radio" : "yandex-radio";
+                const remaining = Math.min(
+                    4000,
+                    Math.max(
+                        1,
+                        Math.ceil(input.execution?.remainingMs() ?? 4000),
+                    ),
+                );
+                const timeout = AbortSignal.timeout(remaining);
+                const signal = input.sourceSignal
+                    ? AbortSignal.any([input.sourceSignal, timeout])
+                    : timeout;
+                const result = await musicSourceCatalog.recommendations(
+                    origin.source,
+                    origin.id,
+                    Math.min(100, input.limit),
+                    signal,
+                );
+                input.execution?.check();
+                return {
+                    tracks: result.tracks.flatMap(
+                        (recording) =>
+                            toNativeRecommendationCandidate(
+                                recording,
+                                "original-radio",
+                            ) ?? [],
+                    ),
+                    degradedSources: result.unavailable.length ? [source] : [],
+                };
+            }
             if (origin.kind === "track" && origin.source === "youtube") {
                 source = "youtube-radio";
                 return {

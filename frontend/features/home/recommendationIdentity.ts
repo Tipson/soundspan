@@ -1,8 +1,12 @@
 import type { PersonalizedTrack } from "./types";
+import {
+    hasNativeMusicSourceIdentity,
+    readMusicSourcePlaybackTrack,
+} from "@/lib/audio/musicSourcePlayback";
 
 /** Provider identity accepted by the recommendation impression API. */
 export interface RecommendationImpressionIdentity {
-    provider: "youtube" | "tidal" | "library";
+    provider: "youtube" | "tidal" | "library" | "vk" | "yandex";
     providerTrackId: string;
 }
 
@@ -10,6 +14,13 @@ export interface RecommendationImpressionIdentity {
 export function recommendationImpressionIdentity(
     track: PersonalizedTrack,
 ): RecommendationImpressionIdentity | null {
+    if (hasNativeMusicSourceIdentity(track)) {
+        const native =
+            readMusicSourcePlaybackTrack(track)?.musicSourceRecording;
+        return native
+            ? { provider: native.provider, providerTrackId: native.id }
+            : null;
+    }
     const youtubeVideoId =
         track.youtubeVideoId ?? track.provider.youtubeVideoId;
     if (youtubeVideoId?.trim()) {

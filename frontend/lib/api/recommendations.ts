@@ -44,7 +44,7 @@ export function WithRecommendations<TBase extends ApiClientConstructor>(
         async reportRecommendationImpressions(
             generationId: string,
             tracks: Array<{
-                provider: "youtube" | "tidal" | "library";
+                provider: "youtube" | "tidal" | "library" | "vk" | "yandex";
                 providerTrackId: string;
             }>,
         ): Promise<{ recorded: number }> {

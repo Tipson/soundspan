@@ -19,7 +19,14 @@ const DEFAULT_SHELF_LIMIT = 12;
 const MAX_CONTINUATION_EXCLUSIONS = 80;
 const personalizedRadioQuerySchema = z
     .object({
-        type: z.enum(["youtube", "vibe", "artist", "artist-name"]),
+        type: z.enum([
+            "youtube",
+            "vibe",
+            "artist",
+            "artist-name",
+            "vk",
+            "yandex",
+        ]),
         value: z.string().trim().min(1).max(200),
         limit: z
             .string()
@@ -102,10 +109,29 @@ const recommendationImpressionsSchema = z
             .array(
                 z
                     .object({
-                        provider: z.enum(["youtube", "tidal", "library"]),
+                        provider: z.enum([
+                            "youtube",
+                            "tidal",
+                            "library",
+                            "vk",
+                            "yandex",
+                        ]),
                         providerTrackId: z.string().trim().min(1).max(128),
                     })
-                    .strict(),
+                    .strict()
+                    .refine(
+                        (value) =>
+                            (value.provider !== "vk" &&
+                                value.provider !== "yandex") ||
+                            (value.provider === "vk"
+                                ? /^-?\d{1,20}_\d{1,20}$/
+                                : /^\d{1,20}$/
+                            ).test(value.providerTrackId),
+                        {
+                            message: "Invalid native recording identity",
+                            path: ["providerTrackId"],
+                        },
+                    ),
             )
             .min(1)
             .max(100),
@@ -150,11 +176,11 @@ router.use(requireAuthOrToken);
  *         required: true
  *         schema:
  *           type: string
- *           enum: [youtube, vibe, artist, artist-name]
+ *           enum: [youtube, vibe, artist, artist-name, vk, yandex]
  *       - in: query
  *         name: value
  *         required: true
- *         description: Original video ID, local track/artist ID, or discovery artist name
+ *         description: Original video ID, exact VK/Yandex recording ID, local track/artist ID, or discovery artist name
  *         schema:
  *           type: string
  *           maxLength: 200
@@ -174,7 +200,7 @@ router.use(requireAuthOrToken);
  *           maximum: 1000000
  *       - in: query
  *         name: exclude
- *         description: Up to 80 comma-separated queue IDs (local, library-prefixed, or yt-prefixed)
+ *         description: Up to 80 comma-separated queue IDs (local or library/yt/vk/yandex-prefixed)
  *         schema:
  *           type: string
  *           maxLength: 11000
@@ -191,7 +217,7 @@ router.use(requireAuthOrToken);
  *         description: Compute without persisting recommendation signals or generations
  *     responses:
  *       200:
- *         description: Ordered mixed YouTube/library tracks, original radioOrigin, generationId, nextCursor and degradation labels; exhaustion can return an empty list
+ *         description: Ordered exact VK/Yandex or mixed YouTube/library tracks, original radioOrigin, generationId, nextCursor and degradation labels; exhaustion can return an empty list
  *       400:
  *         description: Invalid original station or continuation query
  *       401:
@@ -223,7 +249,12 @@ router.get(
                 ? { kind: "artist", source: "discovery", name: value }
                 : {
                       kind: type === "artist" ? "artist" : "track",
-                      source: type === "youtube" ? "youtube" : "library",
+                      source:
+                          type === "youtube" ||
+                          type === "vk" ||
+                          type === "yandex"
+                              ? type
+                              : "library",
                       id: value,
                   },
         );
@@ -235,7 +266,7 @@ router.get(
             exclude.length > MAX_CONTINUATION_EXCLUSIONS ||
             exclude.some(
                 (id) =>
-                    !/^(?:[A-Za-z0-9_-]{1,128}|library:[A-Za-z0-9_-]{1,128}|yt:[A-Za-z0-9_-]{11})$/.test(
+                    !/^(?:[A-Za-z0-9_-]{1,128}|library:[A-Za-z0-9_-]{1,128}|yt:[A-Za-z0-9_-]{11}|vk:-?\d{1,20}_\d{1,20}|yandex:\d{1,20})$/.test(
                         id,
                     ),
             )
@@ -659,7 +690,7 @@ router.get(
  *                   properties:
  *                     provider:
  *                       type: string
- *                       enum: [youtube, tidal, library]
+ *                       enum: [youtube, tidal, library, vk, yandex]
  *                     providerTrackId:
  *                       type: string
  *     responses:

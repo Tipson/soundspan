@@ -5,6 +5,10 @@ import {
 } from "@soundspan/media-metadata-contract";
 import type { Track } from "@/lib/audio-state-context";
 import { toProviderPlaybackTrack } from "@/lib/audio/providerRadioContinuation";
+import {
+    hasNativeMusicSourceIdentity,
+    readMusicSourcePlaybackTrack,
+} from "@/lib/audio/musicSourcePlayback";
 
 type QueueIdentity = Pick<Track, "id" | "youtubeVideoId" | "provider">;
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
@@ -30,6 +34,25 @@ export interface OriginalRadioContinuationRequest {
 }
 
 function identity(track: QueueIdentity): string | null {
+    if (
+        (typeof track.id === "string" && /^(vk|yandex):/.test(track.id)) ||
+        track.provider?.source === "vk" ||
+        track.provider?.source === "yandex"
+    ) {
+        const source = track.provider?.source,
+            id = track.provider?.providerTrackId;
+        return (source === "vk" || source === "yandex") &&
+            typeof id === "string" &&
+            (source === "vk" ? /^-?\d{1,20}_\d{1,20}$/ : /^\d{1,20}$/).test(
+                id,
+            ) &&
+            track.id === `${source}:${id}` &&
+            track.youtubeVideoId == null &&
+            track.provider?.youtubeVideoId == null &&
+            track.provider?.tidalTrackId == null
+            ? track.id
+            : null;
+    }
     const videoId = track.youtubeVideoId ?? track.provider?.youtubeVideoId;
     if (typeof videoId === "string" && VIDEO_ID.test(videoId))
         return `yt:${videoId}`;
@@ -62,8 +85,10 @@ export function buildOriginalRadioContinuationPath(
             ? origin.source === "library"
                 ? "artist"
                 : "artist-name"
-            : origin.source === "youtube"
-              ? "youtube"
+            : origin.source === "youtube" ||
+                origin.source === "vk" ||
+                origin.source === "yandex"
+              ? origin.source
               : "vibe";
     const seed = "id" in origin ? origin.id : origin.name;
     const params = new URLSearchParams({
@@ -120,6 +145,26 @@ export function collectOriginalRadioContinuation(
     const seen = new Set(queue.map(identity).filter(Boolean));
     const selected: Track[] = [];
     for (const value of response.tracks.slice(0, 25)) {
+        if (hasNativeMusicSourceIdentity(value)) {
+            const track = readMusicSourcePlaybackTrack(value);
+            const key = track ? identity(track) : null;
+            if (!track || !key || seen.has(key)) continue;
+            seen.add(key);
+            selected.push({
+                ...track,
+                radioOrigin: origin,
+                ...(typeof response.generationId === "string" &&
+                response.generationId.trim() &&
+                response.generationId.length <= 128
+                    ? { recommendationGenerationId: response.generationId }
+                    : {}),
+                ...(sessionId.trim() && sessionId.length <= 128
+                    ? { recommendationSessionId: sessionId }
+                    : {}),
+            });
+            if (selected.length >= budget) break;
+            continue;
+        }
         const row = object(value),
             artist = object(row?.artist),
             album = object(row?.album),

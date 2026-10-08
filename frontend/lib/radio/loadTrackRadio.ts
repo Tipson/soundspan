@@ -1,6 +1,12 @@
 import { api } from "@/lib/api";
 import type { Track } from "@/lib/audio-state-context";
 import { withPlaybackRadioOrigin } from "./playbackRadioOrigin";
+import { getRecommendationSessionId } from "@/lib/recommendationSession";
+import {
+    hasNativeMusicSourceIdentity,
+    readMusicSourcePlaybackTrack,
+} from "@/lib/audio/musicSourcePlayback";
+import { collectOriginalRadioContinuation } from "./originalRadioContinuation";
 import {
     isRemoteTrack,
     isRetiredRemoteOnlyTrack,
@@ -16,8 +22,46 @@ export class UnsupportedTrackRadioError extends Error {
     }
 }
 
+/** Native action eligibility uses the exact recording; legacy artist actions retain their availability explanation. */
+export function canLoadTrackRadio(seed: Track): boolean {
+    if (hasNativeMusicSourceIdentity(seed))
+        return readMusicSourcePlaybackTrack(seed) !== null;
+    if (seed.artist?.id) return true;
+    if (isRetiredRemoteOnlyTrack(seed))
+        return Boolean(seed.artist?.name?.trim());
+    const normalized = normalizeActionableAudioTrack(seed);
+    return Boolean(
+        normalized && (normalized.youtubeVideoId || !isRemoteTrack(normalized)),
+    );
+}
+
 /** Loads a track-seeded queue, excluding seed aliases and unplayable rows. */
 export async function loadTrackRadio(seed: Track): Promise<Track[]> {
+    if (hasNativeMusicSourceIdentity(seed)) {
+        const native = readMusicSourcePlaybackTrack(seed);
+        if (!native?.musicSourceRecording) return [];
+        const recording = native.musicSourceRecording,
+            origin = {
+                kind: "track",
+                source: recording.provider,
+                id: recording.id,
+            } as const,
+            sessionId = getRecommendationSessionId();
+        const response = await api.getRadioContinuation({
+            origin,
+            queue: [native],
+            cursor: 0,
+            limit: 25,
+            sessionId,
+        });
+        return collectOriginalRadioContinuation(
+            response,
+            [native],
+            origin,
+            25,
+            sessionId,
+        );
+    }
     const normalizedSeed = normalizeActionableAudioTrack(seed);
     // Retired catalog entries retain artist-radio navigation without adding
     // their unplayable recording to the queue.

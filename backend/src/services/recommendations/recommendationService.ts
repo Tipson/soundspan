@@ -442,7 +442,16 @@ export class UnifiedRecommendationService {
             const result = await execution.run(() =>
                 this.engine(
                     (_request, policyTime) =>
-                        loader({ ...input, execution }, policyTime),
+                        loader(
+                            {
+                                ...input,
+                                execution,
+                                ...(options?.signal
+                                    ? { sourceSignal: options.signal }
+                                    : {}),
+                            },
+                            policyTime,
+                        ),
                     input.diagnostic,
                     execution,
                 ).recommend({

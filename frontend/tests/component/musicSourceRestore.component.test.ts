@@ -33,10 +33,23 @@ for (const provider of ["vk", "yandex"] as const) {
             const selected = {
                 ...current,
                 recommendationSessionId: "selected-occurrence",
+                radioOrigin: {
+                    kind: "track" as const,
+                    source: provider,
+                    id: provider === "vk" ? "-001_009" : "0009",
+                },
                 ...(malformed ? { musicSourceRecording: undefined } : {}),
             };
             const queue = [
-                { ...current, recommendationSessionId: "other-occurrence" },
+                {
+                    ...current,
+                    recommendationSessionId: "other-occurrence",
+                    radioOrigin: {
+                        kind: "track" as const,
+                        source: provider,
+                        id: provider === "vk" ? "-001_008" : "0008",
+                    },
+                },
                 selected,
             ];
             if (malformed)
@@ -100,6 +113,22 @@ for (const provider of ["vk", "yandex"] as const) {
                         "selected-occurrence",
                     );
                     assert.equal(stateRef.current?.currentIndex, 1);
+                    assert.deepEqual(
+                        stateRef.current?.currentTrack?.radioOrigin,
+                        selected.radioOrigin,
+                    );
+                    assert.deepEqual(
+                        stateRef.current?.queue[1].itemType === "episode"
+                            ? undefined
+                            : stateRef.current?.queue[1].radioOrigin,
+                        selected.radioOrigin,
+                    );
+                    assert.deepEqual(
+                        stateRef.current?.queue[0].itemType === "episode"
+                            ? undefined
+                            : stateRef.current?.queue[0].radioOrigin,
+                        queue[0].radioOrigin,
+                    );
                     assert.equal(stateRef.current?.queue.length, 2);
                     assert.equal(
                         localStorage.getItem("soundspan_current_time"),

@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { SeekSlider } from "./SeekSlider";
 import { useFeatures } from "@/lib/features-context";
 import {
+    canLoadTrackRadio,
     loadTrackRadio,
     UnsupportedTrackRadioError,
 } from "@/lib/radio/loadTrackRadio";
@@ -397,7 +398,7 @@ export function OverlayPlayer() {
     };
 
     const handleStartRadio = async () => {
-        if (!currentTrack?.artist) return;
+        if (!currentTrack || !canLoadTrackRadio(currentTrack)) return;
         setIsRadioLoading(true);
         try {
             const filtered = await requestRadioQueue(() =>
@@ -438,22 +439,23 @@ export function OverlayPlayer() {
         setIsDrawerOpen(true);
     };
 
-    const trackRadioAction = currentTrack?.artist?.id ? (
-        <button
-            type="button"
-            onClick={handleStartRadio}
-            disabled={isRadioLoading}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40"
-            title={ru.player.startArtistRadio}
-            aria-label={ru.player.startArtistRadio}
-        >
-            {isRadioLoading ? (
-                <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-                <Radio className="h-6 w-6" />
-            )}
-        </button>
-    ) : null;
+    const trackRadioAction =
+        currentTrack && canLoadTrackRadio(currentTrack) ? (
+            <button
+                type="button"
+                onClick={handleStartRadio}
+                disabled={isRadioLoading}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-content-muted transition-colors hover:bg-surface-hover hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40"
+                title={ru.player.startArtistRadio}
+                aria-label={ru.player.startArtistRadio}
+            >
+                {isRadioLoading ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                    <Radio className="h-6 w-6" />
+                )}
+            </button>
+        ) : null;
 
     if (!hasMedia) return null;
 

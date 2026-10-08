@@ -6,9 +6,11 @@
 
 ## Unreleased
 
-- Add exact-recording VK and Yandex neighbour requests with up to 100 candidates. Share search concurrency and provider backoff, reject rounded or coerced recording IDs, fence obsolete credential generations before caching or delivery, and distinguish an unavailable source from an exhausted pool. The original-radio runtime and client integration remain a follow-up.
+- Start and continue radio from exact VK and Yandex recordings through the authenticated original-station API. Apply active owner dislikes and confirmed whole-credit artist suppression before selection, preserve station and selected queue occurrence during restore, and retain native playback and exposure identities without substituting library or YouTube tracks when the source fails.
 
-- Preserve exact VK and Yandex candidates through both recommendation rankers, radio responses and generation attribution. Read only confirmed stored canonical mappings; keep misses neutral, strip upstream identity and analysis claims, and reject conflicting native source tuples before exploration can reinsert them. Native provider radio producers and client launch integration are a separate follow-up.
+- Add exact-recording VK and Yandex neighbour requests with up to 100 candidates. Share search concurrency and provider backoff, reject rounded or coerced recording IDs, fence obsolete credential generations before caching or delivery, and distinguish an unavailable source from an exhausted pool.
+
+- Preserve exact VK and Yandex candidates through both recommendation rankers, radio responses and generation attribution. Read only confirmed stored canonical mappings; keep misses neutral, strip upstream identity and analysis claims, and reject conflicting native source tuples before exploration can reinsert them.
 
 - Attach exact VK and Yandex canonical identity automatically after a confirmed playable lookup. Reuse the optional metadata transaction and its existing 500 ms allowance, skip superseded observations, and preserve playback when the optional shared write fails.
 
