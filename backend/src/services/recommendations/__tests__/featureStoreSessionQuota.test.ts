@@ -68,7 +68,8 @@ function useCorpus(plays: SessionPlay[], mappings: SessionMapping[]) {
                         row.userId === query.where.userId &&
                         row.recommendationSessionId ===
                             query.where.recommendationSessionId &&
-                        !query.where.source?.notIn.includes(row.source),
+                        !!query.where.source?.notIn &&
+                        !query.where.source.notIn.includes(row.source),
                 )
                 .sort(
                     (left, right) =>

@@ -18,6 +18,7 @@ import {
     loadVerifiedLikedCanonicalIds,
     loadVerifiedDislikedCanonicalKeys,
     loadVerifiedSeedCanonicalId,
+    loadVerifiedSessionPlays,
 } from "./verifiedSourceFeedback";
 import type {
     RecommendationRequestContext,
@@ -587,25 +588,28 @@ async function loadSessionRows(
     limit: number,
 ): Promise<RecommendationSessionRow[]> {
     const boundedLimit = Math.max(1, Math.min(30, limit));
-    const plays = await prisma.play.findMany({
-        where: {
-            userId,
-            recommendationSessionId: sessionId,
-            source: { notIn: ["VK", "YANDEX"] },
-        },
-        orderBy: { playedAt: "desc" },
-        take: boundedLimit,
-        select: {
-            trackId: true,
-            trackTidalId: true,
-            trackYtMusicId: true,
-            playedAt: true,
-            outcome: true,
-            completionRatio: true,
-            listenedSeconds: true,
-        },
-    });
-    if (plays.length === 0) return [];
+    const [plays, directPlays] = await Promise.all([
+        prisma.play.findMany({
+            where: {
+                userId,
+                recommendationSessionId: sessionId,
+                source: { notIn: ["VK", "YANDEX"] },
+            },
+            orderBy: { playedAt: "desc" },
+            take: boundedLimit,
+            select: {
+                trackId: true,
+                trackTidalId: true,
+                trackYtMusicId: true,
+                playedAt: true,
+                outcome: true,
+                completionRatio: true,
+                listenedSeconds: true,
+            },
+        }),
+        loadVerifiedSessionPlays(userId, sessionId),
+    ]);
+    if (plays.length === 0 && directPlays.length === 0) return [];
 
     const localIds = plays.flatMap((play) =>
         play.trackId ? [play.trackId] : [],
@@ -616,27 +620,32 @@ async function loadSessionRows(
     const youtubeIds = plays.flatMap((play) =>
         play.trackYtMusicId ? [play.trackYtMusicId] : [],
     );
-    const mappings = await prisma.trackMapping.findMany({
-        where: {
-            stale: false,
-            canonicalRecordingId: { not: null },
-            OR: [
-                ...(localIds.length > 0 ? [{ trackId: { in: localIds } }] : []),
-                ...(tidalIds.length > 0
-                    ? [{ trackTidalId: { in: tidalIds } }]
-                    : []),
-                ...(youtubeIds.length > 0
-                    ? [{ trackYtMusicId: { in: youtubeIds } }]
-                    : []),
-            ],
-        },
-        select: {
-            trackId: true,
-            trackTidalId: true,
-            trackYtMusicId: true,
-            canonicalRecordingId: true,
-        },
-    });
+    const mappings =
+        localIds.length + tidalIds.length + youtubeIds.length === 0
+            ? []
+            : await prisma.trackMapping.findMany({
+                  where: {
+                      stale: false,
+                      canonicalRecordingId: { not: null },
+                      OR: [
+                          ...(localIds.length > 0
+                              ? [{ trackId: { in: localIds } }]
+                              : []),
+                          ...(tidalIds.length > 0
+                              ? [{ trackTidalId: { in: tidalIds } }]
+                              : []),
+                          ...(youtubeIds.length > 0
+                              ? [{ trackYtMusicId: { in: youtubeIds } }]
+                              : []),
+                      ],
+                  },
+                  select: {
+                      trackId: true,
+                      trackTidalId: true,
+                      trackYtMusicId: true,
+                      canonicalRecordingId: true,
+                  },
+              });
     const canonicalByProvider = new Map<string, string>();
     for (const mapping of mappings) {
         if (!mapping.canonicalRecordingId) continue;
@@ -670,7 +679,10 @@ async function loadSessionRows(
             ? canonicalByProvider.get(`youtube:${play.trackYtMusicId}`)
             : undefined);
     const canonicalIds = Array.from(
-        new Set(plays.flatMap((play) => canonicalIdForPlay(play) ?? [])),
+        new Set([
+            ...plays.flatMap((play) => canonicalIdForPlay(play) ?? []),
+            ...directPlays.map((play) => play.canonicalRecordingId),
+        ]),
     );
     const featureByCanonical = new Map(
         (await loadCanonicalFeatures(canonicalIds)).flatMap((feature) =>
@@ -679,13 +691,22 @@ async function loadSessionRows(
                 : [],
         ),
     );
-    return plays.flatMap((play) => {
+    const legacyRows = plays.flatMap((play) => {
         const canonicalId = canonicalIdForPlay(play);
         const embedding = canonicalId
             ? featureByCanonical.get(canonicalId)
             : undefined;
         return embedding ? [{ ...play, embedding }] : [];
     });
+    const directRows = directPlays.flatMap((play) => {
+        const embedding = featureByCanonical.get(play.canonicalRecordingId);
+        return embedding ? [{ ...play, embedding }] : [];
+    });
+    // Failed/neutral plays and malformed vectors cannot consume the shared quota.
+    return [...legacyRows, ...directRows]
+        .filter((row) => tasteDelta(row) !== 0)
+        .sort((a, b) => b.playedAt.getTime() - a.playedAt.getTime())
+        .slice(0, boundedLimit);
 }
 
 function timeBucket(localHour: number | undefined): string | null {

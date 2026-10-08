@@ -196,3 +196,103 @@ export async function loadVerifiedSeedCanonicalId(
     if (!reference) return null;
     return (await loadVerifiedMappings([reference]))[0]?.id ?? null;
 }
+
+/** Owned session evidence resolved through confirmed facts; never private display snapshots. */
+export interface VerifiedMusicSourceSessionPlay {
+    canonicalRecordingId: string;
+    playedAt: Date;
+    outcome: string | null;
+    completionRatio: number | null;
+    listenedSeconds: number | null;
+}
+
+/** Read at most 300 eligible direct plays before the consumer's real-vector/signal quota. */
+export async function loadVerifiedSessionPlays(
+    userId: string,
+    sessionId: string,
+): Promise<VerifiedMusicSourceSessionPlay[]> {
+    const mappingWhere: Prisma.TrackMappingWhereInput = {
+        stale: false,
+        canonicalRecording: {
+            is: {
+                ...liveCanonicalWhere,
+                embeddings: {
+                    some: { space: { status: "active", cleaningAt: null } },
+                },
+            },
+        },
+    };
+    const plays: VerifiedMusicSourceSessionPlay[] = [];
+    let cursor: string | undefined;
+    let scanned = 0;
+    while (scanned < 300) {
+        const rows = await prisma.play.findMany({
+            where: {
+                userId,
+                recommendationSessionId: sessionId,
+                AND: [
+                    {
+                        OR: ["vk", "yandex"].map((provider) => ({
+                            source: provider === "vk" ? "VK" : "YANDEX",
+                            trackMusicSource: {
+                                is: {
+                                    ...confirmedNamespaceWhere,
+                                    provider,
+                                    mappings: { some: mappingWhere },
+                                },
+                            },
+                        })),
+                    },
+                    {
+                        OR: [{ outcome: null }, { outcome: { not: "failed" } }],
+                    },
+                ],
+            },
+            orderBy: [{ playedAt: "desc" }, { id: "asc" }],
+            take: 30,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            select: {
+                id: true,
+                source: true,
+                playedAt: true,
+                outcome: true,
+                completionRatio: true,
+                listenedSeconds: true,
+                trackMusicSource: {
+                    select: {
+                        ...namespaceSelect,
+                        mappings: {
+                            where: mappingWhere,
+                            take: 1,
+                            select: { canonicalRecordingId: true },
+                        },
+                    },
+                },
+            },
+        });
+        scanned += rows.length;
+        for (const row of rows) {
+            const recording = readVerifiedMusicSourceRecording(
+                row.trackMusicSource,
+            );
+            const canonicalRecordingId =
+                row.trackMusicSource?.mappings[0]?.canonicalRecordingId;
+            if (
+                !recording ||
+                !canonicalRecordingId ||
+                row.source !== (recording.provider === "vk" ? "VK" : "YANDEX")
+            )
+                continue;
+            plays.push({
+                canonicalRecordingId,
+                playedAt: row.playedAt,
+                outcome: row.outcome,
+                completionRatio: row.completionRatio,
+                listenedSeconds: row.listenedSeconds,
+            });
+        }
+        if (rows.length < 30) break;
+        cursor = rows[rows.length - 1].id;
+    }
+    return plays;
+}

@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+- Use real session-tagged VK and Yandex listens in the fast taste profile through confirmed current canonical mappings and active audio vectors. Keep failed, unconfirmed and malformed signals neutral, preserve legacy session reserves, and apply the shared recent-signal quota after validation without reading private display snapshots.
+
 - Read server-confirmed VK and Yandex saved taste and exact canonical feedback without borrowing private playback metadata. Keep malformed direct seeds neutral, preserve legacy provider reserves and the global vector quota, and exclude exact disliked recordings without requiring audio analysis.
 
 - Keep exact VK and Yandex likes and dislikes private to each listener, preserve newer choices during concurrent requests, and replay confirmed recordings from the liked playlist. Show the existing player feedback controls for supported direct recordings while retaining playlist and download restrictions. Ignore late feedback playback callbacks after the player controls unmount or the queue changes, preserving a newly selected podcast, audiobook, or same-song replacement queue.
