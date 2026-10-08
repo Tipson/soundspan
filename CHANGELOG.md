@@ -6,6 +6,7 @@
 
 ## Unreleased
 
+- Reconcile a newer radio station on the same selected song without adopting server source, position, shuffle or pause state. Reject divergent queues and superseded local commands, accounts and group sessions; retain the loaded codec and bitrate during station-only updates.
 - Keep automatic and manual radio continuation attached to the original song or artist, including mixed local and YouTube queues. Retain ordered response membership and playback position; reject superseded station, account, pause, seek and group-session responses. Keep artist-radio continuation available without enabling Wave mode.
 - Continue track and artist radio through a bounded original-station API. Apply queue exclusions, actual listening, current dislikes and viewed recordings before seed-selection quotas; retain ordered generation membership and report partial provider failures without substituting unrelated music.
 - Apply an already suppressed artist to both online and local copies in automatic radio continuation. Keep the existing dislike threshold and expiry, and preserve explicitly selected collection playback and the legacy radio endpoint.

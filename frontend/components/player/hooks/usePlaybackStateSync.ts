@@ -14,6 +14,29 @@ interface UsePlaybackStateSyncOptions {
     setStreamProfile: (profile: PlaybackStreamProfile | null) => void;
 }
 
+function isRadioOriginOnlyUpdate(
+    previous: Track | null,
+    current: Track | null,
+): boolean {
+    if (!previous || !current || previous.radioOrigin === current.radioOrigin)
+        return false;
+    const fields = Object.keys(previous).filter((key) => key !== "radioOrigin");
+    const currentFields = Object.keys(current).filter(
+        (key) => key !== "radioOrigin",
+    );
+    return (
+        fields.length === currentFields.length &&
+        fields.every(
+            (key) =>
+                Object.hasOwn(current, key) &&
+                Object.is(
+                    previous[key as keyof Track],
+                    current[key as keyof Track],
+                ),
+        )
+    );
+}
+
 /** Keeps orchestrator refs synchronized with React playback state. */
 export function usePlaybackStateSync({
     refs,
@@ -34,7 +57,8 @@ export function usePlaybackStateSync({
     } = refs;
 
     useEffect(() => {
-        const previousTrackId = currentTrackRef.current?.id ?? null;
+        const previousTrack = currentTrackRef.current;
+        const previousTrackId = previousTrack?.id ?? null;
         currentTrackRef.current = currentTrack;
         const currentTrackId = currentTrack?.id ?? null;
         if (previousTrackId !== currentTrackId) {
@@ -46,14 +70,17 @@ export function usePlaybackStateSync({
         if (currentTrack?.id !== transientTrackRecoveryTrackIdRef.current) {
             clearTransientTrackRecovery(true);
         }
-        if (currentTrack) {
+        if (
+            currentTrack &&
+            !isRadioOriginOnlyUpdate(previousTrack, currentTrack)
+        ) {
             setStreamProfile({
                 mode: "direct",
                 sourceType: resolveDirectTrackSourceType(currentTrack),
                 codec: null,
                 bitrateKbps: null,
             });
-        } else {
+        } else if (!currentTrack) {
             setStreamProfile(null);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- Preserve the relocated ref access and original hook scheduling.

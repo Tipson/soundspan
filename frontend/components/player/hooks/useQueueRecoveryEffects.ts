@@ -3,6 +3,7 @@ import type { Track } from "@/lib/audio-state-context";
 import { getListenTogetherSessionSnapshot } from "@/lib/listen-together-session";
 import {
     getPlaybackIntentGeneration,
+    getQueueReplacementGeneration,
     type PlaybackAdvanceOrigin,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
 import { logPlaybackClientMetric } from "@/lib/audio-engine/audioPlaybackOrchestratorRuntime";
@@ -112,6 +113,8 @@ export function useQueueRecoveryEffects({
             if (
                 getPlaybackIntentGeneration() !==
                     pending.playbackIntentGeneration ||
+                getQueueReplacementGeneration() !==
+                    pending.queueReplacementGeneration ||
                 refs.loadIdRef.current !== pending.loadId ||
                 refs.seekOperationIdRef.current !== pending.seekOperationId
             ) {
@@ -242,6 +245,7 @@ export function useQueueRecoveryEffects({
                 loadId: refs.loadIdRef.current,
                 seekOperationId: refs.seekOperationIdRef.current,
                 playbackIntentGeneration: getPlaybackIntentGeneration(),
+                queueReplacementGeneration: getQueueReplacementGeneration(),
                 queueIdentity: queue,
                 playbackPositionGeneration:
                     playbackPositionRef.current.generation,

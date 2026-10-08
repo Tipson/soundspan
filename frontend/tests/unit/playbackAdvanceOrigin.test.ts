@@ -9,9 +9,32 @@ import {
     setPlaybackAutoRestartSuppressed,
     writePlaybackAdvanceOrigin,
     writePlaybackReplacementIntent,
+    getQueueReplacementGeneration,
+    getPlaybackIntentGeneration,
+    getPlaybackReplacementGeneration,
+    getExplicitPlaybackPauseGeneration,
+    recordQueueContextChange,
 } from "@/lib/audio-engine/playbackAdvanceOrigin";
 
 describe("playback advance origin", () => {
+    it("retires station queue work without a media, pause or playback command", () => {
+        writePlaybackAdvanceOrigin("error", "seed");
+        const before = {
+            queue: getQueueReplacementGeneration(),
+            intent: getPlaybackIntentGeneration(),
+            replacement: getPlaybackReplacementGeneration(),
+            pause: getExplicitPlaybackPauseGeneration(),
+        };
+        recordQueueContextChange();
+        assert.equal(getQueueReplacementGeneration(), before.queue + 1);
+        assert.equal(getPlaybackIntentGeneration(), before.intent);
+        assert.equal(getPlaybackReplacementGeneration(), before.replacement);
+        assert.equal(getExplicitPlaybackPauseGeneration(), before.pause);
+        assert.deepEqual(consumePlaybackAdvanceOrigin(), {
+            origin: "error",
+            originatingTrackId: "seed",
+        });
+    });
     afterEach(() => {
         writePlaybackAdvanceOrigin(null, null);
         setPlaybackAutoRestartSuppressed(false);

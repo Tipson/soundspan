@@ -47,6 +47,10 @@ export function reservePlaybackIntent(): number {
 export function getQueueReplacementGeneration(): number {
     return queueReplacementGeneration;
 }
+/** Retires pending queue work after a station-context change without altering media or playback intent. */
+export function recordQueueContextChange(): void {
+    queueReplacementGeneration += 1;
+}
 /** Counts media replacements without treating pending asynchronous requests as playback. */
 export function getPlaybackReplacementGeneration(): number {
     return playbackReplacementGeneration;

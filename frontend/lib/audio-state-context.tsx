@@ -5,9 +5,11 @@ import {
     useContext,
     useState,
     useEffect,
+    useLayoutEffect,
     useRef,
     ReactNode,
     useMemo,
+    useCallback,
 } from "react";
 import { api } from "@/lib/api";
 import type {
@@ -52,8 +54,19 @@ import {
     type QueueItem,
 } from "@/lib/queue-item";
 import { frontendLogger as sharedFrontendLogger } from "@/lib/logger";
-import { markRemoteTrackChange } from "@/lib/audio-engine/playbackAdvanceOrigin";
+import {
+    getPlaybackIntentGeneration,
+    getQueueReplacementGeneration,
+    recordQueueContextChange,
+    markRemoteTrackChange,
+} from "@/lib/audio-engine/playbackAdvanceOrigin";
 import { withPlaybackRadioOrigin } from "@/lib/radio/playbackRadioOrigin";
+import { reconcileRadioSnapshotMetadata } from "@/lib/radio/radioSnapshotMetadata";
+import {
+    isListenTogetherActiveOrPending,
+    subscribeListenTogetherMembership,
+} from "@/lib/listen-together-session";
+import { listenTogetherSocket } from "@/lib/listen-together-socket";
 import {
     getUserPlaybackStorageGeneration,
     isUserPlaybackStorageGenerationCurrent,
@@ -358,6 +371,19 @@ function resolvePersistedVibeState(
     };
 }
 
+function useRadioContextSetter<T>(
+    setter: (value: SetStateAction<T>) => void,
+    markMutation: () => void,
+): (value: SetStateAction<T>) => void {
+    return useCallback(
+        (value: SetStateAction<T>) => {
+            markMutation();
+            setter(value);
+        },
+        [setter, markMutation],
+    );
+}
+
 /**
  * Renders the AudioStateProvider component.
  */
@@ -365,7 +391,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     const [playbackStorageGeneration] = useState(
         getUserPlaybackStorageGeneration,
     );
-    const [currentTrack, setCurrentTrack] = useState<Track | null>(
+    const [currentTrack, setCurrentTrackState] = useState<Track | null>(
         readPersistedTrack,
     );
     const [currentAudiobook, setCurrentAudiobook] = useState<Audiobook | null>(
@@ -374,7 +400,7 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     const [currentPodcast, setCurrentPodcast] = useState<Podcast | null>(() =>
         parseStorageJson(STORAGE_KEYS.CURRENT_PODCAST, null),
     );
-    const [playbackType, setPlaybackType] = useState<
+    const [playbackType, setPlaybackTypeState] = useState<
         "track" | "audiobook" | "podcast" | null
     >(
         () =>
@@ -384,17 +410,17 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                 | "podcast"
                 | null,
     );
-    const [queue, setQueue] = useState<QueueItem[]>(() =>
+    const [queue, setQueueState] = useState<QueueItem[]>(() =>
         normalizeQueueItems(parseStorageJson(STORAGE_KEYS.QUEUE, [])),
     );
-    const [currentIndex, setCurrentIndex] = useState(() => {
+    const [currentIndex, setCurrentIndexState] = useState(() => {
         const v = readStorage(STORAGE_KEYS.CURRENT_INDEX);
         return v ? parseInt(v) : 0;
     });
-    const [isShuffle, setIsShuffle] = useState(
+    const [isShuffle, setIsShuffleState] = useState(
         () => readStorage(STORAGE_KEYS.IS_SHUFFLE) === "true",
     );
-    const [shuffleIndices, setShuffleIndices] = useState<number[]>([]);
+    const [shuffleIndices, setShuffleIndicesState] = useState<number[]>([]);
     const [repeatMode, setRepeatMode] = useState<"off" | "one" | "all">(
         () =>
             (readStorage(STORAGE_KEYS.REPEAT_MODE) as "off" | "one" | "all") ??
@@ -413,10 +439,12 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         () => readStorage(STORAGE_KEYS.IS_MUTED) === "true",
     );
     const [isHydrated] = useState(() => typeof window !== "undefined");
-    const [lastServerSync, setLastServerSync] = useState<Date | null>(null);
+    const [lastServerSync, setLastServerSyncState] = useState<Date | null>(
+        null,
+    );
 
     // Vibe mode state
-    const [vibeMode, setVibeMode] = useState(
+    const [vibeMode, setVibeModeState] = useState(
         () => resolvePersistedVibeState(queue).active,
     );
     const [waveMode, setWaveMode] = useState<WaveMode>("for-you");
@@ -429,6 +457,47 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         useState<AudioFeatures | null>(null);
     const [vibeQueueIds, setVibeQueueIds] = useState<string[]>(
         () => resolvePersistedVibeState(queue).queueIds,
+    );
+
+    // A dispatch can precede its React commit. Fence held polls synchronously,
+    // and commit the revision even when the primary setter is a no-op.
+    const radioContextRevisionRef = useRef(0);
+    const [radioContextRevision, setRadioContextRevision] = useState(0);
+    const markRadioContextMutation = useCallback(() => {
+        const revision = ++radioContextRevisionRef.current;
+        setRadioContextRevision(revision);
+    }, []);
+    const setCurrentTrack = useRadioContextSetter(
+        setCurrentTrackState,
+        markRadioContextMutation,
+    );
+    const setQueue = useRadioContextSetter(
+        setQueueState,
+        markRadioContextMutation,
+    );
+    const setCurrentIndex = useRadioContextSetter(
+        setCurrentIndexState,
+        markRadioContextMutation,
+    );
+    const setPlaybackType = useRadioContextSetter(
+        setPlaybackTypeState,
+        markRadioContextMutation,
+    );
+    const setIsShuffle = useRadioContextSetter(
+        setIsShuffleState,
+        markRadioContextMutation,
+    );
+    const setShuffleIndices = useRadioContextSetter(
+        setShuffleIndicesState,
+        markRadioContextMutation,
+    );
+    const setVibeMode = useRadioContextSetter(
+        setVibeModeState,
+        markRadioContextMutation,
+    );
+    const setLastServerSync = useRadioContextSetter(
+        setLastServerSyncState,
+        markRadioContextMutation,
     );
 
     // Refresh audiobook/podcast progress from API on mount, then sync with server
@@ -776,7 +845,15 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         return () => {
             active = false;
         };
-    }, [playbackStorageGeneration]);
+    }, [
+        playbackStorageGeneration,
+        setCurrentIndex,
+        setCurrentTrack,
+        setIsShuffle,
+        setPlaybackType,
+        setQueue,
+        setVibeMode,
+    ]);
 
     // Effect A (debounced): Persist heavy JSON blobs to localStorage.
     // Debounced at 300ms to coalesce rapid state changes (e.g. queue updates).
@@ -914,6 +991,50 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
     const currentAudiobookIdRef = useRef(currentAudiobook?.id);
     const currentPodcastIdRef = useRef(currentPodcast?.id);
     const pollInFlightRef = useRef(false);
+    const radioPollContextRef = useRef({
+        currentTrack,
+        queue,
+        currentIndex,
+        playbackType,
+        isShuffle,
+        shuffleIndices,
+        vibeMode,
+        lastServerSync,
+        revision: radioContextRevision,
+    });
+    const radioPollMembershipGenerationRef = useRef(0);
+
+    // Capture committed station changes before asynchronous answers can see stale passive refs.
+    useLayoutEffect(() => {
+        radioPollContextRef.current = {
+            currentTrack,
+            queue,
+            currentIndex,
+            playbackType,
+            isShuffle,
+            shuffleIndices,
+            vibeMode,
+            lastServerSync,
+            revision: radioContextRevision,
+        };
+    }, [
+        currentTrack,
+        queue,
+        currentIndex,
+        playbackType,
+        isShuffle,
+        shuffleIndices,
+        vibeMode,
+        lastServerSync,
+        radioContextRevision,
+    ]);
+    useEffect(
+        () =>
+            subscribeListenTogetherMembership(() => {
+                radioPollMembershipGenerationRef.current += 1;
+            }),
+        [],
+    );
 
     // Sync refs via lightweight effects
     useEffect(() => {
@@ -997,6 +1118,15 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     removeMigratingStorageItem(STORAGE_KEYS.QUEUE_CLEARED_AT);
                 }
 
+                const radioPollContext = radioPollContextRef.current;
+                const radioPollIntent = getPlaybackIntentGeneration();
+                const radioPollReplacement = getQueueReplacementGeneration();
+                const radioPollAuth = api.getSessionGeneration();
+                const radioPollMembership =
+                    radioPollMembershipGenerationRef.current;
+                const radioPollGroupActive =
+                    isListenTogetherActiveOrPending() ||
+                    listenTogetherSocket.hasActiveGroup;
                 const serverState = await api.getPlaybackState();
                 if (!serverState || !canApplyPollState()) {
                     return;
@@ -1047,6 +1177,54 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     serverUpdatedAtMs,
                 });
                 if (!pollDecision.shouldApplyServerSnapshot) {
+                    if (
+                        pollDecision.reason === "media_unchanged" &&
+                        localPlaybackType === "track" &&
+                        serverPlaybackType === "track"
+                    ) {
+                        const latestLocalSave = parsePlaybackStateSaveTimestamp(
+                            readStorage(
+                                STORAGE_KEYS.LAST_PLAYBACK_STATE_SAVE_AT,
+                            ),
+                        );
+                        if (
+                            !isVisible ||
+                            radioPollContextRef.current !== radioPollContext ||
+                            radioContextRevisionRef.current !==
+                                radioPollContext.revision ||
+                            getPlaybackIntentGeneration() !== radioPollIntent ||
+                            getQueueReplacementGeneration() !==
+                                radioPollReplacement ||
+                            api.getSessionGeneration() !== radioPollAuth ||
+                            radioPollMembershipGenerationRef.current !==
+                                radioPollMembership ||
+                            radioPollGroupActive ||
+                            isListenTogetherActiveOrPending() ||
+                            listenTogetherSocket.hasActiveGroup ||
+                            latestLocalSave !== lastLocalSave
+                        )
+                            return;
+                        const metadata = reconcileRadioSnapshotMetadata({
+                            localCurrentTrack: radioPollContext.currentTrack,
+                            localQueue: radioPollContext.queue,
+                            localCurrentIndex: radioPollContext.currentIndex,
+                            localPlaybackType: radioPollContext.playbackType,
+                            localLastSaveAtMs: latestLocalSave,
+                            localLastServerSyncAtMs:
+                                radioPollContext.lastServerSync?.getTime() ?? 0,
+                            serverPlaybackType,
+                            serverMediaId: serverState.trackId ?? null,
+                            serverCurrentIndex: serverState.currentIndex,
+                            serverQueue: serverState.queue,
+                            serverUpdatedAtMs,
+                        });
+                        if (metadata) {
+                            // Pending station work must see this change before React commits the clone.
+                            recordQueueContextChange();
+                            setQueue(metadata.queue);
+                            setCurrentTrack(metadata.currentTrack);
+                        }
+                    }
                     queueDebugLog("Polling ignored server playback snapshot", {
                         reason: pollDecision.reason,
                         localPlaybackType: localPlaybackType,
@@ -1303,7 +1481,17 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             clearTimeout(jitterTimeout);
             if (pollInterval) clearInterval(pollInterval);
         };
-    }, [isHydrated, playbackStorageGeneration]);
+    }, [
+        isHydrated,
+        playbackStorageGeneration,
+        setCurrentIndex,
+        setCurrentTrack,
+        setIsShuffle,
+        setLastServerSync,
+        setPlaybackType,
+        setQueue,
+        setVibeMode,
+    ]);
 
     // Memoize the context value to prevent unnecessary re-renders
     const value = useMemo(
@@ -1364,6 +1552,14 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             isHydrated,
             lastServerSync,
             repeatOneCount,
+            setCurrentIndex,
+            setCurrentTrack,
+            setIsShuffle,
+            setLastServerSync,
+            setPlaybackType,
+            setQueue,
+            setShuffleIndices,
+            setVibeMode,
         ],
     );
 

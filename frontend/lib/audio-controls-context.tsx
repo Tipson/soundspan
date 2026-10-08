@@ -70,6 +70,7 @@ import { resetPersistedTrackStartPosition } from "@/lib/persisted-playback-posit
 import { resolveListenTogetherNavigationIndex } from "@/lib/listen-together-navigation";
 import {
     getPlaybackIntentGeneration,
+    getQueueReplacementGeneration,
     recordPlaybackReplacement,
     reservePlaybackIntent,
     recordExplicitPlaybackPause,
@@ -358,6 +359,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         radioOrigin: Track["radioOrigin"] | null;
         currentIndex: number;
         intentGeneration: number;
+        queueReplacementGeneration: number;
         mutation: VibeQueueMutationKind | null;
         settled: boolean;
     } | null>(null);
@@ -1234,6 +1236,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                         ),
                         currentIndex: state.currentIndex,
                         intentGeneration: getPlaybackIntentGeneration(),
+                        queueReplacementGeneration:
+                            getQueueReplacementGeneration(),
                         mutation: null as VibeQueueMutationKind | null,
                         settled: false,
                     };
@@ -1361,6 +1365,8 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             ) ||
             getActiveListenTogetherSession() ||
             getPlaybackIntentGeneration() !== pending.intentGeneration ||
+            getQueueReplacementGeneration() !==
+                pending.queueReplacementGeneration ||
             (state.currentIndex !== pending.currentIndex &&
                 pending.mutation !== "replace")
         ) {

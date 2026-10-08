@@ -10,6 +10,7 @@ import {
     setPlaybackAutoRestartSuppressed,
     writePlaybackAdvanceOrigin,
     writePlaybackReplacementIntent,
+    recordQueueContextChange,
 } from "../../lib/audio-engine/playbackAdvanceOrigin";
 import { afterEach, before, beforeEach, mock, test } from "node:test";
 import type {
@@ -6900,6 +6901,35 @@ test("adversarial: late failed AutoMatch must not pause same-occurrence manual r
         advancesBeforeCompletion,
         "the retired natural end must not call advanceQueue(null), which now pauses a final track",
     );
+});
+
+test("a station metadata change retires a pending natural end before the new origin renders", async () => {
+    runtimeEngineMode = "native";
+    playbackState.isPlaying = true;
+    const seed = makeTrack("station-fence-seed", { duration: 9 });
+    audioState.queue = [seed];
+    audioState.currentTrack = seed;
+    audioState.currentIndex = 0;
+    let resolveVibe!: (result: VibeModeStartResult) => void;
+    startVibeModeImpl = () =>
+        new Promise((resolve) => {
+            resolveVibe = resolve;
+        });
+    renderOrchestrator();
+    await flushAsync();
+    engine.duration = 9;
+    engine.emit("load", { durationSec: 9 });
+    engine.currentTime = engine.actualCurrentTime = 9;
+    engine.trackEnded = true;
+    engine.playing = false;
+    engine.emit("end");
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
+    recordQueueContextChange();
+    // Metadata setters have been dispatched; no new origin has rendered yet.
+    resolveVibe({ success: false, trackCount: 0 });
+    await flushAsync();
+    assert.equal(controlCalls.next, 0);
 });
 
 for (const manualAction of ["replay", "pause"] as const) {

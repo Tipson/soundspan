@@ -140,6 +140,7 @@ export function usePlaybackOrchestratorRefs({
         loadId: number;
         seekOperationId: number;
         playbackIntentGeneration: number;
+        queueReplacementGeneration: number;
         queueIdentity: readonly unknown[];
         playbackPositionGeneration: number;
         viaWatchdog: boolean;
